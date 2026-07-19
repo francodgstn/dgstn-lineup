@@ -52,7 +52,11 @@ import * as crypto from 'node:crypto'
 import { parseArgs } from 'node:util'
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
-import { DEFAULT_PAYMENT_MODES, AVAILABILITY_EXCEPTIONS_COLLECTION } from '@linyup/shared'
+import {
+  DEFAULT_PAYMENT_MODES,
+  AVAILABILITY_EXCEPTIONS_COLLECTION,
+  GIFT_CARDS_SUBCOLLECTION,
+} from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -707,6 +711,18 @@ async function seedLeadTenant(profile: LeadProfile) {
     appointmentsEnabled: true,
   }
 
+  // Gift cards (E3) + no-show policy (E5) — profile-authored, absent = off.
+  // giftCards is ALSO mirrored onto the team public_profile (below), same
+  // reasoning as bookingSettings — syncTeamPublicProfile would recompute it
+  // anyway, but a direct write keeps the seed correct even when the sync
+  // triggers aren't deployed on the sandbox.
+  const giftCardSettings = profile.giftCards
+    ? { enabled: profile.giftCards.enabled, amounts: profile.giftCards.amounts }
+    : { enabled: false, amounts: [] }
+  const noShowPolicySettings = profile.noShowPolicy
+    ? { enabled: true, ...profile.noShowPolicy }
+    : { enabled: false, feeAmount: 0, threshold: 3 }
+
   await db
     .collection('teams')
     .doc(teamId)
@@ -728,6 +744,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         gamification: profile.gamification,
         teamEmail: profile.contactEmail,
         booking: bookingSettings,
+        giftCards: giftCardSettings,
+        noShowPolicy: noShowPolicySettings,
         ...(profile.bookingConfirmationInstructions
           ? { bookingConfirmationInstructions: profile.bookingConfirmationInstructions }
           : {}),
@@ -940,10 +958,36 @@ async function seedLeadTenant(profile: LeadProfile) {
           }
         : { name: profile.location.label, address: profile.location.address },
       aggregator_subscription_types: publicSubTypes,
+      // Public-safe gift-card config (enabled + face values, never balances/
+      // codes) so the shop can offer them — mirrors settings.giftCards exactly
+      // as syncTeamPublicProfile does.
+      giftCards: giftCardSettings,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(now()),
     })
+
+  // ── gift cards (teams/{id}/gift_cards/{code}) ─────────────────────────────
+  // A pre-minted DEMO card so redemption can be shown in the one-off checkouts
+  // (drop-in / product / course) without buying a card first. The readable code
+  // is the doc id — shaped exactly as the webhook's mintGiftCard writes it.
+  if (profile.giftCards?.demoCard) {
+    const { code, amount } = profile.giftCards.demoCard
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection(GIFT_CARDS_SUBCOLLECTION)
+      .doc(code)
+      .set({
+        code,
+        teamId,
+        amount,
+        balance: amount,
+        currency: profile.currency,
+        status: 'active',
+        created_at: ts(daysFromNow(-14)),
+      })
+  }
 
   // ── team members + users docs ─────────────────────────────────────────────
   for (const s of profile.staff) {
@@ -1021,6 +1065,18 @@ async function seedLeadTenant(profile: LeadProfile) {
     }
     const dropIn =
       a.dropInPrice != null ? { enabled: true, priceAmount: a.dropInPrice } : { enabled: false }
+    // Class member rate on the drop-in price (Activity.memberBenefit on a
+    // CLASS): holders of a listed type who are NOT covered by the access rule
+    // pay a reduced drop-in. The profile references subscriptions by key —
+    // resolve them to the seeded subscription-type ids here (as accessSubKeys).
+    const memberBenefit = a.memberBenefit
+      ? {
+          subscriptionTypeIds: a.memberBenefit.subKeys.map(subIdOf),
+          effect: a.memberBenefit.effect,
+          ...(a.memberBenefit.percent != null ? { percent: a.memberBenefit.percent } : {}),
+          ...(a.memberBenefit.amount != null ? { amount: a.memberBenefit.amount } : {}),
+        }
+      : null
     await db
       .collection('activities')
       .doc(actIds[i])
@@ -1044,6 +1100,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         // Absent ⇒ the trial is free (the common case).
         ...(a.trialPrice != null ? { trialPriceAmount: a.trialPrice } : {}),
         dropIn,
+        ...(memberBenefit ? { memberBenefit } : {}),
         base_score: a.base_score,
         type: 'class',
         // Classes don't auto-confirm: a booking holds a seat but stays
@@ -1074,6 +1131,10 @@ async function seedLeadTenant(profile: LeadProfile) {
         isFreeTrial: accessRule.type === 'open',
         accessRule,
         ...(dropIn.enabled ? { dropIn } : {}),
+        // The class member rate, mirrored ONLY alongside a live, priced drop-in
+        // (exactly as syncActivityPublicProfile does) — the public booking page
+        // renders the struck-through drop-in price from it.
+        ...(memberBenefit && dropIn.enabled ? { memberBenefit } : {}),
         // Mirrored so the public flow can OFFER the newcomer trial door on a
         // gated class (matches syncActivityPublicProfile).
         ...(a.trialEnabled ? { trialEnabled: true } : {}),
@@ -1345,6 +1406,10 @@ async function seedLeadTenant(profile: LeadProfile) {
         public: true,
         checkout_contact_mode: subCheckoutMode(st),
         prices,
+        // Usage limit on covered class bookings (window counters enforce it).
+        ...(st.limits ? { limits: st.limits } : {}),
+        // Aggregator payout per attended visit (drives the partner_visits ledger).
+        ...(typeof st.payoutPerVisit === 'number' ? { payoutPerVisit: st.payoutPerVisit } : {}),
         teamId,
         created_at: ts(daysFromNow(-120)),
       })
@@ -2436,6 +2501,16 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       ...(courseSubIds.length ? { subscriptionTypeIds: courseSubIds } : {}),
       ...(c.access === 'purchase' && c.priceAmount != null ? { priceAmount: c.priceAmount } : {}),
     }
+    // Subscriber benefit on the purchase price (Course.benefit) — subKeys
+    // resolved to the seeded subscription-type ids, same scheme as accessSubKeys.
+    const benefit = c.benefit
+      ? {
+          subscriptionTypeIds: c.benefit.subKeys.map((key) => `${teamId}-sub-${key}`),
+          effect: c.benefit.effect,
+          ...(c.benefit.percent != null ? { percent: c.benefit.percent } : {}),
+          ...(c.benefit.amount != null ? { amount: c.benefit.amount } : {}),
+        }
+      : null
     const courseOrder = profile.courses.indexOf(c)
     await courseRef.set({
       scope: 'team',
@@ -2445,6 +2520,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       summary: c.summary,
       status: 'published',
       accessRule,
+      ...(benefit ? { benefit } : {}),
       coverImageUrl,
       moduleCount,
       lessonCount,
@@ -2466,6 +2542,9 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       accessType: c.access,
       subscriptionTypeIds: courseSubIds,
       priceAmount: c.access === 'purchase' && c.priceAmount != null ? c.priceAmount : null,
+      // Mirrored exactly as syncCoursePublicProfile does — the shop renders the
+      // member price from it (the type ids are already public in the shop).
+      benefit,
       hideFromShop: false,
       moduleCount,
       lessonCount,
@@ -2505,14 +2584,14 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       ...(p.variants ? { variants: p.variants.map((v) => ({ id: v.id, label: v.label })) } : {}),
     })
   }
-  if (productMirror.length > 0) {
-    await db
-      .collection('teams')
-      .doc(teamId)
-      .collection('public_profile')
-      .doc(teamId)
-      .set({ products: productMirror }, { merge: true })
-  }
+  // Always written (even empty) so removing every product from a profile also
+  // clears the stale mirror on reseed — the shop reads this array, not products/.
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('public_profile')
+    .doc(teamId)
+    .set({ products: productMirror }, { merge: true })
 
   // ── documents ──────────────────────────────────────────────────────────────
   const docNow = ts(now())

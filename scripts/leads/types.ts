@@ -101,6 +101,19 @@ export interface LeadActivityDef {
   accessSubKeys?: string[]
   /** Drop-in / pay-per-class price (major units) for uncovered contacts. */
   dropInPrice?: number
+  /** Member rate on the drop-in price (Activity.memberBenefit on a CLASS):
+   *  holders of a listed subscription type who are NOT covered by the access
+   *  rule pay a reduced drop-in — 'percent_off' takes `percent` (1–99) off,
+   *  'fixed_price' charges `amount` (major units) instead. subKeys reference
+   *  LeadSubscriptionDef.keys (resolved to type ids at seed time, like
+   *  accessSubKeys). Price-modifying effects only; only meaningful (and only
+   *  mirrored publicly) alongside a priced dropInPrice. */
+  memberBenefit?: {
+    subKeys: string[]
+    effect: 'percent_off' | 'fixed_price'
+    percent?: number
+    amount?: number
+  }
   /** Independent of accessTier: a gated class still accepts a newcomer's trial
    *  booking (guest path identical to 'open'). Lets a class combine
    *  members-only access + free trial + drop-in (Activity.trialEnabled). */
@@ -142,6 +155,16 @@ export interface LeadSubscriptionDef {
   /** Multi-price types (e.g. single / 3-pack / 5-pack). When set, overrides the
    *  single price/recurrence/includedMonths fields above. */
   prices?: LeadSubscriptionPriceDef[]
+  /** Usage limit on covered CLASS bookings (SubscriptionType.limits), e.g.
+   *  [{ count: 3, per: 'week' }] = "3 classes per week". Windows are CALENDAR
+   *  periods in the team timezone; once the allowance is spent the type stops
+   *  covering until the window resets (drop-in / member rates still apply).
+   *  Not for credit-metered packs — credits are the meter there. */
+  limits?: { count: number; per: 'day' | 'week' | 'month' }[]
+  /** Aggregator types only (source: 'aggregator'): what the partner pays the
+   *  studio per ATTENDED visit (major units, team currency) — drives the
+   *  partner_visits payout ledger once a class gates on the type. */
+  payoutPerVisit?: number
 }
 
 export interface LeadGridSlot {
@@ -389,6 +412,17 @@ export interface LeadCourseDef {
   accessSubKeys?: string[]
   /** One-off shop price, major units — required for 'purchase'. */
   priceAmount?: number
+  /** Subscriber benefit on the 'purchase' price (Course.benefit): holders of a
+   *  listed subscription type get the course 'included' free, `percent` (1–99)
+   *  off, or at a fixed `amount` (major units). subKeys reference
+   *  LeadSubscriptionDef.keys (resolved to type ids at seed time). Absent =
+   *  no benefit — everyone pays the base price. */
+  benefit?: {
+    subKeys: string[]
+    effect: 'included' | 'percent_off' | 'fixed_price'
+    percent?: number
+    amount?: number
+  }
   /** Assets-folder base name for the cover image. */
   coverAsset?: string
   modules: { title: string; lessons: LeadCourseLessonDef[] }[]
@@ -593,6 +627,22 @@ export interface LeadProfile {
   siteSections: LeadSiteSection[]
   courses: LeadCourseDef[]
   products: LeadProductDef[]
+  /** Gift cards (settings.giftCards + the team public_profile mirror): lets the
+   *  public shop sell stored-value cards at these face values (major units).
+   *  `demoCard` pre-mints ONE active card at teams/{id}/gift_cards/{code} so
+   *  redemption can be demoed in checkout without buying a card first — pick a
+   *  readable demo code (e.g. 'GC-SWIM-DEMO'), never a real minted one.
+   *  Absent ⇒ gift cards stay off for the tenant. */
+  giftCards?: {
+    enabled: boolean
+    amounts: number[]
+    demoCard?: { code: string; amount: number }
+  }
+  /** No-show policy (settings.noShowPolicy): every `threshold` accumulated
+   *  no-show strikes create ONE `feeAmount` policy fee (major units) on the
+   *  contact (TeamUp-style — never per incident; managers can waive). Absent ⇒
+   *  the policy stays off. */
+  noShowPolicy?: { feeAmount: number; threshold: number }
   documents: LeadDocumentDef[]
   /** Public forms (installs the `custom-forms` plugin + flips the team's
    *  `active_public_surfaces.forms`). Absent ⇒ none, plugin not installed. */
