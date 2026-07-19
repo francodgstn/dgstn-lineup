@@ -54,7 +54,7 @@ const MIN_LINK_AMOUNT_MINOR = 50
 // The Stripe Checkout Session itself stays open for a week (a manager sending a
 // link by phone/SMS can't count on the client paying within the public flow's
 // 30-minute hold window). checkout.session.expired (already handled by the
-// Connect webhook — see webhook.ts's handleAppointmentCheckoutExpired) releases
+// Connect webhook — see webhook.ts's handleCheckoutExpired) releases
 // the hold when it lapses; the session doc deliberately carries NO
 // hold_expires_at so the daily sweep (dailyTasks/expirePendingBookings.ts)
 // leaves it alone in the meantime — same rationale as the pending_offline mode.

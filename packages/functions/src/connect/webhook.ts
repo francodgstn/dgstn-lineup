@@ -42,6 +42,7 @@ import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
 import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
+import { buildEmailTemplate, sendEmail } from '../utils/email'
 import {
   constructConnectWebhookEvent,
   getConnectStripe,
@@ -51,6 +52,8 @@ import {
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
 import { writeContactSubscriptionFields } from '../payments/effects'
+import { commitGiftCardHold, mintGiftCard, releaseGiftCardHold } from './giftCards'
+import { markPolicyFeePaid } from '../booking/policyFees'
 import { asLang, runAppointmentSlotTransaction } from '../appointments/booking'
 import { sendAppointmentBookingEmails } from '../appointments/emails'
 import {
@@ -409,6 +412,12 @@ function lineItemFromMetadata(md: Record<string, string>): Record<string, unknow
   if (md.kind === 'appointment') {
     return { kind: 'appointment', label: md.activityName ?? null }
   }
+  if (md.kind === 'gift_card') {
+    return { kind: 'other', label: 'Gift card' }
+  }
+  if (md.kind === 'policy_fee') {
+    return { kind: 'other', label: 'No-show fee' }
+  }
   return null
 }
 
@@ -421,6 +430,8 @@ function financeDescription(md: Record<string, string>): string | null {
   if (md.kind === 'membership') return md.subscriptionTypeName ?? null
   if (md.kind === 'drop_in') return md.activityName ?? 'Drop-in'
   if (md.kind === 'appointment') return md.activityName ?? 'Appointment'
+  if (md.kind === 'gift_card') return 'Gift card'
+  if (md.kind === 'policy_fee') return 'No-show fee'
   return md.purpose ?? null
 }
 
@@ -484,6 +495,13 @@ async function handlePaymentIntent(
             sessionId: md.sessionId ?? null,
           }
         : {}),
+      // Gift card purchases — the minted code is stamped on separately by
+      // handleGiftCardCheckout once the card exists (this handler may run
+      // before or after checkout.session.completed).
+      ...(md.kind === 'gift_card' ? { kind: 'gift_card' } : {}),
+      // No-show policy fees (E5) carry the fee id so the payments dashboard can
+      // link back to teams/{teamId}/policy_fees/{feeId}.
+      ...(md.kind === 'policy_fee' ? { kind: 'policy_fee', feeId: md.feeId ?? null } : {}),
       // Structured "what was bought" — fills the assign/edit dialog's line-item
       // picker, aligned with the BYO rail.
       ...(lineItemFromMetadata(md) ? { line_item: lineItemFromMetadata(md) } : {}),
@@ -880,6 +898,19 @@ async function handleCheckoutCompleted(
   _eventId: string
 ): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
+
+  // Gift-card redemption (product/course/drop-in checkouts that reserved a
+  // drawdown): commit it BEFORE the per-kind dispatch below, one clean spot
+  // for every kind that can carry a gift-card hold. Full-cover redemptions
+  // never reach here (no Stripe checkout was created for them).
+  if (md.giftCardCode && md.giftCardHold) {
+    try {
+      await commitGiftCardHold({ teamId: team.teamId, code: md.giftCardCode, holdKey: md.giftCardHold })
+    } catch (err) {
+      console.error(`[connect] gift card hold commit failed (code=${md.giftCardCode}):`, err)
+    }
+  }
+
   if (md.kind === 'product') {
     await handleProductCheckout(team, session, md)
     return
@@ -894,6 +925,14 @@ async function handleCheckoutCompleted(
   }
   if (md.kind === 'appointment') {
     await handleAppointmentCheckout(team, session, accountId, md)
+    return
+  }
+  if (md.kind === 'gift_card') {
+    await handleGiftCardCheckout(team, session, md)
+    return
+  }
+  if (md.kind === 'policy_fee') {
+    await handlePolicyFeeCheckout(team, session, md)
     return
   }
   if (md.kind !== 'membership' || !md.subscriptionTypeId) return
@@ -1173,6 +1212,86 @@ async function handleCourseCheckout(
       message: `Course purchased · ${md.courseTitle ?? 'Course'}`,
       timestamp: FieldValue.serverTimestamp(),
     })
+}
+
+/**
+ * Gift card purchase (kind === 'gift_card') — mints the card (mintGiftCard,
+ * idempotent on the payment intent id — safe against redelivery/reprocessing)
+ * and emails the code to the purchaser. There is no booking/entitlement to
+ * confirm here; the card itself IS the product. Best-effort: a mail failure
+ * never blocks the mint (the card exists regardless — a manager can look up
+ * the code in the dashboard if the email bounced).
+ */
+async function handleGiftCardCheckout(
+  team: TeamRef,
+  session: any,
+  md: Record<string, string>
+): Promise<void> {
+  const piId =
+    typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
+  if (!piId) return
+
+  const amountMajor = md.amount
+    ? Number(md.amount)
+    : Math.round(((session.amount_total as number | undefined) ?? 0)) / 100
+  const contactId = md.contactId ?? null
+  const purchaserEmail =
+    md.purchaserEmail ?? (session.customer_details?.email as string | undefined) ?? null
+
+  const card = await mintGiftCard({
+    teamId: team.teamId,
+    amount: amountMajor,
+    currency: 'CHF',
+    purchaserContactId: contactId,
+    purchaserEmail,
+    paymentIntentId: piId,
+  })
+
+  await memberPaymentRef(team.teamId, piId).set(
+    { contactId, giftCardCode: card.code },
+    { merge: true }
+  )
+  if (contactId) await stampFinanceContact(team.teamId, piId, contactId)
+
+  if (!purchaserEmail) return
+  try {
+    const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(team.teamId).get()
+    const teamName = (teamSnap.data()?.name as string | undefined) ?? 'the studio'
+    const { html, text } = buildEmailTemplate({
+      title: 'Your gift card',
+      body: `<p>Thank you for your purchase. Here is your gift card code for ${teamName}:</p>
+<p style="font-size:22px;font-weight:600;letter-spacing:1px;">${card.code}</p>
+<p>Value: CHF ${amountMajor.toFixed(2)}</p>
+<p>Share this code with whoever will redeem it. It can be applied toward any purchase at ${teamName}.</p>`,
+    })
+    await sendEmail({
+      to: purchaserEmail,
+      subject: `Your ${teamName} gift card`,
+      html,
+      text,
+      teamId: team.teamId,
+    })
+  } catch (err) {
+    console.error(`[connect] gift card email failed (code=${card.code}):`, err)
+  }
+}
+
+/**
+ * No-show policy fee (kind === 'policy_fee') — settles a fee minted by
+ * processNoShowStrike (booking/policyFees.ts) once the contact pays the
+ * emailed link. markPolicyFeePaid is idempotent (checkout.session.completed +
+ * payment_intent.succeeded both land here across the two sibling events).
+ */
+async function handlePolicyFeeCheckout(
+  team: TeamRef,
+  session: any,
+  md: Record<string, string>
+): Promise<void> {
+  if (!md.feeId) return
+  const piId =
+    typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent?.id ?? null)
+  await markPolicyFeePaid({ teamId: team.teamId, feeId: md.feeId, paymentIntentId: piId })
+  if (piId && md.contactId) await stampFinanceContact(team.teamId, piId, md.contactId)
 }
 
 /**
@@ -1589,15 +1708,28 @@ async function handleAppointmentCheckout(
 }
 
 /**
- * checkout.session.expired (kind === 'appointment') — prompt release at the
- * Stripe-side expiry (~31 min) instead of waiting for the daily sweep. Only
- * touches a STILL-pending hold — a session already confirmed by a race-won
- * checkout.session.completed is left untouched. Session first, THEN the
- * booking delete (mirrors dailyTasks/expirePendingBookings.ts): otherwise the
- * delete's trackBookings recount would resurrect the slot as 'open'.
+ * checkout.session.expired — releases whatever the checkout reserved:
+ *  • ANY kind carrying a gift-card hold (product/course/drop-in redemption
+ *    with a partial gift-card drawdown) — releaseGiftCardHold, independent of
+ *    the appointment logic below.
+ *  • kind === 'appointment' — prompt release at the Stripe-side expiry
+ *    (~31 min) instead of waiting for the daily sweep. Only touches a
+ *    STILL-pending hold — a session already confirmed by a race-won
+ *    checkout.session.completed is left untouched. Session first, THEN the
+ *    booking delete (mirrors dailyTasks/expirePendingBookings.ts): otherwise
+ *    the delete's trackBookings recount would resurrect the slot as 'open'.
  */
-async function handleAppointmentCheckoutExpired(session: any): Promise<void> {
+async function handleCheckoutExpired(session: any): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
+
+  if (md.giftCardCode && md.giftCardHold && md.teamId) {
+    try {
+      await releaseGiftCardHold({ teamId: md.teamId, code: md.giftCardCode, holdKey: md.giftCardHold })
+    } catch (err) {
+      console.error(`[connect] gift card hold release failed (code=${md.giftCardCode}):`, err)
+    }
+  }
+
   if (md.kind !== 'appointment') return
   const { sessionId, contactId } = md
   if (!sessionId || !contactId) return
@@ -1690,7 +1822,7 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
           await handleCheckoutCompleted(team, obj, accountId, event.id)
           break
         case 'checkout.session.expired':
-          await handleAppointmentCheckoutExpired(obj)
+          await handleCheckoutExpired(obj)
           break
         case 'payment_intent.succeeded':
           await handlePaymentIntent(team, obj, 'succeeded', event.id, accountId)

@@ -588,6 +588,23 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Gift cards — the doc id IS the redeemable code, so it is a SECRET:
+      // managers may list/read for support; the public checks balances only
+      // through the checkGiftCard callable. All writes via Cloud Functions
+      // (mint on purchase, holds on redemption, void).
+      match /gift_cards/{code} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
+      // No-show policy fees — created by the policy engine when a contact's
+      // strike count reaches the team threshold; paid via an emailed payment
+      // link (webhook marks paid) or waived by a manager callable.
+      match /policy_fees/{feeId} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+      }
+
       // Finance journal — the normalized, immutable money-event log (all rails).
       // Written ONLY by Cloud Functions (webhooks / recordManualPayment / backfill);
       // corrections are compensating rows, never edits. Financial data → manager+.

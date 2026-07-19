@@ -43,6 +43,8 @@ import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvBu
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
+import { GiftCardsSection } from '@/components/payments/GiftCardsSection'
+import { OutstandingFeesCard } from '@/components/payments/OutstandingFeesCard'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -435,6 +437,14 @@ export default function PaymentsDashboardPage() {
           )}
         </section>
       )}
+
+      {/* No-show policy fees — hidden entirely once there's nothing to show
+          (see OutstandingFeesCard's own empty guard). */}
+      <OutstandingFeesCard />
+
+      {/* Gift cards (E3) — settings + recent cards. Always shown so a manager
+          can find the toggle even before the first card is ever sold. */}
+      <GiftCardsSection />
 
       {teamId && (
         <AssignPaymentDialog

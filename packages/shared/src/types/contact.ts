@@ -199,6 +199,17 @@ export interface Contact {
   // non-expired grants contribute. Empty/absent when the contact holds none.
   credit_summary?: CreditSummaryEntry[]
 
+  // ─── No-show policy (E5) ────────────────────────────────────────────────────
+  // Rolling strike counter toward the team's noShowPolicy.threshold (see
+  // resolveNoShowPolicy, types/policy.ts). Incremented on every 'booking_no_show'
+  // transition (onBookingWrite → processNoShowStrike); reset to 0 (and refs
+  // cleared) the moment a fee is created. Absent ⇒ 0.
+  no_show_strikes?: number
+  // The strike bookings ('sessionId/bookingId') accumulated since the last fee
+  // (or ever, if none yet) — capped ~10, most-recent-last. Copied onto the fee's
+  // strike_booking_refs when the threshold is reached, then cleared.
+  no_show_strike_refs?: string[]
+
   // Notes (plain text; rich-text JSON stored as string in hmd-lineup)
   notes?: string
 

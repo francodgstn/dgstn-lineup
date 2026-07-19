@@ -514,6 +514,15 @@ async function seedTeam(opts: {
     appointmentsEnabled: true,
   }
 
+  // Gift cards (E3) + no-show policy (E5) — studio-tier demo data only, so the
+  // Payments dashboard + public shop have something to show without every plan
+  // tier carrying it. giftCards is ALSO mirrored onto public_profile (below),
+  // same reasoning as bookingSettings — syncTeamPublicProfile would recompute
+  // it anyway, but a direct write keeps the seed correct even without the
+  // functions emulator running.
+  const giftCardSettings = { enabled: plan === 'studio', amounts: [50, 100] }
+  const noShowPolicySettings = { enabled: plan === 'studio', feeAmount: 15, threshold: 3 }
+
   // Team doc
   const trialEndsAt = plan === 'coach' ? ts(daysFromNow(14)) : undefined
   await db
@@ -534,7 +543,12 @@ async function seedTeam(opts: {
       ...(affiliationsEnabled ? { affiliations_enabled: true } : {}),
       ...(teamOrgId ? { organization_ids: [teamOrgId] } : {}),
       ranking_systems: rankingSystemDefs,
-      settings: { gamification: gamificationSettings, booking: bookingSettings },
+      settings: {
+        gamification: gamificationSettings,
+        booking: bookingSettings,
+        giftCards: giftCardSettings,
+        noShowPolicy: noShowPolicySettings,
+      },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground: { type: 'solid', color: '#ffffff' },
@@ -567,6 +581,7 @@ async function seedTeam(opts: {
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
+      giftCards: giftCardSettings,
       // products mirror is written by seedStoreProducts (studio+ only) at the end
       // of seedTeam, via a merge into this same public_profile doc.
       membershipRequiredFields: null,
@@ -1792,6 +1807,30 @@ async function seedTeam(opts: {
   // Only the studio-tier account showcases the full course library (studio+ feature).
   if (plan === 'studio') {
     await seedCourses(teamId, uid)
+  }
+
+  // ── gift cards (E3) — one pre-minted active card, studio tier only ─────────
+  // Mirrors what mintGiftCard writes on a real purchase, minus payment_intent_id
+  // (there was no real Stripe checkout behind this one).
+  if (plan === 'studio') {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('gift_cards')
+      .doc('GC-DEMO-CARD')
+      .set({
+        code: 'GC-DEMO-CARD',
+        teamId,
+        amount: 100,
+        balance: 100,
+        currency: 'CHF',
+        status: 'active',
+        purchaserContactId: null,
+        purchaserEmail: null,
+        payment_intent_id: null,
+        created_at: ts(daysFromNow(-10)),
+        updated_at: ts(daysFromNow(-10)),
+      })
   }
 
   // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──

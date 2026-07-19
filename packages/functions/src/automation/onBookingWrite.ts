@@ -8,6 +8,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { to } from '../utils/async'
 import { fireEventRules, type ContactData, type AutomationTriggerType } from '../utils/automationEngine'
+import { processNoShowStrike } from '../booking/policyFees'
 
 function resolveBookingTrigger(
   before: FirebaseFirestore.DocumentData | undefined,
@@ -46,6 +47,21 @@ export const onBookingWrite = onDocumentWritten(
     if (!contactId) {
       console.log(`[onBookingWrite] booking=${event.params.bookingId}: no contactId, skipping`) // eslint-disable-line no-console
       return
+    }
+
+    // No-show policy (E5): the strike counter is independent of automations —
+    // best-effort, never let a policy failure break the automation dispatch below.
+    if (triggerType === 'booking_no_show') {
+      try {
+        await processNoShowStrike({
+          teamId,
+          contactId,
+          sessionId: event.params.sessionId,
+          bookingId: event.params.bookingId,
+        })
+      } catch (err) {
+        console.error(`[onBookingWrite] no-show strike processing failed (booking=${event.params.bookingId}):`, err) // eslint-disable-line no-console
+      }
     }
 
     const [contactErr, contactDoc] = await to(

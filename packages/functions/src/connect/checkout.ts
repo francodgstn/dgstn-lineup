@@ -89,6 +89,14 @@ export function defaultIdempotencyKey(prefix: string, ...parts: string[]): strin
   return `${prefix}:${parts.join(':')}:${Math.floor(Date.now() / 60_000)}`
 }
 
+/** Stripe's Checkout Session `expires_at` minimum is 30 minutes from creation;
+ *  31 (not 30) avoids a rejection on clock skew. Shared by every checkout that
+ *  needs a SHORT, prompt-release expiry instead of Stripe's default (24h):
+ *  paid appointments (the hold IS the session) and any one-off checkout
+ *  carrying a gift-card hold (product/course/drop-in redemption) — see
+ *  connect/giftCards.ts. */
+export const SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES = 31
+
 // ─── Rate limit (moved verbatim from connect/payments.ts) ───────────────────────
 
 const CHECKOUT_RATE_LIMIT_PER_HOUR = 30

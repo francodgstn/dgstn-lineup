@@ -17,6 +17,7 @@ import {
   type ActivityAccessRule,
   type AnyBenefit,
   type DropInTarget,
+  type GiftCardRedemptionPlan,
   type PaymentOptionsResult,
 } from '@linyup/shared'
 import { loadContactPaymentSnapshot } from './access'
@@ -26,8 +27,14 @@ import {
   checkoutRateLimit,
   defaultIdempotencyKey,
   requireChargeableAmountFromMajor,
+  SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
   startOneOffCheckout,
 } from '../connect/checkout'
+import {
+  commitGiftCardHold,
+  releaseGiftCardHold,
+  reserveGiftCardDrawdown,
+} from '../connect/giftCards'
 import { generateSecureToken } from '../utils/crypto'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
@@ -86,6 +93,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     // enforces the trial-eligibility (one trial per person) check — see
     // Activity.trialPriceAmount and Contact.trial_used_at (@linyup/shared).
     trial?: boolean
+    /** Optional gift-card code to draw down against this booking's price. */
+    giftCardCode?: string
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   if (!data?.sessionId) throw new HttpsError('invalid-argument', 'sessionId is required')
@@ -98,7 +107,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
 
   // Team must have Connect enabled + a chargeable account.
   const team = await loadEnabledTeam(teamId)
-  requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
+  // Chargeable-account gate: a FULL-COVER gift-card redemption moves no money
+  // and must work without Stripe onboarding — when a code is supplied, the
+  // check is deferred to the orchestrator (which re-checks before any charge;
+  // the reserved hold is released if that late check throws).
+  if (!data.giftCardCode) requireChargeableAccount(team)
 
   // Session must be bookable, in the future, and a group class.
   const sessionSnap = await db.collection('sessions').doc(sessionId).get()
@@ -262,7 +275,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   if (!payOption) {
     throw new HttpsError('failed-precondition', 'Drop-in is not available for this class')
   }
-  const amount = requireChargeableAmountFromMajor(payOption.amount)
+  const priceMajor = payOption.amount
+  const amount = requireChargeableAmountFromMajor(priceMajor)
 
   // Trial eligibility: one trial per person, ever — free or paid. Resolved by
   // email (never the looser name+email match above), same lookup bookSession's
@@ -292,10 +306,90 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     throw new HttpsError('already-exists', 'You are already registered for this session')
   }
 
-  // Write / overwrite the PENDING hold. Counts toward NO confirmed totals until paid;
-  // the webhook increments on confirmation, the daily task releases unpaid holds.
   const bookingToken = generateSecureToken()
   const expiresAt = Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000)
+
+  // Optional gift-card redemption — reserve a drawdown against the total BEFORE
+  // writing any booking doc (a failed/invalid code must leave no trace).
+  let giftCardPlan: GiftCardRedemptionPlan | null = null
+  let giftCardHoldKey: string | null = null
+  if (data.giftCardCode) {
+    giftCardHoldKey = generateSecureToken(16)
+    giftCardPlan = await reserveGiftCardDrawdown({
+      teamId,
+      code: data.giftCardCode,
+      totalMajor: priceMajor,
+      holdKey: giftCardHoldKey,
+    })
+  }
+
+  if (giftCardPlan && giftCardPlan.residual === 0) {
+    // FULL COVER — no Stripe at all: confirm the booking directly, mirroring
+    // handleDropInCheckout's confirm effects (minus payment_intent_id, which
+    // doesn't exist on this path).
+    await bookingRef.set({
+      firstname,
+      lastname,
+      email,
+      phone,
+      contact: contactId,
+      session: sessionId,
+      teamId,
+      joinedAt: FieldValue.serverTimestamp(),
+      fromBioLink: true,
+      is_new_contact: isNewContact,
+      booking_token: bookingToken,
+      authenticated_booking: !!contactSession,
+      status: 'confirmed',
+      payment_status: 'gift_card',
+    })
+    await db
+      .collection('sessions')
+      .doc(sessionId)
+      .set(
+        {
+          has_bookings: true,
+          bookings_count: FieldValue.increment(1),
+          last_booking_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+    // A gift-card payment also confirms a provisional (freshly created) contact
+    // — same as a paid Stripe drop-in.
+    if (isNewContact) {
+      await db.collection('contacts').doc(contactId).update({
+        provisional: FieldValue.delete(),
+        provisional_expires_at: FieldValue.delete(),
+      })
+    }
+    if (isTrial) {
+      await db
+        .collection('contacts')
+        .doc(contactId)
+        .update({ trial_used_at: FieldValue.serverTimestamp() })
+    }
+    await db
+      .collection('contacts')
+      .doc(contactId)
+      .collection('activity_log')
+      .add({
+        type: 'drop_in_booked',
+        source: 'gift_card',
+        message: `Drop-in booking · ${activityName}`,
+        timestamp: FieldValue.serverTimestamp(),
+      })
+    await commitGiftCardHold({ teamId, code: data.giftCardCode!, holdKey: giftCardHoldKey! })
+    return {
+      url: null,
+      sessionId: null,
+      paidWithGiftCard: true,
+      amount: 0,
+      drawdown: giftCardPlan.drawdown,
+    }
+  }
+
+  // Write / overwrite the PENDING hold. Counts toward NO confirmed totals until paid;
+  // the webhook increments on confirmation, the daily task releases unpaid holds.
   await bookingRef.set({
     firstname,
     lastname,
@@ -331,20 +425,54 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     // it) and just flags itself for the extra trial_used_at stamp — see
     // handleDropInCheckout.
     ...(isTrial ? { trial: 'true' } : {}),
+    ...(giftCardPlan
+      ? {
+          giftCardCode: data.giftCardCode!.trim().toUpperCase(),
+          giftCardHold: giftCardHoldKey!,
+          giftCardDrawdown: String(giftCardPlan.drawdown),
+        }
+      : {}),
   }
   const idempotencyKey =
     data.idempotencyKey ?? defaultIdempotencyKey('dropin', teamId, sessionId, contactId)
 
-  const checkout = await startOneOffCheckout({
-    team,
-    amountMinor: amount,
-    productName: `${isTrial ? 'Trial' : 'Drop-in'} · ${activityName}`,
-    successUrl,
-    cancelUrl,
-    customerEmail: email || undefined,
-    metadata,
-    idempotencyKey,
-    label: 'createDropInCheckout',
-  })
-  return { url: checkout.url, sessionId: checkout.sessionId, amount }
+  // A gift hold is live only when giftCardPlan is set — give Stripe a SHORT
+  // expiry then so the hold releases promptly (drop-in otherwise has no
+  // checkout expiry; Stripe's 24h default would sit on the card too long).
+  const chargeAmount = giftCardPlan ? requireChargeableAmountFromMajor(giftCardPlan.residual) : amount
+
+  let checkout
+  try {
+    checkout = await startOneOffCheckout({
+      team,
+      amountMinor: chargeAmount,
+      productName: `${isTrial ? 'Trial' : 'Drop-in'} · ${activityName}`,
+      successUrl,
+      cancelUrl,
+      customerEmail: email || undefined,
+      metadata,
+      idempotencyKey,
+      ...(giftCardPlan
+        ? {
+            expiresAtEpochSeconds:
+              Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+          }
+        : {}),
+      label: 'createDropInCheckout',
+    })
+  } catch (err) {
+    // Don't leave a reserved gift-card drawdown dangling until its lazy expiry.
+    if (giftCardPlan && data.giftCardCode && giftCardHoldKey) {
+      await releaseGiftCardHold({ teamId, code: data.giftCardCode, holdKey: giftCardHoldKey }).catch(
+        () => undefined
+      )
+    }
+    throw err
+  }
+  return {
+    url: checkout.url,
+    sessionId: checkout.sessionId,
+    amount: chargeAmount,
+    ...(giftCardPlan ? { drawdown: giftCardPlan.drawdown, residual: giftCardPlan.residual } : {}),
+  }
 })

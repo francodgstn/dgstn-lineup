@@ -185,6 +185,10 @@ export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 // source:'aggregator' subscription type (FitPass, SportPass…); written by
 // bookSession / cancelBooking (Admin SDK). Reporting only — see types/contact.ts.
 export const PARTNER_VISITS_SUBCOLLECTION = 'partner_visits'
+// Gift cards (E3): teams/{teamId}/gift_cards/{code} — the code is the doc id.
+export const GIFT_CARDS_SUBCOLLECTION = 'gift_cards'
+// No-show policy fees (E5): teams/{teamId}/policy_fees/{feeId}.
+export const POLICY_FEES_SUBCOLLECTION = 'policy_fees'
 
 // Idempotency markers for the Connect webhook (doc id = Stripe event id).
 // Admin-SDK only; clients never read or write it.

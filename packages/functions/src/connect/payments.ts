@@ -19,6 +19,7 @@ import {
   normalizeBenefit,
   resolveProductPrice,
   resolvePaymentOptions,
+  toMinorUnits,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   PRODUCTS_SUBCOLLECTION,
   COURSES_COLLECTION,
@@ -32,6 +33,8 @@ import {
 } from '@linyup/shared'
 import { loadContactPaymentSnapshot } from '../booking/access'
 import { getConnectStripe } from '../utils/connect/client'
+import { generateSecureToken } from '../utils/crypto'
+import { applyPaymentEffects } from '../payments/effects'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import {
   buildResultUrls,
@@ -39,9 +42,11 @@ import {
   defaultIdempotencyKey,
   requireChargeableAmountFromMajor,
   requireChargeableMinorAmount,
+  SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
   startOneOffCheckout,
   startSubscriptionCheckout,
 } from './checkout'
+import { reserveGiftCardDrawdown, commitGiftCardHold, releaseGiftCardHold } from './giftCards'
 import { requireContactSessionForTeam } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
@@ -444,6 +449,8 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     locale?: string
     idempotencyKey?: string
     origin?: string
+    /** Optional gift-card code to draw down against this purchase. */
+    giftCardCode?: string
   }
   if (!data?.teamId || !data?.productId) {
     throw new HttpsError('invalid-argument', 'teamId and productId are required')
@@ -460,7 +467,11 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
 
   // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
-  requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
+  // Chargeable-account gate: a FULL-COVER gift-card redemption moves no money
+  // and must work without Stripe onboarding — when a code is supplied, the
+  // check is deferred to the orchestrator (which re-checks before any charge;
+  // the reserved hold is released if that late check throws).
+  if (!data.giftCardCode) requireChargeableAccount(team)
 
   const productSnap = await admin
     .firestore()
@@ -486,7 +497,8 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     variantLabel = variant.label
   }
 
-  const amount = requireChargeableAmountFromMajor(resolveProductPrice(product, variantId))
+  const priceMajor = resolveProductPrice(product, variantId)
+  const amount = requireChargeableAmountFromMajor(priceMajor)
 
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
   const { successUrl, cancelUrl } = buildResultUrls(locale, {
@@ -510,6 +522,66 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
   const idempotencyKey =
     data.idempotencyKey ??
     defaultIdempotencyKey('product-pub', teamId, productId, variantId ?? '_', session.contactId)
+
+  // Optional gift-card redemption: reserve a drawdown against the total, then
+  // either FULL COVER (apply effects directly, no Stripe) or reduce the Stripe
+  // charge to the residual and carry the hold through checkout metadata.
+  if (data.giftCardCode) {
+    const holdKey = generateSecureToken(16)
+    const plan = await reserveGiftCardDrawdown({
+      teamId,
+      code: data.giftCardCode,
+      totalMajor: priceMajor,
+      holdKey,
+    })
+    const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
+
+    if (plan.residual === 0) {
+      await applyPaymentEffects(admin.firestore(), {
+        teamId,
+        contactId: session.contactId,
+        lineItem: { kind: 'product', productId, variantId, label: productName },
+        amountRappen: toMinorUnits(plan.drawdown),
+        currency: 'CHF',
+        source: 'gift_card',
+        paymentRef,
+      })
+      await commitGiftCardHold({ teamId, code: data.giftCardCode, holdKey })
+      return { url: null, sessionId: null, recurring: false, paidWithGiftCard: true, amount: 0, drawdown: plan.drawdown }
+    }
+
+    metadata.giftCardCode = data.giftCardCode.trim().toUpperCase()
+    metadata.giftCardHold = holdKey
+    metadata.giftCardDrawdown = String(plan.drawdown)
+    const residualAmount = requireChargeableAmountFromMajor(plan.residual)
+    let checkout
+    try {
+      checkout = await startOneOffCheckout({
+        team,
+        amountMinor: residualAmount,
+        productName,
+        successUrl,
+        cancelUrl,
+        customerEmail: email,
+        metadata,
+        idempotencyKey,
+        expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+        label: 'createProductCheckout',
+      })
+    } catch (err) {
+      // Don't leave the reserved drawdown dangling until its lazy expiry.
+      await releaseGiftCardHold({ teamId, code: data.giftCardCode, holdKey }).catch(() => undefined)
+      throw err
+    }
+    return {
+      url: checkout.url,
+      sessionId: checkout.sessionId,
+      recurring: false,
+      amount: residualAmount,
+      drawdown: plan.drawdown,
+      residual: plan.residual,
+    }
+  }
 
   const checkout = await startOneOffCheckout({
     team,
@@ -541,6 +613,8 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     locale?: string
     idempotencyKey?: string
     origin?: string
+    /** Optional gift-card code to draw down against this purchase. */
+    giftCardCode?: string
   }
   if (!data?.teamId || !data?.courseId) {
     throw new HttpsError('invalid-argument', 'teamId and courseId are required')
@@ -557,7 +631,11 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
 
   // Remaining gates: the team's Connect kill-switch + chargeable account.
   const team = await loadEnabledTeam(teamId)
-  requireChargeableAccount(team) // fail before the reads; the orchestrator re-checks
+  // Chargeable-account gate: a FULL-COVER gift-card redemption moves no money
+  // and must work without Stripe onboarding — when a code is supplied, the
+  // check is deferred to the orchestrator (which re-checks before any charge;
+  // the reserved hold is released if that late check throws).
+  if (!data.giftCardCode) requireChargeableAccount(team)
 
   const courseSnap = await admin.firestore().collection(COURSES_COLLECTION).doc(courseId).get()
   if (!courseSnap.exists) throw new HttpsError('not-found', 'Course not found')
@@ -607,7 +685,8 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     })
   }
 
-  const amount = requireChargeableAmountFromMajor(payOption.amount)
+  const priceMajor = payOption.amount
+  const amount = requireChargeableAmountFromMajor(priceMajor)
 
   // Land the buyer back in the Space (where they watch), not the shop.
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
@@ -629,6 +708,71 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const idempotencyKey =
     data.idempotencyKey ??
     defaultIdempotencyKey('course-pub', teamId, courseId, session.contactId)
+
+  // Optional gift-card redemption — same shape as createProductCheckout above.
+  if (data.giftCardCode) {
+    const holdKey = generateSecureToken(16)
+    const plan = await reserveGiftCardDrawdown({
+      teamId,
+      code: data.giftCardCode,
+      totalMajor: priceMajor,
+      holdKey,
+    })
+    const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
+
+    if (plan.residual === 0) {
+      await applyPaymentEffects(admin.firestore(), {
+        teamId,
+        contactId: session.contactId,
+        lineItem: { kind: 'course', courseId, label: course.title },
+        amountRappen: toMinorUnits(plan.drawdown),
+        currency: 'CHF',
+        source: 'gift_card',
+        paymentRef,
+      })
+      await commitGiftCardHold({ teamId, code: data.giftCardCode, holdKey })
+      return {
+        url: null,
+        sessionId: null,
+        recurring: false,
+        paidWithGiftCard: true,
+        amount: 0,
+        drawdown: plan.drawdown,
+      }
+    }
+
+    metadata.giftCardCode = data.giftCardCode.trim().toUpperCase()
+    metadata.giftCardHold = holdKey
+    metadata.giftCardDrawdown = String(plan.drawdown)
+    const residualAmount = requireChargeableAmountFromMajor(plan.residual)
+    let checkout
+    try {
+      checkout = await startOneOffCheckout({
+        team,
+        amountMinor: residualAmount,
+        productName: course.title,
+        successUrl,
+        cancelUrl,
+        customerEmail: email,
+        metadata,
+        idempotencyKey,
+        expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+        label: 'createCourseCheckout',
+      })
+    } catch (err) {
+      // Don't leave the reserved drawdown dangling until its lazy expiry.
+      await releaseGiftCardHold({ teamId, code: data.giftCardCode, holdKey }).catch(() => undefined)
+      throw err
+    }
+    return {
+      url: checkout.url,
+      sessionId: checkout.sessionId,
+      recurring: false,
+      amount: residualAmount,
+      drawdown: plan.drawdown,
+      residual: plan.residual,
+    }
+  }
 
   const checkout = await startOneOffCheckout({
     team,

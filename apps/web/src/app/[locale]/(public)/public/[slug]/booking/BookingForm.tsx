@@ -40,6 +40,11 @@ import {
 } from '@/components/booking/ReturningSignIn'
 import { StickyBar, activityGradient } from '@/components/booking/StickyBar'
 import { BackButton } from '@/components/booking/BackButton'
+import {
+  GiftCardRedeemField,
+  giftCardCheckoutErrorMessage,
+  type AppliedGiftCard,
+} from '@/components/booking/GiftCardRedeemField'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -228,6 +233,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Optional gift-card redemption — only meaningful on a paying booking (drop-in
+  // or priced trial). Reset whenever the guest door changes.
+  const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
+
   // Ref to trigger the shared guest-details form's submit from the sticky bar
   // (the Confirm button lives outside the <form> element).
   const guestFormRef = useRef<GuestDetailsFormHandle>(null)
@@ -397,6 +406,14 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
   }, [selectedActivity, dropInAvailable, contact, isAuthenticated])
 
+  // Gated class with drop-in enabled → pay-per-class. NOT when the visitor
+  // explicitly took the free-trial door — a trial newcomer must never be
+  // charged unless the trial itself is priced (isPricedTrial); bookSession
+  // admits gated trial guests (Activity.trialEnabled) for free otherwise.
+  const isPricedTrial =
+    guestPath === 'trial' && typeof selectedActivity?.trialPriceAmount === 'number'
+  const willCharge = (dropInAvailable && guestPath !== 'trial') || isPricedTrial
+
   // ── Guest booking ─────────────────────────────────────────────────────────
 
   const onSubmitGuest = async (values: GuestDetailsValues) => {
@@ -409,11 +426,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     // TRIAL price instead of the drop-in price (`createDropInCheckout`'s
     // `trial` input). Also reused defensively from the catch block below when
     // the server reports `payment_required` for what the client thought was free.
+    // Returns the raw response so the caller can also detect the gift-card
+    // FULL-COVER shape ({ url: null, paidWithGiftCard: true }).
     const checkout = async (trial: boolean) => {
-      const fn = httpsCallable<Record<string, unknown>, { url?: string }>(
-        functions,
-        'createDropInCheckout'
-      )
+      const fn = httpsCallable<
+        Record<string, unknown>,
+        { url?: string | null; paidWithGiftCard?: boolean }
+      >(functions, 'createDropInCheckout')
       const res = await fn({
         teamId,
         sessionId: selectedSession!.id,
@@ -427,23 +446,21 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         locale,
         origin: typeof window !== 'undefined' ? window.location.origin : undefined,
         ...(trial ? { trial: true } : {}),
+        ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
       })
-      return res.data?.url
+      return res.data
     }
 
     try {
-      // Gated class with drop-in enabled → pay-per-class; the webhook confirms the
-      // booking on payment success. Redirect to Stripe Checkout. NOT when the
-      // visitor explicitly took the free-trial door — a trial newcomer must never
-      // be charged unless the trial itself is priced (isPricedTrial below);
-      // bookSession admits gated trial guests (Activity.trialEnabled).
-      const isPricedTrial =
-        guestPath === 'trial' && typeof selectedActivity?.trialPriceAmount === 'number'
-
-      if ((dropInAvailable && guestPath !== 'trial') || isPricedTrial) {
-        const url = await checkout(isPricedTrial)
-        if (url) {
-          window.location.href = url
+      if (willCharge) {
+        const result = await checkout(isPricedTrial)
+        if (result.paidWithGiftCard) {
+          setConfirmedSession(selectedSession)
+          setStep('confirmed')
+          return
+        }
+        if (result.url) {
+          window.location.href = result.url
           return
         }
         throw new Error(t('errorCheckoutFailed'))
@@ -466,7 +483,10 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string; details?: { reason?: string } }
       const reason = e.details?.reason
-      if (reason === 'trial_used') {
+      const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, tShop) : null
+      if (giftMsg) {
+        setBookingError(giftMsg)
+      } else if (reason === 'trial_used') {
         setBookingError(t('errorTrialUsed'))
       } else if (reason === 'payment_required') {
         // Defensive: the server determined this booking requires payment even
@@ -474,9 +494,14 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
         // price) — recover by sending the guest straight to checkout instead of
         // leaving them at a dead end.
         try {
-          const url = await checkout(true)
-          if (url) {
-            window.location.href = url
+          const result = await checkout(true)
+          if (result.paidWithGiftCard) {
+            setConfirmedSession(selectedSession)
+            setStep('confirmed')
+            return
+          }
+          if (result.url) {
+            window.location.href = result.url
             return
           }
         } catch {
@@ -839,6 +864,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                       onClick={() => {
                         setSelectedSession(s)
                         setGuestPath(null)
+                        setGiftCardApplied(null)
                         // Members-only → sign in. But if there's a guest door —
                         // drop-in (pay per class) or a free trial for newcomers —
                         // go to the chooser ('who') instead.
@@ -1034,6 +1060,18 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             {t('detailsSubtitle')}
           </p>
         </div>
+
+        {/* Gift card redemption — only meaningful on a paying booking (drop-in
+            or priced trial); a free trial/booking has nothing to redeem against. */}
+        {willCharge && (
+          <GiftCardRedeemField
+            teamId={teamId}
+            locale={locale}
+            applied={giftCardApplied}
+            onApplied={setGiftCardApplied}
+            disabled={isSubmitting}
+          />
+        )}
 
         <GuestDetailsForm
           ref={guestFormRef}

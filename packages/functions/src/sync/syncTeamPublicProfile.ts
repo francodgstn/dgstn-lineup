@@ -12,7 +12,13 @@ import {
   toKioskPublicConfig,
   normalizeKioskConfig,
 } from '@linyup/shared'
-import type { PublicSurface, ActivePublicSurfaces, DocumentKind, KioskConfig } from '@linyup/shared'
+import type {
+  PublicSurface,
+  ActivePublicSurfaces,
+  DocumentKind,
+  KioskConfig,
+  GiftCardSettings,
+} from '@linyup/shared'
 import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
@@ -197,6 +203,15 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     showBranding: (data.plan ?? 'free') === 'free',
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
+    // Gift cards (E3): public-safe config only (enabled + purchasable face values —
+    // never balances/codes) so the public shop can offer them without reading the
+    // private team doc. Mirrors teams/{id}.settings.giftCards.
+    giftCards: (() => {
+      const raw = (data.settings as { giftCards?: GiftCardSettings } | undefined)?.giftCards
+      return raw?.enabled === true && Array.isArray(raw.amounts)
+        ? { enabled: true, amounts: raw.amounts }
+        : { enabled: false, amounts: [] }
+    })(),
     // Space "complete your signup" reminder toggle (absent ⇒ on) — the Space only
     // reads public_profile, so the setting must be mirrored here.
     space_signup_nudge: data.settings?.space?.signup_nudge !== false,
