@@ -10,9 +10,14 @@ import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
+  GUEST_SNAPSHOT,
+  normalizeBenefit,
   resolveActivityAccessRule,
   resolvePaymentOptions,
   type ActivityAccessRule,
+  type AnyBenefit,
+  type DropInTarget,
+  type PaymentOptionsResult,
 } from '@linyup/shared'
 import { loadContactPaymentSnapshot } from './access'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
@@ -36,27 +41,35 @@ const HOLD_MINUTES = 30
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
- * Whether a contact can already book this class for free (so drop-in is
- * refused) — the SAME semantics bookSession uses, via the shared resolver:
+ * Resolve the drop-in payment options for a KNOWN contact — the SAME semantics
+ * bookSession uses, via the shared resolver:
  *  • a usable lesson-credit balance counts as covered (a member with credits
  *    left must not be sold a redundant drop-in);
  *  • an EXHAUSTED/expired pack does NOT count — that contact gets to pay,
  *    fixing the old deadlock where bookSession denied no_credits while the
- *    previous field-only check here also refused the drop-in.
+ *    previous field-only check here also refused the drop-in;
+ *  • a held benefit type reduces the drop-in price (member rate — percent_off
+ *    or fixed_price on Activity.memberBenefit).
  */
-async function isContactCovered(
+async function resolveDropInForContact(
   teamId: string,
-  rule: ActivityAccessRule,
+  target: DropInTarget,
   contact: FirebaseFirestore.DocumentData & { id: string }
-): Promise<boolean> {
+): Promise<PaymentOptionsResult> {
+  const benefit = normalizeBenefit(target.benefit)
   const snapshot = await loadContactPaymentSnapshot({
     teamId,
     contact,
-    relevantTypeIds: rule.subscriptionTypeIds ?? [],
+    relevantTypeIds: [
+      ...(target.accessRule.subscriptionTypeIds ?? []),
+      ...(benefit?.subscriptionTypeIds ?? []),
+    ],
   })
-  const { options } = resolvePaymentOptions(snapshot, { kind: 'class_booking', accessRule: rule })
-  return options.length > 0
+  return resolvePaymentOptions(snapshot, target)
 }
+
+const isCoveredResult = (r: PaymentOptionsResult): boolean =>
+  r.options.some((o) => o.type === 'covered' || o.type === 'spend_credits')
 
 export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
   monitorAppCheck(request, 'createDropInCheckout')
@@ -132,8 +145,24 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     throw new HttpsError('failed-precondition', 'This class is free to book — no payment needed')
   }
 
+  // Config sanity: the BASE price must be chargeable (member rates clamp to the
+  // floor, so a valid base guarantees a valid effective amount).
   const priceAmountMajor = isTrial ? (trialPriceAmount as number) : (dropIn!.priceAmount as number)
-  const amount = requireChargeableAmountFromMajor(priceAmountMajor)
+  requireChargeableAmountFromMajor(priceAmountMajor)
+
+  // The one target the resolver prices for every caller of this class —
+  // includes the member rate (Activity.memberBenefit on the drop-in price).
+  const dropInTarget: DropInTarget = {
+    kind: 'drop_in',
+    accessRule,
+    dropIn: dropIn ?? null,
+    trial: { enabled: activity.trialEnabled === true, priceAmount: trialPriceAmount ?? null },
+    asTrial: isTrial,
+    benefit: (activity.memberBenefit as AnyBenefit | undefined) ?? null,
+  }
+  // Set on every path below: known contacts resolve with their snapshot
+  // (coverage refusal + member rate), fresh guests resolve as GUEST_SNAPSHOT.
+  let resolved: PaymentOptionsResult
 
   // Resolve the contact (payment is proof — no email verification needed here).
   let contactId: string
@@ -159,7 +188,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     firstname = (c.firstname as string) || ''
     lastname = (c.lastname as string) || ''
     phone = (c.phone as string) || null
-    if (await isContactCovered(teamId, accessRule, { ...c, id: cSnap.id })) {
+    resolved = await resolveDropInForContact(teamId, dropInTarget, { ...c, id: cSnap.id })
+    if (isCoveredResult(resolved)) {
       throw new HttpsError('failed-precondition', 'You can already book this class for free')
     }
   } else {
@@ -186,7 +216,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     })
     if (match) {
       contactId = match.id
-      if (await isContactCovered(teamId, accessRule, { ...match.data(), id: match.id })) {
+      resolved = await resolveDropInForContact(teamId, dropInTarget, {
+        ...match.data(),
+        id: match.id,
+      })
+      if (isCoveredResult(resolved)) {
         throw new HttpsError('failed-precondition', 'You can already book this class for free')
       }
       // An existing OFF-FUNNEL contact (form/shop lead — no stage) booking a
@@ -218,8 +252,17 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         created_at: FieldValue.serverTimestamp(),
       })
       contactId = ref.id
+      resolved = resolvePaymentOptions(GUEST_SNAPSHOT, dropInTarget)
     }
   }
+
+  // The caller's effective amount — base price, or their member rate when a
+  // held benefit type applies (percent_off / fixed_price, clamped ≥ 0.50).
+  const payOption = resolved.options.find((o) => o.type === 'pay')
+  if (!payOption) {
+    throw new HttpsError('failed-precondition', 'Drop-in is not available for this class')
+  }
+  const amount = requireChargeableAmountFromMajor(payOption.amount)
 
   // Trial eligibility: one trial per person, ever — free or paid. Resolved by
   // email (never the looser name+email match above), same lookup bookSession's

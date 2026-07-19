@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { Benefit } from './benefit'
 
 export type ActivityLevel = 'all' | 'beginners' | 'intermediate' | 'advanced'
 
@@ -130,10 +131,13 @@ export interface Activity {
    *  History: was `durationsMinutes: number[]` until 2026-07 (pre-launch), when
    *  per-duration pricing arrived with paid appointments. */
   durations?: ActivityDuration[]
-  /** APPOINTMENT-ONLY. The one member-benefit rule for this activity — see
-   *  `ActivityMemberBenefit`. Absent/empty = no benefit, everyone pays base
-   *  (or books free, when the duration itself is unpriced). */
-  memberBenefit?: ActivityMemberBenefit
+  /** The one member-benefit rule for this activity. Appointments: applies to
+   *  every priced duration. Classes: applies to the DROP-IN price (a member
+   *  rate for holders who aren't covered by the accessRule) — price-modifying
+   *  effects only there. Accepts the legacy appointment shape or the
+   *  generalized `Benefit`; ALL reads go through `normalizeBenefit`.
+   *  Absent/empty = no benefit, everyone pays base. */
+  memberBenefit?: ActivityMemberBenefit | Benefit
   /** Does a booking confirm itself, or does the studio decide?
    *  - `true`  → the booking is written `status: 'confirmed'` on the spot.
    *  - `false` → it stays unconfirmed until the studio confirms/checks them in.
@@ -229,10 +233,10 @@ export interface ActivityPublicProfile {
    *  no per-contact data to strip any more (the old `subscriptionPricing`
    *  matrix is gone; see `ActivityDuration`'s history note). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
-  /** APPOINTMENT-ONLY. Mirrored verbatim from `Activity.memberBenefit` —
-   *  public-safe, since the referenced subscription-type ids are already
-   *  public in the shop. */
-  memberBenefit?: ActivityMemberBenefit
+  /** Mirrored verbatim from `Activity.memberBenefit` (appointments AND class
+   *  drop-in member rates) — public-safe, since the referenced
+   *  subscription-type ids are already public in the shop. */
+  memberBenefit?: ActivityMemberBenefit | Benefit
   /** Denormalised display-only prerequisites for the public booking pages. */
   prerequisites?: string
 }

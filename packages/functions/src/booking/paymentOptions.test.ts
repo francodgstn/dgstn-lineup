@@ -254,7 +254,7 @@ describe('resolvePaymentOptions — appointment (effectivePrice parity rows)', (
             type: 'pay',
             amount: 76,
             source: 'base',
-            appliedBenefit: { subscriptionTypeId: 'gold', kind: 'discount', baseAmount: 95 },
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 95 },
           },
         ],
         denial: null,
@@ -273,7 +273,7 @@ describe('resolvePaymentOptions — appointment (effectivePrice parity rows)', (
             type: 'pay',
             amount: MIN_CHARGE_MAJOR,
             source: 'base',
-            appliedBenefit: { subscriptionTypeId: 'gold', kind: 'discount', baseAmount: 1 },
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 1 },
           },
         ],
         denial: null,
@@ -291,7 +291,7 @@ describe('resolvePaymentOptions — appointment (effectivePrice parity rows)', (
             type: 'pay',
             amount: MIN_CHARGE_MAJOR,
             source: 'base',
-            appliedBenefit: { subscriptionTypeId: 'gold', kind: 'discount', baseAmount: 95 },
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 95 },
           },
         ],
         denial: null,
@@ -389,6 +389,191 @@ describe('resolvePaymentOptions — course (shop/Space tiers incl. P6 widening)'
       target: t({ type: 'purchase', priceAmount: 120 }),
       expected: {
         options: [{ type: 'pay', amount: 120, source: 'course_price' }],
+        denial: null,
+      },
+    },
+  ])
+})
+
+describe('resolvePaymentOptions — generalized Benefit (Phase C)', () => {
+  const dropInTarget = (benefit: unknown): PaymentTarget => ({
+    kind: 'drop_in',
+    accessRule: { type: 'subscription', subscriptionTypeIds: ['gold'] },
+    dropIn: { enabled: true, priceAmount: 25 },
+    benefit: benefit as never,
+  })
+  runRows([
+    {
+      name: 'drop-in member rate: percent_off holder pays the reduced drop-in price',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: dropInTarget({ subscriptionTypeIds: ['silver'], effect: 'percent_off', percent: 40 }),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 15,
+            source: 'drop_in',
+            appliedBenefit: { subscriptionTypeId: 'silver', effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'drop-in member rate: fixed_price holder pays the flat member price',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: dropInTarget({ subscriptionTypeIds: ['silver'], effect: 'fixed_price', amount: 10 }),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 10,
+            source: 'drop_in',
+            appliedBenefit: { subscriptionTypeId: 'silver', effect: 'fixed_price', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'drop-in: included/spend_credits effects are IGNORED on classes (accessRule owns coverage)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: dropInTarget({ subscriptionTypeIds: ['silver'], effect: 'included' }),
+      expected: { options: [{ type: 'pay', amount: 25, source: 'drop_in' }], denial: null },
+    },
+    {
+      name: 'appointment fixed_price: holder pays the flat rate, clamped to the floor',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 95 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'fixed_price', amount: 0.1 },
+      },
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: MIN_CHARGE_MAJOR,
+            source: 'base',
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'fixed_price', baseAmount: 95 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'appointment explicit spend_credits effect: only a pack WITH balance applies',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 5 }] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 95 },
+        benefit: { subscriptionTypeIds: ['pack10'], effect: 'spend_credits' },
+      },
+      expected: {
+        options: [{ type: 'spend_credits', via: { subscriptionTypeId: 'pack10' }, remaining: 5 }],
+        denial: null,
+      },
+    },
+    {
+      name: 'appointment spend_credits effect without balance: falls back to base',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 0 }] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 95 },
+        benefit: { subscriptionTypeIds: ['pack10'], effect: 'spend_credits' },
+      },
+      expected: { options: [{ type: 'pay', amount: 95, source: 'base' }], denial: null },
+    },
+    {
+      name: 'course percent_off: subscriber pays half price (the tier free-or-full could not express)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'percent_off', percent: 50 },
+      },
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 60,
+            source: 'course_price',
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 120 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'course included benefit: holder covered(benefit_included)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'included' },
+      },
+      expected: covered({ reason: 'benefit_included', subscriptionTypeId: 'gold' }),
+    },
+    {
+      name: 'course: an explicit benefit WINS over the legacy free-inclusion list',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120, subscriptionTypeIds: ['gold'] },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'percent_off', percent: 50 },
+      },
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 60,
+            source: 'course_price',
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 120 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'course: spend_credits effect is ignored (no grant+spend story) → pay base',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 5 }] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120 },
+        benefit: { subscriptionTypeIds: ['pack10'], effect: 'spend_credits' },
+      },
+      expected: {
+        options: [{ type: 'pay', amount: 120, source: 'course_price' }],
+        denial: null,
+      },
+    },
+    {
+      name: 'legacy appointment shape {kind: included} still resolves via normalizeBenefit',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 95 },
+        benefit: { subscriptionTypeIds: ['gold'], kind: 'included' },
+      },
+      expected: covered({ reason: 'benefit_included', subscriptionTypeId: 'gold' }),
+    },
+    {
+      name: 'legacy {kind: discount, discountPercent} ≡ new {effect: percent_off, percent}',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 100 },
+        benefit: { subscriptionTypeIds: ['gold'], kind: 'discount', discountPercent: 25 },
+      },
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 75,
+            source: 'base',
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 100 },
+          },
+        ],
         denial: null,
       },
     },

@@ -16,6 +16,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   recurrenceToStripeInterval,
   isRecurringRecurrence,
+  normalizeBenefit,
   resolveProductPrice,
   resolvePaymentOptions,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
@@ -583,17 +584,21 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       .doc(session.contactId)
       .get(),
   ])
+  const courseBenefit = normalizeBenefit(course.benefit)
   const baseSnapshot = await loadContactPaymentSnapshot({
     teamId,
     contact:
       contactSnap.exists && contactSnap.data()?.teamId === teamId
         ? { ...contactSnap.data()!, id: contactSnap.id }
         : null,
-    relevantTypeIds: course.accessRule.subscriptionTypeIds ?? [],
+    relevantTypeIds: [
+      ...(course.accessRule.subscriptionTypeIds ?? []),
+      ...(courseBenefit?.subscriptionTypeIds ?? []),
+    ],
   })
   const priced = resolvePaymentOptions(
     { ...baseSnapshot, ownsCourse: purchaseSnap.exists },
-    { kind: 'course', accessRule: course.accessRule }
+    { kind: 'course', accessRule: course.accessRule, benefit: courseBenefit }
   )
   const payOption = priced.options[0]
   if (payOption?.type !== 'pay') {

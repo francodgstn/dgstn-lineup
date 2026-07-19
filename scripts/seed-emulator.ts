@@ -621,6 +621,10 @@ async function seedTeam(opts: {
     trialEnabled?: boolean
     /** Pay-per-class price for uncovered contacts (the ONE drop-in concept). */
     dropIn?: { enabled: boolean; priceAmount?: number }
+    /** Member rate on the drop-in price (Activity.memberBenefit on a CLASS):
+     *  holders of a listed type who are NOT covered by the accessRule pay a
+     *  reduced drop-in. Price-modifying effects only. */
+    memberBenefit?: { subscriptionTypeIds: string[]; effect: 'percent_off'; percent: number }
   }
   const activities: ClassActivitySeed[] = [
     {
@@ -651,6 +655,18 @@ async function seedTeam(opts: {
         enabled: true,
         priceAmount: plan === 'coach' ? 25 : plan === 'studio' ? 30 : 35,
       },
+      // Starter subscribers aren't covered for MMA, but pay HALF the drop-in
+      // (the class member rate the old model couldn't express). Coach teams
+      // have no uncovered tier, so no rate there.
+      ...(plan !== 'coach'
+        ? {
+            memberBenefit: {
+              subscriptionTypeIds: [`${teamId}-sub-starter`],
+              effect: 'percent_off' as const,
+              percent: 50,
+            },
+          }
+        : {}),
     },
     {
       id: `${teamId}-act-kickbox`,
@@ -706,6 +722,9 @@ async function seedTeam(opts: {
         ? { dropIn: { enabled: true, priceAmount: a.dropIn.priceAmount } }
         : {}),
       ...(a.trialEnabled ? { trialEnabled: true } : {}),
+      // Class member rate mirrored verbatim (as syncActivityPublicProfile does)
+      // so the public booking page can show the struck-through drop-in price.
+      ...(a.memberBenefit ? { memberBenefit: a.memberBenefit } : {}),
       level: a.level,
     })
   }
@@ -1851,6 +1870,9 @@ async function seedCourses(teamId: string, uid: string) {
     accessType: 'free' | 'registered' | 'subscription' | 'purchase'
     subscriptionTypeIds?: string[]
     priceAmount?: number // major units (CHF); required for the 'purchase' tier
+    /** Subscriber benefit on the purchase price (Course.benefit) — demos the
+     *  percent_off middle ground the free-or-full inclusion can't express. */
+    benefit?: { subscriptionTypeIds: string[]; effect: 'percent_off'; percent: number }
     modules: ModuleSeed[]
   }
 
@@ -2024,6 +2046,13 @@ async function seedCourses(teamId: string, uid: string) {
       status: 'published',
       accessType: 'purchase',
       priceAmount: 49,
+      // Elite subscribers buy it at half price (Course.benefit — resolved by
+      // resolvePaymentOptions; the shop shows the struck-through member price).
+      benefit: {
+        subscriptionTypeIds: [`${teamId}-sub-elite`],
+        effect: 'percent_off',
+        percent: 50,
+      },
       modules: [
         {
           title: 'Build your A-game',
@@ -2075,6 +2104,7 @@ async function seedCourses(teamId: string, uid: string) {
         summary: cs.summary,
         status: cs.status,
         accessRule,
+        ...(cs.benefit ? { benefit: cs.benefit } : {}),
         moduleCount: cs.modules.length,
         lessonCount,
         order: ci,
@@ -2103,6 +2133,8 @@ async function seedCourses(teamId: string, uid: string) {
           ...(cs.accessType === 'purchase' && cs.priceAmount != null
             ? { priceAmount: cs.priceAmount }
             : {}),
+          // Mirrored exactly as syncCoursePublicProfile does.
+          benefit: cs.benefit ?? null,
           subscriptionTypeIds: cs.subscriptionTypeIds ?? [],
           moduleCount: cs.modules.length,
           lessonCount,

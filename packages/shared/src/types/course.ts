@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { Benefit } from './benefit'
 
 // 'org' is reserved for a future slice where a parent org publishes courses to all
 // member teams. MVP only writes 'team'.
@@ -50,6 +51,12 @@ export interface Course {
   coverImageUrl?: string
   status: CourseStatus
   accessRule: CourseAccessRule // default { type: 'registered' }
+  // Subscriber benefit on the PURCHASE price ('purchase' tier only): holders of
+  // a listed type get the course included free or at a reduced price — the
+  // middle ground the free-or-full accessRule.subscriptionTypeIds inclusion
+  // can't express. When both are set, `benefit` wins; the legacy inclusion
+  // list keeps meaning "included free". Resolved by resolvePaymentOptions.
+  benefit?: Benefit | null
   // When true, the course is omitted from the public shop catalogue
   // (/public/{slug}/shop). It stays openable via a direct link and still shows in a
   // contact's Space "My courses" if they have access. Absent ⇒ visible in the shop.

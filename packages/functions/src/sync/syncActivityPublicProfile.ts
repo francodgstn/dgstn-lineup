@@ -63,10 +63,20 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
           })),
         }
       : {}),
-    // APPOINTMENT-ONLY. The one member-benefit rule, mirrored verbatim —
-    // public-safe, since the referenced subscription-type ids are already
-    // public in the shop.
-    ...(data.type === 'appointment' && data.memberBenefit ? { memberBenefit: data.memberBenefit } : {}),
+    // The one member-benefit rule, mirrored verbatim — public-safe, since the
+    // referenced subscription-type ids are already public in the shop.
+    // Appointments: applies to every priced duration. Classes: the member rate
+    // on the drop-in price — only meaningful (and only mirrored) alongside a
+    // live, priced drop-in.
+    ...(data.type === 'appointment' && data.memberBenefit
+      ? { memberBenefit: data.memberBenefit }
+      : {}),
+    ...(data.type !== 'appointment' &&
+    data.memberBenefit &&
+    data.dropIn?.enabled &&
+    typeof data.dropIn.priceAmount === 'number'
+      ? { memberBenefit: data.memberBenefit }
+      : {}),
     // Display-only prerequisites shown on the public booking pages.
     prerequisites: data.prerequisites || null,
   }

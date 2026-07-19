@@ -19,7 +19,11 @@
 
 import type { ActivityAccessRule, ActivityDuration, ActivityMemberBenefit } from '../types/activity'
 import type { CourseAccessRule } from '../types/course'
+import { normalizeBenefit, type Benefit, type BenefitEffect } from '../types/benefit'
 import { MIN_CHARGE_MAJOR } from './money'
+
+/** Either benefit shape — every read normalizes via `normalizeBenefit`. */
+export type AnyBenefit = ActivityMemberBenefit | Benefit
 
 // ─── Snapshot — what the resolver may know about the caller ─────────────────────
 
@@ -68,17 +72,25 @@ export interface DropInTarget {
   trial?: { enabled?: boolean; priceAmount?: number | null } | null
   /** True when the caller asked for the paid-trial door (trial: true). */
   asTrial?: boolean
+  /** Member rate on the drop-in price — price-modifying effects only
+   *  (percent_off / fixed_price); included/spend_credits are the accessRule's
+   *  job on classes and are ignored here. */
+  benefit?: AnyBenefit | null
 }
 
 export interface AppointmentTarget {
   kind: 'appointment'
   duration: ActivityDuration
-  benefit?: ActivityMemberBenefit | null
+  benefit?: AnyBenefit | null
 }
 
 export interface CourseTarget {
   kind: 'course'
   accessRule: CourseAccessRule
+  /** Subscriber benefit on the purchase price. When present it WINS over the
+   *  legacy accessRule.subscriptionTypeIds free-inclusion list. spend_credits
+   *  is not supported for courses (no grant+spend story) and is ignored. */
+  benefit?: AnyBenefit | null
 }
 
 export type PaymentTarget = ClassBookingTarget | DropInTarget | AppointmentTarget | CourseTarget
@@ -105,7 +117,7 @@ export type PaymentOption =
       source: 'base' | 'drop_in' | 'trial' | 'course_price'
       appliedBenefit?: {
         subscriptionTypeId: string
-        kind: 'discount'
+        effect: Extract<BenefitEffect, 'percent_off' | 'fixed_price'>
         baseAmount: number
       } | null
     }
@@ -183,6 +195,121 @@ function resolveClassCoverage(
   return { options: [], denial: attached ? 'no_credits' : 'no_subscription' }
 }
 
+/**
+ * Apply a (normalized) benefit to a priced unit. `allowed` scopes which effects
+ * the context supports — unsupported effects fall back to base price, benefit
+ * not applied. Shared by the appointment, drop-in and course arms.
+ */
+function applyBenefitToPrice(
+  snapshot: ContactPaymentSnapshot,
+  rawBenefit: AnyBenefit | null | undefined,
+  base: number,
+  source: 'base' | 'drop_in' | 'course_price',
+  allowed: ReadonlySet<BenefitEffect>
+): PaymentOptionsResult {
+  const payBase: PaymentOptionsResult = {
+    options: [{ type: 'pay', amount: base, source }],
+    denial: null,
+  }
+  const benefit = normalizeBenefit(rawBenefit)
+  if (!benefit || !allowed.has(benefit.effect)) return payBase
+
+  // Held (in benefit-config order): unmetered subscription OR usable credits.
+  const via =
+    benefit.subscriptionTypeIds.find(
+      (id) => snapshot.heldUnmeteredTypeIds.includes(id) || creditRemaining(snapshot, id) > 0
+    ) ?? null
+  if (!via) return payBase
+
+  switch (benefit.effect) {
+    case 'included': {
+      if (snapshot.heldUnmeteredTypeIds.includes(via)) {
+        return {
+          options: [
+            { type: 'covered', via: { reason: 'benefit_included', subscriptionTypeId: via } },
+          ],
+          denial: null,
+        }
+      }
+      // Held only via a credit pack — included means "spend one credit".
+      return {
+        options: [
+          {
+            type: 'spend_credits',
+            via: { subscriptionTypeId: via },
+            remaining: creditRemaining(snapshot, via),
+          },
+        ],
+        denial: null,
+      }
+    }
+    case 'spend_credits': {
+      // Explicit credit spend: only a listed pack WITH balance applies.
+      const creditVia = benefit.subscriptionTypeIds.find((id) => creditRemaining(snapshot, id) > 0)
+      if (!creditVia) return payBase
+      return {
+        options: [
+          {
+            type: 'spend_credits',
+            via: { subscriptionTypeId: creditVia },
+            remaining: creditRemaining(snapshot, creditVia),
+          },
+        ],
+        denial: null,
+      }
+    }
+    case 'percent_off': {
+      const pct = benefit.percent
+      if (typeof pct !== 'number' || pct <= 0) return payBase // malformed → not applied
+      const amount =
+        pct >= 100
+          ? MIN_CHARGE_MAJOR
+          : Math.max(MIN_CHARGE_MAJOR, Math.round(((base * (100 - pct)) / 100) * 100) / 100)
+      return {
+        options: [
+          {
+            type: 'pay',
+            amount,
+            source,
+            appliedBenefit: { subscriptionTypeId: via, effect: 'percent_off', baseAmount: base },
+          },
+        ],
+        denial: null,
+      }
+    }
+    case 'fixed_price': {
+      if (typeof benefit.amount !== 'number' || !Number.isFinite(benefit.amount)) return payBase
+      return {
+        options: [
+          {
+            type: 'pay',
+            amount: Math.max(MIN_CHARGE_MAJOR, benefit.amount),
+            source,
+            appliedBenefit: { subscriptionTypeId: via, effect: 'fixed_price', baseAmount: base },
+          },
+        ],
+        denial: null,
+      }
+    }
+  }
+}
+
+const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
+  'included',
+  'spend_credits',
+  'percent_off',
+  'fixed_price',
+])
+// Classes: coverage (free/credits) is the accessRule's job — the drop-in
+// benefit is a MEMBER RATE, price-modifying effects only.
+const DROP_IN_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
+// Courses: no grant+spend story in the webhook → no spend_credits.
+const COURSE_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
+  'included',
+  'percent_off',
+  'fixed_price',
+])
+
 // ─── The resolver ───────────────────────────────────────────────────────────────
 
 export function resolvePaymentOptions(
@@ -215,10 +342,14 @@ export function resolvePaymentOptions(
       }
 
       if (target.dropIn?.enabled && typeof target.dropIn.priceAmount === 'number') {
-        return {
-          options: [{ type: 'pay', amount: target.dropIn.priceAmount, source: 'drop_in' }],
-          denial: null,
-        }
+        // Member rate: a held benefit type discounts the drop-in price.
+        return applyBenefitToPrice(
+          snapshot,
+          target.benefit,
+          target.dropIn.priceAmount,
+          'drop_in',
+          DROP_IN_EFFECTS
+        )
       }
       // No pay path configured — surface the underlying coverage denial.
       return { options: [], denial: coverage.denial ?? 'no_subscription' }
@@ -226,69 +357,13 @@ export function resolvePaymentOptions(
 
     case 'appointment': {
       // THE PRICE IS THE GATE — guests always get an answer, never a denial.
-      // Exact port of resolveEffectiveAppointmentPrice + the held-benefit
-      // combination (see effectivePrice parity fixtures).
+      // Exact port of the old resolveEffectiveAppointmentPrice rules (see the
+      // appointment parity fixtures), generalized through applyBenefitToPrice.
       const base = target.duration.priceAmount
       if (typeof base !== 'number') {
         return { options: [{ type: 'covered', via: { reason: 'unpriced' } }], denial: null }
       }
-
-      const benefit = target.benefit
-      const benefitIds = benefit?.subscriptionTypeIds ?? []
-      // Held (in benefit-config order): unmetered subscription OR usable credits.
-      const via =
-        benefitIds.find(
-          (id) =>
-            snapshot.heldUnmeteredTypeIds.includes(id) || creditRemaining(snapshot, id) > 0
-        ) ?? null
-
-      if (!benefit || !via) {
-        return { options: [{ type: 'pay', amount: base, source: 'base' }], denial: null }
-      }
-
-      if (benefit.kind === 'included') {
-        if (snapshot.heldUnmeteredTypeIds.includes(via)) {
-          return {
-            options: [
-              { type: 'covered', via: { reason: 'benefit_included', subscriptionTypeId: via } },
-            ],
-            denial: null,
-          }
-        }
-        // Held only via a credit pack — included means "spend one credit".
-        return {
-          options: [
-            {
-              type: 'spend_credits',
-              via: { subscriptionTypeId: via },
-              remaining: creditRemaining(snapshot, via),
-            },
-          ],
-          denial: null,
-        }
-      }
-
-      // kind === 'discount'
-      const pct = benefit.discountPercent
-      if (typeof pct !== 'number' || pct <= 0) {
-        // Malformed → base price, benefit NOT applied (parity: via reported null).
-        return { options: [{ type: 'pay', amount: base, source: 'base' }], denial: null }
-      }
-      const amount =
-        pct >= 100
-          ? MIN_CHARGE_MAJOR
-          : Math.max(MIN_CHARGE_MAJOR, Math.round(((base * (100 - pct)) / 100) * 100) / 100)
-      return {
-        options: [
-          {
-            type: 'pay',
-            amount,
-            source: 'base',
-            appliedBenefit: { subscriptionTypeId: via, kind: 'discount', baseAmount: base },
-          },
-        ],
-        denial: null,
-      }
+      return applyBenefitToPrice(snapshot, target.benefit, base, 'base', APPOINTMENT_EFFECTS)
     }
 
     case 'course': {
@@ -329,7 +404,10 @@ export function resolvePaymentOptions(
       if (snapshot.ownsCourse) {
         return { options: [{ type: 'covered', via: { reason: 'owned' } }], denial: null }
       }
-      if (included) {
+      const benefit = normalizeBenefit(target.benefit)
+      if (!benefit && included) {
+        // Legacy free-inclusion list (accessRule.subscriptionTypeIds) — only
+        // consulted when no explicit benefit is configured; benefit wins.
         return {
           options: [
             { type: 'covered', via: { reason: 'subscription', subscriptionTypeId: included } },
@@ -338,10 +416,13 @@ export function resolvePaymentOptions(
         }
       }
       if (typeof rule.priceAmount === 'number') {
-        return {
-          options: [{ type: 'pay', amount: rule.priceAmount, source: 'course_price' }],
-          denial: null,
-        }
+        return applyBenefitToPrice(
+          snapshot,
+          benefit,
+          rule.priceAmount,
+          'course_price',
+          COURSE_EFFECTS
+        )
       }
       // Purchase tier without a price — misconfig; nothing to offer.
       return {

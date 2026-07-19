@@ -31,6 +31,7 @@ import {
   type ActivityDuration,
   type ActivityMemberBenefit,
   type Availability,
+  type Benefit,
 } from '@linyup/shared'
 import {
   DAY_MS,
@@ -67,7 +68,7 @@ interface ActivityInfo {
   name: string
   /** Priced duration menu (resolveAppointmentDurations default applied). */
   durations: ActivityDuration[]
-  memberBenefit?: ActivityMemberBenefit
+  memberBenefit?: ActivityMemberBenefit | Benefit
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
@@ -208,7 +209,7 @@ export const listAvailability = onCall(async (request) => {
     activityId: string
     activityName: string
     durations: ActivityDuration[]
-    memberBenefit?: ActivityMemberBenefit
+    memberBenefit?: ActivityMemberBenefit | Benefit
     location: string | null
     onlineUrl: string | null
     daysMap: Map<number, Record<string, Set<number>>>
