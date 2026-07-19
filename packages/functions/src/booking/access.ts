@@ -3,9 +3,9 @@
 // is enforced here against an already-resolved authenticated contact (or null for
 // a guest) — the single source of truth so both booking flows agree.
 // CLASS-ONLY as of 2026-07 — appointments dropped the access gate entirely (money
-// is the only gate there; see `ActivityMemberBenefit` in @linyup/shared). This
-// file's held/credit core is shared with `resolveHeldBenefit` below, which is the
-// appointments-only (non-throwing, money-only) parallel read over the same data.
+// is the only gate there; see `ActivityMemberBenefit` in @linyup/shared). The
+// appointment paths share this file's snapshot loader (loadContactPaymentContext)
+// and resolve through the same shared resolver.
 import * as admin from 'firebase-admin'
 import { HttpsError } from 'firebase-functions/v2/https'
 import type { Timestamp } from 'firebase-admin/firestore'
@@ -64,14 +64,6 @@ async function classifyHeldType(
   }
 }
 
-async function typeGrantsUnmeteredAccess(
-  teamId: string,
-  subscriptionTypeId: string,
-  contact: FirebaseFirestore.DocumentData
-): Promise<boolean> {
-  return (await classifyHeldType(teamId, subscriptionTypeId, contact)).unmetered
-}
-
 export interface AccessGateResult {
   /** The subscription type whose coverage matched, or null (open/members rule,
    *  or no subscription check was needed). */
@@ -119,10 +111,10 @@ function denialMessage(denial: BookingAccessDenialReason, isAppointment: boolean
   }
 }
 
-// The "held" shape both resolveBookingCoverage (classes) and resolveHeldBenefit
-// (appointments) start from: live subscriptions + the primary snapshot, and
+// The "held" shape every coverage/benefit resolution starts from: live
+// subscriptions + the primary snapshot, and
 // non-exhausted, non-expired lesson-credit balances. Pure, no DB call — the DB
-// call (typeGrantsUnmeteredAccess, above) happens per-id, because it depends on
+// call (classifyHeldType, above) happens per-id, because it depends on
 // which id is being checked.
 function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
   held: Set<string>
@@ -157,7 +149,7 @@ function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
  * Build the pure snapshot `resolvePaymentOptions` (@linyup/shared) consumes —
  * the AUTHORITATIVE server-side one. This is where the impure part of coverage
  * lives: classifying each relevant held type as unmetered vs credit-metered
- * (`typeGrantsUnmeteredAccess`, a per-type Firestore read, deliberately
+ * (`classifyHeldType`, a per-type Firestore read, deliberately
  * fail-open). Only ids in `relevantTypeIds` are classified — pass the union of
  * every id the resolution can touch (accessRule ids ∪ benefit ids).
  */
@@ -181,8 +173,14 @@ export async function loadContactPaymentContext(params: {
   teamId: string
   contact: (admin.firestore.DocumentData & { id: string }) | null
   relevantTypeIds: string[]
+  /** The moment the usage-limit window is metered against — pass the SESSION's
+   *  start so "3 per week" counts the week the class HAPPENS, not the week the
+   *  booking is made (advance bookings must debit the right window). Defaults
+   *  to now for callers with no session date (e.g. course checkouts, where
+   *  limits don't apply anyway). */
+  usageAt?: Date
 }): Promise<ContactPaymentContext> {
-  const { teamId, contact, relevantTypeIds } = params
+  const { teamId, contact, relevantTypeIds, usageAt } = params
   if (!contact) return { snapshot: GUEST_SNAPSHOT, limitedWindows: {} }
 
   const { held, creditTypes } = heldAndCreditSets(contact)
@@ -231,7 +229,7 @@ export async function loadContactPaymentContext(params: {
   const limitedWindows: Record<string, LimitedUsageWindow> = {}
   const usageRemaining: Record<string, number> = {}
   for (const { id, limit } of limited) {
-    const docId = usageWindowDocId(id, limit.per)
+    const docId = usageWindowDocId(id, limit.per, usageAt ?? new Date())
     let used = 0
     try {
       const snap = await admin
@@ -266,6 +264,7 @@ export async function loadContactPaymentSnapshot(params: {
   teamId: string
   contact: (admin.firestore.DocumentData & { id: string }) | null
   relevantTypeIds: string[]
+  usageAt?: Date
 }): Promise<ContactPaymentSnapshot> {
   return (await loadContactPaymentContext(params)).snapshot
 }
@@ -281,12 +280,15 @@ export async function resolveBookingCoverage(params: {
   teamId: string
   accessRule: ActivityAccessRule
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
+  /** Session start — meters usage limits against the week the class HAPPENS. */
+  usageAt?: Date
 }): Promise<BookingCoverageResult> {
-  const { teamId, accessRule, authenticatedContact } = params
+  const { teamId, accessRule, authenticatedContact, usageAt } = params
   const { snapshot, limitedWindows } = await loadContactPaymentContext({
     teamId,
     contact: authenticatedContact,
     relevantTypeIds: accessRule.subscriptionTypeIds ?? [],
+    usageAt,
   })
   const { options, denial } = resolvePaymentOptions(snapshot, {
     kind: 'class_booking',
@@ -329,62 +331,10 @@ export async function resolveBookingCoverage(params: {
   }
 }
 
-export interface HeldBenefitResult {
-  /** The subset of the GIVEN `subscriptionTypeIds` the contact currently holds
-   *  (unmetered subscription OR a usable credit pack), in the SAME order as
-   *  the input — so a caller that picks `heldTypeIds[0]` as "the" match gets
-   *  the one earliest in the activity's configured benefit order. */
-  heldTypeIds: string[]
-  /** Set to the first id (in input order) held ONLY via a credit pack — the
-   *  type a booking must spend a credit of, IF that id ends up being the
-   *  resolved benefit (`resolveEffectiveAppointmentPrice`'s `viaSubscriptionTypeId`).
-   *  Null when no id is credit-only-held. */
-  creditSpendTypeId: string | null
-}
-
-/**
- * APPOINTMENTS-ONLY held-benefit lookup — money is the only gate for
- * appointments (see `ActivityMemberBenefit`), so this never throws and never
- * refuses a guest; it just reports which of the activity's benefit
- * `subscriptionTypeIds` this (already-resolved) contact currently holds, for
- * `resolveEffectiveAppointmentPrice` to price against. Shares the held/credit
- * core (`heldAndCreditSets`) and the per-id unmetered-access check
- * (`typeGrantsUnmeteredAccess`) with `resolveBookingCoverage` — the class gate
- * keeps its exact behaviour; this is a parallel, non-throwing, multi-match read
- * over the SAME underlying data.
- */
-export async function resolveHeldBenefit(params: {
-  teamId: string
-  contact: (admin.firestore.DocumentData & { id: string }) | null
-  subscriptionTypeIds: string[]
-}): Promise<HeldBenefitResult> {
-  const { teamId, contact, subscriptionTypeIds } = params
-  if (!contact || subscriptionTypeIds.length === 0) {
-    return { heldTypeIds: [], creditSpendTypeId: null }
-  }
-
-  const snapshot = await loadContactPaymentSnapshot({
-    teamId,
-    contact,
-    relevantTypeIds: subscriptionTypeIds,
-  })
-  const heldTypeIds: string[] = []
-  let creditSpendTypeId: string | null = null
-  for (const id of subscriptionTypeIds) {
-    if (snapshot.heldUnmeteredTypeIds.includes(id)) {
-      heldTypeIds.push(id)
-      continue
-    }
-    const credit = snapshot.heldCreditTypes.find(
-      (e) => e.subscriptionTypeId === id && e.remaining > 0
-    )
-    if (credit) {
-      heldTypeIds.push(id)
-      if (!creditSpendTypeId) creditSpendTypeId = id
-    }
-  }
-  return { heldTypeIds, creditSpendTypeId }
-}
+// History: an APPOINTMENTS-ONLY `resolveHeldBenefit` (multi-match held-benefit
+// lookup) lived here until the pricing consolidation — the appointment paths
+// now build a snapshot via loadContactPaymentContext and resolve through
+// resolvePaymentOptions like everything else.
 
 /**
  * Enforce an activity's accessRule against an already-resolved authenticated
@@ -399,6 +349,8 @@ export async function resolveBookingAccessGate(params: {
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
   /** Drives denial-message wording only. */
   isAppointment: boolean
+  /** Session start — meters usage limits against the week the class HAPPENS. */
+  usageAt?: Date
 }): Promise<AccessGateResult> {
   const coverage = await resolveBookingCoverage(params)
   if (coverage.denial) {

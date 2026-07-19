@@ -679,13 +679,32 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     { kind: 'course', accessRule: course.accessRule, benefit: courseBenefit }
   )
   const payOption = priced.options[0]
+  // Refuse selling only when the buyer's access is GRANTABLE BY THE RULES:
+  // owning the course, or coverage via their PRIMARY subscription type (the
+  // only one canReadPublishedCourse checks). A resolver-covered-but-not-
+  // rules-grantable state (e.g. coverage via a secondary held type) must fall
+  // through to a normal sale — refusing would deadlock the buyer between a
+  // checkout that says "you already have access" and rules that deny the read.
+  const primaryTypeId =
+    (contactSnap.exists ? (contactSnap.data()?.subscription_type_id as string | undefined) : undefined) ??
+    null
   if (payOption?.type !== 'pay') {
-    throw new HttpsError('failed-precondition', 'You already have access to this course', {
-      reason: 'covered',
-    })
+    const via = payOption?.type === 'covered' ? payOption.via : null
+    const rulesGrantable =
+      via !== null &&
+      (via.reason === 'owned' ||
+        (('subscriptionTypeId' in via ? via.subscriptionTypeId : null) === primaryTypeId &&
+          primaryTypeId !== null))
+    if (rulesGrantable) {
+      throw new HttpsError('failed-precondition', 'You already have access to this course', {
+        reason: 'covered',
+      })
+    }
   }
-
-  const priceMajor = payOption.amount
+  // Effective amount: the pay option's (benefit-discounted) price, or the base
+  // course price on the fall-through path above.
+  const priceMajor =
+    payOption?.type === 'pay' ? payOption.amount : (course.accessRule.priceAmount as number)
   const amount = requireChargeableAmountFromMajor(priceMajor)
 
   // Land the buyer back in the Space (where they watch), not the shop.

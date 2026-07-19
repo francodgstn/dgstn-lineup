@@ -61,7 +61,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 async function resolveDropInForContact(
   teamId: string,
   target: DropInTarget,
-  contact: FirebaseFirestore.DocumentData & { id: string }
+  contact: FirebaseFirestore.DocumentData & { id: string },
+  /** Session start — meters usage limits against the week the class happens. */
+  usageAt?: Date
 ): Promise<PaymentOptionsResult> {
   const benefit = normalizeBenefit(target.benefit)
   const snapshot = await loadContactPaymentSnapshot({
@@ -71,6 +73,7 @@ async function resolveDropInForContact(
       ...(target.accessRule.subscriptionTypeIds ?? []),
       ...(benefit?.subscriptionTypeIds ?? []),
     ],
+    usageAt,
   })
   return resolvePaymentOptions(snapshot, target)
 }
@@ -201,7 +204,12 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     firstname = (c.firstname as string) || ''
     lastname = (c.lastname as string) || ''
     phone = (c.phone as string) || null
-    resolved = await resolveDropInForContact(teamId, dropInTarget, { ...c, id: cSnap.id })
+    resolved = await resolveDropInForContact(
+      teamId,
+      dropInTarget,
+      { ...c, id: cSnap.id },
+      (sessionData.start as Timestamp).toDate()
+    )
     if (isCoveredResult(resolved)) {
       throw new HttpsError('failed-precondition', 'You can already book this class for free')
     }
@@ -229,10 +237,12 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     })
     if (match) {
       contactId = match.id
-      resolved = await resolveDropInForContact(teamId, dropInTarget, {
-        ...match.data(),
-        id: match.id,
-      })
+      resolved = await resolveDropInForContact(
+        teamId,
+        dropInTarget,
+        { ...match.data(), id: match.id },
+        (sessionData.start as Timestamp).toDate()
+      )
       if (isCoveredResult(resolved)) {
         throw new HttpsError('failed-precondition', 'You can already book this class for free')
       }
@@ -273,6 +283,15 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // held benefit type applies (percent_off / fixed_price, clamped ≥ 0.50).
   const payOption = resolved.options.find((o) => o.type === 'pay')
   if (!payOption) {
+    // A KNOWN contact who already used their trial gets the dedicated,
+    // reason-carrying refusal the web maps to its trial-used message — the
+    // generic throw below would swallow it (guests are covered by the
+    // email-resolved eligibility check further down).
+    if (resolved.denial === 'trial_used') {
+      throw new HttpsError('failed-precondition', 'This email has already used a trial', {
+        reason: 'trial_used',
+      })
+    }
     throw new HttpsError('failed-precondition', 'Drop-in is not available for this class')
   }
   const priceMajor = payOption.amount

@@ -16,7 +16,7 @@
 // Cards do not expire in v1 (Swiss-friendly default); studios can void.
 
 import type { Timestamp } from './common'
-import { MIN_CHARGE_MAJOR } from '../utils/money'
+import { MIN_CHARGE_MAJOR, round2Major } from '../utils/money'
 
 export type GiftCardStatus = 'active' | 'depleted' | 'void'
 
@@ -98,9 +98,7 @@ export function planGiftCardRedemption(
   return { drawdown, residual }
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
+const round2 = round2Major
 
 /** GC-XXXX-XXXX from 8 unambiguous chars (no 0/O/1/I). Caller supplies random
  *  bytes so this stays pure (crypto lives in the functions package). */

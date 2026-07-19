@@ -180,6 +180,11 @@ export async function processNoShowStrike(params: {
   let createdFee: PolicyFee | null = null
 
   await db.runTransaction(async (tx) => {
+    // A Firestore transaction RETRIES this closure on contention — reset the
+    // out-param first, or an aborted attempt that reached the threshold leaks
+    // its fee into the email step while the final attempt wrote nothing
+    // (phantom fee with a live payment link).
+    createdFee = null
     const cSnap = await tx.get(contactRef)
     if (!cSnap.exists || cSnap.data()?.teamId !== teamId) return
     const contact = cSnap.data()!

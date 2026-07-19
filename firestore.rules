@@ -222,12 +222,25 @@ service cloud.firestore {
              && exists(/databases/$(database)/documents/courses/$(courseId)/purchases/$(request.auth.token.contactId));
     }
 
+    // Whether a course's benefit grants the calling contact INCLUDED access:
+    // Course.benefit {effect:'included', subscriptionTypeIds} held via the
+    // contact's primary subscription type. Mirrors the resolver's covered
+    // decision (checkout refuses the sale for exactly these holders, so the
+    // rules MUST grant the read or they could neither pay nor watch). The
+    // `is map` guard matters: benefit may be absent OR stored as null.
+    function courseBenefitIncludesCaller(c) {
+      return c.get('benefit', null) is map
+             && c.benefit.get('effect', '') == 'included'
+             && c.benefit.get('subscriptionTypeIds', []).hasAny([callerContactSubscriptionTypeId()]);
+    }
+
     // Whether the public web (anonymous or a contact session) may read a course doc.
     //  - free         → anyone
     //  - registered   → any signed-in contact of the owning team
     //  - subscription → signed-in contact whose subscription_type_id is allowed
     //  - purchase     → signed-in contact who bought it, OR whose subscription_type_id
-    //                   is in the (optional) "included free" list
+    //                   is in the (optional) "included free" list or the course's
+    //                   included-for-subscribers benefit
     function canReadPublishedCourse(courseId, c) {
       return c.status == 'published' && (
            c.accessRule.type == 'free'
@@ -236,7 +249,8 @@ service cloud.firestore {
             && c.accessRule.subscriptionTypeIds.hasAny([callerContactSubscriptionTypeId()]))
         || (c.accessRule.type == 'purchase' && isContactOfTeam(c.teamId)
             && (hasPurchasedCourse(courseId)
-                || c.accessRule.get('subscriptionTypeIds', []).hasAny([callerContactSubscriptionTypeId()])))
+                || c.accessRule.get('subscriptionTypeIds', []).hasAny([callerContactSubscriptionTypeId()])
+                || courseBenefitIncludesCaller(c)))
       );
     }
 

@@ -52,7 +52,12 @@ import {
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
 import { writeContactSubscriptionFields } from '../payments/effects'
-import { commitGiftCardHold, mintGiftCard, releaseGiftCardHold } from './giftCards'
+import {
+  commitGiftCardHold,
+  mintGiftCard,
+  releaseGiftCardHold,
+  restoreGiftCardDrawdown,
+} from './giftCards'
 import { markPolicyFeePaid } from '../booking/policyFees'
 import { asLang, runAppointmentSlotTransaction } from '../appointments/booking'
 import { sendAppointmentBookingEmails } from '../appointments/emails'
@@ -902,10 +907,18 @@ async function handleCheckoutCompleted(
   // Gift-card redemption (product/course/drop-in checkouts that reserved a
   // drawdown): commit it BEFORE the per-kind dispatch below, one clean spot
   // for every kind that can carry a gift-card hold. Full-cover redemptions
-  // never reach here (no Stripe checkout was created for them).
+  // never reach here (no Stripe checkout was created for them). The metadata
+  // drawdown is the fallback amount for a payment that landed AFTER the hold
+  // lazily expired — the event-id ledger keeps this once-per-event.
   if (md.giftCardCode && md.giftCardHold) {
+    const fallback = Number(md.giftCardDrawdown)
     try {
-      await commitGiftCardHold({ teamId: team.teamId, code: md.giftCardCode, holdKey: md.giftCardHold })
+      await commitGiftCardHold({
+        teamId: team.teamId,
+        code: md.giftCardCode,
+        holdKey: md.giftCardHold,
+        fallbackAmountMajor: Number.isFinite(fallback) ? fallback : undefined,
+      })
     } catch (err) {
       console.error(`[connect] gift card hold commit failed (code=${md.giftCardCode}):`, err)
     }
@@ -1345,6 +1358,20 @@ async function handleDropInCheckout(
           { contactId, status: 'refunded', updated_at: FieldValue.serverTimestamp() },
           { merge: true }
         )
+        // A duplicate that redeemed a gift card had its drawdown committed
+        // before dispatch — restore it, or the buyer loses stored value with
+        // nothing delivered.
+        const dupDrawdown = Number(md.giftCardDrawdown)
+        if (md.giftCardCode && Number.isFinite(dupDrawdown) && dupDrawdown > 0) {
+          await restoreGiftCardDrawdown({
+            teamId: team.teamId,
+            code: md.giftCardCode,
+            amountMajor: dupDrawdown,
+          })
+          console.log(
+            `[connect] drop-in duplicate: restored gift-card drawdown ${dupDrawdown} to ${md.giftCardCode}`
+          )
+        }
         console.log(`[connect] drop-in duplicate charge ${piId} refunded (booking already confirmed)`)
       } catch (err) {
         console.error('[connect] drop-in duplicate refund failed:', err)

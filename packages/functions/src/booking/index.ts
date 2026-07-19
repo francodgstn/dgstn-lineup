@@ -673,6 +673,9 @@ export const bookSession = onCall(async (request) => {
     accessRule: gateAccessRule,
     authenticatedContact,
     isAppointment: false,
+    // Meter usage limits against the week the CLASS happens, not the booking
+    // moment — advance bookings must debit the session's own window.
+    usageAt: (sessionData.start as Timestamp).toDate(),
   })
 
   // Resolve or create contact

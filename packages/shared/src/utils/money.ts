@@ -6,7 +6,8 @@
 //  • AUTHORED prices below the floor are a configuration error → callers THROW
 //    (see requireChargeableAmountFromMajor in functions/connect/checkout.ts);
 //  • ARITHMETIC-DERIVED prices (percent discounts) CLAMP UP to the floor and are
-//    never free — see resolveEffectiveAppointmentPrice.
+//    never free — see the appointment arm of resolvePaymentOptions
+//    (utils/paymentOptions.ts).
 // All SUPPORTED_CURRENCIES are two-decimal by design (see types/currency.ts), so
 // ×100 is safe for every currency the app can be configured with.
 
@@ -25,4 +26,11 @@ export function toMinorUnits(major: number): number {
 /** True iff `amount` is an integer minor-unit value at or above the charge floor. */
 export function isChargeableMinorAmount(amount: unknown): amount is number {
   return typeof amount === 'number' && Number.isInteger(amount) && amount >= MIN_CHARGE_MINOR
+}
+
+/** Round a MAJOR-units amount to two decimals — the one rounding policy for
+ *  major-unit arithmetic (benefit discounts, gift-card balances). Keep every
+ *  call site on this helper so a policy change can never fork the math. */
+export function round2Major(major: number): number {
+  return Math.round(major * 100) / 100
 }

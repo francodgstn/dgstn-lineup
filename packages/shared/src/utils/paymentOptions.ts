@@ -20,7 +20,7 @@
 import type { ActivityAccessRule, ActivityDuration, ActivityMemberBenefit } from '../types/activity'
 import type { CourseAccessRule } from '../types/course'
 import { normalizeBenefit, type Benefit, type BenefitEffect } from '../types/benefit'
-import { MIN_CHARGE_MAJOR } from './money'
+import { MIN_CHARGE_MAJOR, round2Major } from './money'
 
 /** Either benefit shape — every read normalizes via `normalizeBenefit`. */
 export type AnyBenefit = ActivityMemberBenefit | Benefit
@@ -266,7 +266,12 @@ function applyBenefitToPrice(
           denial: null,
         }
       }
-      // Held only via a credit pack — included means "spend one credit".
+      // Held only via a credit pack — included means "spend one credit"…
+      // but ONLY in contexts that can actually spend one (appointments).
+      // Courses have no credit-spend story, so a pack-held 'included' benefit
+      // falls back to the base price there instead of emitting an
+      // unfulfillable spend_credits option.
+      if (!allowed.has('spend_credits')) return payBase
       return {
         options: [
           {
@@ -299,7 +304,7 @@ function applyBenefitToPrice(
       const amount =
         pct >= 100
           ? MIN_CHARGE_MAJOR
-          : Math.max(MIN_CHARGE_MAJOR, Math.round(((base * (100 - pct)) / 100) * 100) / 100)
+          : Math.max(MIN_CHARGE_MAJOR, round2Major((base * (100 - pct)) / 100))
       return {
         options: [
           {

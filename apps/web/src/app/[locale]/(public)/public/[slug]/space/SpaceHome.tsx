@@ -67,7 +67,12 @@ function hasAccess(
     heldSubscriptionTypeIds,
     ownsCourse: purchasedCourseIds?.has(card.id),
   })
-  return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule }).options.length > 0
+  // COVERED options only — a priced course always yields a `pay` option for
+  // any signed-in contact, and "you could buy this" is not an entitlement
+  // (this section shows the contact's library, never a catalogue).
+  return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule }).options.some(
+    (o) => o.type === 'covered'
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

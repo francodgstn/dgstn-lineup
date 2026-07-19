@@ -653,3 +653,41 @@ describe('resolvePaymentOptions — usage limits (Phase D)', () => {
     },
   ])
 })
+
+describe('resolvePaymentOptions — review-fix regressions', () => {
+  runRows([
+    {
+      name: 'course included-benefit held only via a CREDIT PACK falls back to pay (no course credit-spend exists)',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 5 }] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120 },
+        benefit: { subscriptionTypeIds: ['pack10'], effect: 'included' },
+      },
+      expected: {
+        options: [{ type: 'pay', amount: 120, source: 'course_price' }],
+        denial: null,
+      },
+    },
+    {
+      name: 'percent_off keeps two-decimal rounding (45 at 33% off -> 30.15)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 45 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'percent_off', percent: 33 },
+      },
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 30.15,
+            source: 'base',
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 45 },
+          },
+        ],
+        denial: null,
+      },
+    },
+  ])
+})

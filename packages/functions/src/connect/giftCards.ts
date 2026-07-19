@@ -30,6 +30,7 @@ import {
   formatGiftCardCode,
   giftCardAvailable,
   planGiftCardRedemption,
+  round2Major,
   type GiftCard,
   type GiftCardHold,
   type GiftCardRedemptionPlan,
@@ -48,9 +49,7 @@ import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
 const DEFAULT_HOLD_MINUTES = 35
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
+const round2 = round2Major
 
 /** Codes are case/space-insensitive to the buyer; the doc id is always the
  *  canonical uppercase form formatGiftCardCode produces. */
@@ -170,18 +169,27 @@ export async function reserveGiftCardDrawdown(params: {
       amount: plan.drawdown,
       expires_at: Timestamp.fromMillis(nowMs + holdMinutes * 60_000),
     }
-    tx.set(ref, { holds, updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    // update() REPLACES the holds map wholesale — set(..., {merge:true}) would
+    // deep-merge it and resurrect every key we dropped (expired-hold cleanup
+    // and releases would never persist).
+    tx.update(ref, { holds, updated_at: FieldValue.serverTimestamp() })
     return plan
   })
 }
 
 /** Commit a reserved hold: subtract the drawdown from the card's balance and
- *  drop the hold. Idempotent — a missing hold (already committed by a sibling
- *  webhook event, or lazily expired) is a no-op. */
+ *  drop the hold. Idempotent per Stripe event (the webhook's event-id ledger
+ *  guarantees single delivery). When the hold is MISSING but the caller knows
+ *  the drawdown (webhook metadata), the amount is deducted anyway — a payment
+ *  that lands after the 35-minute hold expiry must still draw the card down,
+ *  or the buyer keeps stored value they already spent. */
 export async function commitGiftCardHold(params: {
   teamId: string
   code: string
   holdKey: string
+  /** The reserved drawdown (major units), from checkout metadata — used when
+   *  the hold has lazily expired before the payment webhook arrived. */
+  fallbackAmountMajor?: number
 }): Promise<void> {
   const db = admin.firestore()
   const ref = cardRef(params.teamId, params.code)
@@ -194,25 +202,47 @@ export async function commitGiftCardHold(params: {
     const holds = dropExpiredHolds(card.holds, nowMs)
     const hold = holds[params.holdKey]
 
-    if (!hold) {
-      // Already committed (or the hold expired before payment landed — the
-      // Stripe checkout expiry mirrors the hold window, so this is rare).
-      tx.set(ref, { holds, updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    const amount = hold?.amount ?? params.fallbackAmountMajor
+    if (typeof amount !== 'number') {
+      // No hold, no known drawdown — nothing safe to commit; still persist any
+      // lazy-expired cleanup we computed.
+      tx.update(ref, { holds, updated_at: FieldValue.serverTimestamp() })
       return
     }
 
     delete holds[params.holdKey]
-    const balance = round2(card.balance - hold.amount)
-    tx.set(
-      ref,
-      {
-        holds,
-        balance,
-        status: balance <= 0 ? 'depleted' : card.status,
-        updated_at: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+    const balance = Math.max(0, round2(card.balance - amount))
+    // update() replaces the holds map wholesale (merge would resurrect
+    // dropped keys) — see reserveGiftCardDrawdown.
+    tx.update(ref, {
+      holds,
+      balance,
+      status: balance <= 0 ? 'depleted' : card.status,
+      updated_at: FieldValue.serverTimestamp(),
+    })
+  })
+}
+
+/** Restore a previously COMMITTED drawdown (e.g. a duplicate charge that got
+ *  refunded after its gift-card portion was already committed). */
+export async function restoreGiftCardDrawdown(params: {
+  teamId: string
+  code: string
+  amountMajor: number
+}): Promise<void> {
+  const db = admin.firestore()
+  const ref = cardRef(params.teamId, params.code)
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists) return
+    const card = snap.data() as GiftCard
+    const balance = round2(card.balance + params.amountMajor)
+    tx.update(ref, {
+      balance,
+      // A void stays void; a depleted card comes back to life.
+      status: card.status === 'depleted' && balance > 0 ? 'active' : card.status,
+      updated_at: FieldValue.serverTimestamp(),
+    })
   })
 }
 
@@ -231,13 +261,10 @@ export async function releaseGiftCardHold(params: {
     const card = snap.data() as GiftCard
     const nowMs = Date.now()
     const holds = dropExpiredHolds(card.holds, nowMs)
-    if (!(params.holdKey in holds)) {
-      // Nothing to release, but persist any lazy-expired cleanup we found.
-      tx.set(ref, { holds, updated_at: FieldValue.serverTimestamp() }, { merge: true })
-      return
-    }
     delete holds[params.holdKey]
-    tx.set(ref, { holds, updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    // update() replaces the holds map wholesale — merge would resurrect the
+    // deleted key and the release would never persist.
+    tx.update(ref, { holds, updated_at: FieldValue.serverTimestamp() })
   })
 }
 

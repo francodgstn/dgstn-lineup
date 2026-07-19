@@ -104,10 +104,10 @@ back at it; `origin: 'window'`.
 **No access gate.** Appointments have no access rule — THE PRICE IS THE GATE
 (see "Paid appointments"). The class access gate (`booking/access.ts`) is
 untouched for `bookSession`; what the two paths share is the **held-types
-computation**: `resolveHeldBenefit` reuses the same held-subscription/credit
-lookup the class coverage gate uses, but feeds it
-`memberBenefit.subscriptionTypeIds` — so credit packs keep spending a credit on
-an `included` booking. (History: the 2026-07 activity-bound refactor initially
+computation**: the appointment paths build the same contact snapshot
+(`loadContactPaymentContext`) the class coverage gate uses, but resolve it
+against `memberBenefit.subscriptionTypeIds` — so credit packs keep spending a
+credit on an `included` booking. (History: the 2026-07 activity-bound refactor initially
 gave appointments the class access gate; a persona test showed it produced the
 "who pays base price if only Premium can book?" paradox, and it was dropped the
 same month — while the old generator model before the refactor couldn't gate at

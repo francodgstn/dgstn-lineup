@@ -256,7 +256,7 @@ Checkout, with metadata
 durationMinutes }`. The `checkout.session.completed` webhook (`handleAppointmentCheckout`)
 confirms the hold (or re-acquires a swept slot, or refunds a lost/duplicate one) and
 writes `member_payments/{pi}` with `kind: 'appointment'` + `sessionId`;
-`checkout.session.expired` (`handleAppointmentCheckoutExpired`) releases a still-pending
+`checkout.session.expired` (`handleCheckoutExpired`) releases a still-pending
 hold promptly. Full architecture — pricing model, the price-is-the-gate rule, the hold
 state machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
 
