@@ -1406,7 +1406,14 @@
     "subTypeActivitiesLabel": "Attività sbloccate da questo abbonamento",
     "subTypeActivitiesDesc": "I titolari di questo abbonamento possono prenotare queste attività. Collegare un’attività ne limita la prenotazione agli abbonati.",
     "subTypeActivitiesEmpty": "Nessuna attività al momento — creale in Offerta → Attività.",
-    "subTypeActivitiesHint": "Rimuovendo l’ultimo abbonamento da un’attività, questa torna prenotabile da tutti i membri."
+    "subTypeActivitiesHint": "Rimuovendo l’ultimo abbonamento da un’attività, questa torna prenotabile da tutti i membri.",
+    "subTypeUsageLimit": "Limite di utilizzo",
+    "subTypeUsageLimitDesc": "Limita solo le prenotazioni di CORSI coperte da questo abbonamento. Una volta esaurita l'allowance, i membri possono comunque prenotare al prezzo a ingresso singolo (si applica il prezzo membro).",
+    "subTypeLimitPeriodDay": "al giorno",
+    "subTypeLimitPeriodWeek": "alla settimana",
+    "subTypeLimitPeriodMonth": "al mese",
+    "subTypePayoutPerVisit": "Compenso per visita",
+    "subTypePayoutPerVisitDesc": "Quanto ti paga il partner per ogni visita effettuata. Mostrato nel registro delle visite dei partner."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -3013,7 +3020,11 @@
     "lineKind_other": "Altro",
     "selectCourse": "Scegli corso",
     "selectProduct": "Scegli prodotto",
-    "selectVariant": "Variante"
+    "selectVariant": "Variante",
+    "partnerVisitsHeading": "Visite partner",
+    "partnerVisitsEmpty": "Nessuna visita partner questo mese.",
+    "partnerVisitsRateNotSet": "Tariffa non impostata",
+    "partnerVisitsTotal": "Pagamento stimato questo mese: {amount}"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Iscrizione abbonamento",
@@ -3436,6 +3447,13 @@
     "personaGuest": "Ospite",
     "personaMember": "Membro (senza abbonamento)",
     "packEmptyLabel": "Pacchetto esaurito",
+    "allowanceUsedUpLabel": "Allowance esaurita",
+    "remainingThisPeriod": "· ancora {count} in questo periodo",
+    "limitReached": "Limite del periodo raggiunto",
+    "sellUsageLimit": "Fino a {count} corsi {period}",
+    "limitPeriod_day": "al giorno",
+    "limitPeriod_week": "alla settimana",
+    "limitPeriod_month": "al mese",
     "groupClasses": "Corsi",
     "groupAppointments": "Appuntamenti",
     "groupCourses": "Corsi online",

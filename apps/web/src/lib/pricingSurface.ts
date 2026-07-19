@@ -10,6 +10,7 @@ import {
   resolveAppointmentDurations,
   resolvePaymentOptions,
   resolveProductPrice,
+  resolveUsageLimit,
   type Activity,
   type Benefit,
   type ContactPaymentSnapshot,
@@ -17,6 +18,7 @@ import {
   type PaymentDenial,
   type Product,
   type SubscriptionType,
+  type SubscriptionUsageLimit,
 } from '@linyup/shared'
 
 // ─── Personas ───────────────────────────────────────────────────────────────────
@@ -33,6 +35,9 @@ export interface PricingPersona {
   creditOnly: boolean
   /** Usable credits of a fresh pack (largest active credit price). */
   packSize?: number
+  /** Usage limit ("up to N classes per period"), when the type has one — the
+   *  page offers an "allowance used up" toggle for these. */
+  limit?: SubscriptionUsageLimit
 }
 
 /** Classify a subscription type the same way the server's coverage loader does
@@ -55,6 +60,7 @@ export function buildPersonas(subscriptionTypes: SubscriptionType[]): PricingPer
   for (const t of subscriptionTypes) {
     if (t.active === false) continue
     const creditOnly = isCreditOnlyType(t)
+    const limit = resolveUsageLimit(t)
     personas.push({
       id: `type:${t.id}`,
       kind: 'type',
@@ -62,6 +68,7 @@ export function buildPersonas(subscriptionTypes: SubscriptionType[]): PricingPer
       label: t.name,
       creditOnly,
       packSize: creditOnly ? packSize(t) : undefined,
+      ...(limit ? { limit } : {}),
     })
   }
   return personas
@@ -69,8 +76,14 @@ export function buildPersonas(subscriptionTypes: SubscriptionType[]): PricingPer
 
 /** The snapshot a persona resolves with. `packEmpty` only affects credit-only
  *  personas — it demos the exhausted-pack state (denied free path, offered the
- *  drop-in pay path instead). */
-export function personaSnapshot(persona: PricingPersona, packEmpty = false): ContactPaymentSnapshot {
+ *  drop-in pay path instead). `allowanceUsedUp` only affects usage-limited
+ *  personas — it demos the spent-window state (limit_reached denial, or the
+ *  drop-in pay path when one exists). */
+export function personaSnapshot(
+  persona: PricingPersona,
+  packEmpty = false,
+  allowanceUsedUp = false
+): ContactPaymentSnapshot {
   if (persona.kind === 'guest') return GUEST_SNAPSHOT
   if (persona.kind === 'member' || !persona.subscriptionTypeId) {
     return { authenticated: true, joined: true, heldUnmeteredTypeIds: [], heldCreditTypes: [] }
@@ -93,13 +106,27 @@ export function personaSnapshot(persona: PricingPersona, packEmpty = false): Con
     joined: true,
     heldUnmeteredTypeIds: [persona.subscriptionTypeId],
     heldCreditTypes: [],
+    ...(persona.limit
+      ? {
+          usageRemaining: {
+            [persona.subscriptionTypeId]: allowanceUsedUp ? 0 : persona.limit.count,
+          },
+        }
+      : {}),
   }
 }
 
 // ─── Price cells ────────────────────────────────────────────────────────────────
 
 export type PriceCell =
-  | { kind: 'free'; reason: 'open' | 'members' | 'unpriced' | 'included' | 'registered' | 'free_tier' | 'subscription'; viaTypeId?: string }
+  | {
+      kind: 'free'
+      reason: 'open' | 'members' | 'unpriced' | 'included' | 'registered' | 'free_tier' | 'subscription'
+      viaTypeId?: string
+      /** For usage-limited subscription coverage: bookings left in the
+       *  current window AFTER this one. */
+      remaining?: number
+    }
   | { kind: 'credit'; typeId: string; remaining: number }
   | {
       kind: 'pay'
@@ -126,6 +153,7 @@ function fromResult(
   }
   if (option.type === 'covered') {
     const via = option.via
+    const remaining = option.remaining
     switch (via.reason) {
       case 'open':
         return { kind: 'free', reason: 'open' }
@@ -140,9 +168,9 @@ function fromResult(
       case 'owned':
         return { kind: 'free', reason: 'free_tier' }
       case 'subscription':
-        return { kind: 'free', reason: 'subscription', viaTypeId: via.subscriptionTypeId }
+        return { kind: 'free', reason: 'subscription', viaTypeId: via.subscriptionTypeId, remaining }
       case 'benefit_included':
-        return { kind: 'free', reason: 'included', viaTypeId: via.subscriptionTypeId }
+        return { kind: 'free', reason: 'included', viaTypeId: via.subscriptionTypeId, remaining }
     }
   }
   if (option.type === 'spend_credits') {

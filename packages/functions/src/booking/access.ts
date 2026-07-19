@@ -12,9 +12,12 @@ import type { Timestamp } from 'firebase-admin/firestore'
 import {
   GUEST_SNAPSHOT,
   resolvePaymentOptions,
+  resolveUsageLimit,
+  usageWindowDocId,
   type ActivityAccessRule,
   type ContactPaymentSnapshot,
   type SubscriptionPrice,
+  type SubscriptionUsageLimit,
 } from '@linyup/shared'
 
 /**
@@ -26,11 +29,11 @@ import {
  *   • Price unknown: true unless EVERY active price carries credits (a
  *     credits-only type can only ever grant metered access).
  */
-async function typeGrantsUnmeteredAccess(
+async function classifyHeldType(
   teamId: string,
   subscriptionTypeId: string,
   contact: FirebaseFirestore.DocumentData
-): Promise<boolean> {
+): Promise<{ unmetered: boolean; limit: SubscriptionUsageLimit | null }> {
   try {
     const snap = await admin
       .firestore()
@@ -39,24 +42,34 @@ async function typeGrantsUnmeteredAccess(
       .collection('subscription_types')
       .doc(subscriptionTypeId)
       .get()
-    if (!snap.exists) return true // unknown type — behave as before credits existed
-    const prices = ((snap.data()?.prices as SubscriptionPrice[] | undefined) ?? []).filter(
+    if (!snap.exists) return { unmetered: true, limit: null } // unknown type — pre-credits behavior
+    const data = snap.data()!
+    const limit = resolveUsageLimit({ limits: data.limits as SubscriptionUsageLimit[] | undefined })
+    const prices = ((data.prices as SubscriptionPrice[] | undefined) ?? []).filter(
       (p) => p.active !== false
     )
-    if (prices.length === 0 || prices.every((p) => !p.credits)) return true
+    if (prices.length === 0 || prices.every((p) => !p.credits)) return { unmetered: true, limit }
     const heldPriceId =
       contact.subscription_type_id === subscriptionTypeId
         ? (contact.subscription_price_id as string | undefined)
         : undefined
     if (heldPriceId) {
       const heldPrice = prices.find((p) => p.id === heldPriceId)
-      if (heldPrice) return !heldPrice.credits
+      if (heldPrice) return { unmetered: !heldPrice.credits, limit }
     }
     // Held price unknown: lenient unless the type is credits-only.
-    return prices.some((p) => !p.credits)
+    return { unmetered: prices.some((p) => !p.credits), limit }
   } catch {
-    return true // fail open — same behavior as before the credits feature
+    return { unmetered: true, limit: null } // fail open — pre-credits/pre-limits behavior
   }
+}
+
+async function typeGrantsUnmeteredAccess(
+  teamId: string,
+  subscriptionTypeId: string,
+  contact: FirebaseFirestore.DocumentData
+): Promise<boolean> {
+  return (await classifyHeldType(teamId, subscriptionTypeId, contact)).unmetered
 }
 
 export interface AccessGateResult {
@@ -66,10 +79,19 @@ export interface AccessGateResult {
   /** Set when the match came from a lesson-credit pack — the caller must spend
    *  one credit of this type atomically with the booking write. */
   creditSpendTypeId: string | null
+  /** Set when the match came from a USAGE-LIMITED subscription — the caller
+   *  must increment this window counter atomically with the booking write
+   *  (and stamp the booking so cancellation can decrement it). */
+  usageSpend: { subscriptionTypeId: string; docId: string; count: number } | null
 }
 
 /** Why coverage was denied — null means it wasn't (the caller is covered). */
-export type BookingAccessDenialReason = 'guest' | 'not_joined' | 'no_subscription' | 'no_credits'
+export type BookingAccessDenialReason =
+  | 'guest'
+  | 'not_joined'
+  | 'no_subscription'
+  | 'no_credits'
+  | 'limit_reached'
 
 export interface BookingCoverageResult extends AccessGateResult {
   /** Whether the accessRule is satisfied — the non-throwing twin of
@@ -90,6 +112,8 @@ function denialMessage(denial: BookingAccessDenialReason, isAppointment: boolean
         : 'This session is for members only. Trial accounts cannot book this class.'
     case 'no_credits':
       return 'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
+    case 'limit_reached':
+      return 'You have used all the classes your membership includes for this period.'
     case 'no_subscription':
       return 'This class requires an active membership you do not currently hold.'
   }
@@ -137,13 +161,29 @@ function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
  * fail-open). Only ids in `relevantTypeIds` are classified — pass the union of
  * every id the resolution can touch (accessRule ids ∪ benefit ids).
  */
-export async function loadContactPaymentSnapshot(params: {
+export interface LimitedUsageWindow {
+  subscriptionTypeId: string
+  /** Doc id under contacts/{id}/usage_windows for the CURRENT window. */
+  docId: string
+  /** The configured allowance (limit.count). */
+  count: number
+  used: number
+}
+
+export interface ContactPaymentContext {
+  snapshot: ContactPaymentSnapshot
+  /** Per LIMITED unmetered held type: the current window's counter state —
+   *  what bookSession must increment transactionally on a covered booking. */
+  limitedWindows: Record<string, LimitedUsageWindow>
+}
+
+export async function loadContactPaymentContext(params: {
   teamId: string
   contact: (admin.firestore.DocumentData & { id: string }) | null
   relevantTypeIds: string[]
-}): Promise<ContactPaymentSnapshot> {
+}): Promise<ContactPaymentContext> {
   const { teamId, contact, relevantTypeIds } = params
-  if (!contact) return GUEST_SNAPSHOT
+  if (!contact) return { snapshot: GUEST_SNAPSHOT, limitedWindows: {} }
 
   const { held, creditTypes } = heldAndCreditSets(contact)
   const nowMs = Date.now()
@@ -168,10 +208,13 @@ export async function loadContactPaymentSnapshot(params: {
 
   const heldUnmeteredTypeIds: string[] = []
   const heldCreditTypes: Array<{ subscriptionTypeId: string; remaining: number }> = []
+  const limited: Array<{ id: string; limit: SubscriptionUsageLimit }> = []
   for (const id of relevantTypeIds) {
     if (held.has(id)) {
-      if (await typeGrantsUnmeteredAccess(teamId, id, contact)) {
+      const { unmetered, limit } = await classifyHeldType(teamId, id, contact)
+      if (unmetered) {
         heldUnmeteredTypeIds.push(id)
+        if (limit) limited.push({ id, limit })
         continue
       }
       // Mirror-held but credit-metered — attached, possibly with 0 usable left
@@ -184,13 +227,47 @@ export async function loadContactPaymentSnapshot(params: {
     }
   }
 
-  return {
-    authenticated: true,
-    joined: contact.acquisition_stage === 'joined',
-    heldUnmeteredTypeIds,
-    heldCreditTypes,
-    trialUsed: !!contact.trial_used_at,
+  // Current-window consumption for the limited types (one small doc each).
+  const limitedWindows: Record<string, LimitedUsageWindow> = {}
+  const usageRemaining: Record<string, number> = {}
+  for (const { id, limit } of limited) {
+    const docId = usageWindowDocId(id, limit.per)
+    let used = 0
+    try {
+      const snap = await admin
+        .firestore()
+        .collection('contacts')
+        .doc(contact.id)
+        .collection('usage_windows')
+        .doc(docId)
+        .get()
+      used = (snap.data()?.used as number | undefined) ?? 0
+    } catch {
+      used = 0 // fail open, like the type classification
+    }
+    limitedWindows[id] = { subscriptionTypeId: id, docId, count: limit.count, used }
+    usageRemaining[id] = Math.max(0, limit.count - used)
   }
+
+  return {
+    snapshot: {
+      authenticated: true,
+      joined: contact.acquisition_stage === 'joined',
+      heldUnmeteredTypeIds,
+      heldCreditTypes,
+      trialUsed: !!contact.trial_used_at,
+      ...(limited.length > 0 ? { usageRemaining } : {}),
+    },
+    limitedWindows,
+  }
+}
+
+export async function loadContactPaymentSnapshot(params: {
+  teamId: string
+  contact: (admin.firestore.DocumentData & { id: string }) | null
+  relevantTypeIds: string[]
+}): Promise<ContactPaymentSnapshot> {
+  return (await loadContactPaymentContext(params)).snapshot
 }
 
 /**
@@ -206,7 +283,7 @@ export async function resolveBookingCoverage(params: {
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
 }): Promise<BookingCoverageResult> {
   const { teamId, accessRule, authenticatedContact } = params
-  const snapshot = await loadContactPaymentSnapshot({
+  const { snapshot, limitedWindows } = await loadContactPaymentContext({
     teamId,
     contact: authenticatedContact,
     relevantTypeIds: accessRule.subscriptionTypeIds ?? [],
@@ -221,6 +298,7 @@ export async function resolveBookingCoverage(params: {
       covered: false,
       matchedSubscriptionTypeId: null,
       creditSpendTypeId: null,
+      usageSpend: null,
       denial: denial as BookingAccessDenialReason,
     }
   }
@@ -230,6 +308,7 @@ export async function resolveBookingCoverage(params: {
       covered: true,
       matchedSubscriptionTypeId: option.via.subscriptionTypeId,
       creditSpendTypeId: option.via.subscriptionTypeId,
+      usageSpend: null,
       denial: null,
     }
   }
@@ -237,7 +316,17 @@ export async function resolveBookingCoverage(params: {
     option?.type === 'covered' && option.via.reason === 'subscription'
       ? option.via.subscriptionTypeId
       : null
-  return { covered: true, matchedSubscriptionTypeId: matched, creditSpendTypeId: null, denial: null }
+  // A limited type's coverage must consume one unit of its current window.
+  const window = matched ? limitedWindows[matched] : undefined
+  return {
+    covered: true,
+    matchedSubscriptionTypeId: matched,
+    creditSpendTypeId: null,
+    usageSpend: window
+      ? { subscriptionTypeId: window.subscriptionTypeId, docId: window.docId, count: window.count }
+      : null,
+    denial: null,
+  }
 }
 
 export interface HeldBenefitResult {
@@ -315,5 +404,9 @@ export async function resolveBookingAccessGate(params: {
   if (coverage.denial) {
     throw new HttpsError('permission-denied', denialMessage(coverage.denial, params.isAppointment))
   }
-  return { matchedSubscriptionTypeId: coverage.matchedSubscriptionTypeId, creditSpendTypeId: coverage.creditSpendTypeId }
+  return {
+    matchedSubscriptionTypeId: coverage.matchedSubscriptionTypeId,
+    creditSpendTypeId: coverage.creditSpendTypeId,
+    usageSpend: coverage.usageSpend,
+  }
 }

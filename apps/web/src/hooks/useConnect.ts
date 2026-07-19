@@ -11,6 +11,7 @@ import { db, functions } from '@/lib/firebase'
 import {
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
+  PARTNER_VISITS_SUBCOLLECTION,
   PAYMENT_EVENTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   type ConnectAccountStatus,
@@ -18,6 +19,7 @@ import {
   type ExternalPayment,
   type MemberPayment,
   type MemberSubscription,
+  type PartnerVisit,
   type PaymentLineItem,
 } from '@linyup/shared'
 
@@ -235,6 +237,30 @@ export function useUpdatePaymentRecord() {
       qc.invalidateQueries({ queryKey: ['payment-events', vars.teamId] })
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })
+    },
+  })
+}
+
+/** Current-month partner (aggregator) visit payout ledger — reporting only
+ * (teams/{teamId}/partner_visits). Filtered by created_at only (no composite
+ * index); status is filtered client-side. */
+export function usePartnerVisits(teamId: string | null) {
+  return useQuery({
+    queryKey: ['partner-visits', teamId],
+    enabled: !!teamId,
+    queryFn: async (): Promise<PartnerVisit[]> => {
+      const startOfMonth = new Date()
+      startOfMonth.setDate(1)
+      startOfMonth.setHours(0, 0, 0, 0)
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, PARTNER_VISITS_SUBCOLLECTION),
+          where('created_at', '>=', startOfMonth),
+          orderBy('created_at', 'desc'),
+          limit(200)
+        )
+      )
+      return snap.docs.map((d) => d.data() as PartnerVisit)
     },
   })
 }

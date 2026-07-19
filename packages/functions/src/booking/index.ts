@@ -24,6 +24,7 @@ import {
   resolveAutoConfirm,
   heldSubscriptionTypeIds,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
+  PARTNER_VISITS_SUBCOLLECTION,
   type ActivityAccessRule,
   type ActivityType,
 } from '@linyup/shared'
@@ -667,7 +668,7 @@ export const bookSession = onCall(async (request) => {
   }
 
   const gateAccessRule: ActivityAccessRule = isTrialDoor ? { type: 'open' } : accessRule
-  const { matchedSubscriptionTypeId, creditSpendTypeId } = await resolveBookingAccessGate({
+  const { matchedSubscriptionTypeId, creditSpendTypeId, usageSpend } = await resolveBookingAccessGate({
     teamId: data.teamId,
     accessRule: gateAccessRule,
     authenticatedContact,
@@ -891,10 +892,89 @@ export const bookSession = onCall(async (request) => {
       tx.set(bookingRef, { ...bookingDoc, credit_grant_id: grant.ref.id, credit_spent: 1 })
       tx.set(sessionRef, sessionCounterUpdate, { merge: true })
     })
+  } else if (usageSpend) {
+    // Usage-limited subscription ("3 classes per week"): consume one unit of
+    // the current window atomically with the booking write. The transaction
+    // re-reads the counter, so a concurrent-booking race is settled here —
+    // exactly the credit-spend pattern above. The booking is stamped with the
+    // window doc id so cancelBooking can refund the unit.
+    const db = admin.firestore()
+    const windowRef = db
+      .collection('contacts')
+      .doc(contactId)
+      .collection('usage_windows')
+      .doc(usageSpend.docId)
+    await db.runTransaction(async (tx) => {
+      const windowSnap = await tx.get(windowRef)
+      const used = (windowSnap.data()?.used as number | undefined) ?? 0
+      if (used >= usageSpend.count) {
+        throw new HttpsError(
+          'permission-denied',
+          'You have used all the classes your membership includes for this period.'
+        )
+      }
+      tx.set(
+        windowRef,
+        {
+          teamId: data.teamId,
+          subscription_type_id: usageSpend.subscriptionTypeId,
+          used: used + 1,
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      tx.set(bookingRef, {
+        ...bookingDoc,
+        usage_window_doc_id: usageSpend.docId,
+        usage_window_type_id: usageSpend.subscriptionTypeId,
+      })
+      tx.set(sessionRef, sessionCounterUpdate, { merge: true })
+    })
   } else {
-    // Non-credit path — unchanged.
+    // Non-credit, non-limited path — unchanged.
     await bookingRef.set(bookingDoc)
     await sessionRef.set(sessionCounterUpdate, { merge: true })
+  }
+
+  // Partner (aggregator) visit ledger — a booking covered via a
+  // source:'aggregator' subscription type (FitPass/SportPass/USC…) earns the
+  // studio a per-visit payout from the partner. Reporting only, best-effort:
+  // a ledger failure must never fail the booking. Doc id session_contact ⇒
+  // idempotent across retries; cancelBooking flips it to 'cancelled'.
+  if (matchedSubscriptionTypeId && !creditSpendTypeId) {
+    try {
+      const typeSnap = await admin
+        .firestore()
+        .collection('teams')
+        .doc(data.teamId)
+        .collection('subscription_types')
+        .doc(matchedSubscriptionTypeId)
+        .get()
+      const typeData = typeSnap.data()
+      if (typeData?.source === 'aggregator') {
+        await admin
+          .firestore()
+          .collection('teams')
+          .doc(data.teamId)
+          .collection(PARTNER_VISITS_SUBCOLLECTION)
+          .doc(`${data.sessionId}_${contactId}`)
+          .set({
+            teamId: data.teamId,
+            contactId,
+            sessionId: data.sessionId,
+            subscription_type_id: matchedSubscriptionTypeId,
+            subscription_type_name: (typeData.name as string) ?? null,
+            // Major units, team currency; null = rate not configured yet.
+            amount: typeof typeData.payoutPerVisit === 'number' ? typeData.payoutPerVisit : null,
+            session_start: sessionData.start ?? null,
+            activity_name: (sessionData.activityName as string | undefined) ?? null,
+            status: 'booked',
+            created_at: FieldValue.serverTimestamp(),
+          })
+      }
+    } catch (ledgerErr) {
+      console.error('[bookSession] partner_visits ledger write failed:', ledgerErr)
+    }
   }
 
   if (!isNewContact) {
@@ -1153,6 +1233,21 @@ export const cancelBooking = onCall(async (request) => {
         grantRefund = { ref: grantRef, used: (grantSnap.data()?.credits_used as number) ?? 0 }
       }
     }
+    // Usage-limited booking: refund the window unit (floors at 0; applies even
+    // if the window has meanwhile rolled over — the doc id pins the ORIGINAL
+    // window, so a cancellation after the reset harmlessly refunds a past one).
+    let usageRefund: { ref: FirebaseFirestore.DocumentReference; used: number } | null = null
+    if (contactId && booking.usage_window_doc_id) {
+      const windowRef = db
+        .collection('contacts')
+        .doc(contactId)
+        .collection('usage_windows')
+        .doc(booking.usage_window_doc_id as string)
+      const windowSnap = await tx.get(windowRef)
+      if (windowSnap.exists) {
+        usageRefund = { ref: windowRef, used: (windowSnap.data()?.used as number) ?? 0 }
+      }
+    }
     tx.update(bookingDoc.ref, {
       status: 'cancelled',
       cancelled_at: FieldValue.serverTimestamp(),
@@ -1178,7 +1273,23 @@ export const cancelBooking = onCall(async (request) => {
     if (grantRefund) {
       tx.update(grantRefund.ref, { credits_used: Math.max(0, grantRefund.used - 1) })
     }
+    if (usageRefund) {
+      tx.update(usageRefund.ref, { used: Math.max(0, usageRefund.used - 1) })
+    }
   })
+
+  // Partner visit ledger: a cancelled booking earns no payout. Best-effort —
+  // most bookings have no ledger row (update on a missing doc just throws).
+  try {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection(PARTNER_VISITS_SUBCOLLECTION)
+      .doc(`${sessionId}_${contactId}`)
+      .update({ status: 'cancelled', cancelled_at: FieldValue.serverTimestamp() })
+  } catch {
+    // No ledger row — not an aggregator-covered booking.
+  }
 
   const rebookUrl = teamSlug
     ? isAppointment

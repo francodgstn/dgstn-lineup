@@ -579,3 +579,77 @@ describe('resolvePaymentOptions — generalized Benefit (Phase C)', () => {
     },
   ])
 })
+
+describe('resolvePaymentOptions — usage limits (Phase D)', () => {
+  const gated: PaymentTarget = {
+    kind: 'class_booking',
+    accessRule: { type: 'subscription', subscriptionTypeIds: ['starter'] },
+  }
+  const dropInTarget: PaymentTarget = {
+    kind: 'drop_in',
+    accessRule: { type: 'subscription', subscriptionTypeIds: ['starter'] },
+    dropIn: { enabled: true, priceAmount: 25 },
+    benefit: { subscriptionTypeIds: ['starter'], effect: 'percent_off', percent: 50 },
+  }
+  runRows([
+    {
+      name: 'limited type with allowance left: covered, remaining reported AFTER this booking',
+      snapshot: contact({ heldUnmeteredTypeIds: ['starter'], usageRemaining: { starter: 3 } }),
+      target: gated,
+      expected: {
+        options: [
+          {
+            type: 'covered',
+            via: { reason: 'subscription', subscriptionTypeId: 'starter' },
+            remaining: 2,
+          } as never,
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'limited type with window spent: denied limit_reached (free path)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['starter'], usageRemaining: { starter: 0 } }),
+      target: gated,
+      expected: denied('limit_reached'),
+    },
+    {
+      name: 'window spent + drop-in: falls to the PAY path, member rate still applies',
+      snapshot: contact({ heldUnmeteredTypeIds: ['starter'], usageRemaining: { starter: 0 } }),
+      target: dropInTarget,
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 12.5,
+            source: 'drop_in',
+            appliedBenefit: { subscriptionTypeId: 'starter', effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'window spent but a listed credit pack has balance: spend_credits fallback',
+      snapshot: contact({
+        heldUnmeteredTypeIds: ['starter'],
+        heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 4 }],
+        usageRemaining: { starter: 0 },
+      }),
+      target: {
+        kind: 'class_booking',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['starter', 'pack10'] },
+      },
+      expected: {
+        options: [{ type: 'spend_credits', via: { subscriptionTypeId: 'pack10' }, remaining: 4 }],
+        denial: null,
+      },
+    },
+    {
+      name: 'unlimited types are untouched: no usageRemaining key, no remaining on the option',
+      snapshot: contact({ heldUnmeteredTypeIds: ['starter'] }),
+      target: gated,
+      expected: covered({ reason: 'subscription', subscriptionTypeId: 'starter' }),
+    },
+  ])
+})

@@ -1406,7 +1406,14 @@
     "subTypeActivitiesLabel": "Activities this subscription unlocks",
     "subTypeActivitiesDesc": "Holders of this subscription can book these activities. Linking an activity restricts its booking to subscribers.",
     "subTypeActivitiesEmpty": "No activities yet — create them under Offer → Activities.",
-    "subTypeActivitiesHint": "Unlinking the last subscription from an activity makes it bookable by all members again."
+    "subTypeActivitiesHint": "Unlinking the last subscription from an activity makes it bookable by all members again.",
+    "subTypeUsageLimit": "Usage limit",
+    "subTypeUsageLimitDesc": "Only limits CLASS bookings covered by this subscription. Once the allowance is used up, members can still book at the drop-in price (member rate applies).",
+    "subTypeLimitPeriodDay": "per day",
+    "subTypeLimitPeriodWeek": "per week",
+    "subTypeLimitPeriodMonth": "per month",
+    "subTypePayoutPerVisit": "Payout per visit",
+    "subTypePayoutPerVisitDesc": "What the partner pays you per attended visit. Shown in the partner-visits ledger."
   },
   "Bookings": {
     "title": "Bookings",
@@ -3013,7 +3020,11 @@
     "lineKind_other": "Other",
     "selectCourse": "Select course",
     "selectProduct": "Select product",
-    "selectVariant": "Variant"
+    "selectVariant": "Variant",
+    "partnerVisitsHeading": "Partner visits",
+    "partnerVisitsEmpty": "No partner visits this month.",
+    "partnerVisitsRateNotSet": "Rate not set",
+    "partnerVisitsTotal": "Estimated payout this month: {amount}"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Subscription signup",
@@ -3436,6 +3447,13 @@
     "personaGuest": "Guest",
     "personaMember": "Member (no subscription)",
     "packEmptyLabel": "Pack used up",
+    "allowanceUsedUpLabel": "Allowance used up",
+    "remainingThisPeriod": "· {count} left this period",
+    "limitReached": "Period limit reached",
+    "sellUsageLimit": "Up to {count} classes {period}",
+    "limitPeriod_day": "per day",
+    "limitPeriod_week": "per week",
+    "limitPeriod_month": "per month",
     "groupClasses": "Classes",
     "groupAppointments": "Appointments",
     "groupCourses": "Courses",

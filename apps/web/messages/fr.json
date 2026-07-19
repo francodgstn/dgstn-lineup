@@ -1406,7 +1406,14 @@
     "subTypeActivitiesLabel": "Activités débloquées par cet abonnement",
     "subTypeActivitiesDesc": "Les titulaires de cet abonnement peuvent réserver ces activités. Lier une activité réserve sa réservation aux abonnés.",
     "subTypeActivitiesEmpty": "Aucune activité pour l’instant — créez-les sous Offre → Activités.",
-    "subTypeActivitiesHint": "Si le dernier abonnement est retiré d’une activité, elle redevient réservable par tous les membres."
+    "subTypeActivitiesHint": "Si le dernier abonnement est retiré d’une activité, elle redevient réservable par tous les membres.",
+    "subTypeUsageLimit": "Limite d'utilisation",
+    "subTypeUsageLimitDesc": "Limite uniquement les réservations de COURS couvertes par cet abonnement. Une fois le quota épuisé, les membres peuvent toujours réserver au tarif à la séance (le tarif membre s'applique).",
+    "subTypeLimitPeriodDay": "par jour",
+    "subTypeLimitPeriodWeek": "par semaine",
+    "subTypeLimitPeriodMonth": "par mois",
+    "subTypePayoutPerVisit": "Reversement par visite",
+    "subTypePayoutPerVisitDesc": "Ce que le partenaire vous verse par visite effectuée. Affiché dans le journal des visites partenaires."
   },
   "Bookings": {
     "title": "Réservations",
@@ -3013,7 +3020,11 @@
     "lineKind_other": "Autre",
     "selectCourse": "Choisir un cours",
     "selectProduct": "Choisir un produit",
-    "selectVariant": "Variante"
+    "selectVariant": "Variante",
+    "partnerVisitsHeading": "Visites partenaires",
+    "partnerVisitsEmpty": "Aucune visite partenaire ce mois-ci.",
+    "partnerVisitsRateNotSet": "Tarif non défini",
+    "partnerVisitsTotal": "Versement estimé ce mois-ci : {amount}"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Inscription à l'abonnement",
@@ -3436,6 +3447,13 @@
     "personaGuest": "Invité",
     "personaMember": "Membre (sans abonnement)",
     "packEmptyLabel": "Forfait épuisé",
+    "allowanceUsedUpLabel": "Quota épuisé",
+    "remainingThisPeriod": "· {count} restant(s) sur cette période",
+    "limitReached": "Limite de période atteinte",
+    "sellUsageLimit": "Jusqu'à {count} cours {period}",
+    "limitPeriod_day": "par jour",
+    "limitPeriod_week": "par semaine",
+    "limitPeriod_month": "par mois",
     "groupClasses": "Cours",
     "groupAppointments": "Rendez-vous",
     "groupCourses": "Cours en ligne",

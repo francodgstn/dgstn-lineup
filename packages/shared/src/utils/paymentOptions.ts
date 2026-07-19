@@ -44,6 +44,12 @@ export interface ContactPaymentSnapshot {
   trialUsed?: boolean
   /** The contact owns this course (purchase entitlement). Course targets only. */
   ownsCourse?: boolean
+  /** Usage-limited types: remaining bookings in the CURRENT window per
+   *  subscription-type id (see SubscriptionType.limits + usageWindowKey).
+   *  Absent key = unlimited. 0 = allowance spent — the type stops covering
+   *  class bookings until the window resets (credits, drop-in and member rates
+   *  still apply; appointments/courses are NOT window-limited in v1). */
+  usageRemaining?: Record<string, number>
 }
 
 /** The anonymous-visitor snapshot. */
@@ -108,7 +114,13 @@ export type CoverageVia =
   | { reason: 'benefit_included'; subscriptionTypeId: string }
 
 export type PaymentOption =
-  | { type: 'covered'; via: CoverageVia }
+  | {
+      type: 'covered'
+      via: CoverageVia
+      /** For usage-limited subscription coverage: bookings left in the current
+       *  window AFTER this one (e.g. 3/week, none used → remaining: 2). */
+      remaining?: number
+    }
   | { type: 'spend_credits'; via: { subscriptionTypeId: string }; remaining: number }
   | {
       type: 'pay'
@@ -128,6 +140,7 @@ export type PaymentDenial =
   | 'not_joined'
   | 'no_subscription'
   | 'no_credits'
+  | 'limit_reached'
   | 'sign_in_required'
   | 'trial_used'
 
@@ -165,11 +178,28 @@ function resolveClassCoverage(
   }
 
   const allowed = accessRule.subscriptionTypeIds ?? []
-  // 1) Unmetered coverage first — never burns credits.
-  const unmetered = allowed.find((id) => snapshot.heldUnmeteredTypeIds.includes(id))
+  const windowRemaining = (id: string): number | null => {
+    const r = snapshot.usageRemaining?.[id]
+    return typeof r === 'number' ? r : null // null = unlimited
+  }
+  // 1) Unmetered coverage first — never burns credits. A usage-limited type
+  //    only covers while its window allowance isn't spent.
+  const unmetered = allowed.find((id) => {
+    if (!snapshot.heldUnmeteredTypeIds.includes(id)) return false
+    const r = windowRemaining(id)
+    return r === null || r > 0
+  })
   if (unmetered) {
+    const r = windowRemaining(unmetered)
     return {
-      options: [{ type: 'covered', via: { reason: 'subscription', subscriptionTypeId: unmetered } }],
+      options: [
+        {
+          type: 'covered',
+          via: { reason: 'subscription', subscriptionTypeId: unmetered },
+          // Remaining AFTER this booking, for "2 of 3 left" displays.
+          ...(r !== null ? { remaining: r - 1 } : {}),
+        },
+      ],
       denial: null,
     }
   }
@@ -187,8 +217,13 @@ function resolveClassCoverage(
       denial: null,
     }
   }
-  // 3) Denied — attached to an allowed credit type with nothing usable left →
+  // 3) Denied — a held limited type with a spent window → limit_reached;
+  //    attached to an allowed credit type with nothing usable left →
   //    no_credits; otherwise no_subscription.
+  const limitSpent = allowed.some(
+    (id) => snapshot.heldUnmeteredTypeIds.includes(id) && windowRemaining(id) === 0
+  )
+  if (limitSpent) return { options: [], denial: 'limit_reached' }
   const attached = allowed.some(
     (id) => attachedToCreditType(snapshot, id) || snapshot.heldUnmeteredTypeIds.includes(id)
   )

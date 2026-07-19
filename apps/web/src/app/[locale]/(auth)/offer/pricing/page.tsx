@@ -29,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CheckCircle2, AlertTriangle, AlertCircle, Info } from 'lucide-react'
 import { formatCurrency } from '@/lib/format'
 import type { Activity, Course, Product, SubscriptionPrice, SubscriptionType } from '@linyup/shared'
-import { isSellableCourse } from '@linyup/shared'
+import { isSellableCourse, resolveUsageLimit } from '@linyup/shared'
 import {
   buildPersonas,
   personaSnapshot,
@@ -127,7 +127,16 @@ function PriceCellView({
       default:
         label = t('freeUnpriced')
     }
-    return <Badge className={`${FREE_BADGE_CLASS} border-transparent`}>{label}</Badge>
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Badge className={`${FREE_BADGE_CLASS} border-transparent`}>{label}</Badge>
+        {typeof cell.remaining === 'number' && (
+          <span className="text-xs text-muted-foreground">
+            {t('remainingThisPeriod', { count: cell.remaining })}
+          </span>
+        )}
+      </span>
+    )
   }
 
   if (cell.kind === 'credit') {
@@ -163,7 +172,9 @@ function PriceCellView({
   // blocked
   return (
     <span className="inline-flex items-center gap-1.5 flex-wrap">
-      <span className="text-sm text-muted-foreground">{t('noAccess')}</span>
+      <span className="text-sm text-muted-foreground">
+        {cell.denial === 'limit_reached' ? t('limitReached') : t('noAccess')}
+      </span>
       {cell.trialAvailable && (
         <span className="text-xs text-muted-foreground italic">{t('trialAvailableHint')}</span>
       )}
@@ -193,12 +204,13 @@ function PricingPreviewSection({
   const t = useTranslations('OfferPricing')
   const [selectedId, setSelectedId] = useState(personas[0]?.id ?? 'guest')
   const [packEmpty, setPackEmpty] = useState(false)
+  const [allowanceUsedUp, setAllowanceUsedUp] = useState(false)
 
   const selected = personas.find((p) => p.id === selectedId) ?? personas[0]
   const snapshot = useMemo(
-    () => personaSnapshot(selected, packEmpty),
+    () => personaSnapshot(selected, packEmpty, allowanceUsedUp),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selected?.id, packEmpty]
+    [selected?.id, packEmpty, allowanceUsedUp]
   )
 
   const typeNameById = useMemo(() => {
@@ -210,6 +222,7 @@ function PricingPreviewSection({
   const handleSelect = (id: string) => {
     setSelectedId(id)
     setPackEmpty(false)
+    setAllowanceUsedUp(false)
   }
 
   const nothingToPrice =
@@ -228,6 +241,13 @@ function PricingPreviewSection({
           <div className="flex items-center justify-between rounded-lg border border-dashed p-2.5">
             <span className="text-sm text-muted-foreground">{t('packEmptyLabel')}</span>
             <Switch checked={packEmpty} onCheckedChange={setPackEmpty} />
+          </div>
+        )}
+
+        {selected?.limit && (
+          <div className="flex items-center justify-between rounded-lg border border-dashed p-2.5">
+            <span className="text-sm text-muted-foreground">{t('allowanceUsedUpLabel')}</span>
+            <Switch checked={allowanceUsedUp} onCheckedChange={setAllowanceUsedUp} />
           </div>
         )}
 
@@ -399,6 +419,7 @@ function SubscriptionTypeSellCard({
   const tc = useTranslations('Contacts')
   const activePrices = (type.prices ?? []).filter((p) => p.active !== false)
   const grants = useMemo(() => grantsForType(type.id, activities, courses), [type.id, activities, courses])
+  const limit = resolveUsageLimit(type)
 
   return (
     <Card>
@@ -416,6 +437,15 @@ function SubscriptionTypeSellCard({
               </p>
             ))}
           </div>
+        )}
+
+        {limit && (
+          <p className="text-xs text-muted-foreground">
+            {t('sellUsageLimit', {
+              count: limit.count,
+              period: t(`limitPeriod_${limit.per}` as Parameters<typeof t>[0]),
+            })}
+          </p>
         )}
 
         {(grants.coveredClassNames.length > 0 || grants.benefits.length > 0) && (

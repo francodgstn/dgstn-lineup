@@ -223,6 +223,10 @@ async function seedTeam(opts: {
     source: string
     prices: SeedPrice[]
     active: boolean
+    /** Usage limit (Phase D), e.g. Starter's real "3 classes per week". */
+    limits?: { count: number; per: 'day' | 'week' | 'month' }[]
+    /** Aggregator payout per attended visit (E1), source:'aggregator' only. */
+    payoutPerVisit?: number
   }
   const subscriptionTypeDefs: SeedSubType[] =
     plan === 'coach'
@@ -255,6 +259,8 @@ async function seedTeam(opts: {
                 { id: `${teamId}-sub-starter-monthly`, amount: 89, recurrence: 'monthly' },
                 { id: `${teamId}-sub-starter-annual`, amount: 890, recurrence: 'annual' },
               ],
+              // Enforced by the Phase D usage-limit window counters.
+              limits: [{ count: 3, per: 'week' }],
               active: true,
             },
             {
@@ -285,6 +291,9 @@ async function seedTeam(opts: {
               description: 'Access via FitPass aggregator network.',
               source: 'aggregator',
               prices: [],
+              // What FitPass pays the studio per attended visit (E1 — drives
+              // the partner_visits payout ledger).
+              payoutPerVisit: 18,
               active: true,
             },
             {
@@ -293,6 +302,7 @@ async function seedTeam(opts: {
               description: 'Access via SportPass membership card.',
               source: 'aggregator',
               prices: [],
+              payoutPerVisit: 15,
               active: true,
             },
           ]
@@ -306,6 +316,10 @@ async function seedTeam(opts: {
                 { id: `${teamId}-sub-starter-monthly`, amount: 99, recurrence: 'monthly' },
                 { id: `${teamId}-sub-starter-annual`, amount: 990, recurrence: 'annual' },
               ],
+              // The description is now REAL: enforced by the usage-limit window
+              // counters (Phase D) — 4th booking in a week falls to the drop-in
+              // pay path (at the member rate, where one is configured).
+              limits: [{ count: 3, per: 'week' }],
               active: true,
             },
             {
@@ -604,10 +618,23 @@ async function seedTeam(opts: {
   // "unlimited" subscription types, so seeded contacts split into covered and
   // uncovered (exercises the session badges, the warn+confirm, and the
   // subscription-side activities editor). isFreeTrial stays in sync (open ⇔ true).
+  // Starter is INCLUDED but usage-limited (3/week — see its `limits`): bookings
+  // 1–3 in a week are covered, the 4th falls to the drop-in pay path at
+  // Starter's 50% member rate. Premium/Elite are unlimited. On the studio team
+  // the aggregator passes (FitPass/SportPass) also cover MMA — their covered
+  // bookings earn the per-visit payout in the partner_visits ledger (E1).
   const mmaSubIds =
     plan === 'coach'
       ? [`${teamId}-sub-monthly`, `${teamId}-sub-10class`]
-      : [`${teamId}-sub-premium`, `${teamId}-sub-elite`]
+      : plan === 'studio'
+        ? [
+            `${teamId}-sub-starter`,
+            `${teamId}-sub-premium`,
+            `${teamId}-sub-elite`,
+            `${teamId}-sub-fitpass`,
+            `${teamId}-sub-sportpass`,
+          ]
+        : [`${teamId}-sub-starter`, `${teamId}-sub-premium`, `${teamId}-sub-elite`]
   type ClassActivitySeed = {
     id: string
     name: string
@@ -900,6 +927,8 @@ async function seedTeam(opts: {
         public: st.active !== false,
         checkout_contact_mode: hasRecurring ? 'full' : 'minimal',
         prices: st.prices.map((p) => ({ ...p, active: true })),
+        ...(st.limits ? { limits: st.limits } : {}),
+        ...(typeof st.payoutPerVisit === 'number' ? { payoutPerVisit: st.payoutPerVisit } : {}),
         teamId,
         created_at: ts(daysFromNow(-60)),
       })

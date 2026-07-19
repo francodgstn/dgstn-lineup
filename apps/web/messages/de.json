@@ -1406,7 +1406,14 @@
     "subTypeActivitiesLabel": "Aktivitäten, die dieses Abo freischaltet",
     "subTypeActivitiesDesc": "Inhaber dieses Abos können diese Aktivitäten buchen. Eine Verknüpfung beschränkt die Buchung der Aktivität auf Abonnenten.",
     "subTypeActivitiesEmpty": "Noch keine Aktivitäten — erstelle sie unter Angebot → Aktivitäten.",
-    "subTypeActivitiesHint": "Wird das letzte Abo einer Aktivität entfernt, ist sie wieder für alle Mitglieder buchbar."
+    "subTypeActivitiesHint": "Wird das letzte Abo einer Aktivität entfernt, ist sie wieder für alle Mitglieder buchbar.",
+    "subTypeUsageLimit": "Nutzungslimit",
+    "subTypeUsageLimitDesc": "Begrenzt nur KURS-Buchungen, die über dieses Abo abgedeckt sind. Ist das Kontingent aufgebraucht, können Mitglieder weiterhin zum Einzeleintritt buchen (Mitgliederpreis gilt).",
+    "subTypeLimitPeriodDay": "pro Tag",
+    "subTypeLimitPeriodWeek": "pro Woche",
+    "subTypeLimitPeriodMonth": "pro Monat",
+    "subTypePayoutPerVisit": "Auszahlung pro Besuch",
+    "subTypePayoutPerVisitDesc": "Was der Partner dir pro besuchtem Termin auszahlt. Wird im Partnerbesuchs-Journal angezeigt."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -3013,7 +3020,11 @@
     "lineKind_other": "Sonstiges",
     "selectCourse": "Kurs wählen",
     "selectProduct": "Produkt wählen",
-    "selectVariant": "Variante"
+    "selectVariant": "Variante",
+    "partnerVisitsHeading": "Partnerbesuche",
+    "partnerVisitsEmpty": "Diesen Monat keine Partnerbesuche.",
+    "partnerVisitsRateNotSet": "Tarif nicht festgelegt",
+    "partnerVisitsTotal": "Geschätzte Auszahlung diesen Monat: {amount}"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Abo-Anmeldung",
@@ -3436,6 +3447,13 @@
     "personaGuest": "Gast",
     "personaMember": "Mitglied (kein Abo)",
     "packEmptyLabel": "Paket aufgebraucht",
+    "allowanceUsedUpLabel": "Kontingent aufgebraucht",
+    "remainingThisPeriod": "· noch {count} in diesem Zeitraum",
+    "limitReached": "Zeitraumlimit erreicht",
+    "sellUsageLimit": "Bis zu {count} Kurse {period}",
+    "limitPeriod_day": "pro Tag",
+    "limitPeriod_week": "pro Woche",
+    "limitPeriod_month": "pro Monat",
     "groupClasses": "Kurse",
     "groupAppointments": "Termine",
     "groupCourses": "Online-Kurse",
