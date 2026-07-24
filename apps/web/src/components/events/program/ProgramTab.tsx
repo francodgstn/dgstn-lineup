@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { CalendarRange, Eye, Pencil, Plus, Settings2 } from 'lucide-react'
+import { CalendarRange, Eye, LayoutTemplate, Pencil, Plus, Save, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,8 @@ import type { Event, EventProgramConfig, EventProgramItem } from '@linyup/shared
 import { ProgramTimeline } from './ProgramTimeline'
 import { ProgramItemDialog } from './ProgramItemDialog'
 import { ProgramStructureDialog } from './ProgramStructureDialog'
+import { ApplyTemplateDialog } from './ApplyTemplateDialog'
+import { SaveAsTemplateDialog } from './SaveAsTemplateDialog'
 import {
   programTenant,
   useCreateProgramItem,
@@ -19,6 +21,7 @@ import {
   useDeleteProgramItem,
   useDeleteProgramTrack,
   useProgramItems,
+  useReplaceProgram,
   useSaveProgramConfig,
   useUpdateProgramItem,
   type ProgramItemDraft,
@@ -35,9 +38,12 @@ export interface ProgramTabProps {
   event: Event
   /** False for a read-only viewer — hides every editing affordance. */
   canEdit?: boolean
+  /** The org this event's team belongs to, so inherited org templates appear in
+   *  the picker. An org-scoped event derives it from the event itself. */
+  parentOrgId?: string | null
 }
 
-export function ProgramTab({ event, canEdit = true }: ProgramTabProps) {
+export function ProgramTab({ event, canEdit = true, parentOrgId }: ProgramTabProps) {
   const t = useTranslations('EventProgram')
   const eventId = event.id
   const config = event.program ?? EMPTY_CONFIG
@@ -52,6 +58,13 @@ export function ProgramTab({ event, canEdit = true }: ProgramTabProps) {
   const deleteItem = useDeleteProgramItem(eventId)
   const deleteDay = useDeleteProgramDay(eventId)
   const deleteTrack = useDeleteProgramTrack(eventId)
+  const replaceProgram = useReplaceProgram(eventId, tenant)
+
+  // Templates are saved to the org when an org admin edits an org event, and to
+  // the team otherwise. The picker always offers both, inherited ones read-only.
+  const orgId = event.orgId ?? parentOrgId ?? null
+  const templateScope: 'team' | 'org' = event.scope === 'org' ? 'org' : 'team'
+  const templateOwnerId = templateScope === 'org' ? orgId : event.teamId ?? null
 
   const days = sortedDays(config)
   const [activeDayId, setActiveDayId] = useState<string | null>(null)
@@ -59,6 +72,8 @@ export function ProgramTab({ event, canEdit = true }: ProgramTabProps) {
   const [itemOpen, setItemOpen] = useState(false)
   const [editing, setEditing] = useState<EventProgramItem | null>(null)
   const [preview, setPreview] = useState(false)
+  const [applyOpen, setApplyOpen] = useState(false)
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
 
   // Fall back to the first day whenever the selected one disappears.
   const currentDayId = days.some((d) => d.id === activeDayId) ? activeDayId : days[0]?.id ?? null
@@ -111,25 +126,45 @@ export function ProgramTab({ event, canEdit = true }: ProgramTabProps) {
             {t('emptyDescription')}
           </p>
           {canEdit && (
-            <Button className="mt-5" onClick={() => setStructureOpen(true)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              {t('buildProgram')}
-            </Button>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Button onClick={() => setStructureOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                {t('buildProgram')}
+              </Button>
+              <Button variant="outline" onClick={() => setApplyOpen(true)}>
+                <LayoutTemplate className="mr-1.5 h-4 w-4" />
+                {t('applyTemplate')}
+              </Button>
+            </div>
           )}
         </div>
 
         {canEdit && (
-          <ProgramStructureDialog
-            open={structureOpen}
-            onOpenChange={setStructureOpen}
-            event={event}
-            config={config}
-            items={items}
-            saving={saveConfig.isPending}
-            onSave={(next) => saveConfig.mutateAsync(next)}
-            onDeleteDay={(dayId) => deleteDay.mutateAsync({ config, dayId, items })}
-            onDeleteTrack={(trackId) => deleteTrack.mutateAsync({ config, trackId, items })}
-          />
+          <>
+            <ProgramStructureDialog
+              open={structureOpen}
+              onOpenChange={setStructureOpen}
+              event={event}
+              config={config}
+              items={items}
+              saving={saveConfig.isPending}
+              onSave={(next) => saveConfig.mutateAsync(next)}
+              onDeleteDay={(dayId) => deleteDay.mutateAsync({ config, dayId, items })}
+              onDeleteTrack={(trackId) => deleteTrack.mutateAsync({ config, trackId, items })}
+            />
+            <ApplyTemplateDialog
+              open={applyOpen}
+              onOpenChange={setApplyOpen}
+              event={event}
+              teamId={event.teamId ?? null}
+              orgId={orgId}
+              existingItemCount={items.length}
+              applying={replaceProgram.isPending}
+              onApply={(nextConfig, nextItems) =>
+                replaceProgram.mutateAsync({ config: nextConfig, items: nextItems, existing: items })
+              }
+            />
+          </>
         )}
       </>
     )
@@ -153,6 +188,14 @@ export function ProgramTab({ event, canEdit = true }: ProgramTabProps) {
           </Button>
           {canEdit && (
             <>
+              <Button size="sm" variant="outline" onClick={() => setSaveTemplateOpen(true)}>
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                {t('saveAsTemplate')}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setApplyOpen(true)}>
+                <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
+                {t('applyTemplate')}
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setStructureOpen(true)}>
                 <Settings2 className="mr-1.5 h-3.5 w-3.5" />
                 {t('structureTitle')}
@@ -234,6 +277,29 @@ export function ProgramTab({ event, canEdit = true }: ProgramTabProps) {
             onSave={(next) => saveConfig.mutateAsync(next)}
             onDeleteDay={(dayId) => deleteDay.mutateAsync({ config, dayId, items })}
             onDeleteTrack={(trackId) => deleteTrack.mutateAsync({ config, trackId, items })}
+          />
+
+          <ApplyTemplateDialog
+            open={applyOpen}
+            onOpenChange={setApplyOpen}
+            event={event}
+            teamId={event.teamId ?? null}
+            orgId={orgId}
+            existingItemCount={items.length}
+            applying={replaceProgram.isPending}
+            onApply={(nextConfig, nextItems) =>
+              replaceProgram.mutateAsync({ config: nextConfig, items: nextItems, existing: items })
+            }
+          />
+
+          <SaveAsTemplateDialog
+            open={saveTemplateOpen}
+            onOpenChange={setSaveTemplateOpen}
+            config={config}
+            items={items}
+            scope={templateScope}
+            ownerId={templateOwnerId}
+            defaultName={event.title}
           />
         </>
       )}

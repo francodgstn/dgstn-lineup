@@ -17,6 +17,7 @@ import {
   Send,
   Mail,
   ListChecks,
+  ListTodo,
   LayoutTemplate,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -45,6 +46,7 @@ export interface SettingsNavItem {
 export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // Scheduling — how sessions and bookings work.
   { id: 'eventTypes', href: '/settings/event-types', labelKey: 'eventTypes', icon: CalendarRange, group: 'scheduling' },
+  { id: 'programTemplates', href: '/settings/program-templates', labelKey: 'programTemplates', icon: ListTodo, group: 'scheduling' },
   { id: 'places', href: '/settings/places', labelKey: 'places', icon: MapPin, group: 'scheduling' },
   { id: 'bookingPage', href: '/settings/booking', labelKey: 'bookingPage', icon: CalendarCheck, group: 'scheduling' },
   // Studio — the studio's own configuration. Each team sub-section is its own rail

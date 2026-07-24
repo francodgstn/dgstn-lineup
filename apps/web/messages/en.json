@@ -138,7 +138,8 @@
     "signOut": "Sign out",
     "affiliations": "Affiliations",
     "coaches": "Coaches",
-    "pricing": "Pricing"
+    "pricing": "Pricing",
+    "programTemplates": "Programme templates"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1084,7 +1085,42 @@
     "errorTitleRequired": "A title is required.",
     "cancel": "Cancel",
     "save": "Save",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "applyTemplate": "Apply a template",
+    "saveAsTemplate": "Save as template",
+    "noTemplates": "No templates yet. Build a programme and save it as a template to reuse it.",
+    "templateFromOrg": "Organisation",
+    "templateSummary": "{days, plural, one {# day} other {# days}} · {items, plural, one {# item} other {# items}}",
+    "templateTarget": "Save to",
+    "templateNew": "A new template",
+    "templateOverwrite": "Overwrite “{name}”",
+    "templateName": "Template name",
+    "templateNamePlaceholder": "e.g. Standard summer camp",
+    "templateDescription": "Description",
+    "templateSavedToOrg": "saved for the whole organisation",
+    "templateCapReached": "You already have the maximum of {max} templates.",
+    "errorTemplateNameRequired": "A template name is required.",
+    "applyStartDate": "First day",
+    "applyStartDateHint": "The template’s days are counted from this date.",
+    "applyReplaceWarning": "This replaces the current programme. {count, plural, one {# existing item} other {# existing items}} will be deleted.",
+    "templatesTitle": "Programme templates",
+    "templatesSubtitle": "Reusable event programmes. Build one on an event, then save it here to apply to future events.",
+    "templatesOrgSubtitle": "Shared with every studio in the organisation. They can apply these templates but not change them.",
+    "templatesEmpty": "No templates yet.",
+    "templatesEmptyHint": "Open an event, build its programme, then use “Save as template”.",
+    "templateRename": "Rename",
+    "templateDelete": "Delete",
+    "templateDeleteTitle": "Delete this template?",
+    "templateDeleteDescription": "Events already using it keep their programme. This cannot be undone.",
+    "templateInherited": "Inherited from your organisation — read-only.",
+    "duplicateEvent": "Duplicate",
+    "duplicateTitle": "Duplicate this event",
+    "duplicateDescription": "Copies the settings and the whole programme. Attendees, invitations and check-ins are not copied, and the copy stays private.",
+    "duplicateNewTitle": "Title",
+    "duplicateNewStart": "New start date",
+    "duplicateSuffix": "{title} (copy)",
+    "duplicating": "Duplicating…",
+    "duplicateFailed": "Could not duplicate this event."
   },
   "TeamMembers": {
     "title": "Team",
@@ -2193,7 +2229,8 @@
     "pluginsInstalledSuccess": "installed for all studios",
     "pluginsUninstalledSuccess": "Plugin removed from organization.",
     "pluginsErrorInstall": "Could not install plugin. Please try again.",
-    "pluginsErrorUninstall": "Could not remove plugin. Please try again."
+    "pluginsErrorUninstall": "Could not remove plugin. Please try again.",
+    "tabProgramTemplates": "Programme templates"
   },
   "OrgTeams": {
     "title": "Teams",

@@ -13,12 +13,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, CalendarDays, MapPin, Users, Check, X } from 'lucide-react'
-import { Link } from '@/i18n/navigation'
+import { ArrowLeft, CalendarDays, MapPin, Users, Check, X, Copy } from 'lucide-react'
+import { Link, useRouter } from '@/i18n/navigation'
 import { EVENTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
 import type { Event, EventCheckin, EventType } from '@linyup/shared'
 import type { Route } from 'next'
 import { ProgramTab } from '@/components/events/program/ProgramTab'
+import { DuplicateEventDialog } from '@/components/events/DuplicateEventDialog'
 
 interface Team { id: string; name: string }
 
@@ -79,6 +80,8 @@ export default function OrgEventDetailPage() {
   // The program tab label lives in the shared Events namespace — one key, not
   // a duplicate per surface.
   const tp = useTranslations('Events')
+  // Programme + duplication copy lives in its own namespace.
+  const tpp = useTranslations('EventProgram')
   const { orgId, id: eventId } = useParams<{ orgId: string; id: string }>()
   const { isAdmin } = useOrg()
   const qc = useQueryClient()
@@ -86,6 +89,8 @@ export default function OrgEventDetailPage() {
   const [teamFilter, setTeamFilter] = useState<string>('all')
   const [toggling, setToggling] = useState<string | null>(null)
   const [tab, setTab] = useState<'program' | 'checkins'>('checkins')
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
+  const router = useRouter()
 
   const eventQ = useOrgEvent(eventId)
   const checkinsQ = useEventCheckins(eventId)
@@ -154,7 +159,19 @@ export default function OrgEventDetailPage() {
                 )}
               </div>
             </div>
-            <Badge variant="secondary" className="capitalize shrink-0">{eventTypeLabel(t, event.type)}</Badge>
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge variant="secondary" className="capitalize">{eventTypeLabel(t, event.type)}</Badge>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDuplicateOpen(true)}
+                  title={tpp('duplicateEvent')}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
           {event.description && (
             <p className="text-sm text-muted-foreground pt-1">{event.description}</p>
@@ -292,6 +309,15 @@ export default function OrgEventDetailPage() {
           )}
         </div>
       </div>
+
+      {event && (
+        <DuplicateEventDialog
+          open={duplicateOpen}
+          onOpenChange={setDuplicateOpen}
+          event={event}
+          onDuplicated={(newId) => router.push(`/org/${orgId}/events/${newId}` as Route)}
+        />
+      )}
     </div>
   )
 }

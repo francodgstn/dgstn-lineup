@@ -97,6 +97,7 @@ export {
 } from './events'
 export { trackEventAttendees } from './events/trackEventAttendees'
 export { addEventCheckin } from './events/addEventCheckin'
+export { duplicateEvent } from './events/duplicateEvent'
 
 // Analytics
 export {

@@ -138,7 +138,8 @@
     "signOut": "Se déconnecter",
     "affiliations": "Affiliations",
     "coaches": "Coachs",
-    "pricing": "Tarifs"
+    "pricing": "Tarifs",
+    "programTemplates": "Modèles de programme"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -1084,7 +1085,42 @@
     "errorTitleRequired": "Un titre est requis.",
     "cancel": "Annuler",
     "save": "Enregistrer",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "applyTemplate": "Appliquer un modèle",
+    "saveAsTemplate": "Enregistrer comme modèle",
+    "noTemplates": "Aucun modèle. Créez un programme puis enregistrez-le comme modèle pour le réutiliser.",
+    "templateFromOrg": "Organisation",
+    "templateSummary": "{days, plural, one {# jour} other {# jours}} · {items, plural, one {# élément} other {# éléments}}",
+    "templateTarget": "Enregistrer dans",
+    "templateNew": "Un nouveau modèle",
+    "templateOverwrite": "Remplacer « {name} »",
+    "templateName": "Nom du modèle",
+    "templateNamePlaceholder": "ex. Camp d'été standard",
+    "templateDescription": "Description",
+    "templateSavedToOrg": "enregistré pour toute l'organisation",
+    "templateCapReached": "Vous avez déjà le maximum de {max} modèles.",
+    "errorTemplateNameRequired": "Un nom de modèle est requis.",
+    "applyStartDate": "Premier jour",
+    "applyStartDateHint": "Les jours du modèle sont comptés à partir de cette date.",
+    "applyReplaceWarning": "Cela remplace le programme actuel. {count, plural, one {# élément existant sera supprimé} other {# éléments existants seront supprimés}}.",
+    "templatesTitle": "Modèles de programme",
+    "templatesSubtitle": "Programmes d'événement réutilisables. Créez-en un sur un événement, puis enregistrez-le ici.",
+    "templatesOrgSubtitle": "Partagés avec tous les studios de l'organisation. Ils peuvent les appliquer mais pas les modifier.",
+    "templatesEmpty": "Aucun modèle.",
+    "templatesEmptyHint": "Ouvrez un événement, créez son programme, puis « Enregistrer comme modèle ».",
+    "templateRename": "Renommer",
+    "templateDelete": "Supprimer",
+    "templateDeleteTitle": "Supprimer ce modèle ?",
+    "templateDeleteDescription": "Les événements qui l’utilisent conservent leur programme. Cette action est irréversible.",
+    "templateInherited": "Hérité de votre organisation — lecture seule.",
+    "duplicateEvent": "Dupliquer",
+    "duplicateTitle": "Dupliquer cet événement",
+    "duplicateDescription": "Copie les réglages et tout le programme. Les participants, invitations et pointages ne sont pas copiés, et la copie reste privée.",
+    "duplicateNewTitle": "Titre",
+    "duplicateNewStart": "Nouvelle date de début",
+    "duplicateSuffix": "{title} (copie)",
+    "duplicating": "Duplication…",
+    "duplicateFailed": "Impossible de dupliquer cet événement."
   },
   "TeamMembers": {
     "title": "Équipe",
@@ -2193,7 +2229,8 @@
     "pluginsInstalledSuccess": "installé pour tous les studios",
     "pluginsUninstalledSuccess": "Plugin supprimé de l'organisation.",
     "pluginsErrorInstall": "Impossible d'installer le plugin. Veuillez réessayer.",
-    "pluginsErrorUninstall": "Impossible de supprimer le plugin. Veuillez réessayer."
+    "pluginsErrorUninstall": "Impossible de supprimer le plugin. Veuillez réessayer.",
+    "tabProgramTemplates": "Modèles de programme"
   },
   "OrgTeams": {
     "title": "Équipes",
