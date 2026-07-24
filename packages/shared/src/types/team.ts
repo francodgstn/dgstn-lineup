@@ -37,6 +37,7 @@ export type PublicSurface =
   | 'signup'
   | 'documents'
   | 'kiosk'
+  | 'events'
 
 // Denormalized onto TeamPublicProfile so the public root page (which may only
 // read world-readable public_profile, never the private installed_plugins) can
@@ -52,6 +53,9 @@ export interface ActivePublicSurfaces {
   // shop is live when a sellable channel is enabled (products / online-courses
   // plugin or Stripe Connect); the public shop aggregates whatever exists.
   shop?: boolean
+  // ≥1 event has been explicitly published (Event.publicVisibility === 'public').
+  // Events are private by default, so this is false for most studios.
+  events?: boolean
   // ≥1 published Custom Form exists (custom-forms plugin active). Optional — forms
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
   // surface, so this is a discovery signal (e.g. a bio-link entry), NOT a landing.
@@ -383,6 +387,10 @@ export interface TeamPublicProfile {
   name: string
   description?: string
   slug: string
+  // Which organisation this studio belongs to. Public surfaces need it to list
+  // the parent org's published events alongside the studio's own — an org event
+  // has no teamId, so a teamId query can never find it. Null when independent.
+  org_id?: string | null
   links?: TeamLink[]
   sport_type?: string
   profileImage?: string

@@ -12,11 +12,35 @@ import {
   sortedTracks,
 } from '@linyup/shared'
 import type {
-  EventProgramConfig,
-  EventProgramItem,
+  DaysAndTracks,
   ProgramDay,
+  ProgramItemKind,
   ProgramTrack,
 } from '@linyup/shared'
+
+// Accepts BOTH the private EventProgramItem and the public mirror's
+// PublicProgramItem (which uses null where the private doc uses undefined), so
+// the admin, the public page, the Space strip and the print sheet all render
+// through one component instead of drifting apart.
+export interface TimelineItem {
+  id: string
+  dayId: string
+  trackId?: string | null
+  startTime: string
+  endTime?: string | null
+  allDay?: boolean
+  title: string
+  subtitle?: string | null
+  description?: string | null
+  locationText?: string | null
+  peopleText?: string | null
+  kind?: ProgramItemKind | null
+  color?: string | null
+  isHighlight?: boolean
+  /** Staff-only; only rendered when showInternalNotes is explicitly set. */
+  internalNote?: string | null
+  order: number
+}
 
 // The ONE read-only renderer for an event program. Reused by the admin preview,
 // the public event page, the Space strip and the print sheet, so a program looks
@@ -29,14 +53,15 @@ import type {
 // principles.
 
 export interface ProgramTimelineProps {
-  config: EventProgramConfig | undefined
-  items: EventProgramItem[]
+  /** Accepts the private config and the public mirror's nullable one alike. */
+  config: (DaysAndTracks & { timezoneLabel?: string | null; note?: string | null }) | undefined
+  items: TimelineItem[]
   /** Restrict to one day. Omit to render every day in order. */
   dayId?: string
   /** Show staff-only internal notes. NEVER pass true on a public surface. */
   showInternalNotes?: boolean
   /** Renders an edit affordance on each item (admin only). */
-  onEditItem?: (item: EventProgramItem) => void
+  onEditItem?: (item: TimelineItem) => void
   className?: string
 }
 
@@ -58,9 +83,9 @@ function ItemCard({
   onEdit,
   accent,
 }: {
-  item: EventProgramItem
+  item: TimelineItem
   showInternalNotes?: boolean
-  onEdit?: (item: EventProgramItem) => void
+  onEdit?: (item: TimelineItem) => void
   accent?: string
 }) {
   const t = useTranslations('EventProgram')
@@ -148,10 +173,10 @@ function DaySection({
   showDayHeading,
 }: {
   day: ProgramDay
-  dayItems: EventProgramItem[]
+  dayItems: TimelineItem[]
   tracks: ProgramTrack[]
   showInternalNotes?: boolean
-  onEditItem?: (item: EventProgramItem) => void
+  onEditItem?: (item: TimelineItem) => void
   showDayHeading: boolean
 }) {
   const t = useTranslations('EventProgram')
@@ -303,8 +328,8 @@ export function ProgramTimeline({
 /** Convenience predicate for surfaces that only want to show a program section
  *  when there is actually something to show. */
 export function hasProgram(
-  config: EventProgramConfig | undefined,
-  items: Array<Pick<EventProgramItem, 'id'>> | undefined,
+  config: DaysAndTracks | undefined,
+  items: Array<{ id: string }> | undefined,
 ): boolean {
   return (config?.days?.length ?? 0) > 0 && (items?.length ?? 0) > 0
 }

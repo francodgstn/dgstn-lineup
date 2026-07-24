@@ -8,6 +8,7 @@ import {
   SITE_PUBLISHED_COLLECTION,
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
+  EVENTS_COLLECTION,
   resolveSystemLinkTarget,
   toKioskPublicConfig,
   normalizeKioskConfig,
@@ -150,6 +151,18 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     (data.payments as { connectStatus?: string } | undefined)?.connectStatus === 'enabled'
   const shopActive = productsPluginActive || onlineCoursesActive || connectEnabled
 
+  // events: base feature, no plugin — live as soon as ≥1 event has been
+  // explicitly published. Events are private by default, so this is false for
+  // most studios. Same existence-probe shape as the documents check above.
+  const publishedEventSnap = await db
+    .collection(EVENTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('publicVisibility', '==', 'public')
+    .where('deleted_at', '==', null)
+    .limit(1)
+    .get()
+  const eventsActive = !publishedEventSnap.empty
+
   // signup is a base surface (the subscription sign-up form) — available on every
   // plan, so always live. Denormalized here so the public root can redirect to it
   // when it's chosen as the default landing.
@@ -164,6 +177,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     forms: formsActive,
     documents: documentsActive,
     kiosk: kioskActive,
+    events: eventsActive,
   }
 
   // ── default_public_surface ───────────────────────────────────────────────────
@@ -175,6 +189,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     name: data.name || '',
     description: data.description || '',
     slug: data.slug || '',
+    // Which organisation this studio belongs to. Public surfaces need it to show
+    // the parent org's published events alongside the studio's own — an org
+    // event has no teamId, so it cannot be found by a teamId query.
+    org_id: data.org_id || null,
     sport_type: data.sport_type || null,
     profileImage: data.profileImage || null,
     heroImage: data.heroImage || null,

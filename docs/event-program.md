@@ -1,0 +1,166 @@
+# Event programmes
+
+An event is not just a session with a different label — it **has a programme**: a
+multi-day, multi-track agenda of what happens, where, and with whom. A summer camp
+runs five days with a kids stream and an adults stream; a seminar runs two rooms in
+parallel; a competition has weigh-in, pools, finals, ceremony. None of that fits in
+`Event.start`/`Event.end`.
+
+## The model
+
+| Where | What |
+|---|---|
+| `Event.program` | `EventProgramConfig` — the days and tracks, embedded on the event doc (they are few, like `Place.rooms`) |
+| `events/{id}/program_items/{itemId}` | The agenda rows. A subcollection because a five-day multi-track camp runs to hundreds |
+| `teams/{teamId}/program_templates/{id}` | Reusable programmes owned by a studio |
+| `organizations/{orgId}/org_program_templates/{id}` | Org-wide templates, read-only for member studios |
+| `events/{id}/public_profile/{id}` | The world-readable mirror, with the whole programme embedded |
+
+Types: `packages/shared/src/types/event.ts`. Pure helpers:
+`packages/shared/src/utils/programTime.ts`.
+
+## Times are wall-clock, and that is deliberate
+
+A programme item stores `startTime: 'HH:MM'` plus its day's `date: 'YYYY-MM-DD'` —
+**never an absolute `Timestamp`**.
+
+A programme is a printed schedule. "09:00 breakfast" is 09:00 wherever the camp is.
+Storing instants would mean a camp in Spain renders an hour off for a Swiss studio,
+and a DST boundary mid-camp would shift half the agenda. Wall-clock sidesteps both.
+`EventProgramConfig.timezoneLabel` is **display only** — nothing converts.
+
+Same convention as `availability.ts`. Day arithmetic (`addDaysISO`,
+`daysBetweenISO`) is done on the calendar in UTC, never via a local `Date`, so
+shifting a programme across a DST boundary cannot collapse two days onto one.
+
+`endTime` earlier than `startTime` means the item **crosses midnight** — valid, not
+an error.
+
+## Tracks and plenary items
+
+`ProgramTrack` is a free-text parallel stream — "Kids", "Adults", "Mat A". An item
+with `trackId: null` is **plenary**: it spans every track (lunch, the opening
+briefing). With 0–1 tracks the timeline renders a plain agenda list; with 2+ it
+renders a column per track. Removing a track does **not** delete its items — they
+fall back to plenary, the non-destructive reading of "remove this lane". Removing a
+**day** does delete its items, and is always confirmed.
+
+## Free text, on purpose
+
+`locationText` and `peopleText` are strings, not links to `Place`/`Activity`/
+`team_members`. Events are frequently off-site and staffed by people who are not
+team members, running activities that are not in the regular schedule. Adding
+optional FKs later is purely additive — the free-text fields stay as the fallback,
+exactly as `Session.location` does alongside `Session.placeId`.
+
+## Templates use a relative `dayIndex`
+
+`ProgramTemplateItem.dayIndex` is a 0-based offset, never a date — that is what
+makes a template portable to any future event. `materialiseTemplate` turns it into
+real dated days counted from a chosen start; `extractTemplate` is the inverse.
+Track ids are **regenerated on every apply**, so two events never share track ids.
+
+Applying a template **replaces** the programme rather than merging — merging two
+multi-track schedules has no sane automatic answer. It runs as one batch, so the
+agenda is never left half-replaced.
+
+Templates are edited by **apply → adjust on a real event → save back**. There is
+deliberately no standalone template editor; the event page already is one.
+A studio that applies an **org** template and saves it back produces its own
+**team** template — the rules refuse a club write to the organisation's copy.
+
+## Org events
+
+Org-scoped events (`scope: 'org'`, `teamId` null, `orgId` set) are first-class.
+Two things make that work:
+
+- **Every program item carries a denormalised tenant stamp** (`teamId`/`orgId`/
+  `scope`). Rules authorise from the stamp, so an org event — which has no
+  `teamId` — works by construction.
+- `ProgramTab` is **tenant-agnostic**: it reads the tenant off the `Event`
+  document, never from team context, so the team and org event pages mount the
+  same component.
+
+This change also fixed a pre-existing bug: the `categories` and `attendees`
+subcollection rules gated only on `belongsToUserTeam(parent)`, which can never
+pass for an org event. Org admins could not manage categories or read the roster.
+
+### Rules contract
+
+Create pays for one `get()` on the parent event to prove the stamp matches — the
+denormalised stamp is only trustworthy downstream if it was validated once. Read,
+update and delete then trust it, so the hot paths stay `get()`-free. The stamp is
+**immutable on update**: an item cannot be re-pointed at another studio.
+
+Without the create-time check, a manager of *any* team could inject rows into
+another studio's event carrying their own `teamId` — each write passing a
+capability check against a team they legitimately manage. The rules test suite
+(`packages/functions/src/events/programRules.rules-test.ts`) caught exactly this
+during development. Run it with:
+
+```
+pnpm --filter @linyup/functions test:rules   # needs the Firestore emulator
+```
+
+## Publishing
+
+**Events are private by default.** `Event.publicVisibility` (`'hidden' | 'public'`)
+gates `syncEventPublicProfile`; flipping it off deletes the mirror, so the public
+page 404s immediately. No existing event became public as a result of this feature.
+
+The mirror is an **aggregate** one (like `syncPrimaryPlaceToPublicProfile`): the
+whole programme is embedded into the single mirror doc, so a public page is one
+document read. It therefore reacts to writes on the event **and** on
+`program_items` — otherwise a published agenda would silently go stale.
+
+`internalNote` is **never mirrored**. The projection is an explicit whitelist, so a
+future private field is not published by default.
+`MAX_PROGRAM_ITEMS` (300) caps the embedded list so the mirror cannot approach
+Firestore's 1 MB document limit.
+
+### Public surfaces
+
+| Route | Shows |
+|---|---|
+| `/public/{slug}/events` | A studio's published events **plus its parent org's** |
+| `/public/{slug}/events/{eventId}` | Event + programme |
+| `/public/{slug}/events/{eventId}/print` | The printable handout |
+| `/public/org/{slug}/events` | An organisation's own published events |
+
+An org event has no `teamId`, so a studio's page runs **two queries and merges**
+(own `teamId` + parent `orgId`) — mirroring what `useAllEvents` already does in the
+admin calendar. `Team.org_id` is denormalised onto the team public profile so a
+public surface can tell which org a studio belongs to. For a federation this is the
+point: publish one event with one programme, and it appears on the federation's
+page *and* on every member club's page.
+
+Printing is `@media print` CSS (`apps/web/src/app/globals.css`) plus
+`window.print()`, not jsPDF — hand-laying a multi-day multi-track grid in jsPDF is
+far more work for a worse result.
+
+## Duplicating an event
+
+`duplicateEvent` (callable, `packages/functions/src/events/duplicateEvent.ts`)
+copies an event's **setup** and never its **participants**.
+
+| Copied | Reset |
+|---|---|
+| Settings, place, coach, fee, description | `attendees`, `invitations`, `checkins` |
+| `categories` (per-event setup, not participant data) | every counter → 0 |
+| The whole programme, days shifted to the new start | `publicVisibility` → **`'hidden'`** |
+
+Fields are dropped by **deny-list**, so a future setup field is inherited by
+default — the safe direction. Days shift by whole **calendar** days, not by the
+millisecond delta, so a camp moved across a DST boundary keeps its shape. Forcing
+the copy to `'hidden'` matters: inheriting "published" would silently expose a
+draft event the moment it is created.
+
+## Deliberately not done
+
+Per-item booking or capacity · FK links to Places/Activities/Coaches ·
+drag-and-drop reordering (times drive the order; `order` is only a tie-break) ·
+attendee-personalised programmes in Space (the `attendees` subcollection is not
+readable by a contact session, so it needs a callable) · bulk time-shift ·
+per-item media · a standalone template editor · duplicating across teams ·
+unifying the team and org event detail pages (only the tab strip was added) ·
+letting org events use plugin/custom event types.

@@ -144,8 +144,35 @@ default surface (`Team.default_public_surface`, defaults to `'bio-link'`). The r
 `TeamPublicProfile.active_public_surfaces` (computed by `syncTeamPublicProfile` on team write)
 to avoid redirecting to a dead surface. Sub-routes are siblings: `/public/{slug}/site`,
 `/public/{slug}/space`, `/public/{slug}/booking`, `/public/{slug}/signup`,
-`/public/{slug}/manage-booking`, `/public/{slug}/contact-update`, `/public/{slug}/coaching`.
-Token-only routes stay standalone: `/public/event-invitation` and `/public/team-invitation/{token}`.
+`/public/{slug}/manage-booking`, `/public/{slug}/contact-update`, `/public/{slug}/coaching`,
+`/public/{slug}/events`. Token-only routes stay standalone: `/public/event-invitation` and
+`/public/team-invitation/{token}`.
+
+### Event programmes — what makes an event more than a session
+
+An event **has a programme**: a multi-day, multi-track agenda. `Event.program`
+embeds the days + tracks (few, like `Place.rooms`); the rows live in
+`events/{id}/program_items` (can run to hundreds). Full docs: `docs/event-program.md`.
+
+Three invariants worth knowing before touching it:
+
+- **Times are WALL-CLOCK at the venue** (`'HH:MM'` + the day's `'YYYY-MM-DD'`),
+  never `Timestamp`s. A programme is a printed schedule — "09:00 breakfast" is
+  09:00 wherever the camp is. Same convention as `availability.ts`;
+  `timezoneLabel` is display-only. Do not "fix" this into UTC.
+- **Every program item carries a denormalised tenant stamp** (`teamId`/`orgId`/
+  `scope`). Create validates it against the parent event once; read/update/delete
+  then trust it, so the hot paths need no `get()` — and org-scoped events (whose
+  `teamId` is null) work by construction. The stamp is immutable on update.
+- **Events are private by default.** `Event.publicVisibility` gates
+  `syncEventPublicProfile`, which embeds the whole programme into one mirror doc
+  and NEVER mirrors `internalNote`.
+
+`ProgramTab` is tenant-agnostic (reads the tenant off the Event doc), so the team
+and org event pages mount the same component. Templates
+(`teams|organizations/{id}/[org_]program_templates`) key items by a relative
+`dayIndex`, so an org authors a standard camp programme once and every member
+studio applies it. Rules tests: `pnpm --filter @linyup/functions test:rules`.
 
 ### Public Space — the contacts' personal portal
 

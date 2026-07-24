@@ -16,7 +16,7 @@ import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag, Ticket } from 'lucide-react'
+import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag, Ticket, CalendarDays } from 'lucide-react'
 import { resolvePaymentOptions, heldSubscriptionTypeIds, type CourseAccessRule } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { formatCurrency } from '@/lib/format'
@@ -24,6 +24,7 @@ import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpaceContact } from './useSpaceContact'
 import { usePublicTeam } from '../PublicTeamProvider'
+import { usePublicEvents } from '@/components/events/program/usePublicEvents'
 
 // ─── Public course card data (from public_profile subcollection) ───────────────
 
@@ -79,6 +80,7 @@ function hasAccess(
 
 export default function SpaceHome() {
   const t = useTranslations('Space')
+  const tEvents = useTranslations('EventProgram')
   const { slug, teamId, isAuthenticated, contact, openSignIn } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
@@ -87,6 +89,12 @@ export default function SpaceHome() {
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
   const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+
+  // Upcoming published events — the studio's own plus its parent org's. Read
+  // from the same world-readable mirrors the public events page uses. NOT
+  // filtered to the events this contact RSVP'd to: the attendees subcollection
+  // is not readable by a contact session, so personalising it needs a callable.
+  const { events: upcomingEvents } = usePublicEvents(teamId, team?.org_id ?? null, { limit: 3 })
 
   // Load published courses (only needed once signed in — to compute "My courses").
   useEffect(() => {
@@ -420,6 +428,51 @@ export default function SpaceHome() {
                 >
                   <Icon className="h-4 w-4" style={{ color: accent }} />
                   <span className="flex-1 text-sm font-medium">{l.label}</span>
+                  <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Upcoming events — read-only teaser; the full list lives on the public
+          events page, and each card links straight to its programme. */}
+      {upcomingEvents.length > 0 && (
+        <section className="rounded-2xl p-4" style={cardStyle}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" style={{ color: accent }} />
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
+                {tEvents('spaceEventsTitle')}
+              </h2>
+            </div>
+            <Link
+              href={`/public/${slug}/events` as Route}
+              className="text-xs underline underline-offset-2"
+              style={{ color: textMuted }}
+            >
+              {tEvents('spaceEventsAll')}
+            </Link>
+          </div>
+          <div className="grid gap-2">
+            {upcomingEvents.map((ev) => {
+              const start = (ev.start as unknown as { toDate?: () => Date } | null)?.toDate?.()
+              return (
+                <Link
+                  key={ev.id}
+                  href={`/public/${slug}/events/${ev.id}` as Route}
+                  className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
+                  style={{ background: `${accent}14`, color: textMain }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{ev.title}</p>
+                    {start && (
+                      <p className="text-xs" style={{ color: textMuted }}>
+                        {start.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
+                      </p>
+                    )}
+                  </div>
                   <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
                 </Link>
               )

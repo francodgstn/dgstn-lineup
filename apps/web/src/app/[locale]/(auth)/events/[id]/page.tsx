@@ -42,6 +42,7 @@ import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
 import { ProgramTab } from '@/components/events/program/ProgramTab'
 import { DuplicateEventDialog } from '@/components/events/DuplicateEventDialog'
+import { EventPublishCard } from '@/components/events/EventPublishCard'
 import { useOrg } from '@/contexts/OrgContext'
 import dynamic from 'next/dynamic'
 import type { Route } from 'next'
@@ -683,6 +684,12 @@ export default function EventDetailPage() {
       {/* ── Overview tab ─────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
         <div className="space-y-6">
+          <EventPublishCard
+            event={event}
+            publicSlug={team?.slug ?? null}
+            canEdit={can('events.manage') || isOrgAdmin}
+          />
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <StatCard
               label={t('detail_statsCheckins')}

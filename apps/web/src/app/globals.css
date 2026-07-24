@@ -312,3 +312,41 @@
 .driver-active [data-slot='select-positioner'] {
   z-index: 100000 !important;
 }
+
+/* ── Event programme print sheet ──────────────────────────────────────────────
+   The printable handout at /public/{slug}/events/{id}/print. Browser
+   "Save as PDF" over these rules produces the A4 handout, which is why there is
+   no jsPDF path — hand-laying a multi-day multi-track grid there would be far
+   more work for a worse result. */
+@media print {
+  .program-print {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* Each day starts a fresh page, and a day's block is never split mid-way. */
+  .program-print .program-day {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .program-print .program-day + .program-day {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* Tracks keep their columns on paper — the screen layout only collapses them
+     for narrow viewports, which a printed page is not. */
+  .program-print .grid {
+    display: grid !important;
+  }
+
+  /* Flatten interactive chrome: borders stay (they carry the structure),
+     shadows and hover affordances do not. */
+  .program-print * {
+    box-shadow: none !important;
+  }
+
+  a[href]::after {
+    content: none !important;
+  }
+}

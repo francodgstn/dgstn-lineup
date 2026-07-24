@@ -195,6 +195,54 @@ export interface ProgramTemplate {
 /** Flat safeguard cap — same for every plan (applies per team and per org). */
 export const MAX_PROGRAM_TEMPLATES = 25
 
+// ─── public mirror ────────────────────────────────────────────────────────────
+// events/{eventId}/public_profile/{eventId}, written by syncEventPublicProfile.
+// World-readable, so it carries ONLY what a public page may show — note the
+// absence of `internalNote` on the items.
+
+export interface PublicProgramItem {
+  id: string
+  dayId: string
+  trackId: string | null
+  startTime: string
+  endTime: string | null
+  allDay: boolean
+  title: string
+  subtitle: string | null
+  description: string | null
+  locationText: string | null
+  peopleText: string | null
+  kind: ProgramItemKind | null
+  color: string | null
+  isHighlight: boolean
+  order: number
+}
+
+export interface EventPublicProfile {
+  type: 'event'
+  /** Null for an org-scoped event. */
+  teamId: string | null
+  /** Null for a team-scoped event. */
+  orgId: string | null
+  scope: 'team' | 'org'
+  title: string
+  eventType: string | null
+  start: Timestamp | null
+  end: Timestamp | null
+  status: EventStatus
+  location: string | null
+  description: string | null
+  coachName: string | null
+  program: {
+    days: ProgramDay[]
+    tracks: ProgramTrack[]
+    timezoneLabel: string | null
+    note: string | null
+  } | null
+  programItems: PublicProgramItem[]
+  programItemCount: number
+}
+
 // ─── configurable event type (teams/{teamId}/event_types/{typeId}) ─────────────
 
 export type EventTypeFieldType = 'text' | 'number' | 'select' | 'multiselect' | 'boolean'

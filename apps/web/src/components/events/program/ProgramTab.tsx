@@ -86,8 +86,12 @@ export function ProgramTab({ event, canEdit = true, parentOrgId }: ProgramTabPro
     setItemOpen(true)
   }
 
-  function openEditItem(item: EventProgramItem) {
-    setEditing(item)
+  // The timeline is shared with the public surfaces, so it hands back the
+  // narrower display shape — resolve the real document before editing.
+  function openEditItem(item: { id: string }) {
+    const full = items.find((i) => i.id === item.id)
+    if (!full) return
+    setEditing(full)
     setItemOpen(true)
   }
 

@@ -34,7 +34,16 @@ export function formatHHMM(totalMinutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-type SortableItem = Pick<EventProgramItem, 'startTime' | 'order'> & { allDay?: boolean }
+// Structural, not Pick<EventProgramItem>: the PUBLIC mirror uses `null` where
+// the private document uses `undefined`, and both must sort through the same
+// comparator rather than each growing its own.
+type SortableItem = { startTime: string; order: number; allDay?: boolean }
+
+/** The time fields these helpers need, tolerant of null or undefined ends. */
+export interface TimedItem {
+  startTime: string
+  endTime?: string | null
+}
 
 /** The canonical item ordering WITHIN a day: all-day first, then by start
  *  time, then by `order` as a stable tie-break. Times drive the ordering —
@@ -55,9 +64,7 @@ export function compareProgramItems(a: SortableItem, b: SortableItem): number {
 
 /** Length in minutes, handling an item that runs past midnight (endTime
  *  earlier than startTime). Null when either end is missing or unparseable. */
-export function itemDurationMinutes(
-  item: Pick<EventProgramItem, 'startTime' | 'endTime'>,
-): number | null {
+export function itemDurationMinutes(item: TimedItem): number | null {
   const start = parseHHMM(item.startTime)
   const end = parseHHMM(item.endTime)
   if (start === null || end === null) return null
@@ -65,12 +72,18 @@ export function itemDurationMinutes(
 }
 
 /** True when the item finishes on the following calendar day. */
-export function crossesMidnight(
-  item: Pick<EventProgramItem, 'startTime' | 'endTime'>,
-): boolean {
+export function crossesMidnight(item: TimedItem): boolean {
   const start = parseHHMM(item.startTime)
   const end = parseHHMM(item.endTime)
   return start !== null && end !== null && end < start
+}
+
+/** Just the parts of a program config these helpers read. The PUBLIC mirror
+ *  uses null where the private document uses undefined, so both flow through
+ *  the same sorting/grouping code. */
+export interface DaysAndTracks {
+  days?: ProgramDay[]
+  tracks?: ProgramTrack[]
 }
 
 export function compareProgramDays(a: ProgramDay, b: ProgramDay): number {
@@ -78,11 +91,11 @@ export function compareProgramDays(a: ProgramDay, b: ProgramDay): number {
   return a.date.localeCompare(b.date)
 }
 
-export function sortedDays(config: EventProgramConfig | undefined): ProgramDay[] {
+export function sortedDays(config: DaysAndTracks | undefined): ProgramDay[] {
   return [...(config?.days ?? [])].sort(compareProgramDays)
 }
 
-export function sortedTracks(config: EventProgramConfig | undefined): ProgramTrack[] {
+export function sortedTracks(config: DaysAndTracks | undefined): ProgramTrack[] {
   return [...(config?.tracks ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }
 
@@ -110,7 +123,7 @@ export function isPlenary(item: { trackId?: string | null }): boolean {
 
 /** Day-by-day grouping in display order, including days with no items. */
 export function groupItemsByDay<T extends SortableItem & { dayId: string }>(
-  config: EventProgramConfig | undefined,
+  config: DaysAndTracks | undefined,
   items: T[],
 ): Array<{ day: ProgramDay; items: T[] }> {
   return sortedDays(config).map((day) => ({ day, items: itemsForDay(items, day.id) }))
