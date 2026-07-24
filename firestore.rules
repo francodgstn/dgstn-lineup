@@ -111,6 +111,26 @@ service cloud.firestore {
       return orgId != null && hasOrgRole(orgId, 'org_admin');
     }
 
+    // Check if the current user is an org_admin of the org that owns the given
+    // ORG-SCOPED event. Event subcollections (categories/attendees) previously
+    // gated only on belongsToUserTeam(parent), which can never pass for an org
+    // event because its teamId is null — this restores access for org admins.
+    function isOrgAdminOfEvent(eventId) {
+      let e = get(/databases/$(database)/documents/events/$(eventId)).data;
+      let orgId = e.get('orgId', null);
+      return e.get('scope', '') == 'org' && orgId != null && hasOrgRole(orgId, 'org_admin');
+    }
+
+    // The tenant stamp denormalised onto an event subcollection document must
+    // match the parent event's own. Without this, a manager could inject rows
+    // into ANOTHER studio's event carrying their own teamId — each write would
+    // pass a capability check against a team they legitimately manage.
+    function tenantMatchesEvent(eventId, data) {
+      let e = get(/databases/$(database)/documents/events/$(eventId)).data;
+      return data.get('teamId', null) == e.get('teamId', null)
+             && data.get('orgId', null) == e.get('orgId', null);
+    }
+
     // Returns true if the current user may write org-locked affiliation fields.
     // Short-circuits to true when the team has no org or the org has not enabled the
     // affiliation lock (Organization.lock_affiliation).
@@ -687,6 +707,13 @@ service cloud.firestore {
         allow delete: if hasTeamRole(teamId, 'owner');
       }
 
+      // Reusable event programs (team-owned; org-wide templates live under
+      // organizations/{orgId}/org_program_templates and are read-only here).
+      match /program_templates/{templateId} {
+        allow read:  if isTeamMember(teamId) || isOrgAdminOfTeam(teamId);
+        allow write: if hasTeamCapability(teamId, 'events.manage');
+      }
+
       // Rebuild jobs subcollection (background score history rebuild tasks)
       match /rebuild_jobs/{jobId} {
         // Owners and managers can read their own job status (for onSnapshot polling)
@@ -936,14 +963,68 @@ service cloud.firestore {
 
       // Per-event categories (used by fighting_cup and any plugin with hasCategories)
       match /categories/{category} {
-        allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)));
-        allow write: if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event))) || hasRole('admin');
+        allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)))
+                     || isOrgAdminOfEvent(event);
+        allow write: if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)))
+                     || isOrgAdminOfEvent(event)
+                     || hasRole('admin');
       }
 
       // RSVP attendees — written by Cloud Functions
       match /attendees/{attendee} {
-        allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)));
+        allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)))
+                     || isOrgAdminOfEvent(event);
         allow write: if false;
+      }
+
+      // Program items — the event's agenda (multi-day, multi-track).
+      // Tenant fields (teamId/orgId/scope) are DENORMALISED onto every item.
+      // Create validates that stamp against the parent event once; read, update
+      // and delete then trust it, so the hot paths need no get() on the parent
+      // and org-scoped events (whose teamId is null) work by construction.
+      // Deliberately avoids belongsToUserTeam(), which reads a legacy `teacher`
+      // field these documents do not carry.
+      match /program_items/{item} {
+        function itemTeam() { return resource.data.get('teamId', null); }
+        function itemOrg()  { return resource.data.get('orgId', null); }
+
+        allow read: if isAuthed() && (
+                         (itemTeam() != null
+                            && (isTeamMember(itemTeam()) || isOrgAdminOfTeam(itemTeam())))
+                         // An org event's programme is visible to the whole org:
+                         // to org members directly, and to any studio whose
+                         // current team belongs to that org (mirrors org_places
+                         // and the parent event's own read rule).
+                      || (itemOrg() != null && isOrgMember(itemOrg()))
+                      || (itemOrg() != null
+                            && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.get('org_id', null) == itemOrg())
+                      || hasRole('admin'));
+
+        // CREATE is the one operation that pays for a get() on the parent: the
+        // denormalised stamp is only trustworthy downstream if it was proven to
+        // match the event it is filed under. Every later operation reads the
+        // already-validated stamp, so the common path stays get()-free.
+        allow create: if hasRole('admin')
+                      || (isAuthed()
+                          && tenantMatchesEvent(event, request.resource.data)
+                          && ((request.resource.data.get('teamId', null) != null
+                                 && hasTeamCapability(request.resource.data.get('teamId', ''), 'events.manage'))
+                              || (request.resource.data.get('orgId', null) != null
+                                 && hasOrgRole(request.resource.data.get('orgId', ''), 'org_admin'))));
+
+        // The tenant stamp is immutable — it cannot be re-pointed at another
+        // studio after the fact.
+        allow update: if hasRole('admin')
+                      || (isAuthed()
+                          && request.resource.data.get('teamId', null) == itemTeam()
+                          && request.resource.data.get('orgId', null) == itemOrg()
+                          && ((itemTeam() != null && hasTeamCapability(itemTeam(), 'events.manage'))
+                              || (itemOrg() != null && hasOrgRole(itemOrg(), 'org_admin'))));
+
+        allow delete: if hasRole('admin')
+                      || (isAuthed()
+                          && ((itemTeam() != null && hasTeamCapability(itemTeam(), 'events.manage'))
+                              || (itemOrg() != null && hasOrgRole(itemOrg(), 'org_admin'))));
       }
 
       // Invitations — written and read exclusively by Cloud Functions (admin SDK).
@@ -1434,6 +1515,17 @@ service cloud.firestore {
       // Org-wide places: shared down to every sub-studio (read), managed by org admins.
       // Sub-team members read via their current team's org_id (mirrors org-scope events).
       match /org_places/{placeId} {
+        allow read:  if isOrgMember(orgId)
+                     || (isAuthed()
+                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow write: if hasOrgRole(orgId, 'org_admin');
+      }
+
+      // Org-wide event programs: the federation authors the standard camp or
+      // competition programme once and every sub-studio can apply it (read-only),
+      // exactly like org_places. Applying it to an event and saving back always
+      // produces a TEAM template — a club can never write to the org's.
+      match /org_program_templates/{templateId} {
         allow read:  if isOrgMember(orgId)
                      || (isAuthed()
                          && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);

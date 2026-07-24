@@ -18,6 +18,7 @@ import { Link } from '@/i18n/navigation'
 import { EVENTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
 import type { Event, EventCheckin, EventType } from '@linyup/shared'
 import type { Route } from 'next'
+import { ProgramTab } from '@/components/events/program/ProgramTab'
 
 interface Team { id: string; name: string }
 
@@ -75,12 +76,16 @@ function initials(c: { contact: { firstname: string; lastname: string } }) {
 
 export default function OrgEventDetailPage() {
   const t = useTranslations('OrgEventDetail')
+  // The program tab label lives in the shared Events namespace — one key, not
+  // a duplicate per surface.
+  const tp = useTranslations('Events')
   const { orgId, id: eventId } = useParams<{ orgId: string; id: string }>()
   const { isAdmin } = useOrg()
   const qc = useQueryClient()
 
   const [teamFilter, setTeamFilter] = useState<string>('all')
   const [toggling, setToggling] = useState<string | null>(null)
+  const [tab, setTab] = useState<'program' | 'checkins'>('checkins')
 
   const eventQ = useOrgEvent(eventId)
   const checkinsQ = useEventCheckins(eventId)
@@ -157,8 +162,37 @@ export default function OrgEventDetailPage() {
         </div>
       )}
 
+      {/* Tabs — an org event carries a program exactly like a team event does. */}
+      {event && (
+        <div className="flex gap-1 border-b">
+          {([
+            { key: 'program' as const, label: tp('detail_tabProgram') },
+            { key: 'checkins' as const, label: t('checkinsTitle') },
+          ]).map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => setTab(entry.key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+                tab === entry.key
+                  ? 'border-primary font-medium text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Program tab — the same component the team event page mounts. It reads
+          teamId/orgId/scope off the event doc, so org events need no variant. */}
+      {event && tab === 'program' && (
+        <ProgramTab event={event} canEdit={isAdmin} />
+      )}
+
       {/* Checkins section */}
-      <div className="space-y-3">
+      <div className={`space-y-3 ${event && tab !== 'checkins' ? 'hidden' : ''}`}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />

@@ -106,6 +106,12 @@ export const EVENT_TYPES_SUBCOLLECTION = 'event_types'
 export const EVENT_CATEGORIES_SUBCOLLECTION = 'categories'
 export const EVENT_INVITATIONS_SUBCOLLECTION = 'invitations'
 export const EVENT_ATTENDEES_SUBCOLLECTION = 'attendees'
+// The event's agenda — events/{eventId}/program_items/{itemId}
+export const EVENT_PROGRAM_ITEMS_SUBCOLLECTION = 'program_items'
+// Reusable programs. Team-owned, plus org-owned templates every member studio
+// can apply read-only (same scope model as team_places / org_places).
+export const PROGRAM_TEMPLATES_SUBCOLLECTION = 'program_templates'
+export const ORG_PROGRAM_TEMPLATES_SUBCOLLECTION = 'org_program_templates'
 export const CHECKINS_COLLECTION = 'checkins'
 export const SESSIONS_COLLECTION = 'sessions'
 export const PARTICIPANTS_SUBCOLLECTION = 'participants'

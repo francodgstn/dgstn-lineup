@@ -40,6 +40,7 @@ import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useEventTypes } from '@/hooks/useEventTypes'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
+import { ProgramTab } from '@/components/events/program/ProgramTab'
 import { useOrg } from '@/contexts/OrgContext'
 import dynamic from 'next/dynamic'
 import type { Route } from 'next'
@@ -389,7 +390,7 @@ function StatCard({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type DetailTab = 'overview' | 'checkins' | 'categories' | 'attendees' | 'invitations'
+type DetailTab = 'overview' | 'program' | 'checkins' | 'categories' | 'attendees' | 'invitations'
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -540,6 +541,10 @@ export default function EventDetailPage() {
 
   const TABS: { key: DetailTab; label: string }[] = [
     { key: 'overview',    label: t('detail_tabOverview') },
+    // Base feature, never plugin-gated — the program is what distinguishes an
+    // event from a session, so the tab is always offered and its empty state
+    // is the discovery affordance.
+    { key: 'program',     label: t('detail_tabProgram') },
     { key: 'checkins',    label: checkinLabel },
     ...(showCategoriesTab ? [{ key: 'categories' as DetailTab, label: 'Categories' }] : []),
     ...(canSeeAttendees ? [{ key: 'attendees' as DetailTab, label: `${t('detail_tabAttendees')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` }] : []),
@@ -693,6 +698,11 @@ export default function EventDetailPage() {
             <p className="text-sm text-muted-foreground italic">{t('detail_noDescription')}</p>
           )}
         </div>
+      )}
+
+      {/* ── Program tab ──────────────────────────────────────────────────────── */}
+      {tab === 'program' && (
+        <ProgramTab event={event} canEdit={can('events.manage') || isOrgAdmin} />
       )}
 
       {/* ── Check-ins tab ───────────────────────────────────────────────────── */}

@@ -31,10 +31,169 @@ export interface Event {
   last_invitation_sent_at?: Timestamp
   coachId?: string | null
   coachName?: string | null
+  // The event's agenda — see "event program" below. Absent until the studio
+  // builds one; an event without a program behaves exactly as it does today.
+  program?: EventProgramConfig
+  // Events are PRIVATE by default. An event only becomes world-readable when the
+  // studio explicitly publishes it — this gates syncEventPublicProfile.
+  publicVisibility?: 'hidden' | 'public'
   created_at?: Timestamp
   createdBy?: string
   deleted_at?: Timestamp | null
 }
+
+// ─── event program (the agenda) ───────────────────────────────────────────────
+// The program is what distinguishes an event from a session: a multi-day,
+// multi-track schedule of what happens, where, and with whom.
+//
+// TIMES ARE WALL-CLOCK AT THE VENUE ('HH:MM' plus the day's calendar date),
+// never absolute Timestamps. A program is a printed schedule — "09:00
+// breakfast" is 09:00 wherever the camp is. This sidesteps DST entirely and
+// lets an event run abroad without the whole agenda shifting. Same convention
+// as `availability.ts`. `timezoneLabel` is DISPLAY ONLY — nothing converts.
+//
+// Days and tracks are few, so they live in an embedded object on the event doc
+// (the `Place.rooms` / `Form.fields` precedent). Items can run to hundreds, so
+// they get their own subcollection: events/{eventId}/program_items/{itemId}.
+
+/** A parallel stream within the program — "Kids", "Adults", "Mat A", "Room 1". */
+export interface ProgramTrack {
+  id: string
+  name: string
+  color?: string
+  order: number
+}
+
+/** One calendar day of the program. */
+export interface ProgramDay {
+  id: string
+  date: string // 'YYYY-MM-DD' — the venue's calendar date
+  title?: string // "Day 1 — Arrival"
+  subtitle?: string
+  order: number
+}
+
+export interface EventProgramConfig {
+  days: ProgramDay[]
+  tracks: ProgramTrack[]
+  /** Display-only label, e.g. 'Europe/Madrid'. Nothing converts times. */
+  timezoneLabel?: string
+  /** Free note rendered above the agenda. */
+  note?: string
+}
+
+export type ProgramItemKind =
+  | 'activity'
+  | 'meal'
+  | 'break'
+  | 'transfer'
+  | 'ceremony'
+  | 'briefing'
+  | 'free'
+  | 'other'
+
+export const PROGRAM_ITEM_KINDS: ProgramItemKind[] = [
+  'activity', 'meal', 'break', 'transfer', 'ceremony', 'briefing', 'free', 'other',
+]
+
+/** events/{eventId}/program_items/{itemId} */
+export interface EventProgramItem {
+  id: string
+  eventId: string
+  // Tenant fields are DENORMALISED onto every item so security rules never need
+  // get(parent) and so org-scoped events work (their parent's teamId is null).
+  teamId?: string
+  orgId?: string
+  scope?: 'team' | 'org'
+
+  dayId: string // → EventProgramConfig.days[].id
+  /** null/absent = plenary: the item spans every track. */
+  trackId?: string | null
+
+  startTime: string // 'HH:MM' wall clock
+  endTime?: string // 'HH:MM'; earlier than startTime means it crosses midnight
+  allDay?: boolean // sorts before timed items
+
+  title: string
+  subtitle?: string
+  description?: string
+  /** Free text — an event is often off-site ("Beach", "Hotel Aurora"). */
+  locationText?: string
+  /** Free text — guests and externals are not team_members ("Coach Marta"). */
+  peopleText?: string
+  kind?: ProgramItemKind
+  color?: string
+  isHighlight?: boolean
+  /** Staff-only. NEVER mirrored to the public profile. */
+  internalNote?: string
+
+  /** Tie-break for items sharing a startTime. Times drive the ordering. */
+  order: number
+  created_at?: Timestamp
+  updated_at?: Timestamp
+  createdBy?: string
+}
+
+// Keeps the public mirror doc (which embeds the whole program) safely under
+// Firestore's 1 MB limit — ~300 items ≈ 120 KB.
+export const MAX_PROGRAM_ITEMS = 300
+
+// ─── program templates ────────────────────────────────────────────────────────
+// A reusable program, stored WHOLE in one document (always read and written as a
+// unit, like Form.fields). Template items are keyed by a relative `dayIndex`,
+// never a dayId or a calendar date — that is what makes a template portable to
+// any future event.
+//
+// Storage:
+//   • team templates → teams/{teamId}/program_templates/{id}          (scope: 'team')
+//   • org templates  → organizations/{orgId}/org_program_templates/{id} (scope: 'org')
+// Org templates are a read-only shared resource every member studio can apply —
+// the same model as org places (see place.ts).
+
+export interface ProgramTemplateDay {
+  dayIndex: number // 0-based offset from the event's first program day
+  title?: string
+  subtitle?: string
+}
+
+export interface ProgramTemplateItem {
+  dayIndex: number
+  trackId?: string | null // → ProgramTemplate.tracks[].id, or null for plenary
+  startTime: string
+  endTime?: string
+  allDay?: boolean
+  title: string
+  subtitle?: string
+  description?: string
+  locationText?: string
+  peopleText?: string
+  kind?: ProgramItemKind
+  color?: string
+  isHighlight?: boolean
+  internalNote?: string // kept — templates are never public
+  order: number
+}
+
+export interface ProgramTemplate {
+  id: string
+  scope: 'team' | 'org'
+  teamId?: string // set for team templates
+  orgId?: string // set for org templates
+  name: string
+  description?: string
+  timezoneLabel?: string
+  note?: string
+  tracks: ProgramTrack[]
+  days: ProgramTemplateDay[]
+  items: ProgramTemplateItem[]
+  itemCount?: number
+  created_at?: Timestamp
+  updated_at?: Timestamp
+  createdBy?: string
+}
+
+/** Flat safeguard cap — same for every plan (applies per team and per org). */
+export const MAX_PROGRAM_TEMPLATES = 25
 
 // ─── configurable event type (teams/{teamId}/event_types/{typeId}) ─────────────
 
