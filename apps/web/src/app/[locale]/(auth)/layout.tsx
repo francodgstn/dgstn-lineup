@@ -29,7 +29,8 @@ import {
   Gift,
   GraduationCap,
   FolderTree,
-  SlidersHorizontal,
+  Settings,
+  HelpCircle,
   X,
   Workflow,
   Zap,
@@ -45,7 +46,6 @@ import {
   TrendingUp,
   Search,
   Calculator,
-  Compass,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -119,7 +119,7 @@ const ALL_SETTINGS_ITEM: NavItem = {
   id: 'allSettings',
   href: '/settings',
   labelKey: 'allSettings',
-  icon: SlidersHorizontal,
+  icon: Settings, // cog — the settings hub
   exact: true,
 }
 // How-to — high-level product guides + onboarding workflow. A general utility
@@ -128,7 +128,7 @@ const HOW_TO_ITEM: NavItem = {
   id: 'howTo',
   href: '/how-to',
   labelKey: 'howTo',
-  icon: Compass,
+  icon: HelpCircle, // question mark — help
 }
 
 // Action-oriented sidebar sections for high-frequency destinations. Lower-frequency
@@ -335,6 +335,32 @@ function NavLink({
     )
   }
   return link
+}
+
+// A compact icon-only link for the utility actions (settings, help) that sit in
+// their own row under the search bar rather than in the nav list. Always shows
+// its label as a tooltip, since there's no text beside the icon.
+function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
+  const pathname = usePathname()
+  const t = useTranslations('Nav')
+  const Icon = item.icon
+  const label = t(item.labelKey as Parameters<typeof t>[0])
+  const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+  return (
+    <Link
+      href={item.href as Route}
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+        isActive
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+    </Link>
+  )
 }
 
 // ─── flyout submenu ───────────────────────────────────────────────────────────
@@ -1227,16 +1253,23 @@ function SidebarContent({
         </div>
       )}
 
+      {/* Utility actions — settings + help. Right-aligned under the search so the
+          left space stays free for future additions; stacked as plain icons in
+          icon-only mode, where there's no search bar for them to sit beneath. */}
+      <div
+        className={`px-2 pt-2 shrink-0 flex ${
+          collapsed ? 'flex-col items-center gap-1' : 'justify-end gap-1'
+        }`}
+      >
+        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
+        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
+      </div>
+
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* General — Dashboard + the settings hub */}
-        <div>
-          {!collapsed && <GroupLabel>{t('navGroupGeneral')}</GroupLabel>}
-          <div className="space-y-0.5">
-            <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-            <NavLink item={ALL_SETTINGS_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-            <NavLink item={HOW_TO_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-          </div>
+        {/* Dashboard — no group heading; it stands on its own above Shortcuts. */}
+        <div className="space-y-0.5">
+          <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
         </div>
 
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
@@ -1316,11 +1349,11 @@ function SidebarContent({
                 <button
                   type="button"
                   onClick={() => toggleSection(section.labelKey)}
-                  className="flex w-full items-center justify-between rounded px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                  className="flex w-full items-center justify-between rounded px-2 pb-1 text-xs font-bold uppercase tracking-wider text-foreground/75 transition-colors hover:text-foreground"
                 >
                   <span>{label}</span>
                   <ChevronDown
-                    className={`h-3 w-3 shrink-0 transition-transform ${secCollapsed ? '-rotate-90' : ''}`}
+                    className={`h-3.5 w-3.5 shrink-0 transition-transform ${secCollapsed ? '-rotate-90' : ''}`}
                   />
                 </button>
               )
