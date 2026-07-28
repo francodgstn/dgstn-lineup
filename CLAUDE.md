@@ -361,10 +361,34 @@ Isolated datasets, never mixed:
 Prospective-customer sandboxes (real public business data + synthetic contacts),
 seeded by the generic `pnpm lead:seed --lead <id>` (`scripts/seed-lead.ts`) from
 per-lead profiles in `scripts/leads/{id}/profile.ts` — dual-target: local emulator
-or the cloud `linyup-sandbox` project (also dispatchable via the
-**Seed Lead Sandbox** GitHub Action with a lead picker). Lead tenants are NOT on
-the public `/try` picker; `--reset` tears down one lead only (never use
-`pnpm sandbox:reset` for that). Full docs: `scripts/leads/README.md`.
+or the cloud `linyup-sandbox` project. Seeding is **local-only**: lead profiles are
+gitignored, so CI has no profiles to read (the old Seed Lead Sandbox Action was
+removed for that reason). Lead tenants are NOT on the public `/try` picker.
+Full docs: `scripts/leads/README.md`.
+
+### Sandbox safety model
+
+The sandbox hosts **live prospect demos**, so nothing lands in it unattended:
+
+- **Code deploys are manual.** `deploy-sandbox.yml` (functions + rules) is
+  `workflow_dispatch` only — no push trigger. Sandbox can therefore drift behind
+  `main`; deploy by hand before a demo if backend code changed. The **web app**
+  is separate: it rolls out via App Hosting's own GitHub integration, configured
+  in the Firebase Console (Console → App Hosting → backend → Deployment
+  settings), not in this repo.
+- **Data is never reset automatically.** Nothing scheduled or push-triggered
+  wipes data. The one exception is `purgeProvisionalContacts` (in `dailyTasks`),
+  which hard-deletes *expired provisional* contacts across all tenants nightly.
+- **`pnpm sandbox:reset` PRESERVES lead tenants.** It wipes only the `/try`
+  playground; `lead-*` teams, their data and their logins survive. It asks for a
+  typed confirmation (`--yes` to skip in CI, `--dry-run` to preview counts first,
+  `--include-leads` to override the preservation).
+- **To tear down ONE lead**, use `pnpm lead:seed --lead <id> --reset` — scoped to
+  that tenant, and it now also asks for typed confirmation against the cloud.
+- Both teardown paths derive their collection list from the **shared**
+  `TENANT_DATA_COLLECTIONS` (`packages/shared/src/tenantData.ts`), which has a
+  completeness test. Never hand-copy that list into a script — the copies went
+  stale and started missing `availability_exceptions` and `feedback`.
 
 ---
 

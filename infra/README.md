@@ -342,8 +342,8 @@ npx firebase-tools apphosting:backends:create \
   --project linyup-sandbox --app <WEB_APP_ID> --backend linyup-web \
   --primary-region europe-west4 --root-dir apps/web --non-interactive
 
-# 5. Seed the six demo Studio tenants (ADC; idempotent — reset:sandbox to wipe first)
-pnpm seed:sandbox
+# 5. Seed the six demo Studio tenants (ADC; idempotent — sandbox:reset to wipe first)
+pnpm sandbox:seed
 
 # 6. Custom domain — the public demo lives at https://demo.linyup.com/try.
 #    a) Firebase Console → App Hosting → linyup-web (sandbox) → Custom domains →
@@ -361,7 +361,7 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
 `tennis@`, `yoga@`, `pilates@`, `dance@` `linyup.com`.
 
 > **Auto-reseed** (nightly wipe + reseed) is a deferred follow-up — for now reseed
-> manually with `pnpm reset:sandbox` then `pnpm seed:sandbox`.
+> manually with `pnpm sandbox:reset` then `pnpm sandbox:seed`.
 
 ---
 

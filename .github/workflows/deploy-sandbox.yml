@@ -1,29 +1,27 @@
 name: Deploy Sandbox
 
-# The sandbox web app (apps/web) auto-deploys via Firebase App Hosting's GitHub
-# integration. This workflow covers everything else the demo playground needs:
-# Cloud Functions + Firestore rules/indexes + Storage rules + RTDB rules.
+# Backend for the demo playground: Cloud Functions + Firestore rules/indexes +
+# Storage rules.
 #
-# Runs on pushes to main that touch backend config, and on manual dispatch.
-# Demo *data* is reseeded ONLY on a manual run with reseed_demo=true (it wipes
-# the running demo + all auth users) — auto-deploys never touch data. You can
-# also reseed locally with `pnpm reset:sandbox && pnpm seed:sandbox`.
+# MANUAL DISPATCH ONLY — deliberately. The sandbox hosts live lead demos, so
+# nothing lands in it unattended: a rules change that denies a read, or a
+# function that throws, would otherwise break a demo mid-pitch. Deploy by hand
+# from the Actions tab when you're ready. The trade-off is that sandbox can drift
+# behind main, so deploy before a demo if backend code changed.
+#
+# NOTE: the sandbox WEB APP (apps/web) is a separate story — it rolls out via
+# Firebase App Hosting's own GitHub integration, which is configured on the
+# backend in the Firebase Console, NOT here. Removing this workflow's push
+# trigger does NOT stop that. Turn off automatic rollouts in
+# Console → App Hosting → backend → Deployment settings.
+#
+# Demo *data* is only ever touched by an explicit reseed run below.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'packages/functions/**'
-      - 'packages/shared/**'
-      - 'firestore.rules'
-      - 'firestore.index.json'
-      - 'storage.rules'
-      - 'firebase.json'
-      - '.github/workflows/deploy-sandbox.yml'
   workflow_dispatch:
     inputs:
       reseed_demo:
-        description: 'DESTRUCTIVE: wipe & reseed the sandbox demo data after deploy'
+        description: 'DESTRUCTIVE: wipe & reseed the /try demo data after deploy (lead tenants are preserved)'
         type: boolean
         default: false
 
@@ -91,16 +89,21 @@ jobs:
       - name: Deploy to Firebase (Sandbox)
         run: npx firebase-tools deploy --project sandbox --only functions,firestore,storage --non-interactive --force
 
-      # Optional demo reseed — manual dispatch + reseed_demo=true only, so routine
-      # backend deploys never wipe the running demo. Reuses the ADC from the auth
-      # step; the deploy SA's roles/firebase.admin covers Firestore + Auth writes.
+      # Optional demo reseed — reseed_demo=true only, so a routine backend deploy
+      # never wipes the running demo. Reuses the ADC from the auth step; the
+      # deploy SA's roles/firebase.admin covers Firestore + Auth writes.
       # GOOGLE_CLOUD_PROJECT is pinned to satisfy reset-sandbox-db.ts's project
       # guard regardless of what the auth step exported. Runs after deploy so the
       # fresh data lands against the just-deployed rules/indexes (e.g. fromBioLink).
-      - name: Reseed demo data (destructive)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reseed_demo }}
+      #
+      # `--yes` is the non-interactive escape hatch for the typed confirmation
+      # (there is no TTY here). LEAD TENANTS ARE PRESERVED by default — this only
+      # resets the /try playground. Wiping a lead demo is deliberately not
+      # reachable from CI; do it locally with `pnpm lead:seed --lead <id> --reset`.
+      - name: Reseed /try demo data (destructive)
+        if: ${{ inputs.reseed_demo }}
         env:
           GOOGLE_CLOUD_PROJECT: linyup-sandbox
         run: |
-          pnpm reset:sandbox
-          pnpm seed:sandbox
+          pnpm sandbox:reset --yes
+          pnpm sandbox:seed

@@ -50,12 +50,14 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as crypto from 'node:crypto'
 import { parseArgs } from 'node:util'
+import { createInterface } from 'node:readline/promises'
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
 import {
   DEFAULT_PAYMENT_MODES,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   GIFT_CARDS_SUBCOLLECTION,
+  TENANT_DATA_COLLECTIONS,
 } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -88,6 +90,8 @@ const { values: cli } = parseArgs({
   options: {
     lead: { type: 'string' },
     reset: { type: 'boolean', default: false },
+    // Skip the typed confirmation that --reset asks for against the cloud.
+    yes: { type: 'boolean', default: false },
     // `--target emulator` fills in the emulator host env vars below so you don't
     // have to; `cloud` (the default) targets linyup-sandbox via ADC.
     target: { type: 'string' },
@@ -433,37 +437,34 @@ async function resolveSectionAssets(
 }
 
 // ── lead-scoped reset (--reset) ─────────────────────────────────────────────
-// Tears down ONLY this lead's tenant. Mirrors TENANT_DATA_COLLECTIONS +
-// tenantStoragePrefix in packages/shared/src/tenantData.ts (re-declared here —
-// scripts don't resolve the workspace import; keep in sync with that file).
+// Tears down ONLY this lead's tenant, driven by the SHARED manifest
+// (TENANT_DATA_COLLECTIONS in packages/shared/src/tenantData.ts). This used to
+// be a hand-copied list and it went stale — `availability_exceptions` (coach
+// time-off) and `feedback` were added to the shared manifest but never here, so
+// a --reset left them behind. The shared list carries a completeness test; a
+// local copy carries nothing. Never re-introduce one.
+
+// Structural type for the imported manifest: tsconfig.scripts.json doesn't
+// resolve the @linyup/shared types (the import is `any` at compile time even
+// though it resolves fine at runtime), so annotate rather than infer.
+type TenantCollection = {
+  collection: string
+  match: { by: 'field'; field: string } | { by: 'docId' }
+}
+const TENANT_COLLECTIONS: TenantCollection[] = TENANT_DATA_COLLECTIONS
 
 const TENANT_FIELD_COLLECTIONS: { collection: string; field: string }[] = [
-  { collection: 'contacts', field: 'teamId' },
-  { collection: 'sessions', field: 'teamId' },
-  { collection: 'activities', field: 'teamId' },
-  { collection: 'events', field: 'teamId' },
-  { collection: 'checkins', field: 'teamId' },
-  { collection: 'session_series', field: 'teamId' },
-  { collection: 'courses', field: 'teamId' },
-  { collection: 'forms', field: 'teamId' },
-  { collection: 'documents', field: 'teamId' },
-  { collection: 'availability', field: 'teamId' },
-  { collection: 'referrals', field: 'team_id' },
-  { collection: 'referral_codes', field: 'teamId' },
-  { collection: 'connect_accounts', field: 'teamId' },
-  { collection: 'saas_checkout_attempts', field: 'teamId' },
+  ...TENANT_COLLECTIONS.flatMap((c) =>
+    c.match.by === 'field' ? [{ collection: c.collection, field: c.match.field }] : []
+  ),
   // Legacy: nothing writes auth_tokens any more (the mechanism was dead and was
-  // removed 2026-07-17), but keep purging it so docs left by earlier seed runs of
-  // an already-provisioned sandbox still get cleaned up on --reset.
+  // removed 2026-07-17), so it is absent from the shared manifest — but keep
+  // purging it so docs left by earlier seed runs still get cleaned up.
   { collection: 'auth_tokens', field: 'teamId' },
 ]
-const TENANT_DOCID_COLLECTIONS = [
-  'saas_subscriptions',
-  'site_drafts',
-  'site_published',
-  'embed_widgets',
-  'messaging_policies',
-]
+const TENANT_DOCID_COLLECTIONS: string[] = TENANT_COLLECTIONS.flatMap((c) =>
+  c.match.by === 'docId' ? [c.collection] : []
+)
 
 async function resetLeadTenant(teamId: string) {
   console.log(`   ⟲ resetting tenant '${teamId}'…`)
@@ -2810,7 +2811,29 @@ async function main() {
     await enableEmailPasswordSignIn()
   }
 
-  if (cli.reset) await resetLeadTenant(teamId)
+  if (cli.reset) {
+    // Typed confirmation against the CLOUD sandbox — a typo in --lead would
+    // otherwise silently destroy a different (possibly live) prospect demo.
+    // The emulator is disposable, so it skips straight through; --yes is the
+    // non-interactive escape hatch.
+    if (!USE_EMULATOR && !cli.yes) {
+      if (!process.stdin.isTTY) {
+        console.error(`\n❌ Refusing to --reset '${teamId}' non-interactively without --yes.\n`)
+        process.exit(1)
+      }
+      const rl = createInterface({ input: process.stdin, output: process.stdout })
+      const answer = await rl.question(
+        `\n⚠️  This DESTROYS the '${teamId}' tenant in ${PROJECT_ID} (Firestore + Storage + logins).\n` +
+          `   Type '${LEAD}' to confirm: `
+      )
+      rl.close()
+      if (answer.trim() !== LEAD) {
+        console.error('❌ Confirmation did not match — aborted. Nothing was deleted.\n')
+        process.exit(1)
+      }
+    }
+    await resetLeadTenant(teamId)
+  }
 
   const { studentEmail, sessionCount, demoContact } = await seedLeadTenant(profile)
 

@@ -37,7 +37,7 @@
     "staging:reset": "tsx scripts/reset-staging-db.ts --confirm",
     "lead:seed": "tsx scripts/seed-lead.ts",
     "sandbox:seed": "tsx scripts/seed-sandbox.ts",
-    "sandbox:reset": "tsx scripts/reset-sandbox-db.ts --confirm",
+    "sandbox:reset": "tsx scripts/reset-sandbox-db.ts",
     "messaging:policy": "tsx scripts/messaging-policy.ts",
     "backfill:finance": "tsx scripts/backfill-finance-journal.ts"
   },

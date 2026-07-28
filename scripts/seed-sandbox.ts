@@ -20,16 +20,16 @@
  *   • Real project (default):  ADC via `applicationDefault()` → linyup-sandbox.
  *     Run `gcloud auth application-default login` once; the identity needs Editor
  *     (or Firebase Admin + Datastore + Identity Toolkit Admin).
- *       pnpm seed:sandbox
+ *       pnpm sandbox:seed
  *   • Local emulator (no cloud project needed): set the emulator host vars and the
  *     seed writes into the emulator's `demo-linyup` namespace (what the web app
  *     reads). Useful for exercising /try before the project exists:
  *       FIRESTORE_EMULATOR_HOST=localhost:8080 \
  *       FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
- *       pnpm seed:sandbox
+ *       pnpm sandbox:seed
  *
  * Idempotent: deterministic IDs + set(), so re-running overwrites. For a clean
- * slate against the real project, run `pnpm reset:sandbox` first.
+ * slate against the real project, run `pnpm sandbox:reset` first.
  */
 
 import admin from 'firebase-admin'
@@ -56,9 +56,24 @@ import {
 } from './lib/appointments'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
+// Emulator convenience: the Auth host is required alongside Firestore — default
+// it so a forgotten env var doesn't silently create auth users (with the shared
+// demo password) on the REAL sandbox project while Firestore writes go local.
+// Same guard as seed-lead.ts.
+if (USE_EMULATOR && !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099'
+}
 // On the emulator, write into the namespace the web app + emulator use
 // (demo-linyup); against the cloud, target the dedicated sandbox project.
 const PROJECT_ID = USE_EMULATOR ? process.env.GCLOUD_PROJECT || 'demo-linyup' : 'linyup-sandbox'
+
+// Guard: this script only ever targets the sandbox project (or the emulator) —
+// it must never write demo teams into staging/production.
+const envProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT
+if (!USE_EMULATOR && envProject && envProject !== PROJECT_ID) {
+  console.error(`❌ Refusing to run: ambient project '${envProject}' != '${PROJECT_ID}'.`)
+  process.exit(1)
+}
 
 admin.initializeApp(
   USE_EMULATOR
