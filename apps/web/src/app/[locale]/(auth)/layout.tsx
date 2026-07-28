@@ -337,6 +337,35 @@ function NavLink({
   return link
 }
 
+// Dashboard as the left element of the top toolbar (alongside the settings/help
+// icons), NOT a nav-list row. It deliberately uses the quiet icon-button active
+// style — tinted, no inset accent bar or bold — because here it reads as part of
+// this mini toolbar, not the working-area menu below.
+function DashboardToolbarLink({ collapsed, onClick }: { collapsed: boolean; onClick?: () => void }) {
+  const pathname = usePathname()
+  const t = useTranslations('Nav')
+  const Icon = DASHBOARD_ITEM.icon
+  const label = t(DASHBOARD_ITEM.labelKey as Parameters<typeof t>[0])
+  const isActive = pathname === DASHBOARD_ITEM.href
+  return (
+    <Link
+      href={DASHBOARD_ITEM.href as Route}
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={`flex h-8 items-center rounded-lg transition-colors ${
+        collapsed ? 'w-8 justify-center' : 'flex-1 gap-2 px-2'
+      } ${
+        isActive
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && <span className="text-sm font-medium">{label}</span>}
+    </Link>
+  )
+}
+
 // A compact icon-only link for the utility actions (settings, help) that sit in
 // their own row under the search bar rather than in the nav list. Always shows
 // its label as a tooltip, since there's no text beside the icon.
@@ -1253,25 +1282,23 @@ function SidebarContent({
         </div>
       )}
 
-      {/* Utility actions — settings + help. Right-aligned under the search so the
-          left space stays free for future additions; stacked as plain icons in
-          icon-only mode, where there's no search bar for them to sit beneath. */}
+      {/* Top toolbar — Dashboard on the left, settings + help as icon buttons on
+          the right, split by a light divider. Dashboard lives here rather than in
+          the menu below, which is why it wears the quiet toolbar active style.
+          In icon-only mode the three stack as centred icons (no divider). */}
       <div
-        className={`px-2 pt-2 shrink-0 flex ${
-          collapsed ? 'flex-col items-center gap-1' : 'justify-end gap-1'
+        className={`px-2 pt-2 shrink-0 flex gap-1 ${
+          collapsed ? 'flex-col items-center' : 'items-center'
         }`}
       >
+        <DashboardToolbarLink collapsed={collapsed} onClick={onLinkClick} />
+        {!collapsed && <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />}
         <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* Dashboard — no group heading; it stands on its own above Shortcuts. */}
-        <div className="space-y-0.5">
-          <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-        </div>
-
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
 
