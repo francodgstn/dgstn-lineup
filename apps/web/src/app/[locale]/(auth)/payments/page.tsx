@@ -44,6 +44,7 @@ import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { GiftCardsSection } from '@/components/payments/GiftCardsSection'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OutstandingFeesCard } from '@/components/payments/OutstandingFeesCard'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -285,166 +286,189 @@ export default function PaymentsDashboardPage() {
         </section>
       )}
 
-      {/* Toolbar: filter + search */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant={filter === 'all' ? 'default' : 'outline'}
-          onClick={() => setFilter('all')}
-        >
-          {t('filterAll')}
-        </Button>
-        <Button
-          size="sm"
-          variant={filter === 'unassigned' ? 'default' : 'outline'}
-          onClick={() => setFilter('unassigned')}
-        >
-          {t('filterUnassigned')}
-          {unassignedCount > 0 && (
-            <Badge variant="secondary" className="ml-1.5">
-              {unassignedCount}
-            </Badge>
-          )}
-        </Button>
-        <div className="relative ml-auto w-full sm:w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('searchPlaceholder')}
-            className="pl-8"
-          />
-        </div>
-      </div>
-
-      {/* Payments table (Connect + BYO, unified) */}
-      <section className="space-y-3">
-        {loading ? (
-          <Skeleton className="h-40 rounded" />
-        ) : filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">
-            {search
-              ? t('noResults')
-              : filter === 'unassigned'
-                ? t('noUnassigned')
-                : t('noPayments')}
-          </p>
-        ) : (
-          <>
-            <PaymentsTable
-              rows={filtered}
-              contactName={(id) => contactName.get(id)}
-              onAssign={setAssignTarget}
-              onRefund={setRefundTarget}
-            />
-
-            {hasMore && (
-              <div className="flex justify-center">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPageSize((p) => p + 50)}
-                  disabled={fetchingMore}
-                >
-                  {fetchingMore && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                  {t('loadMore')}
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* Recurring memberships (Connect) */}
-      {subscriptions.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium">{t('subscriptionsHeading')}</h2>
-          <Card>
-            <CardContent className="p-0 divide-y">
-              {subscriptions.map((s) => (
-                <div key={s.subscriptionId} className="flex items-center gap-3 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{t('membership')}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatMoneyMinor(s.amount, s.currency)} · {s.status}
-                    </p>
-                  </div>
-                  <Badge variant="secondary">{s.status}</Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </section>
-      )}
-
-      {/* Partner (aggregator) visit payouts — reporting only; the money settles
-          between studio and partner off-platform (FitPass/SportPass…). Only
-          shown once the team has at least one aggregator subscription type. */}
-      {hasAggregatorType && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium">{t('partnerVisitsHeading')}</h2>
-          <Card>
-            <CardContent className="p-0 divide-y">
-              {partnerVisits.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">
-                  {t('partnerVisitsEmpty')}
-                </p>
-              ) : (
-                partnerVisits.map((v) => {
-                  const cancelled = v.status === 'cancelled'
-                  return (
-                    <div
-                      key={`${v.sessionId}_${v.contactId}`}
-                      className={`flex items-center gap-3 p-3 ${cancelled ? 'text-muted-foreground' : ''}`}
-                    >
-                      <div className={`min-w-0 flex-1 ${cancelled ? 'line-through' : ''}`}>
-                        <p className="text-sm font-medium truncate">
-                          {v.activity_name || t('unassigned')}
-                          {v.subscription_type_name && (
-                            <span className="font-normal text-muted-foreground">
-                              {' '}
-                              · {v.subscription_type_name}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {formatSessionStart(v.session_start)}
-                        </p>
-                      </div>
-                      <div className={`shrink-0 text-sm font-medium ${cancelled ? 'line-through' : ''}`}>
-                        {typeof v.amount === 'number'
-                          ? formatMoneyMajor(v.amount, currency)
-                          : t('partnerVisitsRateNotSet')}
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </CardContent>
-          </Card>
-          {partnerVisits.length > 0 && (
-            <p className="text-sm text-muted-foreground text-right">
-              {t('partnerVisitsTotal', {
-                amount: formatMoneyMajor(
-                  partnerVisits.reduce(
-                    (sum, v) => sum + (v.status !== 'cancelled' ? (v.amount ?? 0) : 0),
-                    0
-                  ),
-                  currency
-                ),
-              })}
-            </p>
-          )}
-        </section>
-      )}
-
-      {/* No-show policy fees — hidden entirely once there's nothing to show
-          (see OutstandingFeesCard's own empty guard). */}
+      {/* No-show policy fees — pinned with "Awaiting payment" above the tabs:
+          both are money still owed, and an action item buried behind a tab is
+          an action item nobody sees. Costs nothing when settled — the card
+          hides itself once there's nothing outstanding. */}
       <OutstandingFeesCard />
 
-      {/* Gift cards (E3) — settings + recent cards. Always shown so a manager
-          can find the toggle even before the first card is ever sold. */}
-      <GiftCardsSection />
+      {/* The record surfaces are tabbed rather than stacked: one-off payments
+          and partner visits both grow without bound, so stacking them buried
+          gift cards (and each other) under an ever-longer scroll. Tabs stay
+          conditional exactly as the sections were — a studio with no
+          aggregator deal never sees "Partner visits". Headings are dropped
+          inside the tabs: the tab label already names each surface. */}
+      <Tabs defaultValue="payments" className="gap-6">
+        <TabsList>
+          <TabsTrigger value="payments">{t('paymentsHeading')}</TabsTrigger>
+          {subscriptions.length > 0 && (
+            <TabsTrigger value="subscriptions">{t('subscriptionsHeading')}</TabsTrigger>
+          )}
+          {hasAggregatorType && (
+            <TabsTrigger value="partnerVisits">{t('partnerVisitsHeading')}</TabsTrigger>
+          )}
+          <TabsTrigger value="giftCards">{t('giftCardsHeading')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="payments" className="space-y-6">
+          {/* Toolbar: filter + search */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant={filter === 'all' ? 'default' : 'outline'}
+              onClick={() => setFilter('all')}
+            >
+              {t('filterAll')}
+            </Button>
+            <Button
+              size="sm"
+              variant={filter === 'unassigned' ? 'default' : 'outline'}
+              onClick={() => setFilter('unassigned')}
+            >
+              {t('filterUnassigned')}
+              {unassignedCount > 0 && (
+                <Badge variant="secondary" className="ml-1.5">
+                  {unassignedCount}
+                </Badge>
+              )}
+            </Button>
+            <div className="relative ml-auto w-full sm:w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('searchPlaceholder')}
+                className="pl-8"
+              />
+            </div>
+          </div>
+
+          {/* Payments table (Connect + BYO, unified) */}
+          <section className="space-y-3">
+            {loading ? (
+              <Skeleton className="h-40 rounded" />
+            ) : filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                {search
+                  ? t('noResults')
+                  : filter === 'unassigned'
+                    ? t('noUnassigned')
+                    : t('noPayments')}
+              </p>
+            ) : (
+              <>
+                <PaymentsTable
+                  rows={filtered}
+                  contactName={(id) => contactName.get(id)}
+                  onAssign={setAssignTarget}
+                  onRefund={setRefundTarget}
+                />
+
+                {hasMore && (
+                  <div className="flex justify-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPageSize((p) => p + 50)}
+                      disabled={fetchingMore}
+                    >
+                      {fetchingMore && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                      {t('loadMore')}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        </TabsContent>
+
+        {/* Recurring memberships (Connect) */}
+        {subscriptions.length > 0 && (
+          <TabsContent value="subscriptions">
+            <Card>
+              <CardContent className="p-0 divide-y">
+                {subscriptions.map((s) => (
+                  <div key={s.subscriptionId} className="flex items-center gap-3 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{t('membership')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatMoneyMinor(s.amount, s.currency)} · {s.status}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">{s.status}</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* Partner (aggregator) visit payouts — reporting only; the money
+            settles between studio and partner off-platform (FitPass/SportPass…).
+            Only shown once the team has an aggregator subscription type. */}
+        {hasAggregatorType && (
+          <TabsContent value="partnerVisits" className="space-y-3">
+            <Card>
+              <CardContent className="p-0 divide-y">
+                {partnerVisits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    {t('partnerVisitsEmpty')}
+                  </p>
+                ) : (
+                  partnerVisits.map((v) => {
+                    const cancelled = v.status === 'cancelled'
+                    return (
+                      <div
+                        key={`${v.sessionId}_${v.contactId}`}
+                        className={`flex items-center gap-3 p-3 ${cancelled ? 'text-muted-foreground' : ''}`}
+                      >
+                        <div className={`min-w-0 flex-1 ${cancelled ? 'line-through' : ''}`}>
+                          <p className="text-sm font-medium truncate">
+                            {v.activity_name || t('unassigned')}
+                            {v.subscription_type_name && (
+                              <span className="font-normal text-muted-foreground">
+                                {' '}
+                                · {v.subscription_type_name}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {formatSessionStart(v.session_start)}
+                          </p>
+                        </div>
+                        <div className={`shrink-0 text-sm font-medium ${cancelled ? 'line-through' : ''}`}>
+                          {typeof v.amount === 'number'
+                            ? formatMoneyMajor(v.amount, currency)
+                            : t('partnerVisitsRateNotSet')}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+            {partnerVisits.length > 0 && (
+              <p className="text-sm text-muted-foreground text-right">
+                {t('partnerVisitsTotal', {
+                  amount: formatMoneyMajor(
+                    partnerVisits.reduce(
+                      (sum, v) => sum + (v.status !== 'cancelled' ? (v.amount ?? 0) : 0),
+                      0
+                    ),
+                    currency
+                  ),
+                })}
+              </p>
+            )}
+          </TabsContent>
+        )}
+
+        {/* Gift cards (E3) — settings + recent cards. Always a tab so a manager
+            can find the toggle even before the first card is ever sold. */}
+        <TabsContent value="giftCards">
+          <GiftCardsSection showHeading={false} />
+        </TabsContent>
+      </Tabs>
 
       {teamId && (
         <AssignPaymentDialog

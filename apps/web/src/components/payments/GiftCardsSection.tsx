@@ -248,11 +248,13 @@ function GiftCardsListCard() {
   )
 }
 
-export function GiftCardsSection() {
+/** @param showHeading false when the caller already names the section — e.g.
+ *  inside a tab, where the tab label would repeat this heading verbatim. */
+export function GiftCardsSection({ showHeading = true }: { showHeading?: boolean }) {
   const t = useTranslations('PaymentsDashboard')
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-medium">{t('giftCardsHeading')}</h2>
+      {showHeading && <h2 className="text-sm font-medium">{t('giftCardsHeading')}</h2>}
       <GiftCardSettingsCard />
       <GiftCardsListCard />
     </section>
