@@ -31,6 +31,13 @@
       "runtimeArgs": ["dev:admin"],
       "port": 3002,
       "autoPort": true
+    },
+    {
+      "name": "admin-sandbox",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:admin:sandbox"],
+      "port": 3002,
+      "autoPort": true
     }
   ]
 }
