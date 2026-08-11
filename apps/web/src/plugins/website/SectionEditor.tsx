@@ -288,16 +288,33 @@ function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p:
       </p>
       <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="What we offer" className="h-9" /></Field>
       <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
-      <Field label="Columns">
-        <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
-          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+      <Field label="Layout">
+        <Select
+          value={s.layout ?? 'grid'}
+          onValueChange={(v) => onChange({ layout: v as ActivitiesSection['layout'] })}
+        >
+          <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="2">2</SelectItem>
-            <SelectItem value="3">3</SelectItem>
-            <SelectItem value="4">4</SelectItem>
+            <SelectItem value="grid">Grid of cards</SelectItem>
+            <SelectItem value="list">Stacked list</SelectItem>
           </SelectContent>
         </Select>
       </Field>
+      {/* A stacked list is always one per row — the column count is meaningless
+          there. Hidden rather than reset, so switching back to grid restores
+          whatever the studio had picked. */}
+      {(s.layout ?? 'grid') === 'grid' && (
+        <Field label="Columns">
+          <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
+            <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2">2</SelectItem>
+              <SelectItem value="3">3</SelectItem>
+              <SelectItem value="4">4</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
       <label className="flex items-center justify-between rounded-lg border p-3">
         <span className="text-sm">Show “Book” link on cards</span>
         <Switch checked={s.showBooking ?? false} onCheckedChange={(v) => onChange({ showBooking: v })} />

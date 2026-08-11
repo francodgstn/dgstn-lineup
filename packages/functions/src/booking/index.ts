@@ -27,6 +27,7 @@ import {
   PARTNER_VISITS_SUBCOLLECTION,
   type ActivityAccessRule,
   type ActivityType,
+  publicUrl,
 } from '@linyup/shared'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -796,7 +797,7 @@ export const bookSession = onCall(async (request) => {
   const bookingToken = generateSecureToken()
   const teamSlug: string | null = team.slug || null
   const manageBookingUrl = teamSlug
-    ? `${getHostingUrl()}/public/${teamSlug}/manage-booking?token=${bookingToken}`
+    ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: bookingToken })
     : null
   const subscriptionTypeId =
     matchedSubscriptionTypeId ??
@@ -1296,8 +1297,8 @@ export const cancelBooking = onCall(async (request) => {
 
   const rebookUrl = teamSlug
     ? isAppointment
-      ? `${getHostingUrl()}/public/${teamSlug}/appointments`
-      : `${getHostingUrl()}/public/${teamSlug}/booking${session.activityId ? `?activity=${session.activityId}` : ''}`
+      ? publicUrl(getHostingUrl(), teamSlug, 'appointments')
+      : publicUrl(getHostingUrl(), teamSlug, 'booking', { activity: session.activityId })
     : null
 
   const sessionEnd = (session.end as Timestamp).toDate()
@@ -1603,7 +1604,7 @@ export const rebookSession = onCall(async (request) => {
   }
 
   const manageBookingUrl = teamSlug
-    ? `${getHostingUrl()}/public/${teamSlug}/manage-booking?token=${newBookingToken}`
+    ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: newBookingToken })
     : null
 
   const oldSessionStart = (oldSession.start as Timestamp).toDate()

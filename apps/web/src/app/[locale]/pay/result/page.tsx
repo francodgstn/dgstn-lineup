@@ -2,6 +2,9 @@ import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { CheckCircle2, XCircle } from 'lucide-react'
+import { parseSlug } from '@linyup/shared'
+import { publicHref } from '@/lib/publicRoutes'
+import { RestoreBookingReturn } from './RestoreBookingReturn'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,9 +16,13 @@ export default async function PayResultPage({
 }: {
   searchParams: Promise<{ status?: string; slug?: string; seg?: string; email?: string }>
 }) {
-  const { status, slug, seg, email } = await searchParams
+  const { status, slug: rawSlug, seg, email } = await searchParams
   const t = await getTranslations('PayResult')
   const success = status === 'success'
+  // This page is reachable with any query — Stripe redirects here, but so does a
+  // hand-crafted link. `slug` is interpolated into the CTA href below, so shape it
+  // rather than trusting the round-trip: an unparseable slug just hides the CTA.
+  const slug = parseSlug(rawSlug)
   // Course purchases land with seg=space — point the buyer to their Space (where they
   // watch). A 'full' membership lands with seg=signup so the buyer finishes their
   // registration (consent + the studio's required fields). Both only on success.
@@ -26,20 +33,21 @@ export default async function PayResultPage({
   // Paid appointments land with seg=appointments — point the buyer back to the picker.
   const toAppointments = success && seg === 'appointments'
 
-  // Primary CTA target + label.
-  let ctaHref = `/public/${slug}/shop`
+  // Primary CTA target + label. Built through the shared route helper so the
+  // slug can only ever land in a path segment and params are encoded once.
+  let ctaHref: Route = publicHref(slug ?? '', 'shop')
   let ctaLabel = t('backToShop')
   if (toSpace) {
-    ctaHref = `/public/${slug}/space`
+    ctaHref = publicHref(slug ?? '', 'space')
     ctaLabel = t('openSpace')
   } else if (toSignup) {
-    ctaHref = `/public/${slug}/signup?from=checkout${email ? `&email=${encodeURIComponent(email)}` : ''}`
+    ctaHref = publicHref(slug ?? '', 'signup', { from: 'checkout', email })
     ctaLabel = t('completeRegistration')
   } else if (toBooking) {
-    ctaHref = `/public/${slug}/booking`
+    ctaHref = publicHref(slug ?? '', 'booking', { from: 'checkout' })
     ctaLabel = t('backToBooking')
   } else if (toAppointments) {
-    ctaHref = `/public/${slug}/appointments`
+    ctaHref = publicHref(slug ?? '', 'appointments', { from: 'checkout' })
     ctaLabel = t('backToAppointments')
   }
 
@@ -67,6 +75,10 @@ export default async function PayResultPage({
           {success ? t('successTitle') : t('cancelledTitle')}
         </h1>
         <p className="text-sm text-muted-foreground">{body}</p>
+        {/* Booking payments came from a flow that may have been running as an
+            overlay on the studio's website — put the buyer back there. Falls
+            through to the static CTA below when there's nothing to restore. */}
+        {toBooking && <RestoreBookingReturn />}
         {slug ? (
           <Link
             href={ctaHref as Route}

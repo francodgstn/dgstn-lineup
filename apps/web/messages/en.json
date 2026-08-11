@@ -3636,7 +3636,15 @@
     "badgeDropInPrice": "Drop-in {price}",
     "chipBenefitIncluded": "Included with subscription",
     "chipBenefitDiscount": "−{percent}% members",
-    "dropInSubtitleMember": "Your member price: {price}"
+    "dropInSubtitleMember": "Your member price: {price}",
+    "dismiss": "Dismiss",
+    "deepLinkNotice": {
+      "past": "That session has already started. Choose another below.",
+      "full": "That session is fully booked. Choose another below.",
+      "gone": "That session is no longer available. Choose another below.",
+      "dateEmpty": "No sessions on the date you picked — showing the next available day."
+    },
+    "toSurface": "To {name}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",
@@ -5106,5 +5114,10 @@
     "unassignedSubtitle": "payments with no contact",
     "unassignedEmpty": "every payment is linked",
     "unassignedAction": "Assign them"
+  },
+  "PublicSurfaceNav": {
+    "shop": "Shop",
+    "space": "My Space",
+    "documents": "Documents"
   }
 }

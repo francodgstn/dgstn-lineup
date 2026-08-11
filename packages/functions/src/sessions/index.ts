@@ -8,6 +8,7 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
+import { publicUrl } from '@linyup/shared'
 
 const SESSION_SERIES_COLLECTION = 'session_series'
 const SESSIONS_COLLECTION = 'sessions'
@@ -205,7 +206,7 @@ async function cancelSingleSession(
 
     const rebookUrl =
       teamData.slug && sessionData.activityId
-        ? `${getHostingUrl()}/public/${teamData.slug}/booking?activity=${sessionData.activityId}`
+        ? publicUrl(getHostingUrl(), teamData.slug, 'booking', { activity: sessionData.activityId })
         : null
 
     for (const bookingDoc of bookingsToNotify) {

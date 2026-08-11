@@ -3636,7 +3636,15 @@
     "badgeDropInPrice": "Ingresso singolo {price}",
     "chipBenefitIncluded": "Incluso con l'abbonamento",
     "chipBenefitDiscount": "−{percent}% per i soci",
-    "dropInSubtitleMember": "Il tuo prezzo socio: {price}"
+    "dropInSubtitleMember": "Il tuo prezzo socio: {price}",
+    "dismiss": "Chiudi",
+    "deepLinkNotice": {
+      "past": "Questa sessione è già iniziata. Scegline un’altra qui sotto.",
+      "full": "Questa sessione è al completo. Scegline un’altra qui sotto.",
+      "gone": "Questa sessione non è più disponibile. Scegline un’altra qui sotto.",
+      "dateEmpty": "Nessuna sessione nella data scelta — ecco il prossimo giorno disponibile."
+    },
+    "toSurface": "Vai {name}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",
@@ -5106,5 +5114,10 @@
     "unassignedSubtitle": "pagamenti senza contatto",
     "unassignedEmpty": "tutti i pagamenti sono collegati",
     "unassignedAction": "Assegnali"
+  },
+  "PublicSurfaceNav": {
+    "shop": "Shop",
+    "space": "Il mio spazio",
+    "documents": "Documenti"
   }
 }

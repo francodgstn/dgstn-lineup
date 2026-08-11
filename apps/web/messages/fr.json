@@ -3636,7 +3636,15 @@
     "badgeDropInPrice": "À la séance {price}",
     "chipBenefitIncluded": "Inclus avec l'abonnement",
     "chipBenefitDiscount": "−{percent}% membres",
-    "dropInSubtitleMember": "Votre prix membre : {price}"
+    "dropInSubtitleMember": "Votre prix membre : {price}",
+    "dismiss": "Fermer",
+    "deepLinkNotice": {
+      "past": "Cette séance a déjà commencé. Choisissez-en une autre ci-dessous.",
+      "full": "Cette séance est complète. Choisissez-en une autre ci-dessous.",
+      "gone": "Cette séance n'est plus disponible. Choisissez-en une autre ci-dessous.",
+      "dateEmpty": "Aucune séance à la date choisie — voici le prochain jour disponible."
+    },
+    "toSurface": "Aller {name}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",
@@ -5106,5 +5114,10 @@
     "unassignedSubtitle": "paiements sans contact",
     "unassignedEmpty": "tous les paiements sont liés",
     "unassignedAction": "Les attribuer"
+  },
+  "PublicSurfaceNav": {
+    "shop": "Boutique",
+    "space": "Mon espace",
+    "documents": "Documents"
   }
 }

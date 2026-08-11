@@ -37,6 +37,7 @@ import {
   type ConnectOnboardingModel,
   type FinanceCategory,
   type SaasPlan,
+  publicUrl,
 } from '@linyup/shared'
 import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
@@ -1706,7 +1707,7 @@ async function handleAppointmentCheckout(
       const teamSlug = (td?.slug as string | undefined) ?? null
       const cancelUrl =
         teamSlug && bookingToken
-          ? `${getHostingUrl()}/public/${teamSlug}/appointments/cancel?token=${bookingToken}`
+          ? publicUrl(getHostingUrl(), teamSlug, 'appointments/cancel', { token: bookingToken })
           : null
       await sendAppointmentBookingEmails({
         teamId: team.teamId,

@@ -32,6 +32,7 @@ import {
   type ActivityMemberBenefit,
   type Availability,
   type Benefit,
+  publicUrl,
 } from '@linyup/shared'
 import {
   DAY_MS,
@@ -474,7 +475,7 @@ export const bookAppointment = onCall(async (request) => {
 
   // ── Emails (confirmation + .ics + coach notification) ──
   const cancelUrl = ctx.teamSlug
-    ? `${getHostingUrl()}/public/${ctx.teamSlug}/appointments/cancel?token=${bookingToken}`
+    ? publicUrl(getHostingUrl(), ctx.teamSlug, 'appointments/cancel', { token: bookingToken })
     : null
   await sendAppointmentBookingEmails({
     teamId,

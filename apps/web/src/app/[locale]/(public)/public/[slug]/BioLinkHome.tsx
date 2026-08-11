@@ -19,7 +19,8 @@ import {
 import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
-import { SYSTEM_LINK_META } from '@linyup/shared'
+import { SYSTEM_LINK_META, SYSTEM_LINK_ROUTE } from '@linyup/shared'
+import { publicHref } from '@/lib/publicRoutes'
 import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground, PublicMainAddress } from '@linyup/shared'
 import { DEFAULT_ACCENT } from '@/lib/colors'
 
@@ -230,7 +231,15 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
               // otherwise it's a custom external URL. Booking keeps the accent CTA style.
               const target = link.target
               const isBooking = target === 'booking'
-              const href = target ? `/public/${slug}/${SYSTEM_LINK_META[target].route}` : link.url
+              // `from: 'bio-link'` so the surface's back link returns here — the
+              // bio-link IS this team's root, so that is also the default, but
+              // being explicit survives the studio changing its default surface.
+              const href = target
+                ? publicHref(slug, SYSTEM_LINK_ROUTE[target].route, {
+                    ...SYSTEM_LINK_ROUTE[target].params,
+                    from: 'bio-link',
+                  })
+                : link.url
 
               const isInternal = !!target
               const cardStyle = isBooking

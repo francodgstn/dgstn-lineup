@@ -38,6 +38,23 @@ export type PublicSurface =
   | 'documents'
   | 'kiosk'
 
+/** Runtime companion to `PublicSurface`, for validating untrusted values. */
+export const PUBLIC_SURFACES: readonly PublicSurface[] = [
+  'bio-link',
+  'site',
+  'space',
+  'booking',
+  'shop',
+  'signup',
+  'documents',
+  'kiosk',
+]
+
+/** Type guard for an untrusted surface value (query params, stored config). */
+export function isPublicSurface(value: unknown): value is PublicSurface {
+  return typeof value === 'string' && (PUBLIC_SURFACES as readonly string[]).includes(value)
+}
+
 // Denormalized onto TeamPublicProfile so the public root page (which may only
 // read world-readable public_profile, never the private installed_plugins) can
 // tell which non-bio-link surfaces are actually live before redirecting to one.

@@ -32,6 +32,7 @@ import {
   resolveAutoConfirm,
   type Activity,
   type SaasPlan,
+  publicUrl,
 } from '@linyup/shared'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import { createOneOffCheckoutSession } from '../utils/connect/client'
@@ -498,7 +499,7 @@ export const createStaffAppointment = onCall(async (request) => {
   if (!blocked && client) {
     const cancelUrl =
       teamSlug && bookingToken
-        ? `${getHostingUrl()}/public/${teamSlug}/appointments/cancel?token=${bookingToken}`
+        ? publicUrl(getHostingUrl(), teamSlug, 'appointments/cancel', { token: bookingToken })
         : null
     await sendAppointmentBookingEmails({
       teamId,

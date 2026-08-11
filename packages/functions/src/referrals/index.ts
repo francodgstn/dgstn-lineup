@@ -6,6 +6,7 @@ import { to } from '../utils/async'
 import { isTeamMember, getTeam } from '../utils/teams'
 import { ensureReferralCode, updateReferralStatus } from '../utils/referrals'
 import { getHostingUrl } from '../utils/env'
+import { publicUrl } from '@linyup/shared'
 
 const BATCH_SIZE = 50
 
@@ -171,8 +172,14 @@ export const getMyReferralCode = onCall(async (request) => {
   }
 
   const code = await ensureReferralCode(contactId, teamId)
+  // A team without a slug has no public surfaces at all, so there is no link to
+  // hand out. Previously this built `/public/undefined/booking?referral=…` and
+  // returned it as if it worked; fail loudly instead of shipping a dead link.
   const teamSlug = team?.slug
-  const referralUrl = `${getHostingUrl()}/public/${teamSlug}/booking?referral=${code}`
+  if (!teamSlug) {
+    throw new HttpsError('failed-precondition', 'Team has no public slug — no referral link exists.')
+  }
+  const referralUrl = publicUrl(getHostingUrl(), teamSlug, 'booking', { referral: code })
 
   console.log(`Referral code ${code} returned for contact ${contactId}`)
   return { code, referralUrl }

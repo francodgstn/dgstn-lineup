@@ -54,6 +54,8 @@ import { compareActivities, type ActivityAccessRule, type ActivityMemberBenefit 
 import { resolveActivityTerms, resolveActivityPricingDisplay, type ActivityTerm, type SubLookup } from '@/lib/activityTerms'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
+import { publicHrefLocalized, publicSubHrefLocalized } from '@/lib/publicRoutes'
+import type { BookIntent } from '@/components/booking/BookingOverlay'
 import { usePlaces } from '@/hooks/usePlaces'
 import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
 import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
@@ -61,6 +63,14 @@ import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
 export interface RenderCtx {
   palette: SitePalette
   slug: string
+  /**
+   * Active locale. These blocks emit RAW `<a href>` — they cannot use next-intl's
+   * `Link`, because the same components render inside a cross-origin iframe
+   * (app/[locale]/embed/…) where every anchor click is delegated to `window.open`,
+   * and in the website builder with no router context. So the locale prefix has
+   * to be baked into the href by `publicHrefLocalized`.
+   */
+  locale: string
   /** Team sites only (undefined for org sites — use `orgId`/`orgTeams` instead). */
   teamId?: string
   /** Org sites only. */
@@ -70,6 +80,16 @@ export interface RenderCtx {
   orgTeams?: OrgSiteTeamRef[]
   preview: boolean
   socialLinks?: SocialLink[]
+  /**
+   * Set only by the LIVE team site (`PublicSite`), which hosts the booking
+   * overlay. When present, booking CTAs open the funnel in place instead of
+   * navigating away.
+   *
+   * Absent everywhere else on purpose: the website builder's canvas and the
+   * cross-origin embed both render these same blocks with no
+   * `PublicTeamProvider`, and the overlay would throw there.
+   */
+  onBook?: (intent: BookIntent) => void
 }
 
 export const SOCIAL_ICONS: Record<string, React.FC<{ className?: string }>> = {
@@ -96,11 +116,85 @@ function linkProps(href: string | undefined, preview: boolean, external = false)
   return external ? { href, target: '_blank' as const, rel: 'noopener noreferrer' } : { href }
 }
 
+// ─── Public-flow hrefs ───────────────────────────────────────────────────────
+//
+// Every link out of the website into a booking/shop flow goes through these.
+// Two invariants, both easy to lose when hand-building template literals:
+//   1. locale-PREFIXED — these render as raw <a> (see RenderCtx.locale)
+//   2. `from: 'site'` — so the flow's back link returns to THIS website, not to
+//      whatever surface the studio picked as its default landing.
+
+/** Where an activity card's "Book" goes. Appointments have their own picker. */
+function activityBookHref(
+  ctx: RenderCtx,
+  a: { id: string; slug?: string | null; activityType?: string },
+  fallbackToBooking = false
+): string | undefined {
+  const { locale, slug } = ctx
+  if (a.activityType === 'appointment')
+    return publicHrefLocalized(locale, slug, 'appointments', { activity: a.id, from: 'site' })
+  if (a.slug) return publicSubHrefLocalized(locale, slug, 'booking', a.slug, { from: 'site' })
+  return fallbackToBooking
+    ? publicHrefLocalized(locale, slug, 'booking', { from: 'site' })
+    : undefined
+}
+
+/**
+ * Where a CLICKED session goes: straight to that class at that time.
+ *
+ * The whole point of the schedule block. Until this existed the CTA was one
+ * constant `/booking` for every row, so picking "Fri 18:00 Yoga" landed the
+ * visitor on a blank activity picker and made them find it again.
+ */
+function sessionBookHref(ctx: RenderCtx, session: { id: string }): string {
+  return publicHrefLocalized(ctx.locale, ctx.slug, 'booking', {
+    session: session.id,
+    from: 'site',
+  })
+}
+
+/** Which funnel an activity card opens: the appointment picker, or classes. */
+function activityIntent(a: {
+  id: string
+  slug?: string | null
+  activityType?: string
+}): BookIntent {
+  return a.activityType === 'appointment'
+    ? { kind: 'appointment', activityId: a.id }
+    : { kind: 'activity', activitySlug: a.slug ?? '' }
+}
+
+/**
+ * Anchor props for a booking CTA: opens the overlay when the host provides one
+ * (`ctx.onBook`), otherwise a plain navigation to the canonical route.
+ *
+ * The `href` STAYS on the anchor even when onBook handles the click, and that is
+ * load-bearing, not decoration:
+ *   - middle-click / cmd-click / "open in new tab" keep working
+ *   - crawlers keep the link into the booking page
+ *   - the embed iframe's click delegation still has an anchor to read
+ * Never turn these into bare <button>s.
+ */
+export function bookProps(href: string | undefined, ctx: RenderCtx, intent: BookIntent) {
+  // Preview wins FIRST — the builder canvas stays inert no matter what.
+  if (ctx.preview) return linkProps(undefined, true)
+  if (!ctx.onBook || !href) return linkProps(href, ctx.preview)
+  return {
+    href,
+    onClick: (e: React.MouseEvent) => {
+      // Leave new-tab/new-window intents to the browser.
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      e.preventDefault()
+      ctx.onBook!(intent)
+    },
+  }
+}
+
 // ─── Hero ───────────────────────────────────────────────────────────────────
 
 function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
-  const { palette, slug, preview } = ctx
-  const href = ctaHref(section.cta, slug)
+  const { palette, slug, locale, preview } = ctx
+  const href = ctaHref(section.cta, slug, locale)
   const center = section.align !== 'left'
   const overlay = (section.overlay ?? 40) / 100
 
@@ -146,7 +240,10 @@ function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
         {section.cta?.label && (
           <div className={`mt-8 flex ${center ? 'justify-center' : 'justify-start'}`}>
             <a
-              {...linkProps(href, preview, section.cta.action === 'url')}
+              // A 'booking' CTA opens the overlay; signup/external stay navigations.
+              {...(section.cta.action === 'booking'
+                ? bookProps(href, ctx, { kind: 'root' })
+                : linkProps(href, preview, section.cta.action === 'url'))}
               className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-base font-semibold shadow-lg transition-transform hover:scale-[1.03]"
               style={{ background: palette.accent, color: palette.onAccent }}
             >
@@ -358,7 +455,9 @@ function payPerVisitLine(a: ActivityEntry, currency: string): string {
 }
 
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
-  const { palette, slug, teamId, preview } = ctx
+  // slug/locale/preview are read from `ctx` by activityBookHref and bookProps —
+  // not needed directly here.
+  const { palette, teamId } = ctx
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [currency, setCurrency] = useState('CHF')
   // Subscription plans (id → name + price) so a card can name which plan includes
@@ -430,12 +529,29 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
     }
   }, [teamId])
 
+  // Two arrangements of the SAME card. Only the wrapper direction and the image
+  // box differ — the body (chips, pricing rows, CTA) is shared, so the two can't
+  // drift apart.
+  const isList = section.layout === 'list'
   const cols =
     section.columns === 2
       ? '@2xl:grid-cols-2'
       : section.columns === 4
         ? '@2xl:grid-cols-2 @5xl:grid-cols-4'
         : '@2xl:grid-cols-2 @5xl:grid-cols-3'
+  // List: one full-width row per activity, image left. Container queries (not
+  // viewport ones) because this also renders inside the embed iframe, where the
+  // frame — not the window — is what the layout must respond to.
+  const containerClass = isList
+    ? 'mt-10 flex flex-col gap-4'
+    : `mt-10 grid grid-cols-1 gap-5 ${cols}`
+  // Side-by-side only once there's room; below that a list row stacks like a card.
+  const cardClass = isList
+    ? 'flex flex-col overflow-hidden rounded-2xl border @2xl:flex-row'
+    : 'flex flex-col overflow-hidden rounded-2xl border'
+  const mediaClass = isList
+    ? 'relative aspect-[4/3] w-full shrink-0 @2xl:aspect-auto @2xl:w-56 @4xl:w-72'
+    : 'relative aspect-[4/3] w-full'
 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
@@ -446,7 +562,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
             {section.subheading}
           </p>
         )}
-        <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
+        <div className={containerClass}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
               Loading…
@@ -458,13 +574,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
           ) : (
             activities.map((a) => {
               // Appointments book via their own flow (per-coach slot picker).
-              const href = !section.showBooking
-                ? undefined
-                : a.activityType === 'appointment'
-                  ? `/public/${slug}/appointments?activity=${a.id}`
-                  : a.slug
-                    ? `/public/${slug}/booking/${a.slug}`
-                    : undefined
+              const href = section.showBooking ? activityBookHref(ctx, a) : undefined
               // Structured commercial display (locked with the user): Free trial
               // stays a ribbon on the image; the card shows a type chip (Class /
               // Appointment) + NAMED pricing lines ("Included with {sub} — {price}",
@@ -485,11 +595,11 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               return (
                 <div
                   key={a.id}
-                  className="flex flex-col overflow-hidden rounded-2xl border"
+                  className={cardClass}
                   style={{ borderColor: palette.border, background: palette.surface }}
                 >
                   <div
-                    className="relative aspect-[4/3] w-full"
+                    className={mediaClass}
                     style={{ background: a.color || palette.accent }}
                   >
                     {a.imageUrl ? (
@@ -557,7 +667,9 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                     )}
                     {href && (
                       <a
-                        {...linkProps(preview ? undefined : href, preview)}
+                        // Both kinds open the overlay: the panel hosts the class
+                        // funnel or the appointment picker depending on intent.
+                        {...bookProps(href, ctx, activityIntent(a))}
                         className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                         style={{ color: palette.accent }}
                       >
@@ -604,7 +716,7 @@ const RECURRENCE_SUFFIX: Record<string, string> = {
 }
 
 function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCtx }) {
-  const { palette, slug, teamId, preview } = ctx
+  const { palette, slug, locale, teamId, preview } = ctx
   const [plans, setPlans] = useState<PlanEntry[]>([])
   // Pay-per-visit activities (priced drop-ins + priced appointments) — the same
   // "additional lines" the shop shows under Subscriptions, surfaced here as a
@@ -717,7 +829,12 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                   </p>
                 )}
                 <a
-                  {...linkProps(preview ? undefined : `/public/${slug}/shop?type=${p.id}`, preview)}
+                  {...linkProps(
+                    preview
+                      ? undefined
+                      : publicHrefLocalized(locale, slug, 'shop', { type: p.id, from: 'site' }),
+                    preview
+                  )}
                   className="mt-5 inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
                   style={{ background: palette.accent, color: palette.onAccent }}
                 >
@@ -745,12 +862,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             <div className="mt-4 space-y-3">
               {ppvActivities.map((a) => {
                 const line = payPerVisitLine(a, currency)
-                const href =
-                  a.activityType === 'appointment'
-                    ? `/public/${slug}/appointments?activity=${a.id}`
-                    : a.slug
-                      ? `/public/${slug}/booking/${a.slug}`
-                      : `/public/${slug}/booking`
+                const href = activityBookHref(ctx, a, true)
                 return (
                   <div
                     key={a.id}
@@ -768,7 +880,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                       )}
                     </div>
                     <a
-                      {...linkProps(preview ? undefined : href, preview)}
+                      {...bookProps(href, ctx, activityIntent(a))}
                       className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-transform hover:scale-[1.02]"
                       style={{ background: palette.accent, color: palette.onAccent }}
                     >
@@ -784,7 +896,10 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
         {!loading && plans.length > 0 && (
           <div className="mt-8 text-center">
             <a
-              {...linkProps(preview ? undefined : `/public/${slug}/shop`, preview)}
+              {...linkProps(
+                preview ? undefined : publicHrefLocalized(locale, slug, 'shop', { from: 'site' }),
+                preview
+              )}
               className="text-sm font-medium underline-offset-4 hover:underline"
               style={{ color: palette.muted }}
             >
@@ -846,7 +961,7 @@ const isPastSession = (s: SessionEntry) =>
   (s.end ?? s.start).toDate().getTime() < Date.now()
 
 function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: RenderCtx }) {
-  const { palette, slug, teamId, preview } = ctx
+  const { palette, slug, locale, teamId, preview } = ctx
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [loading, setLoading] = useState(true)
   // Studio sets the default view; visitors can switch with the toggle below.
@@ -896,7 +1011,17 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
 
   // Classes only now — see the query above. Appointments book via their own
   // dedicated flow, routed to from the Activities block instead.
-  const bookHref = preview ? undefined : `/public/${slug}/booking`
+  //
+  // The section-level CTA ("Book a session") is a browse entry: no session in
+  // hand, but it does carry the block's activity filter when it has one — a
+  // schedule scoped to Yoga should open Yoga's calendar, not the full picker.
+  // A CLICKED session gets `sessionBookHref` instead (see the modal below).
+  const browseBookHref = preview
+    ? undefined
+    : publicHrefLocalized(locale, slug, 'booking', {
+        activity: section.activityId || undefined,
+        from: 'site',
+      })
 
   // Daily list covers today onward (today's finished sessions render muted);
   // the calendar additionally shows the current week's past days as a timetable.
@@ -1074,15 +1199,26 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
           <SessionDetailModal
             s={selected}
             palette={palette}
-            preview={preview}
-            bookHref={section.showBooking && !isPastSession(selected) ? bookHref : undefined}
+            bookLinkProps={
+              section.showBooking && !isPastSession(selected) && !preview
+                ? bookProps(sessionBookHref(ctx, selected), ctx, {
+                    kind: 'session',
+                    sessionId: selected.id,
+                  })
+                : null
+            }
+            // This modal is a hand-rolled `fixed inset-0 z-50` overlay. The
+            // booking panel portals to <body> at the same layer, so leaving this
+            // backdrop underneath would break Esc and the focus trap — close it
+            // FIRST, then open.
+            onBookClick={() => setSelected(null)}
             onClose={() => setSelected(null)}
           />
         )}
 
         <div className="mt-8 text-center">
           <a
-            {...linkProps(bookHref, preview)}
+            {...bookProps(browseBookHref, ctx, { kind: 'root' })}
             className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
             style={{ background: palette.accent, color: palette.onAccent }}
           >
@@ -1100,14 +1236,15 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
 function SessionDetailModal({
   s,
   palette,
-  preview,
-  bookHref,
+  bookLinkProps,
+  onBookClick,
   onClose,
 }: {
   s: SessionEntry
   palette: SitePalette
-  preview: boolean
-  bookHref?: string
+  /** Ready-made anchor props from `bookProps`; null hides the CTA. */
+  bookLinkProps: ReturnType<typeof bookProps> | null
+  onBookClick: () => void
   onClose: () => void
 }) {
   const start = s.start.toDate()
@@ -1168,9 +1305,14 @@ function SessionDetailModal({
             </div>
           )}
         </div>
-        {bookHref && (
+        {bookLinkProps && (
           <a
-            {...linkProps(bookHref, preview)}
+            {...bookLinkProps}
+            onClick={(e) => {
+              // Dismiss this backdrop before the booking panel opens over it.
+              onBookClick()
+              bookLinkProps.onClick?.(e)
+            }}
             className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
             style={{ background: palette.accent, color: palette.onAccent }}
           >

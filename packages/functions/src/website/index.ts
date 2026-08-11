@@ -12,10 +12,12 @@ import {
   ORGANIZATIONS_COLLECTION,
   ORG_PLACES_SUBCOLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
+  isPublicSurface,
 } from '@linyup/shared'
 import type {
   PublishedSite,
   SiteMeta,
+  SiteSurfaceLinkConfig,
   WebsiteSection,
   HeroSection,
   ContentSection,
@@ -177,6 +179,7 @@ function buildSection(d: Dict, id: string, type: string): WebsiteSection | null 
         subheading: optStr(d.subheading, 400),
         source: 'activities',
         columns: (columns === 2 || columns === 4 ? columns : 3) as 2 | 3 | 4,
+        layout: oneOf(d.layout, ['grid', 'list'] as const, 'grid'),
         showBooking: bool(d.showBooking),
       }) as unknown as WebsiteSection
     }
@@ -295,6 +298,39 @@ async function enrichSectionsWithPlaces(
   }
 }
 
+/**
+ * Studio overrides for the header's cross-surface links.
+ *
+ * Only the OVERRIDE is stored — the link list itself is derived at render time
+ * from `active_public_surfaces`, so nothing here can conjure a link to a surface
+ * the team hasn't got. An entry naming an unknown surface is dropped; one naming
+ * a currently-inactive surface is KEPT, so a studio's label survives toggling the
+ * plugin off and on.
+ */
+function sanitizeSurfaceLinks(raw: unknown): SiteSurfaceLinkConfig[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  const out: SiteSurfaceLinkConfig[] = []
+  for (const entry of raw.slice(0, 20)) {
+    const d = asDict(entry)
+    // Explicit guard rather than oneOf(): oneOf coerces an unknown value to its
+    // fallback, which would silently rewrite a bad entry into a real surface.
+    if (!isPublicSurface(d.surface)) continue
+    const surface = d.surface
+    if (seen.has(surface)) continue
+    seen.add(surface)
+    out.push(
+      clean({
+        surface,
+        hidden: d.hidden === true ? true : undefined,
+        label: optStr(d.label, 60),
+        order: typeof d.order === 'number' && Number.isFinite(d.order) ? d.order : undefined,
+      }) as SiteSurfaceLinkConfig
+    )
+  }
+  return out.length ? out : undefined
+}
+
 export function sanitizeMeta(raw: unknown, fallbackTitle: string): SiteMeta {
   const d = asDict(raw)
   const header = asDict(d.header)
@@ -318,6 +354,8 @@ export function sanitizeMeta(raw: unknown, fallbackTitle: string): SiteMeta {
       ctaLabel: optStr(header.ctaLabel, 120),
       ctaAction: headerCtaAction,
       ctaUrl: headerCtaAction === 'url' ? safeUrl(header.ctaUrl) : undefined,
+      showSignIn: header.showSignIn !== false,
+      surfaceLinks: sanitizeSurfaceLinks(header.surfaceLinks),
     }),
     footer: clean({ showSocial: footer.showSocial !== false }),
   }) as SiteMeta

@@ -8,7 +8,9 @@ import { httpsCallable } from 'firebase/functions'
 import { doc, getDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
-import { CONTACTS_COLLECTION } from '@linyup/shared'
+import { CONTACTS_COLLECTION, type PublicFrom } from '@linyup/shared'
+import { Link } from '@/i18n/navigation'
+import { publicHref, returnHref } from '@/lib/publicRoutes'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
@@ -52,9 +54,11 @@ type DetailsValues = z.infer<ReturnType<typeof createDetailsSchema>>
 
 interface Props {
   slug: string
+  /** `?from=` — which surface to return to. See `returnHref`. */
+  from?: PublicFrom
 }
 
-export default function SignupForm({ slug }: Props) {
+export default function SignupForm({ slug, from }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
   // A live contact session skips the email+OTP steps entirely: the session was
@@ -62,9 +66,10 @@ export default function SignupForm({ slug }: Props) {
   const { isAuthenticated, contact: sessionContact } = usePublicContactAuth()
   const t = useTranslations('PublicSignup')
   const tSurfaces = useTranslations('PublicSurfaceLinks')
-  // The team root renders whatever default surface the studio chose (bio-link,
-  // website, shop, …) — label the link accordingly instead of assuming bio-link.
-  const homeSurface = team.default_public_surface ?? 'bio-link'
+  // Where 'back' goes: the surface named by `?from=`, else whatever default the
+  // studio chose (bio-link, website, shop, …). Labelled to match, and resolved
+  // here rather than by bouncing through the team root's client redirect.
+  const backTo = returnHref(team, slug, from)
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -546,18 +551,18 @@ export default function SignupForm({ slug }: Props) {
         </div>
         <div className="space-y-2">
           {/* Their personal portal — where membership, bookings and courses live. */}
-          <a
-            href={`/public/${slug}/space`}
+          <Link
+            href={publicHref(slug, 'space')}
             className="block text-sm font-medium text-primary hover:underline"
           >
             {t('openSpace')}
-          </a>
-          <a
-            href={`/public/${slug}`}
+          </Link>
+          <Link
+            href={backTo.href}
             className="block text-sm text-muted-foreground hover:text-foreground hover:underline"
           >
-            {t('toSurface', { name: tSurfaces(homeSurface as Parameters<typeof tSurfaces>[0]) })}
-          </a>
+            {t('toSurface', { name: tSurfaces(backTo.surface) })}
+          </Link>
         </div>
       </div>
     </BioLinkShell>

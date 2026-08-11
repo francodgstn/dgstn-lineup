@@ -1,5 +1,6 @@
 import type { SiteMeta, SiteCta, SiteFont } from '@linyup/shared'
 import { DEFAULT_ACCENT } from '@/lib/colors'
+import { publicHrefLocalized } from '@/lib/publicRoutes'
 
 // Shared theming for the Website plugin renderer (public site + builder preview).
 
@@ -55,15 +56,22 @@ export const FONT_STACK: Record<SiteFont, string> = {
   rounded: '"ui-rounded", "SF Pro Rounded", "Nunito", "Quicksand", system-ui, sans-serif',
 }
 
-/** Resolve a CTA to an href. booking/signup → bio-link flows; url → external. */
+/**
+ * Resolve a CTA to an href. booking/signup → the team's public flows; url → external.
+ *
+ * Locale-prefixed, because the site renders these as raw `<a href>` (see
+ * `RenderCtx.locale`). `from: 'site'` gives the flow a back link to the website
+ * the visitor is standing on, rather than the team's default landing surface.
+ */
 export function ctaHref(
   cta: Pick<SiteCta, 'action' | 'url'> | undefined,
-  slug: string
+  slug: string,
+  locale: string
 ): string | undefined {
   if (!cta) return undefined
-  if (cta.action === 'booking') return `/public/${slug}/booking`
+  if (cta.action === 'booking') return publicHrefLocalized(locale, slug, 'booking', { from: 'site' })
   // 'signup' is current; 'membership' is the legacy stored alias.
   if (cta.action === 'signup' || (cta.action as string) === 'membership')
-    return `/public/${slug}/signup`
+    return publicHrefLocalized(locale, slug, 'signup', { from: 'site' })
   return cta.url || undefined
 }

@@ -27,6 +27,7 @@ import {
   TEAM_PLACES_SUBCOLLECTION,
   resolveBookingReminderSteps,
   type BookingReminderStep,
+  publicUrl,
 } from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
@@ -225,7 +226,7 @@ export async function sendBookingReminders(): Promise<{
       const bookingToken = (booking.booking_token as string) || null
       const manageBookingUrl =
         team.slug && bookingToken
-          ? `${getHostingUrl()}/public/${team.slug}/manage-booking?token=${bookingToken}`
+          ? publicUrl(getHostingUrl(), team.slug, 'manage-booking', { token: bookingToken })
           : null
 
       for (const step of pendingSteps) {

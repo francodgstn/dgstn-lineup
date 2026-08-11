@@ -30,6 +30,7 @@ import {
   type CourseAccessRule,
 } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
+import { publicHref, publicSubHref } from '@/lib/publicRoutes'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
@@ -821,12 +822,14 @@ export default function ShopHome({
                       .filter((term) => term.kind !== 'gate' && term.kind !== 'trial')
                       .map((term) => payPerVisitTermLabel(term))
                       .filter((label): label is string => !!label)
+                    // `from: 'shop'` so the flow's back link returns here rather
+                    // than to the team's default landing surface.
                     const href =
                       a.activityType === 'appointment'
-                        ? `/public/${slug}/appointments?activity=${a.id}`
+                        ? publicHref(slug, 'appointments', { activity: a.id, from: 'shop' })
                         : a.slug
-                          ? `/public/${slug}/booking/${a.slug}`
-                          : `/public/${slug}/booking`
+                          ? publicSubHref(slug, 'booking', a.slug, { from: 'shop' })
+                          : publicHref(slug, 'booking', { from: 'shop' })
                     return (
                       <div
                         key={a.id}
@@ -842,7 +845,7 @@ export default function ShopHome({
                           )}
                         </div>
                         <Link
-                          href={href as Route}
+                          href={href}
                           className="shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold"
                           style={{ background: accent, color: '#ffffff' }}
                         >

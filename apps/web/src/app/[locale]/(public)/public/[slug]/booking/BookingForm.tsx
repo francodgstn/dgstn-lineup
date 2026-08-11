@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import type { Route } from 'next'
 import {
   collectionGroup,
   query,
   where,
   orderBy,
   limit,
+  doc,
+  getDoc,
   getDocs,
   Timestamp,
 } from 'firebase/firestore'
@@ -20,12 +23,20 @@ import {
   type ActivityAccessRule,
   type ActivityMemberBenefit,
   type Benefit,
+  type PublicFrom,
+  parseDateKey,
+  parseDocId,
 } from '@linyup/shared'
+import { publicHref, returnHref } from '@/lib/publicRoutes'
+import { useStepUrl } from '@/hooks/useStepUrl'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityPricingDisplay, type SubLookup } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
-import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
+import { Link, useRouter } from '@/i18n/navigation'
+import { BioLinkButton } from '../BioLinkShell'
+import { FlowShell } from '@/components/booking/FlowShell'
+import { useBookingChrome } from '@/components/booking/BookingChrome'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { MiniCalendar } from '@/components/booking/MiniCalendar'
@@ -110,6 +121,13 @@ type Step =
   | 'details'
   | 'confirmed'
 
+/**
+ * Why a `?session=` / `?date=` deep link couldn't be honoured. The visitor is
+ * degraded to the nearest useful step and told why — never silently dumped on
+ * the blank activity picker, which is the whole reason deep links exist.
+ */
+type DeepLinkNotice = 'past' | 'full' | 'gone' | 'dateEmpty'
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function toDateKey(ts: Timestamp): string {
@@ -152,12 +170,64 @@ function sessionDuration(
 // activityGradient now lives in components/booking/StickyBar (shared with the
 // appointment picker) — imported above and reused by the activity cards below.
 
+/** Drop-in (pay-per-class) price for a gated class, else null. */
+function dropInPriceOf(a: ActivityProfile | null | undefined): number | null {
+  if (!a || a.isFreeTrial !== false) return null
+  if (!a.dropIn?.enabled) return null
+  return typeof a.dropIn.priceAmount === 'number' ? a.dropIn.priceAmount : null
+}
+
+/**
+ * Which step follows picking a session. Members-only → sign in ('returning');
+ * but if the class has a guest door — drop-in (pay per class) or a trial for
+ * newcomers — the visitor gets the chooser ('who') instead.
+ *
+ * The ONLY place this rule lives. Both the session click handler and the
+ * `?session=` deep-link resolver call it, or the click path and the link path
+ * silently diverge.
+ */
+function nextStepAfterSession(a: ActivityProfile | null | undefined): Step {
+  const gated = a?.isFreeTrial === false
+  const canGuest = dropInPriceOf(a) != null || a?.trialEnabled === true
+  return gated && !canGuest ? 'returning' : 'who'
+}
+
+/** A session is bookable only while it's upcoming and has a free seat. */
+function sessionBlockReason(s: SessionProfile): DeepLinkNotice | null {
+  if (s.allowBooking !== true) return 'gone'
+  if (s.start.toDate().getTime() <= Date.now()) return 'past'
+  if (typeof s.max_participants === 'number' && (s.bookings_count ?? 0) >= s.max_participants)
+    return 'full'
+  return null
+}
+
 // ─── props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   slug: string
+  /** `/booking/{activitySlug}` path form. Inbound alias only — never pushed. */
   preSelectedActivitySlug?: string
   initialDate?: string
+  /** `?session=` — highest precedence: lands on the "who's booking" step. */
+  initialSession?: string
+  /** `?activity=` — activity ID (the form the cancellation/rebook emails send). */
+  initialActivityId?: string
+  /** `?referral=` — carried through to `bookSession({ referralCode })`. */
+  referral?: string
+  /** `?from=` — which surface to return to. See `returnHref`. */
+  from?: PublicFrom
+  /**
+   * Suppress this flow's own history writes. Set by an overlay host, which owns
+   * the address bar while the panel is open — two writers would fight, and Back
+   * would take two presses to close the overlay.
+   */
+  disableStepUrl?: boolean
+  /**
+   * Open directly on the confirmation step for this session — the visitor has
+   * just returned from a successful Stripe payment. Only ever set from a
+   * verified payment result, never from a URL: see lib/bookingReturn.ts.
+   */
+  confirmedSessionId?: string
 }
 
 // MiniCalendar and StickyBar now live in components/booking/ (shared with the
@@ -165,7 +235,17 @@ interface Props {
 
 // ─── component ───────────────────────────────────────────────────────────────
 
-export default function BookingForm({ slug, preSelectedActivitySlug, initialDate }: Props) {
+export default function BookingForm({
+  slug,
+  preSelectedActivitySlug,
+  initialDate,
+  initialSession,
+  initialActivityId,
+  referral,
+  from,
+  disableStepUrl,
+  confirmedSessionId,
+}: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
   // The team-root sign-in bar's session — a contact may already be signed in
@@ -173,9 +253,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // member rate here; checkout/booking always re-resolve authoritatively
   // server-side (the callable trusts its own session token, not this).
   const { contact, isAuthenticated } = usePublicContactAuth()
+  // 'page' unless an overlay host wraps this flow — see BookingChrome.
+  const chrome = useBookingChrome()
+  const router = useRouter()
   const locale = useLocale()
   const t = useTranslations('PublicBooking')
   const tShop = useTranslations('Shop')
+  const tSurfaces = useTranslations('PublicSurfaceLinks')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const bookingSettings = team.bookingSettings
@@ -227,6 +311,12 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // only ever have the free path, so null behaves like 'trial').
   const [guestPath, setGuestPath] = useState<'trial' | 'dropin' | null>(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+  // Why an inbound deep link couldn't be honoured verbatim (see DeepLinkNotice).
+  const [deepLinkNotice, setDeepLinkNotice] = useState<DeepLinkNotice | null>(null)
+  // `applyEntry` may pick the date itself (from the deep-linked session). Set once
+  // it has, so the default-date effect below doesn't immediately overwrite it.
+  const entryResolvedRef = useRef(false)
 
   // Confirmation
   const [confirmedSession, setConfirmedSession] = useState<SessionProfile | null>(null)
@@ -302,30 +392,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           .filter((s) => s.start && s.end && s.start.toDate() <= windowEnd)
         setSessions(sessList)
 
-        // Determine initial step / auto-select
-        if (preSelectedActivitySlug) {
-          const matched = actList.find((a) => a.slug === preSelectedActivitySlug)
-          if (matched?.activityType === 'appointment') {
-            // Appointments have their own booking flow (per-coach slot picker) —
-            // the class calendar can't render 1:1 slots, so hand the visitor over.
-            // The activity id carries over so the picker preselects the same
-            // offering instead of forgetting what was clicked.
-            window.location.replace(`/public/${slug}/appointments?activity=${matched.id}`)
-            return
-          }
-          if (matched) {
-            setSelectedActivity(matched)
-            setStep('sessions')
-          } else {
-            setStep(actList.length === 1 ? 'sessions' : 'activities')
-            if (actList.length === 1) setSelectedActivity(actList[0])
-          }
-        } else if (actList.length === 1) {
-          setSelectedActivity(actList[0])
-          setStep('sessions')
-        } else {
-          setStep('activities')
-        }
+        // Determine initial step / auto-select from the inbound deep link.
+        if ((await applyEntry(actList, sessList)) === 'navigated') return
       } catch (err) {
         console.error('Error loading booking data', err)
       } finally {
@@ -335,6 +403,131 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId])
+
+  /**
+   * Resolve the inbound deep link to a starting step, in precedence order:
+   *   ?session=  >  ?activity=  >  /booking/{activitySlug}  >  single activity  >  picker
+   *
+   * A `?session=` that can't be honoured (past, full, unpublished) DEGRADES to
+   * that activity's date list with a notice — it never falls through to the blank
+   * picker, which is the failure this whole contract exists to prevent.
+   *
+   * Returns 'navigated' when it hands the visitor over to the appointment flow,
+   * so the caller stops (a router.replace does not halt the surrounding function).
+   */
+  async function applyEntry(
+    actList: ActivityProfile[],
+    sessList: SessionProfile[]
+  ): Promise<'navigated' | 'applied'> {
+    const findActivityFor = (s: SessionProfile) =>
+      actList.find((a) => a.id === s.activityId || (!!s.activitySlug && a.slug === s.activitySlug)) ??
+      null
+
+    // ── Returning from a successful payment ──────────────────────────────────
+    // Straight to the confirmation, no re-booking. The session must still
+    // resolve; if it doesn't, fall through and the normal funnel applies.
+    if (confirmedSessionId) {
+      const paid = sessList.find((s) => s.id === confirmedSessionId)
+      if (paid) {
+        setSelectedActivity(findActivityFor(paid))
+        setSelectedSession(paid)
+        setConfirmedSession(paid)
+        entryResolvedRef.current = true
+        setStep('confirmed')
+        return 'applied'
+      }
+    }
+
+    // ── ?session= ────────────────────────────────────────────────────────────
+    if (initialSession) {
+      // The list query is capped (`limit(200)`) and starts at now, so a session
+      // linked from the website's schedule — which lists from Monday of the
+      // current week — may be absent. The per-session public_profile is
+      // world-readable and its doc id IS the session id, so one read resolves it.
+      let target = sessList.find((s) => s.id === initialSession) ?? null
+      if (!target) {
+        try {
+          const snap = await getDoc(
+            doc(db, 'sessions', initialSession, 'public_profile', initialSession)
+          )
+          const data = snap.data()
+          // Never trust a session id from the URL to belong to this tenant.
+          if (data && data.type === 'session' && data.teamId === teamId) {
+            target = { ...data, id: snap.id } as SessionProfile
+          }
+        } catch {
+          // Unreadable → treated as gone below.
+        }
+      }
+
+      const activity = target ? findActivityFor(target) : null
+      const blocked = target ? sessionBlockReason(target) : 'gone'
+
+      if (target && activity && !blocked) {
+        setSelectedActivity(activity)
+        setSelectedSession(target)
+        setSelectedDate(toDateKey(target.start))
+        entryResolvedRef.current = true
+        setStep(nextStepAfterSession(activity))
+        return 'applied'
+      }
+
+      setDeepLinkNotice(blocked ?? 'gone')
+      // Degrade: keep the activity, but deliberately do NOT pin the linked day.
+      // The notice promises "the next available times", and the linked day is by
+      // definition the one that's past/full — pinning it would show an empty
+      // list under that promise. Leaving the date unset lets the default-date
+      // effect land on the nearest day that actually has sessions.
+      if (activity) {
+        setSelectedActivity(activity)
+        setStep('sessions')
+        return 'applied'
+      }
+      // Otherwise fall through to the activity-level branches below.
+    }
+
+    // ── ?activity= (id) ──────────────────────────────────────────────────────
+    // The form sendBookingCancelled / updateSession have been emailing all along.
+    if (initialActivityId) {
+      const matched = actList.find((a) => a.id === initialActivityId)
+      if (matched?.activityType === 'appointment') {
+        goToAppointments(matched.id)
+        return 'navigated'
+      }
+      if (matched) {
+        setSelectedActivity(matched)
+        setStep('sessions')
+        return 'applied'
+      }
+    }
+
+    // ── /booking/{activitySlug} path form ────────────────────────────────────
+    if (preSelectedActivitySlug) {
+      const matched = actList.find((a) => a.slug === preSelectedActivitySlug)
+      if (matched?.activityType === 'appointment') {
+        // Appointments have their own booking flow (per-coach slot picker) — the
+        // class calendar can't render their slots, so hand the visitor over. The
+        // activity id carries over so the picker preselects the same offering
+        // instead of forgetting what was clicked.
+        goToAppointments(matched.id)
+        return 'navigated'
+      }
+      if (matched) {
+        setSelectedActivity(matched)
+        setStep('sessions')
+        return 'applied'
+      }
+    }
+
+    // ── Defaults ─────────────────────────────────────────────────────────────
+    if (actList.length === 1) {
+      setSelectedActivity(actList[0])
+      setStep('sessions')
+    } else {
+      setStep('activities')
+    }
+    return 'applied'
+  }
 
   // Sessions filtered by selected activity
   const activitySessions = useMemo(() => {
@@ -355,9 +548,20 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     return toDateKey(Timestamp.fromDate(d))
   }, [bookingWindowMonths])
 
-  // Set default selected date
+  // Set default selected date. `applyEntry` may already have picked one from a
+  // deep-linked session — don't clobber it (this effect also runs on the very
+  // transition applyEntry causes).
   useEffect(() => {
     if (availableDates.length === 0) return
+    if (entryResolvedRef.current) {
+      entryResolvedRef.current = false
+      return
+    }
+    if (initialDate && !availableDates.includes(initialDate)) {
+      // The linked day has no sessions for this activity — land on the nearest
+      // one that does, and say so rather than silently showing a different day.
+      setDeepLinkNotice('dateEmpty')
+    }
     const candidate =
       initialDate && availableDates.includes(initialDate) ? initialDate : availableDates[0]
     setSelectedDate(candidate)
@@ -374,13 +578,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   // Drop-in (pay-per-class): a gated class where the studio lets uncovered contacts
   // pay a per-class fee to book. Members who are covered still book free via sign-in.
-  const selectedDropInPrice =
-    selectedActivity &&
-    selectedActivity.isFreeTrial === false &&
-    selectedActivity.dropIn?.enabled &&
-    typeof selectedActivity.dropIn.priceAmount === 'number'
-      ? selectedActivity.dropIn.priceAmount
-      : null
+  const selectedDropInPrice = dropInPriceOf(selectedActivity)
   const dropInAvailable = selectedDropInPrice != null
 
   // Member rate preview on the drop-in price — a signed-in contact (from the
@@ -460,7 +658,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           return
         }
         if (result.url) {
-          window.location.href = result.url
+          leaveFlowTo(result.url)
           return
         }
         throw new Error(t('errorCheckoutFailed'))
@@ -477,6 +675,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           phone: showPhone ? values.phone || null : null,
           aggregatorApp: showFitnessApp ? values.aggregatorApp || null : null,
         },
+        // Free path only — createDropInCheckout takes no referral code, which is
+        // right: a referral link invites a newcomer to their first free booking.
+        ...(referral ? { referralCode: referral } : {}),
       })
       setConfirmedSession(selectedSession)
       setStep('confirmed')
@@ -501,7 +702,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             return
           }
           if (result.url) {
-            window.location.href = result.url
+            leaveFlowTo(result.url)
             return
           }
         } catch {
@@ -561,6 +762,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
       sessionId: selectedSession.id,
       authenticatedContactId: contactId,
       verificationCodeId,
+      ...(referral ? { referralCode: referral } : {}),
     })
     setConfirmedSession(selectedSession)
     setStep('confirmed')
@@ -568,9 +770,164 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
+  /**
+   * Leave the flow for a different URL (Stripe checkout, the appointment picker).
+   * As a page this is a normal navigation; in an overlay the panel must close
+   * first so it isn't left sitting over the page mid-navigation.
+   *
+   * Not for "back out of the flow" — that's `backTo` / `chrome.onClose`.
+   */
+  /**
+   * Hand over to the APPOINTMENT funnel for this activity.
+   *
+   * In an overlay the host swaps the panel's contents in place — bouncing the
+   * visitor to a full page mid-flow is jarring when picking an appointment off
+   * the activity list is, to them, just the next step. As a page it navigates.
+   */
+  function goToAppointments(activityId: string) {
+    if (chrome.switchToAppointments) {
+      chrome.switchToAppointments(activityId)
+      return
+    }
+    router.push(publicHref(slug, 'appointments', { activity: activityId, from }))
+  }
+
+  function leaveFlowTo(href: string) {
+    if (chrome.kind === 'overlay') chrome.navigate(href)
+    else router.push(href as Route)
+  }
+
+  // Where leaving the flow goes. `?from=` names the surface the visitor arrived
+  // from; absent/dead → the team's default surface, resolved HERE rather than by
+  // bouncing through the team root's client redirect.
+  const backTo = useMemo(() => returnHref(team, slug, from), [team, slug, from])
+
+  // ── Step ↔ URL ────────────────────────────────────────────────────────────
+  //
+  // One effect owns the whole mapping, rather than a push at each transition —
+  // there are eight places the step changes, and a push forgotten at any one of
+  // them silently breaks Back for that branch only.
+
+  const stepUrl = useStepUrl({
+    disabled: disableStepUrl,
+    sticky: { from, referral },
+    onRestore: (params) => {
+      // Terminal guard: after a successful booking, Back must NOT re-enter
+      // `details` with a live session — that would let the visitor submit the
+      // same booking twice. Leave the flow instead.
+      if (confirmedSession) {
+        router.push(backTo.href)
+        return
+      }
+
+      // popstate hands back whatever is in the address bar, which the visitor (or
+      // a link they were sent) can have edited — parse it like any inbound param.
+      const sessionId = parseDocId(params.get('session'))
+      const restored = sessionId ? sessions.find((s) => s.id === sessionId) : null
+      // Everything is re-derived from the loaded arrays by id — the step state
+      // holds whole denormalized objects, which must never go in the URL.
+      const activity = restored
+        ? (activities.find(
+            (a) => a.id === restored.activityId || (!!restored.activitySlug && a.slug === restored.activitySlug)
+          ) ?? null)
+        : null
+
+      if (restored && activity) {
+        const sub = params.get('step')
+        setSelectedActivity(activity)
+        setSelectedSession(restored)
+        setSelectedDate(toDateKey(restored.start))
+        entryResolvedRef.current = true
+        if (sub === 'details') {
+          // guestPath is the one piece that isn't derivable, hence `path=`.
+          const path = params.get('path')
+          setGuestPath(path === 'trial' || path === 'dropin' ? path : null)
+          setStep('details')
+        } else if (sub === 'returning') {
+          setStep('returning')
+        } else {
+          setStep(nextStepAfterSession(activity))
+        }
+        return
+      }
+
+      const activityId = parseDocId(params.get('activity'))
+      const matched = activityId ? activities.find((a) => a.id === activityId) : null
+      if (matched) {
+        setSelectedActivity(matched)
+        setSelectedSession(null)
+        setGuestPath(null)
+        const day = parseDateKey(params.get('date'))
+        if (day) {
+          setSelectedDate(day)
+          entryResolvedRef.current = true
+        }
+        setStep('sessions')
+        return
+      }
+
+      // Back to the flow's entry step.
+      setSelectedSession(null)
+      setGuestPath(null)
+      if (preSelectedActivitySlug || activities.length === 1) {
+        setStep('sessions')
+      } else {
+        setSelectedActivity(null)
+        setStep('activities')
+      }
+    },
+  })
+
+  // The canonical query for the current step. All steps stay on ONE pathname:
+  // pushing `/booking/{activitySlug}` would turn popstate into a real route
+  // transition, remounting the wizard and refetching everything.
+  const stepQuery: Record<string, string | undefined> =
+    step === 'activities'
+      ? {}
+      : step === 'sessions'
+        ? { activity: selectedActivity?.id, date: selectedDate ?? undefined }
+        : step === 'confirmed'
+          ? { booked: confirmedSession?.id }
+          : {
+              session: selectedSession?.id,
+              step: step === 'who' ? undefined : step,
+              path: step === 'details' ? (guestPath ?? undefined) : undefined,
+            }
+
+  const syncedQueryRef = useRef<string | null>(null)
+  const prevStepRef = useRef<Step | null>(null)
+  const seenRestoreRef = useRef(0)
+  useEffect(() => {
+    if (loadingData) return
+    const key = JSON.stringify(stepQuery)
+    // This run is a restore's own re-render — the URL is already what popstate
+    // gave us. Record the state and write nothing.
+    if (stepUrl.restoreCount() !== seenRestoreRef.current) {
+      seenRestoreRef.current = stepUrl.restoreCount()
+      syncedQueryRef.current = key
+      prevStepRef.current = step
+      return
+    }
+    if (syncedQueryRef.current === key) return
+    const isFirst = syncedQueryRef.current === null
+    const stepChanged = prevStepRef.current !== step
+    syncedQueryRef.current = key
+    prevStepRef.current = step
+    // Push only on a real step transition. Refinements within a step (paging the
+    // calendar to another day) rewrite instead, or Back would walk day by day
+    // before it ever left the step. `confirmed` also rewrites — see the guard above.
+    if (isFirst || !stepChanged || step === 'confirmed') stepUrl.replace(stepQuery)
+    else stepUrl.push(stepQuery)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, selectedActivity?.id, selectedSession?.id, selectedDate, guestPath, loadingData])
+
   function backFromSessions() {
-    if (preSelectedActivitySlug || activities.length === 1) {
-      window.location.href = `/public/${slug}`
+    if (preSelectedActivitySlug || initialActivityId || activities.length === 1) {
+      // No activity step to go back to — leave the flow. In an overlay that
+      // means CLOSE (the visitor came from the page behind the panel, not from
+      // the team root); as a page it means go to wherever they came from.
+      if (chrome.kind === 'overlay') chrome.onClose?.()
+      else router.push(backTo.href)
     } else {
       setStep('activities')
     }
@@ -579,6 +936,9 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   function resetToStart() {
     setSelectedSession(null)
     setBookingError(null)
+    // Must clear, or the step↔URL restore guard keeps treating the flow as
+    // terminal and ejects the visitor on their next Back.
+    setConfirmedSession(null)
     if (preSelectedActivitySlug || activities.length === 1) {
       setStep('sessions')
     } else {
@@ -592,57 +952,78 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
   // ─── Sticky bar: shown on all non-activity, non-confirmed steps ───────────
 
   const showBar = selectedActivity && step !== 'activities' && step !== 'confirmed'
-  const STICKY_H = 100
 
   function withBar(content: React.ReactNode, wide?: boolean) {
     return (
-      <>
-        <BioLinkShell
-          teamName={teamName}
-          slug={slug}
-          accentColor={accentColor}
-          wide={wide}
-          stickyBarHeight={showBar ? STICKY_H : undefined}
-          showBranding={showBranding}
-        >
-          {content}
-        </BioLinkShell>
-        {showBar && selectedActivity && (
-          <StickyBar
-            title={selectedActivity.name}
-            imageUrl={selectedActivity.image}
-            providerLabel={
-              selectedSession?.providerName
-                ? t('withInstructor', { name: selectedSession.providerName })
-                : null
-            }
-            dateTimeLabel={
-              selectedSession
-                ? `${formatDate(selectedSession.start)} · ${formatTime(selectedSession.start)}–${formatTime(selectedSession.end)}`
-                : null
-            }
-            location={selectedSession?.location ?? null}
-            accentColor={accentColor}
-            showConfirm={step === 'details'}
-            submitting={isSubmitting}
-            confirmLabel={t('ctaConfirm')}
-            submittingLabel={t('ctaBooking')}
-            onConfirm={() => guestFormRef.current?.submit()}
-          />
-        )}
-      </>
+      <FlowShell
+        teamName={teamName}
+        slug={slug}
+        accentColor={accentColor}
+        wide={wide}
+        showBranding={showBranding}
+        backTo={backTo}
+        overlayTitle={selectedActivity?.name}
+        bar={
+          showBar && selectedActivity ? (
+            <StickyBar
+              title={selectedActivity.name}
+              imageUrl={selectedActivity.image}
+              providerLabel={
+                selectedSession?.providerName
+                  ? t('withInstructor', { name: selectedSession.providerName })
+                  : null
+              }
+              dateTimeLabel={
+                selectedSession
+                  ? `${formatDate(selectedSession.start)} · ${formatTime(selectedSession.start)}–${formatTime(selectedSession.end)}`
+                  : null
+              }
+              location={selectedSession?.location ?? null}
+              accentColor={accentColor}
+              position={chrome.kind === 'overlay' ? 'container' : 'viewport'}
+              showConfirm={step === 'details'}
+              submitting={isSubmitting}
+              confirmLabel={t('ctaConfirm')}
+              submittingLabel={t('ctaBooking')}
+              onConfirm={() => guestFormRef.current?.submit()}
+            />
+          ) : null
+        }
+      >
+        {content}
+      </FlowShell>
     )
   }
+
+  // Rendered on BOTH the activities and sessions steps: a link whose session is
+  // gone degrades all the way to the picker, and landing there unexplained is
+  // exactly the "blank picker" failure this contract exists to prevent.
+  const deepLinkBanner = deepLinkNotice ? (
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+    >
+      <p className="flex-1">{t(`deepLinkNotice.${deepLinkNotice}`)}</p>
+      <button
+        type="button"
+        onClick={() => setDeepLinkNotice(null)}
+        aria-label={t('dismiss')}
+        className="shrink-0 font-semibold transition-opacity hover:opacity-70"
+      >
+        ×
+      </button>
+    </div>
+  ) : null
 
   // ─── Loading ──────────────────────────────────────────────────────────────
 
   if (loadingData) {
     return (
-      <BioLinkShell teamName="" slug={slug} accentColor={null} showBranding={showBranding}>
+      <FlowShell teamName={teamName} slug={slug} accentColor={null} showBranding={showBranding}>
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         </div>
-      </BioLinkShell>
+      </FlowShell>
     )
   }
 
@@ -650,16 +1031,19 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
 
   if (step === 'activities') {
     return (
-      <BioLinkShell
+      <FlowShell
         teamName={teamName}
         slug={slug}
         accentColor={accentColor}
         showBranding={showBranding}
+        backTo={backTo}
       >
         <div>
           <h1 className="text-2xl font-bold">{t('titleBookSession')}</h1>
           <p className="text-muted-foreground mt-1 text-sm">{t('chooseActivitySubtitle')}</p>
         </div>
+
+        {deepLinkBanner}
 
         {activities.length === 0 && (
           <div className="rounded-xl border bg-muted/30 p-8 text-center">
@@ -686,7 +1070,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                 onClick={() => {
                   if (!hasSessions) return
                   if (isAppointment) {
-                    window.location.assign(`/public/${slug}/appointments?activity=${a.id}`)
+                    goToAppointments(a.id)
                     return
                   }
                   setSelectedActivity(a)
@@ -804,7 +1188,7 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             )
           })}
         </div>
-      </BioLinkShell>
+      </FlowShell>
     )
   }
 
@@ -820,6 +1204,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">{t('pickDateTimeSubtitle')}</p>
         </div>
+
+        {deepLinkBanner}
 
         {selectedActivity?.prerequisites && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -865,13 +1251,8 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
                         setSelectedSession(s)
                         setGuestPath(null)
                         setGiftCardApplied(null)
-                        // Members-only → sign in. But if there's a guest door —
-                        // drop-in (pay per class) or a free trial for newcomers —
-                        // go to the chooser ('who') instead.
-                        const gated = selectedActivity?.isFreeTrial === false
-                        const canGuest = dropInAvailable || selectedActivity?.trialEnabled === true
-                        const nextStep = gated && !canGuest ? 'returning' : 'who'
-                        setStep(nextStep)
+                        setDeepLinkNotice(null)
+                        setStep(nextStepAfterSession(selectedActivity))
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
                     >
@@ -1096,11 +1477,13 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
     const ctaLabel = bookingSettings?.ctaLabel ?? t('ctaContactUsDefault')
 
     return (
-      <BioLinkShell
+      <FlowShell
         teamName={teamName}
         slug={slug}
         accentColor={accentColor}
         showBranding={showBranding}
+        backTo={backTo}
+        overlayTitle={confirmedSession.activityName ?? undefined}
       >
         <div className="py-6 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
@@ -1167,14 +1550,24 @@ export default function BookingForm({ slug, preSelectedActivitySlug, initialDate
             </a>
           )}
 
-          <button
-            onClick={resetToStart}
-            className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-          >
-            {t('bookAnotherSession')}
-          </button>
+          <div className="space-y-1">
+            <button
+              onClick={resetToStart}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
+              {t('bookAnotherSession')}
+            </button>
+            {/* A booked visitor used to dead-end here with no way out but the
+                header arrow. Send them back where they came from. */}
+            <Link
+              href={backTo.href}
+              className="block w-full py-2 text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t('toSurface', { name: tSurfaces(backTo.surface) })}
+            </Link>
+          </div>
         </div>
-      </BioLinkShell>
+      </FlowShell>
     )
   }
 

@@ -4,13 +4,17 @@ import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { resolvePaymentOptions, type ActivityMemberBenefit, type Benefit, type PaymentOption } from '@linyup/shared'
+import { resolvePaymentOptions, parseDateKey, parseDocId, parsePositiveInt, type ActivityMemberBenefit, type Benefit, type PaymentOption, type PublicFrom } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
+import { useRouter } from '@/i18n/navigation'
+import { returnHref } from '@/lib/publicRoutes'
+import { useStepUrl } from '@/hooks/useStepUrl'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/ui/query-error'
-import { BioLinkShell } from '../BioLinkShell'
+import { FlowShell } from '@/components/booking/FlowShell'
+import { useBookingChrome } from '@/components/booking/BookingChrome'
 import { MiniCalendar, toDateKey } from '@/components/booking/MiniCalendar'
 import {
   GuestDetailsForm,
@@ -166,7 +170,7 @@ function errorDetails(err: unknown): { code?: string; message?: string; reason?:
 // ─── in-page booking step ───────────────────────────────────────────────────
 // Guest fields + returning-member sign-in are the SHARED components also used by
 // the class BookingForm (components/booking/). Rendered IN THE PAGE (inside
-// BioLinkShell), not a modal — same as the class 'details'/'returning' steps.
+// FlowShell), not a modal — same as the class 'details'/'returning' steps.
 // Only the money-specific bits (price display, the sign-in offer, the member-pay
 // confirmation) stay local here. The guest screen's submit is driven from the
 // parent's sticky bar via `guestFormRef` (sr-only <form> submit) — exactly the
@@ -605,22 +609,63 @@ function ActivityCard({
 // Step 3 — duration (only if the activity offers more than one) → day → time.
 // Same layout as the class BookingForm's 'sessions' step: MiniCalendar LEFT,
 // time slots (with duration chips above them) RIGHT — see BookingForm.tsx.
+/**
+ * A booking is identified by exactly four fields — provider, activity, start,
+ * duration (the same key `SlotBookingForm` uses). Everything else on
+ * `WindowBooking` is denormalized from the loaded availability, so the object is
+ * always rebuildable and never needs serializing into the URL.
+ */
+function buildWindowBooking(
+  coach: AvailCoach,
+  activity: AvailActivity,
+  startMs: number,
+  durationMinutes: number
+): WindowBooking {
+  const chosen =
+    activity.durations.find((d) => d.minutes === durationMinutes) ?? activity.durations[0] ?? null
+  return {
+    providerId: coach.providerId,
+    providerName: coach.providerName,
+    activityId: activity.activityId,
+    activityName: activity.activityName,
+    startMs,
+    durationMinutes: chosen?.minutes ?? durationMinutes,
+    location: activity.location,
+    onlineUrl: activity.onlineUrl,
+    priceAmount: chosen?.priceAmount ?? null,
+    memberBenefit: activity.memberBenefit,
+  }
+}
+
+// Duration + day are OWNED BY THE PARENT, not this component. They used to live
+// here, which meant leaving the `time` step destroyed them — so Back from the
+// booking step, or a history restore, silently reset the visitor's choices. They
+// are also two of the four fields that identify a booking, so the URL needs them.
 function TimePicker({
   coach,
   activity,
   currency,
   locale,
+  duration,
+  onDurationChange,
+  selectedDateKey,
+  onDateChange,
   onPick,
 }: {
   coach: AvailCoach
   activity: AvailActivity
   currency: string
   locale: string
+  duration: number
+  onDurationChange: (minutes: number) => void
+  selectedDateKey: string | null
+  onDateChange: (dateKey: string | null) => void
   onPick: (startMs: number, duration: AvailDuration) => void
 }) {
   const t = useTranslations('AppointmentBooking')
   const tPublic = useTranslations('PublicBooking')
-  const [duration, setDuration] = useState<number>(activity.durations[0]?.minutes ?? 60)
+  const setDuration = onDurationChange
+  const setSelectedDateKey = onDateChange
 
   // Only days with a free start for the CHOSEN duration are selectable — a
   // window may offer several lengths and not every day has room for all of them.
@@ -636,14 +681,15 @@ function TimePicker({
     return last ? toDateKey(new Date(last.dayMs)) : toDateKey(new Date())
   }, [activity])
 
-  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(availableDates[0] ?? null)
-
   // Re-validate the selected day whenever the duration (or activity) changes —
-  // the previously-selected day may not offer the new duration.
+  // the previously-selected day may not offer the new duration. Moved up here
+  // WITH the state: without it, a restored duration whose day has no slots
+  // silently renders an empty grid.
   useEffect(() => {
-    setSelectedDateKey((prev) => (prev && availableDates.includes(prev) ? prev : (availableDates[0] ?? null)))
+    if (selectedDateKey && availableDates.includes(selectedDateKey)) return
+    setSelectedDateKey(availableDates[0] ?? null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [duration, activity.activityId])
+  }, [duration, activity.activityId, availableDates.join(',')])
 
   const day = activity.days.find((d) => toDateKey(new Date(d.dayMs)) === selectedDateKey)
   const times = day?.slotsByDuration[String(duration)] ?? []
@@ -724,7 +770,7 @@ function TimePicker({
 
 // ─── main component ───────────────────────────────────────────────────────────
 // Coach-first funnel: coach → activity → duration (only if >1) → day → time →
-// book. Wrapped in BioLinkShell so it wears the same team top bar, content width
+// book. Wrapped in FlowShell so it wears the same team top bar, content width
 // and branded footer as the class BookingForm, and the booking step renders
 // in-page (not a modal) with the shared bottom summary bar. A `?activity=` deep
 // link preselects that offering: coaches are pre-filtered server-side, and when
@@ -733,13 +779,25 @@ function TimePicker({
 export default function AppointmentPicker({
   slug,
   presetActivityId,
+  from,
+  disableStepUrl,
 }: {
   slug: string
   presetActivityId?: string
+  /** `?from=` — which surface to return to. See `returnHref`. */
+  from?: PublicFrom
+  /**
+   * Suppress this flow's own history writes — set by an overlay host, which owns
+   * the address bar while the panel is open. See BookingForm for the same prop.
+   */
+  disableStepUrl?: boolean
 }) {
   const t = useTranslations('AppointmentBooking')
   const tPublic = useTranslations('PublicBooking')
   const locale = useLocale()
+  // 'page' unless an overlay host wraps this flow — see BookingChrome.
+  const chrome = useBookingChrome()
+  const router = useRouter()
   const { teamId, team } = usePublicTeam()
   const currency = team.default_currency ?? 'CHF'
   const teamName = team.name || ''
@@ -758,9 +816,11 @@ export default function AppointmentPicker({
   const [step, setStep] = useState<PickerStep>('coach')
   const [selectedCoach, setSelectedCoach] = useState<AvailCoach | null>(null)
   const [selectedActivity, setSelectedActivity] = useState<AvailActivity | null>(null)
-  // True once the coach step was skipped because exactly one coach offers the
-  // preselected activity — changes where Back on the time step goes.
-  const [skippedCoachStep, setSkippedCoachStep] = useState(false)
+  // Lifted out of TimePicker: leaving the `time` step used to destroy them, so
+  // Back from the booking step reset the visitor's duration and day. They are
+  // also part of a booking's identity, so history restore needs them here.
+  const [duration, setDuration] = useState<number | null>(null)
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
 
   // In-page booking step ↔ sticky bar wiring (mirrors the class BookingForm):
   // the sticky bar's Confirm fires the guest form's sr-only submit, and only
@@ -768,6 +828,134 @@ export default function AppointmentPicker({
   const [bookScreen, setBookScreen] = useState<BookScreen>('guest')
   const [bookSubmitting, setBookSubmitting] = useState(false)
   const guestFormRef = useRef<GuestDetailsFormHandle>(null)
+
+  // Where leaving the flow goes. `?from=` names the surface the visitor arrived
+  // from; absent/dead → the team's default surface, resolved HERE rather than by
+  // bouncing through the team root's client redirect. Declared with the other
+  // hooks — the `confirmed` early return below would otherwise skip it.
+  const backTo = useMemo(() => returnHref(team, slug, from), [team, slug, from])
+
+  // DERIVED, not stored: "the coach step was skipped because exactly one coach
+  // offers the preselected activity". As one-shot state it survived a history
+  // restore with a stale value and mislabelled the time step's Back button.
+  const skippedCoachStep = !!presetActivityId && coaches.length === 1
+
+  // The activity's first duration is the default until the visitor picks one.
+  // Derived rather than seeded into state, so switching activity can't leave a
+  // duration the new activity doesn't offer.
+  const effectiveDuration =
+    duration != null && selectedActivity?.durations.some((d) => d.minutes === duration)
+      ? duration
+      : (selectedActivity?.durations[0]?.minutes ?? 60)
+
+  // ── Step ↔ URL ────────────────────────────────────────────────────────────
+  // Same contract as the class flow (see BookingForm): one effect owns the whole
+  // mapping, raw pushState so the loaded `coaches` array survives Back.
+  // `bookScreen` is deliberately NOT synced — it's an internal sub-state of the
+  // `book` step with its own back affordance, and pushing it would make Back
+  // behave differently between the two flows.
+  const stepUrl = useStepUrl({
+    disabled: disableStepUrl,
+    sticky: { from, activity: presetActivityId },
+    onRestore: (params) => {
+      // popstate hands back whatever is in the address bar — parse it like any
+      // inbound param, not as trusted state we wrote ourselves.
+      const providerId = parseDocId(params.get('provider'))
+      const coach = providerId ? coaches.find((c) => c.providerId === providerId) : null
+      if (!coach) {
+        setWindowBooking(null)
+        // Back to the flow's ENTRY step, which isn't always `coach`: a preset
+        // activity with a single coach never showed one, so re-enter at `time`
+        // exactly as a fresh load would, rather than on a step the visitor has
+        // never seen.
+        const only = skippedCoachStep ? coaches[0] : null
+        if (only?.activities[0]) {
+          setSelectedCoach(only)
+          setSelectedActivity(only.activities[0])
+          setStep('time')
+          return
+        }
+        setSelectedCoach(null)
+        setSelectedActivity(null)
+        setStep('coach')
+        return
+      }
+      setSelectedCoach(coach)
+
+      const activityId = parseDocId(params.get('activity'))
+      const activity = activityId
+        ? coach.activities.find((a) => a.activityId === activityId)
+        : undefined
+      if (!activity) {
+        setSelectedActivity(null)
+        setWindowBooking(null)
+        setStep('activity')
+        return
+      }
+      setSelectedActivity(activity)
+
+      // Only durations this activity actually offers — a crafted `?duration=`
+      // must not reach the booking callable as a length the studio never priced.
+      const mins = parsePositiveInt(params.get('duration'), 24 * 60)
+      if (mins && activity.durations.some((d) => d.minutes === mins)) setDuration(mins)
+      const day = parseDateKey(params.get('date'))
+      if (day) setSelectedDateKey(day)
+
+      // windowBooking is fully derivable from {provider, activity, start,
+      // duration} — the same four fields SlotBookingForm already keys on — so
+      // rebuild it instead of putting a denormalized object in the URL.
+      // The start must be a real free slot, not merely a number: otherwise a
+      // crafted link could put an arbitrary time in front of the visitor.
+      const startMs = parsePositiveInt(params.get('start'))
+      const isRealSlot =
+        !!startMs &&
+        !!mins &&
+        activity.days.some((d) => (d.slotsByDuration[String(mins)] ?? []).includes(startMs))
+      const restoredBooking = isRealSlot ? buildWindowBooking(coach, activity, startMs, mins) : null
+      setWindowBooking(restoredBooking)
+      setBookScreen('guest')
+      setStep(restoredBooking ? 'book' : 'time')
+    },
+  })
+
+  const stepQuery: Record<string, string | number | undefined> =
+    step === 'coach'
+      ? {}
+      : step === 'activity'
+        ? { provider: selectedCoach?.providerId }
+        : {
+            provider: selectedCoach?.providerId,
+            activity: selectedActivity?.activityId,
+            duration: effectiveDuration,
+            date: selectedDateKey ?? undefined,
+            ...(step === 'book' && windowBooking ? { start: windowBooking.startMs } : {}),
+          }
+
+  const syncedQueryRef = useRef<string | null>(null)
+  const prevStepRef = useRef<PickerStep | null>(null)
+  const seenRestoreRef = useRef(0)
+  useEffect(() => {
+    if (loading) return
+    const key = JSON.stringify(stepQuery)
+    // This run is a restore's own re-render — see BookingForm for why this is a
+    // counter rather than an "is restoring" flag.
+    if (stepUrl.restoreCount() !== seenRestoreRef.current) {
+      seenRestoreRef.current = stepUrl.restoreCount()
+      syncedQueryRef.current = key
+      prevStepRef.current = step
+      return
+    }
+    if (syncedQueryRef.current === key) return
+    const isFirst = syncedQueryRef.current === null
+    const stepChanged = prevStepRef.current !== step
+    syncedQueryRef.current = key
+    prevStepRef.current = step
+    // Push only on a real step transition; refinements inside `time` (duration
+    // chips, paging the calendar) rewrite, or Back would walk every fiddle.
+    if (isFirst || !stepChanged) stepUrl.replace(stepQuery)
+    else stepUrl.push(stepQuery)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, selectedCoach?.providerId, selectedActivity?.activityId, effectiveDuration, selectedDateKey, windowBooking?.startMs, loading])
 
   useEffect(() => {
     let alive = true
@@ -798,7 +986,6 @@ export default function AppointmentPicker({
             setSelectedCoach(coach)
             setSelectedActivity(activity)
             setStep('time')
-            setSkippedCoachStep(true)
           }
         }
       } catch (err) {
@@ -818,11 +1005,11 @@ export default function AppointmentPicker({
     setReloadNonce((n) => n + 1)
   }
 
-  // ── Confirmation — wrapped in BioLinkShell so the team top bar persists,
+  // ── Confirmation — wrapped in FlowShell so the team top bar persists,
   // matching the class flow's confirmed step. ──
   if (confirmed) {
     return (
-      <BioLinkShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding}>
+      <FlowShell teamName={teamName} slug={slug} accentColor={accentColor} showBranding={showBranding} backTo={backTo}>
         <div className="py-6 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -836,7 +1023,7 @@ export default function AppointmentPicker({
             </div>
           </div>
         </div>
-      </BioLinkShell>
+      </FlowShell>
     )
   }
 
@@ -871,7 +1058,9 @@ export default function AppointmentPicker({
   // there; activity step in the normal funnel).
   function backFromTime() {
     if (skippedCoachStep) {
-      window.location.href = `/public/${slug}`
+      // No step to go back to — leave the flow, to wherever the visitor came
+      // from rather than the team root's default surface.
+      router.push(backTo.href)
       return
     }
     if (presetActivityId) {
@@ -897,17 +1086,42 @@ export default function AppointmentPicker({
   // mirroring the class flow (sessions/details). The Confirm shows only on the
   // booking step's guest screen.
   const showBar = !!selectedActivity && (step === 'time' || step === 'book')
-  const STICKY_H = 100
 
   return (
     <>
-      <BioLinkShell
+      <FlowShell
         teamName={teamName}
         slug={slug}
         accentColor={accentColor}
         wide={step === 'time'}
-        stickyBarHeight={showBar ? STICKY_H : undefined}
         showBranding={showBranding}
+        backTo={backTo}
+        overlayTitle={selectedActivity?.activityName}
+        bar={
+          showBar && selectedActivity ? (
+            <StickyBar
+              title={selectedActivity.activityName}
+              providerLabel={
+                selectedCoach?.providerName
+                  ? tPublic('withInstructor', { name: selectedCoach.providerName })
+                  : null
+              }
+              dateTimeLabel={
+                step === 'book' && windowBooking
+                  ? `${fmtDateFull(windowBooking.startMs)} · ${fmtTime(windowBooking.startMs)}–${fmtTime(windowBooking.startMs + windowBooking.durationMinutes * 60_000)}`
+                  : null
+              }
+              location={step === 'book' ? (windowBooking?.location ?? null) : null}
+              accentColor={accentColor}
+              position={chrome.kind === 'overlay' ? 'container' : 'viewport'}
+              showConfirm={step === 'book' && bookScreen === 'guest'}
+              submitting={bookSubmitting}
+              confirmLabel={tPublic('ctaConfirm')}
+              submittingLabel={tPublic('ctaBooking')}
+              onConfirm={() => guestFormRef.current?.submit()}
+            />
+          ) : null
+        }
       >
         {step === 'coach' && (
           <div className="space-y-1">
@@ -968,19 +1182,14 @@ export default function AppointmentPicker({
               activity={selectedActivity}
               currency={currency}
               locale={locale}
+              duration={effectiveDuration}
+              onDurationChange={setDuration}
+              selectedDateKey={selectedDateKey}
+              onDateChange={setSelectedDateKey}
               onPick={(startMs, duration) => {
-                setWindowBooking({
-                  providerId: selectedCoach.providerId,
-                  providerName: selectedCoach.providerName,
-                  activityId: selectedActivity.activityId,
-                  activityName: selectedActivity.activityName,
-                  startMs,
-                  durationMinutes: duration.minutes,
-                  location: selectedActivity.location,
-                  onlineUrl: selectedActivity.onlineUrl,
-                  priceAmount: duration.priceAmount,
-                  memberBenefit: selectedActivity.memberBenefit,
-                })
+                setWindowBooking(
+                  buildWindowBooking(selectedCoach, selectedActivity, startMs, duration.minutes)
+                )
                 setStep('book')
               }}
             />
@@ -1034,30 +1243,7 @@ export default function AppointmentPicker({
             />
           </section>
         )}
-      </BioLinkShell>
-
-      {showBar && selectedActivity && (
-        <StickyBar
-          title={selectedActivity.activityName}
-          providerLabel={
-            selectedCoach?.providerName
-              ? tPublic('withInstructor', { name: selectedCoach.providerName })
-              : null
-          }
-          dateTimeLabel={
-            step === 'book' && windowBooking
-              ? `${fmtDateFull(windowBooking.startMs)} · ${fmtTime(windowBooking.startMs)}–${fmtTime(windowBooking.startMs + windowBooking.durationMinutes * 60_000)}`
-              : null
-          }
-          location={step === 'book' ? (windowBooking?.location ?? null) : null}
-          accentColor={accentColor}
-          showConfirm={step === 'book' && bookScreen === 'guest'}
-          submitting={bookSubmitting}
-          confirmLabel={tPublic('ctaConfirm')}
-          submittingLabel={tPublic('ctaBooking')}
-          onConfirm={() => guestFormRef.current?.submit()}
-        />
-      )}
+      </FlowShell>
     </>
   )
 }

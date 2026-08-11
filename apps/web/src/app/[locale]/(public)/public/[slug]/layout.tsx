@@ -1,6 +1,7 @@
 import { PublicTeamProvider } from './PublicTeamProvider'
 import { PublicContactAuthProvider } from './PublicContactAuthProvider'
-import { PublicContactBar } from './PublicContactBar'
+import { PublicContactBar, PublicContactSignIn } from './PublicContactBar'
+import { PublicReturnBar } from './PublicReturnBar'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,8 +20,15 @@ export default async function PublicTeamLayout({ children, params }: Props) {
   return (
     <PublicTeamProvider slug={slug}>
       <PublicContactAuthProvider>
+        {/* Before children so it sits at the top of the page flow. Renders only
+            on the surfaces that have no back affordance of their own. */}
+        <PublicReturnBar />
         {children}
         <PublicContactBar />
+        {/* The dialog mounts for EVERY surface, including the ones that opt out
+            of the pill — the website draws its own sign-in control and opens
+            this same instance. */}
+        <PublicContactSignIn />
       </PublicContactAuthProvider>
     </PublicTeamProvider>
   )

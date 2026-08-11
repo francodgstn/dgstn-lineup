@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase'
 import { MapPin, ArrowRight } from 'lucide-react'
 import type { ClubsSection, LocationsSection, CoachesSection, TeamPublicProfile } from '@linyup/shared'
 import type { SitePalette } from './theme'
+import { publicHrefLocalized } from '@/lib/publicRoutes'
 // Type-only — avoids a real runtime circular import (sections.tsx imports the
 // blocks below as values).
 import type { RenderCtx } from './sections'
@@ -70,7 +71,7 @@ interface ClubEntry {
 }
 
 function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx }) {
-  const { palette, preview, orgTeams } = ctx
+  const { palette, locale, preview, orgTeams } = ctx
   const [clubs, setClubs] = useState<ClubEntry[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -136,9 +137,11 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
             </p>
           ) : (
             clubs.map((c) => (
+              // Cross-tenant: the org site links each member club to its own
+              // tenant root. Locale-prefixed like every other raw <a> here.
               <a
                 key={c.teamId}
-                {...linkProps(`/public/${c.slug}`, preview)}
+                {...linkProps(publicHrefLocalized(locale, c.slug), preview)}
                 className="flex flex-col overflow-hidden rounded-2xl border transition-transform hover:scale-[1.01]"
                 style={{ borderColor: palette.border, background: palette.surface }}
               >

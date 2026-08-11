@@ -3636,7 +3636,15 @@
     "badgeDropInPrice": "Einzeleintritt {price}",
     "chipBenefitIncluded": "Im Abo inbegriffen",
     "chipBenefitDiscount": "−{percent}% für Mitglieder",
-    "dropInSubtitleMember": "Dein Mitgliederpreis: {price}"
+    "dropInSubtitleMember": "Dein Mitgliederpreis: {price}",
+    "dismiss": "Schliessen",
+    "deepLinkNotice": {
+      "past": "Diese Einheit hat bereits begonnen. Wähle unten eine andere.",
+      "full": "Diese Einheit ist ausgebucht. Wähle unten eine andere.",
+      "gone": "Diese Einheit ist nicht mehr verfügbar. Wähle unten eine andere.",
+      "dateEmpty": "Am gewählten Datum gibt es keine Einheiten — hier ist der nächste freie Tag."
+    },
+    "toSurface": "Weiter {name}"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",
@@ -5106,5 +5114,10 @@
     "unassignedSubtitle": "Zahlungen ohne Kontakt",
     "unassignedEmpty": "alle Zahlungen sind zugeordnet",
     "unassignedAction": "Jetzt zuordnen"
+  },
+  "PublicSurfaceNav": {
+    "shop": "Shop",
+    "space": "Mein Space",
+    "documents": "Dokumente"
   }
 }

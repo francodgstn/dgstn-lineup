@@ -17,6 +17,7 @@ import {
   TEAMS_COLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
+  publicSubUrl,
 } from '@linyup/shared'
 import { getConnectStripe } from '../utils/connect/client'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
@@ -145,7 +146,7 @@ export const createContactBillingPortalSession = onCall(async (request) => {
   const locale = data.locale ?? 'en'
   const base = resolveBaseUrl(data.origin)
   const returnUrl = data.slug
-    ? `${base}/${locale}/public/${data.slug}/space/payments`
+    ? publicSubUrl(`${base}/${locale}`, data.slug, 'space', 'payments')
     : `${base}/${locale}`
 
   const stripe = await getConnectStripe()

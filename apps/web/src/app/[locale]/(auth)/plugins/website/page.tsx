@@ -51,6 +51,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DynamicIcon } from '@/components/ui/icon-picker'
+import { SurfaceLinksEditor } from './SurfaceLinksEditor'
 import { ColorPicker } from '@/components/ui/color-picker'
 import type { SiteDraft, SiteMeta, WebsiteSection, WebsiteSectionType } from '@linyup/shared'
 import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
@@ -177,6 +178,28 @@ function AppearancePanel({
             />
           </div>
         )}
+
+        <div className="border-t pt-3">
+          <label className="flex items-center justify-between">
+            <span className="text-sm">Show member sign-in</span>
+            <Switch
+              checked={meta.header.showSignIn !== false}
+              onCheckedChange={(v) => setHeader({ showSignIn: v })}
+            />
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Lets a member sign in and reach their Space from your website.
+          </p>
+        </div>
+
+        {/* Links to the studio's other public pages. The list is derived from
+            what's actually live (shop, Space, documents), so a newly-enabled
+            plugin appears here without editing the site — these controls only
+            record the studio's deviations from that. */}
+        <SurfaceLinksEditor
+          links={meta.header.surfaceLinks}
+          onChange={(surfaceLinks) => setHeader({ surfaceLinks })}
+        />
       </div>
 
       <label className="flex items-center justify-between rounded-lg border p-3">
