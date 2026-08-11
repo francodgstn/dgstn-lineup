@@ -854,11 +854,20 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
-// Expanded-sidebar wrapper for the Shortcuts group — a very light brand-violet
-// gradient panel that gives the section a subtle lift over the flat sidebar
-// (the icon rail keeps the plain hairline divider instead).
+// Expanded-sidebar wrapper for the Shortcuts group — marked by a 2px brand-violet
+// accent down the left edge that fades out towards the bottom, rather than a
+// filled panel. Same "this section is different" signal with far less surface
+// area: a tinted block competes with the rows inside it, while an edge just
+// brackets them. (The icon rail keeps the plain hairline divider instead.)
+//
+// Drawn as a pseudo-element rather than a border: `border-color` takes no
+// gradient. Uses Tailwind's own `from-primary/55` utilities so the colour comes
+// from the design token — `--primary` is an oklch() value, so hand-rolling
+// `hsl(var(--primary)/…)` would not resolve.
 const SHORTCUTS_PANEL =
-  'mt-3 rounded-xl bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent pt-3 pb-1.5'
+  'relative mt-3 pl-3 pt-3 pb-1.5 ' +
+  'before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-full ' +
+  'before:bg-gradient-to-b before:from-primary/55 before:via-primary/20 before:to-transparent'
 
 // How many recently-visited (unpinned) items the Shortcuts group keeps, in
 // addition to the pinned ones.
