@@ -2483,7 +2483,8 @@
     "loading": "Caricamento…",
     "notAvailable": "La modalità chiosco non è disponibile per questo studio.",
     "noSessions": "Nessuna sessione in programma.",
-    "pinClear": "Cancella"
+    "pinClear": "Cancella",
+    "showAvailability": "Mostra disponibilità"
   },
   "OrgWebsite": {
     "title": "Sito dell'organizzazione",

@@ -12,7 +12,8 @@ import {
   doc,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { formatCurrency } from '@/lib/format'
 import {
   Instagram,
@@ -50,7 +51,13 @@ import type {
   SocialLink,
   OrgSiteTeamRef,
 } from '@linyup/shared'
-import { compareActivities, type ActivityAccessRule, type ActivityMemberBenefit } from '@linyup/shared'
+import {
+  browseDurationMinutes,
+  compareActivities,
+  mergeAvailabilitySlots,
+  type ActivityAccessRule,
+  type ActivityMemberBenefit,
+} from '@linyup/shared'
 import { resolveActivityTerms, resolveActivityPricingDisplay, type ActivityTerm, type SubLookup } from '@/lib/activityTerms'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
@@ -915,6 +922,19 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
 
 // ─── Schedule (live: upcoming bookable sessions) ──────────────────────────────
 
+/** The slice of `listAvailability`'s payload the schedule needs. */
+interface AvailCoachLite {
+  providerId: string
+  providerName: string | null
+  activities: {
+    activityId: string
+    activityName: string
+    durations: { minutes: number }[]
+    location: string | null
+    days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
+  }[]
+}
+
 interface SessionEntry {
   id: string
   activityName?: string
@@ -924,6 +944,21 @@ interface SessionEntry {
   end?: Timestamp
   location?: string
   providerName?: string
+  /**
+   * 'session' — a scheduled class, bookable at exactly this time.
+   * 'availability' — a merged window in which an appointment CAN be booked;
+   * the visitor still picks the exact start in the appointment picker.
+   *
+   * Absent ⇒ 'session', so the kiosk and existing call sites are unaffected.
+   */
+  variant?: 'session' | 'availability'
+  /** Availability only — whose time this window is, so the picker can preselect. */
+  providerId?: string
+}
+
+/** Timestamp-alike over a plain epoch, so merged windows reuse the session render path. */
+function msTimestamp(ms: number): Timestamp {
+  return Timestamp.fromMillis(ms)
 }
 
 // Group sorted sessions into ordered per-day buckets (used by the list dividers).
@@ -950,6 +985,11 @@ function groupByDay(sessions: SessionEntry[]): DayGroup[] {
 const fmtTime = (d: Date) =>
   d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
+/** Local YYYY-MM-DD — the same day-key form MiniCalendar and `?date=` use. */
+function toDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Midnight Monday of the current week — the timetable's lower bound. */
 function mondayOfCurrentWeek(): Date {
   const d = new Date()
@@ -969,17 +1009,20 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
   const [view, setView] = useState<'list' | 'calendar'>(section.displayMode ?? 'calendar')
   const [selected, setSelected] = useState<SessionEntry | null>(null)
   const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
+  // Merged appointment availability, loaded separately (see the effect below).
+  const [availability, setAvailability] = useState<SessionEntry[]>([])
+  const [kind, setKind] = useState<'all' | 'classes' | 'appointments'>('all')
 
   useEffect(() => {
     let alive = true
     const windowEnd = new Date()
     windowEnd.setDate(windowEnd.getDate() + (section.windowDays ?? 7))
-    // Classes only — appointments are availability-only now (a Session exists only
-    // once booked), so the only appointment_session mirrors that exist are
-    // ALREADY-BOOKED appointments. Listing them here as bookable would be wrong;
-    // appointment ACTIVITIES still surface via the Activities block, routing to
-    // the dedicated /appointments picker. The lower bound is Monday of the
-    // CURRENT week (not "now"): the calendar doubles as a timetable, showing
+    // This query is CLASSES only, deliberately: appointments are availability-
+    // only (a Session exists only once booked), so the only appointment_session
+    // mirrors that exist are ALREADY-BOOKED appointments — listing those as
+    // bookable would be wrong. Appointment availability comes from
+    // listAvailability in the effect below instead. The lower bound is Monday of
+    // the CURRENT week (not "now"): the calendar doubles as a timetable, showing
     // this week's already-run sessions muted.
     const q = query(
       collectionGroup(db, 'public_profile'),
@@ -1010,8 +1053,78 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     }
   }, [teamId, section.windowDays, section.activityId])
 
-  // Classes only now — see the query above. Appointments book via their own
-  // dedicated flow, routed to from the Activities block instead.
+  // ── Appointment availability ────────────────────────────────────────────────
+  //
+  // Two-step on purpose. `listAvailability` is a Cloud Function, and a public
+  // marketing page can be hit a lot — so first check the (cheap, SDK-cached)
+  // activity mirrors for an appointment offering, and only invoke the callable
+  // for teams that actually have one. A classes-only studio pays nothing.
+  useEffect(() => {
+    if (preview || !teamId) return
+    let alive = true
+    const windowDays = section.windowDays ?? 7
+    const windowEnd = Date.now() + windowDays * 24 * 60 * 60_000
+
+    async function load() {
+      const offerings = await getDocs(
+        query(
+          collectionGroup(db, 'public_profile'),
+          where('teamId', '==', teamId),
+          where('type', '==', 'activity'),
+          where('activityType', '==', 'appointment')
+        )
+      )
+      if (!alive || offerings.empty) return
+
+      const fn = httpsCallable<
+        { teamId: string; days?: number; activityId?: string },
+        { coaches: AvailCoachLite[] }
+      >(functions, 'listAvailability')
+      const res = await fn({
+        teamId: teamId!,
+        days: windowDays,
+        ...(section.activityId ? { activityId: section.activityId } : {}),
+      })
+      if (!alive) return
+
+      const entries: SessionEntry[] = []
+      for (const coach of res.data.coaches ?? []) {
+        for (const activity of coach.activities ?? []) {
+          // Browse by the SHORTEST duration — the most granular starts, and so
+          // the widest true window. Picking an exact length is the picker's job.
+          const minutes = browseDurationMinutes(activity.durations)
+          if (!minutes) continue
+          const starts = (activity.days ?? []).flatMap(
+            (d) => d.slotsByDuration?.[String(minutes)] ?? []
+          )
+          for (const w of mergeAvailabilitySlots(starts, minutes)) {
+            if (w.startMs > windowEnd) continue
+            entries.push({
+              id: `avail-${coach.providerId}-${activity.activityId}-${w.startMs}`,
+              activityId: activity.activityId,
+              providerId: coach.providerId,
+              activityName: activity.activityName,
+              providerName: coach.providerName ?? undefined,
+              location: activity.location ?? undefined,
+              start: msTimestamp(w.startMs),
+              end: msTimestamp(w.endMs),
+              variant: 'availability',
+            })
+          }
+        }
+      }
+      if (alive) setAvailability(entries)
+    }
+
+    load().catch(() => {
+      // Availability is additive — a failure leaves the classes schedule intact.
+      if (alive) setAvailability([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [teamId, section.windowDays, section.activityId, preview])
+
   //
   // The section-level CTA ("Book a session") is a browse entry: no session in
   // hand, but it does carry the block's activity filter when it has one — a
@@ -1024,11 +1137,22 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
         from: 'site',
       })
 
+  // Classes and appointment availability share one timeline; the chips below
+  // narrow it. Chips only appear when the team has BOTH — a classes-only studio
+  // shouldn't be shown a filter with one meaningful option.
+  const hasAvailability = availability.length > 0
+  const showKindChips = hasAvailability && sessions.length > 0
+  const visibleEntries = useMemo(() => {
+    const wanted =
+      kind === 'classes' ? sessions : kind === 'appointments' ? availability : [...sessions, ...availability]
+    return [...wanted].sort((a, b) => a.start.toMillis() - b.start.toMillis())
+  }, [kind, sessions, availability])
+
   // Daily list covers today onward (today's finished sessions render muted);
   // the calendar additionally shows the current week's past days as a timetable.
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
-  const listDays = groupByDay(sessions.filter((s) => s.start.toDate() >= startOfToday))
+  const listDays = groupByDay(visibleEntries.filter((s) => s.start.toDate() >= startOfToday))
   const activeDay = listDays.find((g) => g.key === activeDayKey) ?? listDays[0]
   const today = new Date()
   const isToday = (d: Date) =>
@@ -1155,6 +1279,38 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
           </div>
         </div>
 
+        {/* Classes vs appointment availability. Defaults to All so a visitor
+            sees everything without having to discover the filter; only shown
+            when the team actually has both to choose between. */}
+        {showKindChips && (
+          <div className="mt-3 flex justify-center">
+            <div
+              className="inline-flex items-center gap-1 rounded-full border p-1"
+              style={{ borderColor: palette.border }}
+            >
+              {(['all', 'classes', 'appointments'] as const).map((k) => {
+                const active = kind === k
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKind(k)}
+                    aria-pressed={active}
+                    className="rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors"
+                    style={
+                      active
+                        ? { background: palette.accent, color: palette.onAccent }
+                        : { color: palette.muted }
+                    }
+                  >
+                    {k}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mt-8">
           {loading ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
@@ -1185,7 +1341,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
               }
             >
               <WeeklyCalendar
-                sessions={sessions}
+                sessions={visibleEntries}
                 accent={palette.accent}
                 windowDays={section.windowDays ?? 7}
                 onSelect={(s) => setSelected(s as SessionEntry)}
@@ -1202,10 +1358,31 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             palette={palette}
             bookLinkProps={
               section.showBooking && !isPastSession(selected) && !preview
-                ? bookProps(sessionBookHref(ctx, selected), ctx, {
-                    kind: 'session',
-                    sessionId: selected.id,
-                  })
+                ? selected.variant === 'availability'
+                  ? // An availability window is not a bookable moment — it's a
+                    // range. Hand over to the picker, carrying the coach and day
+                    // the window already identifies so the visitor isn't asked to
+                    // choose again what they just clicked; they only pick the
+                    // exact start and length.
+                    bookProps(
+                      publicHrefLocalized(locale, slug, 'appointments', {
+                        activity: selected.activityId,
+                        provider: selected.providerId,
+                        date: toDayKey(selected.start.toDate()),
+                        from: 'site',
+                      }),
+                      ctx,
+                      {
+                        kind: 'appointment',
+                        activityId: selected.activityId ?? '',
+                        providerId: selected.providerId,
+                        date: toDayKey(selected.start.toDate()),
+                      }
+                    )
+                  : bookProps(sessionBookHref(ctx, selected), ctx, {
+                      kind: 'session',
+                      sessionId: selected.id,
+                    })
                 : null
             }
             // This modal is a hand-rolled `fixed inset-0 z-50` overlay. The

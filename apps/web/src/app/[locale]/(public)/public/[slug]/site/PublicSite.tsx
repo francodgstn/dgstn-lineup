@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase'
 import {
   SITE_PUBLISHED_COLLECTION,
   parseDocId,
+  parseDateKey,
   parseSlug,
   resolveSiteSurfaceLinks,
 } from '@linyup/shared'
@@ -78,7 +79,12 @@ export default function PublicSite({ slug }: { slug: string }) {
         sessionId
           ? { kind: 'session', sessionId }
           : appointmentId
-            ? { kind: 'appointment', activityId: appointmentId }
+            ? {
+                kind: 'appointment',
+                activityId: appointmentId,
+                providerId: parseDocId(params.get('provider')),
+                date: parseDateKey(params.get('date')),
+              }
             : activitySlug
               ? { kind: 'activity', activitySlug }
               : { kind: 'root' }
@@ -101,9 +107,15 @@ export default function PublicSite({ slug }: { slug: string }) {
     params.delete('session')
     params.delete('activity')
     params.delete('appointment')
+    params.delete('provider')
+    params.delete('date')
     if (intent.kind === 'session') params.set('session', intent.sessionId)
     if (intent.kind === 'activity') params.set('activity', intent.activitySlug)
-    if (intent.kind === 'appointment') params.set('appointment', intent.activityId)
+    if (intent.kind === 'appointment') {
+      params.set('appointment', intent.activityId)
+      if (intent.providerId) params.set('provider', intent.providerId)
+      if (intent.date) params.set('date', intent.date)
+    }
     const url = `${window.location.pathname}?${params.toString()}`
     // Spread the existing state — the App Router keeps its route tree there.
     const state = { ...(window.history.state ?? {}) }

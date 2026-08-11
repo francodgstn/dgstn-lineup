@@ -2483,7 +2483,8 @@
     "loading": "Wird geladen…",
     "notAvailable": "Der Kiosk-Modus ist für dieses Studio nicht verfügbar.",
     "noSessions": "Keine Termine geplant.",
-    "pinClear": "Löschen"
+    "pinClear": "Löschen",
+    "showAvailability": "Freie Termine anzeigen"
   },
   "OrgWebsite": {
     "title": "Organisations-Website",

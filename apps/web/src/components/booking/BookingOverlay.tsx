@@ -24,8 +24,13 @@ import { BookingChromeProvider, type BookingChromeValue } from './BookingChrome'
 export type BookIntent =
   | { kind: 'session'; sessionId: string }
   | { kind: 'activity'; activitySlug: string }
-  /** An appointment activity — hosts the slot picker instead of the class funnel. */
-  | { kind: 'appointment'; activityId: string }
+  /**
+   * An appointment activity — hosts the slot picker instead of the class funnel.
+   * `providerId`/`date` come from a clicked availability window, which already
+   * knows whose time it is and which day: without them the picker would ask the
+   * visitor to choose all over again what they just clicked on.
+   */
+  | { kind: 'appointment'; activityId: string; providerId?: string; date?: string }
   | { kind: 'root' }
 
 export interface BookingOverlayProps {
@@ -94,6 +99,8 @@ export function BookingOverlay({
           key={intentKey(intent)}
           slug={slug}
           presetActivityId={intent.activityId}
+          presetProviderId={intent.providerId}
+          presetDate={intent.date}
           from="site"
           disableStepUrl
         />
@@ -166,6 +173,7 @@ export function BookingOverlay({
 function intentKey(intent: BookIntent): string {
   if (intent.kind === 'session') return `session:${intent.sessionId}`
   if (intent.kind === 'activity') return `activity:${intent.activitySlug}`
-  if (intent.kind === 'appointment') return `appointment:${intent.activityId}`
+  if (intent.kind === 'appointment')
+    return `appointment:${intent.activityId}:${intent.providerId ?? ''}:${intent.date ?? ''}`
   return 'root'
 }

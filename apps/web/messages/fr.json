@@ -2483,7 +2483,8 @@
     "loading": "Chargement…",
     "notAvailable": "Le mode kiosque n’est pas disponible pour ce studio.",
     "noSessions": "Aucune séance programmée.",
-    "pinClear": "Effacer"
+    "pinClear": "Effacer",
+    "showAvailability": "Afficher les disponibilités"
   },
   "OrgWebsite": {
     "title": "Site de l'organisation",

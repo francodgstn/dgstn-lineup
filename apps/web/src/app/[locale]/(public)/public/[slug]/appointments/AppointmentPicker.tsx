@@ -779,11 +779,20 @@ function TimePicker({
 export default function AppointmentPicker({
   slug,
   presetActivityId,
+  presetProviderId,
+  presetDate,
   from,
   disableStepUrl,
 }: {
   slug: string
   presetActivityId?: string
+  /**
+   * `?provider=` / `?date=` — set when the visitor clicked a specific
+   * availability window, which already identifies the coach and the day. Without
+   * them the picker would ask them to choose again what they just clicked.
+   */
+  presetProviderId?: string
+  presetDate?: string
   /** `?from=` — which surface to return to. See `returnHref`. */
   from?: PublicFrom
   /**
@@ -838,7 +847,9 @@ export default function AppointmentPicker({
   // DERIVED, not stored: "the coach step was skipped because exactly one coach
   // offers the preselected activity". As one-shot state it survived a history
   // restore with a stale value and mislabelled the time step's Back button.
-  const skippedCoachStep = !!presetActivityId && coaches.length === 1
+  // The coach step was never shown when the visitor arrived naming a coach,
+  // or when there is only one to choose from.
+  const skippedCoachStep = !!presetActivityId && (!!presetProviderId || coaches.length === 1)
 
   // The activity's first duration is the default until the visitor picks one.
   // Derived rather than seeded into state, so switching activity can't leave a
@@ -979,12 +990,21 @@ export default function AppointmentPicker({
         // activity — land straight on duration/day/time, no coach (or activity)
         // step shown. Decided here (not a separate effect) so there's no flash
         // of the coach-list step first.
-        if (presetActivityId && list.length === 1) {
-          const coach = list[0]
-          const activity = coach.activities[0]
+        // A clicked availability window names the coach: land on their times
+        // directly, whether or not they're the team's only provider.
+        const presetCoach = presetProviderId
+          ? list.find((c) => c.providerId === presetProviderId)
+          : list.length === 1
+            ? list[0]
+            : null
+        if (presetActivityId && presetCoach) {
+          const activity =
+            presetCoach.activities.find((a) => a.activityId === presetActivityId) ??
+            presetCoach.activities[0]
           if (activity) {
-            setSelectedCoach(coach)
+            setSelectedCoach(presetCoach)
             setSelectedActivity(activity)
+            if (presetDate) setSelectedDateKey(presetDate)
             setStep('time')
           }
         }
@@ -999,7 +1019,7 @@ export default function AppointmentPicker({
     if (teamId) load()
     else setLoading(false)
     return () => { alive = false }
-  }, [teamId, presetActivityId, reloadNonce])
+  }, [teamId, presetActivityId, presetProviderId, presetDate, reloadNonce])
 
   function retryLoad() {
     setReloadNonce((n) => n + 1)

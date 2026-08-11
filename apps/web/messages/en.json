@@ -2483,7 +2483,8 @@
     "loading": "Loading…",
     "notAvailable": "Kiosk mode isn’t available for this studio.",
     "noSessions": "No sessions scheduled.",
-    "pinClear": "Clear"
+    "pinClear": "Clear",
+    "showAvailability": "Show appointment availability"
   },
   "OrgWebsite": {
     "title": "Organization website",

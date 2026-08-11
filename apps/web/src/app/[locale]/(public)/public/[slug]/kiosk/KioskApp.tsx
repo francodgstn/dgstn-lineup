@@ -132,7 +132,7 @@ function KioskShell({
           <section className="flex min-h-0 flex-1 flex-col">
             <h2 className="mb-4 text-lg font-bold">{t('scheduleTitle')}</h2>
             <div className="min-h-0 flex-1">
-              <KioskSchedule sessions={sessions} loading={loading} view={scheduleView} />
+              <KioskSchedule sessions={sessions} loading={loading} view={scheduleView} teamId={teamId} />
             </div>
           </section>
         )}

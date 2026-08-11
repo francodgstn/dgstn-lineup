@@ -2,10 +2,11 @@
 
 // Read-only schedule board — the simple stacked List view plus the shared
 // WeeklyCalendar (time-grid planner). Tapping any session opens a detail modal.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Clock, MapPin, User, X } from 'lucide-react'
 import { WeeklyCalendar, type PlannerSession } from '@/components/schedule/WeeklyCalendar'
+import { useKioskAvailability } from './useKioskAvailability'
 import type { KioskSession } from './useKioskSessions'
 
 interface DayGroup {
@@ -36,11 +37,42 @@ interface Props {
   sessions: KioskSession[]
   loading: boolean
   view: 'calendar' | 'list'
+  /** Team id — enables the optional appointment-availability overlay. */
+  teamId?: string
 }
 
-export default function KioskSchedule({ sessions, loading, view }: Props) {
+/**
+ * How long the availability overlay stays on before switching itself back off.
+ *
+ * The kiosk is a SHARED tablet: whatever the last person left it showing is what
+ * the next person sees. A filter that HIDES classes would be dangerous here, so
+ * availability is additive (classes never disappear) and it still reverts, so the
+ * display always settles back to the plain schedule.
+ */
+const AVAILABILITY_AUTO_OFF_MS = 60_000
+
+export default function KioskSchedule({ sessions, loading, view, teamId }: Props) {
   const t = useTranslations('Kiosk')
   const [selected, setSelected] = useState<PlannerSession | null>(null)
+  const [showAvailability, setShowAvailability] = useState(false)
+  const availability = useKioskAvailability(teamId ?? '', showAvailability)
+
+  // Timed reset — see AVAILABILITY_AUTO_OFF_MS. Re-armed on every toggle-on.
+  useEffect(() => {
+    if (!showAvailability) return
+    const id = setTimeout(() => setShowAvailability(false), AVAILABILITY_AUTO_OFF_MS)
+    return () => clearTimeout(id)
+  }, [showAvailability])
+
+  // ADDITIVE, never exclusive: availability is layered ON TOP of the real
+  // schedule so the classes are always there behind it.
+  const entries: (KioskSession & { variant?: 'availability' })[] = showAvailability
+    ? [...sessions, ...availability]
+        .sort((a, b) => a.start.toMillis() - b.start.toMillis())
+        // The calendar draws 'availability' as a dashed outline rather than a
+        // solid block, so a window never looks like a scheduled class.
+        .map((s) => (s.type === 'availability' ? { ...s, variant: 'availability' as const } : s))
+    : sessions
 
   if (loading) {
     return (
@@ -62,10 +94,26 @@ export default function KioskSchedule({ sessions, loading, view }: Props) {
 
   return (
     <>
+      {teamId && (
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowAvailability((v) => !v)}
+            aria-pressed={showAvailability}
+            className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+              showAvailability
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('showAvailability')}
+          </button>
+        </div>
+      )}
       {view === 'list' ? (
-        <DayList sessions={sessions} onSelect={setSelected} />
+        <DayList sessions={entries} onSelect={setSelected} />
       ) : (
-        <WeeklyCalendar sessions={sessions} onSelect={setSelected} />
+        <WeeklyCalendar sessions={entries} onSelect={setSelected} />
       )}
       {selected && (
         <SessionModal s={selected} onClose={() => setSelected(null)} closeLabel={t('close')} />
