@@ -3644,7 +3644,11 @@
       "gone": "Questa sessione non è più disponibile. Scegline un’altra qui sotto.",
       "dateEmpty": "Nessuna sessione nella data scelta — ecco il prossimo giorno disponibile."
     },
-    "toSurface": "Vai {name}"
+    "toSurface": "Vai {name}",
+    "accessTitle": "Solo per membri",
+    "accessSubtitle": "{activity} è incluso in un abbonamento. Attivane uno per prenotare — o accedi se ne hai già uno.",
+    "accessIncludedWith": "Incluso in",
+    "accessSeeSubscriptions": "Vedi gli abbonamenti"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",

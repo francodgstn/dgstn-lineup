@@ -3644,7 +3644,11 @@
       "gone": "That session is no longer available. Choose another below.",
       "dateEmpty": "No sessions on the date you picked — showing the next available day."
     },
-    "toSurface": "To {name}"
+    "toSurface": "To {name}",
+    "accessTitle": "Members only",
+    "accessSubtitle": "{activity} is included with a subscription. Get one to book — or sign in if you already have one.",
+    "accessIncludedWith": "Included with",
+    "accessSeeSubscriptions": "See subscriptions"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",

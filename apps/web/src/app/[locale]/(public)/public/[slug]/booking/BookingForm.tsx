@@ -27,12 +27,13 @@ import {
   parseDateKey,
   parseDocId,
 } from '@linyup/shared'
-import { publicHref, returnHref } from '@/lib/publicRoutes'
+import { publicHref, publicHrefLocalized, returnHref } from '@/lib/publicRoutes'
 import { useStepUrl } from '@/hooks/useStepUrl'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { resolveActivityPricingDisplay, type SubLookup } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { useLocale, useTranslations } from 'next-intl'
+import { ArrowUpRight } from 'lucide-react'
 import { Link, useRouter } from '@/i18n/navigation'
 import { BioLinkButton } from '../BioLinkShell'
 import { FlowShell } from '@/components/booking/FlowShell'
@@ -286,7 +287,7 @@ export default function BookingForm({
           : ''
         priceLabel = `${formatCurrency(price.amount, currency, locale)}${suffix}`
       }
-      return { name: p.name, priceLabel }
+      return { id: p.id, name: p.name, priceLabel }
     }
   }, [team, currency, locale, tShop])
 
@@ -1418,6 +1419,61 @@ export default function BookingForm({
     // door (drop-in or trial) DID pass through the 'who' chooser.
     const hadWhoStep =
       !isMembersOnly || dropInAvailable || selectedActivity?.trialEnabled === true
+
+    // A members-only class with no guest door sends a NEWCOMER straight here.
+    // "Welcome back" is the wrong thing to tell them: it names no reason, offers
+    // no way in, and reads as a dead end to exactly the lead we want to convert.
+    // Explain the gate, name what unlocks it, and offer the shop.
+    const gatedPlans = isMembersOnly
+      ? resolveActivityPricingDisplay(
+          { ...selectedActivity, type: selectedActivity?.activityType },
+          subLookup
+        ).includedWith
+      : []
+    // One plan → deep-link it; several → the subscriptions tab.
+    const shopHref = publicHrefLocalized(
+      locale,
+      slug,
+      'shop',
+      gatedPlans.length === 1
+        ? { type: gatedPlans[0].id, from: 'booking' }
+        : { tab: 'subscriptions', from: 'booking' }
+    )
+
+    const accessIntro = isMembersOnly ? (
+      <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+        {gatedPlans.length > 0 && (
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t('accessIncludedWith')}
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {gatedPlans.map((plan) => (
+                <li key={plan.id} className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="font-medium">{plan.name}</span>
+                  {plan.priceLabel && (
+                    <span className="shrink-0 text-muted-foreground">{plan.priceLabel}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {/* New tab on purpose: buying is a detour, and losing the class they'd
+            already picked is the fastest way to lose the booking. */}
+        <a
+          href={shopHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={accentColor ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          {t('accessSeeSubscriptions')}
+          <ArrowUpRight className="h-4 w-4" />
+        </a>
+      </div>
+    ) : null
+
     return withBar(
       <ReturningSignIn
         teamId={teamId}
@@ -1425,6 +1481,13 @@ export default function BookingForm({
         onBack={() => setStep(hadWhoStep ? 'who' : 'sessions')}
         accentColor={accentColor}
         noAccountMessage={isMembersOnly ? t('errorNoAccountMembersOnly') : t('errorNoAccountGeneral')}
+        title={isMembersOnly ? t('accessTitle') : undefined}
+        subtitle={
+          isMembersOnly
+            ? t('accessSubtitle', { activity: selectedActivity?.name ?? '' })
+            : undefined
+        }
+        intro={accessIntro}
       />
     )
   }

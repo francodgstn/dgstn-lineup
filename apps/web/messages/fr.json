@@ -3644,7 +3644,11 @@
       "gone": "Cette séance n'est plus disponible. Choisissez-en une autre ci-dessous.",
       "dateEmpty": "Aucune séance à la date choisie — voici le prochain jour disponible."
     },
-    "toSurface": "Aller {name}"
+    "toSurface": "Aller {name}",
+    "accessTitle": "Réservé aux membres",
+    "accessSubtitle": "{activity} est inclus dans un abonnement. Prenez-en un pour réserver — ou connectez-vous si vous en avez déjà un.",
+    "accessIncludedWith": "Inclus dans",
+    "accessSeeSubscriptions": "Voir les abonnements"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",

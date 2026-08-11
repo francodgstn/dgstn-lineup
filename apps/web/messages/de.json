@@ -3644,7 +3644,11 @@
       "gone": "Diese Einheit ist nicht mehr verfügbar. Wähle unten eine andere.",
       "dateEmpty": "Am gewählten Datum gibt es keine Einheiten — hier ist der nächste freie Tag."
     },
-    "toSurface": "Weiter {name}"
+    "toSurface": "Weiter {name}",
+    "accessTitle": "Nur für Mitglieder",
+    "accessSubtitle": "{activity} ist in einem Abo enthalten. Hol dir eins zum Buchen — oder melde dich an, wenn du schon eins hast.",
+    "accessIncludedWith": "Enthalten in",
+    "accessSeeSubscriptions": "Abos ansehen"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",

@@ -472,6 +472,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
       if (!p) return null
       const price = p.prices?.[0]
       return {
+        id: p.id,
         name: p.name,
         priceLabel: price
           ? `${formatCurrency(price.amount, currency)}${RECURRENCE_SUFFIX[price.recurrence] ?? ''}`

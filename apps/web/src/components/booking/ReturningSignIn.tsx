@@ -66,6 +66,17 @@ export interface ReturningSignInProps {
   /** Shown when no account matches the entered email. Caller-supplied so each
    *  flow can pick its own wording. */
   noAccountMessage: string
+  /**
+   * Replaces the "Welcome back" heading on the email step.
+   *
+   * A members-only class lands a NEWCOMER here, and "Welcome back" is exactly
+   * the wrong thing to tell someone who has never been — it reads as a dead end
+   * rather than an offer. The caller reframes it and explains the gate.
+   */
+  title?: string
+  subtitle?: string
+  /** Rendered between the heading and the email form (e.g. what unlocks this class). */
+  intro?: React.ReactNode
 }
 
 // Same visual weight as BioLinkButton — duplicated here (not imported) since
@@ -106,7 +117,16 @@ function BackButton({ label, onClick }: { label: string; onClick: () => void }) 
   )
 }
 
-export function ReturningSignIn({ teamId, onVerified, onBack, accentColor, noAccountMessage }: ReturningSignInProps) {
+export function ReturningSignIn({
+  teamId,
+  onVerified,
+  onBack,
+  accentColor,
+  noAccountMessage,
+  title,
+  subtitle,
+  intro,
+}: ReturningSignInProps) {
   const t = useTranslations('PublicBooking')
   const emailSchema = createEmailSchema(t)
   const codeSchema = createCodeSchema(t)
@@ -253,9 +273,13 @@ export function ReturningSignIn({ teamId, onVerified, onBack, accentColor, noAcc
       <>
         <div>
           <BackButton label={t('back')} onClick={onBack} />
-          <h1 className="text-2xl font-bold">{t('welcomeBackTitle')}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{t('welcomeBackSubtitle')}</p>
+          <h1 className="text-2xl font-bold">{title ?? t('welcomeBackTitle')}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {subtitle ?? t('welcomeBackSubtitle')}
+          </p>
         </div>
+
+        {intro}
 
         <form onSubmit={emailForm.handleSubmit(onSendCode)} className="space-y-4">
           <div className="space-y-1">

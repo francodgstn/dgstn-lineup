@@ -158,6 +158,8 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
 // simply omits that line — never a generic "Subscription required".
 
 export interface ResolvedSub {
+  /** Subscription type id — lets a surface deep-link /shop?type={id}. */
+  id: string
   name: string
   /** e.g. "CHF 89 / mo" — the surface formats it; null when the sub has no price. */
   priceLabel: string | null
