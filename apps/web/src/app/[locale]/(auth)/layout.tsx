@@ -864,9 +864,13 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 // gradient. Uses Tailwind's own `from-primary/55` utilities so the colour comes
 // from the design token — `--primary` is an oklch() value, so hand-rolling
 // `hsl(var(--primary)/…)` would not resolve.
-const SHORTCUTS_PANEL =
-  'relative mt-3 pl-3 pt-3 pb-1.5 ' +
-  'before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-full ' +
+//
+// Wraps the ROWS ONLY, not the group label: the label stays at the same indent
+// as General/Features so the three macro headings line up, and the rule brackets
+// what's specific to this group.
+const SHORTCUTS_RULE =
+  'relative pl-3 pt-0.5 pb-1.5 ' +
+  'before:absolute before:left-0 before:top-1 before:bottom-2 before:w-0.5 before:rounded-full ' +
   'before:bg-gradient-to-b before:from-primary/55 before:via-primary/20 before:to-transparent'
 
 // How many recently-visited (unpinned) items the Shortcuts group keeps, in
@@ -904,11 +908,13 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div data-tour="nav-shortcuts" className={SHORTCUTS_PANEL}>
+      <div data-tour="nav-shortcuts" className="mt-3">
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
-        <p className="px-3 py-1 text-xs leading-relaxed text-muted-foreground/60">
-          {t('navShortcutsEmpty')}
-        </p>
+        <div className={SHORTCUTS_RULE}>
+          <p className="py-1 pr-2 text-xs leading-relaxed text-muted-foreground/60">
+            {t('navShortcutsEmpty')}
+          </p>
+        </div>
       </div>
     )
   }
@@ -939,9 +945,9 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
+    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'mt-3'}>
       {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
-      <div className="space-y-0.5">
+      <div className={collapsed ? 'space-y-0.5' : `${SHORTCUTS_RULE} space-y-0.5`}>
         {shown.map((entry, idx) => (
           <div key={entry.id}>
             {!collapsed && dragId != null && dropAt === idx && dropLine}
@@ -979,19 +985,21 @@ function ShortcutsNav({
           </div>
         ))}
         {!collapsed && dragId != null && dropAt === shown.length && dropLine}
+        {/* Inside the rule: Show more belongs to this group's content, so it
+            shares the rows' indent rather than hanging off the edge. */}
+        {!collapsed && hasMore && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+            <span>{expanded ? t('navShowLess') : t('navShowMore')}</span>
+          </button>
+        )}
       </div>
-      {!collapsed && hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          />
-          <span>{expanded ? t('navShowLess') : t('navShowMore')}</span>
-        </button>
-      )}
     </div>
   )
 }
