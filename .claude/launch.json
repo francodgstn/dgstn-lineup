@@ -2,6 +2,27 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "emulators",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["emulators:start"],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "emulators-seed",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["emulators:seed"],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "stripe-listen",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["stripe:listen"],
+      "port": 5001,
+      "autoPort": true
+    },
+    {
       "name": "landing",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@linyup/landing", "exec", "astro", "dev", "--port", "4322"],
