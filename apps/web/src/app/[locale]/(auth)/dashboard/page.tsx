@@ -33,6 +33,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Banknote,
+  Globe,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -57,6 +58,7 @@ import { getDailyQuote } from '@/data/quotes'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
+import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -406,7 +408,7 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="max-h-[340px] overflow-y-auto px-6 pb-4">
+        <div className="max-h-[440px] overflow-y-auto px-6 pb-4">
           {isLoading ? (
             <div className="space-y-3 pt-2">
               {[1, 2, 3].map((i) => (
@@ -441,6 +443,7 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
 function QuickActions({ teamSlug }: { teamSlug?: string }) {
   const t = useTranslations('Dashboard')
   const router = useRouter()
+  const { flags } = usePublicSurfaces()
   const actions: { label: string; icon: React.ElementType; href: Route }[] = [
     { label: t('actionNewContact'), icon: UserPlus, href: '/contacts' as Route },
     { label: t('actionNewSession'), icon: Plus, href: '/schedule' as Route },
@@ -449,6 +452,18 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
       icon: BookOpen,
       href: (teamSlug ? `/public/${teamSlug}` : '/team/bio-link') as Route,
     },
+    // Gated on `siteLive` (plugin installed AND a published site) rather than on
+    // the plugin alone — an installed-but-unpublished website would send this
+    // straight to a 404.
+    ...(flags.siteLive && teamSlug
+      ? [
+          {
+            label: t('actionViewWebsite'),
+            icon: Globe,
+            href: `/public/${teamSlug}/site` as Route,
+          },
+        ]
+      : []),
   ]
 
   const chipClass =
@@ -809,7 +824,12 @@ export default function DashboardPage() {
         <QuickActions teamSlug={teamSlug} />
 
         {/* ── 3. Agenda + discovery panel ── */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* min-h gives the row a floor: both cards stretch (h-full), so without
+            it the height collapses to whatever the discovery panel happens to
+            need — around 275px on a quiet day, which reads as cramped. Desktop
+            only; on mobile the cards stack and a floor would just add dead
+            space. The agenda's own max-h (440px) is the ceiling above this. */}
+        <div className="grid grid-cols-1 gap-6 lg:min-h-[380px] lg:grid-cols-3">
           <div className="lg:col-span-2">
             <AgendaCard teamId={currentTeamId} />
           </div>
