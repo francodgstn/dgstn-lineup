@@ -29,15 +29,35 @@ resource "google_secret_manager_secret_iam_member" "accessor" {
   depends_on = [google_secret_manager_secret.secret]
 }
 
-# Admin console runtime SA may ADD new versions of specific secrets (it does not
-# read them). The Settings UI writes the global SMTP password this way; code
-# tracks a password_set flag in Firestore instead of reading the value back.
+# Admin console runtime SA may ADD new versions of the secrets it manages.
 resource "google_secret_manager_secret_iam_member" "admin_version_adder" {
   for_each = toset(var.admin_writable_secret_ids)
 
   project   = var.project_id
   secret_id = each.value
   role      = "roles/secretmanager.secretVersionAdder"
+  member    = "serviceAccount:${var.admin_sa_email}"
+
+  depends_on = [google_secret_manager_secret.secret]
+}
+
+# ...and READ them back. Write-only was the original design (the SMTP password
+# tracked a password_set flag in Firestore instead), but the Brevo and Stripe
+# settings pages report status via secretExists(), a real Secret Manager read,
+# and their "send test email" / Stripe test actions call getSecretValue() for the
+# live key. Without this the console still SAVED correctly but every status read
+# hit PERMISSION_DENIED, which secret-manager.ts swallows into `false` — so the
+# UI said "saved" and then showed "not configured", in every environment.
+#
+# This grants PLAINTEXT read of these keys to the console's runtime SA. That is
+# inherent to the test actions, not incidental: keep the list to secrets the
+# console genuinely manages (it is the same set it can write).
+resource "google_secret_manager_secret_iam_member" "admin_accessor" {
+  for_each = toset(var.admin_writable_secret_ids)
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${var.admin_sa_email}"
 
   depends_on = [google_secret_manager_secret.secret]
