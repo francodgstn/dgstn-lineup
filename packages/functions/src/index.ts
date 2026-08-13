@@ -62,6 +62,31 @@ export {
   rebookSession,
 } from './booking'
 export { createDropInCheckout } from './booking/dropIn'
+// Waitlist (class-only) — join/leave the queue for a full class, and the
+// promoter that offers a seat to the front of it. The promoter is a session
+// TRIGGER, not a call site hook: every event that frees a seat converges on a
+// session-document write. See booking/waitlist/promote.ts.
+// The claim settles a seat that is ALREADY held — free through
+// claimWaitlistSeat, paid through the ordinary createDropInCheckout with the
+// offer token attached. The hourly sweep (booking/waitlist/sweep.ts) rolls a
+// lapsed offer on and rides bookingRemindersHourly, so it exports no function
+// of its own.
+// `getWaitlistEntry` is what makes the two token links resolvable at all: the
+// queue is never client-readable without a contact session, and a guest who
+// joined from the public form has only the token in their mail.
+export { joinWaitlist } from './booking/waitlist/join'
+export { claimWaitlistSeat } from './booking/waitlist/claim'
+// `listMyWaitlist` is the signed-in counterpart: the rules can authorise a
+// contact to GET their own entry, but never to LIST their entries across
+// sessions, so the member surfaces need a callable for it.
+export { getWaitlistEntry, leaveWaitlist, listMyWaitlist } from './booking/waitlist/manage'
+export { promoteWaitlistOnSeatFreed } from './booking/waitlist/promote'
+// A queue whose class will never run. Hung on the session document, not on
+// cancelSession, because a standalone session is deleted client-side.
+export { teardownWaitlistOnSessionDeleted } from './booking/waitlist/teardown'
+// The studio's own row actions. Callables, never client writes — the rules deny
+// every client write to the queue, including a schedule.manage holder's.
+export { promoteWaitlistEntry, removeWaitlistEntry } from './booking/waitlist/admin'
 
 // Gamification
 export { recalculateScores, resetScores } from './gamification'

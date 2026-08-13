@@ -415,14 +415,16 @@ export async function commitGiftCardDrawdown(params: {
   paymentIntentId?: string | null
   occurredAtMs?: number
   description?: string | null
-  // ── Riders declared for later phases; deliberately UNUSED in Phase 1. They
-  // live here so Phase 2 (waitlist) and Phase 3 (promos) extend one function
-  // instead of rediscovering the four call sites this wrapper just collapsed.
-  /** Phase 3: commit the promo reservation in the same call. */
+  // ── Rider declared for a later phase; deliberately UNUSED today. It lives
+  // here so promos extend one function instead of rediscovering the four call
+  // sites this wrapper collapsed. A rider only fits here when it must happen
+  // AFTER the money moves — which is what killed its waitlist sibling: the
+  // full-cover branch confirms the booking BEFORE calling this (dropIn.ts), and
+  // both early returns below (nothing to commit; a comped card) skip anything
+  // placed after them, so an entry flip hung here would simply not run for a
+  // comped claim. The flip is atomic with the booking write instead.
+  /** Commit the promo reservation in the same call. */
   promoRedemptionId?: string
-  /** Phase 2: flip the waitlist entry to 'claimed' here — the full-cover branch
-   *  fires no webhook, so there is no later hook to hang it on. */
-  waitlistEntryId?: string
 }): Promise<{ committedMajor: number; reclassed: boolean }> {
   const outcome = await commitHoldTx(params)
   if (!outcome || outcome.committedMajor <= 0) {

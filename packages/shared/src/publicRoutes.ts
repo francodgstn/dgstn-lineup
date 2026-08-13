@@ -27,6 +27,7 @@ export type PublicRoutable =
   | 'appointments'
   | 'appointments/cancel'
   | 'manage-booking'
+  | 'waitlist'
   | 'contact-update'
   | 'trial-booking'
   | 'forms'
@@ -102,6 +103,10 @@ export interface PublicRouteParams {
   appointments: AppointmentParams
   'appointments/cancel': TokenParams
   'manage-booking': TokenParams
+  /** Both waitlist tokens land here — the page decides which mode to render by
+   *  which one the server matched, so the link shape stays identical whether it
+   *  came from a join confirmation or from an offer. */
+  waitlist: TokenParams
   'contact-update': ContactUpdateParams
   'trial-booking': BookingParams
   forms: FromOnlyParams

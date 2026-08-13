@@ -97,9 +97,56 @@ export function defaultIdempotencyKey(prefix: string, ...parts: string[]): strin
  *  connect/giftCards.ts. */
 export const SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES = 31
 
+/** The other end of the same Stripe constraint: `expires_at` may be at most 24
+ *  hours after creation. Callers that derive an expiry from something else —
+ *  a waitlist claim window, which a studio may configure well past a day — must
+ *  clamp to this or Stripe rejects the session outright. */
+export const STRIPE_MAX_CHECKOUT_EXPIRY_MINUTES = 24 * 60
+
 // ─── Rate limit (moved verbatim from connect/payments.ts) ───────────────────────
 
 export const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
+
+function rateLimitIp(ipRaw: string | undefined): string {
+  return (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
+}
+
+/** The bucket doc id shape is shared by the charge and the peek below — one
+ *  counter per `{prefix, ip, hour}`, never two views of it that could drift. */
+function rateLimitBucketRef(
+  ip: string,
+  prefix: string,
+  bucket: number
+): FirebaseFirestore.DocumentReference {
+  return admin.firestore().collection('connect_checkout_attempts').doc(`${prefix}:${ip}:${bucket}`)
+}
+
+/**
+ * The READ-ONLY half of the same bucket: refuse an IP that has already spent its
+ * hour, without spending anything itself.
+ *
+ * For a surface where the entitled caller must never be throttled. A waitlist
+ * claim is the case that forced this: the offer token is unguessable, single-use
+ * and time-boxed, and there is exactly ONE person on earth who may use it — so
+ * charging their attempt to a per-IP counter means a busy gym's NAT can cost
+ * that person the only seat they will be offered. Those callers peek first
+ * (which is what bounds an enumerator BEFORE any query runs) and call
+ * `checkoutRateLimit` to charge only the attempts that turn out to be entitled
+ * to nothing. See `booking/waitlist/claim.ts`.
+ */
+export async function assertUnderCheckoutRateLimit(
+  ipRaw: string | undefined,
+  prefix = 'checkout',
+  limitPerHour = CHECKOUT_RATE_LIMIT_PER_HOUR
+): Promise<void> {
+  const bucket = Math.floor(Date.now() / 3_600_000)
+  const snap = await rateLimitBucketRef(rateLimitIp(ipRaw), prefix, bucket).get()
+  if (((snap.data()?.count as number | undefined) ?? 0) >= limitPerHour) {
+    throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.', {
+      reason: 'rate_limited',
+    })
+  }
+}
 
 /**
  * Index-free hourly rate limit for the public checkout: a
@@ -118,12 +165,9 @@ export async function checkoutRateLimit(
   prefix = 'checkout',
   limitPerHour = CHECKOUT_RATE_LIMIT_PER_HOUR
 ): Promise<void> {
-  const ip = (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
+  const ip = rateLimitIp(ipRaw)
   const bucket = Math.floor(Date.now() / 3_600_000)
-  const ref = admin
-    .firestore()
-    .collection('connect_checkout_attempts')
-    .doc(`${prefix}:${ip}:${bucket}`)
+  const ref = rateLimitBucketRef(ip, prefix, bucket)
   const count = await admin.firestore().runTransaction(async (tx) => {
     const snap = await tx.get(ref)
     const next = ((snap.data()?.count as number | undefined) ?? 0) + 1
@@ -135,7 +179,12 @@ export async function checkoutRateLimit(
     return next
   })
   if (count > limitPerHour) {
-    throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.')
+    // Reason code, because 'resource-exhausted' also means "this class is full"
+    // on the booking callables — and a full class offers the waitlist while a
+    // throttled IP must not.
+    throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.', {
+      reason: 'rate_limited',
+    })
   }
 }
 

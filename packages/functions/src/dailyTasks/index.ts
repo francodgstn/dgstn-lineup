@@ -8,6 +8,7 @@ import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
+import { sweepWaitlistOffers } from '../booking/waitlist/sweep'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
 
 // Booking reminders run HOURLY (not in the 02:00 batch): multi-step schedules
@@ -20,6 +21,16 @@ export const bookingRemindersHourly = onSchedule(
   async () => {
     await publishMessagingEnv()
     await sendBookingReminders()
+    // The waitlist rides this schedule for the same reason reminders do: a claim
+    // window is two hours, so an offer that lapses at 11:00 has to roll on to the
+    // next person then — the 02:00 batch would leave the seat dead all day. Its
+    // own failure must not take the reminders down with it, and the next hour
+    // re-derives everything from storage.
+    try {
+      await sweepWaitlistOffers()
+    } catch (err) {
+      console.error('sweepWaitlistOffers failed:', err) // eslint-disable-line no-console
+    }
   },
 )
 

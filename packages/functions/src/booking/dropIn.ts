@@ -11,8 +11,11 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   GUEST_SNAPSHOT,
+  WAITLIST_SUBCOLLECTION,
+  countHoldingSeats,
   isPastBookingCutoff,
   sanitizeBookingAnswers,
+  seatsFree,
   normalizeBenefit,
   resolveActivityAccessRule,
   resolvePaymentOptions,
@@ -25,12 +28,14 @@ import {
 import { loadContactPaymentSnapshot } from './access'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
+  assertUnderCheckoutRateLimit,
   buildResultUrls,
   checkoutRateLimit,
   defaultIdempotencyKey,
   requireChargeableAmountFromMajor,
   SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
   startOneOffCheckout,
+  STRIPE_MAX_CHECKOUT_EXPIRY_MINUTES,
 } from '../connect/checkout'
 import {
   commitGiftCardDrawdown,
@@ -45,7 +50,12 @@ import { resolveSingleContact } from '../utils/contacts'
 // Pure trial-gate helpers, shared with bookSession's free trial door — see
 // booking/index.ts's module doc comment. Mirrors the appointments/index.ts
 // same-directory-index import pattern already used elsewhere in this package.
-import { resolveTrialEligibility } from './index'
+import { holdWriteCountDelta, resolveTrialEligibility, type ReplacedBookingShape } from './index'
+import {
+  resolveClaimCheckoutWindow,
+  WAITLIST_CLAIM_RATE_LIMIT_BUCKET,
+  type ClaimCheckoutWindow,
+} from './waitlist/constants'
 
 const HOLD_MINUTES = 30
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -104,6 +114,12 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     /** Answers to the activity's bookingQuestions, keyed by field id. Stored on
      *  the PENDING booking so they survive the Stripe round-trip. */
     questionAnswers?: Record<string, unknown>
+    /** A waitlist offer's single-use `offer_token`. Present ⇒ this is a CLAIM:
+     *  the seat is already held for the offer's contact, the caller is that
+     *  contact (the token names them — no contactDetails are read), and the
+     *  hold's deadline replaces the ordinary 30-minute one on both the booking
+     *  and the Stripe session. See booking/waitlist/claim.ts. */
+    waitlistToken?: string
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   if (!data?.sessionId) throw new HttpsError('invalid-argument', 'sessionId is required')
@@ -111,8 +127,31 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const locale = data.locale ?? 'en'
   const db = admin.firestore()
 
-  // Public endpoint — same per-IP hourly limit as the other Connect checkouts.
-  await checkoutRateLimit(request.rawRequest?.ip)
+  // ── Rate limit: which bucket, and charged or peeked ────────────────────────
+  // Public endpoint, so the ordinary drop-in buyer pays the same per-IP hourly
+  // quota as every other Connect checkout.
+  //
+  // A CLAIM does not. It is the paid half of `claimWaitlistSeat` — the free half
+  // returns `requiresPayment` and sends the caller straight here with the offer
+  // token — so charging it to the shared 'checkout' bucket puts the whole
+  // peek/charge split back where it started: a gym NAT that has already produced
+  // 30 checkout attempts this hour locks out the ONE person on earth holding a
+  // live, single-use, time-boxed offer, their claim lapses, and the seat rolls on
+  // to somebody else. So the claim peeks at the claim bucket (which still bounds
+  // an enumerator, because it runs before any query) and charges only the
+  // attempts whose token turns out to name no live offer. Same two calls, same
+  // bucket, same order as claim.ts — the two must not disagree about who is
+  // entitled to a free attempt.
+  const waitlistToken = typeof data.waitlistToken === 'string' ? data.waitlistToken.trim() : ''
+  /** THE only attempts a claim pays for: a token that resolves to no live offer
+   *  is by definition not the person the seat is being held for. */
+  const chargeClaimAttempt = (): Promise<void> =>
+    checkoutRateLimit(request.rawRequest?.ip, WAITLIST_CLAIM_RATE_LIMIT_BUCKET)
+  if (waitlistToken) {
+    await assertUnderCheckoutRateLimit(request.rawRequest?.ip, WAITLIST_CLAIM_RATE_LIMIT_BUCKET)
+  } else {
+    await checkoutRateLimit(request.rawRequest?.ip)
+  }
 
   // Team must have Connect enabled + a chargeable account.
   const team = await loadEnabledTeam(teamId)
@@ -216,7 +255,115 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // enumerate, arbitrary contacts of the team). Guests carry no session and fall
   // through to the email/name path below.
   const contactSession = optionalContactSessionFromRequest(request)
-  if (contactSession && contactSession.teamId === teamId) {
+
+  // ── A waitlist claim, if that is what this is ──────────────────────────────
+  // Resolved FIRST and from storage, because the offer decides two things this
+  // callable normally decides for itself: WHO is paying (the entry names the
+  // contact, so a claimant never re-types their details and can never claim as
+  // somebody else) and WHEN the hold dies. Everything here is a read — a bad
+  // token must leave no trace, least of all a reserved gift-card drawdown.
+  const waitlistRef = db.collection('sessions').doc(sessionId).collection(WAITLIST_SUBCOLLECTION)
+  let claim: {
+    entryRef: FirebaseFirestore.DocumentReference
+    contactId: string
+    /** THE deadline: the booking hold's expires_at AND the Stripe session's. */
+    expiresAt: Timestamp
+    answers: Record<string, unknown> | null
+  } | null = null
+  let claimCheckout: ClaimCheckoutWindow | null = null
+  if (waitlistToken) {
+    if (isTrial) {
+      // A trial is a newcomer's first class, taken through the guest door with
+      // its own once-per-person gate. Someone who queued for a full class and
+      // was offered a seat is not that person. Charged: no claimant's client
+      // ever sends this pair, so it is only reachable by hand — and it would
+      // otherwise be a way to reach this callable's reads with a token that is
+      // never looked up, and so never costs quota either way.
+      await chargeClaimAttempt()
+      throw new HttpsError('invalid-argument', 'A waitlist claim cannot be booked as a trial')
+    }
+    // Scoped to THIS session's queue — the token is unguessable, but a lookup
+    // that can only ever return an entry of the session being paid for cannot
+    // be pointed at another class by a mismatched request.
+    const offerSnap = await waitlistRef.where('offer_token', '==', waitlistToken).limit(1).get()
+    const offer = offerSnap.docs[0]
+    const offerExpiresAt = offer?.data().offer_expires_at as Timestamp | undefined
+    if (!offer || offer.data().status !== 'offered' || !offerExpiresAt) {
+      await chargeClaimAttempt()
+      throw new HttpsError('failed-precondition', 'This offer is no longer available.', {
+        reason: 'claim_expired',
+      })
+    }
+    if (offerExpiresAt.toMillis() <= Date.now()) {
+      await chargeClaimAttempt()
+      throw new HttpsError('failed-precondition', 'This offer has expired.', {
+        reason: 'claim_expired',
+      })
+    }
+    // A claimant may reach the pay button at minute 119 of a 120-minute window,
+    // and Stripe will not create a session that expires sooner than its own
+    // floor. Refuse with a reason the page renders as "this offer is about to
+    // expire" rather than a generic failure — or, worse, a Stripe session that
+    // outlives the seat it is paying for.
+    //
+    // Neither this refusal nor the contact-mismatch one below charges quota:
+    // past this point the token HAS resolved to a live offer, and the two
+    // callers who hit them are the rightful holder arriving late and someone who
+    // was forwarded their link. Charging the first would let a shared NAT cost
+    // that person their only retry.
+    claimCheckout = resolveClaimCheckoutWindow({
+      nowMs: Date.now(),
+      claimExpiresAtMs: offerExpiresAt.toMillis(),
+      minMinutes: SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
+      maxMinutes: STRIPE_MAX_CHECKOUT_EXPIRY_MINUTES,
+    })
+    if (!claimCheckout.payable) {
+      throw new HttpsError('failed-precondition', 'This offer is about to expire.', {
+        reason: 'claim_window_too_short',
+      })
+    }
+    if (contactSession && contactSession.teamId === teamId && contactSession.contactId !== offer.id) {
+      throw new HttpsError('permission-denied', 'This offer belongs to another contact')
+    }
+    claim = {
+      entryRef: offer.ref,
+      contactId: offer.id,
+      expiresAt: offerExpiresAt,
+      answers: (offer.data().question_answers as Record<string, unknown> | undefined) ?? null,
+    }
+  }
+
+  // The booking answers were collected at JOIN so the claim page never re-asks
+  // them — and both booking writes below are bare `.set()`s that replace the
+  // document wholesale, so they have to be re-sent or the claim silently throws
+  // away what the person already told the studio. A claim page that DOES send
+  // them (an activity that added a question after they joined) wins.
+  const claimAnswers = sanitizedAnswers ?? claim?.answers ?? null
+
+  if (claim) {
+    const cSnap = await db.collection('contacts').doc(claim.contactId).get()
+    if (!cSnap.exists || cSnap.data()?.teamId !== teamId) {
+      throw new HttpsError('not-found', 'Contact not found')
+    }
+    const c = cSnap.data()!
+    contactId = cSnap.id
+    email = (c.email as string) || ''
+    firstname = (c.firstname as string) || ''
+    lastname = (c.lastname as string) || ''
+    phone = (c.phone as string) || null
+    resolved = await resolveDropInForContact(
+      teamId,
+      dropInTarget,
+      { ...c, id: cSnap.id },
+      (sessionData.start as Timestamp).toDate()
+    )
+    if (isCoveredResult(resolved)) {
+      // Covered claims never come through checkout — claimWaitlistSeat settles
+      // them for free, and charging here would sell a seat this person's
+      // membership already pays for.
+      throw new HttpsError('failed-precondition', 'You can already book this class for free')
+    }
+  } else if (contactSession && contactSession.teamId === teamId) {
     const cSnap = await db.collection('contacts').doc(contactSession.contactId).get()
     if (!cSnap.exists || cSnap.data()?.teamId !== teamId) {
       throw new HttpsError('not-found', 'Contact not found')
@@ -339,23 +486,64 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   }
 
   // Guard: already registered (confirmed booking or attendance).
-  const bookingRef = db.collection('sessions').doc(sessionId).collection('bookings').doc(contactId)
+  const sessionRef = db.collection('sessions').doc(sessionId)
+  const bookingsRef = sessionRef.collection('bookings')
+  const bookingRef = bookingsRef.doc(contactId)
+  const contactDocRef = db.collection('contacts').doc(contactId)
   const [bookingSnap, participantSnap] = await Promise.all([
     bookingRef.get(),
-    db.collection('sessions').doc(sessionId).collection('participants').doc(contactId).get(),
+    sessionRef.collection('participants').doc(contactId).get(),
   ])
   if (participantSnap.exists || (bookingSnap.exists && bookingSnap.data()?.status === 'confirmed')) {
     throw new HttpsError('already-exists', 'You are already registered for this session')
   }
 
+  // ── Capacity, fail-fast ────────────────────────────────────────────────────
+  // This callable had NO capacity check whatsoever: a full class sold drop-ins,
+  // deterministically, no race required. The authoritative gate is inside the
+  // booking transaction below; this early copy (same helper, same predicate)
+  // refuses before anything with a side effect happens — before a gift-card
+  // drawdown is reserved, before a Stripe session exists.
+  //
+  // It sits AFTER contact resolution because it needs the caller's own id: their
+  // live-but-unpaid hold occupies a seat, and counting it would refuse them
+  // permission to pay for the seat they are already holding.
+  const preflightSeats = seatsFree(
+    sessionData.max_participants as number | undefined,
+    countHoldingSeats((await bookingsRef.get()).docs, Date.now(), contactId)
+  )
+  if (preflightSeats <= 0) {
+    throw new HttpsError('resource-exhausted', 'This session is fully booked.', {
+      reason: 'session_full',
+    })
+  }
+
   const bookingToken = generateSecureToken()
   const bookingReference = generateBookingReference()
-  const expiresAt = Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000)
+  // A claim has exactly ONE deadline, and this is it: the booking hold, the
+  // waitlist entry's `offer_expires_at` and the Stripe session below all expire
+  // at the same instant. Two timers for one seat is how a seat gets sold twice —
+  // the hold releases at +30, someone else takes it, and the original payer's
+  // Stripe session is still live hours later. HOLD_MINUTES does not apply to a
+  // claim at all.
+  const expiresAt = claim?.expiresAt ?? Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000)
 
   // Optional gift-card redemption — reserve a drawdown against the total BEFORE
   // writing any booking doc (a failed/invalid code must leave no trace).
   let giftCardPlan: GiftCardRedemptionPlan | null = null
   let giftCardHoldKey: string | null = null
+  /** Give the reserved stored value back rather than leaving it held until its
+   *  lazy expiry. Called on EVERY failure after the reservation — the capacity
+   *  refusal below as well as a Stripe failure. */
+  const releaseReservedGiftCard = async (): Promise<void> => {
+    if (giftCardPlan && data.giftCardCode && giftCardHoldKey) {
+      await releaseGiftCardHold({
+        teamId,
+        code: data.giftCardCode,
+        holdKey: giftCardHoldKey,
+      }).catch(() => undefined)
+    }
+  }
   if (data.giftCardCode) {
     giftCardHoldKey = generateSecureToken(16)
     giftCardPlan = await reserveGiftCardDrawdown({
@@ -373,44 +561,93 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     // FULL COVER — no Stripe at all: confirm the booking directly, mirroring
     // handleDropInCheckout's confirm effects (minus payment_intent_id, which
     // doesn't exist on this path).
-    await bookingRef.set({
-      firstname,
-      lastname,
-      email,
-      phone,
-      contact: contactId,
-      session: sessionId,
-      teamId,
-      joinedAt: FieldValue.serverTimestamp(),
-      fromBioLink: true,
-      is_new_contact: isNewContact,
-      booking_token: bookingToken,
-      booking_reference: bookingReference,
-      source: 'online' as const,
-      ...(sanitizedAnswers ? { question_answers: sanitizedAnswers } : {}),
-      authenticated_booking: !!contactSession,
-      status: 'confirmed',
-      payment_status: 'gift_card',
-    })
-    await db
-      .collection('sessions')
-      .doc(sessionId)
-      .set(
-        {
-          has_bookings: true,
-          bookings_count: FieldValue.increment(1),
-          last_booking_at: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-    // A gift-card payment also confirms a provisional (freshly created) contact
-    // — same as a paid Stripe drop-in.
-    if (isNewContact) {
-      await db.collection('contacts').doc(contactId).update({
-        provisional: FieldValue.delete(),
-        provisional_expires_at: FieldValue.delete(),
+    //
+    // Seat + counter in one transaction, for the same reason as bookSession: the
+    // session doc is the serialization point, and `bookings_count` is written as
+    // an absolute value from the read set (the old `increment(1)` landed on top
+    // of trackBookings' recount of this very write). A refusal here has to hand
+    // the reserved stored value back — the drawdown is committed further down,
+    // so bailing out before that leaves the balance held but unspent.
+    //
+    // A CLAIM flips its waitlist entry in this very transaction. This branch
+    // creates no Stripe session, so no webhook ever fires for it and there is no
+    // later hook to hang the flip on — and the seat becomes permanent HERE. An
+    // entry left at 'offered' behind a confirmed, gift-card-paid booking is the
+    // worst state the feature has: the sweep would match it, and a release that
+    // did not check the booking would delete a paid seat and hand it to the next
+    // person, costing the buyer both the balance and the class.
+    try {
+      await db.runTransaction(async (tx) => {
+        const freshSession = await tx.get(sessionRef)
+        if (!freshSession.exists) throw new HttpsError('not-found', 'Session not found')
+        const bookingsSnap = await tx.get(bookingsRef)
+        // Read rather than blind-update, exactly as the Connect webhook does with
+        // the same document: a `tx.update` on an entry that was purged (the queue
+        // of a deleted session is hard-deleted by teardownWaitlistOnSessionDeleted)
+        // throws, and stored value that has already been reserved must never be
+        // lost to a bookkeeping document.
+        const entrySnap = claim ? await tx.get(claim.entryRef) : null
+        const holding = countHoldingSeats(bookingsSnap.docs, Date.now(), contactId)
+        if (seatsFree(freshSession.data()?.max_participants as number | undefined, holding) <= 0) {
+          throw new HttpsError('resource-exhausted', 'This session is fully booked.', {
+            reason: 'session_full',
+          })
+        }
+        // A full set, no merge — which is also what retires the claim fields the
+        // promoter wrote. Leaving `waitlist_claim` on a confirmed booking would
+        // make it stop holding its seat at `claim_expires_at` (bookingHoldsSeat
+        // → isExpiredWaitlistClaim), silently freeing a seat that is paid for.
+        tx.set(bookingRef, {
+          firstname,
+          lastname,
+          email,
+          phone,
+          contact: contactId,
+          session: sessionId,
+          teamId,
+          joinedAt: FieldValue.serverTimestamp(),
+          fromBioLink: true,
+          is_new_contact: isNewContact,
+          booking_token: bookingToken,
+          booking_reference: bookingReference,
+          source: 'online' as const,
+          ...(claimAnswers ? { question_answers: claimAnswers } : {}),
+          ...(claim ? { claimed_from_waitlist: true } : {}),
+          authenticated_booking: !!contactSession,
+          status: 'confirmed',
+          payment_status: 'gift_card',
+        })
+        if (claim && entrySnap?.exists) {
+          tx.update(claim.entryRef, {
+            status: 'claimed',
+            claimed_at: FieldValue.serverTimestamp(),
+            offer_token: FieldValue.delete(),
+          })
+        }
+        tx.set(
+          sessionRef,
+          {
+            has_bookings: true,
+            bookings_count: holding + 1,
+            last_booking_at: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
       })
+    } catch (err) {
+      await releaseReservedGiftCard()
+      throw err
     }
+    // A gift-card payment confirms a provisional contact, exactly as a paid
+    // Stripe drop-in does (handleDropInCheckout clears it for ANY provisional
+    // contact). This used to fire only for a contact created a moment ago, which
+    // left a waitlist-born one — provisional WITH a reaper date — to be deleted
+    // 30 days after a class they paid for and attended. Deleting an absent field
+    // is a no-op, so the unconditional write costs one update.
+    await db.collection('contacts').doc(contactId).update({
+      provisional: FieldValue.delete(),
+      provisional_expires_at: FieldValue.delete(),
+    })
     if (isTrial) {
       await db
         .collection('contacts')
@@ -447,29 +684,89 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     }
   }
 
-  // Write / overwrite the PENDING hold. Counts toward NO confirmed totals until paid;
-  // the webhook increments on confirmation, the daily task releases unpaid holds.
-  await bookingRef.set({
-    firstname,
-    lastname,
-    email,
-    phone,
-    contact: contactId,
-    session: sessionId,
-    teamId,
-    joinedAt: FieldValue.serverTimestamp(),
-    fromBioLink: true,
-    is_new_contact: isNewContact,
-    booking_token: bookingToken,
-    booking_reference: bookingReference,
-    // Drop-in checkout is only reachable from the public booking page.
-    source: 'online' as const,
-    ...(sanitizedAnswers ? { question_answers: sanitizedAnswers } : {}),
-    authenticated_booking: !!contactSession,
-    status: 'pending',
-    payment_status: 'required',
-    expires_at: expiresAt,
-  })
+  // Write / overwrite the PENDING hold, gated on capacity in the same
+  // transaction. The hold HOLDS A SEAT from this instant (bookingHoldsSeat
+  // counts a live `required` hold), so it has to be taken under the same lock
+  // every other seat is taken under — otherwise a full class keeps selling
+  // checkouts and the payer discovers at the door that there was never a seat.
+  // The seat counter moves here, not in the webhook, for the same reason.
+  //
+  // The CONTACT counter moves here too, and only here, because this is the write
+  // that decides which kind of hold the document is. A plain drop-in hold is
+  // uncounted for its whole life (nobody increments it, expirePendingBookings
+  // deletes it without a decrement); a waitlist claim hold is counted from the
+  // moment the promoter mints it. Turning one into the other — which is exactly
+  // what an offer holder does by abandoning the claim link and buying through the
+  // ordinary form — has to move the ledger with it, or the count is stranded on a
+  // document that every later reader treats as uncounted. See holdWriteCountDelta
+  // for the full shape table; the fixtures are pendingBookingsCount.test.ts.
+  try {
+    await db.runTransaction(async (tx) => {
+      const freshSession = await tx.get(sessionRef)
+      if (!freshSession.exists) throw new HttpsError('not-found', 'Session not found')
+      const bookingsSnap = await tx.get(bookingsRef)
+      const holding = countHoldingSeats(bookingsSnap.docs, Date.now(), contactId)
+      if (seatsFree(freshSession.data()?.max_participants as number | undefined, holding) <= 0) {
+        throw new HttpsError('resource-exhausted', 'This session is fully booked.', {
+          reason: 'session_full',
+        })
+      }
+      const countDelta = holdWriteCountDelta(
+        bookingsSnap.docs.find((d) => d.id === contactId)?.data() as
+          | ReplacedBookingShape
+          | undefined,
+        !!claim
+      )
+      // Read rather than blind-update, the same reason the promoter reads its
+      // candidates: a contact document can be gone (a purged provisional
+      // contact), and `tx.update` on a missing document throws — which would
+      // fail a checkout over a counter.
+      const contactSnap = countDelta === 0 ? null : await tx.get(contactDocRef)
+      tx.set(bookingRef, {
+        firstname,
+        lastname,
+        email,
+        phone,
+        contact: contactId,
+        session: sessionId,
+        teamId,
+        joinedAt: FieldValue.serverTimestamp(),
+        fromBioLink: true,
+        is_new_contact: isNewContact,
+        booking_token: bookingToken,
+        booking_reference: bookingReference,
+        // Drop-in checkout is only reachable from the public booking page.
+        source: 'online' as const,
+        ...(claimAnswers ? { question_answers: claimAnswers } : {}),
+        authenticated_booking: !!contactSession,
+        status: 'pending',
+        payment_status: 'required',
+        expires_at: expiresAt,
+        // A CLAIM stays a claim while it is being paid for. This `.set()` has no
+        // merge option, so the promoter's hold fields have to be rewritten here
+        // or the seat quietly stops being the queue's: the entry would still say
+        // 'offered' while the booking had become an ordinary drop-in hold, and
+        // on abandonment expirePendingBookings would delete it and leave the
+        // entry stuck at 'offered' forever — a permanently blocked queue.
+        ...(claim ? { waitlist_claim: true, claim_expires_at: claim.expiresAt } : {}),
+      })
+      tx.set(
+        sessionRef,
+        {
+          has_bookings: true,
+          bookings_count: holding + 1,
+          last_booking_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      if (countDelta !== 0 && contactSnap?.exists) {
+        tx.update(contactDocRef, { pending_bookings_count: FieldValue.increment(countDelta) })
+      }
+    })
+  } catch (err) {
+    await releaseReservedGiftCard()
+    throw err
+  }
 
   // Create the Connect checkout; the webhook (kind: 'drop_in') confirms the booking.
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=booking` : ''
@@ -488,6 +785,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     // it) and just flags itself for the extra trial_used_at stamp — see
     // handleDropInCheckout.
     ...(isTrial ? { trial: 'true' } : {}),
+    // Tells the webhook this payment settles a waitlist claim, so it flips the
+    // entry in the same transaction that confirms the booking. The value is the
+    // entry's own doc id (= contactId) rather than a flag, so the webhook never
+    // has to infer which queue it is closing.
+    ...(claim ? { waitlistEntry: claim.contactId } : {}),
     ...(giftCardPlan
       ? {
           giftCardCode: data.giftCardCode!.trim().toUpperCase(),
@@ -531,17 +833,18 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       // to EVERY drop-in, not only gift-card ones — the gift-card branch was
       // already correct for its own reasons and the plain path was the 24-hour
       // hole.
+      //
+      // A CLAIM expires with its own window instead — the same instant as the
+      // booking hold and the waitlist entry, which is the whole point of
+      // collapsing the three timers into one (resolveClaimCheckoutWindow).
       expiresAtEpochSeconds:
+        claimCheckout?.expiresAtEpochSeconds ??
         Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
       label: 'createDropInCheckout',
     })
   } catch (err) {
     // Don't leave a reserved gift-card drawdown dangling until its lazy expiry.
-    if (giftCardPlan && data.giftCardCode && giftCardHoldKey) {
-      await releaseGiftCardHold({ teamId, code: data.giftCardCode, holdKey: giftCardHoldKey }).catch(
-        () => undefined
-      )
-    }
+    await releaseReservedGiftCard()
     throw err
   }
   return {

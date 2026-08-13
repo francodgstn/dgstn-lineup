@@ -144,6 +144,7 @@ import {
   ArchiveRestore,
   AlertTriangle,
   UserPlus,
+  UserX,
   Archive,
   RotateCcw,
   ArrowRightLeft,
@@ -390,7 +391,7 @@ const profileSchema = z.object({
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
   // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const).optional(),
+  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist'] as const).optional(),
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),
@@ -3110,7 +3111,13 @@ type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach'
 
 const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
   sessions: ['session_participant_add', 'session_participant_delete'],
-  bookings: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_rebooked'],
+  bookings: [
+    'booking_created',
+    'booking_confirmed',
+    'booking_cancelled',
+    'booking_rebooked',
+    'booking_no_show',
+  ],
   profile: [
     'contact_add',
     'contact_type_change',
@@ -3145,6 +3152,7 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   booking_confirmed: { Icon: CheckCircle, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   booking_cancelled: { Icon: XCircle, bg: 'bg-red-500/10', fg: 'text-red-600' },
   booking_rebooked: { Icon: CalendarDays, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  booking_no_show: { Icon: UserX, bg: 'bg-red-500/10', fg: 'text-red-600' },
   contact_login: { Icon: Activity, bg: 'bg-green-500/10', fg: 'text-green-600' },
   outreach_email_sent: { Icon: Mail, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   contact_anonymized: { Icon: Trash2, bg: 'bg-muted', fg: 'text-muted-foreground' },

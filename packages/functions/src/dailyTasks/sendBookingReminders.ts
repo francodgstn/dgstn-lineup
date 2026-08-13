@@ -17,7 +17,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { sendEmail } from '../utils/email'
-import { sendSms } from '../utils/sms'
+import { isWithinSmsSendingHours, sendSms } from '../utils/sms'
 import { buildBookingReminderEmail, buildBookingReminderSms } from '../booking/templates'
 import { getHostingUrl } from '../utils/env'
 import {
@@ -36,8 +36,10 @@ type Lang = 'en' | 'de' | 'fr' | 'it'
 // settings UI; the scan window below derives from the longest offset.
 const CATCH_UP_HOURS = 24
 const MAX_OFFSET_HOURS = 14 * 24
-const SMS_QUIET_START_HOUR = 8 // Europe/Zurich, inclusive
-const SMS_QUIET_END_HOUR = 21 // exclusive
+
+// Quiet hours now live in utils/sms (the waitlist anchors its claim window to
+// the same rule). Re-exported so this module keeps its published surface.
+export { isWithinSmsSendingHours }
 
 interface TeamReminderSettings {
   enabled: boolean
@@ -55,14 +57,6 @@ export function isStepDue(offsetHours: number, hoursUntilSession: number): boole
     hoursUntilSession <= offsetHours &&
     hoursUntilSession > offsetHours - CATCH_UP_HOURS
   )
-}
-
-/** SMS quiet hours: only send 08:00–20:59 team-local (Europe/Zurich). */
-export function isWithinSmsSendingHours(now: Date, timeZone = 'Europe/Zurich'): boolean {
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone }).format(now),
-  )
-  return hour >= SMS_QUIET_START_HOUR && hour < SMS_QUIET_END_HOUR
 }
 
 /** The marker key holding a step's sent timestamp on the booking doc. */
@@ -217,6 +211,11 @@ export async function sendBookingReminders(): Promise<{
       // Dead bookings and unpaid drop-in holds get no reminders.
       if (['cancelled', 'rebooked', 'no_show'].includes(booking.status as string)) continue
       if (booking.payment_status === 'required') continue
+      // An unclaimed waitlist offer is a seat HELD for someone, not a seat they
+      // have — reminding them about a class they have not got would be the
+      // studio's own mail contradicting the claim deadline. The claim flips this
+      // flag off; until then the offer mail is the only thing that speaks.
+      if (booking.waitlist_claim === true) continue
 
       const pendingSteps = dueSteps.filter((s) => !sentMarker(booking, s))
       if (pendingSteps.length === 0) continue

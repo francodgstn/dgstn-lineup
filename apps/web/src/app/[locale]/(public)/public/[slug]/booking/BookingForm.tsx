@@ -82,6 +82,11 @@ interface ActivityProfile {
   /** CLASS-ONLY: reduced trial price (major units). Absent/null ⇒ the trial is
    *  FREE (today's behaviour); a number ⇒ the trial costs that instead. */
   trialPriceAmount?: number | null
+  /** CLASS-ONLY: a full session offers a queue instead of a dead end. The flag
+   *  lives on the ACTIVITY mirror only — sessions deliberately carry no copy of
+   *  it (see Session.waitlist_count), so this is the single thing that decides
+   *  whether a full slot is clickable. */
+  waitlistEnabled?: boolean
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null }>
   /** The one member-benefit rule, mirrored verbatim — appointments (every
@@ -118,6 +123,9 @@ interface SessionProfile {
   bookingMandatory?: boolean
   max_participants?: number
   bookings_count?: number
+  /** How many people are already queueing. An aggregate — the queue itself is
+   *  never public. */
+  waitlist_count?: number
   headline?: string
 }
 
@@ -132,6 +140,12 @@ type Step =
   | 'returning'
   | 'details'
   | 'confirmed'
+  // A full class with a queue behind it. 'waitlist' collects what joining needs
+  // (nothing, for a signed-in contact); 'waitlisted' is its terminal
+  // confirmation — the sibling of 'confirmed', and terminal for the same reason:
+  // Back must never re-enter it and submit a second join.
+  | 'waitlist'
+  | 'waitlisted'
 
 /**
  * Why a `?session=` / `?date=` deep link couldn't be honoured. The visitor is
@@ -207,18 +221,34 @@ function nextStepAfterSession(a: ActivityProfile | null | undefined): Step {
 /** A session is bookable only while it's upcoming, has a free seat, and (if the
  *  studio set one) is still before the online booking cutoff. Client-side
  *  mirror of the server's authoritative check (isPastBookingCutoff, bookSession
- *  / createDropInCheckout) — never trust this alone. */
+ *  / createDropInCheckout) — never trust this alone.
+ *
+ *  ORDER MATTERS: 'closed' is tested BEFORE 'full', so a class that is both
+ *  reports 'closed' and is filtered out of the list entirely. A full class past
+ *  the cutoff must not advertise its queue — the promoter cannot offer from it
+ *  either (the claim window is clamped by the same cutoff), so the chip would
+ *  invite people into a line that can never move. */
 function sessionBlockReason(
   s: SessionProfile,
   cutoffMinutes?: number
 ): DeepLinkNotice | null {
   if (s.allowBooking !== true) return 'gone'
   if (s.start.toDate().getTime() <= Date.now()) return 'past'
-  if (typeof s.max_participants === 'number' && (s.bookings_count ?? 0) >= s.max_participants)
-    return 'full'
   if (cutoffMinutes && cutoffMinutes > 0 && Date.now() >= s.start.toDate().getTime() - cutoffMinutes * 60_000)
     return 'closed'
+  if (typeof s.max_participants === 'number' && (s.bookings_count ?? 0) >= s.max_participants)
+    return 'full'
   return null
+}
+
+/** A full-but-still-open class whose activity runs a queue. The one condition
+ *  that turns a dead end into the waitlist step — everywhere it can be reached
+ *  from (the slot list, the `?session=` deep link). */
+function offersWaitlist(
+  blocked: DeepLinkNotice | null,
+  a: ActivityProfile | null | undefined
+): boolean {
+  return blocked === 'full' && a?.waitlistEnabled === true
 }
 
 // ─── props ────────────────────────────────────────────────────────────────────
@@ -347,6 +377,14 @@ export default function BookingForm({
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // The place in the queue joinWaitlist just returned. Its presence is what
+  // makes 'waitlisted' terminal for the step↔URL restore guard, exactly like
+  // `confirmedSession` is for 'confirmed'.
+  const [waitlistJoined, setWaitlistJoined] = useState<{
+    position: number
+    entryToken: string
+  } | null>(null)
+
   // Optional gift-card redemption — only meaningful on a paying booking (drop-in
   // or priced trial). Reset whenever the guest door changes.
   const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
@@ -398,6 +436,7 @@ export default function BookingForm({
               dropIn: data.dropIn ?? undefined,
               trialEnabled: data.trialEnabled === true,
               trialPriceAmount: typeof data.trialPriceAmount === 'number' ? data.trialPriceAmount : null,
+              waitlistEnabled: data.waitlistEnabled === true,
               durations: Array.isArray(data.durations) ? data.durations : undefined,
               memberBenefit: data.memberBenefit ?? undefined,
               prerequisites: data.prerequisites ?? undefined,
@@ -513,6 +552,18 @@ export default function BookingForm({
         setSelectedDate(toDateKey(target.start))
         entryResolvedRef.current = true
         setStep(nextStepAfterSession(activity))
+        return 'applied'
+      }
+
+      // A link to a class that filled up while the mail sat in an inbox — the
+      // exact moment the queue exists for. It lands on the join step rather than
+      // degrading to the date list with a "that one is full" notice.
+      if (target && activity && offersWaitlist(blocked, activity)) {
+        setSelectedActivity(activity)
+        setSelectedSession(target)
+        setSelectedDate(toDateKey(target.start))
+        entryResolvedRef.current = true
+        setStep('waitlist')
         return 'applied'
       }
 
@@ -809,6 +860,97 @@ export default function BookingForm({
     }
   }
 
+  // ── Waitlist ──────────────────────────────────────────────────────────────
+
+  /**
+   * Take a place in the queue for a full class.
+   *
+   * `values` is null for a signed-in contact: `joinWaitlist` identifies the
+   * caller from the contact-session token alone and ignores any details in the
+   * body, so sending them would be theatre. Deliberately NOT resolving money or
+   * access here — a prospective member's subscription may start before the class
+   * runs, so the badge above the form is a warning and the claim is the gate.
+   */
+  const onJoinWaitlist = async (values: GuestDetailsValues | null) => {
+    if (!selectedSession || !teamId) return
+    if (missingRequiredAnswer()) {
+      setAnswersError(t('errorAnswerRequired'))
+      return
+    }
+    setAnswersError(null)
+    setIsSubmitting(true)
+    setBookingError(null)
+    try {
+      const fn = httpsCallable<Record<string, unknown>, { position: number; entryToken: string }>(
+        functions,
+        'joinWaitlist'
+      )
+      const res = await fn({
+        teamId,
+        sessionId: selectedSession.id,
+        ...(values
+          ? {
+              contactDetails: {
+                firstname: values.firstname,
+                lastname: values.lastname,
+                email: values.email,
+                phone: showPhone ? values.phone || null : null,
+              },
+            }
+          : {}),
+        // Captured at JOIN so the claim never re-asks them — the promoter copies
+        // them onto the booking hold it writes.
+        ...(Object.keys(answers).length ? { questionAnswers: answers } : {}),
+      })
+      setWaitlistJoined(res.data)
+      setStep('waitlisted')
+    } catch (err: unknown) {
+      const e = err as { message?: string; code?: string; details?: { reason?: string } }
+      const reason = e.details?.reason
+      if (reason === 'already_waiting' || e.code === 'already-exists') {
+        setBookingError(t('waitlistAlreadyWaiting'))
+      } else if (reason === 'already_booked') {
+        setBookingError(t('waitlistAlreadyBooked'))
+      } else if (reason === 'seat_available') {
+        // Not really a failure: the class we showed as full has room. The
+        // mirror's `bookings_count` was stale (an abandoned checkout hold that
+        // lapsed and nothing had recounted yet); the server has now healed it,
+        // but this page is holding the copy it loaded, so the slot row would
+        // still render disabled. Patch the one number the server just told us
+        // about so the row becomes clickable and the message is actionable.
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === selectedSession.id && typeof s.max_participants === 'number'
+              ? { ...s, bookings_count: Math.max(s.max_participants - 1, 0) }
+              : s
+          )
+        )
+        setBookingError(t('waitlistSeatAvailable'))
+      } else if (reason === 'email_required') {
+        // Signed in, but the profile carries no address the offer could reach —
+        // and the claim link travels by mail only.
+        setBookingError(t('waitlistEmailRequired'))
+      } else if (reason === 'waitlist_full') {
+        setBookingError(t('waitlistFullQueue'))
+      } else if (reason === 'waitlist_disabled') {
+        setBookingError(t('waitlistUnavailable'))
+      } else if (reason === 'plan_required' || reason === 'plan_inactive') {
+        // The studio's own plan does not carry the queue (or its subscription
+        // has lapsed). That is between the studio and us, and NONE of it may
+        // reach this page: `requirePlan`'s message is English upgrade/billing
+        // prose written for the coach, and rendering it here would put a
+        // tenant's internal state on a visitor's screen — untranslated, and as a
+        // dead end where the chip promised a queue. All the visitor can act on
+        // is that this class has no queue to join.
+        setBookingError(t('waitlistUnavailableNow'))
+      } else {
+        setBookingError(e.message || t('errorGeneric'))
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   // ── Returning member — post-verify (class-specific: subscription coverage
   // check, then book). ReturningSignIn owns the email→code→select steps
   // themselves; this only runs once a contact is confirmed. Throwing here
@@ -906,10 +1048,10 @@ export default function BookingForm({
     disabled: disableStepUrl,
     sticky: { from, referral },
     onRestore: (params) => {
-      // Terminal guard: after a successful booking, Back must NOT re-enter
-      // `details` with a live session — that would let the visitor submit the
-      // same booking twice. Leave the flow instead.
-      if (confirmedSession) {
+      // Terminal guard: after a successful booking — or after joining a queue —
+      // Back must NOT re-enter `details`/`waitlist` with a live session, which
+      // would let the visitor submit the same thing twice. Leave the flow instead.
+      if (confirmedSession || waitlistJoined) {
         router.push(backTo.href)
         return
       }
@@ -937,6 +1079,12 @@ export default function BookingForm({
           const path = params.get('path')
           setGuestPath(path === 'trial' || path === 'dropin' ? path : null)
           setStep('details')
+        } else if (sub === 'waitlist') {
+          // Re-derived, not trusted: the class may have freed a seat since, in
+          // which case the queue step no longer applies and the normal funnel
+          // does.
+          const blocked = sessionBlockReason(restored, bookingSettings?.cutoffMinutes)
+          setStep(offersWaitlist(blocked, activity) ? 'waitlist' : nextStepAfterSession(activity))
         } else if (sub === 'returning') {
           setStep('returning')
         } else {
@@ -992,11 +1140,13 @@ export default function BookingForm({
         ? { activity: selectedActivity?.id, date: selectedDate ?? undefined }
         : step === 'confirmed'
           ? { booked: confirmedSession?.id }
-          : {
-              session: selectedSession?.id,
-              step: step === 'who' ? undefined : step,
-              path: step === 'details' ? (guestPath ?? undefined) : undefined,
-            }
+          : step === 'waitlisted'
+            ? { waitlisted: selectedSession?.id }
+            : {
+                session: selectedSession?.id,
+                step: step === 'who' ? undefined : step,
+                path: step === 'details' ? (guestPath ?? undefined) : undefined,
+              }
 
   const syncedQueryRef = useRef<string | null>(null)
   const prevStepRef = useRef<Step | null>(null)
@@ -1019,8 +1169,10 @@ export default function BookingForm({
     prevStepRef.current = step
     // Push only on a real step transition. Refinements within a step (paging the
     // calendar to another day) rewrite instead, or Back would walk day by day
-    // before it ever left the step. `confirmed` also rewrites — see the guard above.
-    if (isFirst || !stepChanged || step === 'confirmed') stepUrl.replace(stepQuery)
+    // before it ever left the step. The two terminal steps also rewrite — see
+    // the guard above.
+    if (isFirst || !stepChanged || step === 'confirmed' || step === 'waitlisted')
+      stepUrl.replace(stepQuery)
     else stepUrl.push(stepQuery)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, selectedActivity?.id, selectedSession?.id, selectedDate, guestPath, loadingData])
@@ -1056,6 +1208,7 @@ export default function BookingForm({
     // terminal and ejects the visitor on their next Back.
     setConfirmedSession(null)
     setBookingReference(null)
+    setWaitlistJoined(null)
     if (isDateFirst) {
       // Book-another returns to the full day list, not to the activity the
       // previous booking happened to be for.
@@ -1073,7 +1226,8 @@ export default function BookingForm({
 
   // ─── Sticky bar: shown on all non-activity, non-confirmed steps ───────────
 
-  const showBar = selectedActivity && step !== 'activities' && step !== 'confirmed'
+  const showBar =
+    selectedActivity && step !== 'activities' && step !== 'confirmed' && step !== 'waitlisted'
 
   function withBar(content: React.ReactNode, wide?: boolean) {
     return (
@@ -1103,11 +1257,20 @@ export default function BookingForm({
               location={selectedSession?.location ?? null}
               accentColor={accentColor}
               position={chrome.kind === 'overlay' ? 'container' : 'viewport'}
-              showConfirm={step === 'details'}
+              // The queue step submits from the same bar as the booking step —
+              // one Confirm control, two verbs, so the visitor never has to
+              // hunt for a different button in the same layout.
+              showConfirm={step === 'details' || step === 'waitlist'}
               submitting={isSubmitting}
-              confirmLabel={t('ctaConfirm')}
-              submittingLabel={t('ctaBooking')}
-              onConfirm={() => guestFormRef.current?.submit()}
+              confirmLabel={step === 'waitlist' ? t('waitlistJoinCta') : t('ctaConfirm')}
+              submittingLabel={step === 'waitlist' ? t('waitlistCtaJoining') : t('ctaBooking')}
+              onConfirm={() =>
+                step === 'waitlist' && isAuthenticated
+                  ? // A signed-in contact has no form to submit — their identity
+                    // comes from the session token the callable verifies.
+                    onJoinWaitlist(null)
+                  : guestFormRef.current?.submit()
+              }
             />
           ) : null
         }
@@ -1136,6 +1299,38 @@ export default function BookingForm({
       </button>
     </div>
   ) : null
+
+  // Per-activity book-form questions. Rendered ABOVE the identity form on both
+  // the booking and the queue step, so the sticky Confirm still submits last —
+  // the questions are about the booking, the fields below are about the person.
+  // Shared because the queue captures them at JOIN: the promoter copies them
+  // onto the claim hold, and the claim never asks again.
+  const bookingQuestionsBlock =
+    bookingQuestions.length > 0 ? (
+      <div className="space-y-4 rounded-xl border bg-card p-4">
+        {bookingQuestions.map((q) => (
+          <div key={q.id} className="space-y-1.5">
+            {/* A checkbox renders its own inline label. */}
+            {q.type !== 'checkbox' && (
+              <label className="text-sm font-medium">
+                {q.label}
+                {q.required && <span className="ml-0.5 text-destructive">*</span>}
+              </label>
+            )}
+            <FieldInput
+              field={q}
+              value={answers[q.id]}
+              disabled={isSubmitting}
+              onChange={(v) => {
+                setAnswers((prev) => ({ ...prev, [q.id]: v }))
+                setAnswersError(null)
+              }}
+            />
+          </div>
+        ))}
+        {answersError && <p className="text-sm text-destructive">{answersError}</p>}
+      </div>
+    ) : null
 
   // ─── Loading ──────────────────────────────────────────────────────────────
 
@@ -1432,24 +1627,35 @@ export default function BookingForm({
                 <p className="text-sm text-muted-foreground py-4">{t('noSessionsOnDate')}</p>
               ) : (
                 <div className="space-y-2">
-                  {filteredSessions.map((s) => (
+                  {filteredSessions.map((s) => {
+                    // A full slot is still rendered (only 'closed' is filtered
+                    // out) — it is either the queue's front door or, without
+                    // one, an honest "no seats" row. What it must never be
+                    // again is a clickable row that dead-ends on a server throw.
+                    const rowActivity = selectedActivity ?? findActivityForSession(s)
+                    const blocked = sessionBlockReason(s, cutoffMinutes)
+                    const waitlistable = offersWaitlist(blocked, rowActivity)
+                    const isFull = blocked === 'full'
+                    return (
                     <button
                       key={s.id}
+                      disabled={isFull && !waitlistable}
                       onClick={() => {
                         // Date-first browses with no activity pinned, so the
                         // clicked session is what names it. Everything
                         // downstream (access gate, pricing, sticky bar) reads
                         // `selectedActivity`, so resolve it here rather than
                         // letting those fall back to null.
-                        const activity = selectedActivity ?? findActivityForSession(s)
+                        const activity = rowActivity
                         if (!selectedActivity && activity) setSelectedActivity(activity)
                         setSelectedSession(s)
                         setGuestPath(null)
                         setGiftCardApplied(null)
                         setDeepLinkNotice(null)
-                        setStep(nextStepAfterSession(activity))
+                        setBookingError(null)
+                        setStep(waitlistable ? 'waitlist' : nextStepAfterSession(activity))
                       }}
-                      className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
+                      className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group disabled:pointer-events-none disabled:opacity-60"
                     >
                       <div
                         className="w-1 rounded-full shrink-0"
@@ -1477,7 +1683,17 @@ export default function BookingForm({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {s.bookingMandatory && (
+                        {isFull && (
+                          <span className="text-xs rounded-full px-2 py-0.5 bg-muted text-muted-foreground font-medium">
+                            {t('waitlistBadgeFull')}
+                          </span>
+                        )}
+                        {waitlistable && (
+                          <span className="text-xs rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 font-medium">
+                            {t('waitlistJoinCta')}
+                          </span>
+                        )}
+                        {s.bookingMandatory && !isFull && (
                           <span className="text-xs rounded-full px-2 py-0.5 bg-primary/10 text-primary font-medium">
                             {t('bookingRequired')}
                           </span>
@@ -1496,7 +1712,8 @@ export default function BookingForm({
                         </svg>
                       </div>
                     </button>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1787,34 +2004,7 @@ export default function BookingForm({
           )
         })()}
 
-        {/* Per-activity book-form questions. Rendered ABOVE the identity form so
-            the sticky Confirm button still submits last — the questions are
-            about the booking, the fields below are about the person. */}
-        {bookingQuestions.length > 0 && (
-          <div className="space-y-4 rounded-xl border bg-card p-4">
-            {bookingQuestions.map((q) => (
-              <div key={q.id} className="space-y-1.5">
-                {/* A checkbox renders its own inline label. */}
-                {q.type !== 'checkbox' && (
-                  <label className="text-sm font-medium">
-                    {q.label}
-                    {q.required && <span className="ml-0.5 text-destructive">*</span>}
-                  </label>
-                )}
-                <FieldInput
-                  field={q}
-                  value={answers[q.id]}
-                  disabled={isSubmitting}
-                  onChange={(v) => {
-                    setAnswers((prev) => ({ ...prev, [q.id]: v }))
-                    setAnswersError(null)
-                  }}
-                />
-              </div>
-            ))}
-            {answersError && <p className="text-sm text-destructive">{answersError}</p>}
-          </div>
-        )}
+        {bookingQuestionsBlock}
 
         <GuestDetailsForm
           ref={guestFormRef}
@@ -1829,6 +2019,154 @@ export default function BookingForm({
           {t('consentText')}
         </p>
       </>
+    )
+  }
+
+  // ─── Step: Waitlist — take a place in the queue ───────────────────────────
+
+  if (step === 'waitlist' && selectedSession) {
+    return withBar(
+      <>
+        <div>
+          <BackButton label={t('back')} onClick={backToSessions} />
+          <h1 className="text-2xl font-bold">{t('waitlistJoinTitle')}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{t('waitlistJoinSubtitle')}</p>
+        </div>
+
+        <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground space-y-1">
+          <p>{t('waitlistHowItWorks')}</p>
+          {/* The queue's SIZE, which is all the public mirror carries — an
+              aggregate, never a name. It sets the expectation before someone
+              joins, which is the honest thing to do at the back of a long line. */}
+          {(selectedSession.waitlist_count ?? 0) > 0 && (
+            <p className="font-medium text-foreground">
+              {t('waitlistQueueLength', { count: selectedSession.waitlist_count ?? 0 })}
+            </p>
+          )}
+        </div>
+
+        {/* A WARNING, never a gate. Joining a queue settles nothing about access
+            or money: a prospective member's subscription may well start before
+            the class runs, and the claim is where coverage is actually
+            resolved. Refusing here would turn away the person the studio most
+            wants to keep. */}
+        {selectedActivity?.isFreeTrial === false && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="font-semibold">{t('badgeMembersOnly')}</span>{' '}
+            {t('waitlistAccessWarning')}
+          </div>
+        )}
+
+        {bookingQuestionsBlock}
+
+        {isAuthenticated && contact ? (
+          // Signed in: nothing to collect. `joinWaitlist` reads the caller from
+          // the contact-session token and ignores any body details, so a form
+          // here would be a lie about what is being sent.
+          <div className="rounded-xl border bg-card p-4 space-y-2">
+            <p className="text-sm font-medium">
+              {contact.firstname} {contact.lastname}
+            </p>
+            {bookingError && <p className="text-sm text-destructive">{bookingError}</p>}
+          </div>
+        ) : (
+          <GuestDetailsForm
+            ref={guestFormRef}
+            showPhone={showPhone}
+            submitting={isSubmitting}
+            error={bookingError}
+            onSubmit={onJoinWaitlist}
+          />
+        )}
+
+        <p className="text-xs text-muted-foreground">{t('consentText')}</p>
+      </>
+    )
+  }
+
+  // ─── Step: Waitlisted — terminal, like 'confirmed' ───────────────────────
+
+  if (step === 'waitlisted' && selectedSession && waitlistJoined) {
+    return (
+      <FlowShell
+        teamName={teamName}
+        slug={slug}
+        accentColor={accentColor}
+        showBranding={showBranding}
+        backTo={backTo}
+        overlayTitle={selectedSession.activityName ?? undefined}
+      >
+        <div className="py-6 space-y-6">
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <span className="text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                {waitlistJoined.position}
+              </span>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{t('waitlistJoinedTitle')}</h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {t('waitlistPosition', { position: waitlistJoined.position })}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              {selectedSession.activityColor && (
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: selectedSession.activityColor }}
+                />
+              )}
+              <span className="font-semibold">
+                {selectedSession.activityName || t('sessionFallback')}
+              </span>
+            </div>
+            <div className="text-sm space-y-1.5 text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">{t('labelDate')}</span>
+                {formatDate(selectedSession.start)}
+              </p>
+              <p>
+                <span className="font-medium text-foreground">{t('labelTime')}</span>
+                {formatTime(selectedSession.start)} – {formatTime(selectedSession.end)}
+              </p>
+              {selectedSession.location && (
+                <p>
+                  <span className="font-medium text-foreground">{t('labelLocation')}</span>
+                  {selectedSession.location}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            {/* The long-lived entry token — the "check my place / leave the
+                queue" credential. Deliberately NOT the claim token: this link
+                is also in the join-confirmation mail, and a forwarded mail must
+                never hand somebody else the seat. */}
+            <Link
+              href={publicHref(slug, 'waitlist', { token: waitlistJoined.entryToken })}
+              className="block w-full py-2 text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t('waitlistLeaveLink')}
+            </Link>
+            <button
+              onClick={resetToStart}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
+              {t('bookAnotherSession')}
+            </button>
+            <Link
+              href={backTo.href}
+              className="block w-full py-2 text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t('toSurface', { name: tSurfaces(backTo.surface) })}
+            </Link>
+          </div>
+        </div>
+      </FlowShell>
     )
   }
 

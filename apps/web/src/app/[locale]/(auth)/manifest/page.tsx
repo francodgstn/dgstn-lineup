@@ -15,8 +15,14 @@ import { Printer, ChevronLeft, ChevronRight, Users } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDaySheet, activeBookings, type DaySheetEntry } from '@/hooks/useDaySheet'
-import type { Booking } from '@linyup/shared'
+import {
+  useDaySheet,
+  activeBookings,
+  heldOfferSeats,
+  waitingEntries,
+  type DaySheetEntry,
+} from '@/hooks/useDaySheet'
+import type { Booking, WaitlistEntry } from '@linyup/shared'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +42,22 @@ function formatTime(ts: { toDate(): Date } | undefined, locale: string): string 
 function bookingName(b: Booking): string {
   const full = `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim()
   return full || b.email || '—'
+}
+
+/**
+ * "A. Müller" — initial plus surname.
+ *
+ * The queue is printed as ONE line under the roster, not as a second list: the
+ * coach's question at the door is "who do I call about this empty spot", and a
+ * full second roster of people who are not coming makes the sheet harder to
+ * read for the ten times out of eleven that nobody drops out. The phone number
+ * lives one tap away in the app, which is where a call is made from anyway.
+ */
+function waitlistName(e: WaitlistEntry): string {
+  const initial = e.firstname?.trim()?.[0]
+  const last = e.lastname?.trim()
+  if (initial && last) return `${initial}. ${last}`
+  return last || e.firstname || e.email || '—'
 }
 
 /**
@@ -159,6 +181,11 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
   const locale = useLocale()
   const { session } = entry
   const roster = activeBookings(entry.bookings)
+  // Seats the queue is holding for people who have not claimed them yet. They
+  // are NOT on the roster (they are on the waiting line), but they are not free
+  // either — see heldOfferSeats.
+  const held = heldOfferSeats(entry.bookings)
+  const waiting = waitingEntries(entry.waitlist)
   const checkedIn = new Set(entry.participants.map((p) => p.contactId))
 
   // A walk-in checked in without a booking still belongs on the sheet.
@@ -166,9 +193,16 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
   const walkIns = entry.participants.filter((p) => !bookedContactIds.has(p.contactId))
 
   const cap = session.max_participants
-  // Bodies in the room = bookings still holding a seat + walk-ins who checked
-  // in without one. This is what capacity should be read against.
-  const total = roster.length + walkIns.length
+  // Seats taken = the roster + walk-ins who checked in without a booking + the
+  // seats held by unclaimed offers. This is what capacity is read against, and
+  // all three parts are disjoint, so the breakdown below always adds up.
+  const total = roster.length + walkIns.length + held
+  // Only worth breaking down when the total ISN'T just the roster — otherwise
+  // "10 booked (10 booked)" is pure noise.
+  const splitParts = [t('countBooked', { count: roster.length })]
+  if (walkIns.length > 0) splitParts.push(t('countWalkIns', { count: walkIns.length }))
+  if (held > 0) splitParts.push(t('countHeld', { count: held }))
+  const showSplit = splitParts.length > 1
   const isCancelled = session.status === 'cancelled'
 
   return (
@@ -187,20 +221,25 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
             {[session.providerName, session.location].filter(Boolean).join(' · ')}
           </p>
         </div>
-        {/* Headcount. Capacity is measured against TOTAL bodies in the room —
-            a walk-in takes a spot as surely as a booking does, so counting only
-            bookings against `cap` under-reports how full the session is.
-            The booked/walk-in split is only shown when there ARE walk-ins;
-            otherwise total === booked and the breakdown is pure noise. */}
+        {/* Headcount. Capacity is measured against every TAKEN seat — a walk-in
+            takes a spot as surely as a booking does, and a seat held for an
+            unclaimed waitlist offer cannot be given to anyone else while the
+            claim link is live, so counting only the roster against `cap`
+            under-reports how full the session is. The split is only shown when
+            the total ISN'T just the roster. */}
         <p className="text-sm font-medium tabular-nums">
           {cap ? `${total}/${cap}` : total}
           <span className="ml-1 font-normal text-muted-foreground">
-            {walkIns.length > 0 ? t('totalLabel') : t('bookedLabel')}
+            {showSplit ? t('totalLabel') : t('bookedLabel')}
           </span>
-          {walkIns.length > 0 && (
+          {showSplit && (
             <span className="ml-2 font-normal text-muted-foreground">
-              ({t('countBooked', { count: roster.length })} ·{' '}
-              {t('countWalkIns', { count: walkIns.length })})
+              ({splitParts.join(' · ')})
+            </span>
+          )}
+          {waiting.length > 0 && (
+            <span className="ml-2 font-normal text-muted-foreground">
+              · {t('waitlistCount', { count: waiting.length })}
             </span>
           )}
         </p>
@@ -266,6 +305,18 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* The point of the whole feature at the door: a no-show, and the names to
+          call, on the same piece of paper. In queue order — the first name is
+          the one the system would offer the seat to anyway. */}
+      {waiting.length > 0 && (
+        <p className="border-t pt-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {t('waitlistHeading')} ({waiting.length}):
+          </span>{' '}
+          {waiting.map(waitlistName).join(' · ')}
+        </p>
       )}
     </section>
   )

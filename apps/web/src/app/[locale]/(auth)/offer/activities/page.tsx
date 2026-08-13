@@ -25,10 +25,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SubscriptionType, FormField } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SaasPlan, SubscriptionType, FormField } from '@linyup/shared'
+
+/** The waitlist's plan gate, mirroring the server side of it
+ *  (`requirePlan(teamId, 'coach')` in joinWaitlist). One constant, because a
+ *  toggle a tenant can set and a queue that then refuses every join is worse
+ *  than no toggle at all. */
+const WAITLIST_MIN_PLAN: SaasPlan = 'coach'
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
+import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
 import { resolveActivityTerms } from '@/lib/activityTerms'
 import {
   BenefitEditor,
@@ -173,6 +181,11 @@ function createActivitySchema(
     // trial, today's behaviour). A number reduces the trial to that price
     // instead of the class's normal price.
     trialPrice: z.string(),
+    // CLASS-ONLY: a full session offers a queue instead of a dead end. This is
+    // the ONLY place the flag lives — sessions carry no copy of it, so turning
+    // it on here reaches every session of the activity, past and future, with
+    // no fan-out and nothing to backfill.
+    waitlistEnabled: z.boolean(),
     // Does a booking for this activity confirm itself, or wait on studio review?
     // Not implied by `type` — shown for classes and appointments alike.
     autoConfirm: z.boolean(),
@@ -253,6 +266,14 @@ function ActivityDialog({
   const t = useTranslations('Activities')
   const tBenefit = useTranslations('Benefit')
   const qc = useQueryClient()
+  // The waitlist is a paid-tier feature, and THIS is where its flag is written —
+  // the activity doc is a client write, so the gate has to sit on the control
+  // itself (the same shape every other plan-gated toggle uses). `joinWaitlist`
+  // carries the matching server-side requirePlan, so the queue can never open
+  // below the tier even if the flag were set some other way.
+  const { isAtLeast } = usePlan()
+  const planName = usePlanName()
+  const waitlistAllowed = isAtLeast(WAITLIST_MIN_PLAN)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
@@ -294,6 +315,7 @@ function ActivityDialog({
           dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
           trialEnabled: editing.trialEnabled ?? false,
           trialPrice: editing.trialPriceAmount != null ? String(editing.trialPriceAmount) : '',
+          waitlistEnabled: editing.waitlistEnabled ?? false,
           durations: toDurationFormValues(editing.durations),
           memberBenefit: toBenefitFormValue(editing.memberBenefit),
           autoConfirm: resolveAutoConfirm(editing),
@@ -305,6 +327,7 @@ function ActivityDialog({
           type: 'class' as ActivityType, level: 'all',
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
+          waitlistEnabled: false,
           durations: [],
           memberBenefit: defaultBenefitFormValue(),
           autoConfirm: resolveAutoConfirm({ type: 'class' }),
@@ -314,6 +337,7 @@ function ActivityDialog({
   const accessTier = watch('accessTier')
   const dropInEnabled = watch('dropInEnabled')
   const trialEnabled = watch('trialEnabled')
+  const waitlistEnabled = watch('waitlistEnabled')
   const durations = watch('durations') || []
 
   function toggleDuration(minutes: number) {
@@ -456,6 +480,10 @@ function ActivityDialog({
       // a previous tier must not survive as inert data the UI can't show.
       trialPriceAmount:
         data.trialPrice && data.accessTier !== 'open' ? Number(data.trialPrice) : null,
+      // Below the tier the stored value is carried through untouched rather than
+      // read off a locked control: the gate stops a queue being OPENED, it does
+      // not quietly strip one an activity already had (see WAITLIST_MIN_PLAN).
+      waitlistEnabled: waitlistAllowed ? data.waitlistEnabled : (editing?.waitlistEnabled ?? false),
       durations: null,
       memberBenefit: data.dropInEnabled ? toBenefitPayload(data.memberBenefit) : null,
     }
@@ -702,6 +730,39 @@ function ActivityDialog({
                   </div>
                 )}
                 {errors.trialPrice && <p className="text-destructive text-xs">{errors.trialPrice.message}</p>}
+              </div>
+            )}
+
+            {/* CLASS-ONLY: the queue behind a full session. Independent of every
+                other door here — a members-only class, a drop-in class and an
+                open one all fill up the same way. Appointments have none: an
+                appointment session does not exist until it is booked, so
+                "this one is full" has no meaning there. */}
+            {type === 'class' && (
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 pr-4">
+                    <p className="text-sm font-medium">{t('waitlistEnabledLabel')}</p>
+                    <p className="text-xs text-muted-foreground">{t('waitlistEnabledHint')}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    {...register('waitlistEnabled')}
+                    disabled={!waitlistAllowed}
+                    className="accent-primary shrink-0 disabled:opacity-40"
+                  />
+                </div>
+                {/* The plan gate, on the control that writes the flag. */}
+                {!waitlistAllowed && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('waitlistRequiresPlan', { plan: planName(WAITLIST_MIN_PLAN) })}
+                  </p>
+                )}
+                {/* Not a validation error: the limit lives on each SESSION, not
+                    here, so the form cannot know whether any of them has one. */}
+                {waitlistAllowed && waitlistEnabled && (
+                  <p className="text-xs text-muted-foreground">{t('waitlistRequiresCapacity')}</p>
+                )}
               </div>
             )}
 

@@ -42,11 +42,17 @@ async function logActivity(teamId: string, entry: Record<string, unknown>): Prom
 
 // ─── trackBookings ────────────────────────────────────────────────────────────
 
+// A status this map doesn't know returns early, BEFORE the recount below — so
+// every status that changes whether a booking holds a seat must appear here.
+// 'no_show' was missing, which is why markNoShowBookings had to hand-write
+// `bookings_count` in a batch (a blind increment, no conflict detection). It
+// recounts now, and that hand-written counter is gone.
 const STATUS_EVENT: Record<string, string> = {
   pending: 'booking_created',
   confirmed: 'booking_confirmed',
   cancelled: 'booking_cancelled',
   rebooked: 'booking_rebooked',
+  no_show: 'booking_no_show',
 }
 
 export const trackBookings = onDocumentWritten(
@@ -142,6 +148,7 @@ export const trackBookings = onDocumentWritten(
       booking_confirmed: `${contactFullname} confirmed for ${isAppointment ? 'appointment session' : 'session'} on ${sessionDateLabel}.`,
       booking_cancelled: `Booking for ${contactFullname} on ${sessionDateLabel} was cancelled.`,
       booking_rebooked: `${contactFullname} rebooked from session on ${sessionDateLabel}.`,
+      booking_no_show: `${contactFullname} did not attend the ${isAppointment ? 'appointment' : 'session'} on ${sessionDateLabel}.`,
     }
 
     await logActivity(teamId, {

@@ -25,6 +25,11 @@ export function appointmentSlotBlocked(
  *  until `claim_expires_at`; past that the seat is logically free again (lazy
  *  expiry, same shape as isExpiredAppointmentHold) until the offer sweeper
  *  rolls it on to the next person.
+ *
+ *  Asks about the DEADLINE only. Never use it alone to decide whether a seat is
+ *  free: a claim that was taken up keeps its seat past this instant, and pairing
+ *  it with `isUnclaimedClaimHold` is what says so (see bookingHoldsSeat).
+ *
  *  Inert until bookings carry `waitlist_claim` — it lands with its siblings so
  *  the waitlist adds a FIELD rather than a fourth predicate somewhere else. */
 export function isExpiredWaitlistClaim(
@@ -32,6 +37,17 @@ export function isExpiredWaitlistClaim(
   nowMs = Date.now()
 ): boolean {
   return b.waitlist_claim === true && !!b.claim_expires_at && b.claim_expires_at.toMillis() <= nowMs
+}
+
+/** The booking fields the seat predicates read. Nothing else is needed to
+ *  decide whether a document occupies a seat, so a caller can hand over a raw
+ *  `DocumentData` without narrowing it first. */
+export interface SeatHold {
+  status?: string
+  payment_status?: string
+  expires_at?: { toMillis(): number } | null
+  waitlist_claim?: boolean
+  claim_expires_at?: { toMillis(): number } | null
 }
 
 /** THE capacity predicate for bookings — the single source of truth for "does
@@ -44,26 +60,225 @@ export function isExpiredWaitlistClaim(
  *  a session that had a free seat. Counting it as free here makes both the
  *  recount and the gate agree, without waiting for the sweep.
  *
+ *  A lapsed waitlist CLAIM is the same story, with one hard qualification: the
+ *  deadline only releases a seat while the offer is still an UNCLAIMED hold
+ *  (isUnclaimedClaimHold). A claim that was taken up is an ordinary booking —
+ *  confirmed, or paid with money or stored value — and it keeps its seat
+ *  forever, even if the document still carries `waitlist_claim` because whoever
+ *  confirmed it forgot to clear the flag. Testing `isExpiredWaitlistClaim`
+ *  alone made a settled attendee stop holding their seat at `claim_expires_at`,
+ *  so the recount freed it and the promoter offered it again: eleven people,
+ *  ten seats.
+ *
  *  An ABSENT status is pending and still holds a seat. */
-export function bookingHoldsSeat(
-  b: {
-    status?: string
-    payment_status?: string
-    expires_at?: { toMillis(): number } | null
-    waitlist_claim?: boolean
-    claim_expires_at?: { toMillis(): number } | null
-  },
-  nowMs = Date.now()
-): boolean {
+export function bookingHoldsSeat(b: SeatHold, nowMs = Date.now()): boolean {
   if (b.status && NON_HOLDING_BOOKING_STATUSES.has(b.status)) return false
   if (b.payment_status === 'required' && !!b.expires_at && b.expires_at.toMillis() <= nowMs) {
     return false
   }
-  return !isExpiredWaitlistClaim(b, nowMs)
+  if (isUnclaimedClaimHold(b) && isExpiredWaitlistClaim(b, nowMs)) return false
+  return true
 }
 
 /** 'rebooked' means the seat moved to ANOTHER session — it is not held here. */
 const NON_HOLDING_BOOKING_STATUSES = new Set(['cancelled', 'no_show', 'rebooked'])
+
+/** Live seat count over a session's `bookings` subcollection — the ONE way a
+ *  capacity gate turns documents into a number. Takes raw snapshot docs so a
+ *  transaction read can be passed straight in.
+ *
+ *  `nowMs` is sampled ONCE by the caller and threaded through: re-reading the
+ *  clock per document could count a hold as live at the top of a pass and
+ *  expired at the bottom, and the number a gate refuses on is the same number
+ *  it is about to persist.
+ *
+ *  `excludeId` drops the caller's own booking, whose document every gate is
+ *  about to REPLACE — a returning buyer re-opening an abandoned checkout, a
+ *  webhook confirming the hold it created. Counting it would refuse them the
+ *  seat they are already holding. */
+export function countHoldingSeats(
+  docs: Array<{ id: string; data(): unknown }>,
+  nowMs: number = Date.now(),
+  excludeId?: string
+): number {
+  return docs.reduce(
+    (n, d) =>
+      d.id !== excludeId && bookingHoldsSeat(d.data() as SeatHold, nowMs) ? n + 1 : n,
+    0
+  )
+}
+
+/** Seats still open. `Infinity` when the session carries no cap — an unlimited
+ *  class is never full, and `Infinity > 0` keeps the caller's arithmetic honest
+ *  without a special case at every gate. A cap of 0 or less reads as ABSENT,
+ *  matching how `max_participants` has always been interpreted. */
+export function seatsFree(maxParticipants: number | null | undefined, holding: number): number {
+  if (typeof maxParticipants !== 'number' || maxParticipants <= 0) return Infinity
+  return maxParticipants - holding
+}
+
+/** The session fields the seat-freed edge reads — a `before`/`after` pair from
+ *  an onDocumentWritten payload, narrowed to nothing but capacity and life. */
+export interface SeatCounts {
+  max_participants?: number | null
+  bookings_count?: number
+  status?: string
+}
+
+/** Did this write FREE A SEAT? — the edge the waitlist promoter hangs on, and
+ *  the only thing its trigger inspects. True exactly when a session went from
+ *  full (or oversold) to having room, which is where every seat-releasing event
+ *  converges: a cancellation, a no-show flip, a rebooking out, a released hold,
+ *  a raised cap. All of them land as a write to the session document — either
+ *  the writer's own absolute count or `trackBookings`' recount — which is why
+ *  the promoter watches the document instead of being wired into six call sites.
+ *
+ *  Being an EDGE is what makes the promoter loop-safe: the promotion transaction
+ *  writes the session document and so re-fires the trigger, but on that second
+ *  pass the seats are taken and `before` is no longer full, so it terminates.
+ *  The corollary is binding — a handler on this edge must NOT write the session
+ *  document on any path where it decides not to promote, or a "harmless" touch
+ *  re-enters it forever.
+ *
+ *  An uncapped session never produces the edge (it was never full), and neither
+ *  does a cancelled one (there is no seat to hand on). */
+export function seatFreedEdge(
+  before: SeatCounts | null | undefined,
+  after: SeatCounts | null | undefined
+): boolean {
+  if (!before || !after) return false
+  if (after.status === 'cancelled') return false
+  return (
+    seatsFree(before.max_participants, before.bookings_count ?? 0) <= 0 &&
+    seatsFree(after.max_participants, after.bookings_count ?? 0) > 0
+  )
+}
+
+/** Is this booking still the UNTAKEN hold a waitlist offer created? THE question
+ *  every release path has to answer before deleting a booking: an offer that was
+ *  taken up in the meantime is an ordinary booking — confirmed, or paid with
+ *  money or stored value — and deleting it would destroy a seat somebody has
+ *  already paid for, then hand that seat to the next person in the queue.
+ *
+ *  Anything already RESOLVED (cancelled, no_show, rebooked) is equally not a
+ *  hold: its seat has been accounted for by whoever resolved it, and deleting it
+ *  a second time would decrement the same person's pending-booking counter
+ *  twice. Only a still-pending claim qualifies.
+ *
+ *  Deliberately clock-free. Whether the offer LAPSED is a separate question
+ *  (isExpiredWaitlistClaim); this one asks only whether the seat is still
+ *  unsettled, so a sweep that selected a lapsed offer and a `leaveWaitlist` that
+ *  releases a live one apply the identical guard. */
+export function isUnclaimedClaimHold(b: SeatHold | null | undefined): boolean {
+  if (!b || b.waitlist_claim !== true) return false
+  if (b.status && b.status !== 'pending') return false
+  return b.payment_status !== 'paid' && b.payment_status !== 'gift_card'
+}
+
+/** Is this seat actually TAKEN UP — is the person in the class?
+ *
+ *  Holding a seat and being in the class are not the same question, and a
+ *  release path has to ask the second one. `bookingHoldsSeat` is true for a live
+ *  UNPAID hold (`payment_status: 'required'` before `expires_at`), because that
+ *  hold really does occupy the seat while it lasts — but its owner has settled
+ *  nothing, and treating it as "they got in another way" marks their queue entry
+ *  `claimed` and swallows the "your offer lapsed" mail for someone who then
+ *  abandons the checkout.
+ *
+ *  A CONFIRMED booking is in the class whatever its payment markers say: a coach
+ *  confirming someone at the door is the studio deciding they are in, and a
+ *  stranded `payment_status` must not demote that.
+ *
+ *  Everything else that holds a seat is settled by construction — a free
+ *  booking, a paid one, a gift-card cover — so only the unsettled pending hold
+ *  is carved out. */
+export function bookingSeatTakenUp(b: SeatHold | null | undefined, nowMs = Date.now()): boolean {
+  if (!b || !bookingHoldsSeat(b, nowMs)) return false
+  return b.status === 'confirmed' || b.payment_status !== 'required'
+}
+
+/**
+ * Every hold marker that must come OFF a booking when a claim settles.
+ *
+ * A settle is an `update`, not a full replace, so whatever the document was
+ * carrying survives unless it is named here — and by then it may be carrying a
+ * SECOND hold's markers. The path is ordinary: a claimant opens the pay screen
+ * (`createDropInCheckout` rewrites the hold with `payment_status: 'required'` +
+ * `expires_at`), abandons Stripe, then settles some other way — they acquire
+ * coverage and re-open the claim link, or a coach simply confirms them at the
+ * door.
+ *
+ * Clearing only the two claim fields there costs the seat twice over:
+ * `bookingHoldsSeat` frees it at `expires_at` (recount → `seatFreedEdge` → the
+ * promoter hands a confirmed person's seat to the next in the queue — eleven
+ * bookings on ten seats), and `releaseExpiredBookingHolds` matches the same
+ * `payment_status`/`expires_at` pair on its collection group and HARD-DELETES a
+ * confirmed, covered booking.
+ *
+ * The list is exactly what the full-replace writers already produce implicitly —
+ * the promoter's `.set()`, the gift-card full cover, the Connect webhook's
+ * confirm (which sets `payment_status: 'paid'` instead, money having moved).
+ *
+ * It lives in `@linyup/shared` rather than in the waitlist module because the
+ * settle paths are on BOTH sides of the wire: the free claim and the two
+ * check-in callables are server-side, while the studio's bookings list and
+ * session detail page confirm a booking with a client write. One list, or they
+ * drift.
+ */
+export const CLAIM_HOLD_FIELDS = [
+  'waitlist_claim',
+  'claim_expires_at',
+  'payment_status',
+  'expires_at',
+] as const
+
+export type ClaimHoldField = (typeof CLAIM_HOLD_FIELDS)[number]
+
+/** The settle patch, built from `CLAIM_HOLD_FIELDS`. Takes the delete sentinel
+ *  rather than importing one, so this module stays free of both Firebase SDKs
+ *  (`FieldValue.delete()` on the server, `deleteField()` in the browser) and a
+ *  test can apply the same patch with a plain `undefined` — which behaves like
+ *  an absent field for every predicate that reads these four. */
+export function clearedClaimHoldFields<D>(deleteSentinel: D): Record<ClaimHoldField, D> {
+  // `fromEntries` widens the key back to `string`; the entries come from the
+  // literal tuple above, so the narrowing is a restatement, not an assumption.
+  return Object.fromEntries(CLAIM_HOLD_FIELDS.map((field) => [field, deleteSentinel])) as Record<
+    ClaimHoldField,
+    D
+  >
+}
+
+/** A claim hold whose payment never settled — the shape the waitlist introduced
+ *  and the only one a staff confirm has to clear more than the claim fields
+ *  from. `payment_status: 'required'` WITHOUT `waitlist_claim` is an ordinary
+ *  abandoned drop-in hold, which has always survived a confirm untouched;
+ *  whether confirming should waive somebody's payment is a product question and
+ *  is deliberately not answered here. */
+export function isUnsettledPaidClaimHold(b: SeatHold | null | undefined): boolean {
+  return b?.waitlist_claim === true && b.payment_status === 'required'
+}
+
+/**
+ * The hold markers a STAFF confirm must clear, for THIS booking.
+ *
+ * Confirming turns a booking into an ordinary seat, so the claim fields always
+ * go: a leftover `waitlist_claim` hides the person from `sendBookingReminders`
+ * forever, and deleting an absent field is a no-op on every non-waitlist
+ * booking. A claim hold that was mid-payment additionally carries the drop-in
+ * hold's own markers, and those are the ones that quietly kill the seat — see
+ * `CLAIM_HOLD_FIELDS`.
+ *
+ * One function, called by all four confirm surfaces (the bookings list, session
+ * detail, `checkInContact`, `selfCheckIn`), so they cannot settle a booking into
+ * four different document shapes.
+ */
+export function confirmClearedHoldFields<D>(
+  booking: SeatHold | null | undefined,
+  deleteSentinel: D
+): Partial<Record<ClaimHoldField, D>> {
+  if (isUnsettledPaidClaimHold(booking)) return clearedClaimHoldFields(deleteSentinel)
+  return { waitlist_claim: deleteSentinel, claim_expires_at: deleteSentinel }
+}
 
 /** Has the online booking cutoff passed for this session? `cutoffMinutes` is
  *  how long before start online booking closes (0/absent = no cutoff — bookable
@@ -128,9 +343,31 @@ export interface Session {
    *  neither 'cancelled' nor 'no_show' (an absent status = pending = holds a
    *  seat). One counter for classes and appointments alike; `trackBookings` is
    *  the authoritative recount and self-heals races.
+   *
+   *  ONE WRITING STYLE, deliberately: an ABSOLUTE value, written either by
+   *  `trackBookings`' recount or from inside a transaction that read the
+   *  `bookings` subcollection in the same read set (countHoldingSeats). There
+   *  is NO `FieldValue.increment` on this field anywhere — a blind increment
+   *  and an absolute write cannot be ordered against each other, so the two
+   *  styles used to interleave and leave a class one seat over or under. Add a
+   *  new writer only in that shape.
    *  History: classes used to count into a separate `bio_link_bookings_count`
    *  while appointments used this one — merged 2026-07. */
   bookings_count?: number
+  /** How many people are WAITING in this session's queue (`status: 'waiting'`
+   *  entries — an offered/claimed/expired/left entry does not count). Written
+   *  absolutely, only from inside a transaction that read the queue, for the
+   *  same reason as `bookings_count`.
+   *
+   *  There is deliberately NO `waitlist_enabled` on the session, and nothing may
+   *  add one: the flag lives on `Activity.waitlistEnabled` and its public
+   *  mirror, exactly like `trialEnabled`. A session-level copy would need an
+   *  activity→sessions fan-out (only `onActivityTypeChange` does that, and only
+   *  for `type`) plus a backfill for every session that already exists, and it
+   *  would drift the moment either failed. The promoter already reads the team
+   *  for `cutoffMinutes`, so one more activity read on a path that runs only
+   *  when a seat frees costs nothing. */
+  waitlist_count?: number
   /** Capacity state, derived from bookings_count vs max_participants (plus
    *  explicit cancellation). Treat an ABSENT value as 'open' — a session that
    *  nobody has booked yet may not carry one.
@@ -211,6 +448,12 @@ export interface SessionPublicProfile {
   isFreeTrial?: boolean
   templateId?: string
   status?: 'open' | 'full' | 'cancelled'
+  /** CLASS branch only. How many people are waiting — an aggregate, never an
+   *  identity; the queue itself is never public. The public form derives "full"
+   *  arithmetically from `max_participants` vs `bookings_count` (the class
+   *  mirror carries no `status`, and must not start carrying one), so this is
+   *  the only field a "12 waiting" chip needs. */
+  waitlist_count?: number
 }
 
 export interface Participant {
@@ -270,6 +513,88 @@ export interface Booking {
   payment_status?: 'not_required' | 'required' | 'paid'
   payment_intent_id?: string
   expires_at?: Timestamp
+  // Waitlist claim hold. A promoted waitlist entry reserves its seat as an
+  // ORDINARY booking carrying these two fields rather than as a new kind of
+  // object, so `bookingHoldsSeat`, the capacity gates, the duplicate guards and
+  // the recount all understand it without a line of new code. Both are DELETED
+  // when the claim is taken up — from that moment it is a normal booking.
+  /** True while this booking is a seat held for a waitlist offer nobody has
+   *  claimed yet. */
+  waitlist_claim?: boolean
+  /** THE single deadline of a claim: the booking hold expires, the offer
+   *  expires, and (for a paid claim) the Stripe session expires all at this one
+   *  instant. Mirrored onto the entry as `offer_expires_at` — two copies of one
+   *  computed value, never two computations. */
+  claim_expires_at?: Timestamp
+  /** Provenance, kept after the two fields above are deleted: this seat came
+   *  from the queue rather than from the booking page. Never read by a gate —
+   *  it is for the manifest, the day sheet and anyone asking where a booking
+   *  came from. */
+  claimed_from_waitlist?: boolean
+}
+
+/** The lifecycle of one queue entry. 'offered' is the only status that owns a
+ *  claim hold; 'claimed' | 'expired' | 'left' are terminal.
+ *
+ *  An entry is offered ONCE, ever. A lapsed offer is terminal ('expired') and
+ *  the person re-joins if they still want the class — which writes a fresh
+ *  `joined_at` and puts them at the tail for free. That is why there is no
+ *  offer counter, no re-queue ordering key and no "max offers" setting. */
+export const WAITLIST_STATUSES = ['waiting', 'offered', 'claimed', 'expired', 'left'] as const
+export type WaitlistStatus = (typeof WAITLIST_STATUSES)[number]
+
+/** One person's place in a class queue — `sessions/{sessionId}/waitlist/{contactId}`.
+ *
+ *  The doc id IS the contactId, exactly mirroring `sessions/{id}/bookings/{contactId}`:
+ *  dedupe is free, the rules mirror the bookings block, and the promotion
+ *  transaction gets one session's whole queue in a single read.
+ *
+ *  CLASS-ONLY. An appointment session does not exist until it is booked, so
+ *  "this session is full" has no meaning there — the analogous feature is a
+ *  waitlist on an availability WINDOW, which is a different primitive.
+ *
+ *  Written only by Cloud Functions; every client write is denied by the rules. */
+export interface WaitlistEntry {
+  /** = contactId. */
+  id: string
+  teamId: string
+  /** sessionId, denormalised — the collection-group sweeps need it inline. */
+  session: string
+  /** contactId, denormalised (same value as the doc id). */
+  contact: string
+  /** The session's start, denormalised: the ONLY way a collection-group sweep
+   *  finds entries left on sessions that have already run, without a join. */
+  session_start: Timestamp
+  // Denormalised identity: the offer notification needs no contact read, and the
+  // admin queue list and the day sheet render straight from the entry.
+  firstname: string
+  lastname: string
+  email: string
+  phone?: string | null
+  /** THE ordering key — `joined_at ASC` is the queue, always. Immutable, and
+   *  there is no stored position: a position is derived at read time, so a
+   *  departure ahead of you never has to rewrite every entry behind it. */
+  joined_at: Timestamp
+  status: WaitlistStatus
+  /** Long-lived: "check my place" / "leave the waitlist". Deliberately NOT the
+   *  claim credential — a forwarded join-confirmation email must not let anyone
+   *  take the seat. */
+  entry_token: string
+  /** Minted per offer, SINGLE USE, deleted the moment the offer resolves in any
+   *  direction. This is the claim credential. */
+  offer_token?: string
+  offered_at?: Timestamp
+  /** The SAME instant as the claim hold's `claim_expires_at`. */
+  offer_expires_at?: Timestamp
+  /** Attribution — where the join came from. See `BookingSource`. */
+  source?: BookingSource
+  /** Answers to the activity's `bookingQuestions`, captured at JOIN so the claim
+   *  never re-asks them. Narrowed with `sanitizeBookingAnswers`, same as a
+   *  booking's. */
+  question_answers?: Record<string, unknown>
+  left_at?: Timestamp
+  expired_at?: Timestamp
+  claimed_at?: Timestamp
 }
 
 export interface SessionSeries {

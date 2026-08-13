@@ -179,6 +179,16 @@ export interface Activity {
    *  (see `createDropInCheckout`'s `trial` input) — a class may offer a paid
    *  trial with no drop-in configured at all. */
   trialPriceAmount?: number | null
+  /** CLASS-ONLY. When true, a full session of this activity offers a queue
+   *  instead of a dead end: a visitor joins, and the first waiter is offered the
+   *  seat automatically the moment one frees. Meaningless without
+   *  `max_participants` on the sessions — a class with no cap is never full.
+   *
+   *  This is the ONLY place the toggle lives. There is no per-session copy and
+   *  no per-session override (see `Session.waitlist_count` for why), and
+   *  appointments ignore it: nothing exists to be full until a booking creates
+   *  it. */
+  waitlistEnabled?: boolean
   /** Display-only entry requirements shown on the public booking pages (e.g.
    *  "25m front crawl with side breathing"). Not enforced anywhere. */
   prerequisites?: string
@@ -258,6 +268,10 @@ export interface ActivityPublicProfile {
    *  of nothing. Mirrored only when `trialEnabled === true` and the value is a
    *  number — see `Activity.trialPriceAmount`. */
   trialPriceAmount?: number | null
+  /** CLASS-ONLY. Mirrored so the public booking flow can offer "join the
+   *  waitlist" on a full slot — present only when true. The queue itself is
+   *  never public; only this flag and the session's `waitlist_count` are. */
+  waitlistEnabled?: boolean
   /** APPOINTMENT-ONLY. The duration menu with base prices so public cards can
    *  show "from CHF 45". Mirrored verbatim from `Activity.durations` — there's
    *  no per-contact data to strip any more (the old `subscriptionPricing`

@@ -8,7 +8,8 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
-import { publicUrl } from '@linyup/shared'
+import { closeSessionWaitlist } from '../booking/waitlist/teardown'
+import { confirmClearedHoldFields, publicUrl, type SeatHold } from '@linyup/shared'
 
 const SESSION_SERIES_COLLECTION = 'session_series'
 const SESSIONS_COLLECTION = 'sessions'
@@ -179,21 +180,63 @@ async function cancelSingleSession(
   let sent = 0
   let failed = 0
 
+  // THE SESSION IS MARKED CALLED-OFF FIRST, before anything touches the queue.
+  // Closing the queue releases claim holds, and every release writes
+  // `bookings_count` — which is precisely the `seatFreedEdge` that
+  // `promoteWaitlistOnSeatFreed` watches. With the marker not yet written the
+  // promoter re-reads a session that still looks bookable and cheerfully mails
+  // "A place has opened up" for a class being called off as it does so; a join
+  // landing mid-teardown survives it for the same reason. `joinWaitlist` and the
+  // promoter both refuse on `isSessionCancelled` / `allowBooking`, so the marker
+  // is all the ordering constraint they need.
+  if (markAsException) {
+    // The exception pair IS the cancellation record for an occurrence of a
+    // series (status and allowBooking are deliberately left alone — see
+    // isSessionCancelled). Unguarded on purpose: if this write fails the class
+    // is NOT cancelled, and mailing everyone that it was would be the worse
+    // outcome.
+    await sessionRef.update({
+      isException: true,
+      exceptionType: 'cancelled',
+      cancelled_at: FieldValue.serverTimestamp(),
+    })
+  } else {
+    // The delete branch has no marker to write — the document is going away at
+    // the end of this function — so it borrows the one every waitlist path
+    // already tests. Best-effort: the session is about to be deleted, and a
+    // cancellation must complete even if this does not.
+    const [markErr] = await to(sessionRef.update({ allowBooking: false }))
+    if (markErr) {
+      console.error(`cancelSingleSession: could not close bookings on ${sessionId}:`, markErr) // eslint-disable-line no-console
+    }
+  }
+
+  // BEFORE the bookings are read, because closing the queue deletes the claim
+  // holds it owns: a hold is an ordinary `pending` booking, so a teardown that
+  // ran afterwards would decrement `pending_bookings_count` twice for the same
+  // person (once here, once inside the release). That constraint is about the
+  // BOOKINGS READ below, not about the marker above — the two orderings are
+  // independent and both hold. The people whose offer was withdrawn come back as
+  // `offerHolders` and are mailed alongside the real bookings below — they are
+  // the ones who believed they had a seat.
+  const offerHolders = await closeSessionWaitlist(sessionRef)
+
   const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
   let bookingsToNotify = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
 
   // Member cancellation notices are per-team toggleable (Automations → System emails).
   const cancellationTeamId = (sessionData.teamId || sessionData.teacher) as string | undefined
-  if (
-    bookingsToNotify.length > 0 &&
-    cancellationTeamId &&
-    !(await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
-  ) {
+  const cancellationEmailsEnabled =
+    bookingsToNotify.length > 0 || offerHolders.length > 0
+      ? !!cancellationTeamId &&
+        (await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
+      : false
+  if (bookingsToNotify.length > 0 && !cancellationEmailsEnabled) {
     console.log(`cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId}`) // eslint-disable-line no-console
     bookingsToNotify = []
   }
 
-  if (bookingsToNotify.length > 0) {
+  if (bookingsToNotify.length > 0 || (offerHolders.length > 0 && cancellationEmailsEnabled)) {
     let activityName = 'Session'
     if (sessionData.activityId) {
       const [actErr, actDoc] = await to(
@@ -246,15 +289,43 @@ async function cancelSingleSession(
         failed++
       }
     }
+
+    // The withdrawn offers. Same class, same story — but their seat was a hold
+    // this function already gave back, so the loop above cannot reach them, and
+    // being told nothing is the one outcome they would notice: a claim link that
+    // silently stops working reads as a bug. No counter to move here; the
+    // release decremented it when it deleted the hold.
+    if (cancellationEmailsEnabled) {
+      for (const holder of offerHolders) {
+        if (!holder.email) continue
+        try {
+          const email = buildCancellationEmail({
+            firstname: holder.firstname,
+            teamName: teamData.name,
+            activityName,
+            sessionStart: (sessionData.start as Timestamp).toDate(),
+            sessionEnd: (sessionData.end as Timestamp).toDate(),
+            rebookUrl,
+          })
+          await sendEmail({
+            to: holder.email,
+            teamId: (sessionData.teamId || sessionData.teacher) as string,
+            subject: email.subject,
+            html: email.html,
+            text: email.text,
+          })
+          sent++
+        } catch (err) {
+          console.error(`Error sending cancellation to waitlist offer ${holder.email}:`, err)
+          failed++
+        }
+      }
+    }
   }
 
-  if (markAsException) {
-    await sessionRef.update({
-      isException: true,
-      exceptionType: 'cancelled',
-      cancelled_at: FieldValue.serverTimestamp(),
-    })
-  } else {
+  // The exception marker was written at the top of this function; only the
+  // delete branch has work left.
+  if (!markAsException) {
     // Delete bookings subcollection
     const [allBookErr, allBookSnap] = await to(sessionRef.collection('bookings').get())
     if (!allBookErr && allBookSnap && !allBookSnap.empty) {
@@ -269,6 +340,9 @@ async function cancelSingleSession(
       partSnap.docs.forEach((d) => bk.delete(d.ref))
       await bk.commit()
     }
+    // The queue's own documents are removed by the session-delete trigger
+    // (`teardownWaitlistOnSessionDeleted`), which owns that job because a
+    // standalone session is deleted client-side and never reaches this function.
     await sessionRef.delete()
   }
 
@@ -881,9 +955,25 @@ export const selfCheckIn = onCall(async (request) => {
   if (!bErr && bookingDoc && bookingDoc.exists) {
     const bStatus = bookingDoc.data()?.status as string | undefined
     if (!bStatus || bStatus === 'pending') {
-      batch.update(bookingRef, { status: 'confirmed', confirmed_at: FieldValue.serverTimestamp() })
+      batch.update(bookingRef, {
+        status: 'confirmed',
+        confirmed_at: FieldValue.serverTimestamp(),
+        // A confirmed seat is an ordinary booking — the hold markers go with the
+        // same write. The claim flag is not an oversell any more
+        // (bookingHoldsSeat no longer expires a SETTLED claim), but it still
+        // hides this person from `sendBookingReminders` forever; and a claim
+        // that was mid-payment also carries `payment_status: 'required'` +
+        // `expires_at`, which DO still cost the seat (freed at the deadline by
+        // the recount, then hard-deleted at 02:00 by
+        // releaseExpiredBookingHolds). `confirmClearedHoldFields` is the one
+        // patch every confirm surface applies; absent fields are a no-op.
+        ...confirmClearedHoldFields(bookingDoc.data() as SeatHold, FieldValue.delete()),
+      })
+      // No `bookings_count` here: a confirmed booking still HOLDS its seat
+      // (bookingHoldsSeat), so decrementing on check-in was a leftover from the
+      // pre-merge counter model — it put the class one seat under for whoever
+      // won the race with trackBookings' recount of this same status flip.
       batch.update(sessionRef, {
-        bookings_count: FieldValue.increment(-1),
         conversions_count: FieldValue.increment(1),
       })
       batch.update(db.collection('contacts').doc(contactId), {

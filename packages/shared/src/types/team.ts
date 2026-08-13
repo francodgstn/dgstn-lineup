@@ -392,6 +392,11 @@ export interface BookingSettings {
    *  authoritatively by the booking callables — see `isPastBookingCutoff`
    *  (types/session.ts); this setting only configures the threshold. */
   cutoffMinutes?: number
+  /** How long a waitlist offer stays claimable, in minutes. Absent = 120.
+   *  It is a MAXIMUM, not a guarantee: the claim window is also clamped by the
+   *  booking cutoff and the session start, and an offer is simply not made when
+   *  what survives that clamp is too short to reach checkout. */
+  waitlistClaimMinutes?: number
 }
 
 /** A coach as exposed on the world-readable team public_profile (opt-in). */

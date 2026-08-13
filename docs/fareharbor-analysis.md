@@ -129,7 +129,7 @@ reason).
 
 | FareHarbor concept | Linyup today | Verdict | Effort |
 |---|---|---|---|
-| **Waitlist** | **Absent.** A full class throws `resource-exhausted` and the flow ends (`booking/index.ts:607-614`). Zero code hits for `waitlist`/`waiting_list` repo-wide. Already named as a planned Coach feature in `docs/product-strategy.md` §2 ("Slot waiting list") | **Port.** The highest-value *missing* booking feature: an empty seat in a paid class is leaked revenue, and a "sorry, full" dead end is the worst moment in the funnel. Needs a queue, a notification, and a **race-safe claim window** when a seat frees via cancel or no-show | L |
+| **Waitlist** | **Done — Wave 3 Phase 2.** Was: a full class threw `resource-exhausted` and the flow ended, with zero code hits for `waitlist` repo-wide. Now: a queue at `sessions/{id}/waitlist/{contactId}`, offered on the `seatFreedEdge` session trigger, held as an ordinary booking, claimed inside one deadline shared by the hold, the entry and the Stripe session. The capacity refusal it replaced now lives in `bookSession` (`booking/index.ts`) twice: the stale-count pre-flight that calls `healSessionSeatCount`, and the authoritative `countHoldingSeats` / `seatsFree` check inside the booking transaction — `docs/waitlist.md` | **Ported.** The highest-value *missing* booking feature: an empty seat in a paid class is leaked revenue, and a "sorry, full" dead end is the worst moment in the funnel. Shipped with the queue, the notifications, and the **race-safe claim window** | L |
 | **Campaigns → promo codes** | **Zero occurrences** of `coupon`, `promo`, `discount_code`, `voucher` anywhere | **Port** — and the hard parts already exist. The redemption UX is `components/booking/GiftCardRedeemField.tsx` (preview-then-apply); the code lifecycle is `connect/giftCards.ts` (reserve → commit → release, lazy expiry); the discount math is `Benefit` with `percent_off`/`fixed_price` and `applyBenefitToPrice`. **A promo code is essentially a `Benefit` keyed by a code, with a validity window and a usage cap, resolved inside `resolvePaymentOptions`.** Strong launch lever | M–L |
 | **Customer types** — Adult / Child / Infant, each with its own price, description, and per-booking min/max (the live flow offered *Private Section 2-8*, *Cocktail Table max 2*, *Communal*, *Children*, *Infants*) | A booking is hard-keyed `bookings/{contactId}`; `bookings_count` increments by 1; Stripe line items are `quantity: 1` (`utils/connect/client.ts:256,303`). No party size, guest count, or quantity anywhere | **Adapt — do not port the full model.** The per-type price matrix is the tourist shape and would fight the member/subscription model (Linyup's answer to "who pays what" is *the contact's subscription*, resolved server-side — strictly better for a studio). Propose instead the **light version**: `Booking.guestCount` + an activity guest price, capacity decrementing by `1 + guests`, one payment. That unlocks bring-a-friend, parent-books-child, and couples classes without touching the pricing model | L |
 | **Suggested items** — cross-sell shown during checkout *and* in the confirmation email | Shop has a "Pay per visit" cross-sell strip (`ShopHome.tsx:806-856`); nothing post-booking | **Port.** Cheap revenue on top of the existing automation engine, templates, products and courses | S–M |
@@ -204,8 +204,9 @@ Mostly **M**.
 *not* the order listed here. Gift-card flow review was added to this wave in
 2026-08 (guest purchase, admin minting, and a category-attribution fix).
 
-- Gift-card flow review — guest purchase, admin mint, category attribution
-- Waitlist
+- ~~Gift-card flow review — guest purchase, admin mint, category attribution~~
+  **done** (Phase 0 + Phase 1, `62fc546`)
+- ~~Waitlist~~ **done** (Phase 2) — `docs/waitlist.md`
 - Promo codes / campaigns
 - Waivers with a real acceptance ledger
 
@@ -372,8 +373,9 @@ real if promo were applied outside the resolver.
 
 ### 7.3 Pre-existing bugs the design pass uncovered
 
-**None of these are Wave 3 features. All are live today.** Each was confirmed
-against the code, not inferred.
+**None of these are Wave 3 features. All were live when this was written.** Each
+was confirmed against the code, not inferred. **1, 3 and 4 were fixed in Phase 0 +
+Phase 1 (`62fc546`); 2 was fixed in Phase 2.**
 
 1. **Refunds silently destroy gift-card value.** `connect/refunds.ts` has zero
    gift-card handling — no hits for `gift`, `drawdown`, or
@@ -382,7 +384,12 @@ against the code, not inferred.
    outright. Fix in Phase 1.
 2. **`rebookSession` can oversell.** No `max_participants` check anywhere in
    `booking/index.ts:1530-1645`. Rebooking into a full session succeeds. Fix in
-   Phase 2.
+   Phase 2. **Fixed:** the `db.batch()` became a transaction that reads the new
+   session and its bookings and refuses with `reason: 'session_full'`, and it
+   gained the `isPastBookingCutoff` check it had never had — bound to the public,
+   self-service door only, since the same callable also serves the studio's
+   Bookings page, where a coach on the phone at 18:30 moves someone into the
+   19:00 class.
 3. **An abandoned checkout can make a class un-bookable for up to 24 hours.**
    `trackBookings`' `NON_HOLDING` set counts any booking not in
    `{cancelled, no_show, rebooked}`, so a lapsed drop-in payment hold keeps
@@ -439,6 +446,17 @@ transactional. Every later feature merges into the rewritten version — doing
 waivers first means relocating the waiver gate twice. Touches no money surface
 in this order (join is free; claim routes into the existing
 `createDropInCheckout`). Also fixes bug #2.
+**Correction (2026-08, from implementation):** "touches no money surface" held for
+*pricing* — the claim adds no arm to `resolvePaymentOptions` and no price of its
+own — but not for the money **plumbing**. `createDropInCheckout` gained a
+`waitlistToken` input (the claim's deadline replaces the 30-minute hold on both
+the booking and the Stripe session), its gift-card full-cover branch had to flip
+the queue entry in the same transaction as the booking (that branch creates no
+Stripe session, so no webhook can do it later), and the Connect webhook gained a
+capacity re-check that **refunds** rather than confirming into a full class. The
+`commitGiftCardDrawdown({ waitlistEntryId })` rider Phase 1 declared for this was
+removed rather than implemented — the booking is already confirmed before it runs,
+and both of that function's early returns skip anything placed after them.
 
 **Phase 3 — Promo codes.** Third, because it is the only project changing the
 **signature of `resolvePaymentOptions`**; landing it last means it lands once,
@@ -462,7 +480,9 @@ Each of these is atomic — splitting produces a broken intermediate:
 - Transactional `bookSession` + `bookingHoldsSeat` in `trackBookings` + retiring
   the blind `FieldValue.increment()` call sites (leaving both styles in place
   lets the transaction's read set and the increments interleave, with the
-  recount papering over it non-deterministically)
+  recount papering over it non-deterministically) — **landed in Phase 2**;
+  `bookings_count` now has exactly one writing style, and the rule is recorded on
+  the field itself and in `docs/waitlist.md`
 - Promo's resolver signature + `product` arm + the fixture regression gate in
   `paymentOptions.test.ts`
 
@@ -532,6 +552,11 @@ discovered during implementation:
   would record **100× the cash**, and a non-atomic reclassification pair.
 - **Waitlist** — 3 blockers, including a gift-card full-cover claim that loses
   both the money and the seat, and no capacity check at all on the paid path.
+  **Resolved** in `docs/wave3-phase2-spec.md` §0.1 and closed in the
+  implementation; that pass also found ten further findings neither the design nor
+  its critique had caught (§0.4), four of them live miscounts or record
+  corruption — including `markNoShowBookings` stamping abandoned drop-in checkouts
+  `no_show` on real people's records.
 - **Promo** — the reserve transaction has no serialization point.
 - **Waivers** — re-signing is structurally impossible as specified (deterministic
   doc id + `.create()` deadlocks both expiry and revocation).
@@ -547,6 +572,9 @@ discovered during implementation:
   Note §6 "Coaching & 1:1 scheduling" already lists **slot waiting list** and
   **session notes** as intended scope, so Wave 3's waitlist is a confirmation of an
   existing plan, not a new idea
+- `docs/waitlist.md` — Wave 3 Phase 2 as built: the queue's data model, the
+  single-deadline rule, the claim lifecycle (free and paid), the seat predicates
+  and the one-writer rule for `bookings_count`
 - `docs/appointments.md` — the appointment model (activity owns the *what*,
   availability owns the *when*), which is what makes appointment slots
   un-pre-generatable and therefore constrains any waitlist design on that side

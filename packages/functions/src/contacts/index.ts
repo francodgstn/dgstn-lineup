@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
+import { confirmClearedHoldFields, type SeatHold } from '@linyup/shared'
 import { to } from '../utils/async'
 import { hasTeamRole, isTeamMember } from '../utils/teams'
 
@@ -216,9 +217,21 @@ export const checkInContact = onCall(async (request) => {
     batch.update(bookingRef, {
       status: 'confirmed',
       confirmed_at: FieldValue.serverTimestamp(),
+      // A confirmed seat is an ordinary booking from here on, so the hold
+      // markers must go with the same write. `bookingHoldsSeat` no longer
+      // expires a settled claim, so leaving the claim fields is not an oversell
+      // any more — but they would still make `sendBookingReminders` skip this
+      // person forever, and a stale flag on a confirmed booking is a lie the
+      // next reader has to untangle. A claim that was mid-payment carries the
+      // drop-in hold's `payment_status`/`expires_at` on top, and THOSE still
+      // cost the seat: `confirmClearedHoldFields` is the one patch all four
+      // confirm surfaces apply. Deleting an absent field is a no-op.
+      ...confirmClearedHoldFields(bookingDoc.data() as SeatHold, FieldValue.delete()),
     })
+    // No `bookings_count` here — a confirmed booking still holds its seat, and
+    // trackBookings' recount owns that number (same fix as the kiosk self-scan
+    // in sessions/index.ts).
     batch.update(sessionRef, {
-      bookings_count: FieldValue.increment(-1),
       conversions_count: FieldValue.increment(1),
     })
     batch.update(contactRef, { pending_bookings_count: FieldValue.increment(-1) })

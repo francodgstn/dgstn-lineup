@@ -60,6 +60,20 @@ function formatTime(d: Date, lang: Lang): string {
   })
 }
 
+/** Day + time, no year — the compact form SMS copy uses, where every character
+ *  is charged for and the recipient already knows what month it is. */
+function formatShortDateTime(d: Date, lang: Lang): string {
+  const localeMap: Record<Lang, string> = { en: 'en-GB', de: 'de-CH', fr: 'fr-CH', it: 'it-CH' }
+  return d.toLocaleString(localeMap[lang], {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Zurich',
+  })
+}
+
 interface ConfirmationParams {
   firstname: string
   teamName: string
@@ -286,15 +300,7 @@ export function buildBookingReminderSms(params: {
   lang?: Lang
 }): string {
   const { teamName, activityName, sessionStart, locationName, lang = 'en' } = params
-  const localeMap: Record<Lang, string> = { en: 'en-GB', de: 'de-CH', fr: 'fr-CH', it: 'it-CH' }
-  const when = sessionStart.toLocaleString(localeMap[lang], {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/Zurich',
-  })
+  const when = formatShortDateTime(sessionStart, lang)
   const reminders: Record<Lang, string> = {
     en: 'Reminder',
     de: 'Erinnerung',
@@ -396,4 +402,308 @@ export function buildVerificationCodeEmail(params: VerificationCodeParams) {
   }
 
   return buildEmailTemplate({ title: titles[lang], body: bodies[lang] })
+}
+
+// ─── Waitlist ────────────────────────────────────────────────────────────────
+// The three moments a queue has to speak for itself: joining it, being offered a
+// seat, and losing that offer to the clock. The offer mail is the one that
+// matters — it carries the single-use claim token, so it is the ONLY thing
+// standing between a held seat and a seat destroyed in silence.
+//
+// The three mails share their fact-box labels — they describe the same class
+// three times, and a "Class:" that reads differently between them would look
+// like three different systems writing to one person. The SENTENCES stay
+// per-builder: they are prose, not columns.
+
+/** A waitlist entry can carry an empty firstname (a contact record that never
+ *  had one), and "Hi ," is worse than no name at all. */
+function greetingLine(firstname: string, lang: Lang): string {
+  const named: Record<Lang, string> = {
+    en: `Hi ${firstname},`,
+    de: `Hallo ${firstname},`,
+    fr: `Bonjour ${firstname},`,
+    it: `Ciao ${firstname},`,
+  }
+  const bare: Record<Lang, string> = { en: 'Hi,', de: 'Hallo,', fr: 'Bonjour,', it: 'Ciao,' }
+  return firstname.trim() ? named[lang] : bare[lang]
+}
+
+const WAITLIST_CLASS_LABELS: Record<Lang, string> = {
+  en: 'Class',
+  de: 'Kurs',
+  fr: 'Cours',
+  it: 'Corso',
+}
+
+const WAITLIST_DATE_LABELS: Record<Lang, string> = {
+  en: 'Date',
+  de: 'Datum',
+  fr: 'Date',
+  it: 'Data',
+}
+
+const WAITLIST_LOCATION_LABELS: Record<Lang, string> = {
+  en: 'Location',
+  de: 'Ort',
+  fr: 'Lieu',
+  it: 'Luogo',
+}
+
+interface WaitlistJoinedParams {
+  firstname: string
+  teamName: string
+  activityName: string
+  sessionStart: Date
+  sessionEnd: Date
+  locationName?: string | null
+  /** 1-based, derived at join. */
+  position: number
+  /** The long-lived `entry_token` link — status and "leave the waitlist". Never
+   *  a claim credential: this mail gets forwarded. */
+  statusUrl?: string | null
+  lang?: Lang
+}
+
+export function buildWaitlistJoinedEmail(params: WaitlistJoinedParams) {
+  const {
+    firstname,
+    teamName,
+    activityName,
+    sessionStart,
+    sessionEnd,
+    locationName,
+    position,
+    statusUrl,
+    lang = 'en',
+  } = params
+
+  const date = formatDate(sessionStart, lang)
+  const endTime = formatTime(sessionEnd, lang)
+
+  const titles: Record<Lang, string> = {
+    en: "You're on the waitlist",
+    de: 'Sie stehen auf der Warteliste',
+    fr: "Vous êtes sur la liste d'attente",
+    it: "Sei in lista d'attesa",
+  }
+
+  const intros: Record<Lang, string> = {
+    en: `You are on the waitlist for <strong>${activityName}</strong> at <strong>${teamName}</strong>.`,
+    de: `Sie stehen auf der Warteliste für <strong>${activityName}</strong> bei <strong>${teamName}</strong>.`,
+    fr: `Vous êtes sur la liste d'attente pour <strong>${activityName}</strong> chez <strong>${teamName}</strong>.`,
+    it: `Sei in lista d'attesa per <strong>${activityName}</strong> presso <strong>${teamName}</strong>.`,
+  }
+
+  const positionLabels: Record<Lang, string> = {
+    en: 'Your position',
+    de: 'Ihre Position',
+    fr: 'Votre position',
+    it: 'La tua posizione',
+  }
+
+  const explainers: Record<Lang, string> = {
+    en: 'If a place frees up, we will email you and hold it for you for a limited time. The place is only yours once you claim it, so keep an eye on your inbox.',
+    de: 'Wird ein Platz frei, benachrichtigen wir Sie per E-Mail und halten ihn für eine begrenzte Zeit für Sie frei. Der Platz gehört Ihnen erst, wenn Sie ihn bestätigen — behalten Sie also Ihren Posteingang im Auge.',
+    fr: "Si une place se libère, nous vous enverrons un e-mail et la garderons pour vous pendant un temps limité. La place n'est à vous qu'une fois confirmée : surveillez votre boîte de réception.",
+    it: "Se si libera un posto, ti invieremo un'e-mail e lo terremo per te per un tempo limitato. Il posto è tuo solo dopo la conferma: tieni d'occhio la posta in arrivo.",
+  }
+
+  const statusLabels: Record<Lang, string> = {
+    en: 'View or leave the waitlist',
+    de: 'Warteliste ansehen oder verlassen',
+    fr: "Voir ou quitter la liste d'attente",
+    it: "Vedi o lascia la lista d'attesa",
+  }
+
+  const body = [
+    `<p>${greetingLine(firstname, lang)}</p>`,
+    `<p>${intros[lang]}</p>`,
+    detailsBox({
+      content: factLines([
+        `<strong>${WAITLIST_CLASS_LABELS[lang]}:</strong> ${activityName}`,
+        `<strong>${WAITLIST_DATE_LABELS[lang]}:</strong> ${date} – ${endTime}`,
+        locationName ? `<strong>${WAITLIST_LOCATION_LABELS[lang]}:</strong> ${locationName}` : '',
+        `<strong>${positionLabels[lang]}:</strong> ${position}`,
+      ]),
+    }),
+    `<p>${explainers[lang]}</p>`,
+    statusUrl
+      ? `<p style="text-align:center;margin-top:24px;">${ctaButton(statusUrl, statusLabels[lang])}</p>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return buildEmailTemplate({ title: titles[lang], body })
+}
+
+interface WaitlistOfferParams {
+  firstname: string
+  teamName: string
+  activityName: string
+  sessionStart: Date
+  sessionEnd: Date
+  locationName?: string | null
+  /** The claim page, carrying the single-use `offer_token`. */
+  claimUrl: string
+  /** THE deadline — the same instant the hold and (for a paid claim) the Stripe
+   *  session die at. */
+  expiresAt: Date
+  lang?: Lang
+}
+
+export function buildWaitlistOfferEmail(params: WaitlistOfferParams) {
+  const {
+    firstname,
+    teamName,
+    activityName,
+    sessionStart,
+    sessionEnd,
+    locationName,
+    claimUrl,
+    expiresAt,
+    lang = 'en',
+  } = params
+
+  const date = formatDate(sessionStart, lang)
+  const endTime = formatTime(sessionEnd, lang)
+  const deadline = formatDate(expiresAt, lang)
+
+  const titles: Record<Lang, string> = {
+    en: 'A place has opened up',
+    de: 'Ein Platz ist frei geworden',
+    fr: "Une place s'est libérée",
+    it: 'Si è liberato un posto',
+  }
+
+  const intros: Record<Lang, string> = {
+    en: `A place has opened up in <strong>${activityName}</strong> at <strong>${teamName}</strong>, and we are holding it for you.`,
+    de: `In <strong>${activityName}</strong> bei <strong>${teamName}</strong> ist ein Platz frei geworden — wir halten ihn für Sie.`,
+    fr: `Une place s'est libérée pour <strong>${activityName}</strong> chez <strong>${teamName}</strong> et nous la gardons pour vous.`,
+    it: `Si è liberato un posto per <strong>${activityName}</strong> presso <strong>${teamName}</strong> e lo stiamo tenendo per te.`,
+  }
+
+  const deadlineLabels: Record<Lang, string> = {
+    en: 'Claim by',
+    de: 'Bestätigen bis',
+    fr: 'À confirmer avant',
+    it: 'Da confermare entro',
+  }
+
+  // The whole point of the mail: the hold is real, and it is not forever.
+  const urgencies: Record<Lang, string> = {
+    en: `The place is yours once you claim it. If it is not claimed by <strong>${deadline}</strong>, it goes to the next person on the list.`,
+    de: `Der Platz gehört Ihnen, sobald Sie ihn bestätigen. Bleibt er bis <strong>${deadline}</strong> unbestätigt, geht er an die nächste Person auf der Liste.`,
+    fr: `La place est à vous dès que vous la confirmez. Sans confirmation avant le <strong>${deadline}</strong>, elle passe à la personne suivante sur la liste.`,
+    it: `Il posto è tuo non appena lo confermi. Se non viene confermato entro <strong>${deadline}</strong>, passa alla persona successiva in lista.`,
+  }
+
+  const claimLabels: Record<Lang, string> = {
+    en: 'Claim my place',
+    de: 'Platz sichern',
+    fr: 'Confirmer ma place',
+    it: 'Conferma il mio posto',
+  }
+
+  const body = [
+    `<p>${greetingLine(firstname, lang)}</p>`,
+    `<p>${intros[lang]}</p>`,
+    detailsBox({
+      content: factLines([
+        `<strong>${WAITLIST_CLASS_LABELS[lang]}:</strong> ${activityName}`,
+        `<strong>${WAITLIST_DATE_LABELS[lang]}:</strong> ${date} – ${endTime}`,
+        locationName ? `<strong>${WAITLIST_LOCATION_LABELS[lang]}:</strong> ${locationName}` : '',
+        `<strong>${deadlineLabels[lang]}:</strong> ${deadline}`,
+      ]),
+    }),
+    `<p>${urgencies[lang]}</p>`,
+    `<p style="text-align:center;margin-top:24px;">${ctaButton(claimUrl, claimLabels[lang])}</p>`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return buildEmailTemplate({ title: titles[lang], body })
+}
+
+/**
+ * The nudge, not the credential. No URL, deliberately: a claim link carries a
+ * 64-character token and would push every offer to a second charged segment,
+ * and the email carrying that link goes out at the same instant on every offer.
+ * Same reasoning as `buildBookingReminderSms`.
+ */
+export function buildWaitlistOfferSms(params: {
+  teamName: string
+  activityName: string
+  sessionStart: Date
+  expiresAt: Date
+  lang?: Lang
+}): string {
+  const { teamName, activityName, sessionStart, expiresAt, lang = 'en' } = params
+  const when = formatShortDateTime(sessionStart, lang)
+  const deadline = formatShortDateTime(expiresAt, lang)
+  const bodies: Record<Lang, string> = {
+    en: `place free for ${activityName}, ${when}. Check your email to claim it by ${deadline}.`,
+    de: `Platz frei für ${activityName}, ${when}. E-Mail prüfen und bis ${deadline} sichern.`,
+    fr: `place libre pour ${activityName}, ${when}. Consultez votre e-mail pour la confirmer avant ${deadline}.`,
+    it: `posto libero per ${activityName}, ${when}. Controlla l'e-mail e conferma entro ${deadline}.`,
+  }
+  return `${teamName}: ${bodies[lang]}`
+}
+
+interface WaitlistExpiredParams {
+  firstname: string
+  teamName: string
+  activityName: string
+  sessionStart: Date
+  /** Back to the public booking page for this class, so re-joining is one click
+   *  — the queue has no re-queue machinery by design (one offer per entry). */
+  rejoinUrl?: string | null
+  lang?: Lang
+}
+
+export function buildWaitlistExpiredEmail(params: WaitlistExpiredParams) {
+  const { firstname, teamName, activityName, sessionStart, rejoinUrl, lang = 'en' } = params
+
+  const date = formatDate(sessionStart, lang)
+
+  const titles: Record<Lang, string> = {
+    en: 'Your place was not claimed in time',
+    de: 'Ihr Platz wurde nicht rechtzeitig bestätigt',
+    fr: "Votre place n'a pas été confirmée à temps",
+    it: 'Il tuo posto non è stato confermato in tempo',
+  }
+
+  const intros: Record<Lang, string> = {
+    en: `The place we were holding for you in <strong>${activityName}</strong> (${date}) at <strong>${teamName}</strong> was not claimed in time, so it has gone to the next person on the list.`,
+    de: `Der Platz, den wir für Sie in <strong>${activityName}</strong> (${date}) bei <strong>${teamName}</strong> reserviert hatten, wurde nicht rechtzeitig bestätigt und ist an die nächste Person auf der Liste gegangen.`,
+    fr: `La place que nous gardions pour vous en <strong>${activityName}</strong> (${date}) chez <strong>${teamName}</strong> n'a pas été confirmée à temps : elle est passée à la personne suivante sur la liste.`,
+    it: `Il posto che tenevamo per te in <strong>${activityName}</strong> (${date}) presso <strong>${teamName}</strong> non è stato confermato in tempo ed è passato alla persona successiva in lista.`,
+  }
+
+  const outros: Record<Lang, string> = {
+    en: 'You are no longer on the waitlist for this class. If you would still like to come, you can join the list again.',
+    de: 'Sie stehen nicht mehr auf der Warteliste für diesen Kurs. Wenn Sie weiterhin teilnehmen möchten, können Sie sich erneut eintragen.',
+    fr: "Vous n'êtes plus sur la liste d'attente pour ce cours. Si vous souhaitez toujours venir, vous pouvez vous réinscrire sur la liste.",
+    it: "Non sei più in lista d'attesa per questo corso. Se vuoi ancora partecipare, puoi iscriverti di nuovo alla lista.",
+  }
+
+  const rejoinLabels: Record<Lang, string> = {
+    en: 'Join the waitlist again',
+    de: 'Erneut auf die Warteliste',
+    fr: "Rejoindre la liste d'attente",
+    it: "Torna in lista d'attesa",
+  }
+
+  const body = [
+    `<p>${greetingLine(firstname, lang)}</p>`,
+    `<p>${intros[lang]}</p>`,
+    `<p>${outros[lang]}</p>`,
+    rejoinUrl
+      ? `<p style="text-align:center;margin-top:24px;">${ctaButton(rejoinUrl, rejoinLabels[lang])}</p>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return buildEmailTemplate({ title: titles[lang], body })
 }

@@ -45,6 +45,10 @@ function createBookingSchema(t: ReturnType<typeof useTranslations>) {
     ctaLabel: z.string().optional(),
     appointmentsEnabled: z.boolean().optional(),
     cutoffMinutes: z.number().int().min(0).max(10080),
+    // A MAXIMUM, not a guarantee: the claim window is also clamped by the
+    // cutoff above and by the session start, and an offer is simply not made
+    // when what survives that clamp is too short to reach checkout.
+    waitlistClaimMinutes: z.number().int().min(60).max(1440),
   })
 }
 
@@ -77,6 +81,12 @@ function getDefaults(team: Team | null): FormData {
   const flowType = rawBooking.flowType === 'date-first' ? 'date-first' : 'activity-first'
   const rawCutoff = Number(rawBooking.cutoffMinutes)
   const cutoffMinutes = Number.isInteger(rawCutoff) && rawCutoff >= 0 && rawCutoff <= 10080 ? rawCutoff : 0
+  const rawClaim = Number(rawBooking.waitlistClaimMinutes)
+  // Absent falls back to the SAME default the promoter applies server-side
+  // (WAITLIST_DEFAULT_CLAIM_MINUTES) — showing a different number here than the
+  // one actually used is worse than showing none.
+  const waitlistClaimMinutes =
+    Number.isInteger(rawClaim) && rawClaim >= 60 && rawClaim <= 1440 ? rawClaim : 120
   return {
     booking: {
       flowType,
@@ -88,6 +98,7 @@ function getDefaults(team: Team | null): FormData {
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
       appointmentsEnabled: rawBooking.appointmentsEnabled === true,
       cutoffMinutes,
+      waitlistClaimMinutes,
     },
   }
 }
@@ -266,6 +277,33 @@ function BookingForm({
         />
       </div>
 
+      {/* Waitlist claim window. Sits under the cutoff on purpose — the cutoff is
+          a hard clamp on it, so the two only make sense read together. */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
+        <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
+        <Controller
+          control={control}
+          name="booking.waitlistClaimMinutes"
+          render={({ field }) => (
+            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+              <SelectTrigger className="h-9 w-48">
+                <span className="flex flex-1 text-left text-sm truncate">
+                  {t('waitlistClaimMinutesValue', { minutes: field.value })}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {[60, 120, 240, 480, 1440].map((minutes) => (
+                  <SelectItem key={minutes} value={String(minutes)}>
+                    {t('waitlistClaimMinutesValue', { minutes })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
       {/* Toggles */}
       {(
         [
@@ -390,6 +428,7 @@ export default function BookingSettingsPage() {
       ctaLabel: data.booking.ctaLabel || null,
       appointmentsEnabled: data.booking.appointmentsEnabled ?? false,
       cutoffMinutes: data.booking.cutoffMinutes,
+      waitlistClaimMinutes: data.booking.waitlistClaimMinutes,
     }
     try {
       // ① public_profile is the source of truth (team-member writable). Must succeed.

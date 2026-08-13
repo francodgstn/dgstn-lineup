@@ -27,18 +27,22 @@ import {
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  WAITLIST_SUBCOLLECTION,
   buildConnectChargeTxn,
   buildConnectRefundTxn,
   buildDisputeTxn,
   buildPayoutTxn,
+  countHoldingSeats,
   financeTxnId,
   isExpiredAppointmentHold,
   mapCategory,
+  seatsFree,
   type ConnectOnboardingModel,
   type FinanceCategory,
   type SaasPlan,
   publicUrl,
 } from '@linyup/shared'
+import { releaseWaitlistOffer } from '../booking/waitlist/release'
 import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
 import { generateSecureToken } from '../utils/crypto'
@@ -1412,12 +1416,34 @@ async function handleDropInCheckout(
   const piId =
     typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
 
-  // Already confirmed: an idempotent redelivery of the SAME charge, OR a second
-  // (duplicate) charge for a booking that's already paid — refund the duplicate so
-  // the buyer is never charged twice for one seat.
-  if (bSnap.exists && bSnap.data()?.status === 'confirmed') {
+  // ── Does the seat still AWAIT this charge? ──────────────────────────────────
+  // `payment_status: 'required'` — not `status` — is what says "this money still
+  // buys something". createDropInCheckout writes it on the hold and only a
+  // webhook clears it, so a booking that no longer carries it has been settled
+  // some other way and this charge buys the person a seat they already have:
+  //
+  //  • confirmed + paid → an idempotent redelivery of the SAME charge (same
+  //    payment intent: nothing to do), or a SECOND charge for one seat (two
+  //    tabs) — refund it;
+  //  • booked for FREE in the meantime → bookSession's duplicate guards let a
+  //    re-book land on top of a `pending` booking, and its `tx.set` is a FULL
+  //    REPLACE that wipes `payment_status` and `expires_at` off a hold whose
+  //    Stripe session is still open. A guest who opens a drop-in checkout, goes
+  //    back, takes the free trial door and then finishes the stale Stripe page
+  //    gets charged for a seat they now hold for nothing. The old test
+  //    (`status === 'confirmed'` AND a different payment_intent_id) caught
+  //    neither shape of it: a free booking carries no payment intent at all,
+  //    and one on a class that doesn't auto-confirm isn't 'confirmed' either —
+  //    that one fell through and was confirmed as paid.
+  //
+  // The one confirmed booking that must NOT refund is the hold itself: a coach
+  // who confirmed a pending drop-in at the door has not paid for it, and
+  // check-in/confirm are `update`s that leave `payment_status: 'required'`
+  // standing. That falls through and settles below, exactly as it would have if
+  // nobody had touched it.
+  if (bSnap.exists && bSnap.data()?.payment_status !== 'required') {
     const existingPi = (bSnap.data()?.payment_intent_id as string | undefined) ?? null
-    if (piId && existingPi && existingPi !== piId && accountId) {
+    if (piId && existingPi !== piId && accountId) {
       try {
         await refundDirectCharge({
           accountId,
@@ -1449,7 +1475,13 @@ async function handleDropInCheckout(
             )
           }
         }
-        console.log(`[connect] drop-in duplicate charge ${piId} refunded (booking already confirmed)`)
+        const settled = bSnap.data()
+        console.log(
+          `[connect] drop-in charge ${piId} refunded — the seat was already settled ` +
+            `without it (session=${sessionId} contact=${contactId} ` +
+            `status=${settled?.status ?? 'pending'} ` +
+            `payment_status=${settled?.payment_status ?? 'none'})`
+        )
       } catch (err) {
         console.error('[connect] drop-in duplicate refund failed:', err)
       }
@@ -1457,42 +1489,145 @@ async function handleDropInCheckout(
     return
   }
 
-  // Confirm the pending hold — or recreate the booking from metadata if the hold was
-  // already swept before payment landed (a paid charge must never be lost).
-  const isNew = !bSnap.exists
-  await bookingRef.set(
-    {
-      firstname: (contact.firstname as string) ?? '',
-      lastname: (contact.lastname as string) ?? '',
-      email: (contact.email as string) ?? '',
-      phone: (contact.phone as string) ?? null,
-      contact: contactId,
-      session: sessionId,
-      teamId: team.teamId,
-      status: 'confirmed',
-      payment_status: 'paid',
-      payment_intent_id: piId ?? null,
-      expires_at: FieldValue.delete(),
-      updated_at: FieldValue.serverTimestamp(),
-      ...(isNew
-        ? { joinedAt: FieldValue.serverTimestamp(), fromBioLink: true, is_new_contact: false }
-        : {}),
-    },
-    { merge: true }
-  )
+  // Confirm the pending hold — or recreate the booking from metadata if the hold
+  // was already swept before payment landed (a paid charge must never be lost).
+  //
+  // That resurrection is exactly why capacity is re-checked here. The hold this
+  // charge paid for may no longer hold a seat: swept, or lapsed while someone
+  // else took the last place. Confirming blindly then oversells the class and
+  // hands the buyer a seat that does not exist. So: everyone ELSE holding a seat
+  // is counted (the payer's own hold never counts against them — it was held FOR
+  // them, and if it survived there is no capacity question at all), and if the
+  // class is full without them the honest answer is a refund, not a seat.
+  //
+  // One transaction: the session doc is the same lock createDropInCheckout and
+  // bookSession take, and `bookings_count` is written as an absolute from the
+  // read set. The old `increment(1)` here landed ON TOP of trackBookings'
+  // recount of the hold, so a filling class read one seat over and refused the
+  // next real customer.
+  const sessionRef = db.collection('sessions').doc(sessionId)
+  // A waitlist claim being paid for. The entry flips in the SAME transaction
+  // that confirms the booking, so the state "the booking is paid but the queue
+  // still thinks the offer is outstanding" never exists for a sweep to act on.
+  const waitlistEntryRef = md.waitlistEntry
+    ? sessionRef.collection(WAITLIST_SUBCOLLECTION).doc(md.waitlistEntry)
+    : null
+  const oversold = await db.runTransaction(async (tx) => {
+    const bookingsSnap = await tx.get(sessionRef.collection('bookings'))
+    const sSnap = await tx.get(sessionRef)
+    // Read rather than blind-update: an entry that was purged (a deleted queue,
+    // a wiped session) would make `tx.update` throw, and a paid charge must
+    // never be lost to a bookkeeping document.
+    const entrySnap = waitlistEntryRef ? await tx.get(waitlistEntryRef) : null
+    const others = countHoldingSeats(bookingsSnap.docs, Date.now(), contactId)
+    if (seatsFree(sSnap.data()?.max_participants as number | undefined, others) <= 0) return true
 
-  // Now that it's paid, count it toward the session's bookings.
-  await db
-    .collection('sessions')
-    .doc(sessionId)
-    .set(
+    const isNew = !bookingsSnap.docs.some((d) => d.id === contactId)
+    tx.set(
+      bookingRef,
+      {
+        firstname: (contact.firstname as string) ?? '',
+        lastname: (contact.lastname as string) ?? '',
+        email: (contact.email as string) ?? '',
+        phone: (contact.phone as string) ?? null,
+        contact: contactId,
+        session: sessionId,
+        teamId: team.teamId,
+        status: 'confirmed',
+        payment_status: 'paid',
+        payment_intent_id: piId ?? null,
+        expires_at: FieldValue.delete(),
+        // A paid seat is an ordinary booking from here on. Both claim fields
+        // MUST go: a confirmed booking still carrying `waitlist_claim` stops
+        // holding its seat the moment `claim_expires_at` passes
+        // (bookingHoldsSeat → isExpiredWaitlistClaim), which would hand a seat
+        // somebody just paid for to the next person in the queue.
+        waitlist_claim: FieldValue.delete(),
+        claim_expires_at: FieldValue.delete(),
+        ...(waitlistEntryRef ? { claimed_from_waitlist: true } : {}),
+        updated_at: FieldValue.serverTimestamp(),
+        ...(isNew
+          ? { joinedAt: FieldValue.serverTimestamp(), fromBioLink: true, is_new_contact: false }
+          : {}),
+      },
+      { merge: true }
+    )
+    if (waitlistEntryRef && entrySnap?.exists) {
+      tx.update(waitlistEntryRef, {
+        status: 'claimed',
+        claimed_at: FieldValue.serverTimestamp(),
+        // Single use — the credential dies with the offer it belonged to.
+        offer_token: FieldValue.delete(),
+      })
+    }
+    tx.set(
+      sessionRef,
       {
         has_bookings: true,
-        bookings_count: FieldValue.increment(1),
+        bookings_count: others + 1,
         last_booking_at: FieldValue.serverTimestamp(),
       },
       { merge: true }
     )
+    return false
+  })
+
+  if (oversold) {
+    // No seat to give: refund and undo the stored value, mirroring the duplicate
+    // branch above. The hold (if one is still there) is left to
+    // expirePendingBookings — it holds nothing.
+    if (piId && accountId) {
+      try {
+        await refundDirectCharge({
+          accountId,
+          paymentIntentId: piId,
+          reason: 'requested_by_customer',
+          idempotencyKey: `dropin-full:${piId}`,
+        })
+        await memberPaymentRef(team.teamId, piId).set(
+          { contactId, status: 'refunded', updated_at: FieldValue.serverTimestamp() },
+          { merge: true }
+        )
+        if (md.giftCardCode && md.giftCardHold) {
+          const { restoredMajor } = await reverseGiftCardDrawdown({
+            teamId: team.teamId,
+            code: md.giftCardCode,
+            holdKey: md.giftCardHold,
+            targetCategory: 'drop_in',
+            contactId,
+            description: `Class full, charge refunded · ${md.giftCardCode}`,
+          })
+          if (restoredMajor > 0) {
+            console.log(
+              `[connect] drop-in oversell: restored gift-card drawdown ${restoredMajor} to ${md.giftCardCode}`
+            )
+          }
+        }
+      } catch (err) {
+        console.error(`[connect] drop-in full-class refund failed (pi=${piId}):`, err)
+      }
+    }
+    // The claim died with the seat: the money went back, so the hold goes back
+    // to the queue rather than sitting 'offered' against a booking nobody can
+    // ever settle. The same guarded release the sweep runs — it will not touch
+    // the booking unless it is still an unclaimed hold, which is exactly the
+    // state a refunded claim leaves behind.
+    if (waitlistEntryRef) {
+      try {
+        await releaseWaitlistOffer({
+          entryRef: waitlistEntryRef,
+          terminalStatus: 'expired',
+          from: ['offered'],
+        })
+      } catch (err) {
+        console.error(`[connect] drop-in oversell: releasing waitlist claim failed:`, err)
+      }
+    }
+    console.log(
+      `[connect] drop-in payment could not be applied — session ${sessionId} is full (contact=${contactId})`
+    )
+    return
+  }
 
   if (piId) {
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })

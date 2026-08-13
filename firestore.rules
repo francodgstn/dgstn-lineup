@@ -1019,6 +1019,18 @@ service cloud.firestore {
         allow read: if isSelfContact(bookingId);
       }
 
+      // waitlist sub-collection (the queue for a full class; doc id = contactId)
+      match /waitlist/{entryId} {
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        // A contact reads their own place in the line.
+        allow read: if isSelfContact(entryId);
+        // NO client writes, deliberately unlike the bookings block above: every
+        // transition (join, offer, claim, leave, expire) moves a seat count or a
+        // claim hold inside a transaction. A schedule.manage holder writing an
+        // entry directly would bypass that and re-open the oversell.
+        allow write: if false;
+      }
+
       // public_profile sub-collection (for trial booking)
       match /public_profile/{publicProfileId} {
         allow read;  // Public read access
@@ -1112,6 +1124,24 @@ service cloud.firestore {
       allow read: if request.auth != null && (
         resource.data.teamId != null && isTeamMember(resource.data.teamId)
       );
+    }
+
+    // waitlist (collection group)
+    //
+    // NO client reads this way today, deliberately named so nobody infers one:
+    // the day sheet and the session detail page each read ONE session's queue
+    // through the nested match above, and every collection-group query on
+    // `waitlist` in this repo runs in a callable over the Admin SDK, which
+    // bypasses rules entirely. This block is a defensive team-scoping grant for a
+    // future client-side collection-group read (the shape `listMyWaitlist`
+    // exists to avoid, since isSelfContact authorises a get and not a list). It
+    // widens nothing: a team member can already read every one of these
+    // documents individually, so it grants a query shape, not data.
+    match /{path=**}/waitlist/{entryId} {
+      allow read: if request.auth != null && (
+        resource.data.teamId != null && isTeamMember(resource.data.teamId)
+      );
+      allow write: if false;  // callables only — see the nested block above
     }
 
     // public_profile (collection group for trial booking)

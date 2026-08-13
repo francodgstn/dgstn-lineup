@@ -25,7 +25,11 @@ export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
 //    funnel; a purchase/lead-capture is not a funnel milestone):
 //      'shop'     → self-created by a public shop purchase (product / course / membership)
 //      'form'     → lead captured via a published Custom Form
-export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const
+//      'waitlist' → joined the queue for a full class. Off-funnel ON PURPOSE:
+//                   joining a queue is not a trial booking, and stamping
+//                   'trial_booked' on someone who may never get a seat would
+//                   corrupt the funnel. The stage is stamped when they CLAIM.
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist'] as const
 export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 
 // Source axis — marketing CHANNEL (attribution only), set once, never overwritten.

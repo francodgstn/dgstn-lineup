@@ -52,6 +52,12 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     typeof data.trialPriceAmount === 'number'
       ? { trialPriceAmount: data.trialPriceAmount }
       : {}),
+    // CLASS-ONLY waitlist door — the mirror is the ONLY way the public booking
+    // form learns a full slot has a queue behind it (the session mirror
+    // deliberately carries no copy of the flag; see Session.waitlist_count).
+    ...(data.type !== 'appointment' && data.waitlistEnabled === true
+      ? { waitlistEnabled: true }
+      : {}),
     // Appointment duration menu with base prices so public cards can show
     // "from CHF 45". Mirrored verbatim — no per-contact data to strip any more
     // (the old subscriptionPricing matrix is gone).

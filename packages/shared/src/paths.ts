@@ -109,6 +109,12 @@ export const EVENT_ATTENDEES_SUBCOLLECTION = 'attendees'
 export const CHECKINS_COLLECTION = 'checkins'
 export const SESSIONS_COLLECTION = 'sessions'
 export const PARTICIPANTS_SUBCOLLECTION = 'participants'
+// Class waitlist — sessions/{sessionId}/waitlist/{contactId}. The doc id is the
+// contactId, exactly like `bookings`, so a second join is an idempotent write
+// rather than a duplicate row. Written only by Cloud Functions (Admin SDK);
+// every client write is denied. Deliberately NOT registered in tenantData.ts:
+// tenant teardown uses recursiveDelete on the parent session.
+export const WAITLIST_SUBCOLLECTION = 'waitlist'
 export const MONTHLY_SCORES_SUBCOLLECTION = 'monthly_scores'
 export const ACTIVITIES_COLLECTION = 'activities'
 export const SESSION_SERIES_COLLECTION = 'session_series'
