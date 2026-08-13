@@ -41,23 +41,27 @@ resource "google_secret_manager_secret_iam_member" "admin_version_adder" {
   depends_on = [google_secret_manager_secret.secret]
 }
 
-# ...and READ them back. Write-only was the original design (the SMTP password
-# tracked a password_set flag in Firestore instead), but the Brevo and Stripe
-# settings pages report status via secretExists(), a real Secret Manager read,
-# and their "send test email" / Stripe test actions call getSecretValue() for the
-# live key. Without this the console still SAVED correctly but every status read
-# hit PERMISSION_DENIED, which secret-manager.ts swallows into `false` — so the
-# UI said "saved" and then showed "not configured", in every environment.
+# ...and see WHETHER a version exists — metadata only, never the payload.
 #
-# This grants PLAINTEXT read of these keys to the console's runtime SA. That is
-# inherent to the test actions, not incidental: keep the list to secrets the
-# console genuinely manages (it is the same set it can write).
-resource "google_secret_manager_secret_iam_member" "admin_accessor" {
+# The console's settings pages report a "configured / not configured" status via
+# secretExists(), which calls getSecretVersion → secretmanager.versions.get. With
+# secretVersionAdder alone (versions.add) that read returned PERMISSION_DENIED,
+# which secret-manager.ts swallows into `false`. So a save succeeded and the UI
+# then said "not configured", in every environment — the value was there, the
+# console just could not see it.
+#
+# viewer, NOT secretAccessor, is the right role: secretAccessor grants
+# versions.access (the plaintext payload), which the console does not need and
+# must not have. The two actions that did read plaintext (Brevo test-send, Stripe
+# key verify) were removed for exactly this reason — see the notes in
+# apps/admin/src/lib/secret-manager.ts. Adding either back means widening this to
+# secretAccessor across every environment.
+resource "google_secret_manager_secret_iam_member" "admin_viewer" {
   for_each = toset(var.admin_writable_secret_ids)
 
   project   = var.project_id
   secret_id = each.value
-  role      = "roles/secretmanager.secretAccessor"
+  role      = "roles/secretmanager.viewer"
   member    = "serviceAccount:${var.admin_sa_email}"
 
   depends_on = [google_secret_manager_secret.secret]

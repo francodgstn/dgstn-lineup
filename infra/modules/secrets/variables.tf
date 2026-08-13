@@ -20,7 +20,7 @@ variable "admin_sa_email" {
 
 variable "admin_writable_secret_ids" {
   type        = list(string)
-  description = "Secret IDs the admin console MANAGES — granted both secretVersionAdder (write a new version) and secretAccessor (read it back) on each. Must be a subset of secret_ids. Read is required because the settings pages report status via a Secret Manager lookup and the test actions use the live key; note it means plaintext access, so keep this list minimal."
+  description = "Secret IDs the admin console MANAGES — granted secretVersionAdder (write a new version) and viewer (see that a version exists) on each. Must be a subset of secret_ids. The console never reads payloads: viewer covers versions.get (metadata) and deliberately NOT versions.access (plaintext), which is what secretAccessor would add."
   default     = ["smtp-password"]
 }
 
