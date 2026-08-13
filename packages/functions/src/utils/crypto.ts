@@ -19,3 +19,19 @@ export function verifyCode(code: string, salt: string, hash: string): boolean {
 export function generateSecureToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString('hex')
 }
+
+// Alphabet excludes visually ambiguous characters (0/O, 1/I/L) — this is a
+// human-read-aloud reference for phone/desk lookups, not a security token
+// (booking_token remains the unguessable identity for manage-booking links).
+const BOOKING_REFERENCE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+/** Short human-readable booking reference, e.g. "BK-7F3K9Q". Collisions are not
+ *  checked — this is a lookup aid for staff, not a unique key. */
+export function generateBookingReference(): string {
+  const bytes = crypto.randomBytes(6)
+  let code = ''
+  for (const b of bytes) {
+    code += BOOKING_REFERENCE_ALPHABET[b % BOOKING_REFERENCE_ALPHABET.length]
+  }
+  return `BK-${code}`
+}

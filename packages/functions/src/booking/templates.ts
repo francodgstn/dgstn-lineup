@@ -10,6 +10,14 @@ const INSTRUCTIONS_TITLES: Record<'en' | 'de' | 'fr' | 'it', string> = {
   it: 'Importante',
 }
 
+// Localised heading for the cancellation policy box (confirmation emails).
+const POLICY_TITLES: Record<'en' | 'de' | 'fr' | 'it', string> = {
+  en: 'Cancellation policy',
+  de: 'Stornobedingungen',
+  fr: "Politique d'annulation",
+  it: 'Politica di cancellazione',
+}
+
 /** Studio-authored plain-text instructions → highlighted box. Text is escaped,
  *  newlines become <br>, and bare URLs become clickable links. */
 export function instructionsBox(instructions: string, lang: 'en' | 'de' | 'fr' | 'it'): string {
@@ -17,6 +25,14 @@ export function instructionsBox(instructions: string, lang: 'en' | 'de' | 'fr' |
     .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:inherit;">$1</a>')
     .replace(/\n/g, '<br>')
   return detailsBox({ title: INSTRUCTIONS_TITLES[lang], content: `<p style="margin:0;">${html}</p>` })
+}
+
+/** Same shape as `instructionsBox`, titled for the cancellation policy. */
+export function cancellationPolicyBox(policy: string, lang: 'en' | 'de' | 'fr' | 'it'): string {
+  const html = escapeHtml(policy.trim())
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:inherit;">$1</a>')
+    .replace(/\n/g, '<br>')
+  return detailsBox({ title: POLICY_TITLES[lang], content: `<p style="margin:0;">${html}</p>` })
 }
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
@@ -54,6 +70,10 @@ interface ConfirmationParams {
   manageBookingUrl?: string | null
   /** Studio-authored plain-text note (activity override ?? team setting). */
   instructions?: string | null
+  /** Cancellation/refund policy (activity override ?? team default). */
+  cancellationPolicy?: string | null
+  /** Short human-readable code (e.g. "BK-7F3K9Q") for phone/desk lookups. */
+  reference?: string | null
   lang?: Lang
 }
 
@@ -67,6 +87,8 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     locationName,
     manageBookingUrl,
     instructions,
+    cancellationPolicy,
+    reference,
     lang = 'en',
   } = params
 
@@ -99,21 +121,25 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
       `<strong>Activity:</strong> ${activityName}`,
       `<strong>Date:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Location:</strong> ${locationName}` : '',
+      reference ? `<strong>Reference:</strong> ${escapeHtml(reference)}` : '',
     ],
     de: [
       `<strong>Aktivität:</strong> ${activityName}`,
       `<strong>Datum:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Ort:</strong> ${locationName}` : '',
+      reference ? `<strong>Referenz:</strong> ${escapeHtml(reference)}` : '',
     ],
     fr: [
       `<strong>Activité :</strong> ${activityName}`,
       `<strong>Date :</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Lieu :</strong> ${locationName}` : '',
+      reference ? `<strong>Référence :</strong> ${escapeHtml(reference)}` : '',
     ],
     it: [
       `<strong>Attività:</strong> ${activityName}`,
       `<strong>Data:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Luogo:</strong> ${locationName}` : '',
+      reference ? `<strong>Riferimento:</strong> ${escapeHtml(reference)}` : '',
     ],
   }
 
@@ -136,6 +162,7 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     `<p>${intros[lang]}</p>`,
     detailsBox({ content: factLines(facts[lang]) }),
     instructions?.trim() ? instructionsBox(instructions, lang) : '',
+    cancellationPolicy?.trim() ? cancellationPolicyBox(cancellationPolicy, lang) : '',
     `<p>${closings[lang]}</p>`,
     manageBookingUrl
       ? `<p style="text-align:center;margin-top:24px;">${ctaButton(manageBookingUrl, manageLabels[lang])}</p>`

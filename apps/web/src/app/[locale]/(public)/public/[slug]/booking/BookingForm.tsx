@@ -24,9 +24,11 @@ import {
   type ActivityMemberBenefit,
   type Benefit,
   type PublicFrom,
+  type FormField,
   parseDateKey,
   parseDocId,
 } from '@linyup/shared'
+import { FieldInput, isFieldAnswered } from '@/components/forms/FieldInput'
 import { publicHref, publicHrefLocalized, returnHref } from '@/lib/publicRoutes'
 import { useStepUrl } from '@/hooks/useStepUrl'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
@@ -86,6 +88,13 @@ interface ActivityProfile {
    *  appointment shape or the generalized `Benefit`. */
   memberBenefit?: ActivityMemberBenefit | Benefit
   prerequisites?: string
+  meetingPoint?: string
+  whatsIncluded?: string
+  whatsNotIncluded?: string
+  faq?: string
+  cancellationPolicy?: string
+  /** Per-activity book-form questions (shared FormField schema). */
+  bookingQuestions?: FormField[]
 }
 
 interface SessionProfile {
@@ -108,6 +117,7 @@ interface SessionProfile {
   bookingMandatory?: boolean
   max_participants?: number
   bookings_count?: number
+  headline?: string
 }
 
 // MatchedContact / ContactData now live in components/booking/ReturningSignIn
@@ -127,7 +137,7 @@ type Step =
  * degraded to the nearest useful step and told why — never silently dumped on
  * the blank activity picker, which is the whole reason deep links exist.
  */
-type DeepLinkNotice = 'past' | 'full' | 'gone' | 'dateEmpty'
+type DeepLinkNotice = 'past' | 'full' | 'gone' | 'dateEmpty' | 'closed'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -193,12 +203,20 @@ function nextStepAfterSession(a: ActivityProfile | null | undefined): Step {
   return gated && !canGuest ? 'returning' : 'who'
 }
 
-/** A session is bookable only while it's upcoming and has a free seat. */
-function sessionBlockReason(s: SessionProfile): DeepLinkNotice | null {
+/** A session is bookable only while it's upcoming, has a free seat, and (if the
+ *  studio set one) is still before the online booking cutoff. Client-side
+ *  mirror of the server's authoritative check (isPastBookingCutoff, bookSession
+ *  / createDropInCheckout) — never trust this alone. */
+function sessionBlockReason(
+  s: SessionProfile,
+  cutoffMinutes?: number
+): DeepLinkNotice | null {
   if (s.allowBooking !== true) return 'gone'
   if (s.start.toDate().getTime() <= Date.now()) return 'past'
   if (typeof s.max_participants === 'number' && (s.bookings_count ?? 0) >= s.max_participants)
     return 'full'
+  if (cutoffMinutes && cutoffMinutes > 0 && Date.now() >= s.start.toDate().getTime() - cutoffMinutes * 60_000)
+    return 'closed'
   return null
 }
 
@@ -321,12 +339,28 @@ export default function BookingForm({
 
   // Confirmation
   const [confirmedSession, setConfirmedSession] = useState<SessionProfile | null>(null)
+  // Short human-readable code from bookSession's return value — only the FREE
+  // path returns it synchronously (a paid booking confirms later via the
+  // Stripe webhook, off this request), so absent is expected there.
+  const [bookingReference, setBookingReference] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Optional gift-card redemption — only meaningful on a paying booking (drop-in
   // or priced trial). Reset whenever the guest door changes.
   const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
+
+  // Answers to the activity's book-form questions, keyed by FormField.id. The
+  // server re-narrows these to the activity's own questions before storing
+  // (sanitizeBookingAnswers) — this map is convenience, not trust.
+  const [answers, setAnswers] = useState<Record<string, unknown>>({})
+  const [answersError, setAnswersError] = useState<string | null>(null)
+  const bookingQuestions = selectedActivity?.bookingQuestions ?? []
+
+  /** Every required question answered? Gates submit on both booking paths. */
+  function missingRequiredAnswer(): boolean {
+    return bookingQuestions.some((q) => q.required && !isFieldAnswered(q, answers[q.id]))
+  }
 
   // Ref to trigger the shared guest-details form's submit from the sticky bar
   // (the Confirm button lives outside the <form> element).
@@ -366,6 +400,14 @@ export default function BookingForm({
               durations: Array.isArray(data.durations) ? data.durations : undefined,
               memberBenefit: data.memberBenefit ?? undefined,
               prerequisites: data.prerequisites ?? undefined,
+              meetingPoint: data.meetingPoint ?? undefined,
+              whatsIncluded: data.whatsIncluded ?? undefined,
+              whatsNotIncluded: data.whatsNotIncluded ?? undefined,
+              faq: data.faq ?? undefined,
+              cancellationPolicy: data.cancellationPolicy ?? undefined,
+              bookingQuestions: Array.isArray(data.bookingQuestions)
+                ? (data.bookingQuestions as FormField[])
+                : undefined,
             }
           })
           .sort(compareActivities)
@@ -462,7 +504,7 @@ export default function BookingForm({
       }
 
       const activity = target ? findActivityFor(target) : null
-      const blocked = target ? sessionBlockReason(target) : 'gone'
+      const blocked = target ? sessionBlockReason(target, bookingSettings?.cutoffMinutes) : 'gone'
 
       if (target && activity && !blocked) {
         setSelectedActivity(activity)
@@ -521,7 +563,14 @@ export default function BookingForm({
     }
 
     // ── Defaults ─────────────────────────────────────────────────────────────
-    if (actList.length === 1) {
+    // Date-first: straight to the day picker with NO activity pinned, so the
+    // slot list shows every activity running on the chosen day. (Checked before
+    // the single-activity shortcut — with one activity the two are equivalent,
+    // and pinning it would hide nothing but costs the row its name label.)
+    if (isDateFirst) {
+      setSelectedActivity(null)
+      setStep('sessions')
+    } else if (actList.length === 1) {
       setSelectedActivity(actList[0])
       setStep('sessions')
     } else {
@@ -529,6 +578,27 @@ export default function BookingForm({
     }
     return 'applied'
   }
+
+  /**
+   * DATE-FIRST flow (`BookingSettings.flowType`): the visitor picks a DAY first
+   * and sees every activity running that day, instead of picking an activity
+   * and then a day. It reuses the same 'sessions' step with NO activity
+   * selected — `activitySessions` already returns everything in that state and
+   * the slot rows already label themselves with `activityName`. The activity is
+   * resolved from whichever session gets clicked.
+   *
+   * A deep link that names one activity (`/booking/{slug}`, `?activity=`,
+   * `?session=`) still pins it — the visitor asked for that activity
+   * specifically, so the studio's browse preference doesn't apply.
+   */
+  const isDateFirst =
+    bookingSettings?.flowType === 'date-first' && !preSelectedActivitySlug && !initialActivityId
+
+  /** The loaded activity a session belongs to (by id, else by slug). */
+  const findActivityForSession = (s: SessionProfile) =>
+    activities.find(
+      (a) => a.id === s.activityId || (!!s.activitySlug && a.slug === s.activitySlug)
+    ) ?? null
 
   // Sessions filtered by selected activity
   const activitySessions = useMemo(() => {
@@ -569,12 +639,14 @@ export default function BookingForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedActivity?.id, sessions.length])
 
+  const cutoffMinutes = bookingSettings?.cutoffMinutes
   const filteredSessions = useMemo(
     () =>
-      selectedDate
+      (selectedDate
         ? activitySessions.filter((s) => toDateKey(s.start) === selectedDate)
-        : activitySessions,
-    [selectedDate, activitySessions]
+        : activitySessions
+      ).filter((s) => sessionBlockReason(s, cutoffMinutes) !== 'closed'),
+    [selectedDate, activitySessions, cutoffMinutes]
   )
 
   // Drop-in (pay-per-class): a gated class where the studio lets uncovered contacts
@@ -617,6 +689,14 @@ export default function BookingForm({
 
   const onSubmitGuest = async (values: GuestDetailsValues) => {
     if (!selectedSession || !teamId) return
+    // Required book-form questions gate the submit — the server would accept the
+    // booking without them (they're studio preference, not a data contract), so
+    // enforcing here is the only place it happens.
+    if (missingRequiredAnswer()) {
+      setAnswersError(t('errorAnswerRequired'))
+      return
+    }
+    setAnswersError(null)
     setIsSubmitting(true)
     setBookingError(null)
 
@@ -646,6 +726,9 @@ export default function BookingForm({
         origin: typeof window !== 'undefined' ? window.location.origin : undefined,
         ...(trial ? { trial: true } : {}),
         ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
+        // Carried into the PENDING booking doc the checkout creates, so the
+        // answers survive the Stripe round-trip without a client re-submit.
+        ...(Object.keys(answers).length ? { questionAnswers: answers } : {}),
       })
       return res.data
     }
@@ -665,8 +748,11 @@ export default function BookingForm({
         throw new Error(t('errorCheckoutFailed'))
       }
 
-      const bookSessionFn = httpsCallable(functions, 'bookSession')
-      await bookSessionFn({
+      const bookSessionFn = httpsCallable<Record<string, unknown>, { bookingReference?: string }>(
+        functions,
+        'bookSession'
+      )
+      const bookRes = await bookSessionFn({
         teamId,
         sessionId: selectedSession.id,
         contactDetails: {
@@ -679,7 +765,9 @@ export default function BookingForm({
         // Free path only — createDropInCheckout takes no referral code, which is
         // right: a referral link invites a newcomer to their first free booking.
         ...(referral ? { referralCode: referral } : {}),
+        ...(Object.keys(answers).length ? { questionAnswers: answers } : {}),
       })
+      setBookingReference(bookRes.data.bookingReference ?? null)
       setConfirmedSession(selectedSession)
       setStep('confirmed')
     } catch (err: unknown) {
@@ -757,14 +845,18 @@ export default function BookingForm({
         throw new Error(t('errorNoSubscriptionForActivity'))
       }
     }
-    const bookSessionFn = httpsCallable(functions, 'bookSession')
-    await bookSessionFn({
+    const bookSessionFn = httpsCallable<Record<string, unknown>, { bookingReference?: string }>(
+      functions,
+      'bookSession'
+    )
+    const bookRes = await bookSessionFn({
       teamId,
       sessionId: selectedSession.id,
       authenticatedContactId: contactId,
       verificationCodeId,
       ...(referral ? { referralCode: referral } : {}),
     })
+    setBookingReference(bookRes.data.bookingReference ?? null)
     setConfirmedSession(selectedSession)
     setStep('confirmed')
   }
@@ -870,7 +962,17 @@ export default function BookingForm({
       // Back to the flow's entry step.
       setSelectedSession(null)
       setGuestPath(null)
-      if (preSelectedActivitySlug || activities.length === 1) {
+      if (isDateFirst) {
+        setSelectedActivity(null)
+        // The day IS the state in date-first — restoring the step without it
+        // would silently bounce the visitor back to the first available day.
+        const day = parseDateKey(params.get('date'))
+        if (day) {
+          setSelectedDate(day)
+          entryResolvedRef.current = true
+        }
+        setStep('sessions')
+      } else if (preSelectedActivitySlug || activities.length === 1) {
         setStep('sessions')
       } else {
         setSelectedActivity(null)
@@ -923,7 +1025,9 @@ export default function BookingForm({
   }, [step, selectedActivity?.id, selectedSession?.id, selectedDate, guestPath, loadingData])
 
   function backFromSessions() {
-    if (preSelectedActivitySlug || initialActivityId || activities.length === 1) {
+    // `isDateFirst` has no activity step in front of it either — the day picker
+    // IS the entry step there.
+    if (isDateFirst || preSelectedActivitySlug || initialActivityId || activities.length === 1) {
       // No activity step to go back to — leave the flow. In an overlay that
       // means CLOSE (the visitor came from the page behind the panel, not from
       // the team root); as a page it means go to wherever they came from.
@@ -934,13 +1038,29 @@ export default function BookingForm({
     }
   }
 
+  /**
+   * Return to the slot list. In date-first the activity was inferred from the
+   * clicked session, not chosen — so going back must un-pin it, or the visitor
+   * lands on a list silently filtered to one activity they never picked.
+   */
+  function backToSessions() {
+    if (isDateFirst) setSelectedActivity(null)
+    setStep('sessions')
+  }
+
   function resetToStart() {
     setSelectedSession(null)
     setBookingError(null)
     // Must clear, or the step↔URL restore guard keeps treating the flow as
     // terminal and ejects the visitor on their next Back.
     setConfirmedSession(null)
-    if (preSelectedActivitySlug || activities.length === 1) {
+    setBookingReference(null)
+    if (isDateFirst) {
+      // Book-another returns to the full day list, not to the activity the
+      // previous booking happened to be for.
+      setSelectedActivity(null)
+      setStep('sessions')
+    } else if (preSelectedActivitySlug || activities.length === 1) {
       setStep('sessions')
     } else {
       setStep('activities')
@@ -1215,6 +1335,72 @@ export default function BookingForm({
           </div>
         )}
 
+        {selectedActivity?.meetingPoint && (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{t('meetingPointLabel')}</span>{' '}
+            {selectedActivity.meetingPoint}
+          </p>
+        )}
+
+        {(() => {
+          const effectiveCancellationPolicy =
+            selectedActivity?.cancellationPolicy?.trim() ||
+            (team as { bookingCancellationPolicy?: string }).bookingCancellationPolicy?.trim() ||
+            null
+          const hasDetail =
+            selectedActivity &&
+            (selectedActivity.whatsIncluded ||
+              selectedActivity.whatsNotIncluded ||
+              selectedActivity.faq ||
+              effectiveCancellationPolicy)
+          if (!hasDetail) return null
+          return (
+            <details className="rounded-xl border bg-card">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+                {t('activityDetailToggle')}
+              </summary>
+              <div className="space-y-3 border-t px-4 py-3 text-sm text-muted-foreground">
+                {selectedActivity!.whatsIncluded && (
+                  <div>
+                    <p className="font-medium text-foreground">{t('whatsIncludedLabel')}</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {selectedActivity!.whatsIncluded
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line, i) => <li key={i}>{line}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {selectedActivity!.whatsNotIncluded && (
+                  <div>
+                    <p className="font-medium text-foreground">{t('whatsNotIncludedLabel')}</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {selectedActivity!.whatsNotIncluded
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line, i) => <li key={i}>{line}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {selectedActivity!.faq && (
+                  <div>
+                    <p className="font-medium text-foreground">{t('faqLabel')}</p>
+                    <p className="mt-1 whitespace-pre-line">{selectedActivity!.faq}</p>
+                  </div>
+                )}
+                {effectiveCancellationPolicy && (
+                  <div>
+                    <p className="font-medium text-foreground">{t('cancellationPolicyLabel')}</p>
+                    <p className="mt-1 whitespace-pre-line">{effectiveCancellationPolicy}</p>
+                  </div>
+                )}
+              </div>
+            </details>
+          )
+        })()}
+
         {availableDates.length === 0 ? (
           <div className="rounded-xl border bg-muted/30 p-8 text-center">
             <p className="text-muted-foreground text-sm">
@@ -1249,11 +1435,18 @@ export default function BookingForm({
                     <button
                       key={s.id}
                       onClick={() => {
+                        // Date-first browses with no activity pinned, so the
+                        // clicked session is what names it. Everything
+                        // downstream (access gate, pricing, sticky bar) reads
+                        // `selectedActivity`, so resolve it here rather than
+                        // letting those fall back to null.
+                        const activity = selectedActivity ?? findActivityForSession(s)
+                        if (!selectedActivity && activity) setSelectedActivity(activity)
                         setSelectedSession(s)
                         setGuestPath(null)
                         setGiftCardApplied(null)
                         setDeepLinkNotice(null)
-                        setStep(nextStepAfterSession(selectedActivity))
+                        setStep(nextStepAfterSession(activity))
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group"
                     >
@@ -1270,6 +1463,9 @@ export default function BookingForm({
                         <p className="font-semibold text-sm">
                           {formatTime(s.start)} – {formatTime(s.end)}
                         </p>
+                        {s.headline && (
+                          <p className="text-xs text-amber-700 mt-0.5">{s.headline}</p>
+                        )}
                         <div className="flex flex-wrap gap-x-3 mt-0.5">
                           {s.providerName && (
                             <p className="text-xs text-muted-foreground">{s.providerName}</p>
@@ -1321,7 +1517,7 @@ export default function BookingForm({
     return withBar(
       <>
         <div>
-          <BackButton label={t('back')} onClick={() => setStep('sessions')} />
+          <BackButton label={t('back')} onClick={backToSessions} />
           <h1 className="text-2xl font-bold">{t('titleWhosBooking')}</h1>
         </div>
 
@@ -1478,7 +1674,7 @@ export default function BookingForm({
       <ReturningSignIn
         teamId={teamId}
         onVerified={onVerified}
-        onBack={() => setStep(hadWhoStep ? 'who' : 'sessions')}
+        onBack={() => (hadWhoStep ? setStep('who') : backToSessions())}
         accentColor={accentColor}
         noAccountMessage={isMembersOnly ? t('errorNoAccountMembersOnly') : t('errorNoAccountGeneral')}
         title={isMembersOnly ? t('accessTitle') : undefined}
@@ -1515,6 +1711,74 @@ export default function BookingForm({
             onApplied={setGiftCardApplied}
             disabled={isSubmitting}
           />
+        )}
+
+        {/* Live price breakdown — display only; createDropInCheckout /
+            bookSession re-resolve the charge authoritatively server-side. */}
+        {willCharge && (() => {
+          const basePrice = isPricedTrial
+            ? (selectedActivity?.trialPriceAmount ?? 0)
+            : (selectedDropInPrice ?? 0)
+          const memberDiscount =
+            !isPricedTrial && dropInMemberPrice ? dropInMemberPrice.base - dropInMemberPrice.amount : 0
+          const afterBenefit = basePrice - memberDiscount
+          const giftCardDeduction = giftCardApplied
+            ? Math.min(giftCardApplied.balance, afterBenefit)
+            : 0
+          const total = Math.max(0, afterBenefit - giftCardDeduction)
+          return (
+            <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t('priceSubtotal')}</span>
+                <span>{formatCurrency(basePrice, currency, locale)}</span>
+              </div>
+              {memberDiscount > 0 && (
+                <div className="flex items-center justify-between text-green-700">
+                  <span>{t('priceMemberDiscount')}</span>
+                  <span>−{formatCurrency(memberDiscount, currency, locale)}</span>
+                </div>
+              )}
+              {giftCardDeduction > 0 && (
+                <div className="flex items-center justify-between text-green-700">
+                  <span>{t('priceGiftCard')}</span>
+                  <span>−{formatCurrency(giftCardDeduction, currency, locale)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t pt-1.5 font-semibold">
+                <span>{t('priceTotal')}</span>
+                <span>{formatCurrency(total, currency, locale)}</span>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Per-activity book-form questions. Rendered ABOVE the identity form so
+            the sticky Confirm button still submits last — the questions are
+            about the booking, the fields below are about the person. */}
+        {bookingQuestions.length > 0 && (
+          <div className="space-y-4 rounded-xl border bg-card p-4">
+            {bookingQuestions.map((q) => (
+              <div key={q.id} className="space-y-1.5">
+                {/* A checkbox renders its own inline label. */}
+                {q.type !== 'checkbox' && (
+                  <label className="text-sm font-medium">
+                    {q.label}
+                    {q.required && <span className="ml-0.5 text-destructive">*</span>}
+                  </label>
+                )}
+                <FieldInput
+                  field={q}
+                  value={answers[q.id]}
+                  disabled={isSubmitting}
+                  onChange={(v) => {
+                    setAnswers((prev) => ({ ...prev, [q.id]: v }))
+                    setAnswersError(null)
+                  }}
+                />
+              </div>
+            ))}
+            {answersError && <p className="text-sm text-destructive">{answersError}</p>}
+          </div>
         )}
 
         <GuestDetailsForm
@@ -1602,6 +1866,12 @@ export default function BookingForm({
                 <p>
                   <span className="font-medium text-foreground">{t('labelLocation')}</span>
                   {confirmedSession.location}
+                </p>
+              )}
+              {bookingReference && (
+                <p>
+                  <span className="font-medium text-foreground">{t('labelReference')}</span>
+                  {bookingReference}
                 </p>
               )}
             </div>

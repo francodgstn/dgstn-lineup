@@ -336,8 +336,8 @@ export default function SessionDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   // QR scanner state — kept for when scanner is re-enabled; prefixed with _ to suppress unused-var lint
-  const [scanning, _setScanning] = useState(false)
-  const [_scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   // ── data fetching ────────────────────────────────────────────────────────────
 
@@ -528,8 +528,11 @@ export default function SessionDetailPage() {
 
   const scanner = useQrScanner(handleQrScan)
 
-  // toggleScanner intentionally removed — QR scanner is "coming soon" (button is disabled)
-  useEffect(() => { if (!scanning) scanner.stop() }, [scanning, scanner])
+  useEffect(() => {
+    if (scanning) scanner.start()
+    else scanner.stop()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning])
 
   // ── derived ───────────────────────────────────────────────────────────────────
 
@@ -662,19 +665,15 @@ export default function SessionDetailPage() {
 
         {/* Action row */}
         <div className="px-5 pb-4 flex flex-wrap gap-2">
-          {/* QR scanner — coming soon; button is disabled and scanner UI is suppressed */}
-          <div className="relative inline-flex items-center">
-            <button
-              disabled
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
-            >
-              <QrCode className="h-4 w-4" />
-              {t('checkInScannerButton')}
-            </button>
-            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 select-none">
-              {t('comingSoonBadge')}
-            </span>
-          </div>
+          <button
+            onClick={() => setScanning((v) => !v)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              scanning ? 'bg-primary text-primary-foreground' : 'border hover:bg-muted'
+            }`}
+          >
+            <QrCode className="h-4 w-4" />
+            {scanning ? t('stopScannerButton') : t('checkInScannerButton')}
+          </button>
           <button
             onClick={() => setAddOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
@@ -693,8 +692,33 @@ export default function SessionDetailPage() {
         </div>
       </div>
 
-      {/* QR scanner section — disabled (coming soon); keep code for future re-enable */}
-      {/* {scanner.active && ( ... )} */}
+      {/* QR scanner */}
+      {scanning && (
+        <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+          <div className="relative aspect-square w-full max-w-sm mx-auto bg-black">
+            <video
+              ref={scanner.videoRef}
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+            />
+            {scanMsg && (
+              <div
+                className={`absolute inset-x-2 top-2 rounded-lg px-3 py-2 text-center text-sm font-medium shadow ${
+                  scanMsg.ok ? 'bg-green-600 text-white' : 'bg-destructive text-destructive-foreground'
+                }`}
+              >
+                {scanMsg.text}
+              </div>
+            )}
+          </div>
+          {scanner.error ? (
+            <p className="px-5 py-3 text-sm text-destructive">{scanner.error}</p>
+          ) : (
+            <p className="px-5 py-3 text-sm text-muted-foreground">{t('qrScannerHint')}</p>
+          )}
+        </div>
+      )}
 
       {/* Portal bookings */}
       {hasBookings && (

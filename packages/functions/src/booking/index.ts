@@ -7,7 +7,7 @@ import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
-import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
+import { hashVerificationCode, verifyCode, generateSecureToken, generateBookingReference } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { resolveReferralCode, createReferral } from '../utils/referrals'
@@ -23,6 +23,10 @@ import {
   resolveActivityAccessRule,
   resolveAutoConfirm,
   heldSubscriptionTypeIds,
+  isPastBookingCutoff,
+  parseBookingSource,
+  sanitizeBookingAnswers,
+  type FormField,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   PARTNER_VISITS_SUBCOLLECTION,
   type ActivityAccessRule,
@@ -339,6 +343,11 @@ export const bookSession = onCall(async (request) => {
     verificationCodeId?: string
     referralCode?: string
     subscription_type_id?: string
+    /** Attribution hint (see BookingSource). Untrusted — validated with
+     *  parseBookingSource before it's persisted. */
+    source?: string
+    /** Answers to the activity's bookingQuestions, keyed by field id. */
+    questionAnswers?: Record<string, unknown>
   }
 
   if (!data?.teamId || !data?.sessionId) {
@@ -552,6 +561,11 @@ export const bookSession = onCall(async (request) => {
   let accessRule: ActivityAccessRule = { type: 'open' }
   // Per-activity confirmation note (overrides the team-wide setting below).
   let activityInstructions: string | null = null
+  // Per-activity cancellation policy (overrides the team-wide default below).
+  let activityCancellationPolicy: string | null = null
+  // The activity's own book-form questions — the allow-list the submitted
+  // answers get narrowed to (see sanitizeBookingAnswers).
+  let activityBookingQuestions: FormField[] = []
   let activityAutoConfirm: boolean | undefined
   let activityTypeVal: ActivityType | undefined
   // CLASS-ONLY (Activity.trialEnabled, @linyup/shared). Independent of
@@ -578,6 +592,10 @@ export const bookSession = onCall(async (request) => {
           isFreeTrial: actData.isFreeTrial as boolean | undefined,
         })
         activityInstructions = (actData.confirmationInstructions as string) || null
+        activityCancellationPolicy = (actData.cancellationPolicy as string) || null
+        activityBookingQuestions = Array.isArray(actData.bookingQuestions)
+          ? (actData.bookingQuestions as FormField[])
+          : []
         activityAutoConfirm = actData.autoConfirm as boolean | undefined
         activityTypeVal = actData.type as ActivityType | undefined
         activityTrialEnabled = actData.trialEnabled === true
@@ -605,6 +623,16 @@ export const bookSession = onCall(async (request) => {
       | undefined) || null
   const bookingInstructions = activityInstructions?.trim() || teamInstructions?.trim() || null
 
+  // Cancellation policy appended to the confirmation email: activity override ??
+  // team default (mirrors the instructions pattern above; separate field
+  // because this one is ALSO shown publicly before the visitor books).
+  const teamCancellationPolicy =
+    ((team.settings as Record<string, unknown> | undefined)?.bookingCancellationPolicy as
+      | string
+      | undefined) || null
+  const cancellationPolicy =
+    activityCancellationPolicy?.trim() || teamCancellationPolicy?.trim() || null
+
   // Group-class booking cap (optional; enforced against the live reserved count).
   const maxGroup = sessionData.max_participants as number | undefined
   if (maxGroup && maxGroup > 0) {
@@ -612,6 +640,17 @@ export const bookSession = onCall(async (request) => {
     if (reserved >= maxGroup) {
       throw new HttpsError('resource-exhausted', 'This session is fully booked.')
     }
+  }
+
+  // Online booking cutoff (team.settings.booking.cutoffMinutes) — authoritative;
+  // the client hides/disables the same slots but never trust it alone.
+  const cutoffMinutes = (
+    (team.settings as Record<string, unknown> | undefined)?.booking as
+      | { cutoffMinutes?: number }
+      | undefined
+  )?.cutoffMinutes
+  if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
+    throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
   }
 
   // ── Access gate (paid-access axis) ─────────────────────────────────────────
@@ -795,6 +834,7 @@ export const bookSession = onCall(async (request) => {
 
   // Add booking to session
   const bookingToken = generateSecureToken()
+  const bookingReference = generateBookingReference()
   const teamSlug: string | null = team.slug || null
   const manageBookingUrl = teamSlug
     ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: bookingToken })
@@ -817,6 +857,17 @@ export const bookSession = onCall(async (request) => {
     fromBioLink: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
+    booking_reference: bookingReference,
+    // Attribution. Client-supplied but validated against the union — the kiosk
+    // is the one caller that isn't the public booking page, and an unrecognised
+    // value falls back to 'online' rather than persisting junk.
+    source: parseBookingSource(data.source) ?? 'online',
+    // Narrowed to the activity's own questions — unknown ids and off-list
+    // choices are dropped rather than persisted.
+    ...(() => {
+      const answers = sanitizeBookingAnswers(activityBookingQuestions, data.questionAnswers)
+      return answers ? { question_answers: answers } : {}
+    })(),
     booking_ip: bookingIp,
     authenticated_booking: isAuthenticatedBooking,
     subscription_type_id: subscriptionTypeId,
@@ -1050,6 +1101,8 @@ export const bookSession = onCall(async (request) => {
       locationName: sessionData.location || null,
       manageBookingUrl,
       instructions: bookingInstructions,
+      cancellationPolicy,
+      reference: bookingReference,
       lang,
     })
     const subjects: Record<Lang, string> = {
@@ -1110,6 +1163,7 @@ export const bookSession = onCall(async (request) => {
     sessionId: data.sessionId,
     isNewContact,
     isAuthenticatedBooking,
+    bookingReference,
     sessionDetails: {
       activityName,
       start: sessionStart.toISOString(),

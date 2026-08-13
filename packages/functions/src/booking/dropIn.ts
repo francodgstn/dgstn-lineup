@@ -11,6 +11,8 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   GUEST_SNAPSHOT,
+  isPastBookingCutoff,
+  sanitizeBookingAnswers,
   normalizeBenefit,
   resolveActivityAccessRule,
   resolvePaymentOptions,
@@ -35,7 +37,7 @@ import {
   releaseGiftCardHold,
   reserveGiftCardDrawdown,
 } from '../connect/giftCards'
-import { generateSecureToken } from '../utils/crypto'
+import { generateSecureToken, generateBookingReference } from '../utils/crypto'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 import { resolveSingleContact } from '../utils/contacts'
@@ -98,6 +100,9 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     trial?: boolean
     /** Optional gift-card code to draw down against this booking's price. */
     giftCardCode?: string
+    /** Answers to the activity's bookingQuestions, keyed by field id. Stored on
+     *  the PENDING booking so they survive the Stripe round-trip. */
+    questionAnswers?: Record<string, unknown>
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   if (!data?.sessionId) throw new HttpsError('invalid-argument', 'sessionId is required')
@@ -129,6 +134,17 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   if ((sessionData.start as Timestamp).toMillis() < Date.now()) {
     throw new HttpsError('failed-precondition', 'Cannot book sessions in the past')
   }
+  // Online booking cutoff — same guard as the free path (bookSession); a
+  // member paying instead of using the free door must not be able to route
+  // around it.
+  const cutoffMinutes = (
+    (team.data?.settings as Record<string, unknown> | undefined)?.booking as
+      | { cutoffMinutes?: number }
+      | undefined
+  )?.cutoffMinutes
+  if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
+    throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
+  }
   if (sessionData.activityType === 'appointment') {
     throw new HttpsError('failed-precondition', 'Drop-in is not available for appointment sessions')
   }
@@ -139,6 +155,12 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const actSnap = await db.collection('activities').doc(activityId).get()
   if (!actSnap.exists) throw new HttpsError('not-found', 'Activity not found')
   const activity = actSnap.data()!
+  // Book-form answers, narrowed to THIS activity's own questions. Same helper
+  // the free path uses, so the two can't disagree about what gets stored.
+  const sanitizedAnswers = sanitizeBookingAnswers(
+    Array.isArray(activity.bookingQuestions) ? activity.bookingQuestions : null,
+    data.questionAnswers
+  )
   const activityName =
     (activity.name as string) || (sessionData.activityName as string) || 'Class'
   const isTrial = data.trial === true
@@ -326,6 +348,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   }
 
   const bookingToken = generateSecureToken()
+  const bookingReference = generateBookingReference()
   const expiresAt = Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000)
 
   // Optional gift-card redemption — reserve a drawdown against the total BEFORE
@@ -358,6 +381,9 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       fromBioLink: true,
       is_new_contact: isNewContact,
       booking_token: bookingToken,
+      booking_reference: bookingReference,
+      source: 'online' as const,
+      ...(sanitizedAnswers ? { question_answers: sanitizedAnswers } : {}),
       authenticated_booking: !!contactSession,
       status: 'confirmed',
       payment_status: 'gift_card',
@@ -421,6 +447,10 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     fromBioLink: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
+    booking_reference: bookingReference,
+    // Drop-in checkout is only reachable from the public booking page.
+    source: 'online' as const,
+    ...(sanitizedAnswers ? { question_answers: sanitizedAnswers } : {}),
     authenticated_booking: !!contactSession,
     status: 'pending',
     payment_status: 'required',

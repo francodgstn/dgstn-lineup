@@ -387,6 +387,11 @@ export interface BookingSettings {
   ctaUrl?: string | null
   ctaLabel?: string | null
   appointmentsEnabled?: boolean
+  /** Minutes before a session's start that online booking closes. Absent/0 = no
+   *  cutoff (bookable right up to start, today's behaviour). Enforced
+   *  authoritatively by the booking callables — see `isPastBookingCutoff`
+   *  (types/session.ts); this setting only configures the threshold. */
+  cutoffMinutes?: number
 }
 
 /** A coach as exposed on the world-readable team public_profile (opt-in). */
@@ -409,6 +414,12 @@ export interface TeamPublicProfile {
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
+  // Team-wide cancellation policy shown on public booking pages and appended to
+  // confirmation emails when the activity has no `cancellationPolicy` of its
+  // own. Denormalized by syncTeamPublicProfile from
+  // teams/{id}.settings.bookingCancellationPolicy (owner-editable, same home as
+  // the existing bookingConfirmationInstructions default).
+  bookingCancellationPolicy?: string
   // Opt-in coach roster (name + optional photo), maintained by
   // syncTeamCoachesPublicProfile when `public_coaches_enabled` is true. Consumed by
   // the organization website's coaches section. Absent/empty ⇒ not opted in.

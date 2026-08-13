@@ -203,6 +203,13 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     showBranding: (data.plan ?? 'free') === 'free',
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
+    // Team-wide cancellation policy default (activity-level override lives on
+    // Activity.cancellationPolicy). Public because it's shown BEFORE booking,
+    // not just emailed after — see bookingConfirmationInstructions for the
+    // email-only sibling this deliberately does NOT reuse.
+    bookingCancellationPolicy:
+      (data.settings as { bookingCancellationPolicy?: string } | undefined)
+        ?.bookingCancellationPolicy || null,
     // Gift cards (E3): public-safe config only (enabled + purchasable face values —
     // never balances/codes) so the public shop can offer them without reading the
     // private team doc. Mirrors teams/{id}.settings.giftCards.

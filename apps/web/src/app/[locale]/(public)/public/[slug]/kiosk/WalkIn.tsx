@@ -134,6 +134,9 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
           email: values.email,
           phone: values.phone || null,
         },
+        // Taken at the door on the studio's own tablet — not a self-serve
+        // online booking. Server re-validates against the BookingSource union.
+        source: 'kiosk',
       })
       setConfirmedActivity(selected.activityName || '')
       setStep('confirmed')

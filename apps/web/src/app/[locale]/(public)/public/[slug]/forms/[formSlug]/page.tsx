@@ -9,13 +9,10 @@ import { db, functions } from '@/lib/firebase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { CheckCircle2 } from 'lucide-react'
-import type { FormField, FormPublicProfile, FormAccess } from '@linyup/shared'
+import type { FormPublicProfile, FormAccess } from '@linyup/shared'
+import { FieldInput } from '@/components/forms/FieldInput'
 import { usePublicTeam } from '../../PublicTeamProvider'
 import { useSpaceAuth } from '../../space/SpaceAuthProvider'
 
@@ -57,91 +54,6 @@ function usePublicForm(teamId: string, formSlug: string): LoadState {
     }
   }, [teamId, formSlug])
   return state
-}
-
-// ─── Field renderer ───────────────────────────────────────────────────────────
-
-function FieldInput({
-  field, value, onChange,
-}: {
-  field: FormField
-  value: unknown
-  onChange: (v: unknown) => void
-}) {
-  switch (field.type) {
-    case 'long_text':
-      return (
-        <Textarea
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder}
-          rows={4}
-        />
-      )
-    case 'single_choice':
-    case 'dropdown':
-      return (
-        <Select value={(value as string) ?? ''} onValueChange={onChange}>
-          <SelectTrigger><SelectValue placeholder={field.placeholder} /></SelectTrigger>
-          <SelectContent>
-            {(field.options ?? []).map((opt) => (
-              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )
-    case 'multiple_choice': {
-      const arr = Array.isArray(value) ? (value as string[]) : []
-      return (
-        <div className="space-y-1.5">
-          {(field.options ?? []).map((opt) => (
-            <label key={opt} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={arr.includes(opt)}
-                onChange={(e) =>
-                  onChange(e.target.checked ? [...arr, opt] : arr.filter((o) => o !== opt))
-                }
-              />
-              {opt}
-            </label>
-          ))}
-        </div>
-      )
-    }
-    case 'checkbox':
-      return (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={!!value}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          {field.placeholder || field.label}
-        </label>
-      )
-    case 'date':
-      return (
-        <Input type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />
-      )
-    case 'number':
-      return (
-        <Input
-          type="number"
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder}
-        />
-      )
-    case 'email':
-      return (
-        <Input type="email" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />
-      )
-    default:
-      return (
-        <Input value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />
-      )
-  }
 }
 
 // ─── Contacts-only sign-in gate ────────────────────────────────────────────────

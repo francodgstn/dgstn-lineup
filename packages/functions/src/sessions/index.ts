@@ -90,6 +90,8 @@ export const generateRecurringSessions = onCall(async (request) => {
         location: seriesData.template?.location ?? null,
         tags: seriesData.template?.tags ?? [],
         notes: seriesData.template?.notes ?? '',
+        headline: seriesData.template?.headline ?? null,
+        headlinePublic: seriesData.template?.headlinePublic ?? false,
         allowBooking: seriesData.template?.allowBooking ?? false,
         providerName: seriesData.template?.providerName ?? null,
         providerId: seriesData.template?.providerId ?? null,
@@ -395,6 +397,8 @@ export const updateRecurringSession = onCall(async (request) => {
     'maxParticipants',
     'type',
     'notes',
+    'headline',
+    'headlinePublic',
     'recurrence',
     'activityId',
     'activityName',
@@ -521,6 +525,9 @@ export const updateRecurringSession = onCall(async (request) => {
   if (location !== undefined) seriesUpdates['template.location'] = location
   if (tags !== undefined) seriesUpdates['template.tags'] = tags
   if (updates.notes !== undefined) seriesUpdates['template.notes'] = updates.notes
+  if (updates.headline !== undefined) seriesUpdates['template.headline'] = updates.headline
+  if (updates.headlinePublic !== undefined)
+    seriesUpdates['template.headlinePublic'] = updates.headlinePublic
   if (updates.allowBooking !== undefined)
     seriesUpdates['template.allowBooking'] = updates.allowBooking
   if (updates.providerName !== undefined)
@@ -659,6 +666,13 @@ export const updateRecurringSession = onCall(async (request) => {
             | null) ?? null,
         tags: ((seriesUpdates['template.tags'] ?? seriesData.template?.tags) as string[]) ?? [],
         notes: ((seriesUpdates['template.notes'] ?? seriesData.template?.notes) as string) ?? '',
+        headline:
+          ((seriesUpdates['template.headline'] ?? seriesData.template?.headline) as
+            | string
+            | null) ?? null,
+        headlinePublic:
+          ((seriesUpdates['template.headlinePublic'] ??
+            seriesData.template?.headlinePublic) as boolean) ?? false,
         allowBooking:
           ((seriesUpdates['template.allowBooking'] ??
             seriesData.template?.allowBooking) as boolean) ?? false,

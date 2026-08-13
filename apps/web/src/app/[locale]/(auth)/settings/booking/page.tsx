@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, BookingSettings } from '@linyup/shared'
 import { NoShowPolicyCard } from './NoShowPolicyCard'
+import { CancellationPolicyCard } from './CancellationPolicyCard'
 
 // ─── schema ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ function createBookingSchema(t: ReturnType<typeof useTranslations>) {
     ctaUrl: createSafeUrlSchema(t),
     ctaLabel: z.string().optional(),
     appointmentsEnabled: z.boolean().optional(),
+    cutoffMinutes: z.number().int().min(0).max(10080),
   })
 }
 
@@ -73,6 +75,8 @@ function getDefaults(team: Team | null): FormData {
   const windowMonths =
     Number.isInteger(rawMonths) && rawMonths >= 1 && rawMonths <= 6 ? rawMonths : 2
   const flowType = rawBooking.flowType === 'date-first' ? 'date-first' : 'activity-first'
+  const rawCutoff = Number(rawBooking.cutoffMinutes)
+  const cutoffMinutes = Number.isInteger(rawCutoff) && rawCutoff >= 0 && rawCutoff <= 10080 ? rawCutoff : 0
   return {
     booking: {
       flowType,
@@ -83,6 +87,7 @@ function getDefaults(team: Team | null): FormData {
       ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
       appointmentsEnabled: rawBooking.appointmentsEnabled === true,
+      cutoffMinutes,
     },
   }
 }
@@ -234,6 +239,33 @@ function BookingForm({
         />
       </div>
 
+      {/* Booking cutoff */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{t('cutoffTitle')}</p>
+        <p className="text-xs text-muted-foreground">{t('cutoffSubtitle')}</p>
+        <Controller
+          control={control}
+          name="booking.cutoffMinutes"
+          render={({ field }) => (
+            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+              <SelectTrigger className="h-9 w-48">
+                <span className="flex flex-1 text-left text-sm truncate">
+                  {field.value === 0 ? t('cutoffNone') : t('cutoffMinutesBefore', { minutes: field.value })}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">{t('cutoffNone')}</SelectItem>
+                <SelectItem value="15">{t('cutoffMinutesBefore', { minutes: 15 })}</SelectItem>
+                <SelectItem value="30">{t('cutoffMinutesBefore', { minutes: 30 })}</SelectItem>
+                <SelectItem value="60">{t('cutoffMinutesBefore', { minutes: 60 })}</SelectItem>
+                <SelectItem value="120">{t('cutoffMinutesBefore', { minutes: 120 })}</SelectItem>
+                <SelectItem value="1440">{t('cutoffMinutesBefore', { minutes: 1440 })}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
       {/* Toggles */}
       {(
         [
@@ -357,6 +389,7 @@ export default function BookingSettingsPage() {
       ctaUrl: data.booking.ctaUrl || null,
       ctaLabel: data.booking.ctaLabel || null,
       appointmentsEnabled: data.booking.appointmentsEnabled ?? false,
+      cutoffMinutes: data.booking.cutoffMinutes,
     }
     try {
       // ① public_profile is the source of truth (team-member writable). Must succeed.
@@ -408,7 +441,8 @@ export default function BookingSettingsPage() {
         <BookingForm control={control} register={register} />
       </form>
 
-      <div className="max-w-2xl">
+      <div className="max-w-2xl space-y-4">
+        <CancellationPolicyCard />
         <NoShowPolicyCard />
       </div>
     </div>

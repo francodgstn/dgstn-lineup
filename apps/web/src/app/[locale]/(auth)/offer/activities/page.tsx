@@ -25,7 +25,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SubscriptionType } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SubscriptionType, FormField } from '@linyup/shared'
+import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { resolveActivityTerms } from '@/lib/activityTerms'
@@ -144,6 +145,15 @@ function createActivitySchema(
     description: z.string().max(500).optional(),
     prerequisites: z.string().max(300).optional(),
     confirmationInstructions: z.string().max(2000).optional(),
+    meetingPoint: z.string().max(200).optional(),
+    whatsIncluded: z.string().max(1000).optional(),
+    whatsNotIncluded: z.string().max(1000).optional(),
+    faq: z.string().max(2000).optional(),
+    cancellationPolicy: z.string().max(2000).optional(),
+    // Book-form questions (shared FormField schema). Validated loosely here —
+    // the editor constrains type/count, and blank-labelled rows are dropped on
+    // save rather than blocking it.
+    bookingQuestions: z.array(z.any()),
     type: z.enum(['class', 'appointment'] as const).default('class'),
     level: z.enum(LEVELS),
     color: z.string().optional(),
@@ -269,6 +279,12 @@ function ActivityDialog({
           description: editing.description ?? '',
           prerequisites: editing.prerequisites ?? '',
           confirmationInstructions: editing.confirmationInstructions ?? '',
+          meetingPoint: editing.meetingPoint ?? '',
+          whatsIncluded: editing.whatsIncluded ?? '',
+          whatsNotIncluded: editing.whatsNotIncluded ?? '',
+          faq: editing.faq ?? '',
+          cancellationPolicy: editing.cancellationPolicy ?? '',
+          bookingQuestions: editing.bookingQuestions ?? [],
           type: (editing.type ?? 'class') as ActivityType,
           level: editing.level ?? 'all',
           color: editing.color ?? '',
@@ -284,6 +300,8 @@ function ActivityDialog({
         }
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
+          meetingPoint: '', whatsIncluded: '', whatsNotIncluded: '', faq: '', cancellationPolicy: '',
+          bookingQuestions: [],
           type: 'class' as ActivityType, level: 'all',
           color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
@@ -387,6 +405,16 @@ function ActivityDialog({
       description: data.description ?? '',
       prerequisites: data.prerequisites ?? '',
       confirmationInstructions: data.confirmationInstructions ?? '',
+      meetingPoint: data.meetingPoint ?? '',
+      whatsIncluded: data.whatsIncluded ?? '',
+      whatsNotIncluded: data.whatsNotIncluded ?? '',
+      faq: data.faq ?? '',
+      cancellationPolicy: data.cancellationPolicy ?? '',
+      // Drop half-written rows (no label = nothing to ask) so the public form
+      // never renders an unlabelled input.
+      bookingQuestions: (data.bookingQuestions ?? [])
+        .filter((q: FormField) => q?.label?.trim())
+        .map((q: FormField, i: number) => ({ ...q, label: q.label.trim(), order: i })),
       type: data.type,
       level: data.level,
       color: data.color ?? '',
@@ -940,6 +968,75 @@ function ActivityDialog({
               />
               <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
             </div>
+
+            {/* Rich detail shown on the public booking page before a visitor
+                books — everything the item page in a mature booking tool
+                answers up front so it never becomes a support email. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="act-meeting-point">{t('fieldMeetingPoint')}</Label>
+              <Input
+                id="act-meeting-point"
+                {...register('meetingPoint')}
+                placeholder={t('meetingPointPlaceholder')}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
+              <textarea
+                id="act-whats-included"
+                {...register('whatsIncluded')}
+                rows={3}
+                placeholder={t('whatsIncludedPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
+              <textarea
+                id="act-whats-not-included"
+                {...register('whatsNotIncluded')}
+                rows={3}
+                placeholder={t('whatsIncludedPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
+              <textarea
+                id="act-faq"
+                {...register('faq')}
+                rows={4}
+                placeholder={t('faqPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
+              <textarea
+                id="act-cancellation-policy"
+                {...register('cancellationPolicy')}
+                rows={3}
+                placeholder={t('cancellationPolicyPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
+            </div>
+
+            <Controller
+              control={control}
+              name="bookingQuestions"
+              render={({ field }) => (
+                <BookingQuestionsEditor
+                  value={(field.value ?? []) as FormField[]}
+                  onChange={field.onChange}
+                />
+              )}
+            />
           </div>
 
           <DialogFooter>

@@ -15,6 +15,7 @@ import {
   Users,
   Calendar,
   ClipboardList,
+  ClipboardCheck,
   Trophy,
   Globe,
   Wallet,
@@ -140,6 +141,10 @@ const NAV_SECTIONS: NavSection[] = [
     icon: Activity,
     items: [
       { id: 'calendar', href: '/schedule', labelKey: 'calendar', icon: Calendar },
+      // The printable day sheet — what a coach carries to the door. Sits next
+      // to the calendar because it answers the same question ("what's on
+      // today?") for the one context the calendar can't serve: paper.
+      { id: 'manifest', href: '/manifest', labelKey: 'manifest', icon: ClipboardCheck },
       { id: 'bookings', href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { id: 'contacts', href: '/contacts', labelKey: 'contacts', icon: Users },
       // Coaches (team staff) — studio/org only; the coach plan is single-person.

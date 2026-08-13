@@ -79,6 +79,21 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
       : {}),
     // Display-only prerequisites shown on the public booking pages.
     prerequisites: data.prerequisites || null,
+    // Display-only rich detail (meeting point, what's included/not, FAQ) —
+    // answers the pre-booking questions the visitor would otherwise email in
+    // for. Same for classes and appointments.
+    meetingPoint: data.meetingPoint || null,
+    whatsIncluded: data.whatsIncluded || null,
+    whatsNotIncluded: data.whatsNotIncluded || null,
+    faq: data.faq || null,
+    // Per-activity cancellation policy override — falls back to the team-wide
+    // default (TeamPublicProfile.bookingCancellationPolicy) when absent.
+    cancellationPolicy: data.cancellationPolicy || null,
+    // Book-form questions. The QUESTIONS are public (the form has to render
+    // them); the ANSWERS live on the booking and are never mirrored here.
+    ...(Array.isArray(data.bookingQuestions) && data.bookingQuestions.length
+      ? { bookingQuestions: data.bookingQuestions }
+      : {}),
   }
 
   await afterRef.collection('public_profile').doc(activityId).set(publicProfile)

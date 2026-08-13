@@ -21,6 +21,19 @@ export function appointmentSlotBlocked(
   return s.status !== 'cancelled' && !isExpiredAppointmentHold(s, nowMs)
 }
 
+/** Has the online booking cutoff passed for this session? `cutoffMinutes` is
+ *  how long before start online booking closes (0/absent = no cutoff — bookable
+ *  right up to start). Shared by the client (hide/disable slots) and the
+ *  booking callables (authoritative refusal) so they never disagree. */
+export function isPastBookingCutoff(
+  sessionStart: { toMillis(): number },
+  cutoffMinutes: number | null | undefined,
+  nowMs: number = Date.now()
+): boolean {
+  if (!cutoffMinutes || cutoffMinutes <= 0) return false
+  return nowMs >= sessionStart.toMillis() - cutoffMinutes * 60_000
+}
+
 export interface Session {
   id: string
   teamId: string
@@ -56,6 +69,14 @@ export interface Session {
   /** When booking is allowed, mark it as required (no drop-ins) — surfaces a
    *  "Booking required" chip in the public booking flow. Class-only in UI. */
   bookingMandatory?: boolean
+  /** A note pinned to this specific occurrence ("Marta subbing today", "outdoor
+   *  — bring a jacket"). Internal by default; set `headlinePublic` to also show
+   *  it on the public slot list, the confirmation email, and the reminder.
+   *  Distinct from `notes`, which is always internal-only. */
+  headline?: string
+  /** When true, `headline` is mirrored onto the session's public_profile and
+   *  surfaced to bookers. Absent/false ⇒ staff-only, same as `notes`. */
+  headlinePublic?: boolean
   // ── Booking state — BOTH kinds. Not implied by activityType. ──
   /** Hard booking cap (seats for a class, 1 for a typical 1:1 appointment). */
   max_participants?: number
@@ -126,6 +147,8 @@ export interface SessionPublicProfile {
   allowBooking: boolean
   /** Booking is required for this session (no drop-ins) — drives the public chip. */
   bookingMandatory?: boolean
+  /** Mirrored from `Session.headline` ONLY when `headlinePublic === true`. */
+  headline?: string
   location?: string
   onlineUrl?: string
   /** UID + display name of the provider (class instructor or appointment provider). */
@@ -153,6 +176,25 @@ export interface Participant {
   checked_in_by?: string
 }
 
+/** Where a booking came from — the attribution axis.
+ *  - 'online' → the visitor booked themselves on a public surface (booking
+ *    page, appointment picker, Space). The default.
+ *  - 'kiosk'  → taken at the door on the studio's own tablet (walk-in).
+ *  - 'staff'  → entered by a team member on the client's behalf.
+ *  Absent ⇒ treat as 'online' (bookings written before this field existed came
+ *  from the public flow, which was the only writer). */
+export type BookingSource = 'online' | 'kiosk' | 'staff'
+
+export const BOOKING_SOURCES: readonly BookingSource[] = ['online', 'kiosk', 'staff']
+
+/** Narrow an untrusted value to a BookingSource, else null. Used by the
+ *  callables to validate client-supplied attribution. */
+export function parseBookingSource(v: unknown): BookingSource | null {
+  return typeof v === 'string' && (BOOKING_SOURCES as readonly string[]).includes(v)
+    ? (v as BookingSource)
+    : null
+}
+
 export interface Booking {
   id: string
   teamId: string
@@ -165,6 +207,16 @@ export interface Booking {
   is_new_contact: boolean
   joinedAt: Timestamp
   booking_token?: string
+  /** Short human-readable code (e.g. "BK-7F3K9Q") for phone/desk lookups — never
+   *  the auth mechanism (booking_token is). Not guaranteed collision-free. */
+  booking_reference?: string
+  /** Attribution — see `BookingSource`. Absent ⇒ 'online'. */
+  source?: BookingSource
+  /** Answers to the activity's `bookingQuestions`, keyed by FormField.id.
+   *  Stored verbatim as given; the questions themselves live on the activity,
+   *  so a label edit doesn't rewrite history — an answer whose field id no
+   *  longer exists is simply not rendered. */
+  question_answers?: Record<string, unknown>
   status?: 'pending' | 'confirmed' | 'cancelled' | 'no_show' | 'rebooked'
   rebooked_from?: string
   rebooked_to?: string

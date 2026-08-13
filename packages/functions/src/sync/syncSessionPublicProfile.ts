@@ -58,6 +58,8 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       status: data.status || 'open',
       allowBooking: true,
       bookingMandatory: data.bookingMandatory === true,
+      // Only mirrored when the studio opted in — see Session.headlinePublic.
+      ...(data.headlinePublic === true && data.headline ? { headline: data.headline } : {}),
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   } else {
@@ -81,6 +83,8 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       max_participants: data.max_participants || null,
       bookings_count: data.bookings_count || 0,
       bookingMandatory: data.bookingMandatory === true,
+      // Only mirrored when the studio opted in — see Session.headlinePublic.
+      ...(data.headlinePublic === true && data.headline ? { headline: data.headline } : {}),
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   }
