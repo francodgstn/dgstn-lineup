@@ -20,6 +20,14 @@ env:
     availability:
       - RUNTIME
 
+  # SERVER-side project id for the Admin SDK — see the long note in apphosting.yaml.
+  # Without it the SDK falls back to 'demo-linyup' and verifyIdToken rejects every
+  # token, so the console cannot be signed into at all.
+  - variable: FIREBASE_PROJECT_ID
+    value: linyup-prod
+    availability:
+      - RUNTIME
+
   # Public client Firebase config for the login page (apiKey/authDomain/projectId/appId only).
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: linyup-prod

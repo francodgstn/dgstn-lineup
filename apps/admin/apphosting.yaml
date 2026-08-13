@@ -25,6 +25,21 @@ env:
     availability:
       - RUNTIME
 
+  # SERVER-side project id for the Admin SDK (src/lib/firebase-admin.ts). REQUIRED:
+  # that file resolves FIREBASE_PROJECT_ID || GOOGLE_CLOUD_PROJECT || GCLOUD_PROJECT
+  # and falls back to 'demo-linyup'. App Hosting populates FIREBASE_CONFIG but NONE
+  # of those three (Cloud Run doesn't set GOOGLE_CLOUD_PROJECT), and the explicit
+  # projectId passed to initializeApp overrides FIREBASE_CONFIG — so without this the
+  # SDK initialises as 'demo-linyup' and verifyIdToken rejects every real token
+  # ("invalid token" on /api/auth/session), because the token's audience is this
+  # project. Also fixes adminBucket and the target label in the shell.
+  # RUNTIME only — read per request, never inlined into the bundle (unlike the
+  # NEXT_PUBLIC_* values below, which need BUILD for exactly that reason).
+  - variable: FIREBASE_PROJECT_ID
+    value: linyup-staging
+    availability:
+      - RUNTIME
+
   # Public client Firebase config — used ONLY by the login page (Google sign-in).
   # These are public values (they ship in the JS bundle), reused from the same
   # Firebase web app as apps/web. The admin client reads only these four keys
