@@ -200,10 +200,13 @@ Mostly **M**.
 
 ### Wave 3 — revenue and compliance
 
-**L** each; each is a self-contained project.
+**L** each. Designed in detail in §7 below — including the phase order, which is
+*not* the order listed here. Gift-card flow review was added to this wave in
+2026-08 (guest purchase, admin minting, and a category-attribution fix).
 
-- Promo codes / campaigns
+- Gift-card flow review — guest purchase, admin mint, category attribution
 - Waitlist
+- Promo codes / campaigns
 - Waivers with a real acceptance ledger
 
 ### Wave 4 — structural
@@ -318,7 +321,227 @@ is a strategic bet; the second is what exists today and may be enough.
 
 ---
 
-## 7. Related documents
+## 7. Wave 3 — resolved design
+
+Added 2026-08 after a design pass: four specs written against the code, each
+adversarially reviewed, plus a cross-cutting analysis of how they collide. The
+full specs and critiques live in the workflow journal at
+`.claude/projects/…/subagents/workflows/wf_fc749ebe-409/journal.jsonl`. This
+section records only what was *decided*.
+
+### 7.1 Decisions (settled — do not re-litigate)
+
+| Question | Decision |
+|---|---|
+| Waivers: where | Extend Documents (`kind: 'waiver'`) with **immutable published version snapshots**; acceptance keyed by `(contact, documentId, version)` |
+| Promo vs member benefit | **Best-one-wins** — never stacked. `appliedBenefit` and `appliedPromo` stay mutually exclusive on the wire |
+| Waitlist promotion | **Notify + claim window**, uniform for free and paid, respecting the booking cutoff |
+| Admin gift-card mint | Asks **paid or comp**. Paid → `recordManualPayment`. Comp → no journal entry (correct on cash basis), stamped for audit |
+| Gift-card category | **Fix it.** Redemptions must attribute to their real category, not sit in `'other'` |
+| Plan/plugin gates | Gates control **creation only**. Every in-flight object completes its lifecycle regardless — an outstanding waitlist offer, a reserved promo slot, and a required waiver all survive a downgrade |
+
+### 7.2 The pricing rule (write this down once, obey it everywhere)
+
+The single most important output of the design pass. A single drop-in booking
+can involve a member benefit, a promo code *and* a gift card, and "best-one-wins"
+only settles the first two.
+
+> **A price modifier belongs in Stage A (inside `resolvePaymentOptions`).
+> A tender belongs in Stage B (at the checkout callable). Nothing may be both.**
+
+```
+STAGE A — PRICE (pure, resolver):
+  list price → best-one-wins(member benefit, promo) → clamp ≥ MIN_CHARGE_MAJOR → pay.amount
+
+STAGE B — TENDER (impure, callable):
+  pay.amount → gift-card drawdown (planGiftCardRedemption) → residual → Stripe
+```
+
+Promo is Stage A. Gift card is Stage B. `spend_credits` is Stage A but is a
+*coverage* answer, not a tender.
+
+**Two different 0.50 floors, and the difference is load-bearing.** The PRICE
+floor clamps inside the resolver (authored values throw, derived values clamp).
+The CHARGE floor protects the residual by **shrinking the drawdown**, never by
+clamping the residual — clamping there would create money from nothing.
+
+A useful consequence: putting promo *inside* the resolver means the gift-card
+call sites already receive a post-promo total and need no edit at all. The promo
+spec's largest self-flagged money-loss risk dissolves entirely — it was only
+real if promo were applied outside the resolver.
+
+### 7.3 Pre-existing bugs the design pass uncovered
+
+**None of these are Wave 3 features. All are live today.** Each was confirmed
+against the code, not inferred.
+
+1. **Refunds silently destroy gift-card value.** `connect/refunds.ts` has zero
+   gift-card handling — no hits for `gift`, `drawdown`, or
+   `restoreGiftCardDrawdown`. `refundMemberPayment` refunds the Stripe residual
+   only, so a refunded gift-card booking loses the customer's stored value
+   outright. Fix in Phase 1.
+2. **`rebookSession` can oversell.** No `max_participants` check anywhere in
+   `booking/index.ts:1530-1645`. Rebooking into a full session succeeds. Fix in
+   Phase 2.
+3. **An abandoned checkout can make a class un-bookable for up to 24 hours.**
+   `trackBookings`' `NON_HOLDING` set counts any booking not in
+   `{cancelled, no_show, rebooked}`, so a lapsed drop-in payment hold keeps
+   holding its seat until the 02:00 sweep. Fixed by `bookingHoldsSeat` in Phase 0.
+4. **The gift-card price breakdown lies to the customer.**
+   `BookingForm.tsx:1725-1728` uses `Math.min(balance, afterBenefit)` instead of
+   `planGiftCardRedemption`, so it doesn't model the floor-shrink: price 20 with
+   a 19.80 balance shows "−19.80, total 0.20" while the server draws 19.50 and
+   charges 0.50. Fix in Phase 0 — *before* a promo line makes that branch common.
+5. **Full-cover redemption writes no `finance_transactions` row at all** — a real
+   money-equivalent event missing from the journal. This is the hole the
+   category fix nominally exists to close.
+
+### 7.4 Phase order
+
+Deliberately **not** the order the items were listed in. Each phase's placement
+is justified by what it unblocks.
+
+**Phase 0 — shared foundations.** No user-visible feature; each item is otherwise
+re-invented three times.
+
+1. `checkoutRateLimit(ipRaw, prefix?)` — one signature covers the promo preview,
+   gift-card check, and guest purchase.
+2. `bookingHoldsSeat` + `isExpiredWaitlistClaim` in `shared/src/types/session.ts`,
+   beside `isExpiredAppointmentHold` and `appointmentSlotBlocked` — they are the
+   third member of an existing family. `trackBookings` switches to it.
+   **Correction (2026-08, from implementation):** this does *not* fix bug #3 on
+   its own, as originally claimed here. `trackBookings` only fires on booking
+   writes, and `bookSession` refuses at the capacity gate *before* writing — so a
+   stale-full class stayed stuck. The fix needs the capacity gate itself to
+   re-count live holds before refusing, and to persist the correction
+   (`bookings_count` **and** `status`, or the public mirror still advertises
+   'full').
+   **Second correction:** freeing the seat at +30 min while the Stripe session
+   stayed payable for 24 h turned "buyer abandoned checkout" into "class
+   oversold and buyer charged for a seat that no longer exists". Every drop-in
+   checkout now expires at `SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES`, not just the
+   gift-card ones.
+3. `commitGiftCardHold` returns the committed amount; null-guard the dedupe query.
+4. The client price breakdown calls `planGiftCardRedemption`. Fixes bug #4.
+
+**Phase 1 — Gift cards.** First, because it is the only project *fixing existing
+production behaviour on real money* rather than adding surface. Widening
+`FinanceCategory` is a compile-time break across all three chart templates —
+far cheaper to land now, at pre-launch data volume. Its
+`commitGiftCardDrawdown(...)` wrapper becomes the single hook that promo's commit
+and the waitlist claim-confirm both ride on: four scattered call sites collapse
+to one function, and later phases add one field each instead of rediscovering
+them. Also fixes bug #1.
+
+**Phase 2 — Waitlist.** Second, because it carries the only hard prerequisite
+that **rewrites a hot path**: `bookSession`'s capacity check must become
+transactional. Every later feature merges into the rewritten version — doing
+waivers first means relocating the waiver gate twice. Touches no money surface
+in this order (join is free; claim routes into the existing
+`createDropInCheckout`). Also fixes bug #2.
+
+**Phase 3 — Promo codes.** Third, because it is the only project changing the
+**signature of `resolvePaymentOptions`**; landing it last means it lands once,
+against settled call sites. It must also add a `product` target arm —
+`createProductCheckout` currently bypasses the resolver entirely
+(`resolveProductPrice` → `requireChargeableAmountFromMajor`), which is a genuine
+one-resolver repair, but one only promo requires.
+
+**Phase 4 — Waivers.** Last, because it has the largest independent surface
+(versioning, immutable snapshots, acceptance ledger, guardian model, rules
+tightening, a new public mirror) and the smallest interaction footprint — no
+waiver arm in `resolvePaymentOptions`, so it never contends for the price
+pipeline. Its one prerequisite is Phase 2's transactional `bookSession`: the
+gate must refuse *before* contact creation and write *after* the booking commits.
+
+### 7.5 Commits that must not be split
+
+Each of these is atomic — splitting produces a broken intermediate:
+
+- `FinanceCategory` + all three chart templates + `chartTemplates.test.ts`
+- Transactional `bookSession` + `bookingHoldsSeat` in `trackBookings` + retiring
+  the blind `FieldValue.increment()` call sites (leaving both styles in place
+  lets the transaction's read set and the increments interleave, with the
+  recount papering over it non-deterministically)
+- Promo's resolver signature + `product` arm + the fixture regression gate in
+  `paymentOptions.test.ts`
+
+### 7.6 Resolved: guardians and Documents de-gating
+
+Both settled 2026-08 by a second design pass (`wf_9aab7697-8e6`).
+
+**Guardians — a distinct `Guardian` type, not an extended `EmergencyContact`.**
+They look structurally similar but differ where it counts: a guardian's `email`
+is **required** (it is the identity consent is recorded against, and
+`EmergencyContact.email` is optional), a guardian is legally load-bearing where
+an emergency contact is freely-edited operational data, and every consent path
+must answer *"may this person sign?"* from the type rather than a runtime filter
+on a mixed array. Array capped at 2 (separated parents are the ordinary case
+under Swiss joint parental authority); guardians remain **embedded on the
+contact**, never counted rows, preserving the contact-cap invariant.
+
+The acceptance ledger **snapshots the signer** rather than referencing the
+guardian array, so removing a guardian never rewrites history.
+
+**Minor detection — three states, and the system asks rather than guesses.**
+`minor | adult | unknown`, with a declared `requires_guardian_consent` flag
+beating any computed value. Since the guest booking form collects no birthdate,
+*every* guest-booked contact starts `unknown` — so neither default is acceptable:
+treating unknown as adult is a silent compliance hole on the highest-volume
+intake path; treating it as minor taxes every adult booking. Instead the waiver
+itself carries `guardianRequired: 'never' | 'if_minor' | 'always'` (default
+`if_minor`), and on `if_minor` + `unknown` it asks for a date of birth **once,
+inside the waiver step, with the reason stated** — and nowhere else in the
+product. An adults-only studio (`never`) pays zero age questions; a kids' club
+(`always`) skips the age question entirely.
+
+> ⚠️ Amend `docs/product-strategy.md:313-314`. It currently says *"Guardians are
+> not contact records. Guardian / emergency info is stored as fields on the
+> contact (name + phone)"* — the counting invariant holds, but it conflates
+> guardian with emergency info and specifies "name + phone" where a guardian
+> needs a required email.
+
+**Documents becomes a default feature, not a plugin.** It was never monetised —
+`minPlan: 'free'`, no `addon` field, gated purely by install state — so this
+gives away no revenue and, on Coach, may free the one-plugin explore slot. It
+also removes a real defect structurally: uninstalling the plugin batch-deletes
+every document public-profile mirror, which under Wave 3 would make a booking
+gate point at content that no longer resolves.
+
+Deliberately **not** replaced by an "extended documents" plugin — that would
+create confusion for no gain.
+
+> ⚠️ **De-gating is not a no-op on existing data.** The critique found the
+> design's "existing-data effect: none" claim to be false and load-bearing:
+> teams holding documents that are `published + isPublic` while the plugin is
+> uninstalled would have those surfaces **flip live** the moment the gate is
+> removed. Pre-launch this is seed data only, but the migration must audit and
+> resolve that set *before* the gate comes out, not after.
+
+`signupDocumentIds` currently lives in `installed_plugins/documents.config` —
+plugin-shaped storage that needs a new home plus a dual-read migration. The
+critique flagged a silent no-op-save window in the proposed ordering; the
+config move must land with the read/write switch, not before it.
+
+### 7.7 Remaining risk before implementation
+
+Every spec came back with blocker-class defects. These must be folded in, not
+discovered during implementation:
+
+- **Gift cards** — 4 blockers, including a major/minor units disagreement that
+  would record **100× the cash**, and a non-atomic reclassification pair.
+- **Waitlist** — 3 blockers, including a gift-card full-cover claim that loses
+  both the money and the seat, and no capacity check at all on the paid path.
+- **Promo** — the reserve transaction has no serialization point.
+- **Waivers** — re-signing is structurally impossible as specified (deterministic
+  doc id + `.create()` deadlocks both expiry and revocation).
+- **Guardians** — the authenticated-guardian path is unimplementable as designed:
+  the contact session token records `contactId` but not *which* email opened the
+  session, so it cannot prove a guardian is signing rather than the minor.
+
+---
+
+## 8. Related documents
 
 - `docs/product-strategy.md` — tiering, pricing, and the module list this maps onto.
   Note §6 "Coaching & 1:1 scheduling" already lists **slot waiting list** and

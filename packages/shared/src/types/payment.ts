@@ -29,7 +29,19 @@ export type PaymentAssignmentStatus = 'assigned' | 'unassigned'
 // same effects a Connect purchase would: subscription → set subscription fields
 // (+ credits if the price carries them); course → grant the lifetime entitlement
 // (unlocks in the Space); product → record only. See applyPaymentEffects.
-export type PaymentLineItemKind = 'subscription' | 'course' | 'product' | 'drop_in' | 'appointment' | 'other'
+//
+// 'gift_card' is deliberately effect-less here: the entitlement is the CODE, and
+// the card doc under teams/{id}/gift_cards is what carries it. This kind exists
+// so the sale is CATEGORISED as a gift-card sale in the journal — without it,
+// normalizePaymentLineItem rejects the kind and the row lands in 'other'.
+export type PaymentLineItemKind =
+  | 'subscription'
+  | 'course'
+  | 'product'
+  | 'drop_in'
+  | 'appointment'
+  | 'gift_card'
+  | 'other'
 
 export interface PaymentLineItem {
   kind: PaymentLineItemKind

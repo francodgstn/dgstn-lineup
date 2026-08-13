@@ -99,24 +99,42 @@ export const SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES = 31
 
 // ─── Rate limit (moved verbatim from connect/payments.ts) ───────────────────────
 
-const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
+export const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
 
 /**
- * Index-free hourly rate limit for the public checkout: an `{ip}:{hourBucket}`
- * counter doc, incremented in a transaction. Avoids composite indexes (and the
- * emulator-hides-missing-index trap). 'unknown' IPs share one bucket.
+ * Index-free hourly rate limit for the public checkout: a
+ * `{prefix}:{ip}:{hourBucket}` counter doc, incremented in a transaction.
+ * Avoids composite indexes (and the emulator-hides-missing-index trap).
+ * 'unknown' IPs share one bucket.
+ *
+ * `prefix` SEPARATES the buckets of unrelated public surfaces. One shared
+ * counter means a burst of purchase attempts from an office/gym NAT locks the
+ * same IP out of *checking* a gift-card balance — two different people, one
+ * quota. `limitPerHour` is a parameter so a cheaper read-only surface can get
+ * its own ceiling without a second copy of this function.
  */
-export async function checkoutRateLimit(ipRaw: string | undefined): Promise<void> {
+export async function checkoutRateLimit(
+  ipRaw: string | undefined,
+  prefix = 'checkout',
+  limitPerHour = CHECKOUT_RATE_LIMIT_PER_HOUR
+): Promise<void> {
   const ip = (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
   const bucket = Math.floor(Date.now() / 3_600_000)
-  const ref = admin.firestore().collection('connect_checkout_attempts').doc(`${ip}:${bucket}`)
+  const ref = admin
+    .firestore()
+    .collection('connect_checkout_attempts')
+    .doc(`${prefix}:${ip}:${bucket}`)
   const count = await admin.firestore().runTransaction(async (tx) => {
     const snap = await tx.get(ref)
     const next = ((snap.data()?.count as number | undefined) ?? 0) + 1
-    tx.set(ref, { ip, bucket, count: next, updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    tx.set(
+      ref,
+      { prefix, ip, bucket, count: next, updated_at: FieldValue.serverTimestamp() },
+      { merge: true }
+    )
     return next
   })
-  if (count > CHECKOUT_RATE_LIMIT_PER_HOUR) {
+  if (count > limitPerHour) {
     throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.')
   }
 }

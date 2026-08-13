@@ -54,10 +54,12 @@ import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
 import { writeContactSubscriptionFields } from '../payments/effects'
 import {
-  commitGiftCardHold,
+  commitGiftCardDrawdown,
+  giftCardCurrency,
   mintGiftCard,
   releaseGiftCardHold,
-  restoreGiftCardDrawdown,
+  reverseGiftCardDrawdown,
+  voidGiftCardValue,
 } from './giftCards'
 import { markPolicyFeePaid } from '../booking/policyFees'
 import { asLang, runAppointmentSlotTransaction } from '../appointments/booking'
@@ -419,7 +421,11 @@ function lineItemFromMetadata(md: Record<string, string>): Record<string, unknow
     return { kind: 'appointment', label: md.activityName ?? null }
   }
   if (md.kind === 'gift_card') {
-    return { kind: 'other', label: 'Gift card' }
+    // Its own kind, not 'other': the manual rail derives the journal category
+    // straight from line_item.kind (buildExternalPaymentTxn → mapCategory), so
+    // spelling it 'other' here would leave the two rails disagreeing about what
+    // a gift-card sale is. Effect-less on both — see applyPaymentEffects.
+    return { kind: 'gift_card', label: 'Gift card' }
   }
   if (md.kind === 'policy_fee') {
     return { kind: 'other', label: 'No-show fee' }
@@ -671,6 +677,28 @@ async function handleDispute(
     { merge: true }
   )
 
+  // A disputed GIFT-CARD PURCHASE: kill the card the moment the chargeback
+  // opens. Buying a card with a stolen card, redeeming it in full (which needs
+  // no Stripe charge at all) and then charging back is otherwise a clean
+  // laundering path — and since the guest purchase flow attaches no identity,
+  // the code is the only thing left to stop. Best-effort: a failure here must
+  // not cost us the dispute record above.
+  if (phase === 'created') {
+    try {
+      const pay = (await memberPaymentRef(team.teamId, piId).get()).data()
+      const soldCode = pay?.giftCardCode as string | undefined
+      if (soldCode) {
+        await voidGiftCardValue({
+          teamId: team.teamId,
+          code: soldCode,
+          reason: `chargeback on ${piId}`,
+        })
+      }
+    } catch (err) {
+      console.error(`[connect] gift card void on dispute failed (pi=${piId}):`, err)
+    }
+  }
+
   // Finance journal. Funds movement comes from the dispute's balance transactions
   // (an inquiry/early-warning dispute has none — nothing to journal then):
   //   created      → withdrawal entries (net < 0) → 'dispute' row
@@ -914,11 +942,22 @@ async function handleCheckoutCompleted(
   if (md.giftCardCode && md.giftCardHold) {
     const fallback = Number(md.giftCardDrawdown)
     try {
-      await commitGiftCardHold({
+      await commitGiftCardDrawdown({
         teamId: team.teamId,
         code: md.giftCardCode,
         holdKey: md.giftCardHold,
         fallbackAmountMajor: Number.isFinite(fallback) ? fallback : undefined,
+        // md.kind is the same field the dispatch below switches on, so the
+        // reclassified revenue always lands in the category that was bought.
+        targetCategory: mapCategory(md.kind),
+        // Re-verified rather than trusted: metadata is client-supplied at
+        // checkout creation, and a journal row attributed to another team's
+        // contact is a tenant leak that no later step would catch.
+        contactId: await verifiedMetadataContact(team.teamId, md),
+        paymentIntentId:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : ((session.payment_intent?.id as string | undefined) ?? null),
       })
     } catch (err) {
       console.error(`[connect] gift card hold commit failed (code=${md.giftCardCode}):`, err)
@@ -1235,6 +1274,22 @@ async function handleCourseCheckout(
  * confirm here; the card itself IS the product. Best-effort: a mail failure
  * never blocks the mint (the card exists regardless — a manager can look up
  * the code in the dashboard if the email bounced).
+ *
+ * A GUEST buyer is deliberately NOT turned into a Contact, which is why this
+ * handler calls neither resolveOrCreateContact nor confirmProvisionalContact
+ * while the membership, product and course handlers all call both. Two reasons,
+ * and the next reader should not "fix" the asymmetry:
+ *   1. Creating a contact exists to hang a per-person effect off it (a course
+ *      entitlement, membership fields, credits). A gift card has none — the
+ *      entitlement travels with the code, to whoever the buyer hands it to.
+ *   2. The Free plan's 15-contact cap is HARD, and provisional contacts are
+ *      deliberately excluded from it (utils/contactCap.ts). A studio selling
+ *      twenty Christmas cards would otherwise fill its own allowance with
+ *      people who are not its customers, and confirming a provisional buyer
+ *      would flip an excluded contact into one that consumes a slot.
+ * The lead is not lost: purchaserEmail is stored on the card and reaches
+ * member_payments via customer_details, and a unique active match is LINKED
+ * below, which costs no slot.
  */
 async function handleGiftCardCheckout(
   team: TeamRef,
@@ -1248,17 +1303,32 @@ async function handleGiftCardCheckout(
   const amountMajor = md.amount
     ? Number(md.amount)
     : Math.round(((session.amount_total as number | undefined) ?? 0)) / 100
-  const contactId = md.contactId ?? null
   const purchaserEmail =
     md.purchaserEmail ?? (session.customer_details?.email as string | undefined) ?? null
+
+  // Identity, in the order that never costs a contact slot: the checkout's own
+  // session (re-verified against the team), else a UNIQUE active contact with
+  // the same address. resolveSingleContact returns null on ambiguity rather
+  // than guessing — email is not a unique key here, and mis-attributing a
+  // purchase to a sibling is worse than leaving it unattributed.
+  let contactId = await verifiedMetadataContact(team.teamId, md)
+  if (!contactId && purchaserEmail) {
+    const { contactId: match } = await resolveSingleContact(team.teamId, purchaserEmail)
+    contactId = match
+  }
 
   const card = await mintGiftCard({
     teamId: team.teamId,
     amount: amountMajor,
-    currency: 'CHF',
+    // The card is denominated in what Stripe ACTUALLY charged, read off the
+    // session — not a literal and not the team's configured default, either of
+    // which can drift from the rail and leave the card unredeemable. giftCardCurrency
+    // is the same value by construction; this is just the closer source.
+    currency: ((session.currency as string | undefined) ?? giftCardCurrency(null)).toUpperCase(),
     purchaserContactId: contactId,
     purchaserEmail,
     paymentIntentId: piId,
+    issueKind: 'purchase',
   })
 
   await memberPaymentRef(team.teamId, piId).set(
@@ -1275,7 +1345,7 @@ async function handleGiftCardCheckout(
       title: 'Your gift card',
       body: `<p>Thank you for your purchase. Here is your gift card code for ${teamName}:</p>
 <p style="font-size:22px;font-weight:600;letter-spacing:1px;">${card.code}</p>
-<p>Value: CHF ${amountMajor.toFixed(2)}</p>
+<p>Value: ${card.currency} ${amountMajor.toFixed(2)}</p>
 <p>Share this code with whoever will redeem it. It can be applied toward any purchase at ${teamName}.</p>`,
     })
     await sendEmail({
@@ -1361,17 +1431,23 @@ async function handleDropInCheckout(
         )
         // A duplicate that redeemed a gift card had its drawdown committed
         // before dispatch — restore it, or the buyer loses stored value with
-        // nothing delivered.
-        const dupDrawdown = Number(md.giftCardDrawdown)
-        if (md.giftCardCode && Number.isFinite(dupDrawdown) && dupDrawdown > 0) {
-          await restoreGiftCardDrawdown({
+        // nothing delivered. The card's own marker says how much moved, so the
+        // metadata drawdown (the RESERVED amount, which the balance floor can
+        // have shrunk) is no longer trusted for the amount.
+        if (md.giftCardCode && md.giftCardHold) {
+          const { restoredMajor } = await reverseGiftCardDrawdown({
             teamId: team.teamId,
             code: md.giftCardCode,
-            amountMajor: dupDrawdown,
+            holdKey: md.giftCardHold,
+            targetCategory: 'drop_in',
+            contactId,
+            description: `Duplicate charge refunded · ${md.giftCardCode}`,
           })
-          console.log(
-            `[connect] drop-in duplicate: restored gift-card drawdown ${dupDrawdown} to ${md.giftCardCode}`
-          )
+          if (restoredMajor > 0) {
+            console.log(
+              `[connect] drop-in duplicate: restored gift-card drawdown ${restoredMajor} to ${md.giftCardCode}`
+            )
+          }
         }
         console.log(`[connect] drop-in duplicate charge ${piId} refunded (booking already confirmed)`)
       } catch (err) {

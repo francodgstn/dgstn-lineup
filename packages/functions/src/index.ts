@@ -187,8 +187,13 @@ export {
 } from './connect/payments'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'
-// Gift cards (E3) — public purchase + balance check, manager void.
-export { createGiftCardCheckout, checkGiftCard, voidGiftCard } from './connect/giftCards'
+// Gift cards (E3) — public purchase + balance check, manager mint + void.
+export {
+  createGiftCardCheckout,
+  checkGiftCard,
+  issueGiftCard,
+  voidGiftCard,
+} from './connect/giftCards'
 // No-show policy fees (E5) — manager resend-link + waive. The strike counter
 // itself (processNoShowStrike) is wired into automation/onBookingWrite, not a
 // callable.

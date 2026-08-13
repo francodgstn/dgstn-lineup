@@ -187,6 +187,11 @@ export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 export const PARTNER_VISITS_SUBCOLLECTION = 'partner_visits'
 // Gift cards (E3): teams/{teamId}/gift_cards/{code} — the code is the doc id.
 export const GIFT_CARDS_SUBCOLLECTION = 'gift_cards'
+// Manager-mint claims: teams/{teamId}/gift_card_issues/{issueRef}. A create()
+// on this doc is the serialisation point for issueGiftCard — whoever wins mints,
+// everyone else reads the code back. Server-only: no firestore.rules block, and
+// there is no `match /{document=**}` wildcard, so clients are denied by default.
+export const GIFT_CARD_ISSUES_SUBCOLLECTION = 'gift_card_issues'
 // No-show policy fees (E5): teams/{teamId}/policy_fees/{feeId}.
 export const POLICY_FEES_SUBCOLLECTION = 'policy_fees'
 

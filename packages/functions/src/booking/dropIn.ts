@@ -33,7 +33,8 @@ import {
   startOneOffCheckout,
 } from '../connect/checkout'
 import {
-  commitGiftCardHold,
+  commitGiftCardDrawdown,
+  giftCardCurrency,
   releaseGiftCardHold,
   reserveGiftCardDrawdown,
 } from '../connect/giftCards'
@@ -362,6 +363,9 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       code: data.giftCardCode,
       totalMajor: priceMajor,
       holdKey: giftCardHoldKey,
+      // The card must match the currency this booking will actually be charged
+      // in — see the guard in reserveGiftCardDrawdown.
+      chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
     })
   }
 
@@ -423,7 +427,17 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         message: `Drop-in booking · ${activityName}`,
         timestamp: FieldValue.serverTimestamp(),
       })
-    await commitGiftCardHold({ teamId, code: data.giftCardCode!, holdKey: giftCardHoldKey! })
+    // Commit + journal in one call. Nothing else records this sale: a
+    // full-cover booking creates no Stripe session, so handleCheckoutCompleted
+    // never runs and there is no member_payments doc either.
+    await commitGiftCardDrawdown({
+      teamId,
+      code: data.giftCardCode!,
+      holdKey: giftCardHoldKey!,
+      targetCategory: 'drop_in',
+      contactId,
+      description: `Drop-in · ${activityName}`,
+    })
     return {
       url: null,
       sessionId: null,
@@ -501,12 +515,24 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       customerEmail: email || undefined,
       metadata,
       idempotencyKey,
-      ...(giftCardPlan
-        ? {
-            expiresAtEpochSeconds:
-              Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
-          }
-        : {}),
+      // The Stripe session must NEVER outlive the booking hold it represents.
+      //
+      // The hold frees its seat at +HOLD_MINUTES (30) — `bookingHoldsSeat`
+      // stops counting it and `bookSession` persists that correction — while a
+      // Stripe session left to its own devices stays payable for 24 HOURS. That
+      // gap is an oversell AND a wrong charge: the seat gets handed to someone
+      // else at +31 min, then the original buyer pays hours later and
+      // `handleDropInCheckout` confirms unconditionally (it must — a real charge
+      // can never be dropped), so the class ends up over capacity and the payer
+      // holds a seat that no longer exists.
+      //
+      // SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES (31) is one minute past the hold, so
+      // the payment window closes just after the seat is released. This applies
+      // to EVERY drop-in, not only gift-card ones — the gift-card branch was
+      // already correct for its own reasons and the plain path was the 24-hour
+      // hole.
+      expiresAtEpochSeconds:
+        Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
       label: 'createDropInCheckout',
     })
   } catch (err) {

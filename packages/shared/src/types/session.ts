@@ -21,6 +21,50 @@ export function appointmentSlotBlocked(
   return s.status !== 'cancelled' && !isExpiredAppointmentHold(s, nowMs)
 }
 
+/** Has a waitlist CLAIM lapsed? An offered seat is held for the claimant only
+ *  until `claim_expires_at`; past that the seat is logically free again (lazy
+ *  expiry, same shape as isExpiredAppointmentHold) until the offer sweeper
+ *  rolls it on to the next person.
+ *  Inert until bookings carry `waitlist_claim` — it lands with its siblings so
+ *  the waitlist adds a FIELD rather than a fourth predicate somewhere else. */
+export function isExpiredWaitlistClaim(
+  b: { waitlist_claim?: boolean; claim_expires_at?: { toMillis(): number } | null },
+  nowMs = Date.now()
+): boolean {
+  return b.waitlist_claim === true && !!b.claim_expires_at && b.claim_expires_at.toMillis() <= nowMs
+}
+
+/** THE capacity predicate for bookings — the single source of truth for "does
+ *  this booking occupy a seat right now?". Used by trackBookings' recount and
+ *  by every capacity gate that has to decide whether a session is really full.
+ *
+ *  A lapsed UNPAID hold (`payment_status: 'required'` past `expires_at`) is the
+ *  reason this exists: an abandoned drop-in checkout used to keep its seat in
+ *  `bookings_count` until the 02:00 sweep, so the next customer was refused on
+ *  a session that had a free seat. Counting it as free here makes both the
+ *  recount and the gate agree, without waiting for the sweep.
+ *
+ *  An ABSENT status is pending and still holds a seat. */
+export function bookingHoldsSeat(
+  b: {
+    status?: string
+    payment_status?: string
+    expires_at?: { toMillis(): number } | null
+    waitlist_claim?: boolean
+    claim_expires_at?: { toMillis(): number } | null
+  },
+  nowMs = Date.now()
+): boolean {
+  if (b.status && NON_HOLDING_BOOKING_STATUSES.has(b.status)) return false
+  if (b.payment_status === 'required' && !!b.expires_at && b.expires_at.toMillis() <= nowMs) {
+    return false
+  }
+  return !isExpiredWaitlistClaim(b, nowMs)
+}
+
+/** 'rebooked' means the seat moved to ANOTHER session — it is not held here. */
+const NON_HOLDING_BOOKING_STATUSES = new Set(['cancelled', 'no_show', 'rebooked'])
+
 /** Has the online booking cutoff passed for this session? `cutoffMinutes` is
  *  how long before start online booking closes (0/absent = no cutoff — bookable
  *  right up to start). Shared by the client (hide/disable slots) and the

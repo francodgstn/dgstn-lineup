@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   MIN_CHARGE_MAJOR,
+  applyGiftCardCommit,
   formatGiftCardCode,
   giftCardAvailable,
   planGiftCardRedemption,
@@ -62,6 +63,29 @@ describe('planGiftCardRedemption', () => {
   it('float artifacts stay two-decimal', () => {
     const plan = planGiftCardRedemption(10.1, 30.3)
     assert.deepEqual(plan, { drawdown: 10.1, residual: 20.2 })
+  })
+})
+
+describe('applyGiftCardCommit', () => {
+  it('committed is the MOVEMENT, not the request, when the balance runs out', () => {
+    // The balance floors at 0 — only 20 ever left the card, so only 20 may be
+    // booked downstream (a reclass of 25 would invent 5 of value).
+    assert.deepEqual(applyGiftCardCommit(20, 25), { newBalanceMajor: 0, committedMajor: 20 })
+  })
+  it('a partial commit leaves the remainder on the card', () => {
+    assert.deepEqual(applyGiftCardCommit(20, 5), { newBalanceMajor: 15, committedMajor: 5 })
+  })
+  it('an exact commit depletes the card', () => {
+    assert.deepEqual(applyGiftCardCommit(0.3, 0.3), { newBalanceMajor: 0, committedMajor: 0.3 })
+  })
+  it('committing against an empty card moves nothing', () => {
+    assert.deepEqual(applyGiftCardCommit(0, 10), { newBalanceMajor: 0, committedMajor: 0 })
+  })
+  it('float artifacts stay two-decimal', () => {
+    assert.deepEqual(applyGiftCardCommit(30.3, 10.1), {
+      newBalanceMajor: 20.2,
+      committedMajor: 10.1,
+    })
   })
 })
 

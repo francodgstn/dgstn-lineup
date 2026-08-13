@@ -22,6 +22,7 @@ import { resolveSingleContact } from '../utils/contacts'
 import {
   resolveActivityAccessRule,
   resolveAutoConfirm,
+  bookingHoldsSeat,
   heldSubscriptionTypeIds,
   isPastBookingCutoff,
   parseBookingSource,
@@ -638,7 +639,37 @@ export const bookSession = onCall(async (request) => {
   if (maxGroup && maxGroup > 0) {
     const reserved = (sessionData.bookings_count as number) || 0
     if (reserved >= maxGroup) {
-      throw new HttpsError('resource-exhausted', 'This session is fully booked.')
+      // The stored counter can be STALE-FULL: an abandoned drop-in checkout
+      // leaves a `payment_status: 'required'` booking whose hold has lapsed,
+      // and nothing recounts it until the 02:00 sweep — trackBookings only
+      // fires on a booking WRITE, and we are about to refuse before writing
+      // one. So re-derive the live count with the same predicate the recount
+      // uses before locking a real customer out of a seat that is free.
+      // One extra read, only on the path that was about to say no.
+      const bookingsSnap = await admin
+        .firestore()
+        .collection('sessions')
+        .doc(data.sessionId)
+        .collection('bookings')
+        .get()
+      const nowMs = Date.now()
+      const live = bookingsSnap.docs.reduce(
+        (n, d) => (bookingHoldsSeat(d.data(), nowMs) ? n + 1 : n),
+        0
+      )
+      if (live >= maxGroup) {
+        throw new HttpsError('resource-exhausted', 'This session is fully booked.')
+      }
+      // Persist the correction so the next caller (and the public mirror) sees
+      // the truth without paying for this read again. `status` moves with the
+      // count or the session stays advertised as full — same pairing
+      // trackBookings writes, and a cancelled session stays cancelled.
+      await to(
+        sessionDoc.ref.update({
+          bookings_count: live,
+          ...(sessionData.status === 'cancelled' ? {} : { status: 'open' }),
+        })
+      )
     }
   }
 

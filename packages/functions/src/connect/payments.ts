@@ -46,7 +46,12 @@ import {
   startOneOffCheckout,
   startSubscriptionCheckout,
 } from './checkout'
-import { reserveGiftCardDrawdown, commitGiftCardHold, releaseGiftCardHold } from './giftCards'
+import {
+  reserveGiftCardDrawdown,
+  commitGiftCardDrawdown,
+  releaseGiftCardHold,
+  giftCardCurrency,
+} from './giftCards'
 import { requireContactSessionForTeam } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
@@ -533,6 +538,8 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
       code: data.giftCardCode,
       totalMajor: priceMajor,
       holdKey,
+      // Card currency must match the charge — see reserveGiftCardDrawdown.
+      chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
     })
     const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
 
@@ -546,7 +553,17 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
         source: 'gift_card',
         paymentRef,
       })
-      await commitGiftCardHold({ teamId, code: data.giftCardCode, holdKey })
+      // The wrapper also writes the journal pair — this branch creates NO
+      // Stripe session, so no webhook ever runs for it and this is the only
+      // place the sale can be recorded at all.
+      await commitGiftCardDrawdown({
+        teamId,
+        code: data.giftCardCode,
+        holdKey,
+        targetCategory: 'product',
+        contactId: session.contactId,
+        description: productName,
+      })
       return { url: null, sessionId: null, recurring: false, paidWithGiftCard: true, amount: 0, drawdown: plan.drawdown }
     }
 
@@ -736,6 +753,8 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       code: data.giftCardCode,
       totalMajor: priceMajor,
       holdKey,
+      // Card currency must match the charge — see reserveGiftCardDrawdown.
+      chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
     })
     const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
 
@@ -749,7 +768,16 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         source: 'gift_card',
         paymentRef,
       })
-      await commitGiftCardHold({ teamId, code: data.giftCardCode, holdKey })
+      // Journal pair included — see the product branch above: a full-cover
+      // course sale has no Stripe session and therefore no webhook to record it.
+      await commitGiftCardDrawdown({
+        teamId,
+        code: data.giftCardCode,
+        holdKey,
+        targetCategory: 'course',
+        contactId: session.contactId,
+        description: course.title,
+      })
       return {
         url: null,
         sessionId: null,

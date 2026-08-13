@@ -3,9 +3,11 @@
 // Public self-checkout ("shop"): lists what a studio sells — memberships (public
 // subscription types), products (merch/equipment) AND online courses (one-off
 // purchase) — and lets a member pay via Stripe Connect. Branded with the team's
-// bio-link palette. No login required — just an email; the webhook links/creates the
-// contact (and grants a course entitlement). The three surfaces are separated behind
-// a tab toggle so they never visually mix.
+// bio-link palette. Login-first: a purchase runs as a verified contact of the team,
+// because what it grants (membership fields, a course entitlement, credits) has to
+// attach to a person. Gift cards are the exception — the entitlement is a code, so a
+// guest buys with nothing but an address. The surfaces are separated behind a tab
+// toggle so they never visually mix.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { collectionGroup, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
@@ -71,6 +73,8 @@ interface ProductEntry {
   variantLabel?: string
   variants?: ProductVariantEntry[]
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type CourseAccessType = 'free' | 'registered' | 'subscription' | 'purchase'
 
@@ -164,6 +168,9 @@ export default function ShopHome({
   const [tab, setTab] = useState<Tab>(initialTab ?? 'subscriptions')
   const [tabTouched, setTabTouched] = useState(false)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
+  /** Guest gift-card buyer's address — receipt destination only, never identity
+   *  (the server treats it as a prefill and links a contact only on a unique match). */
+  const [guestEmail, setGuestEmail] = useState('')
   const [courseFocusHandled, setCourseFocusHandled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -321,13 +328,18 @@ export default function ShopHome({
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusTypeId, loading, tab])
 
-  // LOGIN-FIRST: every purchase requires a contact session — signed-in buyers go
-  // straight to the confirm sheet (the purchase attaches to their contact via the
-  // session); everyone else signs in or registers (allowRegistration) and the
-  // checkout resumes once auth resolves (effect below). No anonymous checkout.
+  // LOGIN-FIRST — with ONE exception. Signed-in buyers go straight to the confirm
+  // sheet (the purchase attaches to their contact via the session); everyone else
+  // signs in or registers (allowRegistration) and the checkout resumes once auth
+  // resolves (effect below).
+  //
+  // Gift cards skip the gate: what is bought is a CODE, usually for somebody else,
+  // and it grants the buyer nothing that would need an account to hold. Making a
+  // present require registration loses the sale; the buyer just leaves an address
+  // for the receipt.
   const startCheckout = useCallback(
     (c: Checkout) => {
-      if (isAuthenticated) {
+      if (isAuthenticated || c.kind === 'giftcard') {
         setCheckout(c)
         setError(null)
       } else {
@@ -501,6 +513,9 @@ export default function ShopHome({
   // (never memberships/subscriptions, never the gift-card purchase itself).
   const giftCardEligible = checkout?.kind === 'product' || checkout?.kind === 'course'
 
+  // The only checkout a signed-out visitor can reach — see startCheckout.
+  const needsGuestEmail = checkout?.kind === 'giftcard' && !isAuthenticated
+
   // Reset the applied code when a different item is opened (but NOT on a mere
   // product-variant swap, which re-creates the checkout object in place).
   const checkoutKey = !checkout
@@ -525,6 +540,13 @@ export default function ShopHome({
 
   async function submit() {
     if (!checkout) return
+    // A guest has no session for the code to land in, so the address typed here
+    // is the ONLY delivery route. Refuse a malformed one before Stripe, not after
+    // the money moved — an unreachable buyer is a card nobody can find.
+    if (needsGuestEmail && !EMAIL_RE.test(guestEmail.trim())) {
+      setError(t('giftCardBuyerEmailInvalid'))
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -612,7 +634,14 @@ export default function ShopHome({
         } else throw new Error('no-url')
       } else {
         const fn = httpsCallable<
-          { teamId: string; amount: number; slug: string; locale: string; origin?: string },
+          {
+            teamId: string
+            amount: number
+            slug: string
+            locale: string
+            origin?: string
+            purchaserEmail?: string
+          },
           { url: string; sessionId: string }
         >(functions, 'createGiftCardCheckout')
         const res = await fn({
@@ -621,13 +650,22 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          // Guests only — a signed-in buyer's address comes from their session,
+          // which the server trusts and this field never overrides.
+          ...(!isAuthenticated && guestEmail ? { purchaserEmail: guestEmail.trim() } : {}),
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')
       }
     } catch (err) {
       const code = (err as FunctionsError)?.code
-      if (code === 'functions/unauthenticated' || code === 'functions/permission-denied') {
+      // Only a signed-in buyer can have a session to re-establish; a guest hitting
+      // this would be logged out of nothing and shown a sign-in wall they were
+      // explicitly allowed to skip.
+      if (
+        isAuthenticated &&
+        (code === 'functions/unauthenticated' || code === 'functions/permission-denied')
+      ) {
         // Session expired (or went stale) mid-flow — re-run the sign-in and resume.
         setSubmitting(false)
         setCheckout(null)
@@ -1155,33 +1193,60 @@ export default function ShopHome({
               </div>
             )}
 
-            {/* Login-first: the purchase attaches to the signed-in contact via the
-                session. "Switch account" restarts sign-in keeping the checkout pending
-                (e.g. a parent switching to the right child before buying). */}
-            <div
-              className="mt-4 space-y-1 rounded-lg px-3 py-2 text-sm"
-              style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
-            >
-              <p className="break-words">
-                {contact ? t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` }) : ''}
-              </p>
-              {/* Own line so a long name never gets truncated by the link */}
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={async () => {
-                  const c = checkout
-                  setCheckout(null)
-                  setPendingCheckout(c)
-                  await logout()
-                  openSignIn({ allowRegistration: true })
-                }}
-                className="block text-xs underline-offset-2 hover:underline"
-                style={{ color: textMuted }}
+            {/* Guest gift-card purchase: no account, one address. The code is
+                emailed here, so the field is required — see submit(). */}
+            {needsGuestEmail ? (
+              <div className="mt-4">
+                <label className="block text-xs font-medium" htmlFor="shop-guest-email">
+                  {t('giftCardBuyerEmailLabel')}
+                </label>
+                <input
+                  id="shop-guest-email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  disabled={submitting}
+                  className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: cardBorder, background: 'transparent', color: textMain }}
+                />
+                <p className="mt-1.5 text-xs" style={{ color: textMuted }}>
+                  {t('giftCardBuyerEmailHelp')}
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: textMuted }}>
+                  {t('giftCardGuestNote')}
+                </p>
+              </div>
+            ) : (
+              /* Login-first: the purchase attaches to the signed-in contact via the
+                 session. "Switch account" restarts sign-in keeping the checkout pending
+                 (e.g. a parent switching to the right child before buying). */
+              <div
+                className="mt-4 space-y-1 rounded-lg px-3 py-2 text-sm"
+                style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
               >
-                {t('switchAccount')}
-              </button>
-            </div>
+                <p className="break-words">
+                  {contact ? t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` }) : ''}
+                </p>
+                {/* Own line so a long name never gets truncated by the link */}
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={async () => {
+                    const c = checkout
+                    setCheckout(null)
+                    setPendingCheckout(c)
+                    await logout()
+                    openSignIn({ allowRegistration: true })
+                  }}
+                  className="block text-xs underline-offset-2 hover:underline"
+                  style={{ color: textMuted }}
+                >
+                  {t('switchAccount')}
+                </button>
+              </div>
+            )}
             {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
             <button
               type="button"

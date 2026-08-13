@@ -19,6 +19,7 @@ import {
   resolveActivityAccessRule,
   compareActivities,
   activityRequiresSubscription,
+  planGiftCardRedemption,
   resolvePaymentOptions,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
@@ -1721,11 +1722,28 @@ export default function BookingForm({
             : (selectedDropInPrice ?? 0)
           const memberDiscount =
             !isPricedTrial && dropInMemberPrice ? dropInMemberPrice.base - dropInMemberPrice.amount : 0
-          const afterBenefit = basePrice - memberDiscount
-          const giftCardDeduction = giftCardApplied
-            ? Math.min(giftCardApplied.balance, afterBenefit)
-            : 0
-          const total = Math.max(0, afterBenefit - giftCardDeduction)
+          const afterBenefit = Math.max(0, basePrice - memberDiscount)
+          // THE server's own split (planGiftCardRedemption, @linyup/shared) —
+          // never Math.min(balance, total). A card that can't full-cover has
+          // its drawdown SHRUNK so the Stripe residual clears the 0.50 floor,
+          // so a 19.80 card against a 20.00 class draws 19.50 and charges 0.50.
+          // Showing the balance as the deduction promised "−19.80 / total 0.20"
+          // and then sent the customer to a Stripe page saying 0.50.
+          const giftLine = (() => {
+            if (!giftCardApplied) return null
+            const plan = planGiftCardRedemption(giftCardApplied.balance, afterBenefit)
+            // null = the card contributes nothing usable here; drop the gift
+            // lines entirely rather than showing a −0.00 that never applies.
+            if (!plan) return null
+            return {
+              code: giftCardApplied.code,
+              currency: giftCardApplied.currency,
+              drawdown: plan.drawdown,
+              residual: plan.residual,
+              remaining: Math.max(0, giftCardApplied.balance - plan.drawdown),
+            }
+          })()
+          const total = giftLine ? giftLine.residual : afterBenefit
           return (
             <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5 text-sm">
               <div className="flex items-center justify-between">
@@ -1738,16 +1756,33 @@ export default function BookingForm({
                   <span>−{formatCurrency(memberDiscount, currency, locale)}</span>
                 </div>
               )}
-              {giftCardDeduction > 0 && (
+              {/* The tender applies to what's left AFTER the discounts — show
+                  the figure it draws against whenever a discount moved it. */}
+              {memberDiscount > 0 && (
+                <div className="flex items-center justify-between border-t pt-1.5">
+                  <span className="text-muted-foreground">{t('priceAfterDiscounts')}</span>
+                  <span>{formatCurrency(afterBenefit, currency, locale)}</span>
+                </div>
+              )}
+              {giftLine && (
                 <div className="flex items-center justify-between text-green-700">
-                  <span>{t('priceGiftCard')}</span>
-                  <span>−{formatCurrency(giftCardDeduction, currency, locale)}</span>
+                  <span className="min-w-0 truncate">
+                    {t('priceGiftCard')}{' '}
+                    <span className="text-muted-foreground">{giftLine.code}</span>
+                  </span>
+                  <span>−{formatCurrency(giftLine.drawdown, currency, locale)}</span>
                 </div>
               )}
               <div className="flex items-center justify-between border-t pt-1.5 font-semibold">
                 <span>{t('priceTotal')}</span>
                 <span>{formatCurrency(total, currency, locale)}</span>
               </div>
+              {giftLine && giftLine.remaining > 0 && (
+                <div className="flex items-center justify-between text-muted-foreground text-xs">
+                  <span>{t('priceGiftCardRemaining')}</span>
+                  <span>{formatCurrency(giftLine.remaining, giftLine.currency, locale)}</span>
+                </div>
+              )}
             </div>
           )
         })()}

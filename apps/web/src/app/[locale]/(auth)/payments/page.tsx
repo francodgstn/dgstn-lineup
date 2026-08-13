@@ -203,8 +203,22 @@ export default function PaymentsDashboardPage() {
 
   async function confirmRefund() {
     if (!refundTarget || !teamId) return
-    await refund.mutateAsync({ teamId, paymentIntentId: refundTarget.paymentId })
-    setRefundTarget(null)
+    try {
+      await refund.mutateAsync({ teamId, paymentIntentId: refundTarget.paymentId })
+      setRefundTarget(null)
+    } catch (err) {
+      // A refund can be REFUSED, not just fail: refunding a gift-card purchase
+      // whose value is already partly spent would hand back cash the studio
+      // cannot recover. Without this the dialog just sat there.
+      const reason = (err as { details?: { reason?: string } })?.details?.reason
+      toast.error(
+        reason === 'gift_card_partially_redeemed'
+          ? t('giftCardRefundPartlyRedeemed')
+          : reason === 'gift_card_partial_refund_unsupported'
+            ? t('giftCardRefundPartialUnsupported')
+            : t('refundError')
+      )
+    }
   }
 
   return (

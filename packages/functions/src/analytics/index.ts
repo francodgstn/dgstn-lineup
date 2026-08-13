@@ -10,6 +10,7 @@ import {
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
   PARTICIPANTS_SUBCOLLECTION,
   TEAM_WEEKLY_REPORTS_SUBCOLLECTION,
+  bookingHoldsSeat,
 } from '@linyup/shared'
 
 // The acquisition funnel only ever advances forward by design, so a stage that
@@ -95,19 +96,21 @@ export const trackBookings = onDocumentWritten(
     if (session.status === 'pending_payment') return
 
     // ── Every session: maintain bookings_count and status — self-healing ─────
-    // recount, run for classes and appointments alike. A booking HOLDS
-    // CAPACITY unless it's 'cancelled', 'no_show', or 'rebooked' away to
-    // another session; an ABSENT status is pending and still holds a seat
-    // (fetch + count in memory — Firestore has no "!=" set query for this).
+    // recount, run for classes and appointments alike. `bookingHoldsSeat` is
+    // THE capacity predicate (shared with bookSession's gate, so the counter
+    // and the refusal can never disagree); fetch + count in memory, because
+    // Firestore has no "!=" set query for this.
     const [, bookingsSnap] = await to(
       db.collection('sessions').doc(sessionId).collection('bookings').get()
     )
     if (bookingsSnap) {
-      const NON_HOLDING = new Set(['cancelled', 'no_show', 'rebooked'])
-      const count = bookingsSnap.docs.reduce((n, d) => {
-        const status = d.data().status as string | undefined
-        return status && NON_HOLDING.has(status) ? n : n + 1
-      }, 0)
+      // ONE instant for the whole pass — re-reading the clock per doc could
+      // count a hold as live and then expired within the same recount.
+      const nowMs = Date.now()
+      const count = bookingsSnap.docs.reduce(
+        (n, d) => (bookingHoldsSeat(d.data(), nowMs) ? n + 1 : n),
+        0
+      )
       // Classes may have no cap (max_participants unset) — never flip those to
       // 'full'. Appointments always carry a cap (defaults to 1 at booking time).
       const maxParticipants = session.max_participants as number | undefined

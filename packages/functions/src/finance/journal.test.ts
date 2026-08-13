@@ -5,6 +5,7 @@ import {
   buildConnectRefundTxn,
   buildDisputeTxn,
   buildExternalPaymentTxn,
+  buildGiftCardReclassTxns,
   buildPayoutTxn,
   financeTxnId,
   mapCategory,
@@ -59,6 +60,9 @@ describe('mapCategory', () => {
     assert.equal(mapCategory('drop_in'), 'drop_in')
     assert.equal(mapCategory('course'), 'course')
     assert.equal(mapCategory('product'), 'product')
+    // Both rails spell a gift-card sale 'gift_card': MemberPayment.kind on the
+    // Connect checkout, PaymentLineItem.kind on a manager-issued card.
+    assert.equal(mapCategory('gift_card'), 'gift_card')
     assert.equal(mapCategory('belt_test'), 'other')
     assert.equal(mapCategory(null), 'other')
   })
@@ -256,5 +260,72 @@ describe('buildExternalPaymentTxn', () => {
     assert.equal(txn.id, 'manual:charge:abc')
     assert.equal(txn.currency, 'EUR')
     assert.equal(txn.category, 'drop_in')
+  })
+})
+
+describe('buildGiftCardReclassTxns', () => {
+  const base = {
+    teamId: 't1',
+    code: 'GC-7F3K-9QRT',
+    holdKey: 'h1',
+    drawdownMinor: 1700,
+    currency: 'chf',
+    targetCategory: 'course' as const,
+    occurredAtMs: T0,
+  }
+
+  it('moves value between categories and nets to zero', () => {
+    const [earn, redeem] = buildGiftCardReclassTxns(base)
+    assert.equal(earn.category, 'course')
+    assert.equal(earn.gross, 1700)
+    assert.equal(earn.net, 1700)
+    assert.equal(redeem.category, 'gift_card')
+    assert.equal(redeem.gross, -1700)
+    assert.equal(redeem.net, -1700)
+    // The pair adds nothing to the month — it only re-attributes.
+    assert.equal(earn.gross + redeem.gross, 0)
+    assert.equal(earn.net + redeem.net, 0)
+  })
+
+  it('both rows satisfy the finance invariant with zero fees', () => {
+    for (const txn of buildGiftCardReclassTxns(base)) {
+      assert.equal(txn.stripe_fee, 0)
+      assert.equal(txn.platform_fee, 0)
+      assert.equal(txn.fee_source, 'none')
+      assertFinanceInvariant(txn) // throws if gross + fees !== net
+    }
+  })
+
+  it('ids are deterministic and hold-scoped, so a replay collides on create()', () => {
+    const [earn, redeem] = buildGiftCardReclassTxns(base)
+    assert.equal(earn.id, 'manual:adjustment:gift:GC-7F3K-9QRT:h1:earn')
+    assert.equal(redeem.id, 'manual:adjustment:gift:GC-7F3K-9QRT:h1:redeem')
+    assert.equal(earn.source_ref, 'gift:GC-7F3K-9QRT:h1')
+    assert.equal(earn.source_doc, 'teams/t1/gift_cards/GC-7F3K-9QRT')
+    // A second redemption of the same card is a different hold → different ids.
+    const [earn2] = buildGiftCardReclassTxns({ ...base, holdKey: 'h2' })
+    assert.notEqual(earn.id, earn2.id)
+  })
+
+  it('both rows carry the SAME normalized currency', () => {
+    // Diverging currencies would leave the monthly report bucketing only the
+    // primary-currency row, and the netting would silently break.
+    const [earn, redeem] = buildGiftCardReclassTxns(base)
+    assert.equal(earn.currency, 'CHF')
+    assert.equal(redeem.currency, 'CHF')
+  })
+
+  it('reverse flips every sign and takes its own ids', () => {
+    const [earn, redeem] = buildGiftCardReclassTxns({ ...base, reverse: true })
+    assert.equal(earn.id, 'manual:adjustment:gift:GC-7F3K-9QRT:h1:earn:rev')
+    assert.equal(redeem.id, 'manual:adjustment:gift:GC-7F3K-9QRT:h1:redeem:rev')
+    assert.equal(earn.gross, -1700)
+    assert.equal(redeem.gross, 1700)
+    assert.equal(earn.gross + redeem.gross, 0)
+  })
+
+  it('refuses a zero or fractional drawdown', () => {
+    assert.throws(() => buildGiftCardReclassTxns({ ...base, drawdownMinor: 0 }))
+    assert.throws(() => buildGiftCardReclassTxns({ ...base, drawdownMinor: 17.5 }))
   })
 })

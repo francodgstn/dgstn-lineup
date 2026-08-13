@@ -60,6 +60,33 @@ export async function recordFinanceTransaction(input: FinanceTransactionInput): 
 }
 
 /**
+ * Append a gift-card reclassification pair (buildGiftCardReclassTxns) as ONE
+ * batch: both rows land or neither does. Returns false when the pair was
+ * already recorded — never an error.
+ *
+ * The batch is what makes this webhook-retryable. Two separate create() calls
+ * could crash between them, and the Connect webhook claims its event id BEFORE
+ * processing and answers 200 even on a handler exception — so Stripe never
+ * redelivers, and a lone row would leave by_category wrong forever with no
+ * alarm (reconciliationCheck only counts 'charge' rows). A batch cannot land
+ * half-written, and since the ids are deterministic, ALREADY_EXISTS on a replay
+ * fails the WHOLE batch before writing anything.
+ */
+export async function recordGiftCardReclass(
+  pair: [FinanceTransactionInput, FinanceTransactionInput]
+): Promise<boolean> {
+  const batch = admin.firestore().batch()
+  for (const row of pair) batch.create(txnRef(row.teamId, row.id), toDoc(row))
+  try {
+    await batch.commit()
+    return true
+  } catch (err: unknown) {
+    if ((err as { code?: number }).code === 6) return false // ALREADY_EXISTS
+    throw err
+  }
+}
+
+/**
  * Upgrade a degraded row's fee breakdown (fee_source 'recorded' → the
  * authoritative balance-transaction split). The ONLY financial-field mutation the
  * journal permits, and only while fee_source !== 'balance_transaction'. Used by

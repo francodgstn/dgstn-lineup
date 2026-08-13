@@ -10,6 +10,8 @@
 //   • course       → grant the LIFETIME entitlement (courses/{id}/purchases/{cid},
 //                    which the security rules check to unlock the course in the Space).
 //   • product      → record-only (merch): an activity-log entry, no entitlement.
+//   • gift_card    → record-only: the CODE is the entitlement and the card doc
+//                    already carries it (teams/{id}/gift_cards).
 //   • drop_in/other→ last_payment_at + an activity-log entry.
 //
 // Every branch appends ONE activity_log entry carrying the payment id + source so
@@ -39,6 +41,7 @@ const LINE_ITEM_KINDS: PaymentLineItemKind[] = [
   'product',
   'drop_in',
   'appointment',
+  'gift_card',
   'other',
 ]
 
@@ -288,6 +291,26 @@ export async function applyPaymentEffects(db: Db, input: ApplyPaymentEffectsInpu
         type: 'product_purchased',
         source,
         message: `Product · ${li.label ?? 'Product'}`,
+        paymentRef,
+      })
+      return
+    }
+
+    case 'gift_card': {
+      // Record-only ON PURPOSE — this branch must never mint a card. The card is
+      // minted once by whoever took the money (the Connect webhook, or the
+      // manager mint), whereas applyPaymentEffects is re-run every time a manager
+      // re-assigns or re-links the payment row: minting here would hand out a
+      // fresh code, and a fresh chunk of stored value, on each of those edits.
+      await db
+        .collection(CONTACTS_COLLECTION)
+        .doc(contactId)
+        .set({ last_payment_at: FieldValue.serverTimestamp() }, { merge: true })
+      await logPaymentActivity(db, contactId, {
+        type: 'payment_received',
+        source,
+        // The label carries the code when the caller knows it ("Gift card GC-…").
+        message: li.label ?? 'Gift card',
         paymentRef,
       })
       return
