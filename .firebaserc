@@ -5,12 +5,22 @@
     "staging": "linyup-staging",
     "production": "linyup-prod"
   },
+  "_comment_targets": [
+    "Only `landing` is a real Firebase Hosting target — apps/landing is the static",
+    "marketing site and firebase.json configures exactly that one.",
+    "",
+    "There used to be an `app` target here too, pointing at the {project} sites",
+    "(linyup-staging.web.app and friends). It predates the web app moving to App",
+    "Hosting and was never removed: firebase.json has no `app` config and no",
+    "workflow deploys hosting:app, so those sites were provisioned-but-empty and",
+    "served a bare 404 to anything pointing at them — which is exactly what",
+    "staging's HOSTING_URL did until 2026-08-14. Removed so the config no longer",
+    "advertises a deploy target that does not exist. The web apps live on App",
+    "Hosting: stg.linyup.com, demo.linyup.com, linyup.com."
+  ],
   "targets": {
     "linyup-sandbox": {
       "hosting": {
-        "app": [
-          "linyup-sandbox"
-        ],
         "landing": [
           "linyup-sandbox-landing"
         ]
@@ -18,9 +28,6 @@
     },
     "linyup-staging": {
       "hosting": {
-        "app": [
-          "linyup-staging"
-        ],
         "landing": [
           "linyup-staging-landing"
         ]
@@ -28,9 +35,6 @@
     },
     "linyup-prod": {
       "hosting": {
-        "app": [
-          "linyup-prod"
-        ],
         "landing": [
           "linyup-prod-landing"
         ]
