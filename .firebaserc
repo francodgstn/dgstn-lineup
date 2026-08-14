@@ -16,7 +16,8 @@
     "served a bare 404 to anything pointing at them — which is exactly what",
     "staging's HOSTING_URL did until 2026-08-14. Removed so the config no longer",
     "advertises a deploy target that does not exist. The web apps live on App",
-    "Hosting: stg.linyup.com, demo.linyup.com, linyup.com."
+    "Hosting: app.linyup.com, app-stg.linyup.com, demo.linyup.com — with",
+    "linyup.com itself reserved for the `landing` target above."
   ],
   "targets": {
     "linyup-sandbox": {

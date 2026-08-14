@@ -25,10 +25,10 @@ const fredoka = Fredoka({
   display: 'swap',
 })
 
-// Only production is indexable. Staging (stg.linyup.com) and the demo sandbox
-// (demo.linyup.com) are real subdomains with real certificates, so they are
-// crawlable by default and would otherwise compete with linyup.com in search —
-// and put half-finished copy in front of strangers.
+// Only production is indexable. Staging (app-stg.linyup.com) and the demo
+// sandbox (demo.linyup.com) are real subdomains with real certificates, so they
+// are crawlable by default and would otherwise compete with linyup.com in
+// search — and put half-finished copy in front of strangers.
 //
 // Derived from the Firebase project rather than a separate flag, so it cannot
 // drift from which backend the app is actually talking to. Next renders this as
