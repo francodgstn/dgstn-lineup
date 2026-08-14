@@ -134,6 +134,14 @@ function claimErrorKey(err: unknown): string {
       return 'claimClosed'
     case 'claim_window_too_short':
       return 'claimWindowTooShort'
+    // The price the surface showed is no longer the price the server resolves.
+    // DOUBLY unreachable from this page: the guard fires only on a checkout that
+    // carried a promo code (`assertQuotedAmount`), and by decision this rail
+    // carries no promo field — and it sends no `quotedAmount` either. Mapped all
+    // the same: the day it can fire, the refusal must already have copy rather
+    // than falling through to "something went wrong".
+    case 'price_changed':
+      return 'priceChanged'
     // Every coverage denial the resolver can return for a class seat, and ALL of
     // them belong here. `not_joined` is not an exotic one: an activity with no
     // explicit accessRule and `isFreeTrial: false` resolves to `{type:'members'}`

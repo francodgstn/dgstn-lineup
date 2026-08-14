@@ -401,6 +401,13 @@ export async function runAppointmentSlotTransaction(params: AppointmentSlotTxPar
       // one): the OLD holder's pending booking must not survive — it HOLDS
       // CAPACITY per trackBookings' NON_HOLDING set, so leaving it in place
       // would make the next recount count 2 bookings for a 1-seat slot.
+      //
+      // SITE 5 OF THE APPOINTMENT-HOLD RELEASE CENSUS (appointments/holdRelease.ts).
+      // It deletes another attempt's booking without a `booking_token` check, and
+      // the guard that makes that sound is the `cancelled || expiredHold`
+      // condition right here: a cancelled session and a lapsed hold are owned by
+      // nobody. The `ownsLiveHold` branch — the retry path — deliberately does NOT
+      // reclaim, because that booking IS ours and is rewritten instead.
       if (cancelled || expiredHold) {
         staleBookingRefs = existingBookingsSnap.docs
           .filter((d) => d.data().payment_status === 'required')

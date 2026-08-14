@@ -47,7 +47,13 @@ const LINE_ITEM_KINDS: PaymentLineItemKind[] = [
 
 /** Validate + normalise a client-supplied line-item. Returns null for junk;
  * downgrades an effect-less subscription/course link (missing id) to 'other' so
- * applyPaymentEffects never silently no-ops on what looked like a real link. */
+ * applyPaymentEffects never silently no-ops on what looked like a real link.
+ *
+ * `promoCode` is DELIBERATELY NOT READ HERE. It is a system stamp written by the
+ * webhook from Checkout Session metadata, and this function's input is whatever
+ * a manager's dialog sent — reading it would let a client write a redemption
+ * onto any payment row. `updatePaymentRecord` carries the STORED value forward
+ * across an edit instead, so the field is neither forgeable nor loseable. */
 export function normalizePaymentLineItem(raw: unknown): PaymentLineItem | null {
   if (!raw || typeof raw !== 'object') return null
   const li = raw as Partial<PaymentLineItem>

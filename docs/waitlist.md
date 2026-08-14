@@ -429,8 +429,8 @@ is the only other copy of `entryToken` that will ever exist.
 
 **No access gate at join, and no money.** A prospective member's subscription may
 start before the class; the public form shows the access badge as a *warning* and
-the claim enforces. Promo codes and gift cards are entered on the claim page,
-never at join.
+the claim enforces. Gift cards are entered on the claim page, never at join.
+**Promo codes are entered on neither** — see "No promo code on this rail".
 
 ### Offer — `offerWaitlistSeats` + `promoteWaitlistOnSeatFreed`
 
@@ -576,6 +576,38 @@ to the queue through the ordinary guarded release. A claimant whose hold survive
 is confirmed unconditionally — the seat was held for them and there is no capacity
 question.
 
+### No promo code on this rail
+
+**A waitlist claim is the one paid drop-in that takes no promo code** (Wave 3
+Phase 3, decision Q11). It is not an oversight and not a deferral: it is the
+interaction of two decisions that are each right on their own.
+
+- Promo's cap **refuses rather than over-issues**, so a live, uncompleted
+  reservation consumes a use of `max_uses`.
+- This rail's deadline **cannot be shortened**. `claim_expires_at`,
+  `offer_expires_at` and the Stripe session's `expires_at` are one instant, and
+  giving one seat two timers is exactly what "The single-deadline rule" above
+  exists to forbid. Every other promo-carrying checkout gets ~31 minutes; this
+  one would get the whole claim window — ~124 minutes by default, up to 24 hours
+  if a studio configures it.
+
+Strict cap plus longest hold is the worst pairing in that design: one claimant
+who opens the pay screen and walks away would hold a slot of a scarce campaign
+closed for hours.
+
+**Enforced on the server, not merely absent from the UI.** The claim page mounts
+no promo field, and `createDropInCheckout` builds a `NO_PROMO_ATTEMPT` on the
+claim path, so a hand-made request carrying `promoCode` is reported
+`not_applicable` — reported, not blocked, like every other inapplicable code. The
+claim still completes at its ordinary price.
+
+Reversing this later needs more than a mount: the claim page's displayed price
+comes from `claimWaitlistSeat`'s own response, and the new refusal reasons would
+have to join `claimErrorKey` — the single mapping shared by `claimWaitlistSeat`,
+`createDropInCheckout` and the promoter. `claimErrorKey` already maps
+`price_changed` → `Waitlist.priceChanged` even though this page cannot fire it
+today, precisely so that groundwork is not the thing that blocks it.
+
 ### Claim — full-cover gift card
 
 A gift card that covers the whole price creates **no Stripe session**, so no
@@ -594,8 +626,11 @@ A rider on `commitGiftCardDrawdown({ waitlistEntryId })`, declared in the Phase 
 spec as the hook for this, was **removed rather than implemented**: the booking is
 already confirmed before it runs, and both of that function's early returns
 (nothing to commit; an `admin_comp` card) skip anything placed after them.
-`promoRedemptionId` is untouched — Phase 3 commits *after* the money moves, which
-is the seam that rider actually fits.
+**Update (Wave 3 Phase 3): `promoRedemptionId` went the same way**, and the
+sentence that used to stand here — "Phase 3 commits *after* the money moves,
+which is the seam that rider actually fits" — was wrong. `commitGiftCardDrawdown`
+only runs when a gift-card code was supplied at all, so a promo used *without* a
+card would never have committed. See `docs/promo-codes.md` → "The commit".
 
 ### Release — and why the ordering is load-bearing
 
@@ -835,8 +870,10 @@ Honest list. Several of these are decisions rather than debt.
   marker; the window anchoring plus the always-sent email covers it.
 - **Push notification of an offer.** Push is not shipped for reminders — never
   build a claim window on a channel that does not exist.
-- **A promo field at join** (Phase 3 adds it to the claim page and nothing else)
-  and **a waiver gate at join** (Phase 4).
+- **A promo field at join** — and, as of Phase 3, **not on the claim page
+  either**: see "No promo code on this rail". This bullet used to say Phase 3
+  would add one to the claim page; that was reversed by the Q11 decision, not
+  merely deferred. **A waiver gate at join** is still Phase 4.
 - **Any waitlist arm in `resolvePaymentOptions`.** A claim is an ordinary drop-in
   resolution.
 - **`canCreateContact` on the join path.** `bookSession` and

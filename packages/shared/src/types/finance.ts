@@ -56,6 +56,7 @@
 // | adjustment        | free-form balanced pair                        |                                 |
 
 import type { Timestamp } from './common'
+import { normalizeRedemptionCode } from '../utils/codes'
 
 // ─── Core enums ───────────────────────────────────────────────────────────────
 
@@ -694,7 +695,9 @@ export function buildGiftCardReclassTxns(params: {
       `gift card reclass ${params.code}: drawdownMinor must be a positive integer minor-unit amount, got ${params.drawdownMinor}`
     )
   }
-  const code = params.code.trim().toUpperCase()
+  // The reclass pair's sourceRef must match the paymentRef the callables build
+  // for the same drawdown, character for character — one normaliser, no forks.
+  const code = normalizeRedemptionCode(params.code)
   const sourceRef = `gift:${code}:${params.holdKey}`
   const suffix = params.reverse ? ':rev' : ''
   const sign = params.reverse ? -1 : 1

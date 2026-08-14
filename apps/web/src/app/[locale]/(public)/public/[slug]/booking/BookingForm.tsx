@@ -60,6 +60,14 @@ import {
   giftCardCheckoutErrorMessage,
   type AppliedGiftCard,
 } from '@/components/booking/GiftCardRedeemField'
+import {
+  PromoCodeField,
+  priceChangedAmount,
+  priceChangedMessage,
+  promoCheckoutErrorMessage,
+  useAcceptedPrice,
+  type AppliedPromo,
+} from '@/components/booking/PromoCodeField'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -309,6 +317,11 @@ export default function BookingForm({
   const locale = useLocale()
   const t = useTranslations('PublicBooking')
   const tShop = useTranslations('Shop')
+  // The promo widget's own namespace — a promo is not a shop item, and the copy
+  // is shared by every mount of PromoCodeField rather than forked per surface.
+  // (Which mounts those are is in docs/promo-codes.md → "The mounts", and only
+  // there; connect/commitSites.test.ts asserts the tally against the source.)
+  const tPromo = useTranslations('Promo')
   const tSurfaces = useTranslations('PublicSurfaceLinks')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
@@ -388,6 +401,35 @@ export default function BookingForm({
   // Optional gift-card redemption — only meaningful on a paying booking (drop-in
   // or priced trial). Reset whenever the guest door changes.
   const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
+
+  // Optional promo code — a Stage A price MODIFIER, so unlike the gift card it
+  // goes INTO the price computation below rather than being deducted after it.
+  const [promoApplied, setPromoApplied] = useState<AppliedPromo | null>(null)
+
+  // ── The recovery half of the `price_changed` guard ────────────────────────
+  // The server's own figure, once it has refused this surface's quote and the
+  // breakdown has been redrawn at it. It is BOTH what the breakdown renders and
+  // what the next submit sends back as `quotedAmount` — which is what makes the
+  // refusal cost one extra, informed confirmation instead of looping (the form
+  // would otherwise re-derive the same optimistic figure and be refused again).
+  //
+  // AN ACCEPTED FIGURE BELONGS TO ONE (target, code, IDENTITY) — the rule lives
+  // in `useAcceptedPrice`, shared with the shop and the appointment picker.
+  // Here the TARGET is the session AND the door (`guestPath`: the trial door and
+  // the drop-in door are different prices for the same seat); the IDENTITY is
+  // the public contact session, which the sign-in bar can change under this form
+  // at any moment — `dropInQuote` re-quotes on it, so the accepted figure has to
+  // retire with it or the breakdown would show a member one number and submit
+  // another.
+  const { acceptedPrice, acceptPrice } = useAcceptedPrice(
+    [
+      selectedSession?.id ?? '',
+      guestPath ?? '',
+      promoApplied?.code ?? '',
+      isAuthenticated ? (contact?.id ?? 'auth') : 'guest',
+      contact?.subscription_type_id ?? '',
+    ].join('|')
+  )
 
   // Answers to the activity's book-form questions, keyed by FormField.id. The
   // server re-narrows these to the activity's own questions before storing
@@ -713,21 +755,41 @@ export default function BookingForm({
   // from its own session, never from this. Today's public contact session
   // only carries one primary `subscription_type_id` — same simplification
   // ShopHome's held union uses.
-  const dropInMemberPrice = useMemo(() => {
+  //
+  // ONE COMPUTATION FOR THIS SURFACE. The member rate, the promo discount and
+  // the subtotal the gift card draws against all come out of this single
+  // `resolvePaymentOptions` result — never two independent calls. Two
+  // independent computations do not become mutually exclusive by assertion: a
+  // member holding a 20% benefit who applies a 25% code would otherwise see
+  // 40 / −8 / −10 / 22 while Stripe charged 30.
+  const dropInQuote = useMemo(() => {
     if (!selectedActivity || !dropInAvailable) return null
     const rule = resolveActivityAccessRule(selectedActivity)
     const heldSubscriptionTypeIds = contact?.subscription_type_id ? [contact.subscription_type_id] : []
     const snapshot = clientPaymentSnapshot({ authenticated: isAuthenticated, heldSubscriptionTypeIds })
-    const { options } = resolvePaymentOptions(snapshot, {
-      kind: 'drop_in',
-      accessRule: rule,
-      dropIn: selectedActivity.dropIn,
-      benefit: selectedActivity.memberBenefit,
-    })
-    const pay = options[0]
-    if (pay?.type !== 'pay' || !pay.appliedBenefit) return null
+    const result = resolvePaymentOptions(
+      snapshot,
+      {
+        kind: 'drop_in',
+        accessRule: rule,
+        dropIn: selectedActivity.dropIn,
+        benefit: selectedActivity.memberBenefit,
+      },
+      promoApplied ? { promo: promoApplied } : undefined
+    )
+    const pay = result.options[0]
+    if (pay?.type !== 'pay') return null
+    return { pay, promo: result.promo ?? null }
+  }, [selectedActivity, dropInAvailable, contact, isAuthenticated, promoApplied])
+
+  // The member rate as the catalogue card renders it (base struck through). Read
+  // OFF the one result above — `appliedBenefit` and `appliedPromo` are mutually
+  // exclusive there by construction, so this is null the moment a code wins.
+  const dropInMemberPrice = useMemo(() => {
+    const pay = dropInQuote?.pay
+    if (!pay?.appliedBenefit) return null
     return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
-  }, [selectedActivity, dropInAvailable, contact, isAuthenticated])
+  }, [dropInQuote])
 
   // Gated class with drop-in enabled → pay-per-class. NOT when the visitor
   // explicitly took the free-trial door — a trial newcomer must never be
@@ -777,6 +839,28 @@ export default function BookingForm({
         locale,
         origin: typeof window !== 'undefined' ? window.location.origin : undefined,
         ...(trial ? { trial: true } : {}),
+        // A promo never rides the TRIAL door — the server refuses it there too,
+        // but sending it would be a request that can only be reported back as a
+        // refusal on the one surface a newcomer sees first.
+        //
+        // THE PRICE THIS SURFACE RENDERED rides WITH the code and only with it.
+        // A code is what turns the figure into a promise (a "Code X" discount
+        // row, a struck-through base); without one it is an optimistic render
+        // from a snapshot documented as partial, and asserting it would refuse
+        // ordinary bookings the server prices differently for good reason (an
+        // exhausted credit pack, a subscription that lapsed since page load).
+        // Disagreement is refused as `price_changed` carrying the new figure,
+        // which the catch below renders and offers.
+        ...(!trial && promoApplied
+          ? {
+              promoCode: promoApplied.code,
+              ...(acceptedPrice !== null
+                ? { quotedAmount: acceptedPrice }
+                : dropInQuote
+                  ? { quotedAmount: dropInQuote.pay.amount }
+                  : {}),
+            }
+          : {}),
         ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
         // Carried into the PENDING booking doc the checkout creates, so the
         // answers survive the Stripe round-trip without a client re-submit.
@@ -825,9 +909,33 @@ export default function BookingForm({
     } catch (err: unknown) {
       const e = err as { message?: string; code?: string; details?: { reason?: string } }
       const reason = e.details?.reason
+      // RECOVERY, before anything else: the server has told us what this class
+      // really costs. Redraw the breakdown at that figure and say so — the next
+      // Confirm sends it back as the quote and the booking completes. Without
+      // this the form re-derives the same optimistic number and is refused
+      // again, which is a lost booking wearing a safety feature's badge.
+      // The sentence is composed by `priceChangedMessage`, because on this rail
+      // the guest form's email reaches the server only at checkout: a
+      // new-customers-only code that previewed fine for an anonymous visitor is
+      // refused HERE, and "the price changed" would be a lie about why.
+      const serverPrice = priceChangedAmount(err)
+      if (serverPrice !== null) {
+        acceptPrice(serverPrice)
+        setBookingError(
+          priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale))
+        )
+        return
+      }
       const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, tShop) : null
+      // PAY-TIME promo refusals. The preview is advisory about availability —
+      // the reserve transaction is the authority and may refuse a code that
+      // previewed fine (exhausted, busy, already used, disabled mid-checkout) —
+      // so every mount handles a refusal here, not only at apply time.
+      const promoMsg = promoCheckoutErrorMessage(err, tPromo)
       if (giftMsg) {
         setBookingError(giftMsg)
+      } else if (promoMsg) {
+        setBookingError(promoMsg)
       } else if (reason === 'trial_used') {
         setBookingError(t('errorTrialUsed'))
       } else if (reason === 'payment_required') {
@@ -1651,6 +1759,10 @@ export default function BookingForm({
                         setSelectedSession(s)
                         setGuestPath(null)
                         setGiftCardApplied(null)
+                        // A code is quoted against ONE purchase (the reservation
+                        // key embeds the session), so picking a different class
+                        // must not carry the previous quote across.
+                        setPromoApplied(null)
                         setDeepLinkNotice(null)
                         setBookingError(null)
                         setStep(waitlistable ? 'waitlist' : nextStepAfterSession(activity))
@@ -1919,6 +2031,27 @@ export default function BookingForm({
           </p>
         </div>
 
+        {/* Promo code — the MODIFIER, above the tender in the UI as in the
+            arithmetic.
+
+            The gate is `willCharge && !isPricedTrial`, not bare `willCharge`:
+            `willCharge` is true on the PRICED-TRIAL door, which is the one door
+            a promo can never apply to (a paid trial is already an acquisition
+            price, enforced once per person). Rendering the field there would
+            show it to the one visitor it is guaranteed to fail — a newcomer on
+            the acquisition surface, told "this code does not apply" while the
+            same person taking the dearer drop-in door gets the discount. */}
+        {willCharge && !isPricedTrial && selectedSession && (
+          <PromoCodeField
+            teamId={teamId}
+            target={{ kind: 'drop_in', sessionId: selectedSession.id }}
+            applied={promoApplied}
+            onApplied={setPromoApplied}
+            outcome={dropInQuote?.promo ?? null}
+            disabled={isSubmitting}
+          />
+        )}
+
         {/* Gift card redemption — only meaningful on a paying booking (drop-in
             or priced trial); a free trial/booking has nothing to redeem against. */}
         {willCharge && (
@@ -1934,12 +2067,29 @@ export default function BookingForm({
         {/* Live price breakdown — display only; createDropInCheckout /
             bookSession re-resolve the charge authoritatively server-side. */}
         {willCharge && (() => {
-          const basePrice = isPricedTrial
-            ? (selectedActivity?.trialPriceAmount ?? 0)
-            : (selectedDropInPrice ?? 0)
-          const memberDiscount =
-            !isPricedTrial && dropInMemberPrice ? dropInMemberPrice.base - dropInMemberPrice.amount : 0
-          const afterBenefit = Math.max(0, basePrice - memberDiscount)
+          // Once the server has refused our quote and told us the real figure,
+          // IT is the breakdown — every discount row we were rendering is a
+          // promise the server just declined to keep, and leaving them up over a
+          // higher total is the exact overcharge-by-display the guard refuses.
+          const overridden = acceptedPrice !== null
+          const basePrice = overridden
+            ? (acceptedPrice as number)
+            : isPricedTrial
+              ? (selectedActivity?.trialPriceAmount ?? 0)
+              : (selectedDropInPrice ?? 0)
+          // BOTH discount rows come from the ONE result above, and the resolver
+          // stamps at most one of appliedBenefit / appliedPromo — so they are
+          // mutually exclusive structurally, not by convention.
+          const pay = isPricedTrial || overridden ? null : dropInQuote?.pay
+          const memberDiscount = pay?.appliedBenefit
+            ? pay.appliedBenefit.baseAmount - pay.amount
+            : 0
+          const promoLine = pay?.appliedPromo
+            ? { code: pay.appliedPromo.code, discount: pay.appliedPromo.baseAmount - pay.amount }
+            : null
+          // The subtotal the TENDER draws against — the resolver's own number,
+          // never a second subtraction.
+          const afterBenefit = pay ? pay.amount : Math.max(0, basePrice)
           // THE server's own split (planGiftCardRedemption, @linyup/shared) —
           // never Math.min(balance, total). A card that can't full-cover has
           // its drawdown SHRUNK so the Stripe residual clears the 0.50 floor,
@@ -1973,9 +2123,17 @@ export default function BookingForm({
                   <span>−{formatCurrency(memberDiscount, currency, locale)}</span>
                 </div>
               )}
+              {promoLine && promoLine.discount > 0 && (
+                <div className="flex items-center justify-between text-green-700">
+                  <span className="min-w-0 truncate">
+                    {tPromo('discountRow', { code: promoLine.code })}
+                  </span>
+                  <span>−{formatCurrency(promoLine.discount, currency, locale)}</span>
+                </div>
+              )}
               {/* The tender applies to what's left AFTER the discounts — show
                   the figure it draws against whenever a discount moved it. */}
-              {memberDiscount > 0 && (
+              {(memberDiscount > 0 || (promoLine?.discount ?? 0) > 0) && (
                 <div className="flex items-center justify-between border-t pt-1.5">
                   <span className="text-muted-foreground">{t('priceAfterDiscounts')}</span>
                   <span>{formatCurrency(afterBenefit, currency, locale)}</span>

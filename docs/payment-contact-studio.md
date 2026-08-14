@@ -276,6 +276,37 @@ state machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
 | `updatePaymentRecord` | callable | manager+ | (Re)assign the contact + edit the comment (shared with BYO). |
 | `handleConnectWebhook` | onRequest (public) | Stripe | Verify + reconcile account / payment / subscription / refund / dispute state + contact membership. |
 
+> **Every one-off checkout callable now accepts an optional `quotedAmount`**
+> (major units — the figure the surface actually rendered) and an optional
+> `promoCode`. `assertQuotedAmount` (`connect/checkout.ts`) compares the quote to
+> the resolved price and refuses `failed-precondition` with
+> `{ reason: 'price_changed', amount, promoRefusal? }` — carrying the *current*
+> figure, and the typed code's own verdict when the code is why the figure moved
+> (`docs/promo-codes.md` → "Refusals"). The commonest cause of this refusal is a
+> refused code, not a moved price, and the surface says which.
+>
+> **The guard is scoped to promo-carrying checkouts** (a required
+> `scope: { promoAttempted }` argument, so no call site can be silently in or out
+> of it). Without a code the rendered price is an optimistic render, not a quote:
+> the public surfaces price from a documented-as-partial client snapshot (a
+> contact session carries only the *primary* `subscription_type_id`, every held id
+> is reported unmetered, the shop fetches its catalogue once), and that snapshot
+> and the server's are allowed to disagree. Enforcing a quote there refuses
+> ordinary sales — an exhausted credit pack listed in a benefit, a price raised
+> under an open tab — deterministically and with no way out.
+>
+> **It is one-sided:** it fires only when the server resolves a price *higher*
+> than the caller was shown. Being charged more than the screen said is the harm;
+> being charged less needs no consent — a member whose benefit comes from a
+> secondary held type is routinely quoted base by the client and the discounted
+> price by the server, and a strict `!==` would refuse that sale for being cheaper
+> than advertised.
+>
+> **The refusal is recoverable:** `details.amount` is the server's figure; each
+> mount renders it, offers the purchase at it, and re-sends it as `quotedAmount`
+> on the next attempt. Sending no `quotedAmount` proceeds. See
+> `docs/promo-codes.md`.
+
 > Same-session redirect targets (Checkout success/cancel, Account Link return/refresh)
 > are built from the **caller's origin** when it's a trusted Linyup/localhost origin
 > (`resolveBaseUrl`, `utils/env.ts`), so local dev returns to localhost; otherwise they

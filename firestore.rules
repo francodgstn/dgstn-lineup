@@ -611,6 +611,49 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Promo codes — the doc id IS the code. Unlike a gift card the CODE is not
+      // a secret (it is printed on a flyer), but the DOCUMENT is: it carries
+      // max_uses, usage_count, live reservations and internal labels, and the
+      // collection is a list of every code a scraper could harvest. So: manager
+      // read, no client write at all.
+      //
+      // Writes go through callables and NOT through per-field rules, and the
+      // argument is about WHERE the writers live, not how many there are.
+      // Every write to this document happens inside a Firestore transaction in
+      // connect/promoCodes.ts that read the document first: `usage_count` is
+      // written only by the commit transaction, as an absolute value from its
+      // own read set, and every `reservations` write is a compare-and-set
+      // against the entry it is about to replace or delete. That is a CLOSED
+      // SET of writers, all of which can see each other's work.
+      //
+      // A "these fields yes, that field no" rule would put a writer OUTSIDE
+      // that set — on a client, with no transaction, no read set and no
+      // ownership marker to compare — and the finite resources on this document
+      // (a capped counter, a capped live-reservation map) are exactly the kind
+      // that a blind write corrupts. gift_cards and referral_codes avoid the
+      // same shape for the same reason. Note this is a claim about writers, not
+      // a count of them: adding another transactional writer in that file
+      // changes nothing here; adding one anywhere else breaks the argument.
+      //
+      // The public never reads this collection DIRECTLY. Public traffic reaches
+      // it only through callables that read it with the Admin SDK — the
+      // previewPromoCode peek on its own rate-limit bucket, and the one-off
+      // checkout callables that load a typed code — and none of them ever
+      // returns the document.
+      match /promo_codes/{code} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+
+        // The durable per-PERSON ledger, keyed by a HASH of the normalised
+        // email so the doc ids are not a harvestable list of customer
+        // addresses. Read for the admin list; cleared only by
+        // clearPromoRedemption.
+        match /redemptions/{identityKey} {
+          allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+          allow write: if false;
+        }
+      }
+
       // No-show policy fees — created by the policy engine when a contact's
       // strike count reaches the team threshold; paid via an emailed payment
       // link (webhook marks paid) or waived by a manager callable.

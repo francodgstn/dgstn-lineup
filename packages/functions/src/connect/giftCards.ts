@@ -43,6 +43,7 @@ import {
   formatGiftCardCode,
   giftCardAvailable,
   normalizeEmail,
+  normalizeRedemptionCode,
   planGiftCardRedemption,
   resolveStripeCurrency,
   round2Major,
@@ -69,6 +70,11 @@ import { recordGiftCardReclass } from '../finance/journal'
 import { writeManualPaymentEvent } from '../payments/recordManualPayment'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
+/** Fallback ONLY, for a caller with no Checkout Session behind its hold. Every
+ *  money path passes `holdMinutes` derived from the session it is guarding
+ *  (resolveCheckoutHoldWindow in ./checkout.ts) — this constant was that
+ *  derivation's answer back when every session was ~31 minutes, and it silently
+ *  became wrong the moment a waitlist claim made the session length variable. */
 const DEFAULT_HOLD_MINUTES = 35
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 /** A fat-fingered comp must not be able to mint arbitrary stored value: a
@@ -79,9 +85,11 @@ const MAX_ISSUE_REASON_LEN = 200
 const round2 = round2Major
 
 /** Codes are case/space-insensitive to the buyer; the doc id is always the
- *  canonical uppercase form formatGiftCardCode produces. */
+ *  canonical uppercase form formatGiftCardCode produces. Delegates to the ONE
+ *  shared normaliser (shared/utils/codes.ts) so gift cards and promo codes can
+ *  never fork on what "the same code" means — both key a document on it. */
 function normalizeCode(code: string): string {
-  return code.trim().toUpperCase()
+  return normalizeRedemptionCode(code)
 }
 
 function cardRef(teamId: string, code: string): FirebaseFirestore.DocumentReference {
@@ -202,7 +210,16 @@ export async function reserveGiftCardDrawdown(params: {
   teamId: string
   code: string
   totalMajor: number
+  /** Minted by the CALLER (generateSecureToken(16)) before any Stripe session
+   *  exists — the reservation has to succeed or fail before a session is worth
+   *  creating. It travels to the webhook in checkout metadata as
+   *  `giftCardHold`. */
   holdKey: string
+  /** How long the hold lives. MUST come from resolveCheckoutHoldWindow
+   *  (./checkout.ts), derived from the very instant this checkout's Stripe
+   *  session expires at, so the hold always outlives the payment window. A hold
+   *  that dies first frees the value for another purchase while the original is
+   *  still payable. Optional only so a caller with no session can compile. */
   holdMinutes?: number
   /** Currency of the charge this drawdown is being applied to. A card may only
    *  pay for a charge in its OWN currency — see the guard below. Optional so
@@ -415,16 +432,36 @@ export async function commitGiftCardDrawdown(params: {
   paymentIntentId?: string | null
   occurredAtMs?: number
   description?: string | null
-  // ── Rider declared for a later phase; deliberately UNUSED today. It lives
-  // here so promos extend one function instead of rediscovering the four call
-  // sites this wrapper collapsed. A rider only fits here when it must happen
-  // AFTER the money moves — which is what killed its waitlist sibling: the
-  // full-cover branch confirms the booking BEFORE calling this (dropIn.ts), and
-  // both early returns below (nothing to commit; a comped card) skip anything
-  // placed after them, so an entry flip hung here would simply not run for a
-  // comped claim. The flip is atomic with the booking write instead.
-  /** Commit the promo reservation in the same call. */
-  promoRedemptionId?: string
+  // ── DO NOT ADD A RIDER HERE. This is the SECOND time one has been removed
+  // from this signature, so the reason is written down rather than rediscovered:
+  //
+  //   • `waitlistEntryId` (Wave 3 Phase 2) — deleted; the entry flip is atomic
+  //     with the booking write instead.
+  //   • `promoRedemptionId` (Wave 3 Phase 3) — deleted; promo commits live at
+  //     each webhook handler's per-kind CONFIRM point and in the THREE full-cover
+  //     branches, NAMED so the count cannot rot again: `createDropInCheckout`
+  //     (booking/dropIn.ts), `createProductCheckout` and `createCourseCheckout`
+  //     (connect/payments.ts). There is no fourth — appointments take no gift
+  //     card, so that rail has no full-cover branch at all. (This note miscounted
+  //     them as 2, and was reported and "fixed" twice — because the correction
+  //     landed on the sibling claim in connect/promoCodes.ts and never travelled
+  //     to this copy. That is exactly the failure a bare number invites, so
+  //     connect/commitSites.test.ts now asserts the count against the source and
+  //     the next drift fails a gate instead of waiting for a reader.) See
+  //     connect/promoCodes.ts, N17.
+  //
+  // A rider hung here does not run in three ordinary cases, each of them silent:
+  //   1. the early return below when there is nothing left to commit;
+  //   2. the early return below for an `admin_comp` card;
+  //   3. DECISIVELY — this function only runs when a GIFT-CARD CODE WAS SUPPLIED
+  //      (webhook.ts gates on md.giftCardCode && md.giftCardHold; every callable
+  //      branch gates on data.giftCardCode). A promo used without a card — the
+  //      overwhelmingly common case — would never commit at all: discount given,
+  //      count never moved, no error and no alarm.
+  //
+  // The rule this leaves behind: a rider belongs here ONLY if it must happen
+  // after this card's money moves AND is meaningless without a card. Nothing so
+  // far has met the second half.
 }): Promise<{ committedMajor: number; reclassed: boolean }> {
   const outcome = await commitHoldTx(params)
   if (!outcome || outcome.committedMajor <= 0) {

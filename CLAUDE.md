@@ -274,11 +274,13 @@ packs spend a credit) or pay `discountPercent` off every priced duration
 (`discount`, clamped to Stripe's 0.50 floor, never free-via-discount). Absent =
 no benefit, everyone pays base — the benefit is data, never implied, but it is
 one rule (the per-duration × per-type `subscriptionPricing` matrix is gone).
-Resolver: **`resolvePaymentOptions(snapshot, target)`** — the ONE shared
-coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`, pure,
-client-safe) that answers `covered | spend_credits | pay(amount,
-appliedBenefit)` for class bookings, drop-ins, appointments AND courses; the
-server builds its authoritative snapshot via `loadContactPaymentSnapshot`
+Resolver: **`resolvePaymentOptions(snapshot, target, context?)`** — the ONE
+shared coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`,
+pure, client-safe) that answers `covered | spend_credits | pay(amount,
+appliedBenefit)` for class bookings, drop-ins, appointments, courses AND
+products; the optional third `context` carries a typed promo code (see "Promo
+codes" below) and nothing else, so every pre-existing call site compiles and
+behaves unchanged. The server builds its authoritative snapshot via `loadContactPaymentSnapshot`
 (`packages/functions/src/booking/access.ts`), the web an optimistic one via
 `apps/web/src/lib/paymentSnapshot.ts`. Never add a parallel coverage/price
 check — extend the resolver (fixtures:
@@ -328,6 +330,96 @@ absolute and uncontended by construction). Releases go through
 `releaseWaitlistOffer` and always **release before re-offering** — where there is
 anything to re-offer: the Connect webhook's oversell branch and the session
 teardown deliberately do not. Full docs: `docs/waitlist.md`.
+
+### Promo codes — a Stage A MODIFIER, never a tender
+
+**A promo code changes what a purchase costs; a gift card pays for one.** That is
+the whole design, and getting it backwards is the single biggest way this area
+goes wrong:
+
+> A price **MODIFIER** belongs in Stage A (inside `resolvePaymentOptions`). A
+> **TENDER** belongs in Stage B (at the checkout callable). **Nothing is both.**
+
+So the promo is applied inside the resolver and **no callable ever computes a
+discounted amount itself** — every one reads `payOption.amount`. The dividend:
+every gift-card reservation already receives a post-promo total, so no gift-card
+call site needed a promo edit. `teams/{teamId}/promo_codes/{CODE}` (the doc
+id IS the code, `PromoCode` in `packages/shared/src/types/promoCode.ts`), written
+only by manager callables in `packages/functions/src/connect/promoCodes.ts`;
+`firestore.rules` denies every client write. Rails: drop-in, appointment, course,
+product — **not** memberships, not gift-card purchases, not the priced-trial door,
+and **not the waitlist claim** (its deadline cannot be shortened without giving
+one seat two timers, so a code there would lock a use for the whole claim window;
+the claim path is refused server-side, not merely unmounted). A code may also be
+narrowed by **audience** (`audience: 'all' | 'new_contacts'`, where "new" is
+`!joined` — the same fact the `members` access rule runs on, never a second
+definition), by entity allow-lists, or bound to one contact.
+
+**Best-one-wins, and the comparator is deliberately ASYMMETRIC.** A *benefit*
+applies whenever it does not RAISE the price (`<= base`), because `appliedBenefit`
+answers *which membership priced this booking* — provenance read downstream. A
+*promo* applies only when **strictly lower**, because `appliedPromo` answers *did
+a code change the price* — an event. When a promo beats a benefit, the beaten one
+rides on `appliedPromo.supersededBenefit` so a campaign never blanks a studio's
+subscription attribution. `appliedBenefit` and `appliedPromo` are never both
+present on one option.
+
+**ONE writer of `usage_count`** — `commitPromoRedemption`'s transaction, writing
+an **absolute** value from its own read set. No `FieldValue.increment` on
+`usage_count` or `PromoRedemption.count` anywhere, and **no restore-on-refund
+path**, which is the second writer that would otherwise appear. The manager levers
+(`clearPromoRedemption`, `releasePromoReservations`) *delete lifecycle state* and
+never adjust a counter.
+
+**A use is consumed by a completed SALE, never by an attempt.** The commit sits at
+each handler's per-kind confirm point — never before the dispatch — so every
+branch that refunds the whole charge commits nothing and the reservation simply
+lapses. A **live reservation consumes a use** (never
+over-issue), which is bounded by a deterministic reservation key (a retry is a
+refresh, not a second use), `PROMO_MAX_LIVE_RESERVATIONS` + a distinct
+`promo_busy` refusal, short checkout windows, reserved-shown-separately-from-used
+in the admin list, and the manager release lever. The per-person cap binds to a
+**hashed normalised email**, not a contact document — so it is a nudge with teeth,
+not a promise, and the admin copy says "counted per email address".
+
+**The deterministic key is paid for by a set of ownership rules**, each of which
+was a live bug before it was written down. They are enumerated ONCE, in
+`docs/promo-codes.md` → "Redemption integrity" — read them there rather than from
+a summary, because the summaries of that list have now disagreed with it (and
+with each other) in every review round of this phase. The shape they all share:
+the key says *which slot*, `instanceId` says *whose attempt holds it right now*,
+and `sessionId` says *which Checkout Session may take money for it*; every
+removal or spend compares its marker **inside** the transaction that writes.
+Never make the key unique to fix a release bug — that destroys
+retry-is-a-refresh.
+
+**A promo writes NO finance journal row, ever** — a discount is not a money event
+on a cash basis; the money event is the smaller charge. No `FinanceCategory`
+member, no reclass pair, no CSV column. The record is
+`PaymentLineItem.promoCode` on the payment row (a system stamp: never read off a
+client payload, carried forward across a manager's edit) plus the
+`redemptions/{identityKey}` ledger. Full docs: `docs/promo-codes.md`.
+
+### Comments must not assert a COUNT of code sites
+
+A comment saying "the two X", "all three Y", "six copies" or "the only Z" is a
+claim that rots the moment somebody adds a case — silently, and against the
+reader who trusts it. Wave 3 Phase 3 shipped a false one in **every** review
+round and corrected the arithmetic every time; the numbers kept coming back.
+So, in order of preference:
+
+1. **Point at the owner.** A list of call sites (a "census") is written down
+   ONCE and referred to everywhere else. Existing owners:
+   `packages/functions/src/appointments/holdRelease.ts`'s module header (every
+   site that can release an appointment hold) and `docs/promo-codes.md`
+   ("The census — every site that removes a reservation", "The ownership rules",
+   "The mounts"). Add to the owner; never copy it.
+2. **Name the members and drop the number** — a claim checkable by reading the
+   names beside it fails visibly rather than silently.
+3. **Assert it in a test.** `packages/functions/src/connect/commitSites.test.ts`
+   reads the SOURCE and pins call-site tallies (it spans the functions/web
+   boundary on purpose — that boundary is where corrections stop travelling).
+   That file is where a bare number is allowed, because there it is executable.
 
 ### SaaS plan tiers (Phase 2)
 

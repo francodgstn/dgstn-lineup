@@ -132,9 +132,15 @@ export type PriceCell =
       kind: 'pay'
       /** Major units, team currency. */
       amount: number
-      /** Set when a member rate applied — render the base struck through. */
+      /** Set when a member rate OR a promo code lowered the price — render the
+       *  base struck through. */
       baseAmount?: number
       viaTypeId?: string
+      /** The promo code that priced this cell, when one beat both the list price
+       *  and the member benefit. Display only — this page never applies a code
+       *  itself (personas have none); the field exists so a real quote flowing
+       *  through the same helper renders the same way a checkout charges. */
+      promoCode?: string
       source: 'base' | 'drop_in' | 'trial' | 'course_price' | 'product'
     }
   | { kind: 'blocked'; denial: PaymentDenial; trialAvailable?: boolean }
@@ -176,11 +182,24 @@ function fromResult(
   if (option.type === 'spend_credits') {
     return { kind: 'credit', typeId: option.via.subscriptionTypeId, remaining: option.remaining }
   }
+  // A modifier priced this cell: EITHER a member benefit or a promo code, never
+  // both (best-one-wins, and the resolver stamps at most one). Both carry the
+  // same `baseAmount` — the list price the discount was taken from — so the
+  // struck-through figure is one field read from whichever won.
+  //
+  // `viaTypeId` falls through to `appliedPromo.supersededBenefit` on purpose:
+  // without it, every running campaign would blank the member badge on this page
+  // for exactly the members who used the code — the studio's own attribution,
+  // gone while a campaign runs. (`supersededBenefit` carries no `baseAmount` of
+  // its own, and needs none: `appliedPromo.baseAmount` IS the same list price
+  // `appliedBenefit.baseAmount` would have carried.)
+  const promo = option.appliedPromo
   return {
     kind: 'pay',
     amount: option.amount,
-    baseAmount: option.appliedBenefit ? option.appliedBenefit.baseAmount : undefined,
-    viaTypeId: option.appliedBenefit?.subscriptionTypeId,
+    baseAmount: option.appliedBenefit?.baseAmount ?? promo?.baseAmount,
+    viaTypeId: option.appliedBenefit?.subscriptionTypeId ?? promo?.supersededBenefit?.subscriptionTypeId,
+    ...(promo ? { promoCode: promo.code } : {}),
     source: option.source,
   }
 }

@@ -19,6 +19,8 @@ export interface ContactPayment {
   status: string
   refundedAmount: number // minor units
   createdAt: number | null // epoch ms
+  /** The promo code this purchase was discounted with, or null. */
+  promoCode?: string | null
 }
 
 export interface SpacePaymentsResult {

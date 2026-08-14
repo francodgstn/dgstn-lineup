@@ -55,6 +55,20 @@ export interface PaymentLineItem {
   variantId?: string | null
   /** Denormalized display label ("what was bought") for the payments list. */
   label?: string | null
+  /**
+   * The promo code this purchase was discounted with (canonical uppercase), or
+   * absent. A SYSTEM STAMP, never manager-editable: the webhook copies it from
+   * the Checkout Session metadata (`lineItemFromMetadata` in connect/webhook.ts)
+   * and `normalizePaymentLineItem` deliberately does NOT read it off a client
+   * payload — `updatePaymentRecord` carries the stored value forward instead, so
+   * editing "what was paid" can never invent or erase a redemption.
+   *
+   * This is the ONLY place the code touches the money side. A promo writes no
+   * finance journal row and no CSV column (docs/promo-codes.md → "Finance"), so
+   * "who used this code and what did they pay" is answered from here and from
+   * the redemptions ledger — nowhere else.
+   */
+  promoCode?: string | null
 }
 
 export interface ExternalPayment {

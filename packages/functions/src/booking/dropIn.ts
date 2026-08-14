@@ -16,23 +16,23 @@ import {
   isPastBookingCutoff,
   sanitizeBookingAnswers,
   seatsFree,
-  normalizeBenefit,
-  resolveActivityAccessRule,
+  normalizeRedemptionCode,
   resolvePaymentOptions,
-  type ActivityAccessRule,
-  type AnyBenefit,
   type DropInTarget,
   type GiftCardRedemptionPlan,
   type PaymentOptionsResult,
 } from '@linyup/shared'
-import { loadContactPaymentSnapshot } from './access'
+import { buildDropInTarget, resolveDropInForContact } from './dropInPricing'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
+  assertQuotedAmount,
   assertUnderCheckoutRateLimit,
   buildResultUrls,
   checkoutRateLimit,
+  closeTeamCheckoutSession,
   defaultIdempotencyKey,
   requireChargeableAmountFromMajor,
+  resolveCheckoutHoldWindow,
   SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
   startOneOffCheckout,
   STRIPE_MAX_CHECKOUT_EXPIRY_MINUTES,
@@ -43,6 +43,23 @@ import {
   releaseGiftCardHold,
   reserveGiftCardDrawdown,
 } from '../connect/giftCards'
+import {
+  NO_PROMO_ATTEMPT,
+  bindPromoCheckoutSession,
+  commitPromoRedemption,
+  instrumentKeyParts,
+  loadPromoAttempt,
+  promoCheckoutMetadata,
+  promoCheckoutOutcome,
+  promoScopeOf,
+  releasePromoReservation,
+  reservePromoRedemption,
+  resolvePromoCaller,
+  type PromoAttempt,
+  type PromoCaller,
+  type PromoQuoteTarget,
+  type PromoReservationTicket,
+} from '../connect/promoCodes'
 import { generateSecureToken, generateBookingReference } from '../utils/crypto'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
@@ -59,37 +76,6 @@ import {
 
 const HOLD_MINUTES = 30
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-/**
- * Resolve the drop-in payment options for a KNOWN contact — the SAME semantics
- * bookSession uses, via the shared resolver:
- *  • a usable lesson-credit balance counts as covered (a member with credits
- *    left must not be sold a redundant drop-in);
- *  • an EXHAUSTED/expired pack does NOT count — that contact gets to pay,
- *    fixing the old deadlock where bookSession denied no_credits while the
- *    previous field-only check here also refused the drop-in;
- *  • a held benefit type reduces the drop-in price (member rate — percent_off
- *    or fixed_price on Activity.memberBenefit).
- */
-async function resolveDropInForContact(
-  teamId: string,
-  target: DropInTarget,
-  contact: FirebaseFirestore.DocumentData & { id: string },
-  /** Session start — meters usage limits against the week the class happens. */
-  usageAt?: Date
-): Promise<PaymentOptionsResult> {
-  const benefit = normalizeBenefit(target.benefit)
-  const snapshot = await loadContactPaymentSnapshot({
-    teamId,
-    contact,
-    relevantTypeIds: [
-      ...(target.accessRule.subscriptionTypeIds ?? []),
-      ...(benefit?.subscriptionTypeIds ?? []),
-    ],
-    usageAt,
-  })
-  return resolvePaymentOptions(snapshot, target)
-}
 
 const isCoveredResult = (r: PaymentOptionsResult): boolean =>
   r.options.some((o) => o.type === 'covered' || o.type === 'spend_credits')
@@ -111,6 +97,16 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     trial?: boolean
     /** Optional gift-card code to draw down against this booking's price. */
     giftCardCode?: string
+    /** Optional promo code — a Stage A price MODIFIER, resolved inside
+     *  resolvePaymentOptions and never applied here. A code that turns out not
+     *  to apply is REPORTED and the booking completes at list price; it never
+     *  blocks the purchase. */
+    promoCode?: string
+    /** The price the surface actually rendered, major units. When it disagrees
+     *  with what Stage A resolves, the checkout is REFUSED with `price_changed`
+     *  rather than silently charging a different figure. Absent ⇒ proceed (an
+     *  older client, or a surface with no price display). */
+    quotedAmount?: number
     /** Answers to the activity's bookingQuestions, keyed by field id. Stored on
      *  the PENDING booking so they survive the Stripe round-trip. */
     questionAnswers?: Record<string, unknown>
@@ -206,40 +202,30 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   const isTrial = data.trial === true
   const trialPriceAmount = activity.trialPriceAmount as number | null | undefined
 
-  // The drop-in enabled/priced requirement does NOT apply in trial mode — a
-  // class can offer a paid trial with no drop-in configured at all.
-  const dropIn = activity.dropIn as { enabled?: boolean; priceAmount?: number } | undefined
-  if (!isTrial && (!dropIn?.enabled || typeof dropIn.priceAmount !== 'number')) {
-    throw new HttpsError('failed-precondition', 'Drop-in is not available for this class')
+  // The one target the resolver prices for every caller of this class —
+  // coverage rule, list price and the member rate (Activity.memberBenefit),
+  // built by the SAME helper previewPromoCode uses so a quote and a charge can
+  // never come from different fields (booking/dropInPricing.ts).
+  const door = buildDropInTarget(activity, { asTrial: isTrial })
+  if (!door.ok) {
+    throw new HttpsError(
+      'failed-precondition',
+      door.reason === 'trial_unavailable'
+        ? 'This class does not offer a paid trial'
+        : 'Drop-in is not available for this class'
+    )
   }
-  if (isTrial && (activity.trialEnabled !== true || typeof trialPriceAmount !== 'number')) {
-    throw new HttpsError('failed-precondition', 'This class does not offer a paid trial')
-  }
-  const accessRule = resolveActivityAccessRule({
-    accessRule: activity.accessRule as ActivityAccessRule | undefined,
-    isFreeTrial: activity.isFreeTrial as boolean | undefined,
-  })
+  const { target: dropInTarget, accessRule } = door
   if (accessRule.type === 'open') {
     throw new HttpsError('failed-precondition', 'This class is free to book — no payment needed')
   }
 
-  // Config sanity: the BASE price must be chargeable (member rates clamp to the
-  // floor, so a valid base guarantees a valid effective amount).
-  const priceAmountMajor = isTrial ? (trialPriceAmount as number) : (dropIn!.priceAmount as number)
-  requireChargeableAmountFromMajor(priceAmountMajor)
+  // Config sanity: the BASE price must be chargeable (member rates and promo
+  // discounts clamp to the floor, so a valid base guarantees a valid effective
+  // amount).
+  requireChargeableAmountFromMajor(door.baseMajor)
 
-  // The one target the resolver prices for every caller of this class —
-  // includes the member rate (Activity.memberBenefit on the drop-in price).
-  const dropInTarget: DropInTarget = {
-    kind: 'drop_in',
-    accessRule,
-    dropIn: dropIn ?? null,
-    trial: { enabled: activity.trialEnabled === true, priceAmount: trialPriceAmount ?? null },
-    asTrial: isTrial,
-    benefit: (activity.memberBenefit as AnyBenefit | undefined) ?? null,
-  }
-  // Set on every path below: known contacts resolve with their snapshot
-  // (coverage refusal + member rate), fresh guests resolve as GUEST_SNAPSHOT.
+  // Set below, ONCE, for every caller — see "the single resolution point".
   let resolved: PaymentOptionsResult
 
   // Resolve the contact (payment is proof — no email verification needed here).
@@ -340,6 +326,35 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // them (an activity that added a question after they joined) wins.
   const claimAnswers = sanitizedAnswers ?? claim?.answers ?? null
 
+  // ── WHO is buying — resolved BEFORE anything is priced ────────────────────
+  // Phase 3 split identity from pricing, and that is not tidying. This callable
+  // used to resolve payment options in FOUR places (claim / signed-in contact /
+  // matched contact / fresh guest), so threading a promo into one of them broke
+  // nothing loudly: the other three would simply charge the undiscounted price
+  // to a visitor who had just been quoted a discount — for every member and
+  // every waitlist claimant, i.e. exactly the people this feature is for. With
+  // ONE resolution point that class of bug cannot be written.
+  //
+  // `contactDoc` is null only for a brand-new guest, who is by construction not
+  // covered by anything.
+  let contactDoc: (FirebaseFirestore.DocumentData & { id: string }) | null = null
+  /** An existing OFF-FUNNEL contact (form/shop lead — no stage) enters the
+   *  funnel by booking a drop-in; stamped after the coverage check, as before. */
+  let funnelEntryRef: FirebaseFirestore.DocumentReference | null = null
+  /**
+   * Every contact already stored under the typed email, on the GUEST path only —
+   * captured here and handed to `resolvePromoCaller`, which is what makes the
+   * `new_contacts` audience gate mean the same thing on this rail as on the
+   * appointment rail.
+   *
+   * It has to be THESE documents rather than a fresh query: the guest branch
+   * below mints a provisional contact when nothing matches, so a query issued
+   * after that point sees the new document too, reads as ambiguous, and lets a
+   * long-standing member take a new-customers-only code just by spelling their
+   * name differently on the guest form.
+   */
+  let guestEmailMatches: Array<FirebaseFirestore.DocumentData & { id: string }> | null = null
+
   if (claim) {
     const cSnap = await db.collection('contacts').doc(claim.contactId).get()
     if (!cSnap.exists || cSnap.data()?.teamId !== teamId) {
@@ -351,18 +366,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     firstname = (c.firstname as string) || ''
     lastname = (c.lastname as string) || ''
     phone = (c.phone as string) || null
-    resolved = await resolveDropInForContact(
-      teamId,
-      dropInTarget,
-      { ...c, id: cSnap.id },
-      (sessionData.start as Timestamp).toDate()
-    )
-    if (isCoveredResult(resolved)) {
-      // Covered claims never come through checkout — claimWaitlistSeat settles
-      // them for free, and charging here would sell a seat this person's
-      // membership already pays for.
-      throw new HttpsError('failed-precondition', 'You can already book this class for free')
-    }
+    contactDoc = { ...c, id: cSnap.id }
   } else if (contactSession && contactSession.teamId === teamId) {
     const cSnap = await db.collection('contacts').doc(contactSession.contactId).get()
     if (!cSnap.exists || cSnap.data()?.teamId !== teamId) {
@@ -374,15 +378,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     firstname = (c.firstname as string) || ''
     lastname = (c.lastname as string) || ''
     phone = (c.phone as string) || null
-    resolved = await resolveDropInForContact(
-      teamId,
-      dropInTarget,
-      { ...c, id: cSnap.id },
-      (sessionData.start as Timestamp).toDate()
-    )
-    if (isCoveredResult(resolved)) {
-      throw new HttpsError('failed-precondition', 'You can already book this class for free')
-    }
+    contactDoc = { ...c, id: cSnap.id }
   } else {
     const cd = data.contactDetails
     email = (cd?.email ?? '').toLowerCase().trim()
@@ -398,6 +394,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       .where('teamId', '==', teamId)
       .where('email', '==', email)
       .get()
+    guestEmailMatches = existing.docs.map((d) => ({ ...d.data(), id: d.id }))
     const match = existing.docs.find((d) => {
       const c = d.data()
       return (
@@ -407,24 +404,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     })
     if (match) {
       contactId = match.id
-      resolved = await resolveDropInForContact(
-        teamId,
-        dropInTarget,
-        { ...match.data(), id: match.id },
-        (sessionData.start as Timestamp).toDate()
-      )
-      if (isCoveredResult(resolved)) {
-        throw new HttpsError('failed-precondition', 'You can already book this class for free')
-      }
-      // An existing OFF-FUNNEL contact (form/shop lead — no stage) booking a
-      // drop-in enters the funnel normally at this point.
-      if (!match.data().acquisition_stage) {
-        await match.ref.update({
-          acquisition_stage: 'trial_booked',
-          acquisition_stage_updated_at: FieldValue.serverTimestamp(),
-          trial_booked_at: FieldValue.serverTimestamp(),
-        })
-      }
+      contactDoc = { ...match.data(), id: match.id }
+      if (!match.data().acquisition_stage) funnelEntryRef = match.ref
     } else {
       isNewContact = true
       const ref = db.collection('contacts').doc()
@@ -445,12 +426,102 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         created_at: FieldValue.serverTimestamp(),
       })
       contactId = ref.id
-      resolved = resolvePaymentOptions(GUEST_SNAPSHOT, dropInTarget)
     }
   }
 
-  // The caller's effective amount — base price, or their member rate when a
-  // held benefit type applies (percent_off / fixed_price, clamped ≥ 0.50).
+  // ── The promo, loaded before Stage A and NEVER throwing ───────────────────
+  // A code that does not apply is REPORTED, never silently charged, and never
+  // blocks the purchase (the only thing a checkout refuses over is a price the
+  // caller was not shown — see the quotedAmount guard below).
+  //
+  // NOT ON A WAITLIST CLAIM. Decided 2026-08-14 (Q11): the claim rail is the one
+  // whose Stripe deadline cannot be shortened without giving one seat two timers
+  // — the booking hold, the queue entry's offer_expires_at and the session are
+  // ONE instant — so a code applied here would lock a use of a strictly-capped
+  // campaign for the whole claim window (~124 min by default, up to 24 h if a
+  // studio configures it). Strict cap plus longest hold is the worst pairing in
+  // the design. There is no promo field on the claim page; a hand-made request
+  // that carries one is reported `not_applicable` rather than blocked.
+  const promoTarget: PromoQuoteTarget = {
+    kind: 'drop_in',
+    sessionId,
+    activityId,
+    trial: isTrial,
+  }
+  // ONE caller, resolved once and read by both the loader and the reserve — the
+  // two moments must not answer "is this person already a member?" differently.
+  //
+  // Both halves of the evidence go in, and `contactDoc` being non-null does NOT
+  // settle it: "joined" is a property of the EMAIL, not of whichever document
+  // this rail happens to be buying as. The guest form is where that bites twice
+  // over — `contactDoc` is null for anybody whose (email + exact first + exact
+  // last) does not match (a joined "Ann Smith" booking as "A. Smith"), and it is
+  // NON-null but not-joined for the other member of a household sharing one
+  // mailbox. Both would otherwise read as a brand-new contact and walk straight
+  // through a `new_contacts` code.
+  //
+  // `guestEmailMatches` is passed rather than left to the helper's own query
+  // because of the provisional mint below — see its declaration.
+  //
+  // A CLAIM never asks: this rail refuses a code on the claim path outright
+  // (below), so the gate is unreachable there and its lookup would be a read
+  // that cannot change an answer.
+  const promoCaller: PromoCaller = await resolvePromoCaller({
+    teamId,
+    contact: contactDoc,
+    email,
+    emailMatches: guestEmailMatches,
+    codeTyped: !claim && Boolean(data.promoCode),
+  })
+  const promo: PromoAttempt = claim
+    ? {
+        ...NO_PROMO_ATTEMPT,
+        code: data.promoCode ? normalizeRedemptionCode(data.promoCode) : null,
+        refusal: data.promoCode ? 'not_applicable' : null,
+      }
+    : await loadPromoAttempt({
+        teamId,
+        code: data.promoCode,
+        target: promoTarget,
+        caller: promoCaller,
+        chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      })
+  const promoContext = promo.modifier ? { promo: promo.modifier } : undefined
+
+  // ── THE single resolution point ───────────────────────────────────────────
+  resolved = contactDoc
+    ? await resolveDropInForContact(
+        teamId,
+        dropInTarget,
+        contactDoc,
+        (sessionData.start as Timestamp).toDate(),
+        promoContext
+      )
+    : resolvePaymentOptions(GUEST_SNAPSHOT, dropInTarget, promoContext)
+
+  // A supplied modifier that produced NO outcome is a programming error — a
+  // missed resolver call site — and must be loud rather than a silent
+  // full-price charge.
+  if (promo.modifier && !resolved.promo) {
+    throw new HttpsError('internal', 'The promo code did not reach the resolver')
+  }
+
+  if (isCoveredResult(resolved)) {
+    // Someone who can already book free must not be sold a drop-in — and a
+    // covered CLAIM never comes through checkout at all (claimWaitlistSeat
+    // settles it for nothing).
+    throw new HttpsError('failed-precondition', 'You can already book this class for free')
+  }
+  if (funnelEntryRef) {
+    await funnelEntryRef.update({
+      acquisition_stage: 'trial_booked',
+      acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+      trial_booked_at: FieldValue.serverTimestamp(),
+    })
+  }
+
+  // The caller's effective amount — base price, their member rate, or the promo
+  // price, whichever is lowest (best-one-wins, decided inside the resolver).
   const payOption = resolved.options.find((o) => o.type === 'pay')
   if (!payOption) {
     // A KNOWN contact who already used their trial gets the dedicated,
@@ -466,6 +537,21 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   }
   const priceMajor = payOption.amount
   const amount = requireChargeableAmountFromMajor(priceMajor)
+
+  // ── The price the caller was SHOWN ────────────────────────────────────────
+  // Scoped to a PROMO-CARRYING checkout: a code is the only thing that makes the
+  // rendered figure a promise rather than an optimistic render, and the client's
+  // snapshot is documented as partial (see assertQuotedAmount). Absent quote ⇒
+  // proceed. Refusal carries the server's figure so the surface can offer it —
+  // and `promo.refusal`, because on this rail that is usually WHY the figure
+  // moved: the guest form's email is resolved here and nowhere earlier, so a
+  // `new_contacts` code that previewed fine for an anonymous visitor is refused
+  // at exactly this point. Reporting only "the price changed" told that visitor
+  // something untrue about what happened.
+  assertQuotedAmount(data.quotedAmount, priceMajor, {
+    promoAttempted: Boolean(data.promoCode),
+    promoRefusal: promo.refusal,
+  })
 
   // Trial eligibility: one trial per person, ever — free or paid. Resolved by
   // email (never the looser name+email match above), same lookup bookSession's
@@ -528,14 +614,105 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // claim at all.
   const expiresAt = claim?.expiresAt ?? Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000)
 
+  // The Stripe session's deadline and the window every reservation riding it
+  // must outlive, derived ONCE from the same number (see
+  // resolveCheckoutHoldWindow). A claim brings its own already-reconciled
+  // instant; every other drop-in gets the short window, because a drop-in's
+  // booking hold frees the seat at +HOLD_MINUTES whatever the buyer pays with.
+  //
+  // Deriving the two separately is what made a 120-minute claim reserve its
+  // gift-card drawdown for a flat 35 minutes, freeing the held value for
+  // another purchase while the claim was still payable.
+  //
+  // FIXING THE INSTANT HERE STARTS A CLOCK, and this rail has the most work of
+  // any between that instant and its Stripe create: the promo reserve (a
+  // transaction plus up to two Stripe calls, because superseding a slot closes
+  // the session it was already backing), the gift-card reserve, and the
+  // booking-hold transaction. All of it is spent out of
+  // CHECKOUT_WINDOW_WORK_BUDGET_SECONDS — 60s on the short window (31 minutes
+  // chosen, 30 required by Stripe). The instant cannot be computed later without
+  // re-introducing the two-computations bug above, so the budget is enforced
+  // rather than avoided: assertCheckoutWindowPayable refuses inside
+  // startOneOffCheckout, and THE guard below hands every reservation back.
+  const promoApplied = resolved.promo?.status === 'applied'
+  const holdWindow = resolveCheckoutHoldWindow({
+    nowMs: Date.now(),
+    carriesReservation: Boolean(data.giftCardCode) || promoApplied,
+    fixedExpiresAtEpochSeconds: claimCheckout?.expiresAtEpochSeconds,
+    alwaysBounded: true,
+  })
+
+  // ── RESERVE, in the order the failure modes dictate ───────────────────────
+  //
+  // The promo goes FIRST, and it goes here rather than higher up:
+  //  • AFTER the non-money gates (trial eligibility, already-registered,
+  //    capacity), because none of them has a release path — nothing is reserved
+  //    above them. A visitor with a ten-use flyer code clicking Pay on a full
+  //    class would otherwise burn a use and, because the reservation is keyed to
+  //    her own identity, bar herself from the code on any OTHER class for the
+  //    whole window; ten such clicks would exhaust the campaign without a sale.
+  //  • BEFORE the gift card, because the drawdown is computed against
+  //    `priceMajor`; if the promo reservation could fail after it, the card
+  //    would have been reserved against a price that no longer applies.
+  //
+  // A promo refusal REFUSES THE CHECKOUT — it never silently re-prices. The
+  // caller was quoted a discount we can no longer honour, which is the one case
+  // a checkout must refuse rather than charge something else.
+  //
+  // THE TICKET IS THE ONLY PROOF ANYTHING WAS RESERVED. It stays null unless the
+  // resolver said `applied`, and everything downstream that touches the
+  // reservation — the checkout metadata, the release, the full-cover commit —
+  // takes it. So a valid code that LOST best-one-wins cannot reach the webhook's
+  // commit and burn a use it never got.
+  let promoTicket: PromoReservationTicket | null = null
+  if (promoApplied && promo.code) {
+    promoTicket = await reservePromoRedemption({
+      teamId,
+      code: promo.code,
+      contactId,
+      identityKey: promo.identityKey,
+      reservationKey: promo.reservationKey,
+      targetKey: promo.targetKey,
+      scope: promoScopeOf(promoTarget),
+      caller: promoCaller,
+      // The same instant the Stripe session gets, plus the promo BACKSTOP — two
+      // copies of one number, never two computations. Longer than the gift
+      // card's margin on purpose: this slot is freed by the expiry webhook, and
+      // its lazy expiry must not race the delivery of the completion webhook
+      // that decides the same slot (PROMO_RESERVATION_BACKSTOP_MINUTES).
+      expiresAt: Timestamp.fromMillis(
+        Date.now() + (holdWindow.promoHoldMinutes ?? 0) * 60_000
+      ),
+      amountMajor: priceMajor,
+      baseAmount: payOption.appliedPromo?.baseAmount ?? priceMajor,
+      chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      // Close the session this slot was already backing before minting another,
+      // or refuse. A drop-in duplicate is refunded by the webhook, but the slot
+      // it consumed is not — and the same reserve serves the rails where a
+      // second payment is a second genuine order.
+      closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
+    })
+  }
+
   // Optional gift-card redemption — reserve a drawdown against the total BEFORE
   // writing any booking doc (a failed/invalid code must leave no trace).
   let giftCardPlan: GiftCardRedemptionPlan | null = null
   let giftCardHoldKey: string | null = null
-  /** Give the reserved stored value back rather than leaving it held until its
-   *  lazy expiry. Called on EVERY failure after the reservation — the capacity
-   *  refusal below as well as a Stripe failure. */
-  const releaseReservedGiftCard = async (): Promise<void> => {
+  /**
+   * Hand back everything reserved, in the REVERSE of the order it was taken:
+   * gift card, then promo. Both are idempotent no-ops when nothing was
+   * reserved, or when it has already been committed.
+   *
+   * This is called from ONE guard spanning every path from the reservations to
+   * the successful return — not from an enumerated list of catch sites. The set
+   * of throw sites in between is larger than it looks and grows with the code:
+   * reserveGiftCardDrawdown's three throws, the full-cover booking transaction,
+   * the pending-hold transaction and the Stripe create. (An earlier version of
+   * this comment named the capacity refusal as a caller; that refusal moved
+   * ABOVE the reservations and the comment did not, which is how a stale
+   * precondition comment becomes a wrong design.)
+   */
+  const releaseReserved = async (): Promise<void> => {
     if (giftCardPlan && data.giftCardCode && giftCardHoldKey) {
       await releaseGiftCardHold({
         teamId,
@@ -543,14 +720,32 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         holdKey: giftCardHoldKey,
       }).catch(() => undefined)
     }
+    if (promoTicket) {
+      await releasePromoReservation({
+        teamId,
+        code: promoTicket.code,
+        reservationKey: promoTicket.reservationKey,
+        // OUR instance: if a later attempt at this same purchase already
+        // refreshed the entry, this release is a no-op rather than unguarding a
+        // slot that session still needs.
+        instanceId: promoTicket.instanceId,
+      }).catch(() => undefined)
+    }
   }
+
+  try {
   if (data.giftCardCode) {
     giftCardHoldKey = generateSecureToken(16)
     giftCardPlan = await reserveGiftCardDrawdown({
       teamId,
       code: data.giftCardCode,
+      // Post-promo: the resolver already applied the modifier, so the card is
+      // drawn against the discounted total with no change to its own code.
       totalMajor: priceMajor,
       holdKey: giftCardHoldKey,
+      // Same instant the Stripe session below gets, plus the margin — the hold
+      // must outlive the payment window it is guarding.
+      holdMinutes: holdWindow.holdMinutes,
       // The card must match the currency this booking will actually be charged
       // in — see the guard in reserveGiftCardDrawdown.
       chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
@@ -635,7 +830,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         )
       })
     } catch (err) {
-      await releaseReservedGiftCard()
+      await releaseReserved()
       throw err
     }
     // A gift-card payment confirms a provisional contact, exactly as a paid
@@ -675,12 +870,40 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       contactId,
       description: `Drop-in · ${activityName}`,
     })
+    // …and the promo, for the same reason and NOT on the same call. It cannot
+    // ride on commitGiftCardDrawdown: that function returns early for a card
+    // with nothing left to commit and again for an `admin_comp` card, and it
+    // only runs at all when a gift-card code was supplied — so a promo used
+    // WITHOUT a card (the overwhelmingly common case) would never commit its
+    // reservation, giving the discount and losing the count with no error and
+    // no alarm.
+    if (promoTicket) {
+      await commitPromoRedemption({
+        teamId,
+        code: promoTicket.code,
+        reservationKey: promoTicket.reservationKey,
+        instanceId: promoTicket.instanceId,
+        // Our own claim deadline: only the attempt still holding the slot spends
+        // it. Here the reserve is seconds old, so it is always ours.
+        reservationExpiresMs: promoTicket.expiresAtMs,
+        fallbackContactId: contactId,
+        fallbackIdentityKey: promoTicket.identityKey,
+        fallbackAmountMajor: priceMajor,
+        targetKind: 'drop_in',
+      }).catch((err) => {
+        // Best-effort, exactly like its gift-card neighbour: the customer paid
+        // and owning the seat matters more than the count. A lapsed reservation
+        // under-reports by one, which is the safe direction.
+        console.error('[promo] full-cover drop-in commit failed:', err)
+      })
+    }
     return {
       url: null,
       sessionId: null,
       paidWithGiftCard: true,
       amount: 0,
       drawdown: giftCardPlan.drawdown,
+      ...promoCheckoutOutcome(promo, resolved),
     }
   }
 
@@ -764,7 +987,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       }
     })
   } catch (err) {
-    await releaseReservedGiftCard()
+    await releaseReserved()
     throw err
   }
 
@@ -792,14 +1015,42 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     ...(claim ? { waitlistEntry: claim.contactId } : {}),
     ...(giftCardPlan
       ? {
-          giftCardCode: data.giftCardCode!.trim().toUpperCase(),
+          giftCardCode: normalizeRedemptionCode(data.giftCardCode!),
           giftCardHold: giftCardHoldKey!,
           giftCardDrawdown: String(giftCardPlan.drawdown),
         }
       : {}),
+    // The promo's mirror of that trio — what the webhook commits, and what
+    // handleCheckoutExpired releases. Keyed off the TICKET, so it is stamped IFF
+    // a reservation was actually taken: a code that loaded but lost
+    // best-one-wins leaves this empty and the webhook has nothing to commit.
+    ...promoCheckoutMetadata(promoTicket, priceMajor),
   }
   const idempotencyKey =
-    data.idempotencyKey ?? defaultIdempotencyKey('dropin', teamId, sessionId, contactId)
+    data.idempotencyKey ??
+    // The applied instruments are APPENDED, last, never reordered: Stripe
+    // rejects a reused idempotency key whose request parameters differ, and this
+    // key buckets by minute — so "submit at 40.00, get bounced, type a code,
+    // resubmit twelve seconds later" is the same key with a different amount,
+    // which surfaces as a bare `internal` "Failed to start checkout". A call
+    // with no instruments produces ZERO extra parts and therefore a
+    // byte-identical key (moneyCore.test.ts snapshots all eight legacy shapes).
+    defaultIdempotencyKey(
+      'dropin',
+      teamId,
+      sessionId,
+      contactId,
+      // The gift card contributes its HOLD KEY as well as its code — that key is
+      // stamped into the metadata above and is therefore a request parameter, so
+      // a key without it is reused across attempts whose parameters differ. This
+      // rail already mints it above the key, so nothing had to be hoisted here.
+      ...instrumentKeyParts(
+        promoTicket,
+        data.giftCardCode && giftCardHoldKey
+          ? { code: data.giftCardCode, holdKey: giftCardHoldKey }
+          : null
+      )
+    )
 
   // A gift hold is live only when giftCardPlan is set — give Stripe a SHORT
   // expiry then so the hold releases promptly (drop-in otherwise has no
@@ -837,14 +1088,26 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       // A CLAIM expires with its own window instead — the same instant as the
       // booking hold and the waitlist entry, which is the whole point of
       // collapsing the three timers into one (resolveClaimCheckoutWindow).
-      expiresAtEpochSeconds:
-        claimCheckout?.expiresAtEpochSeconds ??
-        Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+      //
+      // Both this instant and the gift-card hold above come from the ONE
+      // holdWindow computed before the reservation; they are two copies of one
+      // number, never two computations.
+      expiresAtEpochSeconds: holdWindow.expiresAtEpochSeconds,
       label: 'createDropInCheckout',
+    })
+    // Bind the slot to the ONE session that may be paid against it, before the
+    // URL leaves this function. A bind that cannot happen closes that session
+    // and refuses rather than handing back a payable URL with nothing holding a
+    // use for it.
+    await bindPromoCheckoutSession({
+      teamId,
+      ticket: promoTicket,
+      sessionId: checkout.sessionId,
+      closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
     })
   } catch (err) {
     // Don't leave a reserved gift-card drawdown dangling until its lazy expiry.
-    await releaseReservedGiftCard()
+    await releaseReserved()
     throw err
   }
   return {
@@ -852,5 +1115,21 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     sessionId: checkout.sessionId,
     amount: chargeAmount,
     ...(giftCardPlan ? { drawdown: giftCardPlan.drawdown, residual: giftCardPlan.residual } : {}),
+    // What the code did, so a surface can say why a valid code changed nothing
+    // rather than going silent between the preview and the pay button.
+    ...promoCheckoutOutcome(promo, resolved),
+  }
+  } catch (err) {
+    // THE guard. Every path from the reservations above to a successful return
+    // passes through here, which is what makes "release whatever was reserved"
+    // structural rather than a list of catch sites that goes stale — the two
+    // transactions' own catches release early, and this one covers everything
+    // else: reserveGiftCardDrawdown's three throws (not-found / currency /
+    // unusable — the flagship "promo plus a mistyped gift card" case), the
+    // full-cover branch's post-transaction writes, and the Stripe create.
+    // Releasing twice is a no-op: both releases delete a key that is already
+    // gone.
+    await releaseReserved()
+    throw err
   }
 })

@@ -65,8 +65,14 @@ import {
   reverseGiftCardDrawdown,
   voidGiftCardValue,
 } from './giftCards'
+// The promo lifecycle's two webhook entry points. Both are best-effort and
+// carry their own try/catch: a promo commit that throws must not stop a booking
+// from confirming — the customer paid the discounted price, and owning the seat
+// matters more than the count.
+import { commitPromoFromMetadata, releasePromoFromMetadata } from './promoCodes'
 import { markPolicyFeePaid } from '../booking/policyFees'
 import { asLang, runAppointmentSlotTransaction } from '../appointments/booking'
+import { releaseAppointmentHold } from '../appointments/holdRelease'
 import { sendAppointmentBookingEmails } from '../appointments/emails'
 import {
   linkFinanceTxnContact,
@@ -397,8 +403,14 @@ async function stampFinanceContact(teamId: string, piId: string, contactId: stri
  * mirroring the BYO rail's ExternalPayment.line_item (kind 'membership' maps to
  * the line-item spelling 'subscription'). Built from checkout metadata; renewal
  * invoices get theirs stamped by handleInvoice from the subscription doc.
+ *
+ * The promo code is attached ONCE, by the wrapper below, rather than in each
+ * branch. A promo can ride `drop_in`, `appointment`, `product` and `course` —
+ * and repeating the same spread in every branch that could ever carry one is a
+ * place to forget it every time a branch is added here or a rail is added to
+ * `PROMO_TARGETS`. One wrapper cannot be forgotten in a branch it wraps.
  */
-function lineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
+function baseLineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
   if (md.kind === 'membership' && md.subscriptionTypeId) {
     return {
       kind: 'subscription',
@@ -435,6 +447,33 @@ function lineItemFromMetadata(md: Record<string, string>): Record<string, unknow
     return { kind: 'other', label: 'No-show fee' }
   }
   return null
+}
+
+/**
+ * …and the promo stamp on top of it. `md.promoCode` is written by
+ * `promoCheckoutMetadata` (connect/promoCodes.ts) onto every promo-carrying
+ * Checkout Session. It reaches the PaymentIntent because
+ * `createOneOffCheckoutSession` (utils/connect/client.ts) passes THE SAME
+ * metadata object twice — once as the session's `metadata` and once as
+ * `payment_intent_data.metadata`. Stripe copies nothing between the two, so a
+ * key added to only one of those two spreads is missing on whichever handler
+ * reads the other.
+ *
+ * This is the payment row's ONLY record of a discount, and it is deliberate: a
+ * promo writes no finance journal row and adds no CSV column (docs/promo-codes.md
+ * → "Finance"), because a discount is not a money event on a cash basis. So
+ * `financeDescription` below is left alone on purpose — a journal row must never
+ * mention the code.
+ *
+ * A promo only ever rides a kind that yields a line item, so there is no case
+ * where a code is stamped and the row is null. If that ever stops being true,
+ * the code is lost silently — which is why the promo rails are enumerated in
+ * `PROMO_TARGETS` (shared/utils/paymentOptions.ts) rather than inferred here.
+ */
+function lineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
+  const base = baseLineItemFromMetadata(md)
+  if (!base) return null
+  return md.promoCode ? { ...base, promoCode: md.promoCode } : base
 }
 
 /** Human "what was paid" label for the finance journal, from checkout metadata. */
@@ -1152,6 +1191,19 @@ async function handleProductCheckout(
   session: any,
   md: Record<string, string>
 ): Promise<void> {
+  // The promo commit sits at the TOP of this handler rather than after the
+  // contact work, and that is deliberate: this handler never refunds, and its
+  // two early `return`s (no email to link the sale to, contact cap reached)
+  // leave the payment standing. The sale happened, so the use IS consumed —
+  // and identity comes from the reservation, so the commit needs nothing the
+  // early returns are missing.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'product',
+    checkoutSessionId: session?.id ?? null,
+  })
+
   // Login-first checkouts carry the buyer's exact contact in metadata (e.g. the
   // child a parent selected at sign-in) — prefer it over email matching, which
   // would land on the wrong family member. Email resolution stays as the safety
@@ -1210,6 +1262,15 @@ async function handleCourseCheckout(
   md: Record<string, string>
 ): Promise<void> {
   if (!md.courseId) return
+  // Same placement and the same reason as handleProductCheckout above: no
+  // refund branch, and the early returns leave the payment standing.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'course',
+    checkoutSessionId: session?.id ?? null,
+  })
+
   // Login-first: grant the entitlement to the EXACT contact from metadata (the one
   // the buyer was signed in as); email matching only for legacy sessions.
   let contactId = await verifiedMetadataContact(team.teamId, md)
@@ -1642,6 +1703,23 @@ async function handleDropInCheckout(
     await cSnap.ref.update({ trial_used_at: FieldValue.serverTimestamp() })
   }
 
+  // THE PROMO COMMIT, at this handler's confirm point and NOT beside the
+  // gift-card commit above. A USE IS CONSUMED BY A COMPLETED SALE, NEVER BY AN
+  // ATTEMPT: the duplicate-charge and class-full branches above refund the whole
+  // charge and return before here, so on those the reservation simply lapses and
+  // the slot comes back. The gift card answers the same case with a compensating
+  // reversal twenty lines up; a promo reversal would be a SECOND writer of
+  // `usage_count`, which is the one thing this design forecloses.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'drop_in',
+    fallbackContactId: contactId,
+    // The STRIPE session, not `md.sessionId` (ours). The refusal logs are the
+    // only trace the accepted residual leaves, so they must name the payment.
+    checkoutSessionId: session?.id ?? null,
+  })
+
   await db
     .collection(CONTACTS_COLLECTION)
     .doc(contactId)
@@ -1880,6 +1958,16 @@ async function handleAppointmentCheckout(
   if (!confirmed) return
 
   // ── post-confirm effects ──
+  // Past BOTH refund branches above (`apt-dup:` and `apt-refund:`), which return
+  // before here — a use is consumed by a completed sale, never by an attempt.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'appointment',
+    fallbackContactId: contactId,
+    // The STRIPE session, not `md.sessionId` (ours) — see handleDropInCheckout.
+    checkoutSessionId: session?.id ?? null,
+  })
   if (piId) {
     await stampFinanceContact(team.teamId, piId, contactId)
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
@@ -1951,12 +2039,35 @@ async function handleAppointmentCheckout(
  *  • ANY kind carrying a gift-card hold (product/course/drop-in redemption
  *    with a partial gift-card drawdown) — releaseGiftCardHold, independent of
  *    the appointment logic below.
+ *  • ANY kind carrying a promo reservation — releasePromoFromMetadata,
+ *    instance-guarded.
  *  • kind === 'appointment' — prompt release at the Stripe-side expiry
- *    (~31 min) instead of waiting for the daily sweep. Only touches a
- *    STILL-pending hold — a session already confirmed by a race-won
- *    checkout.session.completed is left untouched. Session first, THEN the
- *    booking delete (mirrors dailyTasks/expirePendingBookings.ts): otherwise
- *    the delete's trackBookings recount would resurrect the slot as 'open'.
+ *    (~31 min for the public rail, up to 7 days for a staff payment link)
+ *    instead of waiting for the daily sweep.
+ *
+ * EVERY ONE OF THOSE IS OWNERSHIP-CHECKED, each by a different mechanism, and
+ * the appointment one was the last to get there:
+ *  • the GIFT-CARD hold is addressed by a key minted fresh per attempt, so a
+ *    superseded attempt's release can only ever reach its own hold — ownership
+ *    by construction, and the reason the promo (whose key is deterministic on
+ *    purpose) needs an explicit instance marker instead;
+ *  • the PROMO reservation compares that instance marker inside its transaction;
+ *  • the APPOINTMENT hold compares `booking_token` inside its transaction. It
+ *    used to cancel the session and delete the booking on PRESENCE alone, which
+ *    is unsound at a deterministic, SHARED session id: a retry by the same
+ *    contact rewrites the hold in place (`allowRewriteByHolder`), so an expiry
+ *    for the SUPERSEDED attempt cancelled the hold the retry's live, payable
+ *    session was guarding — the buyer pays for an appointment that has just been
+ *    cancelled out from under them.
+ *
+ * Phase 3 turned that from rare into likely: a promo refresh EXPIRES the
+ * superseded Checkout Session at Stripe before writing anything, so this event
+ * now arrives seconds after the retry rather than ~31 minutes later. Exactly the
+ * same shape as the promo release beside it, and the same fix — prove ownership
+ * inside the transaction that deletes. `releaseAppointmentHold`
+ * (appointments/holdRelease.ts) is that transaction, shared with the callable
+ * rollbacks; its module header carries the census of every release site and the
+ * proof each one rests on, and is the only place that list is written down.
  */
 async function handleCheckoutExpired(session: any): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
@@ -1969,21 +2080,44 @@ async function handleCheckoutExpired(session: any): Promise<void> {
     }
   }
 
+  // …and the promo reservation, for ANY kind, beside its gift-card neighbour.
+  //
+  // THIS IS THE PRIMARY RELEASE PATH FOR A PROMO SLOT, not a nicety on top of
+  // lazy expiry, and the distinction is the cap. This event is POSITIVE EVIDENCE
+  // that the session can never take money again — Stripe emits it (and retries
+  // it) at the session's own expiry — so a slot freed here is provably free. The
+  // reservation's own deadline sits an hour further out
+  // (PROMO_RESERVATION_BACKSTOP_MINUTES) precisely so that it does NOT decide
+  // this: a lease measured in minutes cannot outrun Stripe's delivery horizon,
+  // which is measured in hours, and a slot re-handed while a paid-but-undelivered
+  // session existed is exactly how the counters used to run past their caps.
+  //
+  // Instance-guarded, and this is the caller that check exists for: Stripe
+  // expires abandoned sessions on its own schedule, so an expiry for a session a
+  // live retry has already superseded routinely arrives afterwards.
+  await releasePromoFromMetadata(md)
+
   if (md.kind !== 'appointment') return
-  const { sessionId, contactId } = md
-  if (!sessionId || !contactId) return
-  const db = admin.firestore()
-  const sessionRef = db.collection('sessions').doc(sessionId)
-  const bookingRef = sessionRef.collection('bookings').doc(contactId)
+  const { sessionId, contactId, teamId } = md
+  if (!sessionId || !contactId || !teamId) return
 
-  const sSnap = await sessionRef.get()
-  if (!sSnap.exists || sSnap.data()?.status !== 'pending_payment') return
-  const bSnap = await bookingRef.get()
-  if (bSnap.exists && bSnap.data()?.status === 'confirmed') return
-
-  await sessionRef.set({ status: 'cancelled', hold_expires_at: FieldValue.delete() }, { merge: true })
-  if (bSnap.exists) await bookingRef.delete()
-  console.log(`[connect] appointment checkout expired — released hold (session=${sessionId})`)
+  // `md.bookingToken` is THIS session's proof that the hold at the shared
+  // `apt_{provider}_{start}` id is still the one it wrote. A session created
+  // before that key existed presents none, and is then judged on the named
+  // secondary proofs — a hold past its own deadline, or a document that STILL
+  // presents no deadline at all — never on presence. See
+  // appointments/holdRelease.ts, which owns that ladder and the argument for why
+  // presence is not on it.
+  const outcome = await releaseAppointmentHold({
+    teamId,
+    sessionId,
+    contactId,
+    bookingToken: md.bookingToken || null,
+    label: 'checkout.session.expired',
+  })
+  if (outcome === 'released') {
+    console.log(`[connect] appointment checkout expired — released hold (session=${sessionId})`)
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

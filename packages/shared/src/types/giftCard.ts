@@ -10,9 +10,20 @@
 //    still clear the 0.50 minimum (planGiftCardRedemption enforces it).
 //  • FULL COVER — no Stripe at all: the callable applies the manual-rail
 //    payment effects directly and commits the drawdown immediately.
-// Double-spend safety: a checkout RESERVES its drawdown as a hold on the card
-// (keyed by the Checkout Session id); the webhook COMMITS it on payment
-// success, and checkout.session.expired / the daily sweep RELEASE stale holds.
+// Double-spend safety: a checkout RESERVES its drawdown as a hold on the card;
+// the webhook COMMITS it on payment success, and checkout.session.expired / the
+// daily sweep RELEASE stale holds.
+//
+// The hold key is minted by the CALLER (generateSecureToken(16)) — it is NOT the
+// Stripe Checkout Session id, and cannot be: the reservation has to succeed or
+// fail before a session is worth creating, so at the moment the key is chosen no
+// session exists yet. It is minted at connect/payments.ts (the product and
+// course branches) and booking/dropIn.ts — one per rail that takes a card —
+// with the matching note in connect/giftCards.ts's header. This file and that
+// header drifted apart once already, so the tally is asserted against the
+// source in connect/commitSites.test.ts rather than kept true by hand. The key
+// travels to the webhook in checkout metadata as `giftCardHold`.
+//
 // Cards do not expire in v1 (Swiss-friendly default); studios can void.
 
 import type { Timestamp } from './common'
@@ -38,7 +49,16 @@ export type GiftCardIssueKind = 'purchase' | 'admin_paid' | 'admin_comp'
 export interface GiftCardHold {
   /** Drawdown reserved by a pending checkout (major units). */
   amount: number
-  /** Hold expiry — aligned with the checkout hold window (+35 min). */
+  /** Hold expiry — DERIVED from the Checkout Session this drawdown guards, not
+   *  a constant: the session's own `expires_at` plus a small margin, computed
+   *  once by `resolveCheckoutHoldWindow` (functions/connect/checkout.ts) and
+   *  handed to `reserveGiftCardDrawdown` as `holdMinutes`.
+   *
+   *  It used to be a flat +35 minutes, which was correct only while every
+   *  session was also ~31. A waitlist claim's session lives for the studio's
+   *  whole claim window (120 minutes by default, up to Stripe's 24-hour
+   *  ceiling), so the flat hold died first and the value it was guarding became
+   *  spendable again while the claim was still payable. */
   expires_at: Timestamp
 }
 
@@ -73,7 +93,9 @@ export interface GiftCard {
   balance: number
   currency: string
   status: GiftCardStatus
-  /** Active reservations, keyed by Stripe Checkout Session id. */
+  /** Active reservations, keyed by the caller-minted hold key (see the file
+   *  header — NOT the Stripe Checkout Session id, which does not exist yet when
+   *  the key is chosen). */
   holds?: Record<string, GiftCardHold>
   /** Committed reservations, same keys. Pruned after 90 days by the committer. */
   committed_holds?: Record<string, GiftCardCommittedHold>

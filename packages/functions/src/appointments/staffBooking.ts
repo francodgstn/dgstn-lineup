@@ -45,6 +45,7 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { writeManualPaymentEvent } from '../payments/recordManualPayment'
 import { asLang, runAppointmentSlotTransaction } from './booking'
+import { releaseAppointmentHold } from './holdRelease'
 import { sendAppointmentBookingEmails } from './emails'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -465,6 +466,13 @@ export const createStaffAppointment = onCall(async (request) => {
       providerId,
       startMs: String(startMs),
       durationMinutes: String(durationMinutes),
+      // This hold's proof of ownership, for `handleCheckoutExpired` — which on
+      // THIS rail is the only release path there is (the session deliberately
+      // carries no hold_expires_at, so the daily sweep never sees it). Without it
+      // the expiry handler falls back to the weaker EXCLUSIVITY proof, which is
+      // sound but is an argument about the document rather than a fact about this
+      // attempt. See appointments/holdRelease.ts.
+      bookingToken: bookingToken as string,
     }
     try {
       const checkoutSession = await createOneOffCheckoutSession({
@@ -482,12 +490,27 @@ export const createStaffAppointment = onCall(async (request) => {
       })
       paymentUrl = checkoutSession.url
     } catch (err) {
-      // Stripe create failed AFTER the hold was written — best-effort release,
-      // same pattern as createAppointmentCheckout's catch block.
+      // Stripe create failed AFTER the hold was written — release it through the
+      // SAME ownership-checked transaction `createAppointmentCheckout`'s
+      // rollback and `handleCheckoutExpired` use (appointments/holdRelease.ts,
+      // which owns the census and the proof each site rests on). This used to
+      // cancel the session and delete the booking on PRESENCE while a comment
+      // claimed it followed `createAppointmentCheckout`'s catch; that claim was
+      // false, and the gap was reachable: this rail writes its hold at the same
+      // deterministic `apt_{provider}_{start}` id, and the client's own public
+      // retry (`createAppointmentCheckout`, `allowRewriteByHolder: contactId`)
+      // can rewrite it between this transaction returning and this catch running
+      // — at which point a blind cancel here kills a live, payable Stripe session
+      // of theirs.
       console.error('[appointments] createStaffAppointment: payment-link create failed, releasing hold:', err)
       try {
-        await sessionRef.set({ status: 'cancelled' }, { merge: true })
-        await sessionRef.collection('bookings').doc(contactId as string).delete()
+        await releaseAppointmentHold({
+          teamId,
+          sessionId: sessionRef.id,
+          contactId: contactId as string,
+          bookingToken,
+          label: 'createStaffAppointment',
+        })
       } catch (releaseErr) {
         console.error('[appointments] createStaffAppointment: hold release failed:', releaseErr)
       }

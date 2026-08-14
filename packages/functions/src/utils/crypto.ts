@@ -20,6 +20,19 @@ export function generateSecureToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString('hex')
 }
 
+/**
+ * THE hex SHA-256 for derived, non-secret keys — promo identity keys and promo
+ * reservation keys (see shared/types/promoCode.ts, which takes this as an
+ * argument so that module stays crypto-free and browser-safe).
+ *
+ * Exactly one implementation, because both of those derivations are DOC IDS and
+ * MAP KEYS: two hashers that disagree by so much as an encoding would turn a
+ * retry into a second redemption and a per-person cap into no cap at all.
+ */
+export function sha256Hex(input: string): string {
+  return crypto.createHash('sha256').update(input, 'utf8').digest('hex')
+}
+
 // Alphabet excludes visually ambiguous characters (0/O, 1/I/L) — this is a
 // human-read-aloud reference for phone/desk lookups, not a security token
 // (booking_token remains the unguessable identity for manage-booking links).

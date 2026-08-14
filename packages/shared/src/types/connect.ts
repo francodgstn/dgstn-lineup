@@ -185,8 +185,15 @@ export interface MemberPayment {
   /** Free-form purpose tag, e.g. 'drop_in' | 'belt_test' | 'shop'. */
   purpose: string
   /** Sale kind for display, denormalized from checkout metadata (absent on plain
-   *  manager-created charges). Drives the payments-dashboard row label. */
-  kind?: 'product' | 'course' | 'drop_in' | 'membership'
+   *  manager-created charges). Drives the payments-dashboard row label.
+   *
+   *  The union is DERIVED FROM ITS SINGLE WRITER — `handlePaymentIntent` in
+   *  `connect/webhook.ts`, which is the only code that ever sets this field.
+   *  It declared four members for a long time while the writer stamped seven;
+   *  `'appointment'`, `'gift_card'` and `'policy_fee'` were being written into a
+   *  type that said they could not exist. If you add a `kind` branch there, add
+   *  it here in the same edit — and check the writer, not this comment. */
+  kind?: 'product' | 'course' | 'drop_in' | 'membership' | 'appointment' | 'gift_card' | 'policy_fee'
   productName?: string | null
   variantLabel?: string | null
   courseName?: string | null

@@ -26,6 +26,26 @@ import { applyPaymentEffects, normalizePaymentLineItem } from '../payments/effec
 
 const MAX_COMMENT_LEN = 500
 
+/** Re-attach the system-stamped promo code to a manager's edited line-item.
+ *
+ * `line_item` is REPLACED wholesale on edit, and the picker
+ * (PaymentLineItemPicker) builds a fresh object on every change, so without this
+ * the first "what was paid" correction on a discounted sale would erase the only
+ * record that a code was used — the payments row is that record, by decision:
+ * a promo writes no journal row and no CSV column (docs/promo-codes.md).
+ *
+ * The value comes from the STORED document, never from the request, which is the
+ * other half of the rule `normalizePaymentLineItem` states: not forgeable by a
+ * client, not loseable by an edit. */
+function carryPromoStamp(
+  next: PaymentLineItem | null,
+  payment: FirebaseFirestore.DocumentData
+): PaymentLineItem | null {
+  if (!next) return next
+  const stored = (payment.line_item as PaymentLineItem | undefined)?.promoCode
+  return stored ? { ...next, promoCode: stored } : next
+}
+
 /** The line-item to apply on assign: the manager's explicit pick, else the row's
  * stored line_item, else a bare subscription link derived from subscription_type_id. */
 function effectiveLineItem(
@@ -89,6 +109,9 @@ export const updatePaymentRecord = onCall(async (request) => {
   const snap = await docRef.get()
   if (!snap.exists) throw new HttpsError('not-found', 'Payment not found')
   const payment = snap.data()!
+  // The manager's line-item, with the system-stamped promo code carried across
+  // (the picker rebuilds the object from scratch, so it never round-trips).
+  const finalLineItem = carryPromoStamp(newLineItem, payment)
 
   // Validate the target contact when assigning a non-empty id.
   let newContactId: string | null = null
@@ -115,9 +138,9 @@ export const updatePaymentRecord = onCall(async (request) => {
     update.comment = finalComment
   }
   if (changingLineItem) {
-    update.line_item = newLineItem
-    if (newLineItem?.kind === 'subscription') {
-      update.subscription_type_id = newLineItem.subscriptionTypeId ?? null
+    update.line_item = finalLineItem
+    if (finalLineItem?.kind === 'subscription') {
+      update.subscription_type_id = finalLineItem.subscriptionTypeId ?? null
     }
   }
 
@@ -145,7 +168,7 @@ export const updatePaymentRecord = onCall(async (request) => {
   if (shouldApply && targetContactId) {
     const rowSource =
       source === 'byo' ? ((payment.gateway as string | undefined) ?? 'byo') : 'stripe_connect'
-    const li = effectiveLineItem(newLineItem, payment)
+    const li = effectiveLineItem(finalLineItem, payment)
     if (li) {
       // Full effects: subscription fields / course entitlement / credits + activity.
       await applyPaymentEffects(db, {

@@ -156,17 +156,20 @@ memberBenefit: {                      // the ONE rule — optional
   algebra confused real coaches, and it was cut for this one rule.)
 - **Effective price for a caller** — the appointment arm of the ONE shared
   coverage/quote resolver (`resolvePaymentOptions(snapshot, { kind:
-  'appointment', duration, benefit })` in
-  `packages/shared/src/utils/paymentOptions.ts`, pure + fixture-tested), in
+  'appointment', duration, benefit }, context?)` in
+  `packages/shared/src/utils/paymentOptions.ts`, pure + fixture-tested — the arms
+  are class bookings, drop-ins, appointments, courses **and products**, and the
+  optional third `context` carries a typed promo code: `docs/promo-codes.md`), in
   order: unpriced → `covered` for anyone; priced + no held benefit type →
   `pay(base)` (guests always land here); priced + held + `included` →
   `covered` (or `spend_credits` when held via a pack); priced + held +
   `discount` → `pay(max(0.50, round(base × (100 − pct) / 100)))` — clamped to
   Stripe's **0.50 minimum-charge floor**, never "free via discount" (a
   `discountPercent` ≥ 100 clamps to 0.50; missing/≤ 0 falls back to base).
-  Server-side resolution (snapshot via `loadContactPaymentSnapshot`) is
-  authoritative — the picker runs the same resolver on an optimistic client
-  snapshot for display only.
+  A promo code competes with the benefit inside this same call, best-one-wins,
+  and can only ever lower the result. Server-side resolution (snapshot via
+  `loadContactPaymentSnapshot`) is authoritative — the picker runs the same
+  resolver on an optimistic client snapshot for display only.
 
 ### The price is the gate — there is no access gate
 
@@ -205,15 +208,16 @@ The slot-blocking predicate is centralised in `packages/shared/src/types/session
 — `appointmentSlotBlocked(s, nowMs)` / `isExpiredAppointmentHold` — and consumed by
 `listAvailability`'s busy filter, both branches of the slot transaction, and the
 admin calendar. A hold whose `hold_expires_at` has passed stops blocking the slot
-immediately (**lazy expiry** — release never waits for a cleaner). Three cleaners
+immediately (**lazy expiry** — release never waits for a cleaner). The cleaners
 converge on the same end state:
 
 1. **Lazy** — readers treat expired holds as free; when the slot transaction
    reclaims an expired/foreign hold it deletes stale `payment_status: 'required'`
    booking subdocs in the same transaction (else the next recount counts 2).
-2. **`checkout.session.expired`** — Stripe expires the Checkout at ~31 minutes;
-   the webhook promptly cancels a still-pending hold (session first, then the
-   booking delete).
+2. **`checkout.session.expired`** — Stripe expires the Checkout at ~31 minutes
+   (7 days for a staff payment link); the webhook cancels a still-pending hold
+   **that this session still owns** (session first, then the booking delete). See
+   the census below: it may not cancel on presence.
 3. **Daily sweep** — `expirePendingBookings` cancels expired held sessions before
    its existing bookings sweep, session first THEN booking delete, so the
    delete-triggered recount preserves `cancelled` instead of recomputing `open`.
@@ -223,6 +227,44 @@ Hold consumers to know about: `trackBookings` **early-returns** on
 `pending_payment` sessions (else the hold's own booking write would recompute the
 status and clobber the hold), and `syncSessionPublicProfile` excludes them —
 **holds are never published publicly**.
+
+### Who may release a hold — the census, and the ONE ownership rule
+
+The session's doc id is deterministic (`apt_{providerId}_{startMs}`) and therefore
+**shared by every attempt at that slot** — which is exactly what lets the slot
+transaction refuse a second visitor. The cost is that "cancel the session at this
+id and delete the booking under it" is an operation any attempt can perform on
+**any other attempt's live, payable hold**. *Presence is not ownership.*
+
+This was fixed once per site, from different files, and the last site was missed
+twice — so the census now lives in code, beside the rule, in
+**`packages/functions/src/appointments/holdRelease.ts`**.
+
+> **THAT HEADER OWNS THE CENSUS. This document does not repeat it**, and the
+> omission is the point: this page carried a copy of the table for two rounds,
+> and a copy of a list is a second thing to keep true. It lists every site that
+> can release, cancel or delete a hold, the proof each one rests on, and the grep
+> recipe for re-deriving it. `connect/commitSites.test.ts` asserts that no caller
+> of the shared executor exists without an entry there. **Read that header before
+> adding a release path**, and add the entry in the same commit.
+
+What you need from it to read the rest of this page: the sites that address a
+hold by its shared id while another attempt may own it go through **one call
+each** to `releaseAppointmentHold`, which proves ownership with `booking_token`
+inside the transaction that deletes. Two secondary proofs carry the callers that
+have no token to compare — a **lapsed deadline**, and a document that **still
+presents no deadline at all** (the staff payment-link rail, which writes none so
+the daily sweep leaves its 7-day link alone). A token never leaves a caller worse
+off than no token: where there is nothing to compare it against, a token-holder
+falls to exactly those two proofs, which is what stops a deadline-less staff hold
+being stranded forever. Fixtures, one block per site:
+`packages/functions/src/appointments/holdRelease.test.ts`.
+
+**Why `handleCheckoutExpired` was the urgent one.** Wave 3 Phase 3's promo
+lifecycle expires a superseded Checkout Session *at Stripe* before writing
+anything, so `checkout.session.expired` for an attempt the buyer has just retried
+now arrives **seconds** after the retry instead of ~31 minutes later. A rare race
+became a likely one — and it was the release site still cancelling on presence.
 
 ### Webhook confirmation (`kind: 'appointment'`)
 
@@ -254,11 +296,18 @@ the booking becomes real.
   (`resolveAppointmentCaller` marks it used, single-use). An abandoned checkout
   therefore needs a fresh code for the member's next attempt.
 - **30 vs 31 minutes.** The Firestore hold lives 30 minutes; the Stripe Checkout
-  `expires_at` is set to **31** because Stripe's minimum is 30 minutes from
-  creation and an exact 30 risks rejection on clock skew.
-- **Stripe-create failure after the hold** is caught: best-effort release
-  (session → `cancelled`, booking deleted); a leaked hold self-heals via lazy
-  expiry anyway.
+  `expires_at` is set to **31** because Stripe's minimum is 30 minutes from the
+  moment the create call *lands*. That extra minute used to be clock-skew slack
+  with nothing happening inside it; since Wave 3 Phase 3 it is a **work budget**
+  — the reserves and the hold transaction all run inside it — and
+  `assertCheckoutWindowPayable` refuses a checkout that overspends it. The
+  instant itself comes from `resolveCheckoutHoldWindow`
+  (`connect/checkout.ts`), never from a local constant.
+- **Stripe-create failure after the hold** is caught, and the release is
+  **ownership-checked, not best-effort-on-presence**: it goes through
+  `releaseAppointmentHold`, which cancels the session and deletes the booking
+  only when this attempt still owns the hold. A hold that has been rewritten by
+  a newer attempt is left alone; a leaked one self-heals via lazy expiry.
 - **Mobile stays free-path.** The app books via `bookAppointment` only; a caller
   whose effective price is an amount gets the `payment_required` refusal (no
   mobile checkout surface yet).

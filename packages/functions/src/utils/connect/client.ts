@@ -277,6 +277,66 @@ export async function createOneOffCheckoutSession(params: {
   return { url: session.url, sessionId: session.id }
 }
 
+/**
+ * What became of a Checkout Session we asked Stripe to close.
+ *
+ *  • `closed` — it can no longer take money (we expired it, or it was already
+ *    expired/cancelled). SAFE to hand whatever it was guarding to somebody else.
+ *  • `paid`   — it is `complete`: the money already moved on that session, and a
+ *    caller that treats this as `closed` double-charges or double-issues.
+ *  • `failed` — Stripe could not tell us. NOT the same as `closed`, and the
+ *    difference is the whole point of the three-valued return: a caller must be
+ *    able to refuse rather than assume.
+ */
+export type CheckoutSessionCloseOutcome = 'closed' | 'paid' | 'failed'
+
+/**
+ * Close a Checkout Session on a connected account so it can never take money
+ * again — the ONE Stripe-side half of "a finite thing is backed by at most one
+ * payable session at a time".
+ *
+ * `expire` only accepts a session in status `open`, so its failure is ambiguous
+ * on its own: an already-expired session (nothing to do) and an already-PAID one
+ * (everything to do) both throw. A `retrieve` is what tells them apart, and
+ * guessing in the paid direction is a double charge — so the error path costs a
+ * second call rather than an assumption.
+ */
+export async function closeCheckoutSession(params: {
+  sessionId: string
+  accountId: string
+}): Promise<CheckoutSessionCloseOutcome> {
+  const stripe = await getConnectStripe()
+  const opts = { stripeAccount: params.accountId }
+  try {
+    const session = await stripe.checkout.sessions.expire(params.sessionId, {}, opts)
+    // A race: `expire` can succeed on a session that Stripe has meanwhile
+    // completed. Read the status back rather than assuming what we asked for.
+    return classifyCheckoutSession(session)
+  } catch {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(params.sessionId, {}, opts)
+      const outcome = classifyCheckoutSession(session)
+      // `open` here means expire failed for some other reason and the session is
+      // STILL payable — the one case a caller must not be told "closed".
+      return outcome
+    } catch {
+      return 'failed'
+    }
+  }
+}
+
+function classifyCheckoutSession(session: {
+  status?: string | null
+  payment_status?: string | null
+}): CheckoutSessionCloseOutcome {
+  if (session.status === 'complete') return 'paid'
+  // Belt and braces: a session that has taken money is `paid`/`no_payment_required`
+  // here well before `status` settles to `complete`.
+  if (session.payment_status && session.payment_status !== 'unpaid') return 'paid'
+  if (session.status === 'expired') return 'closed'
+  return 'failed'
+}
+
 /** Recurring membership as a subscription on the connected account. Fee → platform
  * per invoice via subscription_data.application_fee_percent. Inline price_data
  * avoids pre-creating Stripe Price objects per studio. */

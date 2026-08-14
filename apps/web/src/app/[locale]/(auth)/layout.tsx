@@ -47,6 +47,7 @@ import {
   TrendingUp,
   Search,
   Calculator,
+  Ticket,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
@@ -178,6 +179,19 @@ const NAV_SECTIONS: NavSection[] = [
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
       { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
+      // Promo codes — a thin pricing lever, not a plugin (plugin gating is for
+      // substantial à-la-carte modules). `minPlan`, NOT `requiresPlan`: the item
+      // stays visible and locked so the upsell modal can explain it, because
+      // hiding a growth lever teaches nobody that it exists. The server gate is
+      // requirePlan(teamId, 'studio') on createPromoCode only, so a downgraded
+      // team keeps its live codes redeemable.
+      {
+        id: 'promoCodes',
+        href: '/offer/promo-codes',
+        labelKey: 'promoCodes',
+        icon: Ticket,
+        minPlan: 'studio',
+      },
       {
         id: 'onlineCourses',
         href: '/offer/online-courses',

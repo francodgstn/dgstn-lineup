@@ -53,6 +53,11 @@ interface ContactPayment {
   status: string // succeeded | failed | …
   refundedAmount: number // minor units
   createdAt: number | null // epoch ms
+  /** The promo code the buyer used, when this sale carried one. Buyer-appropriate
+   *  by construction — it is their own code, and the field discloses nothing
+   *  internal (no fee, no ids). Read off the stamped line item, the payment row's
+   *  only record of a discount. */
+  promoCode: string | null
 }
 
 function tsToMillis(v: unknown): number | null {
@@ -96,6 +101,7 @@ export const listMyContactPayments = onCall(async (request) => {
         status: (d.status as string) || 'succeeded',
         refundedAmount: typeof d.amount_refunded === 'number' ? d.amount_refunded : 0,
         createdAt: tsToMillis(d.created_at),
+        promoCode: (d.line_item as { promoCode?: string } | undefined)?.promoCode ?? null,
       }
     })
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))

@@ -110,7 +110,10 @@ export default function PaymentsHome() {
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: textMain }}>{p.label}</p>
-                    <p className="text-xs" style={{ color: textMuted }}>{formatDate(p.createdAt)}</p>
+                    <p className="text-xs" style={{ color: textMuted }}>
+                      {formatDate(p.createdAt)}
+                      {p.promoCode ? ` · ${t('paymentPromoCode', { code: p.promoCode })}` : ''}
+                    </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p

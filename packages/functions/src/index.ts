@@ -219,6 +219,20 @@ export {
   issueGiftCard,
   voidGiftCard,
 } from './connect/giftCards'
+// Promo codes (Wave 3 Phase 3) — the public quote plus the manager lifecycle.
+// A promo is a Stage A price MODIFIER: `previewPromoCode` only QUOTES, the code
+// is applied inside resolvePaymentOptions, and the reserve/commit/release
+// engine is called from the checkout callables and the webhook rather than
+// being exposed. The two manager corrections are deletes of lifecycle state —
+// neither touches `usage_count`, which has exactly one writer.
+export {
+  previewPromoCode,
+  createPromoCode,
+  updatePromoCode,
+  setPromoCodeStatus,
+  clearPromoRedemption,
+  releasePromoReservations,
+} from './connect/promoCodes'
 // No-show policy fees (E5) — manager resend-link + waive. The strike counter
 // itself (processNoShowStrike) is wired into automation/onBookingWrite, not a
 // callable.

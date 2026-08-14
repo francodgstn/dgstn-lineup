@@ -5,6 +5,14 @@ import { useLocale, useTranslations } from 'next-intl'
 import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { resolvePaymentOptions, parseDateKey, parseDocId, parsePositiveInt, type ActivityMemberBenefit, type Benefit, type PaymentOption, type PublicFrom } from '@linyup/shared'
+import {
+  PromoCodeField,
+  priceChangedAmount,
+  priceChangedMessage,
+  promoCheckoutErrorMessage,
+  useAcceptedPrice,
+  type AppliedPromo,
+} from '@/components/booking/PromoCodeField'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { useRouter } from '@/i18n/navigation'
 import { returnHref } from '@/lib/publicRoutes'
@@ -85,6 +93,11 @@ type BookScreen = 'guest' | 'signIn' | 'memberPay' | 'autobooking'
 type BookArgs =
   | { contactDetails: { firstname: string; lastname: string; email: string; phone?: string } }
   | { authenticatedContactId: string; verificationCodeId: string }
+
+/** What `checkout` adds on top of the identity: the Stage A MODIFIER the visitor
+ *  typed, and the figure this screen actually rendered. `bookAppointment` (the
+ *  free path) takes neither — there is no price for a code to change. */
+type CheckoutExtras = { promoCode?: string; quotedAmount?: number }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,6 +200,9 @@ function SlotBookingForm({
   priceAmount,
   memberBenefit,
   durationMinutes,
+  providerId,
+  activityId,
+  startMs,
   currency,
   locale,
   backLabel,
@@ -206,22 +222,30 @@ function SlotBookingForm({
    *  renders (there's no price a member could get that a guest can't). */
   memberBenefit: ActivityMemberBenefit | Benefit | null
   durationMinutes: number
+  /** The three ids the promo preview needs — its per-rail target key is
+   *  `apt:{providerId}:{startMs}:{durationMinutes}`, and preview and checkout
+   *  must derive the SAME one or a retry silently becomes a second use. */
+  providerId: string
+  activityId: string
+  startMs: number
   currency: string
   locale: string
   backLabel: string
   /** Leaves the booking step entirely — back to the time picker. */
   onExit: () => void
   book: (args: BookArgs) => Promise<void>
-  checkout: (args: BookArgs) => Promise<{ url?: string; amount?: number }>
+  checkout: (args: BookArgs & CheckoutExtras) => Promise<{ url?: string; amount?: number }>
   onBooked: (details: { firstname: string; email: string }) => void
 }) {
   const t = useTranslations('AppointmentBooking')
   const tPublic = useTranslations('PublicBooking')
+  const tPromo = useTranslations('Promo')
   const [error, setError] = useState<string | null>(null)
   const [submittingGuest, setSubmittingGuest] = useState(false)
   const [submittingPay, setSubmittingPay] = useState(false)
-
-  const offersMemberBenefit = !!memberBenefit?.subscriptionTypeIds.length
+  // The first code field on this surface. Appointments take no gift card by
+  // design, so a promo is the only instrument that can ride this rail.
+  const [promoApplied, setPromoApplied] = useState<AppliedPromo | null>(null)
 
   // 'guest' is the DEFAULT and only ever-required screen — appointments have no
   // access gate any more (see ActivityMemberBenefit's history note): a guest may
@@ -238,6 +262,12 @@ function SlotBookingForm({
   const [memberPay, setMemberPay] = useState<{
     contactId: string
     verificationCodeId: string
+    /** The member's held types, kept so THIS screen can re-quote when the code
+     *  changes on it — see `memberQuote`. Without them the member screen would
+     *  be frozen at the figure resolved at verify time, and the remove control
+     *  added below would take the discount off the code while leaving the
+     *  discounted number on the button. */
+    held: string[]
     amount: number
     viaSubscriptionTypeId?: string | null
     firstname: string
@@ -245,6 +275,82 @@ function SlotBookingForm({
   } | null>(null)
   // Transient state while an INCLUDED member's free booking is in flight.
   const [autobooking, setAutobooking] = useState(false)
+
+  // ── The recovery half of the `price_changed` guard ────────────────────────
+  // The server's own figure, once it has refused this screen's quote. It is BOTH
+  // what the screen shows from then on AND what the next attempt sends back as
+  // `quotedAmount` — which is what makes the refusal cost one extra, informed
+  // confirmation instead of looping (the screen would otherwise re-derive the
+  // same optimistic figure from the same optimistic snapshot and be refused
+  // again, with no path to the real price).
+  //
+  // AN ACCEPTED FIGURE BELONGS TO ONE (target, code, IDENTITY) — the rule lives
+  // in `useAcceptedPrice`, shared with every other mount. The TARGET half is
+  // the remount: `SlotBookingForm` is keyed on provider/activity/start/duration,
+  // so changing the slot builds a fresh component. The other two are the scope
+  // below — and IDENTITY is the one this screen alone can move without changing
+  // what is being bought, because a guest can sign in mid-flow and be re-quoted
+  // as a member.
+  const { acceptedPrice, acceptPrice } = useAcceptedPrice(
+    `${memberPay?.contactId ?? 'guest'}|${promoApplied?.code ?? ''}`
+  )
+
+  /**
+   * THE ONE PRICE COMPUTATION for this screen — the same resolver the server
+   * runs, given the same target and (once signed in) the same held types.
+   *
+   * Both screens that show a price call this: the guest screen with the guest
+   * snapshot, the post-verify path with the member's. A second, promo-free
+   * computation anywhere here is what would let the screen promise one figure
+   * while Stripe charged another.
+   */
+  const quote = (heldSubscriptionTypeIds: string[], authenticated: boolean) =>
+    resolvePaymentOptions(
+      clientPaymentSnapshot({ authenticated, heldSubscriptionTypeIds }),
+      {
+        kind: 'appointment',
+        duration: { minutes: durationMinutes, priceAmount },
+        benefit: memberBenefit,
+      },
+      promoApplied ? { promo: promoApplied } : undefined
+    )
+
+  const guestQuote = hasAnyPrice ? quote([], false) : null
+  const guestPay = guestQuote?.options[0]
+  const resolvedGuestAmount = guestPay?.type === 'pay' ? guestPay.amount : priceAmount
+  // What the guest screen renders — the server's figure once it has told us one.
+  const guestAmount = acceptedPrice ?? resolvedGuestAmount
+
+  // ── The member screen's price, RE-QUOTED rather than frozen ────────────────
+  // The same `quote`, with this member's held types — so the code the member can
+  // now remove on that screen actually moves the figure the button charges.
+  // `memberPay.amount` stays the fallback for the ONE case the client cannot
+  // re-derive: the `payment_required` race, where the client resolved free and
+  // the server did not, so there is no client `pay` option to read and the
+  // server's number is the only truth there is.
+  const memberQuote = memberPay ? quote(memberPay.held, true) : null
+  const memberQuotePay = memberQuote?.options[0]
+  const memberQuotedAmount = memberQuotePay?.type === 'pay' ? memberQuotePay.amount : null
+  const memberPayNow = memberPay ? (acceptedPrice ?? memberQuotedAmount ?? memberPay.amount) : null
+
+  /**
+   * What every checkout call carries beyond the caller's identity.
+   *
+   * THE QUOTE RIDES THE CODE, and only the code. A promo is what turns the
+   * rendered figure into a promise ("Code X applied", a struck-through base);
+   * without one it is an optimistic render from a snapshot documented as partial,
+   * and asserting it server-side would refuse ordinary bookings over divergences
+   * that are nobody's fault and that this screen cannot re-render its way out of.
+   */
+  const checkoutExtras = (amount: number | null): CheckoutExtras =>
+    promoApplied
+      ? {
+          promoCode: promoApplied.code,
+          ...(typeof amount === 'number' ? { quotedAmount: amount } : {}),
+        }
+      : {}
+
+  const offersMemberBenefit = !!memberBenefit?.subscriptionTypeIds.length
 
   // Report the current screen UP so the sticky bar can gate its Confirm button.
   const currentScreen: BookScreen = autobooking
@@ -280,7 +386,7 @@ function SlotBookingForm({
         onBooked({ firstname: values.firstname, email: values.email })
         return
       }
-      const res = await checkout({ contactDetails })
+      const res = await checkout({ contactDetails, ...checkoutExtras(guestAmount) })
       if (res?.url) {
         window.location.href = res.url
         return
@@ -288,7 +394,27 @@ function SlotBookingForm({
       throw new Error('no-url')
     } catch (err) {
       const { code } = errorDetails(err)
-      if (code === 'functions/already-exists') setError(t('errorAlreadyBooked'))
+      // RECOVERY FIRST: the server has told us what this slot really costs. Show
+      // that figure and let the visitor confirm again — the next attempt sends
+      // it back as the quote and the booking completes. Without this the screen
+      // re-derives the same optimistic number and is refused again, forever.
+      // The sentence is composed by `priceChangedMessage`: on this rail the
+      // guest's email reaches the server only now, so a refused code — not a
+      // moved price — is the likeliest cause and must be the one named.
+      const serverPrice = priceChangedAmount(err)
+      if (serverPrice !== null) {
+        acceptPrice(serverPrice)
+        setError(priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale)))
+        return
+      }
+      // PAY-TIME promo refusals next: the preview is advisory about
+      // availability, so a code that applied cleanly can still be refused here
+      // (exhausted, busy, already used, disabled mid-checkout) — and those
+      // arrive as `failed-precondition`, which the generic branch below would
+      // otherwise render as "this slot is unavailable".
+      const promoMsg = promoCheckoutErrorMessage(err, tPromo)
+      if (promoMsg) setError(promoMsg)
+      else if (code === 'functions/already-exists') setError(t('errorAlreadyBooked'))
       else if (code === 'functions/failed-precondition') setError(t('errorSlotUnavailable'))
       else setError(hasAnyPrice ? t('errorCheckoutFailed') : t('errorGeneric'))
     } finally {
@@ -308,16 +434,20 @@ function SlotBookingForm({
     verificationCodeId: string
     contactData: ContactData
   }) {
+    // The GUEST screen's error goes with the guest's figure. `useAcceptedPrice`
+    // retires the number on this identity change; the sentence that named it —
+    // "…the price without the code is CHF 40.00" — is the same fact in words and
+    // has to retire with it, or the member screen renders it directly above a
+    // button charging 24.00. (The reverse direction is `backToGuest`, which
+    // already clears.)
+    setError(null)
     const held = contactData.held_subscription_type_ids ?? []
     const contactFirstname = contactData.firstname || contactData.email.split('@')[0]
-    // Same resolver the server uses (@linyup/shared) — DISPLAY/ROUTING only,
-    // book()/checkout() always re-resolve authoritatively.
-    const snapshot = clientPaymentSnapshot({ authenticated: true, heldSubscriptionTypeIds: held })
-    const { options } = resolvePaymentOptions(snapshot, {
-      kind: 'appointment',
-      duration: { minutes: durationMinutes, priceAmount },
-      benefit: memberBenefit,
-    })
+    // The SAME `quote` the guest screen used, with this member's held types —
+    // so a code applied before signing in is still in the price afterwards, and
+    // the member never sees two different figures for one booking. DISPLAY /
+    // ROUTING only; book()/checkout() always re-resolve authoritatively.
+    const { options } = quote(held, true)
     const effective = toEffectivePrice(options[0])
 
     if (effective.free) {
@@ -336,6 +466,7 @@ function SlotBookingForm({
             setMemberPay({
               contactId,
               verificationCodeId,
+              held,
               amount: amt,
               firstname: contactFirstname,
               email: contactData.email,
@@ -356,6 +487,7 @@ function SlotBookingForm({
       setMemberPay({
         contactId,
         verificationCodeId,
+        held,
         amount: effective.amount,
         viaSubscriptionTypeId: effective.viaSubscriptionTypeId,
         firstname: contactFirstname,
@@ -375,6 +507,10 @@ function SlotBookingForm({
       const res = await checkout({
         authenticatedContactId: memberPay.contactId,
         verificationCodeId: memberPay.verificationCodeId,
+        // The figure THIS screen is showing — re-quoted, not the one frozen at
+        // verify time, or removing the code here would send a number the button
+        // stopped displaying.
+        ...checkoutExtras(memberPayNow),
       })
       if (res?.url) {
         window.location.href = res.url
@@ -383,7 +519,19 @@ function SlotBookingForm({
       throw new Error('no-url')
     } catch (err) {
       const { code, reason } = errorDetails(err)
-      if (code === 'functions/failed-precondition' && reason === 'covered') {
+      // Recovery first — the pay button below re-renders at the server's figure
+      // and pressing it again sends that number as the quote. Same composed
+      // sentence as the guest path: a refused code names itself.
+      const serverPrice = priceChangedAmount(err)
+      if (serverPrice !== null) {
+        acceptPrice(serverPrice)
+        setError(priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale)))
+        return
+      }
+      const promoMsg = promoCheckoutErrorMessage(err, tPromo)
+      if (promoMsg) {
+        setError(promoMsg)
+      } else if (code === 'functions/failed-precondition' && reason === 'covered') {
         // Race: became covered since we checked — retry the free path.
         try {
           await book({
@@ -431,6 +579,27 @@ function SlotBookingForm({
   // the base price struck through only when the member's price is actually lower
   // (a benefit applied); otherwise just the (unchanged) price. ──
   if (memberPay) {
+    // The server's figure wins once it has given us one — and with it the
+    // struck-through base goes, because the discount it advertised is exactly
+    // what the server declined to honour.
+    const payNow = memberPayNow ?? memberPay.amount
+    // WHAT THIS PRICE WAS BEFORE, read off the ONE quote rather than re-derived:
+    // the resolver stamps at most one of `appliedBenefit` / `appliedPromo`, so
+    // "member price" and "code price" are mutually exclusive structurally. Null
+    // once the server has refused our figure (nothing left to strike through)
+    // and null on the `payment_required` race, where there is no client quote to
+    // read and `viaSubscriptionTypeId` from verify time is all we know.
+    const strikeBase = (() => {
+      if (acceptedPrice !== null) return null
+      if (memberQuotePay?.type === 'pay') {
+        const base =
+          memberQuotePay.appliedBenefit?.baseAmount ?? memberQuotePay.appliedPromo?.baseAmount ?? null
+        return base != null && base > memberQuotePay.amount ? base : null
+      }
+      return memberPay.viaSubscriptionTypeId && priceAmount != null && memberPay.amount !== priceAmount
+        ? priceAmount
+        : null
+    })()
     return (
       <>
         <div>
@@ -439,15 +608,41 @@ function SlotBookingForm({
         </div>
         <div className="rounded-xl border bg-card p-4 space-y-4">
           <div className="flex items-baseline gap-2">
-            {memberPay.viaSubscriptionTypeId && priceAmount != null && memberPay.amount !== priceAmount && (
+            {strikeBase != null && (
               <span className="text-sm text-muted-foreground line-through">
-                {formatCurrency(priceAmount, currency, locale)}
+                {formatCurrency(strikeBase, currency, locale)}
               </span>
             )}
             <p className="text-base font-semibold">
-              {t('yourPrice', { price: formatCurrency(memberPay.amount, currency, locale) })}
+              {t('yourPrice', { price: formatCurrency(payNow, currency, locale) })}
             </p>
           </div>
+
+          {/* THE SECOND MOUNT: the applied code, WITH its remove control, on the
+              screen that can be refused for it. The INPUT half is offered on the
+              guest screen only — this mount renders the same component in its
+              `applied` branch and nothing else, which is why it is wrapped in
+              `promoApplied`.
+              Without it, a pay-time reserve refusal here (exhausted, busy,
+              already used, disabled mid-checkout) left the visitor pressing a
+              button that could not succeed and no way to drop the code — the sale
+              lost to a discount that no longer existed. Removing the code
+              re-quotes the price above, relabels the button and completes the
+              purchase at the member rate.
+              The input half stays guest-only deliberately: the preview resolves
+              its caller from a contact session, which this verification-code
+              identity is not, so a code typed on this screen would be quoted as
+              anonymous and could be refused again at pay time. */}
+          {promoApplied && (
+            <PromoCodeField
+              teamId={teamId}
+              target={{ kind: 'appointment', providerId, activityId, startMs, durationMinutes }}
+              applied={promoApplied}
+              onApplied={setPromoApplied}
+              outcome={memberQuote?.promo ?? null}
+              disabled={submittingPay}
+            />
+          )}
           {errorBox}
           <button
             type="button"
@@ -456,9 +651,11 @@ function SlotBookingForm({
             style={accentColor ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
             className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 text-sm"
           >
+            {/* After a `price_changed` refusal this button IS the consent: it
+                names the server's figure and pressing it re-sends that number. */}
             {submittingPay
               ? t('payingEllipsis')
-              : t('confirmPay', { price: formatCurrency(memberPay.amount, currency, locale) })}
+              : t('confirmPay', { price: formatCurrency(payNow, currency, locale) })}
           </button>
         </div>
       </>
@@ -491,11 +688,39 @@ function SlotBookingForm({
         <p className="text-muted-foreground mt-1 text-sm">{tPublic('detailsSubtitle')}</p>
       </div>
 
-      {hasAnyPrice && priceAmount != null && (
+      {/* The price this screen renders comes from the ONE quote above, so an
+          applied code moves it here and nowhere else — and the same number is
+          what goes back as `quotedAmount`. The base is struck through only when
+          a modifier actually lowered it. */}
+      {hasAnyPrice && guestAmount != null && (
         <p className="text-sm text-muted-foreground">
-          {t('payToBook', { price: formatCurrency(priceAmount, currency, locale) })}
+          {priceAmount != null && guestAmount < priceAmount && (
+            <span className="mr-1.5 line-through">
+              {formatCurrency(priceAmount, currency, locale)}
+            </span>
+          )}
+          {t('payToBook', { price: formatCurrency(guestAmount, currency, locale) })}
         </p>
       )}
+
+      {/* Promo code — the only instrument this rail takes (appointments accept
+          no gift card by design). The applied code persists in this component's
+          state through the sign-in offer, so the post-verify member price
+          already carries it — and the member-pay screen re-mounts the chip so
+          it can be removed there too. Applying or removing one retires any
+          accepted figure through the scope in `useAcceptedPrice`, not through a
+          wrapper here. */}
+      {hasAnyPrice && (
+        <PromoCodeField
+          teamId={teamId}
+          target={{ kind: 'appointment', providerId, activityId, startMs, durationMinutes }}
+          applied={promoApplied}
+          onApplied={setPromoApplied}
+          outcome={guestQuote?.promo ?? null}
+          disabled={submittingGuest}
+        />
+      )}
+
       {hasAnyPrice && offersMemberBenefit && (
         <button
           type="button"
@@ -1229,6 +1454,9 @@ export default function AppointmentPicker({
               priceAmount={windowBooking.priceAmount}
               memberBenefit={windowBooking.memberBenefit}
               durationMinutes={windowBooking.durationMinutes}
+              providerId={windowBooking.providerId}
+              activityId={windowBooking.activityId}
+              startMs={windowBooking.startMs}
               currency={currency}
               locale={locale}
               backLabel={t('back')}

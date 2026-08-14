@@ -11,38 +11,37 @@
 // (Phase E) from Stripe events — never from client-reported success.
 
 import * as admin from 'firebase-admin'
-import { FieldValue } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   recurrenceToStripeInterval,
   isRecurringRecurrence,
-  normalizeBenefit,
+  normalizeRedemptionCode,
   resolveProductPrice,
   resolvePaymentOptions,
   toMinorUnits,
+  GUEST_SNAPSHOT,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   PRODUCTS_SUBCOLLECTION,
-  COURSES_COLLECTION,
-  COURSE_PURCHASES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
   type SubscriptionType,
   type Product,
-  type Course,
 } from '@linyup/shared'
-import { loadContactPaymentSnapshot } from '../booking/access'
 import { getConnectStripe } from '../utils/connect/client'
 import { generateSecureToken } from '../utils/crypto'
 import { applyPaymentEffects } from '../payments/effects'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import {
+  assertQuotedAmount,
   buildResultUrls,
   checkoutRateLimit,
+  closeTeamCheckoutSession,
   defaultIdempotencyKey,
   requireChargeableAmountFromMajor,
   requireChargeableMinorAmount,
-  SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES,
+  resolveCheckoutHoldWindow,
   startOneOffCheckout,
   startSubscriptionCheckout,
 } from './checkout'
@@ -52,6 +51,26 @@ import {
   releaseGiftCardHold,
   giftCardCurrency,
 } from './giftCards'
+import { loadCoursePricing } from './coursePricing'
+import {
+  NO_PROMO_ATTEMPT,
+  bindPromoCheckoutSession,
+  commitPromoRedemption,
+  instrumentKeyParts,
+  loadPromoAttempt,
+  loadPromoCaller,
+  promoCallerNotAsked,
+  promoCheckoutMetadata,
+  promoCheckoutOutcome,
+  promoScopeOf,
+  releasePromoReservation,
+  reservePromoRedemption,
+  resolvePromoCaller,
+  type PromoAttempt,
+  type PromoCaller,
+  type PromoQuoteTarget,
+  type PromoReservationTicket,
+} from './promoCodes'
 import { requireContactSessionForTeam } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 
@@ -456,6 +475,13 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     origin?: string
     /** Optional gift-card code to draw down against this purchase. */
     giftCardCode?: string
+    /** Optional promo code — a Stage A price MODIFIER, applied inside the
+     *  resolver. Never applied here: that is what the Stage A / Stage B rule
+     *  forbids, and it is why this rail had to stop pricing itself first. */
+    promoCode?: string
+    /** The price the surface rendered, major units. Disagreement → refuse with
+     *  `price_changed` rather than charge a figure the buyer never saw. */
+    quotedAmount?: number
   }
   if (!data?.teamId || !data?.productId) {
     throw new HttpsError('invalid-argument', 'teamId and productId are required')
@@ -502,8 +528,85 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     variantLabel = variant.label
   }
 
-  const priceMajor = resolveProductPrice(product, variantId)
+  // Config sanity: the AUTHORED price must be chargeable. Authored values below
+  // the floor are a configuration error and throw here, before anything is
+  // derived from them — the same pre-flight the drop-in rail runs on its base
+  // price (booking/dropIn.ts), with the return discarded.
+  const listMajor = resolveProductPrice(product, variantId)
+  requireChargeableAmountFromMajor(listMajor)
+
+  // ── The promo, loaded before Stage A and never throwing ──
+  // The AUDIENCE gate is the ONLY reason this login-first callable reads the
+  // buyer's contact at all, and it reads it only when a code was typed. It is a
+  // question about the EMAIL, not about that one document, so a not-yet-joined
+  // buyer costs one further query (the household case). The product ARM stays
+  // snapshot-invariant; the gate is a separate question, and it lives in the
+  // loader.
+  const promoTarget: PromoQuoteTarget = {
+    kind: 'product',
+    productId,
+    variantId: variantId ?? null,
+  }
+  const promoCaller: PromoCaller = data.promoCode
+    ? await loadPromoCaller({ teamId, contactId: session.contactId, email: email ?? null })
+    : // No code typed ⇒ the identity gates are never consulted, so nothing here
+      // answers "is this person already a member?" — and a hand-built
+      // `joined: false` literal is exactly how that question got answered wrong
+      // three times. The named helper says out loud that it is a placeholder.
+      promoCallerNotAsked({ contactId: session.contactId, email: email ?? null })
+  const promo: PromoAttempt = data.promoCode
+    ? await loadPromoAttempt({
+        teamId,
+        code: data.promoCode,
+        target: promoTarget,
+        caller: promoCaller,
+        chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      })
+    : NO_PROMO_ATTEMPT
+
+  // Through the ONE resolver. Until now this rail priced itself, which is why a
+  // price MODIFIER (a promo code) could not exist on merchandise without
+  // violating the Stage A / Stage B rule — the modifier would have had to be
+  // applied at the callable, where tenders live.
+  //
+  // GUEST_SNAPSHOT is correct rather than lazy: the product arm reads NOTHING
+  // from the snapshot (it never covers and never denies, and `Product` carries
+  // no benefit), so loading this buyer's subscription facts would be Firestore
+  // reads that cannot change the answer. The day `Product` gains a benefit this
+  // must become a real snapshot via loadContactPaymentSnapshot — the resolver
+  // fixture "the product arm ignores the snapshot" is the tripwire.
+  const priced = resolvePaymentOptions(
+    GUEST_SNAPSHOT,
+    { kind: 'product', priceAmount: listMajor, benefit: null },
+    promo.modifier ? { promo: promo.modifier } : undefined
+  )
+  if (promo.modifier && !priced.promo) {
+    // A supplied modifier that produced no outcome is a missed resolver call
+    // site — loud, never a silent full-price charge.
+    throw new HttpsError('internal', 'The promo code did not reach the resolver')
+  }
+  const payOption = priced.options.find((o) => o.type === 'pay')
+  if (!payOption) {
+    // Unreachable by construction (the arm returns exactly one pay option for
+    // every snapshot). Loud rather than silently charging the list price.
+    throw new HttpsError('internal', 'Product pricing did not resolve')
+  }
+  // The one number everything downstream reads — the gift-card reservation, the
+  // full-cover branch and the Stripe charge. Equal to the list price when no
+  // code applies; the point of routing through the resolver is that it stops
+  // being so.
+  const priceMajor = payOption.amount
   const amount = requireChargeableAmountFromMajor(priceMajor)
+  // Promo-carrying checkouts only — see assertQuotedAmount (and the course
+  // branch below, which has the same stale-catalogue exposure). `promo.refusal`
+  // rides along so a refused code is reported AS a refused code: a buyer who
+  // applied it before signing in, then signed in as a member, must be told the
+  // code is for new customers, not that the studio moved the price.
+  assertQuotedAmount(data.quotedAmount, priceMajor, {
+    promoAttempted: Boolean(data.promoCode),
+    promoRefusal: promo.refusal,
+  })
+  const promoApplied = priced.promo?.status === 'applied'
 
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=shop` : ''
   const { successUrl, cancelUrl } = buildResultUrls(locale, {
@@ -520,28 +623,125 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     productId,
     productName: product.name,
     contactId: session.contactId,
+    // The promo's mirror of the gift card's giftCardCode/Hold/Drawdown trio is
+    // NOT spread here — it is stamped below, from the reservation ticket, so it
+    // cannot exist without a reservation behind it.
   }
   if (variantId) metadata.variantId = variantId
   if (variantLabel) metadata.variantLabel = variantLabel
 
+  // ONE instant for the Stripe session and for anything reserved against it.
+  // A purchase that reserves NOTHING keeps Stripe's 24-hour default and the
+  // buyer keeps the option to think it over overnight; the moment a finite thing
+  // rides the session — a gift-card hold, a promo reservation, or both — the
+  // window shortens so that thing is released promptly instead of being held
+  // hostage by an abandoned cart for a day.
+  //
+  // And the moment it shortens, the work below it starts spending
+  // CHECKOUT_WINDOW_WORK_BUDGET_SECONDS — the promo reserve and the gift-card
+  // reserve on this rail. Overspending is refused at startOneOffCheckout; the
+  // 24-hour branch has no budget to spend (nothing is reserved against it).
+  const holdWindow = resolveCheckoutHoldWindow({
+    nowMs: Date.now(),
+    carriesReservation: Boolean(data.giftCardCode) || promoApplied,
+  })
+
+  // ── RESERVE: the promo first, then the gift card ──
+  // The promo goes first because the drawdown is computed against `priceMajor`;
+  // a promo failure after it would leave the card reserved against a price that
+  // no longer applies.
+  //
+  // THE TICKET IS THE ONLY PROOF ANYTHING WAS RESERVED — null unless the resolver
+  // said `applied`, and required by everything that touches the reservation.
+  let promoTicket: PromoReservationTicket | null = null
+  if (promoApplied && promo.code) {
+    promoTicket = await reservePromoRedemption({
+      teamId,
+      code: promo.code,
+      contactId: session.contactId,
+      identityKey: promo.identityKey,
+      reservationKey: promo.reservationKey,
+      targetKey: promo.targetKey,
+      scope: promoScopeOf(promoTarget),
+      caller: promoCaller,
+      // The same instant the Stripe session gets, plus the promo BACKSTOP —
+      // longer than the gift card's margin on purpose, because this slot is
+      // freed by the expiry webhook and its lazy expiry must not race the
+      // delivery of the completion webhook that decides the same slot.
+      expiresAt: Timestamp.fromMillis(Date.now() + (holdWindow.promoHoldMinutes ?? 0) * 60_000),
+      amountMajor: priceMajor,
+      baseAmount: payOption.appliedPromo?.baseAmount ?? priceMajor,
+      chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      // Supersede the session this slot was already backing, or refuse. Without
+      // it, a retry leaves the previous Checkout Session payable and one slot
+      // backs two genuine discounted product orders.
+      closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
+    })
+  }
+  // Stamped from the TICKET and only after the reserve returned: metadata exists
+  // IFF a reservation exists, so the webhook can never commit one that does not.
+  Object.assign(metadata, promoCheckoutMetadata(promoTicket, priceMajor))
+
+  // HOISTED ABOVE THE IDEMPOTENCY KEY, not minted where it is used: the hold key
+  // is stamped into the session metadata (`giftCardHold`) and is therefore a
+  // request PARAMETER, so a key that omits it is reused across attempts whose
+  // parameters differ and Stripe refuses the second one. Same reasoning as the
+  // promo's `instanceId` — see instrumentKeyParts.
+  const giftCardHoldKey = data.giftCardCode ? generateSecureToken(16) : null
+
   const idempotencyKey =
     data.idempotencyKey ??
-    defaultIdempotencyKey('product-pub', teamId, productId, variantId ?? '_', session.contactId)
+    // Instruments appended LAST, never reordered, and ZERO parts when none
+    // applied — see instrumentKeyParts.
+    defaultIdempotencyKey(
+      'product-pub',
+      teamId,
+      productId,
+      variantId ?? '_',
+      session.contactId,
+      ...instrumentKeyParts(
+        promoTicket,
+        data.giftCardCode && giftCardHoldKey
+          ? { code: data.giftCardCode, holdKey: giftCardHoldKey }
+          : null
+      )
+    )
 
+  /** Idempotent no-op when nothing was reserved, or once it is committed. */
+  const releaseReservedPromo = async (): Promise<void> => {
+    if (promoTicket) {
+      await releasePromoReservation({
+        teamId,
+        code: promoTicket.code,
+        reservationKey: promoTicket.reservationKey,
+        // OUR instance — a newer attempt at this purchase owns the entry now, and
+        // this release must not free the slot guarding its live session.
+        instanceId: promoTicket.instanceId,
+      }).catch(() => undefined)
+    }
+  }
+
+  try {
   // Optional gift-card redemption: reserve a drawdown against the total, then
   // either FULL COVER (apply effects directly, no Stripe) or reduce the Stripe
   // charge to the residual and carry the hold through checkout metadata.
   if (data.giftCardCode) {
-    const holdKey = generateSecureToken(16)
+    // Minted above, with the idempotency key that carries it.
+    const holdKey = giftCardHoldKey as string
     const plan = await reserveGiftCardDrawdown({
       teamId,
       code: data.giftCardCode,
+      // Post-promo — the resolver already applied the modifier, so the card
+      // draws against the discounted total with no change to its own code.
       totalMajor: priceMajor,
       holdKey,
+      // Same instant the Stripe session below gets, plus the margin — the hold
+      // must outlive the payment window it is guarding.
+      holdMinutes: holdWindow.holdMinutes,
       // Card currency must match the charge — see reserveGiftCardDrawdown.
       chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
     })
-    const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
+    const paymentRef = `gift:${normalizeRedemptionCode(data.giftCardCode)}:${holdKey}`
 
     if (plan.residual === 0) {
       await applyPaymentEffects(admin.firestore(), {
@@ -564,10 +764,42 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
         contactId: session.contactId,
         description: productName,
       })
-      return { url: null, sessionId: null, recurring: false, paidWithGiftCard: true, amount: 0, drawdown: plan.drawdown }
+      // …and, for the same reason, the promo — separately. It cannot ride on
+      // commitGiftCardDrawdown, which returns early for a card with nothing left
+      // to commit and again for an `admin_comp` card, and which only runs when a
+      // gift-card code was supplied at all.
+      if (promoTicket) {
+        await commitPromoRedemption({
+          teamId,
+          code: promoTicket.code,
+          reservationKey: promoTicket.reservationKey,
+          instanceId: promoTicket.instanceId,
+          // Our own claim deadline: only the attempt still holding the slot
+          // spends it. Here the reserve is seconds old, so it is always ours.
+          reservationExpiresMs: promoTicket.expiresAtMs,
+          fallbackContactId: session.contactId,
+          fallbackIdentityKey: promoTicket.identityKey,
+          fallbackAmountMajor: priceMajor,
+          targetKind: 'product',
+        }).catch((err) => {
+          // Best-effort: the buyer paid and owning the goods matters more than
+          // the count. A lapsed reservation under-reports by one — the safe
+          // direction.
+          console.error('[promo] full-cover product commit failed:', err)
+        })
+      }
+      return {
+        url: null,
+        sessionId: null,
+        recurring: false,
+        paidWithGiftCard: true,
+        amount: 0,
+        drawdown: plan.drawdown,
+        ...promoCheckoutOutcome(promo, priced),
+      }
     }
 
-    metadata.giftCardCode = data.giftCardCode.trim().toUpperCase()
+    metadata.giftCardCode = normalizeRedemptionCode(data.giftCardCode)
     metadata.giftCardHold = holdKey
     metadata.giftCardDrawdown = String(plan.drawdown)
     const residualAmount = requireChargeableAmountFromMajor(plan.residual)
@@ -582,8 +814,16 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
         customerEmail: email,
         metadata,
         idempotencyKey,
-        expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+        expiresAtEpochSeconds: holdWindow.expiresAtEpochSeconds,
         label: 'createProductCheckout',
+      })
+      // The slot now names the session that may be paid against it. Inside this
+      // try so a bind refusal releases the drawdown too.
+      await bindPromoCheckoutSession({
+        teamId,
+        ticket: promoTicket,
+        sessionId: checkout.sessionId,
+        closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
       })
     } catch (err) {
       // Don't leave the reserved drawdown dangling until its lazy expiry.
@@ -597,6 +837,7 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
       amount: residualAmount,
       drawdown: plan.drawdown,
       residual: plan.residual,
+      ...promoCheckoutOutcome(promo, priced),
     }
   }
 
@@ -609,9 +850,46 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
     customerEmail: email,
     metadata,
     idempotencyKey,
+    // TWO PATHS REACH THIS LINE, and the window differs on each. "No gift card"
+    // is not "no instrument": this is also the flagship promo case — a code
+    // applied WITHOUT a gift card — and `holdWindow` was derived above from
+    // `Boolean(data.giftCardCode) || promoApplied`.
+    //
+    //  • no code, no card → undefined → Stripe's documented 24-hour default, and
+    //    the buyer keeps the option to think it over overnight;
+    //  • a promo reservation is live → ~31 minutes, because a finite thing rides
+    //    this session and one abandoned cart must not hold a scarce campaign
+    //    closed for a day (§10 Q10, answered "ship the short window").
+    //
+    // Threaded as a VALUE rather than an omission so the two paths are one line
+    // rather than two branches — which is what stops B3b (the 24-hour hole) being
+    // rediscovered on whichever path grows an instrument next.
+    expiresAtEpochSeconds: holdWindow.expiresAtEpochSeconds,
     label: 'createProductCheckout',
   })
-  return { url: checkout.url, sessionId: checkout.sessionId, recurring: false }
+  // Bind the slot to the ONE session that may be paid against it, before the URL
+  // leaves this function — a bind that cannot happen closes that session and
+  // refuses, rather than returning a payable URL nothing is holding a use for.
+  await bindPromoCheckoutSession({
+    teamId,
+    ticket: promoTicket,
+    sessionId: checkout.sessionId,
+    closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
+  })
+  return {
+    url: checkout.url,
+    sessionId: checkout.sessionId,
+    recurring: false,
+    ...promoCheckoutOutcome(promo, priced),
+  }
+  } catch (err) {
+    // THE guard: every path from the promo reserve to a successful return passes
+    // through here, so a reservation is never stranded until its lazy expiry —
+    // including reserveGiftCardDrawdown's three throws, which is the flagship
+    // "valid code plus a mistyped gift card" case.
+    await releaseReservedPromo()
+    throw err
+  }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -632,6 +910,12 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     origin?: string
     /** Optional gift-card code to draw down against this purchase. */
     giftCardCode?: string
+    /** Optional promo code — a Stage A price MODIFIER, applied inside the
+     *  resolver and never here. */
+    promoCode?: string
+    /** The price the surface rendered, major units. Disagreement → refuse with
+     *  `price_changed` rather than charge a figure the buyer never saw. */
+    quotedAmount?: number
   }
   if (!data?.teamId || !data?.courseId) {
     throw new HttpsError('invalid-argument', 'teamId and courseId are required')
@@ -654,47 +938,49 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // the reserved hold is released if that late check throws).
   if (!data.giftCardCode) requireChargeableAccount(team)
 
-  const courseSnap = await admin.firestore().collection(COURSES_COLLECTION).doc(courseId).get()
-  if (!courseSnap.exists) throw new HttpsError('not-found', 'Course not found')
-  const course = courseSnap.data() as Course
-  // Only a published, purchase-tier course that belongs to this team is sellable.
-  if (course.teamId !== teamId) throw new HttpsError('not-found', 'Course not found')
-  if (course.status !== 'published') {
-    throw new HttpsError('failed-precondition', 'This course is not available')
-  }
-  if (course.accessRule?.type !== 'purchase' || typeof course.accessRule.priceAmount !== 'number') {
-    throw new HttpsError('failed-precondition', 'This course is not for sale')
-  }
+  // ── ONE assembly of this rail's pricing inputs (N22) ──
+  // The course refusals ("not found" / "not available" / "not for sale"), the
+  // contact document, the purchase entitlement, the benefit and the snapshot's
+  // relevantTypeIds union all live in loadCoursePricing — which is exactly what
+  // previewPromoCode calls. Two independent assemblies is how a preview starts
+  // quoting a price this callable would not charge; the helper existed for that
+  // reason and this callable was still doing it by hand.
+  const pricing = await loadCoursePricing({ teamId, courseId, contactId: session.contactId })
+  const course = pricing.course
 
-  // Refuse selling to an already-entitled buyer (owner, or included free via a
-  // held subscription) — same principle as the drop-in P1 fix: the entitlement
-  // write is idempotent, but a second charge would never be refunded.
-  const [contactSnap, purchaseSnap] = await Promise.all([
-    admin.firestore().collection(CONTACTS_COLLECTION).doc(session.contactId).get(),
-    admin
-      .firestore()
-      .collection(COURSES_COLLECTION)
-      .doc(courseId)
-      .collection(COURSE_PURCHASES_SUBCOLLECTION)
-      .doc(session.contactId)
-      .get(),
-  ])
-  const courseBenefit = normalizeBenefit(course.benefit)
-  const baseSnapshot = await loadContactPaymentSnapshot({
+  // ── The promo, loaded before Stage A and never throwing ──
+  // The contact document came back with the pricing, so this rail hands it
+  // straight to `resolvePromoCaller` — the ONE definition of "new customer"
+  // every rail shares. Holding a document does NOT settle the gate: a buyer
+  // whose own contact has not joined still shares a mailbox with one that may
+  // have, so the email is consulted unless the held document already says joined.
+  const promoTarget: PromoQuoteTarget = { kind: 'course', courseId }
+  const promoCaller: PromoCaller = await resolvePromoCaller({
     teamId,
-    contact:
-      contactSnap.exists && contactSnap.data()?.teamId === teamId
-        ? { ...contactSnap.data()!, id: contactSnap.id }
-        : null,
-    relevantTypeIds: [
-      ...(course.accessRule.subscriptionTypeIds ?? []),
-      ...(courseBenefit?.subscriptionTypeIds ?? []),
-    ],
+    contact: pricing.contact,
+    email: email ?? null,
+    codeTyped: Boolean(data.promoCode),
   })
+  const promo: PromoAttempt = data.promoCode
+    ? await loadPromoAttempt({
+        teamId,
+        code: data.promoCode,
+        target: promoTarget,
+        caller: promoCaller,
+        chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      })
+    : NO_PROMO_ATTEMPT
+
   const priced = resolvePaymentOptions(
-    { ...baseSnapshot, ownsCourse: purchaseSnap.exists },
-    { kind: 'course', accessRule: course.accessRule, benefit: courseBenefit }
+    pricing.snapshot,
+    pricing.target,
+    promo.modifier ? { promo: promo.modifier } : undefined
   )
+  if (promo.modifier && !priced.promo) {
+    // A supplied modifier that produced no outcome is a missed resolver call
+    // site — loud, never a silent full-price charge.
+    throw new HttpsError('internal', 'The promo code did not reach the resolver')
+  }
   const payOption = priced.options[0]
   // Refuse selling only when the buyer's access is GRANTABLE BY THE RULES:
   // owning the course, or coverage via their PRIMARY subscription type (the
@@ -702,9 +988,7 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // rules-grantable state (e.g. coverage via a secondary held type) must fall
   // through to a normal sale — refusing would deadlock the buyer between a
   // checkout that says "you already have access" and rules that deny the read.
-  const primaryTypeId =
-    (contactSnap.exists ? (contactSnap.data()?.subscription_type_id as string | undefined) : undefined) ??
-    null
+  const primaryTypeId = pricing.primaryTypeId
   if (payOption?.type !== 'pay') {
     const via = payOption?.type === 'covered' ? payOption.via : null
     const rulesGrantable =
@@ -720,9 +1004,17 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   }
   // Effective amount: the pay option's (benefit-discounted) price, or the base
   // course price on the fall-through path above.
-  const priceMajor =
-    payOption?.type === 'pay' ? payOption.amount : (course.accessRule.priceAmount as number)
+  const priceMajor = payOption?.type === 'pay' ? payOption.amount : pricing.listMajor
   const amount = requireChargeableAmountFromMajor(priceMajor)
+  // Promo-carrying checkouts only — the shop fetches its catalogue once with no
+  // listener, so a price raised underneath an open tab would otherwise refuse
+  // that tab's every attempt forever. See assertQuotedAmount; `promo.refusal`
+  // rides along so a refused code is named rather than blamed on the price.
+  assertQuotedAmount(data.quotedAmount, priceMajor, {
+    promoAttempted: Boolean(data.promoCode),
+    promoRefusal: promo.refusal,
+  })
+  const promoApplied = priced.promo?.status === 'applied'
 
   // Land the buyer back in the Space (where they watch), not the shop.
   const slugQuery = data.slug ? `&slug=${encodeURIComponent(data.slug)}&seg=space` : ''
@@ -739,24 +1031,105 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     courseId,
     courseTitle: course.title,
     contactId: session.contactId,
+    // The promo's mirror of the gift card's metadata trio is NOT spread here —
+    // it is stamped below, from the reservation ticket, so it cannot exist
+    // without a reservation behind it.
   }
+
+  // ONE instant for the session and for anything reserved against it — see the
+  // product branch above, including the work budget the reserves below spend.
+  // A plain course purchase reserves nothing and keeps Stripe's 24-hour default.
+  const holdWindow = resolveCheckoutHoldWindow({
+    nowMs: Date.now(),
+    carriesReservation: Boolean(data.giftCardCode) || promoApplied,
+  })
+
+  // ── RESERVE: the promo first, then the gift card ──
+  // The promo goes first because the drawdown is computed against `priceMajor`;
+  // a promo failure after it would leave the card reserved against a price that
+  // no longer applies.
+  //
+  // THE TICKET IS THE ONLY PROOF ANYTHING WAS RESERVED — null unless the resolver
+  // said `applied`, and required by everything that touches the reservation.
+  let promoTicket: PromoReservationTicket | null = null
+  if (promoApplied && promo.code) {
+    promoTicket = await reservePromoRedemption({
+      teamId,
+      code: promo.code,
+      contactId: session.contactId,
+      identityKey: promo.identityKey,
+      reservationKey: promo.reservationKey,
+      targetKey: promo.targetKey,
+      scope: promoScopeOf(promoTarget),
+      caller: promoCaller,
+      // The same instant the Stripe session gets, plus the promo BACKSTOP — see
+      // the product branch above and PROMO_RESERVATION_BACKSTOP_MINUTES.
+      expiresAt: Timestamp.fromMillis(Date.now() + (holdWindow.promoHoldMinutes ?? 0) * 60_000),
+      amountMajor: priceMajor,
+      baseAmount: payOption?.type === 'pay' ? (payOption.appliedPromo?.baseAmount ?? priceMajor) : priceMajor,
+      chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      // A course is bought once but CAN be re-attempted; the previous session
+      // must be closed before a second discounted one exists.
+      closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
+    })
+  }
+  // Stamped from the TICKET and only after the reserve returned: metadata exists
+  // IFF a reservation exists, so the webhook can never commit one that does not.
+  Object.assign(metadata, promoCheckoutMetadata(promoTicket, priceMajor))
+
+  // Hoisted above the idempotency key for the same reason as the product branch:
+  // the hold key is a request parameter (metadata `giftCardHold`), so it belongs
+  // in the key that dedupes those requests.
+  const giftCardHoldKey = data.giftCardCode ? generateSecureToken(16) : null
 
   const idempotencyKey =
     data.idempotencyKey ??
-    defaultIdempotencyKey('course-pub', teamId, courseId, session.contactId)
+    // Instruments appended LAST, never reordered, and ZERO parts when none
+    // applied — see instrumentKeyParts.
+    defaultIdempotencyKey(
+      'course-pub',
+      teamId,
+      courseId,
+      session.contactId,
+      ...instrumentKeyParts(
+        promoTicket,
+        data.giftCardCode && giftCardHoldKey
+          ? { code: data.giftCardCode, holdKey: giftCardHoldKey }
+          : null
+      )
+    )
 
+  /** Idempotent no-op when nothing was reserved, or once it is committed. */
+  const releaseReservedPromo = async (): Promise<void> => {
+    if (promoTicket) {
+      await releasePromoReservation({
+        teamId,
+        code: promoTicket.code,
+        reservationKey: promoTicket.reservationKey,
+        // OUR instance — a newer attempt at this purchase owns the entry now, and
+        // this release must not free the slot guarding its live session.
+        instanceId: promoTicket.instanceId,
+      }).catch(() => undefined)
+    }
+  }
+
+  try {
   // Optional gift-card redemption — same shape as createProductCheckout above.
   if (data.giftCardCode) {
-    const holdKey = generateSecureToken(16)
+    // Minted above, with the idempotency key that carries it.
+    const holdKey = giftCardHoldKey as string
     const plan = await reserveGiftCardDrawdown({
       teamId,
       code: data.giftCardCode,
       totalMajor: priceMajor,
       holdKey,
+      // Same instant the Stripe session below gets, plus the margin — the hold
+      // must outlive the payment window it is guarding.
+      holdMinutes: holdWindow.holdMinutes,
       // Card currency must match the charge — see reserveGiftCardDrawdown.
       chargeCurrency: giftCardCurrency(team.data?.default_currency as string | undefined),
     })
-    const paymentRef = `gift:${data.giftCardCode.trim().toUpperCase()}:${holdKey}`
+    const paymentRef = `gift:${normalizeRedemptionCode(data.giftCardCode)}:${holdKey}`
 
     if (plan.residual === 0) {
       await applyPaymentEffects(admin.firestore(), {
@@ -778,6 +1151,30 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         contactId: session.contactId,
         description: course.title,
       })
+      // …and, for the same reason, the promo — separately. It cannot ride on
+      // commitGiftCardDrawdown, which returns early for a card with nothing
+      // left to commit and again for an `admin_comp` card, and which only runs
+      // when a gift-card code was supplied at all.
+      if (promoTicket) {
+        await commitPromoRedemption({
+          teamId,
+          code: promoTicket.code,
+          reservationKey: promoTicket.reservationKey,
+          instanceId: promoTicket.instanceId,
+          // Our own claim deadline: only the attempt still holding the slot
+          // spends it. Here the reserve is seconds old, so it is always ours.
+          reservationExpiresMs: promoTicket.expiresAtMs,
+          fallbackContactId: session.contactId,
+          fallbackIdentityKey: promoTicket.identityKey,
+          fallbackAmountMajor: priceMajor,
+          targetKind: 'course',
+        }).catch((err) => {
+          // Best-effort: the buyer paid and owning the course matters more than
+          // the count. A lapsed reservation under-reports by one — the safe
+          // direction.
+          console.error('[promo] full-cover course commit failed:', err)
+        })
+      }
       return {
         url: null,
         sessionId: null,
@@ -785,10 +1182,11 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         paidWithGiftCard: true,
         amount: 0,
         drawdown: plan.drawdown,
+        ...promoCheckoutOutcome(promo, priced),
       }
     }
 
-    metadata.giftCardCode = data.giftCardCode.trim().toUpperCase()
+    metadata.giftCardCode = normalizeRedemptionCode(data.giftCardCode)
     metadata.giftCardHold = holdKey
     metadata.giftCardDrawdown = String(plan.drawdown)
     const residualAmount = requireChargeableAmountFromMajor(plan.residual)
@@ -803,8 +1201,15 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         customerEmail: email,
         metadata,
         idempotencyKey,
-        expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + SHORT_HOLD_CHECKOUT_EXPIRY_MINUTES * 60,
+        expiresAtEpochSeconds: holdWindow.expiresAtEpochSeconds,
         label: 'createCourseCheckout',
+      })
+      // Inside this try so a bind refusal releases the drawdown too.
+      await bindPromoCheckoutSession({
+        teamId,
+        ticket: promoTicket,
+        sessionId: checkout.sessionId,
+        closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
       })
     } catch (err) {
       // Don't leave the reserved drawdown dangling until its lazy expiry.
@@ -818,6 +1223,7 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       amount: residualAmount,
       drawdown: plan.drawdown,
       residual: plan.residual,
+      ...promoCheckoutOutcome(promo, priced),
     }
   }
 
@@ -830,9 +1236,31 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     customerEmail: email,
     metadata,
     idempotencyKey,
+    // Undefined only when NOTHING is reserved — a promo applied without a gift
+    // card reaches this same line with a live reservation and a ~31-minute
+    // window. See the product branch above for both paths.
+    expiresAtEpochSeconds: holdWindow.expiresAtEpochSeconds,
     label: 'createCourseCheckout',
   })
-  return { url: checkout.url, sessionId: checkout.sessionId, recurring: false }
+  // One slot, one payable session — bound before the URL leaves this function.
+  await bindPromoCheckoutSession({
+    teamId,
+    ticket: promoTicket,
+    sessionId: checkout.sessionId,
+    closeCheckoutSession: (id) => closeTeamCheckoutSession(team, id),
+  })
+  return {
+    url: checkout.url,
+    sessionId: checkout.sessionId,
+    recurring: false,
+    ...promoCheckoutOutcome(promo, priced),
+  }
+  } catch (err) {
+    // THE guard: every path from the promo reserve to a successful return passes
+    // through here, so a reservation is never stranded until its lazy expiry.
+    await releaseReservedPromo()
+    throw err
+  }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

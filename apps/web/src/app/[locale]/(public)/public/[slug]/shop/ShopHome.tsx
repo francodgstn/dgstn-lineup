@@ -38,6 +38,14 @@ import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { DEFAULT_ACCENT } from '@/lib/colors'
 import {
+  PromoCodeField,
+  priceChangedAmount,
+  priceChangedMessage,
+  promoCheckoutErrorMessage,
+  useAcceptedPrice,
+  type AppliedPromo,
+} from '@/components/booking/PromoCodeField'
+import {
   GiftCardRedeemField,
   giftCardCheckoutErrorMessage,
   type AppliedGiftCard,
@@ -150,6 +158,10 @@ export default function ShopHome({
   initialTab: Tab | null
 }) {
   const t = useTranslations('Shop')
+  // The promo widget's own namespace — a promo is not a shop item, and one
+  // namespace serves every mount of PromoCodeField rather than a fork per
+  // surface. (docs/promo-codes.md → "The mounts" owns that list.)
+  const tPromo = useTranslations('Promo')
   const locale = useLocale()
   const { slug, teamId, team } = usePublicTeam()
   const { isAuthenticated, contact, openSignIn, logout } = usePublicContactAuth()
@@ -163,6 +175,9 @@ export default function ShopHome({
   const [currency, setCurrency] = useState('CHF')
   const [giftCardAmounts, setGiftCardAmounts] = useState<number[]>([])
   const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
+  // The promo is a Stage A MODIFIER, so unlike the gift card it goes INTO the
+  // modal's single price computation rather than being deducted after it.
+  const [promoApplied, setPromoApplied] = useState<AppliedPromo | null>(null)
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
   const [tab, setTab] = useState<Tab>(initialTab ?? 'subscriptions')
@@ -458,7 +473,11 @@ export default function ShopHome({
 
   // Same resolver the server uses (@linyup/shared) for course access — pure
   // function of the course's accessRule + the visitor's optimistic snapshot.
-  const courseOptions = (c: CourseEntry) => {
+  // `promo` is threaded rather than assumed: the CATALOGUE cards resolve without
+  // one (no code has been typed yet at card level) and the checkout MODAL
+  // resolves with it. One function, two inputs — never two independent
+  // computations of the same number.
+  const courseOptions = (c: CourseEntry, promo?: AppliedPromo | null) => {
     const rule: CourseAccessRule = {
       type: c.accessType,
       subscriptionTypeIds: c.subscriptionTypeIds,
@@ -469,7 +488,11 @@ export default function ShopHome({
       heldSubscriptionTypeIds,
       ownsCourse: purchasedCourseIds.has(c.id),
     })
-    return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule, benefit: c.benefit })
+    return resolvePaymentOptions(
+      snapshot,
+      { kind: 'course', accessRule: rule, benefit: c.benefit },
+      promo ? { promo } : undefined
+    )
   }
 
   // A signed-in holder's applied benefit on a 'purchase'-tier course, if any —
@@ -497,21 +520,51 @@ export default function ShopHome({
     return denial === 'sign_in_required' ? 'signin' : 'subscribe'
   }
 
-  // The amount shown in the checkout modal.
-  const checkoutAmount = (() => {
+  // ── THE MODAL'S ONE COMPUTATION ────────────────────────────────────────────
+  // Everything the checkout modal renders — the price, the struck-through base,
+  // the promo's verdict — and the `quotedAmount` it sends comes out of THIS
+  // single resolver result. Products go through the resolver too now (the
+  // `product` arm), which is what lets a price MODIFIER exist on merchandise at
+  // all without applying it at the callable, where tenders live.
+  const checkoutQuote = (() => {
+    if (checkout?.kind === 'course') return courseOptions(checkout.course, promoApplied)
+    if (checkout?.kind === 'product') {
+      return resolvePaymentOptions(
+        // The product arm is snapshot-INVARIANT (it never covers, never denies,
+        // and a Product carries no benefit), so the snapshot here cannot change
+        // the answer — it is passed for uniformity with every other rail.
+        clientPaymentSnapshot({ authenticated: isAuthenticated, heldSubscriptionTypeIds }),
+        {
+          kind: 'product',
+          priceAmount: resolveProductPrice(checkout.product, checkout.variantId),
+          benefit: null,
+        },
+        promoApplied ? { promo: promoApplied } : undefined
+      )
+    }
+    return null
+  })()
+
+  // The amount the resolver produced for this modal.
+  const resolvedAmount = (() => {
     if (!checkout) return 0
     if (checkout.kind === 'membership') return checkout.price.amount
     if (checkout.kind === 'giftcard') return checkout.amount
-    if (checkout.kind === 'course') {
-      const { options } = courseOptions(checkout.course)
-      return options[0]?.type === 'pay' ? options[0].amount : (checkout.course.priceAmount ?? 0)
-    }
-    return resolveProductPrice(checkout.product, checkout.variantId)
+    const pay = checkoutQuote?.options[0]
+    if (pay?.type === 'pay') return pay.amount
+    return checkout.kind === 'course'
+      ? (checkout.course.priceAmount ?? 0)
+      : resolveProductPrice(checkout.product, checkout.variantId)
   })()
 
   // Redeeming a gift card only applies to the one-off product/course checkouts
   // (never memberships/subscriptions, never the gift-card purchase itself).
   const giftCardEligible = checkout?.kind === 'product' || checkout?.kind === 'course'
+  // The same two rails take a promo, for the same reason: they are the one-off
+  // purchases. A subscription would need a Stripe coupon rather than an amount
+  // we compute, and a discount on a gift card would mint stored value the studio
+  // was never paid for.
+  const promoEligible = giftCardEligible
 
   // The only checkout a signed-out visitor can reach — see startCheckout.
   const needsGuestEmail = checkout?.kind === 'giftcard' && !isAuthenticated
@@ -529,13 +582,62 @@ export default function ShopHome({
           : `giftcard:${checkout.amount}`
   useEffect(() => {
     setGiftCardApplied(null)
+    // A code is quoted against ONE purchase (the reservation key embeds the
+    // product/course id), so opening a different item must not carry the
+    // previous quote across.
+    setPromoApplied(null)
   }, [checkoutKey])
 
-  // The base price to strike through in the modal — set only when a signed-in
-  // holder's benefit actually lowered the course's checkout amount.
+  // ── The recovery half of the `price_changed` guard ────────────────────────
+  // The server's own figure, once it has refused a quote and this modal has
+  // shown it. It is BOTH what the modal renders from here on AND what the next
+  // submit sends back as `quotedAmount` — which is what makes the refusal cost
+  // one extra, informed click instead of looping forever (the modal would
+  // otherwise re-derive the same optimistic number and be refused again).
+  //
+  // AN ACCEPTED FIGURE BELONGS TO ONE (target, code, IDENTITY) — the rule lives
+  // in `useAcceptedPrice`, shared with the class BookingForm and the appointment
+  // picker. Here the TARGET is the item AND its variant (a variant swap re-prices
+  // the same product in place, without opening a different checkout); the
+  // IDENTITY is the public contact session, which this modal can change under
+  // itself — the stale-session branch in `submit()` below logs the buyer out and
+  // re-opens sign-in with the checkout pending, and `courseOptions` re-quotes on
+  // the membership that sign-in produces. Without the identity axis a guest
+  // refused at the list price, who then signed in, would be shown and would
+  // re-send that figure over a member price the resolver had already lowered.
+  const checkoutVariantId = checkout?.kind === 'product' ? (checkout.variantId ?? null) : null
+  const { acceptedPrice, acceptPrice } = useAcceptedPrice(
+    [
+      checkoutKey ?? '',
+      checkoutVariantId ?? '',
+      promoApplied?.code ?? '',
+      isAuthenticated ? (contact?.id ?? 'auth') : 'guest',
+      contact?.subscription_type_id ?? '',
+    ].join('|')
+  )
+
+  // What the modal renders and what the buyer is asked to confirm.
+  const checkoutAmount = acceptedPrice ?? resolvedAmount
+
+  // The base price to strike through in the modal, and WHICH modifier produced
+  // it. Read off the ONE result above — the resolver stamps at most one of
+  // `appliedBenefit` / `appliedPromo`, so "member price" and "code price" are
+  // mutually exclusive structurally rather than by convention.
   const checkoutMemberBase = (() => {
-    if (checkout?.kind !== 'course') return null
-    return courseMemberPrice(checkout.course)
+    // The server has told us what this actually costs, and it is higher than the
+    // modifier we rendered — so there is no discount left to strike a base
+    // through. Showing one over the server's figure would be the same broken
+    // promise the guard exists to refuse.
+    if (acceptedPrice !== null) return null
+    const pay = checkoutQuote?.options[0]
+    if (pay?.type !== 'pay') return null
+    if (pay.appliedBenefit) {
+      return { amount: pay.amount, base: pay.appliedBenefit.baseAmount, via: 'benefit' as const }
+    }
+    if (pay.appliedPromo) {
+      return { amount: pay.amount, base: pay.appliedPromo.baseAmount, via: 'promo' as const }
+    }
+    return null
   })()
 
   async function submit() {
@@ -583,6 +685,8 @@ export default function ShopHome({
             locale: string
             origin?: string
             giftCardCode?: string
+            promoCode?: string
+            quotedAmount?: number
           },
           { url: string | null; paidWithGiftCard?: boolean }
         >(functions, 'createProductCheckout')
@@ -593,6 +697,15 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          // THE FIGURE THIS MODAL RENDERED, sent WITH the code and only with it.
+          // A code is what turns the rendered price into a promise ("Code X
+          // applied", a struck-through base); without one the number is an
+          // optimistic render the server is entitled to disagree with, and
+          // asserting it would refuse ordinary sales. Disagreement here is
+          // refused as `price_changed` carrying the server's number.
+          ...(promoApplied
+            ? { promoCode: promoApplied.code, quotedAmount: checkoutAmount }
+            : {}),
           ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
         })
         if (res.data?.paidWithGiftCard) {
@@ -612,6 +725,8 @@ export default function ShopHome({
             locale: string
             origin?: string
             giftCardCode?: string
+            promoCode?: string
+            quotedAmount?: number
           },
           { url: string | null; paidWithGiftCard?: boolean }
         >(functions, 'createCourseCheckout')
@@ -621,6 +736,10 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          // Same pairing as the product branch: the quote rides the code.
+          ...(promoApplied
+            ? { promoCode: promoApplied.code, quotedAmount: checkoutAmount }
+            : {}),
           ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
         })
         if (res.data?.paidWithGiftCard) {
@@ -675,9 +794,31 @@ export default function ShopHome({
         setError(null)
         return
       }
+      // RECOVERY, before anything else: the server has told us what this really
+      // costs. Render that figure, relabel the button to it, and let the buyer
+      // take it — the next submit sends it back as `quotedAmount` and completes.
+      // Without this branch the modal re-renders the same optimistic number and
+      // is refused again, which is a lost sale wearing a safety feature's badge.
+      // The sentence itself is composed by `priceChangedMessage`, because the
+      // commonest cause is a REFUSED CODE rather than a moved price and only the
+      // server knows which — see its docblock.
+      const serverPrice = priceChangedAmount(err)
+      if (serverPrice !== null) {
+        acceptPrice(serverPrice)
+        setError(
+          priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale))
+        )
+        setSubmitting(false)
+        return
+      }
       const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, t) : null
+      // PAY-TIME promo refusals — the preview is advisory about availability
+      // (exhausted / busy / already used are decided by the reserve
+      // transaction).
+      const promoMsg = promoCheckoutErrorMessage(err, tPromo)
       setError(
         giftMsg ??
+          promoMsg ??
           (code === 'functions/already-exists'
             ? t('alreadySubscribed')
             : code === 'functions/failed-precondition'
@@ -1110,7 +1251,11 @@ export default function ShopHome({
                     <span className="mr-1.5 line-through" style={{ color: textMuted }}>
                       {formatCurrency(checkoutMemberBase.base, currency)}
                     </span>
-                    <span>{t('memberPrice', { price: formatCurrency(checkoutAmount, currency) })}</span>
+                    <span>
+                      {checkoutMemberBase.via === 'benefit'
+                        ? t('memberPrice', { price: formatCurrency(checkoutAmount, currency) })
+                        : formatCurrency(checkoutAmount, currency)}
+                    </span>
                   </p>
                 ) : (
                   <p className="text-xs" style={{ color: textMuted }}>
@@ -1163,6 +1308,31 @@ export default function ShopHome({
               <p className="mt-3 text-xs" style={{ color: textMuted }}>
                 {t('courseAccessNote')}
               </p>
+            )}
+
+            {/* Promo code — the MODIFIER, ABOVE the tender in the UI as in the
+                arithmetic. Product/course only, for the same reason the gift
+                card is. */}
+            {promoEligible && (
+              <div className="mt-4">
+                <PromoCodeField
+                  teamId={teamId}
+                  target={
+                    checkout.kind === 'course'
+                      ? { kind: 'course', courseId: checkout.course.id }
+                      : {
+                          kind: 'product',
+                          productId: checkout.product.id,
+                          ...(checkout.variantId ? { variantId: checkout.variantId } : {}),
+                        }
+                  }
+                  applied={promoApplied}
+                  onApplied={setPromoApplied}
+                  outcome={checkoutQuote?.promo ?? null}
+                  disabled={submitting}
+                  colors={{ textMain, textMuted, borderColor: cardBorder, accentColor: accent }}
+                />
+              </div>
             )}
 
             {/* Gift card redemption — product/course only (see giftCardEligible). */}
@@ -1256,7 +1426,14 @@ export default function ShopHome({
               style={{ background: accent, color: '#ffffff' }}
             >
               {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              {t('continueToPayment')}
+              {/* After a `price_changed` refusal the button IS the consent: it
+                  names the server's figure, and pressing it re-sends that exact
+                  number as the quote. */}
+              {acceptedPrice !== null
+                ? tPromo('continueAtPrice', {
+                    price: formatCurrency(acceptedPrice, currency, locale),
+                  })
+                : t('continueToPayment')}
             </button>
           </div>
         </div>

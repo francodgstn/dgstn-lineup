@@ -130,7 +130,7 @@ reason).
 | FareHarbor concept | Linyup today | Verdict | Effort |
 |---|---|---|---|
 | **Waitlist** | **Done — Wave 3 Phase 2.** Was: a full class threw `resource-exhausted` and the flow ended, with zero code hits for `waitlist` repo-wide. Now: a queue at `sessions/{id}/waitlist/{contactId}`, offered on the `seatFreedEdge` session trigger, held as an ordinary booking, claimed inside one deadline shared by the hold, the entry and the Stripe session. The capacity refusal it replaced now lives in `bookSession` (`booking/index.ts`) twice: the stale-count pre-flight that calls `healSessionSeatCount`, and the authoritative `countHoldingSeats` / `seatsFree` check inside the booking transaction — `docs/waitlist.md` | **Ported.** The highest-value *missing* booking feature: an empty seat in a paid class is leaked revenue, and a "sorry, full" dead end is the worst moment in the funnel. Shipped with the queue, the notifications, and the **race-safe claim window** | L |
-| **Campaigns → promo codes** | **Zero occurrences** of `coupon`, `promo`, `discount_code`, `voucher` anywhere | **Port** — and the hard parts already exist. The redemption UX is `components/booking/GiftCardRedeemField.tsx` (preview-then-apply); the code lifecycle is `connect/giftCards.ts` (reserve → commit → release, lazy expiry); the discount math is `Benefit` with `percent_off`/`fixed_price` and `applyBenefitToPrice`. **A promo code is essentially a `Benefit` keyed by a code, with a validity window and a usage cap, resolved inside `resolvePaymentOptions`.** Strong launch lever | M–L |
+| **Campaigns → promo codes** | **Done — Wave 3 Phase 3.** Was: zero occurrences of `coupon`, `promo`, `discount_code`, `voucher` anywhere. Now: `teams/{teamId}/promo_codes/{CODE}` (the code IS the doc id), applied as a **Stage A modifier inside `resolvePaymentOptions`** on the four one-off rails (drop-in, appointment, course, product), best-one-wins against the member benefit, with a deterministic reserve → commit → release lifecycle whose `usage_count` has exactly one writer — `docs/promo-codes.md` | **Ported**, and the prediction held: the redemption UX was cloned from `GiftCardRedeemField` into `PromoCodeField`, the lifecycle shape from `connect/giftCards.ts`, and the discount math is the `Benefit` vocabulary's price-modifying half (`percent_off` / `fixed_price`) sharing one clamp-and-round site with the benefit path. Two things the prediction missed: a promo is **not** simply "a `Benefit` keyed by a code" — it also owns a finite counter, which is what forced the reserve transaction and the one-writer rule; and it required the `product` resolver arm (§7.4) | M–L |
 | **Customer types** — Adult / Child / Infant, each with its own price, description, and per-booking min/max (the live flow offered *Private Section 2-8*, *Cocktail Table max 2*, *Communal*, *Children*, *Infants*) | A booking is hard-keyed `bookings/{contactId}`; `bookings_count` increments by 1; Stripe line items are `quantity: 1` (`utils/connect/client.ts:256,303`). No party size, guest count, or quantity anywhere | **Adapt — do not port the full model.** The per-type price matrix is the tourist shape and would fight the member/subscription model (Linyup's answer to "who pays what" is *the contact's subscription*, resolved server-side — strictly better for a studio). Propose instead the **light version**: `Booking.guestCount` + an activity guest price, capacity decrementing by `1 + guests`, one payment. That unlocks bring-a-friend, parent-books-child, and couples classes without touching the pricing model | L |
 | **Suggested items** — cross-sell shown during checkout *and* in the confirmation email | Shop has a "Pay per visit" cross-sell strip (`ShopHome.tsx:806-856`); nothing post-booking | **Port.** Cheap revenue on top of the existing automation engine, templates, products and courses | S–M |
 | **Add-ons / upgrades** attached to a booking (the live flow offered +9% cancellation protection and a gratuity picker) | Products exist as standalone shop items; nothing attaches to a booking | **Adapt.** Real for a studio (rent a gi, hire a mat, add video analysis) but depends on guest count or a cart landing first | M |
@@ -207,7 +207,7 @@ Mostly **M**.
 - ~~Gift-card flow review — guest purchase, admin mint, category attribution~~
   **done** (Phase 0 + Phase 1, `62fc546`)
 - ~~Waitlist~~ **done** (Phase 2) — `docs/waitlist.md`
-- Promo codes / campaigns
+- ~~Promo codes / campaigns~~ **done** (Phase 3) — `docs/promo-codes.md`
 - Waivers with a real acceptance ledger
 
 ### Wave 4 — structural
@@ -335,7 +335,7 @@ section records only what was *decided*.
 | Question | Decision |
 |---|---|
 | Waivers: where | Extend Documents (`kind: 'waiver'`) with **immutable published version snapshots**; acceptance keyed by `(contact, documentId, version)` |
-| Promo vs member benefit | **Best-one-wins** — never stacked. `appliedBenefit` and `appliedPromo` stay mutually exclusive on the wire |
+| Promo vs member benefit | **Best-one-wins** — never stacked. `appliedBenefit` and `appliedPromo` stay mutually exclusive on the wire. **Refined in Phase 3:** exclusive as the field that *prices* the option, which is what "never stacked" means; a benefit a promo beat still rides out on `appliedPromo.supersededBenefit`, or every campaign would blank the studio's own `subscription_type_id` attribution for exactly the members who used the code. The comparator is also deliberately asymmetric — a benefit applies when it does not *raise* the price, a promo only when *strictly lower* — because the two fields answer different questions |
 | Waitlist promotion | **Notify + claim window**, uniform for free and paid, respecting the booking cutoff |
 | Admin gift-card mint | Asks **paid or comp**. Paid → `recordManualPayment`. Comp → no journal entry (correct on cash basis), stamped for audit |
 | Gift-card category | **Fix it.** Redemptions must attribute to their real category, not sit in `'other'` |
@@ -371,6 +371,12 @@ call sites already receive a post-promo total and need no edit at all. The promo
 spec's largest self-flagged money-loss risk dissolves entirely — it was only
 real if promo were applied outside the resolver.
 
+**Confirmed in implementation, with one narrowing.** No gift-card call site
+needed a *promo* edit: `reserveGiftCardDrawdown` still receives `totalMajor:
+priceMajor` unchanged, and that figure is now post-promo. They did each gain one
+unrelated argument — `holdMinutes`, from `resolveCheckoutHoldWindow` — but that
+is bug B3 below, not the promo.
+
 ### 7.3 Pre-existing bugs the design pass uncovered
 
 **None of these are Wave 3 features. All were live when this was written.** Each
@@ -402,6 +408,22 @@ Phase 1 (`62fc546`); 2 was fixed in Phase 2.**
 5. **Full-cover redemption writes no `finance_transactions` row at all** — a real
    money-equivalent event missing from the journal. This is the hole the
    category fix nominally exists to close.
+
+**Phase 3's own pass found eight more, all live at `4b3177f`** — numbered B1–B7
+as in `docs/wave3-phase3-spec.md` §0.3 (which carries the evidence), plus B3b,
+the second half of B3. **Seven were fixed in Phase 3** because each sat on a line
+promo was rewriting anyway; B6 was named and deliberately left alone.
+
+| | Defect | Resolution |
+|---|---|---|
+| **B1** | A `fixed_price` member benefit **above** the base price charged the member MORE than the guest, and stamped `appliedBenefit` so the UI struck through the *lower* figure. Authorable through the benefit editor, which validates only `amount >= 0.50` and never cross-checks the target's price | The one comparator now starts its incumbent at the list price and only ever lowers it, so "a modifier never raises a price" is true by construction. B1's fix and the promo's comparator are literally the same function |
+| **B2** | `createProductCheckout` bypassed `resolvePaymentOptions` entirely, and `pricingSurface`'s `source` union already carried a dead `'product'` member proving it | The `product` arm, and the callable routed through it. The dead union member is live |
+| **B3** | On a waitlist claim the gift-card hold expired at +35 min while the Stripe session it guarded stayed payable to +120 — so the held value came back and another purchase could spend it | `resolveCheckoutHoldWindow` derives both from **one** instant; the hold now outlives its session by a bounded margin |
+| **B3b** | The plain product and course checkouts took Stripe's **24-hour** default expiry — only their gift-card sub-branches passed a short one | Any one-off checkout carrying a reservation of a finite thing gets the short window. A no-instrument purchase keeps its 24 hours |
+| **B4** | The gift-card hold-key comments claimed holds are "keyed by Stripe Checkout Session id" while all three call sites mint the key *before* any session exists | Comments corrected. The promo reservation key has the identical ordering constraint, so the stale claim would have misled the next reader directly |
+| **B5** | `MemberPayment.kind` declared four members; the webhook — its only writer — writes seven | Union widened to what the writer writes, with the writer named on the line |
+| **B6** | `mapCategory` has no `'appointment'` case, so appointment revenue lands in `'other'` | **Named, not fixed.** No promo path depends on it; recorded so nobody assumes Phase 3 blessed it |
+| **B7** | `releaseReservedGiftCard`'s comment named a caller that does not exist — the capacity refusal it cited had moved above the reservation in Phase 2 | Comment fixed alongside the promo release it sits beside. It had already caused harm: an earlier revision of the promo spec cited that stale comment as evidence for where the promo release should go |
 
 ### 7.4 Phase order
 
@@ -464,6 +486,28 @@ against settled call sites. It must also add a `product` target arm —
 `createProductCheckout` currently bypasses the resolver entirely
 (`resolveProductPrice` → `requireChargeableAmountFromMajor`), which is a genuine
 one-resolver repair, but one only promo requires.
+**Correction (2026-08, from implementation):** the signature change itself cost
+nothing — an **optional third `context` parameter** meant every pre-existing
+call site compiled and behaved unchanged, and `paymentOptions.test.ts` took 671
+added lines and **zero deletions**, so every pre-existing fixture is still
+byte-identical under `assert.deepEqual`. The expensive half was elsewhere,
+and this section did not predict it: a promo owns a **finite counter**, so it
+needed a reserve → commit → release lifecycle with exactly one writer of
+`usage_count`, a deterministic reservation key (so a buyer's own retry refreshes
+rather than refuses her), and an ownership marker on top of that key. Three
+further decisions changed the shipped shape against what was designed here:
+
+- an **audience axis** (`audience: 'all' | 'new_contacts'`) was added, because
+  best-one-wins otherwise hands a public "20% off" campaign to the 120 members
+  who already hold a 10% benefit and acquires nobody;
+- the **waitlist claim page takes no code** — reversing what Phase 2 had assumed
+  and what a comment in `claim.ts` had asserted. The claim rail's deadline
+  cannot be shortened without giving one seat two timers, so a code there would
+  lock a use of a strictly-capped campaign for the whole claim window;
+- the `commitGiftCardDrawdown({ promoRedemptionId })` rider Phase 1 declared for
+  this was **deleted rather than implemented**, exactly as Phase 2 deleted
+  `waitlistEntryId` — that function only runs when a gift-card code was supplied
+  at all, so a promo used *without* a card would never have committed.
 
 **Phase 4 — Waivers.** Last, because it has the largest independent surface
 (versioning, immutable snapshots, acceptance ledger, guardian model, rules
@@ -484,7 +528,14 @@ Each of these is atomic — splitting produces a broken intermediate:
   `bookings_count` now has exactly one writing style, and the rule is recorded on
   the field itself and in `docs/waitlist.md`
 - Promo's resolver signature + `product` arm + the fixture regression gate in
-  `paymentOptions.test.ts`
+  `paymentOptions.test.ts` — **landed together in Phase 3**, and the pairing
+  earned itself: the base-as-candidate comparator that gives the promo its
+  "never raises a price" property is the same edit that fixes B1, so splitting
+  it would have shipped a signature nothing exercised, or a new arm with no
+  regression net. A second atomic group emerged during implementation and is
+  worth recording beside it: **reserve + commit + release + all four call
+  sites**, because a reserve without a commit gives the discount and never
+  counts it, and a commit without a reserve has nothing to commit
 
 ### 7.6 Resolved: guardians and Documents de-gating
 
@@ -558,6 +609,15 @@ discovered during implementation:
   corruption — including `markNoShowBookings` stamping abandoned drop-in checkouts
   `no_show` on real people's records.
 - **Promo** — the reserve transaction has no serialization point.
+  **Resolved** in `docs/wave3-phase3-spec.md` §5 and closed in the
+  implementation: the transaction's read set is the promo document plus one
+  redemption row, both single-document `get`s by id, so it both reads and writes
+  `promoRef` and there is no query in it to be phantom about. That pass also
+  found three defects neither the design nor its critique had caught, all one
+  root cause — the deterministic reservation key being treated as a handle on a
+  single attempt. One let a *superseded* code reach Stripe carrying a
+  reservation key nothing had reserved, which the webhook then committed:
+  a use consumed and a buyer's per-person cap burned for a discount never given.
 - **Waivers** — re-signing is structurally impossible as specified (deterministic
   doc id + `.create()` deadlocks both expiry and revocation).
 - **Guardians** — the authenticated-guardian path is unimplementable as designed:
@@ -575,6 +635,11 @@ discovered during implementation:
 - `docs/waitlist.md` — Wave 3 Phase 2 as built: the queue's data model, the
   single-deadline rule, the claim lifecycle (free and paid), the seat predicates
   and the one-writer rule for `bookings_count`
+- `docs/promo-codes.md` — Wave 3 Phase 3 as built: the Stage A / Stage B split,
+  best-one-wins and its deliberate asymmetry, the reserve → commit → release
+  lifecycle and its ownership rules, the identity the per-person cap binds
+  to and what it does not promise, and the four decisions (§10 Q8/Q9/Q11/Q12)
+  with their user-visible consequences
 - `docs/appointments.md` — the appointment model (activity owns the *what*,
   availability owns the *when*), which is what makes appointment slots
   un-pre-generatable and therefore constrains any waitlist design on that side

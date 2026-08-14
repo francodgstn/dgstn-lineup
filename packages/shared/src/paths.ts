@@ -198,6 +198,18 @@ export const GIFT_CARDS_SUBCOLLECTION = 'gift_cards'
 // everyone else reads the code back. Server-only: no firestore.rules block, and
 // there is no `match /{document=**}` wildcard, so clients are denied by default.
 export const GIFT_CARD_ISSUES_SUBCOLLECTION = 'gift_card_issues'
+// Promo codes (Wave 3 P3): teams/{teamId}/promo_codes/{CODE} — the canonical
+// uppercase code is the doc id, which is what makes "is this code taken?" a
+// create() rather than a query-then-write race. Server-only: firestore.rules
+// give managers/owners read and deny every client write (the doc carries
+// usage_count, max_uses and internal labels), so every mutation is a callable.
+export const PROMO_CODES_SUBCOLLECTION = 'promo_codes'
+// Durable per-PERSON redemption ledger:
+// teams/{teamId}/promo_codes/{CODE}/redemptions/{identityKey}. The doc id is
+// promoIdentityKey(...) — a hash of the normalised email, NOT a contactId — so
+// the per-person cap survives a contact document being purged and recreated,
+// and the ids are not a harvestable list of a studio's customer emails.
+export const PROMO_REDEMPTIONS_SUBCOLLECTION = 'redemptions'
 // No-show policy fees (E5): teams/{teamId}/policy_fees/{feeId}.
 export const POLICY_FEES_SUBCOLLECTION = 'policy_fees'
 
