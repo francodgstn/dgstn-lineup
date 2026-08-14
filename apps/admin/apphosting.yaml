@@ -1,6 +1,10 @@
 # Firebase App Hosting config for the operator console (@linyup/admin).
-# Deploy as a SEPARATE backend (rootDirectory: apps/admin) on its own domain
-# (e.g. ops.linyup.app).
+# Deploy as a SEPARATE backend (rootDirectory: apps/admin) on its own domain:
+# ops.linyup.com (prod) and ops-stg.linyup.com (staging). Domains follow a
+# surface-then-environment scheme — app.linyup.com / app-stg.linyup.com for the
+# web app, ops.* for this console — with linyup.com reserved for the marketing
+# site and demo.linyup.com kept as-is because prospects see it during demos.
+# (An earlier note here suggested ops.linyup.app; that domain was never owned.)
 #
 # Runtime identity: point this backend at the dedicated `linyup-admin` service
 # account (NOT the shared firebase-app-hosting-compute SA used by apps/web). That

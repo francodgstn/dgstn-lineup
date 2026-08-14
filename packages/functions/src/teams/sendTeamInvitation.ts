@@ -7,6 +7,7 @@ import { regionalFunctions } from '../utils/functions'
 import { isTeamMember, hasTeamRole, hasCapability, getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
+import { getHostingUrl } from '../utils/env'
 
 export const sendTeamInvitation = regionalFunctions.https.onCall(
   async (data: { teamId: string; email: string; role: 'manager' | 'coach' | 'viewer' }, context) => {
@@ -82,8 +83,10 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
         expires_at: expiresAt,
       })
 
-    const hostingUrl = process.env.HOSTING_URL || 'https://linyup.com'
-    const invitationUrl = `${hostingUrl}/public/team-invitation/${token}`
+    // getHostingUrl(), not process.env + a local fallback: this was the only
+    // place reading the raw env var, and its hardcoded 'https://linyup.com'
+    // default pointed at the marketing site, which 404s on /public/*.
+    const invitationUrl = `${getHostingUrl()}/public/team-invitation/${token}`
 
     const { html, text } = buildEmailTemplate({
       title: `You've been invited to join ${team.name} on Linyup`,
