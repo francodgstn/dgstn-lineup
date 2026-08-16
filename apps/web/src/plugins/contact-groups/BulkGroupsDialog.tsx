@@ -10,7 +10,7 @@ import type { Route } from 'next'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FolderTree } from 'lucide-react'
 import type { ContactGroup } from '@linyup/shared'
-import { flattenGroupTree } from './hooks'
+import { flattenGroupTree, isDynamicGroup } from './hooks'
 
 export function BulkGroupsDialog({
   open, onOpenChange, mode, groups, count, onConfirm,
@@ -35,7 +35,8 @@ export function BulkGroupsDialog({
     try { await onConfirm(picked); onOpenChange(false) } finally { setBusy(false) }
   }
 
-  const flat = flattenGroupTree(groups)
+  // Manual groups only — a dynamic group has no membership to bulk-write into.
+  const flat = flattenGroupTree(groups).filter(({ group }) => !isDynamicGroup(group))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

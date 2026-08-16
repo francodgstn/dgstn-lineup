@@ -733,7 +733,34 @@
     "timelineMilestone": "Traguardo",
     "timelineNow": "Ora",
     "tabReorder": "Riordina schede",
-    "tabReorderDone": "Fatto"
+    "tabReorderDone": "Fatto",
+    "addFilter": "Aggiungi filtro",
+    "filterSearchLabel": "Ricerca",
+    "filterAge": "Età",
+    "filterAgeModeAge": "Età",
+    "filterAgeModeBirthYear": "Anno di nascita",
+    "filterAgeMin": "Da",
+    "filterAgeMax": "A",
+    "filterBirthYearMin": "Dall'anno",
+    "filterBirthYearMax": "All'anno",
+    "filterAgeIncludeUnknown": "Includi i contatti senza data di nascita",
+    "filterTags": "Tag",
+    "filterCustomFields": "Campi personalizzati",
+    "filterCustomFieldsNoun": "condizioni",
+    "customFieldAddCondition": "Aggiungi condizione",
+    "customFieldYes": "Sì",
+    "customFieldNo": "No",
+    "customFieldOp_equals": "è",
+    "customFieldOp_contains": "contiene",
+    "customFieldOp_gt": "è dopo / maggiore di",
+    "customFieldOp_lt": "è prima / minore di",
+    "customFieldOp_is_set": "è valorizzato",
+    "customFieldOp_is_empty": "è vuoto",
+    "saveAsGroup": "Salva come gruppo…",
+    "editingRuleFor": "Modifica della regola di «{name}»",
+    "saveRule": "Salva regola",
+    "cancelRuleEdit": "Annulla",
+    "ruleSaved": "Regola aggiornata per «{name}»"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -2093,7 +2120,28 @@
     "addToGroup": "Aggiungi al gruppo",
     "ungrouped": "Nessun gruppo",
     "ungroupedHint": "Non ancora in nessun gruppo",
-    "assignToGroup": "Assegna a un gruppo"
+    "assignToGroup": "Assegna a un gruppo",
+    "dynamicBadge": "Dinamico",
+    "viewRule": "Regola",
+    "saveAsGroupTitle": "Salva il filtro come gruppo",
+    "groupNamePlaceholder": "Nome del gruppo",
+    "createGroup": "Crea gruppo",
+    "parentGroup": "Gruppo principale",
+    "noParent": "Nessuno (primo livello)",
+    "modeDynamicTitle": "Dinamico — sempre aggiornato",
+    "modeDynamicBody": "Il filtro è l’appartenenza. I membri vengono ricalcolati ogni volta che il gruppo viene aperto, quindi non si disallinea mai.",
+    "modeSnapshotTitle": "Istantanea — elenco fisso",
+    "modeSnapshotBody": "Copia le {count} corrispondenze di oggi. I membri restano finché non li cambi a mano.",
+    "snapshotAgeWarning": "Questo filtro usa l’età, che cambia da sola. Un’istantanea non si accorgerà di chi supera la fascia: scegli Dinamico, a meno che tu non voglia congelare l’elenco di oggi.",
+    "ruleTitle": "Regola di «{name}»",
+    "ruleExplainer": "L’appartenenza viene calcolata da questo filtro ogni volta che serve. Non viene memorizzato nulla, quindi non può disallinearsi.",
+    "ruleCriteria": "Filtri in uso",
+    "ruleMatchesEveryone": "Nessun filtro: corrisponde a tutti i contatti.",
+    "ruleMatchCount": "{count} contatti corrispondono in questo momento.",
+    "convertToManual": "Congela in un gruppo manuale",
+    "convertToManualBody": "Copia gli attuali {count} membri e rimuove la regola. L’appartenenza smette di aggiornarsi.",
+    "convertedToast": "«{name}» ora è un gruppo manuale",
+    "editInContacts": "Modifica nei contatti"
   },
   "Org": {
     "tabPlaces": "Sedi",
@@ -4386,7 +4434,8 @@
         "bio_link_booking_no_show": "Prenotazione bio-link non presentata",
         "tag": "Ha il tag",
         "field_equals": "Il campo è uguale a",
-        "birthday_today": "Compleanno oggi"
+        "birthday_today": "Compleanno oggi",
+        "in_group": "È nel gruppo"
       }
     },
     "subscriptionStatus": {
@@ -4491,7 +4540,8 @@
       "nameRequired": "Il nome è obbligatorio",
       "triggerRequired": "Il trigger è obbligatorio",
       "conditionRequiredDaily": "Una regola giornaliera richiede almeno una condizione. Senza condizioni verrebbe eseguita ogni giorno per tutti i contatti del team.",
-      "required": "Obbligatorio"
+      "required": "Obbligatorio",
+      "groupRequired": "Scegli un gruppo per la condizione «È nel gruppo»."
     },
     "dialogs": {
       "rule": {

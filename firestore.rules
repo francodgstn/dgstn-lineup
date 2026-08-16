@@ -561,7 +561,18 @@ service cloud.firestore {
       }
 
       // Contact Groups plugin — nested member groups (parent_id hierarchy).
-      // Membership lives on contacts/{id}.group_ids, covered by the contacts rules.
+      //
+      // Two kinds of membership, with DELIBERATELY different permissions:
+      //  • MANUAL  — membership is contacts/{id}.group_ids, so filing a person
+      //    follows the CONTACT's write rule: anyone who may edit a contact may
+      //    file it (a coach can file their own students). The taxonomy itself —
+      //    creating, renaming, nesting, deleting — stays manager/owner. That
+      //    split is intentional, not an oversight; group membership is never an
+      //    input to any authorization decision, so a coach filing someone
+      //    grants no access.
+      //  • DYNAMIC — membership is the `rule` field on THIS doc and is never
+      //    written to any contact. Because the rule lives here, changing who is
+      //    in a dynamic group requires manager/owner, matching the taxonomy.
       match /contact_groups/{groupId} {
         allow read:  if isTeamMember(teamId);
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');

@@ -733,7 +733,34 @@
     "timelineMilestone": "Meilenstein",
     "timelineNow": "Jetzt",
     "tabReorder": "Tabs neu anordnen",
-    "tabReorderDone": "Fertig"
+    "tabReorderDone": "Fertig",
+    "addFilter": "Filter hinzufügen",
+    "filterSearchLabel": "Suche",
+    "filterAge": "Alter",
+    "filterAgeModeAge": "Alter",
+    "filterAgeModeBirthYear": "Jahrgang",
+    "filterAgeMin": "Von",
+    "filterAgeMax": "Bis",
+    "filterBirthYearMin": "Ab Jahr",
+    "filterBirthYearMax": "Bis Jahr",
+    "filterAgeIncludeUnknown": "Kontakte ohne Geburtsdatum einschliessen",
+    "filterTags": "Tags",
+    "filterCustomFields": "Eigene Felder",
+    "filterCustomFieldsNoun": "Bedingungen",
+    "customFieldAddCondition": "Bedingung hinzufügen",
+    "customFieldYes": "Ja",
+    "customFieldNo": "Nein",
+    "customFieldOp_equals": "ist",
+    "customFieldOp_contains": "enthält",
+    "customFieldOp_gt": "ist nach / über",
+    "customFieldOp_lt": "ist vor / unter",
+    "customFieldOp_is_set": "ist gesetzt",
+    "customFieldOp_is_empty": "ist leer",
+    "saveAsGroup": "Als Gruppe speichern …",
+    "editingRuleFor": "Regel für „{name}“ bearbeiten",
+    "saveRule": "Regel speichern",
+    "cancelRuleEdit": "Abbrechen",
+    "ruleSaved": "Regel für „{name}“ aktualisiert"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -2093,7 +2120,28 @@
     "addToGroup": "Zu Gruppe hinzufügen",
     "ungrouped": "Keine Gruppe",
     "ungroupedHint": "Noch in keiner Gruppe",
-    "assignToGroup": "Einer Gruppe zuordnen"
+    "assignToGroup": "Einer Gruppe zuordnen",
+    "dynamicBadge": "Dynamisch",
+    "viewRule": "Regel",
+    "saveAsGroupTitle": "Filter als Gruppe speichern",
+    "groupNamePlaceholder": "Gruppenname",
+    "createGroup": "Gruppe erstellen",
+    "parentGroup": "Übergeordnete Gruppe",
+    "noParent": "Keine (oberste Ebene)",
+    "modeDynamicTitle": "Dynamisch — immer aktuell",
+    "modeDynamicBody": "Der Filter ist die Mitgliedschaft. Die Mitglieder werden bei jedem Öffnen neu ermittelt und veralten nie.",
+    "modeSnapshotTitle": "Momentaufnahme — feste Liste",
+    "modeSnapshotBody": "Übernimmt die heutigen {count} Treffer. Die Mitglieder bleiben, bis Sie sie von Hand ändern.",
+    "snapshotAgeWarning": "Dieser Filter nutzt das Alter, das sich von selbst ändert. Eine Momentaufnahme merkt nicht, wenn jemand herauswächst — wählen Sie Dynamisch, ausser Sie wollen die heutige Liste einfrieren.",
+    "ruleTitle": "Regel für „{name}“",
+    "ruleExplainer": "Die Mitgliedschaft wird bei jedem Zugriff aus diesem Filter ermittelt. Es wird nichts gespeichert, also kann nichts veralten.",
+    "ruleCriteria": "Verwendete Filter",
+    "ruleMatchesEveryone": "Keine Filter — trifft auf alle Kontakte zu.",
+    "ruleMatchCount": "{count} Kontakte passen aktuell.",
+    "convertToManual": "In manuelle Gruppe einfrieren",
+    "convertToManualBody": "Übernimmt die aktuellen {count} Mitglieder und entfernt die Regel. Die Mitgliedschaft wird nicht mehr aktualisiert.",
+    "convertedToast": "„{name}“ ist jetzt eine manuelle Gruppe",
+    "editInContacts": "In Kontakten bearbeiten"
   },
   "Org": {
     "tabPlaces": "Orte",
@@ -4386,7 +4434,8 @@
         "bio_link_booking_no_show": "Bio-Link-Buchung nicht erschienen",
         "tag": "Hat Tag",
         "field_equals": "Feld ist gleich",
-        "birthday_today": "Geburtstag heute"
+        "birthday_today": "Geburtstag heute",
+        "in_group": "Ist in Gruppe"
       }
     },
     "subscriptionStatus": {
@@ -4491,7 +4540,8 @@
       "nameRequired": "Name ist erforderlich",
       "triggerRequired": "Auslöser ist erforderlich",
       "conditionRequiredDaily": "Eine tägliche Regel benötigt mindestens eine Bedingung. Ohne Bedingung würde sie jeden Tag für alle Kontakte deines Teams ausgeführt.",
-      "required": "Erforderlich"
+      "required": "Erforderlich",
+      "groupRequired": "Wählen Sie eine Gruppe für die Bedingung „Ist in Gruppe“."
     },
     "dialogs": {
       "rule": {
