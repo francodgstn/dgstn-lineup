@@ -1069,7 +1069,7 @@ function NavSearch({
     // Offset right of the trigger on desktop so the panel is visibly detached
     // from the window edge rather than pinned to it. Not on narrow viewports,
     // where every pixel of width counts more than the gap.
-    const nudge = typeof window !== 'undefined' && window.innerWidth >= 768 ? 24 : 0
+    const nudge = typeof window !== 'undefined' && window.innerWidth >= 768 ? 8 : 0
     if (r) setAnchor({ left: r.left + nudge, top: r.top })
     setExpanded(true)
   }
@@ -1169,8 +1169,12 @@ function NavSearch({
   // right, which is also what keeps THEM reading as secondary.
   //
   // Collapsed sidebar: no room for text, so it falls back to the icon alone.
-  if (!expanded) {
-    return (
+  // The trigger stays MOUNTED while the panel is open. Unmounting it collapsed
+  // the row and slid the icons beside it left — and, because the panel anchors
+  // to the trigger's measured position, an unmounted trigger also loses the ref
+  // any reposition would need.
+  return (
+    <>
       <button
         type="button"
         ref={triggerRef}
@@ -1190,16 +1194,14 @@ function NavSearch({
             whose whole job is to stay quiet until wanted. */}
         {!collapsed && <span className="truncate text-xs">{t('navSearchPlaceholder')}</span>}
       </button>
-    )
-  }
 
-  return (
-    // PORTALLED TO document.body. `fixed` is only viewport-relative while no
-    // ancestor creates a containing block, and the sidebar sits inside a
-    // sticky/transformed tree — on the settings page the overlay rendered
-    // BEHIND the page content because of it. A portal removes the whole class
-    // of bug rather than chasing z-index.
-    createPortal(
+      {/* PORTALLED TO document.body. `fixed` is only viewport-relative while no
+          ancestor creates a containing block, and the sidebar sits inside a
+          sticky/width-transitioning tree — on the settings page the overlay
+          rendered BEHIND the page content because of it. A portal removes the
+          whole class of bug rather than chasing z-index. */}
+      {expanded &&
+        createPortal(
     <>
       {/* Dim the page behind the panel — enough to actually read as a mode the
           app is in, not a translucent box floating over live content. */}
@@ -1261,10 +1263,15 @@ function NavSearch({
           a void under it, which reads as broken rather than ready. One quiet row,
           shaped like the result rows it will be replaced by. */}
       {!showResults && (
-        <div className="mt-1.5 rounded-md px-2 py-3 text-sm text-muted-foreground">
+        <div className="mt-1.5 flex items-center gap-2 rounded-md px-2 py-3 text-sm text-muted-foreground">
           {/* No icon — the field above already has one, and repeating it made
-              the row read as a result rather than a prompt. */}
-          {t('navSearchPrompt')}
+              the row read as a result rather than a prompt. The shortcut IS
+              here, though: this is the moment the user is looking at the panel
+              and can learn how to reach it without the mouse next time. */}
+          <span>{t('navSearchPrompt')}</span>
+          <kbd className="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground/70">
+            {modKeyLabel()}K
+          </kbd>
         </div>
       )}
       {showResults && (
@@ -1358,8 +1365,9 @@ function NavSearch({
       )}
       </div>
     </>,
-    document.body
-    )
+          document.body
+        )}
+    </>
   )
 }
 
