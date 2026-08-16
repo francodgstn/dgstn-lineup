@@ -29,6 +29,13 @@ export interface OutboundMessage {
   // App-level idempotency. When set, a duplicate send with the same key is
   // skipped (see mailService) and the key is forwarded to the provider.
   idempotencyKey?: string
+  // Machine-readable opt-out for BULK mail (RFC 2369). Mail clients render this
+  // as their own "Unsubscribe" affordance, and the major inbox providers expect
+  // it on bulk sends — without it a studio's outreach lands in spam far sooner.
+  // A mailto: target only; true one-click (RFC 8058 List-Unsubscribe-Post)
+  // additionally needs a public HTTP endpoint, which does not exist yet.
+  // Transactional mail must NOT set this.
+  listUnsubscribe?: string
 }
 
 export interface ProviderSendResult {

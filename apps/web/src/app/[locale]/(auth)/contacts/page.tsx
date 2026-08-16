@@ -48,6 +48,7 @@ import {
 } from '@/plugins/contact-groups/hooks'
 import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
 import { SaveAsGroupDialog } from '@/plugins/contact-groups/SaveAsGroupDialog'
+import { BulkOutreachDialog } from '@/components/contacts/BulkOutreachDialog'
 import { toast } from 'sonner'
 import { GROUP_RULE_HANDOFF_KEY } from '@/plugins/contact-groups/GroupRuleDialog'
 import { setGroupRule } from '@/plugins/contact-groups/hooks'
@@ -2176,6 +2177,7 @@ export default function ContactsPage() {
     [isInstalled, team?.custom_field_definitions],
   )
   const [saveAsGroupOpen, setSaveAsGroupOpen] = useState(false)
+  const [bulkOutreachOpen, setBulkOutreachOpen] = useState(false)
   const invalidateGroups = useInvalidateContactGroups(currentTeamId)
 
   // "Edit in contacts" on a dynamic group hands its rule over here, because this
@@ -2398,6 +2400,10 @@ export default function ContactsPage() {
 
   const selectable = tab === 'active' || tab === 'leads' || tab === 'archived' || tab === 'deleted'
   const selectedList = [...selected]
+  // Resolved rows, not just ids — the outreach dialog needs each contact's
+  // email + unsubscribe flag to say who will actually receive the message.
+  // Selection is cleared on tab change, so the current tab is the right source.
+  const selectedContacts = currentList.filter((c) => selected.has(c.id))
 
   return (
     <div className="space-y-6 pb-24">
@@ -2664,9 +2670,18 @@ export default function ContactsPage() {
               { label: t('bulkRemoveFromGroup'), icon: FolderTree, onClick: () => setBulkEditMode('group-remove') },
             ] : []),
           ] : []}
-          moreActions={tab === 'active' && isAtLeast('studio') ? [
-            { label: t('bulkMove'),     icon: ArrowRightLeft, onClick: () => {}, disabled: true },
-            { label: t('bulkOutreach'), icon: Mail,           onClick: () => {}, disabled: true },
+          // The menu itself is no longer plan-gated: gating the whole thing made
+          // it vanish, so a Coach had no way to discover outreach exists or to
+          // reach the upgrade prompt. The ACTION is gated instead.
+          moreActions={tab === 'active' ? [
+            { label: t('bulkMove'), icon: ArrowRightLeft, onClick: () => {}, disabled: true },
+            {
+              label: t('bulkOutreach'),
+              icon: Mail,
+              onClick: () => isAtLeast('studio')
+                ? setBulkOutreachOpen(true)
+                : openUpgradeModal({ minPlan: 'studio' }),
+            },
           ] : []}
         />
       )}
@@ -2744,6 +2759,15 @@ export default function ContactsPage() {
           onConfirm={(groupId) => bulkGroupUpdate(groupId, bulkEditMode === 'group-remove' ? 'remove' : 'add')}
         />
       )}
+
+      <BulkOutreachDialog
+        open={bulkOutreachOpen}
+        onOpenChange={setBulkOutreachOpen}
+        teamId={currentTeamId}
+        contacts={selectedContacts}
+        // The per-contact activity log gains an outreach_email_sent entry.
+        onSent={() => qc.invalidateQueries({ queryKey: ['contact-activity-log'] })}
+      />
 
       {groupsEnabled && (
         <SaveAsGroupDialog
