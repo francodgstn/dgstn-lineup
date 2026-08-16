@@ -246,31 +246,63 @@ up. That is Franco's call, not a mechanical repair.
 Recorded here for the same reason as the defects above — the follow-up chips are
 session-scoped and do not survive a restart.
 
-### Link one document from another in the editor
+### Link one document from another in the editor — SHIPPED 2026-08-17
 
-Requested 2026-08-16. From the "/" slash menu and the toolbar, link another
-document inside a document's body.
+Deleted per the rule at the top of this file. It shipped as
+`feat(documents): link one document from another, latest by default`.
 
-**Smaller than it sounds:** `apps/web/src/components/RichTextEditor.tsx` is TipTap
-3.26 with a working slash menu (`components/editor/SlashCommand.tsx`), a toolbar,
-and `@tiptap/suggestion` already a dependency; the server sanitizer already permits
-`a` with `href`/`target`/`rel`. A new slash item is one array entry.
+**The design recorded here was superseded before it was built.** This entry said
+"pin the link to the target's version as of publish", to stop a live link
+changing what a signed waiver meant. Franco cut that: *"at this stage we do not
+care, studio own responsibility, and we did not even go live yet."* What shipped
+is simpler — **latest by default, pinned only when the author says so** — with no
+publish-time freezing and no publish-time validation. See
+`packages/shared/src/utils/documentLink.ts` for the model and
+`packages/functions/src/documents/documentLink.test.ts` for its fixtures.
 
-**Store a reference, never the rendered URL.** Both the team slug and the document
-slug are editable, so a stored URL breaks silently — inside a legal document.
-Validate at publish that every linked document is actually published and public,
-or a visitor follows a link mid-consent into a 404.
+## Newly recorded, 2026-08-17
 
-**The decision that matters — a live link breaks a waiver version's immutability.**
-A published waiver freezes `bodyHtml` and stores a `bodyHash`, which is what makes
-an acceptance mean *this person agreed to THIS EXACT TEXT*. A link to "our
-cancellation policy" ends that: the studio edits the policy in June, the March
-signature still verifies, and what was agreed has silently changed.
+### `pnpm backfill:gateway-data` has not been run anywhere
 
-**Franco's decision: pin the link to the target's version as of publish**, so the
-pinned reference travels inside the frozen snapshot and a reader sees the document
-as it was. Render the target's title with an "as published" affordance, and a route
-to the current version. Open question recorded for whoever builds it: what
-non-waiver documents do, where there is no snapshot and a live link is the natural
-behaviour — one mechanism differing by kind is fine if the difference is visible to
-the author; two mechanisms are not.
+Ops, not code — the same shape as entry 4, and it needs the same treatment.
+
+`saas_subscriptions` docs written before the dotted-key fix keep `subscription_id`,
+`customer_id`, `last_event_id` and friends as **literal top-level fields named**
+`"gateway_data.subscription_id"`, because `set()` takes a dotted key literally
+where `update()` reads it as a path. Every reader now goes through
+`readGatewayData`, which understands both shapes, so **nothing is broken while
+this is outstanding** — this is cleanup, not a live defect. The webhook also
+heals a doc on its next event.
+
+The gap is the same as entry 4's: a `cancelled` or `past_due` subscription may
+never receive another event, so those docs stay in the old shape indefinitely.
+
+Run: `pnpm backfill:gateway-data --project <id>` (dry-run), then `--apply`.
+Verified end-to-end against the emulator; never run against staging or prod.
+
+### The pinned document-version read path is only half-verified
+
+`getPublicDocumentVersion` is wired: the public document page reads `?v=`, calls
+it with the right arguments, reports a failure rather than swallowing it, and
+falls back to the latest text — all observed in a browser.
+
+**What was NOT exercised is the callable itself.** The running functions emulator
+predates the callable and discovers its trigger list at startup, so every call
+returned a CORS/registration failure; registering it needs an emulator restart,
+which would have wiped the seeded stack. So the *serving* half — that it returns
+v1's frozen text, refuses a waiver, and applies the published+isPublic gate — has
+only been read, not run.
+
+Verify by restarting the emulator with a fresh functions build (export the data
+first if you want to keep it) and following a pinned link to an older version.
+
+### Stripe webhook handler params are typed `any`
+
+Carried over rather than newly found — recorded here because it is the root cause
+of a class, not one bug. Three shipped defects came from Stripe moving fields
+between API versions; each read returned `undefined` silently. The SDK ships full
+declarations, so **typecheck would have caught all three**. `utils/stripe/objectShape.ts`
+now contains the reads that are known to have moved, with compile-time assertions,
+but the handler signatures themselves are still `any`, so the next moved field
+fails the same silent way. Retyping them is the durable fix; the blast radius is
+why it has not been done.

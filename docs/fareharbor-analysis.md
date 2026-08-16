@@ -521,7 +521,7 @@ Phase 1 (`62fc546`); 2 was fixed in Phase 2.**
    category fix nominally exists to close.
 
 **Phase 3's own pass found eight more, all live at `4b3177f`** — numbered B1–B7
-as in `docs/wave3-phase3-spec.md` §0.3 (which carries the evidence), plus B3b,
+as in the Phase 3 design pass (since retired — see `docs/promo-codes.md`), plus B3b,
 the second half of B3. **Seven were fixed in Phase 3** because each sat on a line
 promo was rewriting anyway; B6 was named and deliberately left alone.
 
@@ -779,13 +779,13 @@ discovered during implementation:
   would record **100× the cash**, and a non-atomic reclassification pair.
 - **Waitlist** — 3 blockers, including a gift-card full-cover claim that loses
   both the money and the seat, and no capacity check at all on the paid path.
-  **Resolved** in `docs/wave3-phase2-spec.md` §0.1 and closed in the
+  **Resolved** in the Phase 2 design pass (retired; see `docs/waitlist.md`) and closed in the
   implementation; that pass also found ten further findings neither the design nor
   its critique had caught (§0.4), four of them live miscounts or record
   corruption — including `markNoShowBookings` stamping abandoned drop-in checkouts
   `no_show` on real people's records.
 - **Promo** — the reserve transaction has no serialization point.
-  **Resolved** in `docs/wave3-phase3-spec.md` §5 and closed in the
+  **Resolved** in the Phase 3 design pass (retired; see `docs/promo-codes.md`) and closed in the
   implementation: the transaction's read set is the promo document plus one
   redemption row, both single-document `get`s by id, so it both reads and writes
   `promoRef` and there is no query in it to be phantom about. That pass also
@@ -796,7 +796,7 @@ discovered during implementation:
   a use consumed and a buyer's per-person cap burned for a discount never given.
 - **Waivers** — re-signing is structurally impossible as specified (deterministic
   doc id + `.create()` deadlocks both expiry and revocation).
-  **Resolved** in `docs/wave3-phase4-spec.md` §1.1 and closed in the
+  **Resolved** in the Phase 4 design pass (retired; see `docs/waivers.md`) and closed in the
   implementation: the ledger splits into append-only EVENT rows plus one mutable
   CURRENT-STATE row, and the event id derives from the event (its `intentId`
   nonce) rather than from the relationship — which makes a second, genuine
