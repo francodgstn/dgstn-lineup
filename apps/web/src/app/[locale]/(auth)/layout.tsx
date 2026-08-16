@@ -10,6 +10,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { UserMenu } from '@/components/layout/UserMenu'
+import { TeamQrButton } from '@/components/layout/TeamQrButton'
 import {
   LayoutDashboard,
   Users,
@@ -1038,16 +1039,36 @@ function modKeyLabel(): string {
 // Sidebar quick-search (Firebase-style). Phase 1 searches nav destinations only,
 // but results are already grouped so later search providers (contacts, products,
 // courses… — async, Zoho-Books-style) can append their own result groups.
-function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate?: () => void }) {
+function NavSearch({
+  entries,
+  onNavigate,
+  collapsed,
+}: {
+  entries: SearchEntry[]
+  onNavigate?: () => void
+  collapsed?: boolean
+}) {
   const t = useTranslations('Nav')
   const router = useRouter()
   const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
   const { isPinned, togglePin } = useNavPins()
   const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Where the panel opens: measured from the trigger at click time, so it grows
+  // out of the control the user actually pressed rather than appearing in the
+  // corner of the window. Falls back to the sidebar's top-left for ⌘K, which
+  // has no click to measure.
+  const [anchor, setAnchor] = useState<{ left: number; top: number }>({ left: 8, top: 8 })
+
+  const openPanel = () => {
+    const r = triggerRef.current?.getBoundingClientRect()
+    if (r) setAnchor({ left: r.left, top: r.top })
+    setExpanded(true)
+  }
 
   const q = normalizeSearch(query.trim())
   const results = q
@@ -1059,7 +1080,10 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
     : []
   // Future providers append their groups here (each may resolve asynchronously).
   const groups = [{ label: t('navSearchGroupPages'), results }]
-  const open = focused && q.length > 0
+  // Two different things, no longer fused: the PANEL is open because the user
+  // asked for it, and the RESULT LIST appears once there is something to match.
+  const showResults = expanded && q.length > 0
+  const open = showResults
 
   // Keyboard selection indexes the FLATTENED result order, so it keeps working
   // when later providers append their own groups — the visual grouping and the
@@ -1081,19 +1105,35 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
       ?.scrollIntoView({ block: 'nearest' })
   }, [open, activeIndex])
 
-  // Close when clicking anywhere outside the search box + dropdown.
+  // Close when clicking anywhere outside the panel. Keyed on `expanded`, not on
+  // `open`: the panel is dismissible while it is still empty, which is exactly
+  // when a user who opened it by accident wants out.
   useEffect(() => {
-    if (!open) return
+    if (!expanded) return
     const onDown = (ev: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) setFocused(false)
+      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) close()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+  }, [expanded])
+
+  // ⌘K / Ctrl+K. Behind an icon, search loses the discoverability a permanent
+  // field had; the shortcut is the standard compensation, and the placeholder
+  // spells it out for anyone who opens the panel by mouse.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'k' || ev.key === 'K')) {
+        ev.preventDefault()
+        openPanel()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const close = () => {
     setQuery('')
-    setFocused(false)
+    setExpanded(false)
     setActiveIndex(0)
   }
 
@@ -1113,13 +1153,68 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
     close()
   }
 
+  // The trigger — a MINI-INPUT, not a bare icon.
+  //
+  // It reads as a field (icon + placeholder + a rule under it) so it still says
+  // "you can search here", while costing a share of one row instead of a whole
+  // one — which is what freed the space the studio name now uses in the header.
+  // Clicking it opens the real input in an overlay; because the two look alike,
+  // that reads as the field growing rather than a different thing appearing.
+  //
+  // It takes the row's spare width (`flex-1`) and pushes the true icon buttons
+  // right, which is also what keeps THEM reading as secondary.
+  //
+  // Collapsed sidebar: no room for text, so it falls back to the icon alone.
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        ref={triggerRef}
+        data-tour="nav-search"
+        onClick={openPanel}
+        title={`${t('navSearchPlaceholder')} (${modKeyLabel()}K)`}
+        aria-label={t('navSearchPlaceholder')}
+        className={
+          collapsed
+            ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+            : 'group/search flex h-8 min-w-0 flex-1 items-center gap-1.5 border-b border-transparent px-1 text-muted-foreground transition-colors hover:border-border hover:text-foreground'
+        }
+      >
+        <Search className="h-4 w-4 shrink-0" />
+        {/* Placeholder only — no ⌘K badge. The shortcut still works and is in
+            the tooltip; printed in the row it was visual noise on a control
+            whose whole job is to stay quiet until wanted. */}
+        {!collapsed && <span className="truncate text-xs">{t('navSearchPlaceholder')}</span>}
+      </button>
+    )
+  }
+
   return (
-    <div ref={wrapRef} data-tour="nav-search" className="relative">
+    <>
+      {/* Dim the page behind the panel — enough to actually read as a mode the
+          app is in, not a translucent box floating over live content. */}
+      <div aria-hidden className="fixed inset-0 z-40 animate-in fade-in-0 duration-150 bg-background/80" />
+      <div
+        ref={wrapRef}
+        data-tour="nav-search"
+        // Grows out of the trigger, spilling a little into the content area.
+        // Capped so it never runs off a narrow viewport.
+        style={{ left: anchor.left, top: anchor.top }}
+        // Grows out of the trigger: fades and scales up from 95%, sliding a few
+        // pixels right so it reads as the mini-input opening rather than a
+        // separate panel blinking into existence on top of it.
+        className="fixed z-50 w-[min(22rem,calc(100vw-1rem))] origin-top-left animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-150 rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-lg"
+      >
+      <div className="relative">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        // autoFocus, NOT a ref: the shared Input is a plain function component
+        // with no forwardRef, so a ref on it is silently null and the panel
+        // opened with nothing focused. The input mounts with the panel, so
+        // autoFocus is both correct and simpler.
+        autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => setFocused(true)}
         role="combobox"
         aria-expanded={open}
         aria-controls="nav-search-results"
@@ -1151,12 +1246,13 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
         aria-label={t('navSearchPlaceholder')}
         className="h-8 pl-8 text-sm"
       />
-      {open && (
+      </div>
+      {showResults && (
         <div
           ref={listRef}
           id="nav-search-results"
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-md"
+          className="mt-1.5 max-h-[60vh] overflow-y-auto"
         >
           {results.length === 0 ? (
             <p className="px-2 py-2 text-sm text-muted-foreground">{t('navSearchNoResults')}</p>
@@ -1240,7 +1336,8 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -1393,7 +1490,9 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Logo + collapse toggle */}
+      {/* Logo + collapse toggle. The PRODUCT's identity, and nothing else — the
+          studio's name gets its own row below rather than sitting under the
+          Linyup mark, where the two read as one lockup. */}
       <div
         className={`flex items-center border-b h-14 shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
       >
@@ -1412,24 +1511,45 @@ function SidebarContent({
         )}
       </div>
 
-      {/* Quick search — pages now, entity providers later (hidden in icon mode) */}
-      {!collapsed && (
-        <div className="px-2 pt-2 shrink-0">
-          <NavSearch entries={searchEntries} onNavigate={onLinkClick} />
+      {/* WHICH STUDIO — its own row, with the QR beside it. The QR belongs here
+          rather than with the utility icons: it encodes THIS studio's public
+          links, so it is a property of the name it sits next to, not another
+          place to navigate to. (It used to live beside the user avatar, inside
+          the account cluster, which was the wrong grouping in a third way.)
+
+          Orientation, not a control: there is no team switcher — a user's
+          `currentTeam` is a single value on their profile. Hidden when collapsed,
+          like every other piece of text in the sidebar. */}
+      {!collapsed && team?.name && (
+        <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
+          <p className="min-w-0 flex-1 truncate px-1 text-xs font-medium">{team.name}</p>
+          <TeamQrButton />
         </div>
       )}
 
-      {/* Utility row — three icon buttons, in order: plugins, settings, how-to.
-          These are destinations you go to occasionally and deliberately, which is
-          why they are icons rather than rows competing with the working areas.
-          RIGHT-aligned so they read as secondary to the menu below, and closed by
-          a rule that separates them from Dashboard — the first working row.
-          In icon-only mode they stack as centred icons. */}
+      {/* Utility row — search, then plugins / settings / how-to. Occasional,
+          deliberate destinations, so icons rather than rows competing with the
+          working areas below.
+
+          Search is a mini-input rather than the full-width field it used to be a
+          row above: the field cost a whole row for something used in bursts, and
+          collapsing it is what freed the space the studio name now has. It opens
+          as an overlay anchored to itself, and ⌘K/Ctrl+K opens it too — behind an
+          icon it would otherwise lose the discoverability a permanent field had.
+
+          Closed by a rule that separates it from Dashboard, the first working
+          row. In icon-only mode they stack as centred icons. */}
       <div
         className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 border-b ${
-          collapsed ? 'flex-col items-center' : 'items-center justify-end'
+          collapsed ? 'flex-col items-center' : 'items-center'
         }`}
       >
+        <NavSearch entries={searchEntries} onNavigate={onLinkClick} collapsed={collapsed} />
+        {/* Search is a FIELD; the rest are destinations. */}
+        {!collapsed && (
+          <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />
+        )}
+        {collapsed && <TeamQrButton collapsed />}
         <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
