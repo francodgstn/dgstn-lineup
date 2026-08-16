@@ -89,7 +89,8 @@ import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useContactGroups } from '@/plugins/contact-groups/hooks'
+import { useContactGroups, flattenGroupTree, isDynamicGroup } from '@/plugins/contact-groups/hooks'
+import type { ContactGroup } from '@linyup/shared'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ interface AutomationCondition {
   type: string
   value?: string
   field?: string // field_equals condition
+  group_id?: string // in_group condition
   delay_days?: number
 }
 
@@ -208,6 +210,8 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'tag', input: 'text', group: 'other' },
   { value: 'field_equals', input: 'field_equals', group: 'other' },
   { value: 'birthday_today', input: 'none', group: 'other' },
+  // Contact Groups plugin — filtered out below when it isn't installed.
+  { value: 'in_group', input: 'group_select', group: 'other' },
 ]
 
 // Render a flat option list as grouped <SelectGroup> sections with dividers, in the
@@ -598,10 +602,12 @@ function ConditionEditor({
   conditions,
   onChange,
   subscriptionTypes,
+  contactGroups,
 }: {
   conditions: FormCondition[]
   onChange: (c: FormCondition[]) => void
   subscriptionTypes: SubscriptionType[]
+  contactGroups: ContactGroup[]
 }) {
   const t = useTranslations('Automations')
   const groupLabel = (g: string) => t(`groups.${g}` as Parameters<typeof t>[0])
@@ -612,10 +618,12 @@ function ConditionEditor({
     { value: 'none', label: t('conditions.subscriptionScope.none'), group: 'general' },
     ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name, group: 'subscriptionTypes' })),
   ]
-  const resolvedConditionOptions = CONDITION_TYPE_OPTIONS.map((o) => ({
-    ...o,
-    label: conditionTypeLabel(t, o.value),
-  }))
+  const resolvedConditionOptions = CONDITION_TYPE_OPTIONS
+    .filter((o) => o.value !== 'in_group' || contactGroups.length > 0)
+    .map((o) => ({
+      ...o,
+      label: conditionTypeLabel(t, o.value),
+    }))
   function add() {
     onChange([...conditions, { type: 'acquisition_stage', value: 'trial_booked' }])
   }
@@ -656,7 +664,8 @@ function ConditionEditor({
                               ? ''
                               : next === 'has_affiliation'
                                 ? ''
-                                : next === 'tag' || next === 'field_equals' || next === 'affiliation_type'
+                                : next === 'tag' || next === 'field_equals'
+                                    || next === 'affiliation_type' || next === 'in_group'
                                   ? ''
                                   : '7'
                     update(i, { type: next, value: defaultVal, condField: undefined })
@@ -687,6 +696,28 @@ function ConditionEditor({
                           {ACQUISITION_STAGE_VALUES.map((s) => (
                             <SelectItem key={s} value={s} className="text-xs">
                               {acquisitionStageLabel(t, s)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {opt?.input === 'group_select' && (
+                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <span className="flex flex-1 text-left text-xs truncate">
+                            {contactGroups.find((g) => g.id === cond.value)?.name ?? (
+                              <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
+                            )}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {/* Dynamic groups belong here: READING a derived group
+                              is the whole point of in_group. Only WRITES exclude them. */}
+                          {flattenGroupTree(contactGroups).map(({ group, depth }) => (
+                            <SelectItem key={group.id} value={group.id} className="text-xs">
+                              <span style={{ paddingLeft: `${depth * 12}px` }}>
+                                {group.name}{isDynamicGroup(group) ? ' ⚡' : ''}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -857,7 +888,7 @@ function ActionEditor({
   templates: OutreachTemplate[]
   onChange: (a: FormAction[]) => void
   actionTypeLabels?: Record<string, string>
-  contactGroups: { id: string; name: string }[]
+  contactGroups: ContactGroup[]
   groupsEnabled: boolean
 }) {
   const t = useTranslations('Automations')
@@ -1146,30 +1177,37 @@ function ActionEditor({
               />
             )}
 
-            {(action.type === 'add_to_group' || action.type === 'remove_from_group') && (
-              <Select value={action.group_id ?? ''} onValueChange={(v) => update(i, { group_id: v ?? '' })}>
-                <SelectTrigger className="h-8 text-xs">
-                  <span className="flex flex-1 text-left text-xs truncate">
-                    {contactGroups.find((g) => g.id === action.group_id)?.name ?? (
-                      <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
-                    )}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {contactGroups.length === 0 ? (
-                    <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
-                      {t('actions.noGroupsYet')}
-                    </SelectItem>
-                  ) : (
-                    contactGroups.map((g) => (
-                      <SelectItem key={g.id} value={g.id} className="text-xs">
-                        {g.name}
+            {(action.type === 'add_to_group' || action.type === 'remove_from_group') && (() => {
+              // Writable groups only. A DYNAMIC group's membership is its rule —
+              // writing group_ids for one would be a no-op the user can't see.
+              const writable = flattenGroupTree(contactGroups).filter(({ group }) => !isDynamicGroup(group))
+              return (
+                <Select value={action.group_id ?? ''} onValueChange={(v) => update(i, { group_id: v ?? '' })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {contactGroups.find((g) => g.id === action.group_id)?.name ?? (
+                        <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
+                      )}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {writable.length === 0 ? (
+                      <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
+                        {t('actions.noGroupsYet')}
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            )}
+                    ) : (
+                      // Indented like every other group picker — the old flat list
+                      // hid the hierarchy the rest of the app shows.
+                      writable.map(({ group, depth }) => (
+                        <SelectItem key={group.id} value={group.id} className="text-xs">
+                          <span style={{ paddingLeft: `${depth * 12}px` }}>{group.name}</span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              )
+            })()}
           </div>
 
           <Button
@@ -1290,7 +1328,10 @@ function RuleDialog({
       setConditions(
         editing.conditions.map((c) => ({
           type: c.type,
-          value: c.value ?? (c.delay_days != null ? String(c.delay_days) : ''),
+          value:
+            (c as { group_id?: string }).group_id
+            ?? c.value
+            ?? (c.delay_days != null ? String(c.delay_days) : ''),
           condField: (c as { field?: string }).field,
         }))
       )
@@ -1341,6 +1382,14 @@ function RuleDialog({
       return
     }
 
+    // An in_group condition with no group picked would save happily and then
+    // match nobody, forever — the same silent-no-op trap the action list guards
+    // against. Say so instead.
+    if (conditions.some((c) => c.type === 'in_group' && !c.value)) {
+      setSubmitError(t('validation.groupRequired'))
+      return
+    }
+
     try {
       const ruleData = {
         name: values.name.trim(),
@@ -1370,6 +1419,7 @@ function RuleDialog({
           if (opt?.input === 'none') return { type: c.type }
           if (c.type === 'field_equals')
             return { type: 'field_equals', field: c.condField ?? '', value: c.value }
+          if (c.type === 'in_group') return { type: 'in_group', group_id: c.value }
           return { type: c.type, value: c.value }
         }),
         actions: actions
@@ -1582,6 +1632,7 @@ function RuleDialog({
                 conditions={conditions}
                 onChange={setConditions}
                 subscriptionTypes={subscriptionTypes}
+                contactGroups={contactGroups}
               />
             </div>
 

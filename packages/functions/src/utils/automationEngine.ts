@@ -13,7 +13,11 @@ import { sendEmail } from './email'
 import { logActivity } from './users'
 import { substituteVariables, renderBody, buildOutreachEmail } from './outreachEmail'
 import { pluginActionHandlers } from '../plugins/index'
-import type { PluginActionId, PluginTriggerId } from '@linyup/shared'
+import type { PluginActionId, PluginTriggerId, ContactGroup, EngagementThresholds } from '@linyup/shared'
+import {
+  matchesFilter,
+  TEAMS_COLLECTION, CONTACT_GROUPS_SUBCOLLECTION,
+} from '@linyup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,6 +74,10 @@ export type AutomationCondition =
   // Affiliation axis conditions (summary-based, no subcollection read required)
   | { type: 'has_affiliation' } // affiliation_summary.has_active === true
   | { type: 'affiliation_type'; value: string } // affiliation_summary.types includes value
+  // Contact Groups plugin — is the contact in this group (subgroups included)?
+  // Works for BOTH kinds: a manual group tests group_ids, a dynamic group
+  // resolves its saved rule per contact. Nothing is materialized either way.
+  | { type: 'in_group'; group_id: string }
   // NOTE: affiliation_status (per-affiliation status_id check) and affiliation_expires_in
   // are deferred — they require reading the affiliations subcollection per contact in the
   // scheduled scan path, which is expensive. The summary covers the primary use cases.
@@ -153,6 +161,15 @@ export interface ContactData {
   birthdate?: Timestamp | { seconds: number; nanoseconds: number } | null
   // Affiliation axis — summary maintained by onAffiliationWrite
   affiliation_summary?: { has_active: boolean; types: string[]; org_ids: string[] }
+  // Read by the `in_group` condition via the shared contact predicate. Declared
+  // explicitly (not left to the index signature) so ContactData satisfies
+  // ContactFilterSubject — a dynamic group's rule may filter on any of these.
+  group_ids?: string[]
+  source?: string
+  ranks?: Record<string, number>
+  custom_fields?: Record<string, string | number | boolean>
+  alerts_count?: number
+  pending_signup?: boolean
   [key: string]: unknown
 }
 
@@ -295,13 +312,45 @@ function resolveTimestampMs(ts: unknown): number | null {
  * bio_link_booking_no_show conditions are skipped — they are handled by
  * the booking-based execution path.
  */
+/**
+ * What `in_group` needs to answer a membership question. Loaded once per team
+ * per run (loadGroupContext) — a handful of docs, not per contact.
+ */
+export interface ConditionContext {
+  groups?: ContactGroup[]
+  engagementThresholds?: EngagementThresholds
+}
+
 export function evaluateContactConditions(
   conditions: AutomationCondition[],
   contact: ContactData,
-  now: Date
+  now: Date,
+  ctx: ConditionContext = {}
 ): boolean {
   for (const cond of conditions) {
     switch (cond.type) {
+      // Group membership is a PER-CONTACT predicate, never a materialized set:
+      // the contact is already in hand, so a manual group checks its group_ids
+      // and a dynamic group resolves its rule right here. Both go through the
+      // shared resolver so "in the group" means one thing everywhere.
+      case 'in_group': {
+        // Delegated, NOT reimplemented: descendant expansion, dynamic-rule
+        // resolution and the not-in-context fallback all live in the shared
+        // resolver. Duplicating them here is exactly the parallel check its
+        // docstring forbids — the copies would drift on the next change.
+        const matched = matchesFilter(
+          contact,
+          { groups: [cond.group_id] },
+          {
+            groups: ctx.groups ?? [],
+            engagementThresholds: ctx.engagementThresholds,
+            nowMs: now.getTime(),
+          },
+        )
+        if (!matched) return false
+        break
+      }
+
       case 'bio_link_booking_no_show':
         // handled separately in booking path
         continue
@@ -1125,6 +1174,8 @@ async function runBookingRule(
     | { type: 'bio_link_booking_no_show'; delay_days?: number; delay_hours?: number }
     | undefined
 
+  const conditionCtx = await loadConditionContext(rule, teamId, teamData)
+
   const delayDays =
     bookingCond?.delay_days || Math.round((bookingCond?.delay_hours || 24) / 24) || 1
   const delayHours = delayDays * 24
@@ -1221,7 +1272,7 @@ async function runBookingRule(
         stats.skipped++
         continue
       }
-      if (!evaluateContactConditions(rule.conditions, contact, now)) {
+      if (!evaluateContactConditions(rule.conditions, contact, now, conditionCtx)) {
         stats.skipped++
         continue
       }
@@ -1253,6 +1304,30 @@ async function runBookingRule(
 // Contact-based rule path
 // ---------------------------------------------------------------------------
 
+/**
+ * Load the group context for a rule — but only when a condition actually asks
+ * for it. A rule with no in_group condition costs zero extra reads.
+ */
+export async function loadConditionContext(
+  rule: AutomationRule,
+  teamId: string,
+  teamData: Record<string, unknown>
+): Promise<ConditionContext> {
+  if (!rule.conditions.some((c) => c.type === 'in_group')) return {}
+  const [err, snap] = await to(
+    admin.firestore().collection(TEAMS_COLLECTION).doc(teamId)
+      .collection(CONTACT_GROUPS_SUBCOLLECTION).get()
+  )
+  if (err || !snap) {
+    console.error(`[automationEngine] rule=${rule.id}: failed to load contact groups`, err)
+    return {}
+  }
+  return {
+    groups: snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactGroup),
+    engagementThresholds: teamData.engagement_thresholds as EngagementThresholds | undefined,
+  }
+}
+
 async function runContactRule(
   rule: AutomationRule,
   contacts: ContactData[],
@@ -1264,6 +1339,7 @@ async function runContactRule(
   payload?: Record<string, unknown>
 ): Promise<void> {
   const db = admin.firestore()
+  const conditionCtx = await loadConditionContext(rule, teamId, teamData)
 
   console.log(
     `[automationEngine] rule=${rule.id} team=${teamId}: evaluating ${contacts.length} contacts`
@@ -1307,7 +1383,7 @@ async function runContactRule(
       }
     }
 
-    if (!evaluateContactConditions(rule.conditions, contact, now)) {
+    if (!evaluateContactConditions(rule.conditions, contact, now, conditionCtx)) {
       stats.skipped++
       continue
     }

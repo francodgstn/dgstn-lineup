@@ -733,7 +733,35 @@
     "timelineMilestone": "Étape",
     "timelineNow": "Maintenant",
     "tabReorder": "Réorganiser les onglets",
-    "tabReorderDone": "Terminé"
+    "tabReorderDone": "Terminé",
+    "addFilter": "Ajouter un filtre",
+    "filterSearchLabel": "Recherche",
+    "filterAge": "Âge",
+    "filterAgeModeAge": "Âge",
+    "filterAgeModeBirthYear": "Année de naissance",
+    "filterAgeMin": "De",
+    "filterAgeMax": "À",
+    "filterBirthYearMin": "Depuis l'année",
+    "filterBirthYearMax": "Jusqu'à l'année",
+    "filterAgeIncludeUnknown": "Inclure les contacts sans date de naissance",
+    "filterTags": "Étiquettes",
+    "filterCustomFields": "Champs personnalisés",
+    "filterCustomFieldsNoun": "conditions",
+    "customFieldAddCondition": "Ajouter une condition",
+    "customFieldYes": "Oui",
+    "customFieldNo": "Non",
+    "customFieldOp_equals": "est",
+    "customFieldOp_contains": "contient",
+    "customFieldOp_gt": "est après / supérieur à",
+    "customFieldOp_lt": "est avant / inférieur à",
+    "customFieldOp_is_set": "est renseigné",
+    "customFieldOp_is_empty": "est vide",
+    "saveAsGroup": "Enregistrer comme groupe…",
+    "editingRuleFor": "Modification de la règle de « {name} »",
+    "saveRule": "Enregistrer la règle",
+    "cancelRuleEdit": "Annuler",
+    "ruleSaved": "Règle mise à jour pour « {name} »",
+    "ruleDropsGroups": "Le filtre de groupe ne sera pas conservé : une règle ne peut pas dépendre d’un autre groupe."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2093,7 +2121,29 @@
     "addToGroup": "Ajouter au groupe",
     "ungrouped": "Aucun groupe",
     "ungroupedHint": "Dans aucun groupe pour l'instant",
-    "assignToGroup": "Affecter à un groupe"
+    "assignToGroup": "Affecter à un groupe",
+    "dynamicBadge": "Dynamique",
+    "viewRule": "Règle",
+    "saveAsGroupTitle": "Enregistrer le filtre comme groupe",
+    "groupNamePlaceholder": "Nom du groupe",
+    "createGroup": "Créer le groupe",
+    "parentGroup": "Groupe parent",
+    "noParent": "Aucun (niveau supérieur)",
+    "modeDynamicTitle": "Dynamique — toujours à jour",
+    "modeDynamicBody": "Le filtre EST l’appartenance. Les membres sont recalculés à chaque ouverture du groupe, sans jamais se périmer.",
+    "modeSnapshotTitle": "Instantané — liste figée",
+    "modeSnapshotBody": "Copie les {count} correspondances du jour. Les membres ne bougent plus sans intervention.",
+    "snapshotAgeWarning": "Ce filtre utilise l’âge, qui évolue tout seul. Un instantané ne verra pas quelqu’un changer de tranche — choisissez Dynamique, sauf si vous voulez figer la liste du jour.",
+    "ruleTitle": "Règle de « {name} »",
+    "ruleExplainer": "L’appartenance est calculée à partir de ce filtre à chaque besoin. Rien n’est stocké, donc rien ne se périme.",
+    "ruleCriteria": "Filtres utilisés",
+    "ruleMatchesEveryone": "Aucun filtre — tous les contacts correspondent.",
+    "ruleMatchCount": "{count} contacts correspondent actuellement.",
+    "convertToManual": "Figer en groupe manuel",
+    "convertToManualBody": "Copie les {count} membres actuels et supprime la règle. L’appartenance cesse de se mettre à jour.",
+    "convertedToast": "« {name} » est désormais un groupe manuel",
+    "editInContacts": "Modifier dans les contacts",
+    "dynamicDropsGroupsWarning": "Une règle ne peut pas dépendre d’un autre groupe : ce filtre est retiré — ce groupe correspondra à {count} contacts, pas à la liste derrière cette fenêtre. Choisissez Instantané pour conserver les membres actuels."
   },
   "Org": {
     "tabPlaces": "Lieux",
@@ -4386,7 +4436,8 @@
         "bio_link_booking_no_show": "Réservation bio-link absente",
         "tag": "A le tag",
         "field_equals": "Le champ est égal à",
-        "birthday_today": "Anniversaire aujourd'hui"
+        "birthday_today": "Anniversaire aujourd'hui",
+        "in_group": "Est dans le groupe"
       }
     },
     "subscriptionStatus": {
@@ -4491,7 +4542,8 @@
       "nameRequired": "Le nom est requis",
       "triggerRequired": "Le déclencheur est requis",
       "conditionRequiredDaily": "Une règle quotidienne nécessite au moins une condition. Sans condition, elle s'exécuterait chaque jour pour tous les contacts de votre équipe.",
-      "required": "Requis"
+      "required": "Requis",
+      "groupRequired": "Choisissez un groupe pour la condition « Est dans le groupe »."
     },
     "dialogs": {
       "rule": {

@@ -6,9 +6,9 @@
 
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/contexts/AuthContext'
-import { FolderTree, Plus } from 'lucide-react'
+import { FolderTree, Plus, Zap } from 'lucide-react'
 import type { Contact } from '@linyup/shared'
-import { useContactGroups } from './hooks'
+import { useContactGroups, useContactFilterContext, groupsForContact, isDynamicGroup } from './hooks'
 import { GroupPickerPopover } from './GroupPickerPopover'
 
 export function ContactGroupsChips({ contact, onChanged }: { contact: Contact; onChanged: () => void }) {
@@ -16,8 +16,12 @@ export function ContactGroupsChips({ contact, onChanged }: { contact: Contact; o
   const { currentTeamId } = useAuth()
   const { data: groups = [] } = useContactGroups(currentTeamId)
 
-  const memberIds = new Set(contact.group_ids ?? [])
-  const memberGroups = groups.filter((g) => memberIds.has(g.id))
+  // The reverse lookup, asked the cheap way: instead of "who is in this group?"
+  // (which would need the whole contact list), test THIS contact against each
+  // group's rule. Dozens of groups, one contact — no list, no index, no
+  // materialization. Dynamic memberships appear here exactly like manual ones.
+  const filterCtx = useContactFilterContext(groups)
+  const memberGroups = groupsForContact(contact, groups, filterCtx)
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -28,6 +32,8 @@ export function ContactGroupsChips({ contact, onChanged }: { contact: Contact; o
         >
           {g.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: g.color }} />}
           {g.name}
+          {/* Derived, not filed — so it can't be removed from here. */}
+          {isDynamicGroup(g) && <Zap className="h-2.5 w-2.5 text-violet-500 shrink-0" />}
         </span>
       ))}
       <GroupPickerPopover

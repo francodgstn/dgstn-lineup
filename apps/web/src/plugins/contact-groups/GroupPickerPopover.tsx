@@ -19,7 +19,7 @@ import { Check } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { CONTACTS_COLLECTION } from '@linyup/shared'
-import { useContactGroups, flattenGroupTree } from './hooks'
+import { useContactGroups, flattenGroupTree, isDynamicGroup } from './hooks'
 
 export function GroupPickerPopover({
   contactId,
@@ -46,7 +46,10 @@ export function GroupPickerPopover({
   const [busy, setBusy] = useState(false)
 
   const memberIds = new Set(groupIds)
-  const flat = flattenGroupTree(groups)
+  // Manual groups only. A dynamic group's membership IS its rule — ticking a box
+  // here would write a group_ids entry that nothing ever reads, so the contact
+  // would appear unchanged and the click would look broken.
+  const flat = flattenGroupTree(groups).filter(({ group }) => !isDynamicGroup(group))
 
   const toggle = async (groupId: string) => {
     if (busy) return

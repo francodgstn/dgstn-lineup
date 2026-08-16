@@ -10,6 +10,7 @@ import { requirePlan } from '../utils/plan'
 import {
   normalizeRule,
   evaluateContactConditions,
+  loadConditionContext,
   type ContactData,
 } from '../utils/automationEngine'
 
@@ -55,6 +56,13 @@ export const previewAutomationRule = onCall(async (request) => {
   const rule = normalizeRule(ruleId, ruleDoc.data() as Record<string, unknown>)
   const now = new Date()
   const matched: MatchedContact[] = []
+
+  // The preview must resolve group membership exactly as the real run does,
+  // otherwise an in_group rule would preview a different set than it acts on.
+  const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
+  const conditionCtx = await loadConditionContext(
+    rule, teamId, (!teamErr && teamDoc?.data()) || {}
+  )
 
   const hasBookingCondition = rule.conditions.some((c) => c.type === 'bio_link_booking_no_show')
 
@@ -125,7 +133,7 @@ export const previewAutomationRule = onCall(async (request) => {
         }
 
         if (!contact.email || contact.email_unsubscribed) continue
-        if (!evaluateContactConditions(rule.conditions, contact, now)) continue
+        if (!evaluateContactConditions(rule.conditions, contact, now, conditionCtx)) continue
 
         matched.push({
           id: contactId || bookingDoc.id,
@@ -166,7 +174,7 @@ export const previewAutomationRule = onCall(async (request) => {
     for (const contact of contacts) {
       if (contact.deleted_at || contact.archived_at) continue
       if (!contact.email || contact.email_unsubscribed) continue
-      if (!evaluateContactConditions(rule.conditions, contact, now)) continue
+      if (!evaluateContactConditions(rule.conditions, contact, now, conditionCtx)) continue
 
       matched.push({
         id: contact.id,

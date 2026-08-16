@@ -30,16 +30,32 @@ import {
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
   planHasHardContactCap,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds } from '@linyup/shared'
-import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, computeEngagementBand } from '@linyup/shared'
+import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS } from '@linyup/shared'
+// The ONE contact predicate — see packages/shared/src/utils/contactFilter.ts.
+// Never re-implement matching here; extend the resolver instead.
+import {
+  EMPTY_CONTACT_FILTER, emptyContactFilter, normalizeContactFilter, countActiveFilters,
+  filterContacts, flattenGroupTree, isDynamicGroup, toGroupRule, ruleWouldDropGroups,
+} from '@linyup/shared'
+import type {
+  ContactFilter, InactivityPreset, RankFilter,
+  AgeFilter, CustomFieldCondition, CustomFieldOp,
+} from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useContactGroups, expandGroupSelection, flattenGroupTree } from '@/plugins/contact-groups/hooks'
+import {
+  useContactGroups, useInvalidateContactGroups, createGroupFromFilter, useContactFilterContext,
+} from '@/plugins/contact-groups/hooks'
 import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
+import { SaveAsGroupDialog } from '@/plugins/contact-groups/SaveAsGroupDialog'
+import { toast } from 'sonner'
+import { GROUP_RULE_HANDOFF_KEY } from '@/plugins/contact-groups/GroupRuleDialog'
+import { setGroupRule } from '@/plugins/contact-groups/hooks'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  Search, UserPlus, X,
+  Search, UserPlus, X, Plus,
   AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
   Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree, ShieldCheck, UserCheck,
@@ -516,40 +532,11 @@ function OverviewPanel({
 
 // ─── filter panel ─────────────────────────────────────────────────────────────
 
-type InactivityPreset = 'never' | '30d' | '60d' | '90d'
-
-type RankFilter = Record<string, number[]> // systemId → selected level values
-
-interface Filters {
-  stages: string[]           // AcquisitionStage values
-  sources: string[]          // ContactSource values
-  statuses: string[]
-  subscriptions: string[]    // subscription_type_id values; 'none' = no subscription
-  groups: string[]           // contact_groups IDs (Contact Groups plugin); parents include subgroups
-  engagement: EngagementBand[] // derived band: active / low / at_risk / inactive
-  hasAlerts: boolean
-  // Paid a 'full'-mode purchase but hasn't completed the full signup (profile+consent)
-  pendingSignup: boolean
-  sessionsMin: number | null
-  sessionsMax: number | null
-  inactivity: InactivityPreset | null
-  rankFilter: RankFilter | null
-}
-const EMPTY_FILTERS: Filters = {
-  stages: [], sources: [], statuses: [], subscriptions: [], groups: [], engagement: [],
-  hasAlerts: false, pendingSignup: false, sessionsMin: null, sessionsMax: null, inactivity: null,
-  rankFilter: null,
-}
-
-function countActiveFilters(f: Filters): number {
-  return f.stages.length + f.sources.length + f.statuses.length + f.subscriptions.length + f.groups.length
-    + f.engagement.length
-    + (f.hasAlerts ? 1 : 0)
-    + (f.pendingSignup ? 1 : 0)
-    + (f.sessionsMin != null || f.sessionsMax != null ? 1 : 0)
-    + (f.inactivity ? 1 : 0)
-    + (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0) ? 1 : 0)
-}
+// The filter shape, the predicate and the active-count all live in
+// @linyup/shared (utils/contactFilter.ts) so the contacts list, saved presets,
+// dynamic groups and the automation engine agree on what "matches" means.
+type Filters = ContactFilter
+const EMPTY_FILTERS = EMPTY_CONTACT_FILTER
 
 // ─── filter chips ─────────────────────────────────────────────────────────────
 
@@ -607,10 +594,19 @@ const ENGAGEMENT_DOT: Record<EngagementBand, string> = {
   inactive: 'bg-muted-foreground/40',
 }
 
-function FilterChip({ label, activeLabel, isActive, onClear, children }: {
-  label: string; activeLabel?: string; isActive: boolean; onClear?: () => void; children: React.ReactNode
+function FilterChip({ label, activeLabel, isActive, onClear, openOnMount, children }: {
+  label: string; activeLabel?: string; isActive: boolean; onClear?: () => void
+  /** Freshly added from the "Add filter" menu — open straight away so the
+   *  user lands on the values instead of having to click the chip again. */
+  openOnMount?: boolean
+  children: React.ReactNode
 }) {
   const { open, onOpenChange } = useScrollLockOnOpen()
+  const autoOpened = useRef(false)
+  useEffect(() => {
+    if (openOnMount && !autoOpened.current) { autoOpened.current = true; onOpenChange(true) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openOnMount])
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border outline-none transition-colors ${
@@ -619,19 +615,40 @@ function FilterChip({ label, activeLabel, isActive, onClear, children }: {
           : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
       }`}>
         <span>{isActive && activeLabel ? activeLabel : label}</span>
-        {isActive ? (
-          <span role="button" aria-label="Clear"
-            onClick={(e) => { e.stopPropagation(); onClear?.() }}
-            className="rounded-full p-0.5 hover:bg-primary/20 transition-colors -mr-0.5"
+        <ChevronDown className="h-3 w-3 opacity-40" />
+        {onClear && (
+          <span role="button" aria-label="Remove filter"
+            onClick={(e) => { e.stopPropagation(); onClear() }}
+            className={`rounded-full p-0.5 transition-colors -mr-0.5 ${isActive ? 'hover:bg-primary/20' : 'hover:bg-muted'}`}
           ><X className="h-3 w-3" /></span>
-        ) : (
-          <ChevronDown className="h-3 w-3 opacity-40" />
         )}
       </PopoverTrigger>
       <PopoverContent align="start" side="bottom" className="w-auto min-w-[180px] p-1.5">
         {children}
       </PopoverContent>
     </Popover>
+  )
+}
+
+/** A boolean filter — no values to pick, so the chip itself is the control. */
+function ToggleChip({ label, icon: Icon, isActive, onToggle, onRemove }: {
+  label: string; icon: React.ElementType; isActive: boolean
+  onToggle: () => void; onRemove: () => void
+}) {
+  return (
+    <button type="button" onClick={onToggle}
+      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+        isActive
+          ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+          : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+      }`}>
+      <Icon className="h-3 w-3" />
+      {label}
+      <span role="button" aria-label="Remove filter"
+        onClick={(e) => { e.stopPropagation(); onRemove() }}
+        className={`rounded-full p-0.5 -mr-0.5 transition-colors ${isActive ? 'hover:bg-primary/20' : 'hover:bg-muted'}`}
+      ><X className="h-3 w-3" /></span>
+    </button>
   )
 }
 
@@ -689,17 +706,22 @@ function useSavedQueries(teamId: string | null) {
   return { saved, save, remove, togglePin, pinnedPresets, togglePresetPin }
 }
 
-function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPresets, togglePresetPin }: {
+function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPresets, togglePresetPin, onSaveAsGroup }: {
   filters: Filters; onChange: (f: Filters) => void
   saved: SavedQuery[]; save: (name: string, filters: Filters) => void
   remove: (id: string) => void; togglePin: (id: string) => void
   pinnedPresets: string[]; togglePresetPin: (id: string) => void
+  /** Contact Groups plugin installed — offer "turn this filter into a group". */
+  onSaveAsGroup?: () => void
 }) {
+  const t = useTranslations('Contacts')
   const { open, onOpenChange } = useScrollLockOnOpen()
   const [saveName, setSaveName] = useState('')
   const hasActive = countActiveFilters(filters) > 0
 
-  function apply(q: SavedQuery) { onChange(q.filters); onOpenChange(false) }
+  // Older presets predate newer keys (search, tags, age…) — backfill defaults so
+  // applying one never leaves the filter object with holes.
+  function apply(q: SavedQuery) { onChange(normalizeContactFilter(q.filters)); onOpenChange(false) }
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -753,6 +775,17 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
                 className="shrink-0 p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
               ><BookmarkPlus className="h-3.5 w-3.5" /></button>
             </div>
+            {/* The shortcut from a query to a first-class, nestable group. The
+                dialog chooses snapshot (members copied now) vs dynamic (the
+                filter IS the membership, re-evaluated on every read). */}
+            {onSaveAsGroup && (
+              <button type="button"
+                onClick={() => { onSaveAsGroup(); onOpenChange(false) }}
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left">
+                <FolderTree className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate">{t('saveAsGroup')}</span>
+              </button>
+            )}
           </>
         )}
       </PopoverContent>
@@ -820,13 +853,208 @@ function RankFilterContent({ rankingSystems, rankFilter, onChange }: {
   )
 }
 
+// ─── age + custom-field editors ───────────────────────────────────────────────
+
+function AgeFilterContent({ value, onChange }: {
+  value: AgeFilter | null; onChange: (v: AgeFilter | null) => void
+}) {
+  const t = useTranslations('Contacts')
+  const age: AgeFilter = value ?? { mode: 'age', min: null, max: null }
+
+  function patch(next: Partial<AgeFilter>) {
+    const merged = { ...age, ...next }
+    onChange(merged.min == null && merged.max == null && !merged.includeUnknown ? null : merged)
+  }
+
+  return (
+    <div className="min-w-[210px] p-1 space-y-1.5">
+      {/* Age vs birth year are different questions: rosters and competition
+          categories are year-based, so a December and a January child share a
+          category all season even though their ages differ for most of it. */}
+      <div className="flex gap-0.5 p-0.5 rounded-md bg-muted/60">
+        {(['age', 'birth_year'] as const).map((m) => (
+          <button key={m} type="button" onClick={() => patch({ mode: m, min: null, max: null })}
+            className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+              age.mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}>
+            {m === 'age' ? t('filterAgeModeAge') : t('filterAgeModeBirthYear')}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1.5 px-0.5">
+        <Input type="number" inputMode="numeric"
+          placeholder={age.mode === 'age' ? t('filterAgeMin') : t('filterBirthYearMin')}
+          value={age.min ?? ''}
+          onChange={(e) => patch({ min: e.target.value ? Number(e.target.value) : null })}
+          className="h-7 text-xs w-24" />
+        <span className="text-xs text-muted-foreground">–</span>
+        <Input type="number" inputMode="numeric"
+          placeholder={age.mode === 'age' ? t('filterAgeMax') : t('filterBirthYearMax')}
+          value={age.max ?? ''}
+          onChange={(e) => patch({ max: e.target.value ? Number(e.target.value) : null })}
+          className="h-7 text-xs w-24" />
+      </div>
+      {/* A missing birthdate is common; dropping those contacts silently is the
+          kind of thing nobody notices until a roster is wrong. */}
+      <CheckOption label={t('filterAgeIncludeUnknown')} checked={age.includeUnknown === true}
+        onToggle={() => patch({ includeUnknown: !age.includeUnknown })} />
+    </div>
+  )
+}
+
+const CUSTOM_FIELD_OPS: Record<CustomFieldType, CustomFieldOp[]> = {
+  text:     ['contains', 'equals', 'is_set', 'is_empty'],
+  select:   ['equals', 'is_set', 'is_empty'],
+  number:   ['equals', 'gt', 'lt', 'is_set', 'is_empty'],
+  date:     ['gt', 'lt', 'equals', 'is_set', 'is_empty'],
+  checkbox: ['equals', 'is_set', 'is_empty'],
+}
+
+function CustomFieldsFilterContent({ defs, value, onChange }: {
+  defs: CustomFieldDefinition[]
+  value: CustomFieldCondition[]
+  onChange: (v: CustomFieldCondition[]) => void
+}) {
+  const t = useTranslations('Contacts')
+
+  function update(i: number, patch: Partial<CustomFieldCondition>) {
+    onChange(value.map((c, idx) => (idx === i ? { ...c, ...patch } : c)))
+  }
+  function addCondition() {
+    const first = defs[0]
+    if (!first) return
+    onChange([...value, { fieldId: first.id, op: CUSTOM_FIELD_OPS[first.type][0] }])
+  }
+
+  return (
+    <div className="min-w-[280px] p-1 space-y-1.5">
+      {value.map((cond, i) => {
+        const def = defs.find((d) => d.id === cond.fieldId)
+        const ops = def ? CUSTOM_FIELD_OPS[def.type] : (['equals'] as CustomFieldOp[])
+        const needsValue = cond.op !== 'is_set' && cond.op !== 'is_empty'
+        return (
+          <div key={i} className="flex items-center gap-1">
+            <Select value={cond.fieldId}
+              onValueChange={(v) => {
+                const next = defs.find((d) => d.id === v)
+                update(i, { fieldId: v ?? '', op: next ? CUSTOM_FIELD_OPS[next.type][0] : 'equals', value: undefined })
+              }}>
+              <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
+                <span className="flex flex-1 text-left text-xs truncate">{def?.label ?? cond.fieldId}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {defs.map((d) => <SelectItem key={d.id} value={d.id} className="text-xs">{d.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={cond.op}
+              onValueChange={(v) => update(i, { op: (v ?? 'equals') as CustomFieldOp, value: undefined })}>
+              <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
+                <span className="flex flex-1 text-left text-xs truncate">
+                  {t(`customFieldOp_${cond.op}` as Parameters<typeof t>[0])}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {ops.map((op) => (
+                  <SelectItem key={op} value={op} className="text-xs">
+                    {t(`customFieldOp_${op}` as Parameters<typeof t>[0])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {needsValue && (
+              def?.type === 'select' ? (
+                <Select value={String(cond.value ?? '')}
+                  onValueChange={(v) => update(i, { value: v ?? '' })}>
+                  <SelectTrigger className="h-7 w-24 shrink-0 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {String(cond.value ?? '') || '—'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(def.options ?? []).map((o) => (
+                      <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : def?.type === 'checkbox' ? (
+                <Select value={cond.value === true ? 'true' : 'false'}
+                  onValueChange={(v) => update(i, { value: v === 'true' })}>
+                  <SelectTrigger className="h-7 w-24 shrink-0 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {cond.value === true ? t('customFieldYes') : t('customFieldNo')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true" className="text-xs">{t('customFieldYes')}</SelectItem>
+                    <SelectItem value="false" className="text-xs">{t('customFieldNo')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type={def?.type === 'number' ? 'number' : def?.type === 'date' ? 'date' : 'text'}
+                  value={String(cond.value ?? '')}
+                  onChange={(e) => update(i, { value: def?.type === 'number' ? Number(e.target.value) : e.target.value })}
+                  className="h-7 w-24 shrink-0 text-xs" />
+              )
+            )}
+            <button type="button" onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+              className="shrink-0 p-1 text-muted-foreground hover:text-destructive transition-colors">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )
+      })}
+      <button type="button" onClick={addCondition}
+        className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+        <Plus className="h-3 w-3" />{t('customFieldAddCondition')}
+      </button>
+    </div>
+  )
+}
+
+// ─── filter bar ───────────────────────────────────────────────────────────────
+// Every dimension is declared once here, then rendered only when it carries a
+// value or the user explicitly added it. With 13 dimensions an always-on chip
+// row was a wall; the "Add filter" menu keeps the bar to what's in play.
+
+/**
+ * Are two filters the same? Compared on a key-SORTED normalization: a plain
+ * JSON.stringify depends on key insertion order, so a preset saved before a new
+ * dimension existed would never light up as active after being backfilled.
+ */
+function sameFilter(a: Partial<ContactFilter>, b: Partial<ContactFilter>): boolean {
+  const stable = (f: Partial<ContactFilter>) => {
+    const n = normalizeContactFilter(f) as unknown as Record<string, unknown>
+    return JSON.stringify(Object.keys(n).sort().map((k) => [k, n[k]]))
+  }
+  return stable(a) === stable(b)
+}
+
+interface FilterDimension {
+  key: string
+  label: string
+  /** Hidden entirely when false — plugin not installed, or no data to pick from. */
+  available: boolean
+  isActive: (f: Filters) => boolean
+  clear: (f: Filters) => Filters
+  activeLabel?: (f: Filters) => string
+  /** Boolean dimensions render as a ToggleChip instead of a popover. */
+  toggle?: (f: Filters) => Filters
+  icon?: React.ElementType
+  render?: (f: Filters, onChange: (f: Filters) => void) => React.ReactNode
+}
+
 function FilterChips({
   filters, onChange, subscriptionTypes, teamId, rankingSystems, contactGroups,
+  allTags, customFieldDefs, onSaveAsGroup,
 }: {
   filters: Filters; onChange: (f: Filters) => void
   subscriptionTypes: SubscriptionType[]; teamId: string | null
   rankingSystems: RankingSystem[]
   contactGroups: ContactGroup[] | null  // null = plugin not installed
+  allTags: string[]
+  customFieldDefs: CustomFieldDefinition[]
+  onSaveAsGroup?: () => void
 }) {
   const t = useTranslations('Contacts')
   const { saved, save, remove, togglePin, pinnedPresets, togglePresetPin } = useSavedQueries(teamId)
@@ -834,6 +1062,11 @@ function FilterChips({
     ...FILTER_PRESETS.filter((q) => pinnedPresets.includes(q.id)),
     ...saved.filter((q) => q.pinned),
   ]
+
+  // Dimensions the user added but hasn't given a value to yet. Removing a chip
+  // drops it from here too, so the bar never keeps an empty leftover.
+  const [revealed, setRevealed] = useState<string[]>([])
+  const [justAdded, setJustAdded] = useState<string | null>(null)
 
   const STAGE_OPTS  = (ACQUISITION_STAGES as readonly AcquisitionStage[]).map((v) => ({ value: v, label: t(`stage_${v}` as Parameters<typeof t>[0]) }))
   const SOURCE_OPTS = (CONTACT_SOURCES as readonly ContactSource[]).map((v) => ({ value: v, label: t(`source_${v}` as Parameters<typeof t>[0]) }))
@@ -857,136 +1090,163 @@ function FilterChips({
     return arr.length === 1 ? (opts.find((o) => o.value === arr[0])?.label ?? arr[0]) : `${arr.length} ${noun}`
   }
 
-  const activityParts: string[] = []
-  if (filters.inactivity) activityParts.push(INACTIVITY_OPTS.find((o) => o.value === filters.inactivity)?.label ?? '')
-  if (filters.sessionsMin != null && filters.sessionsMax != null) activityParts.push(`${filters.sessionsMin}–${filters.sessionsMax} sessions`)
-  else if (filters.sessionsMin != null) activityParts.push(`${filters.sessionsMin}+ sessions`)
-  else if (filters.sessionsMax != null) activityParts.push(`≤${filters.sessionsMax} sessions`)
-
   function toggle<T extends string>(arr: T[], v: T): T[] {
     return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
   }
 
-  const activityIsActive = filters.inactivity !== null || filters.sessionsMin !== null || filters.sessionsMax !== null
-
-  // Combined "Acquisition" chip label: stage and source parts joined.
-  const acqParts: string[] = []
-  if (filters.stages.length) acqParts.push(chip(filters.stages, STAGE_OPTS, 'stages'))
-  if (filters.sources.length) acqParts.push(chip(filters.sources, SOURCE_OPTS, 'sources'))
-  const acqActiveLabel = acqParts.join(' · ')
-
-  const rankActiveLabel = (() => {
-    const rf = filters.rankFilter
-    if (!rf) return ''
-    const active = Object.entries(rf).filter(([, lvls]) => lvls.length > 0)
-    if (!active.length) return ''
-    const total = active.reduce((n, [, lvls]) => n + lvls.length, 0)
-    if (active.length === 1) {
-      const [systemId, levels] = active[0]
-      const sys = rankingSystems.find((s) => s.id === systemId)
-      if (sys && levels.length === 1)
-        return sys.levels.find((l) => l.value === levels[0])?.label ?? '1 rank'
-      const prefix = rankingSystems.length > 1 ? `${sys?.name ?? ''}: ` : ''
-      return `${prefix}${levels.length} ranks`
-    }
-    return `${total} ranks`
-  })()
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <SavedMenu filters={filters} onChange={onChange} saved={saved} save={save} remove={remove} togglePin={togglePin} pinnedPresets={pinnedPresets} togglePresetPin={togglePresetPin} />
-      {pinnedQueries.length > 0 && (
-        <>
-          {pinnedQueries.map((q) => {
-            const isActive = JSON.stringify(filters) === JSON.stringify(q.filters)
-            return (
-              <button key={q.id} type="button"
-                onClick={() => onChange(isActive ? EMPTY_FILTERS : q.filters)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
-                    : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
-                }`}
-              >
-                <Pin className="h-3 w-3 opacity-50 shrink-0" />
-                {q.name}
-                {isActive && (
-                  <span role="button" aria-label="Clear"
-                    onClick={(e) => { e.stopPropagation(); onChange(EMPTY_FILTERS) }}
-                    className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5"
-                  ><X className="h-3 w-3" /></span>
-                )}
-              </button>
-            )
-          })}
-        </>
-      )}
-      <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
-      {/* Acquisition — stage + source in one chip, split by a light divider */}
-      <FilterChip label={t('filterAcquisition')} activeLabel={acqActiveLabel}
-        isActive={filters.stages.length > 0 || filters.sources.length > 0}
-        onClear={() => onChange({ ...filters, stages: [], sources: [] })}>
+  const DIMENSIONS: FilterDimension[] = [
+    {
+      key: 'acquisition',
+      label: t('filterAcquisition'),
+      available: true,
+      isActive: (f) => f.stages.length > 0 || f.sources.length > 0,
+      clear: (f) => ({ ...f, stages: [], sources: [] }),
+      activeLabel: (f) => {
+        const parts: string[] = []
+        if (f.stages.length) parts.push(chip(f.stages, STAGE_OPTS, 'stages'))
+        if (f.sources.length) parts.push(chip(f.sources, SOURCE_OPTS, 'sources'))
+        return parts.join(' · ')
+      },
+      render: (f, set) => (
         <div className="p-1 space-y-0.5">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterStage')}</p>
-          {STAGE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.stages.includes(o.value)}
-            onToggle={() => onChange({ ...filters, stages: toggle(filters.stages, o.value) })} />)}
+          {STAGE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={f.stages.includes(o.value)}
+            onToggle={() => set({ ...f, stages: toggle(f.stages, o.value) })} />)}
           <div className="border-t my-1.5 mx-1" />
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterSource')}</p>
-          {SOURCE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.sources.includes(o.value)}
-            onToggle={() => onChange({ ...filters, sources: toggle(filters.sources, o.value) })} />)}
+          {SOURCE_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={f.sources.includes(o.value)}
+            onToggle={() => set({ ...f, sources: toggle(f.sources, o.value) })} />)}
         </div>
-      </FilterChip>
-
-      <FilterChip label={t('filterAffiliation')} activeLabel={chip(filters.statuses, AFFIL_OPTS, 'statuses')}
-        isActive={filters.statuses.length > 0} onClear={() => onChange({ ...filters, statuses: [] })}>
-        {AFFIL_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.statuses.includes(o.value)}
-          onToggle={() => onChange({ ...filters, statuses: toggle(filters.statuses, o.value) })} />)}
-      </FilterChip>
-
-      {rankingSystems.length > 0 && (
-        <FilterChip label={t('filterRank')} activeLabel={rankActiveLabel}
-          isActive={!!filters.rankFilter && Object.values(filters.rankFilter).some((l) => l.length > 0)}
-          onClear={() => onChange({ ...filters, rankFilter: null })}>
-          <RankFilterContent
-            rankingSystems={rankingSystems}
-            rankFilter={filters.rankFilter}
-            onChange={(rf) => onChange({ ...filters, rankFilter: rf })}
-          />
-        </FilterChip>
-      )}
-
-      <FilterChip label={t('filterSubscription')} activeLabel={chip(filters.subscriptions, SUB_OPTS, 'subscriptions')}
-        isActive={filters.subscriptions.length > 0} onClear={() => onChange({ ...filters, subscriptions: [] })}>
-        {SUB_OPTS.map((o) => <CheckOption key={o.value} label={o.label} checked={filters.subscriptions.includes(o.value)}
-          onToggle={() => onChange({ ...filters, subscriptions: toggle(filters.subscriptions, o.value) })} />)}
-      </FilterChip>
-
-      {/* Contact Groups plugin — chip only when installed and groups exist */}
-      {contactGroups && contactGroups.length > 0 && (
-        <FilterChip label={t('filterGroups')}
-          activeLabel={chip(filters.groups, contactGroups.map((g) => ({ value: g.id, label: g.name })), 'groups')}
-          isActive={filters.groups.length > 0} onClear={() => onChange({ ...filters, groups: [] })}>
-          {flattenGroupTree(contactGroups).map(({ group, depth }) => (
-            <div key={group.id} style={{ paddingLeft: `${depth * 14}px` }}>
-              <CheckOption label={group.name} checked={filters.groups.includes(group.id)}
-                onToggle={() => onChange({ ...filters, groups: toggle(filters.groups, group.id) })} />
-            </div>
+      ),
+    },
+    {
+      key: 'statuses',
+      label: t('filterAffiliation'),
+      available: true,
+      isActive: (f) => f.statuses.length > 0,
+      clear: (f) => ({ ...f, statuses: [] }),
+      activeLabel: (f) => chip(f.statuses, AFFIL_OPTS, 'statuses'),
+      render: (f, set) => AFFIL_OPTS.map((o) => (
+        <CheckOption key={o.value} label={o.label} checked={f.statuses.includes(o.value)}
+          onToggle={() => set({ ...f, statuses: toggle(f.statuses, o.value) })} />
+      )),
+    },
+    {
+      key: 'rankFilter',
+      label: t('filterRank'),
+      available: rankingSystems.length > 0,
+      isActive: (f) => !!f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0),
+      clear: (f) => ({ ...f, rankFilter: null }),
+      activeLabel: (f) => {
+        const rf = f.rankFilter
+        if (!rf) return ''
+        const active = Object.entries(rf).filter(([, lvls]) => lvls.length > 0)
+        if (!active.length) return ''
+        const total = active.reduce((n, [, lvls]) => n + lvls.length, 0)
+        if (active.length === 1) {
+          const [systemId, levels] = active[0]
+          const sys = rankingSystems.find((s) => s.id === systemId)
+          if (sys && levels.length === 1)
+            return sys.levels.find((l) => l.value === levels[0])?.label ?? '1 rank'
+          const prefix = rankingSystems.length > 1 ? `${sys?.name ?? ''}: ` : ''
+          return `${prefix}${levels.length} ranks`
+        }
+        return `${total} ranks`
+      },
+      render: (f, set) => (
+        <RankFilterContent rankingSystems={rankingSystems} rankFilter={f.rankFilter}
+          onChange={(rf) => set({ ...f, rankFilter: rf })} />
+      ),
+    },
+    {
+      key: 'subscriptions',
+      label: t('filterSubscription'),
+      available: true,
+      isActive: (f) => f.subscriptions.length > 0,
+      clear: (f) => ({ ...f, subscriptions: [] }),
+      activeLabel: (f) => chip(f.subscriptions, SUB_OPTS, 'subscriptions'),
+      render: (f, set) => SUB_OPTS.map((o) => (
+        <CheckOption key={o.value} label={o.label} checked={f.subscriptions.includes(o.value)}
+          onToggle={() => set({ ...f, subscriptions: toggle(f.subscriptions, o.value) })} />
+      )),
+    },
+    {
+      key: 'groups',
+      label: t('filterGroups'),
+      available: !!contactGroups && contactGroups.length > 0,
+      isActive: (f) => f.groups.length > 0,
+      clear: (f) => ({ ...f, groups: [] }),
+      activeLabel: (f) => chip(f.groups, (contactGroups ?? []).map((g) => ({ value: g.id, label: g.name })), 'groups'),
+      render: (f, set) => flattenGroupTree(contactGroups ?? []).map(({ group, depth }) => (
+        <div key={group.id} style={{ paddingLeft: `${depth * 14}px` }}>
+          <CheckOption
+            label={group.name}
+            // A dynamic group resolves its rule at read time; the dot marks it
+            // so a manual and a derived group are never confused in a picker.
+            dot={isDynamicGroup(group) ? 'bg-violet-500' : undefined}
+            checked={f.groups.includes(group.id)}
+            onToggle={() => set({ ...f, groups: toggle(f.groups, group.id) })} />
+        </div>
+      )),
+    },
+    {
+      key: 'age',
+      label: t('filterAge'),
+      available: true,
+      isActive: (f) => !!f.age && (f.age.min != null || f.age.max != null),
+      clear: (f) => ({ ...f, age: null }),
+      activeLabel: (f) => {
+        const a = f.age
+        if (!a || (a.min == null && a.max == null)) return ''
+        const range = a.min != null && a.max != null ? `${a.min}–${a.max}`
+          : a.min != null ? `${a.min}+`
+          : `≤${a.max}`
+        return a.mode === 'birth_year' ? `${t('filterAgeModeBirthYear')} ${range}` : `${t('filterAge')} ${range}`
+      },
+      render: (f, set) => (
+        <AgeFilterContent value={f.age} onChange={(age) => set({ ...f, age })} />
+      ),
+    },
+    {
+      key: 'tags',
+      label: t('filterTags'),
+      available: allTags.length > 0,
+      isActive: (f) => f.tags.length > 0,
+      clear: (f) => ({ ...f, tags: [] }),
+      activeLabel: (f) => chip(f.tags, allTags.map((tg) => ({ value: tg, label: tg })), 'tags'),
+      render: (f, set) => (
+        <div className="max-h-64 overflow-y-auto">
+          {allTags.map((tg) => (
+            <CheckOption key={tg} label={tg} checked={f.tags.includes(tg)}
+              onToggle={() => set({ ...f, tags: toggle(f.tags, tg) })} />
           ))}
-        </FilterChip>
-      )}
-
-      <FilterChip label={t('filterActivity')} activeLabel={activityParts.join(' · ')}
-        isActive={activityIsActive}
-        onClear={() => onChange({ ...filters, inactivity: null, sessionsMin: null, sessionsMax: null })}>
+        </div>
+      ),
+    },
+    {
+      key: 'activity',
+      label: t('filterActivity'),
+      available: true,
+      isActive: (f) => f.inactivity !== null || f.sessionsMin !== null || f.sessionsMax !== null,
+      clear: (f) => ({ ...f, inactivity: null, sessionsMin: null, sessionsMax: null }),
+      activeLabel: (f) => {
+        const parts: string[] = []
+        if (f.inactivity) parts.push(INACTIVITY_OPTS.find((o) => o.value === f.inactivity)?.label ?? '')
+        if (f.sessionsMin != null && f.sessionsMax != null) parts.push(`${f.sessionsMin}–${f.sessionsMax} sessions`)
+        else if (f.sessionsMin != null) parts.push(`${f.sessionsMin}+ sessions`)
+        else if (f.sessionsMax != null) parts.push(`≤${f.sessionsMax} sessions`)
+        return parts.join(' · ')
+      },
+      render: (f, set) => (
         <div className="p-1 space-y-0.5">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterLastActive')}</p>
           {INACTIVITY_OPTS.map((o) => (
             <button key={o.value} type="button"
-              onClick={() => onChange({ ...filters, inactivity: filters.inactivity === o.value ? null : o.value })}
-              className={`flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left ${filters.inactivity === o.value ? 'font-medium' : 'text-muted-foreground'}`}
+              onClick={() => set({ ...f, inactivity: f.inactivity === o.value ? null : o.value })}
+              className={`flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left ${f.inactivity === o.value ? 'font-medium' : 'text-muted-foreground'}`}
             >
-              <span className={`h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${filters.inactivity === o.value ? 'bg-primary border-primary' : 'border-input'}`}>
-                {filters.inactivity === o.value && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+              <span className={`h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${f.inactivity === o.value ? 'bg-primary border-primary' : 'border-input'}`}>
+                {f.inactivity === o.value && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
               </span>
               {o.label}
             </button>
@@ -995,66 +1255,148 @@ function FilterChips({
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">{t('filterSessions')}</p>
           <div className="flex items-center gap-1.5 px-1 pb-1">
             <Input type="number" min="0" placeholder={t('filterSessionsMin')}
-              value={filters.sessionsMin ?? ''}
-              onChange={(e) => onChange({ ...filters, sessionsMin: e.target.value ? Number(e.target.value) : null })}
+              value={f.sessionsMin ?? ''}
+              onChange={(e) => set({ ...f, sessionsMin: e.target.value ? Number(e.target.value) : null })}
               className="h-7 text-xs w-20" />
             <span className="text-xs text-muted-foreground">–</span>
             <Input type="number" min="0" placeholder={t('filterSessionsMax')}
-              value={filters.sessionsMax ?? ''}
-              onChange={(e) => onChange({ ...filters, sessionsMax: e.target.value ? Number(e.target.value) : null })}
+              value={f.sessionsMax ?? ''}
+              onChange={(e) => set({ ...f, sessionsMax: e.target.value ? Number(e.target.value) : null })}
               className="h-7 text-xs w-20" />
           </div>
         </div>
-      </FilterChip>
+      ),
+    },
+    {
+      key: 'engagement',
+      label: t('filterEngagement'),
+      available: true,
+      isActive: (f) => f.engagement.length > 0,
+      clear: (f) => ({ ...f, engagement: [] }),
+      activeLabel: (f) => chip(f.engagement, ENGAGEMENT_OPTS, 'bands'),
+      render: (f, set) => ENGAGEMENT_OPTS.map((o) => (
+        <CheckOption key={o.value} label={o.label} dot={o.dot} checked={f.engagement.includes(o.value)}
+          onToggle={() => set({ ...f, engagement: toggle(f.engagement, o.value) })} />
+      )),
+    },
+    {
+      key: 'customFields',
+      label: t('filterCustomFields'),
+      available: customFieldDefs.length > 0,
+      isActive: (f) => f.customFields.length > 0,
+      clear: (f) => ({ ...f, customFields: [] }),
+      activeLabel: (f) => {
+        if (!f.customFields.length) return ''
+        if (f.customFields.length === 1) {
+          return customFieldDefs.find((d) => d.id === f.customFields[0].fieldId)?.label ?? t('filterCustomFields')
+        }
+        return `${f.customFields.length} ${t('filterCustomFieldsNoun')}`
+      },
+      render: (f, set) => (
+        <CustomFieldsFilterContent defs={customFieldDefs} value={f.customFields}
+          onChange={(customFields) => set({ ...f, customFields })} />
+      ),
+    },
+    {
+      key: 'hasAlerts',
+      label: t('filterAlertsLabel'),
+      available: true,
+      icon: AlertCircle,
+      isActive: (f) => f.hasAlerts,
+      clear: (f) => ({ ...f, hasAlerts: false }),
+      toggle: (f) => ({ ...f, hasAlerts: !f.hasAlerts }),
+    },
+    {
+      key: 'pendingSignup',
+      label: t('filterPendingSignup'),
+      available: true,
+      icon: UserCheck,
+      isActive: (f) => f.pendingSignup,
+      clear: (f) => ({ ...f, pendingSignup: false }),
+      toggle: (f) => ({ ...f, pendingSignup: !f.pendingSignup }),
+    },
+  ]
 
-      <FilterChip label={t('filterEngagement')} activeLabel={chip(filters.engagement, ENGAGEMENT_OPTS, 'bands')}
-        isActive={filters.engagement.length > 0} onClear={() => onChange({ ...filters, engagement: [] })}>
-        {ENGAGEMENT_OPTS.map((o) => <CheckOption key={o.value} label={o.label} dot={o.dot}
-          checked={filters.engagement.includes(o.value)}
-          onToggle={() => onChange({ ...filters, engagement: toggle(filters.engagement, o.value) })} />)}
-      </FilterChip>
+  const visible = DIMENSIONS.filter((d) => d.available && (d.isActive(filters) || revealed.includes(d.key)))
+  const addable = DIMENSIONS.filter((d) => d.available && !visible.includes(d))
 
-      <button type="button"
-        onClick={() => onChange({ ...filters, hasAlerts: !filters.hasAlerts })}
-        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-          filters.hasAlerts
-            ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
-            : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
-        }`}>
-        <AlertCircle className="h-3 w-3" />
-        {t('filterAlertsLabel')}
-        {filters.hasAlerts && (
-          <span role="button" aria-label="Clear"
-            onClick={(e) => { e.stopPropagation(); onChange({ ...filters, hasAlerts: false }) }}
-            className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5">
-            <X className="h-3 w-3" />
-          </span>
-        )}
-      </button>
+  function addDimension(dim: FilterDimension) {
+    setRevealed((r) => (r.includes(dim.key) ? r : [...r, dim.key]))
+    setJustAdded(dim.key)
+    // A boolean dimension has nothing to pick, so adding it turns it on.
+    if (dim.toggle) onChange(dim.toggle(filters))
+  }
 
-      {/* Pending signup — paid a 'full'-mode purchase, full profile+consent still owed */}
-      <button type="button"
-        onClick={() => onChange({ ...filters, pendingSignup: !filters.pendingSignup })}
-        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-          filters.pendingSignup
-            ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
-            : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
-        }`}>
-        <UserCheck className="h-3 w-3" />
-        {t('filterPendingSignup')}
-        {filters.pendingSignup && (
-          <span role="button" aria-label="Clear"
-            onClick={(e) => { e.stopPropagation(); onChange({ ...filters, pendingSignup: false }) }}
-            className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5">
-            <X className="h-3 w-3" />
-          </span>
-        )}
-      </button>
+  function removeDimension(dim: FilterDimension) {
+    setRevealed((r) => r.filter((k) => k !== dim.key))
+    if (dim.key === justAdded) setJustAdded(null)
+    onChange(dim.clear(filters))
+  }
 
-      {countActiveFilters(filters) > 0 && (
+  function clearAll() {
+    setRevealed([])
+    setJustAdded(null)
+    // Keep the search box — it has its own visible input and its own ×.
+    onChange({ ...emptyContactFilter(), search: filters.search })
+  }
+
+  // Search is excluded: it has its own visible input and its own ×, and
+  // clearAll deliberately leaves it alone — so counting it here would leave a
+  // "Clear filters" button that appears to do nothing.
+  const activeCount = countActiveFilters({ ...filters, search: '' })
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <SavedMenu filters={filters} onChange={onChange} saved={saved} save={save} remove={remove}
+        togglePin={togglePin} pinnedPresets={pinnedPresets} togglePresetPin={togglePresetPin}
+        onSaveAsGroup={onSaveAsGroup} />
+
+      {pinnedQueries.map((q) => {
+        const isActive = sameFilter(filters, q.filters)
+        return (
+          <button key={q.id} type="button"
+            onClick={() => onChange(isActive ? EMPTY_FILTERS : normalizeContactFilter(q.filters))}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+              isActive
+                ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/15'
+                : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            <Pin className="h-3 w-3 opacity-50 shrink-0" />
+            {q.name}
+            {isActive && (
+              <span role="button" aria-label="Clear"
+                onClick={(e) => { e.stopPropagation(); clearAll() }}
+                className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5"
+              ><X className="h-3 w-3" /></span>
+            )}
+          </button>
+        )
+      })}
+
+      {visible.length > 0 && <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />}
+
+      {visible.map((dim) => dim.toggle ? (
+        <ToggleChip key={dim.key} label={dim.label} icon={dim.icon ?? AlertCircle}
+          isActive={dim.isActive(filters)}
+          onToggle={() => onChange(dim.toggle!(filters))}
+          onRemove={() => removeDimension(dim)} />
+      ) : (
+        <FilterChip key={dim.key} label={dim.label}
+          activeLabel={dim.activeLabel?.(filters)}
+          isActive={dim.isActive(filters)}
+          openOnMount={dim.key === justAdded}
+          onClear={() => removeDimension(dim)}>
+          {dim.render?.(filters, onChange)}
+        </FilterChip>
+      ))}
+
+      {addable.length > 0 && <AddFilterMenu dimensions={addable} onAdd={addDimension} />}
+
+      {activeCount > 0 && (
         <>
           <div className="h-5 w-px bg-border/50 shrink-0 mx-0.5" />
-          <button type="button" onClick={() => onChange(EMPTY_FILTERS)}
+          <button type="button" onClick={clearAll}
             className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-destructive/30 text-destructive/80 hover:text-destructive hover:bg-destructive/5 hover:border-destructive/50 transition-colors">
             <X className="h-3 w-3" />{t('clearFilters')}
           </button>
@@ -1064,7 +1406,30 @@ function FilterChips({
   )
 }
 
-// ─── contact row ──────────────────────────────────────────────────────────────
+function AddFilterMenu({ dimensions, onAdd }: {
+  dimensions: FilterDimension[]; onAdd: (d: FilterDimension) => void
+}) {
+  const t = useTranslations('Contacts')
+  const { open, onOpenChange } = useScrollLockOnOpen()
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-dashed border-border/70 text-muted-foreground hover:text-foreground hover:border-border outline-none transition-colors">
+        <Plus className="h-3 w-3" />
+        {t('addFilter')}
+      </PopoverTrigger>
+      <PopoverContent align="start" side="bottom" className="w-48 p-1.5">
+        {dimensions.map((d) => (
+          <button key={d.key} type="button"
+            onClick={() => { onAdd(d); onOpenChange(false) }}
+            className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left">
+            {d.icon ? <d.icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <span className="w-3.5 shrink-0" />}
+            <span className="truncate">{d.label}</span>
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 function ContactRow({
   contact,
@@ -1799,6 +2164,39 @@ export default function ContactsPage() {
   const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? currentTeamId : null)
   const inOrg = !!team?.org_id
 
+  // Tag vocabulary is free-form (automations and manual edits both write it),
+  // so the filter's options come from what the loaded contacts actually carry.
+  const allTags = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of [...active, ...leads, ...archived]) for (const tg of c.tags ?? []) set.add(tg)
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [active, leads, archived])
+  const customFieldDefs = useMemo(
+    () => (isInstalled('custom-fields') ? team?.custom_field_definitions ?? [] : []),
+    [isInstalled, team?.custom_field_definitions],
+  )
+  const [saveAsGroupOpen, setSaveAsGroupOpen] = useState(false)
+  const invalidateGroups = useInvalidateContactGroups(currentTeamId)
+
+  // "Edit in contacts" on a dynamic group hands its rule over here, because this
+  // page IS the filter editor — there is no second place where matching is
+  // decided. Saving it back goes through the normal "Save as group" path.
+  const [editingRuleFor, setEditingRuleFor] = useState<{ groupId: string; name: string } | null>(null)
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem(GROUP_RULE_HANDOFF_KEY)
+    if (!raw) return
+    window.sessionStorage.removeItem(GROUP_RULE_HANDOFF_KEY)
+    try {
+      const { groupId, name, filter } = JSON.parse(raw) as {
+        groupId: string; name: string; filter: Partial<ContactFilter>
+      }
+      setFilters(normalizeContactFilter(filter))
+      setEditingRuleFor({ groupId, name })
+    } catch {
+      // A malformed handoff is not worth surfacing — the page just opens unfiltered.
+    }
+  }, [])
+
   // Contact cap usage: counts active = non-archived, non-deleted. Over-cap
   // behaviour is tier-specific (contactOverageForPlan) and never per-contact
   // metered: Free hard-blocks manual adds (portal signups still land), Coach is
@@ -1815,8 +2213,11 @@ export default function ContactsPage() {
   useEffect(() => {
     if (tab === 'leads' && !loadingActive && leads.length === 0) setTab('active')
   }, [tab, loadingActive, leads.length])
-  const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  // Search lives INSIDE the filter object so "Save as…" captures it — the old
+  // separate state meant a saved preset silently lost its text query.
+  const search = filters.search
+  const setSearch = (v: string) => setFilters((f) => ({ ...f, search: v }))
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -1842,104 +2243,17 @@ export default function ContactsPage() {
   }
 
   // ── filter + search ───────────────────────────────────────────────────────
+  // Matching itself lives in @linyup/shared (matchesFilter). This page only
+  // supplies the context: the team's groups (so a selected parent expands to its
+  // subgroups, and a DYNAMIC group resolves its rule) and the engagement
+  // thresholds. Search is part of the filter object, so saved presets carry it.
 
-  function applyFiltersAndSearch(list: Contact[], f: Filters, q: string): Contact[] {
-    let result = list
+  const filterContext = useContactFilterContext(contactGroups)
 
-    if (f.stages.length > 0)
-      result = result.filter((c) => c.acquisition_stage && f.stages.includes(c.acquisition_stage))
-
-    if (f.sources.length > 0)
-      result = result.filter((c) => c.source && f.sources.includes(c.source))
-
-    // Affiliation filter: statuses now carries 'active' (has_active) or 'none' (not affiliated)
-    if (f.statuses.length > 0)
-      result = result.filter((c) => {
-        if (f.statuses.includes('active') && !f.statuses.includes('none')) {
-          return c.affiliation_summary?.has_active === true
-        }
-        if (f.statuses.includes('none') && !f.statuses.includes('active')) {
-          return !c.affiliation_summary?.has_active
-        }
-        return true // both selected = no filter
-      })
-
-    if (f.subscriptions.length > 0) {
-      result = result.filter((c) => {
-        if (f.subscriptions.includes('none')) {
-          if (!c.subscription_type_id) return true
-        }
-        return c.subscription_type_id && f.subscriptions.includes(c.subscription_type_id)
-      })
-    }
-
-    if (f.groups.length > 0) {
-      // Selecting a parent group also matches members of its subgroups
-      const wanted = expandGroupSelection(contactGroups, f.groups)
-      result = result.filter((c) => (c.group_ids ?? []).some((gid) => wanted.has(gid)))
-    }
-
-    if (f.hasAlerts)
-      result = result.filter((c) => (c.alerts_count ?? 0) > 0)
-
-    if (f.pendingSignup)
-      result = result.filter((c) => c.pending_signup === true)
-
-    if (f.sessionsMin != null)
-      result = result.filter((c) => (c.total_sessions ?? 0) >= f.sessionsMin!)
-    if (f.sessionsMax != null)
-      result = result.filter((c) => (c.total_sessions ?? 0) <= f.sessionsMax!)
-
-    if (f.inactivity) {
-      const now = Date.now()
-      result = result.filter((c) => {
-        const last = c.last_session_at
-          ? (c.last_session_at as { toDate(): Date }).toDate().getTime()
-          : null
-        if (f.inactivity === 'never') return last === null
-        const days = f.inactivity === '30d' ? 30 : f.inactivity === '60d' ? 60 : 90
-        const cutoff = now - days * 86400000
-        return last === null || last < cutoff
-      })
-    }
-
-    if (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0)) {
-      result = result.filter((c) =>
-        Object.entries(f.rankFilter!).some(([systemId, levels]) => {
-          const rank = c.ranks?.[systemId]
-          return rank != null && levels.includes(rank)
-        })
-      )
-    }
-
-    // Engagement band — derived on the fly from attendance recency (last attended
-    // session, falling back to join date), measured against the team's thresholds.
-    if (f.engagement.length > 0) {
-      const now = Date.now()
-      const thresholds = team?.engagement_thresholds
-      result = result.filter((c) => {
-        const refMs = tsToDate(c.last_session_at)?.getTime() ?? tsToDate(c.created_at)?.getTime() ?? null
-        return f.engagement.includes(computeEngagementBand(refMs, thresholds, now))
-      })
-    }
-
-    const sq = q.trim().toLowerCase()
-    if (sq)
-      result = result.filter((c) =>
-        `${c.firstname} ${c.lastname}`.toLowerCase().includes(sq) ||
-        (c.email ?? '').toLowerCase().includes(sq)
-      )
-
-    return result
-  }
-
-  /* eslint-disable react-hooks/exhaustive-deps -- applyFiltersAndSearch closes over contactGroups + team thresholds */
-  const engagementThresholds = team?.engagement_thresholds
-  const filteredActive   = useMemo(() => applyFiltersAndSearch(active,   filters, search), [active,   filters, search, contactGroups, engagementThresholds])
-  const filteredLeads = useMemo(() => applyFiltersAndSearch(leads, filters, search), [leads, filters, search, contactGroups, engagementThresholds])
-  const filteredArchived = useMemo(() => applyFiltersAndSearch(archived, filters, search), [archived, filters, search, contactGroups, engagementThresholds])
-  const filteredDeleted  = useMemo(() => applyFiltersAndSearch(deleted,  filters, search), [deleted,  filters, search, contactGroups, engagementThresholds])
-  /* eslint-enable react-hooks/exhaustive-deps */
+  const filteredActive   = useMemo(() => filterContacts(active,   filters, filterContext), [active,   filters, filterContext])
+  const filteredLeads    = useMemo(() => filterContacts(leads,    filters, filterContext), [leads,    filters, filterContext])
+  const filteredArchived = useMemo(() => filterContacts(archived, filters, filterContext), [archived, filters, filterContext])
+  const filteredDeleted  = useMemo(() => filterContacts(deleted,  filters, filterContext), [deleted,  filters, filterContext])
 
   // ── current list & loading state ──────────────────────────────────────────
 
@@ -1948,6 +2262,14 @@ export default function ContactsPage() {
     : tab === 'leads' ? filteredLeads
     : tab === 'archived' ? filteredArchived
     : filteredDeleted
+  // The same tab BEFORE filtering — a dynamic rule can resolve wider than the
+  // current view (it can't keep the `groups` dimension), so previewing it
+  // against `currentList` would understate the group.
+  const currentUnfilteredList =
+    tab === 'active' ? active
+    : tab === 'leads' ? leads
+    : tab === 'archived' ? archived
+    : deleted
   const isLoading =
     tab === 'active' || tab === 'leads' ? loadingActive
     : tab === 'archived' ? loadingArchived
@@ -2179,6 +2501,37 @@ export default function ContactsPage() {
         </div>
       </div>
 
+      {/* Editing a dynamic group's rule — adjust the filters, then save back. */}
+      {editingRuleFor && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/5 px-3 py-2">
+          <span className="text-sm">
+            {t('editingRuleFor', { name: editingRuleFor.name })}
+            {ruleWouldDropGroups(filters) && (
+              <span className="block text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                {t('ruleDropsGroups')}
+              </span>
+            )}
+          </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => setEditingRuleFor(null)}>
+              {t('cancelRuleEdit')}
+            </Button>
+            <Button size="sm" onClick={async () => {
+              if (!currentTeamId) return
+              // Store what will actually evaluate — a rule can't keep the
+              // `groups` dimension, so saving `filters` verbatim would persist a
+              // constraint that silently vanishes on every read.
+              await setGroupRule(currentTeamId, editingRuleFor.groupId, toGroupRule(filters))
+              invalidateGroups()
+              setEditingRuleFor(null)
+              toast.success(t('ruleSaved', { name: editingRuleFor.name }))
+            }}>
+              {t('saveRule')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       {tab !== 'requests' && (
         <FilterChips
@@ -2188,6 +2541,9 @@ export default function ContactsPage() {
           teamId={currentTeamId}
           rankingSystems={rankingSystems}
           contactGroups={groupsEnabled ? contactGroups : null}
+          allTags={allTags}
+          customFieldDefs={customFieldDefs}
+          onSaveAsGroup={groupsEnabled ? () => setSaveAsGroupOpen(true) : undefined}
         />
       )}
 
@@ -2250,7 +2606,9 @@ export default function ContactsPage() {
 
           {!isLoading && currentList.length === 0 && (
             <div className="px-4 py-16 text-center text-muted-foreground text-sm">
-              {search || filters.stages.length || filters.sources.length || filters.statuses.length ? t('emptySearch') : t('empty')}
+              {/* Any active dimension means "nothing matched", not "nothing exists".
+                  The old hand-listed check missed every dimension added after it. */}
+              {countActiveFilters(filters) > 0 ? t('emptySearch') : t('empty')}
             </div>
           )}
 
@@ -2384,6 +2742,26 @@ export default function ContactsPage() {
           groups={contactGroups}
           count={selected.size}
           onConfirm={(groupId) => bulkGroupUpdate(groupId, bulkEditMode === 'group-remove' ? 'remove' : 'add')}
+        />
+      )}
+
+      {groupsEnabled && (
+        <SaveAsGroupDialog
+          open={saveAsGroupOpen}
+          onOpenChange={setSaveAsGroupOpen}
+          filter={filters}
+          groups={contactGroups}
+          matches={currentList}
+          allContacts={currentUnfilteredList}
+          filterContext={filterContext}
+          onCreate={async ({ name, parentId, mode, rule, memberIds }) => {
+            if (!currentTeamId || !user) return
+            await createGroupFromFilter(currentTeamId, user.uid, {
+              name, parentId, mode, filter: rule, memberIds,
+            })
+            invalidateGroups()
+            if (mode === 'snapshot') qc.invalidateQueries({ queryKey: ['contacts'] })
+          }}
         />
       )}
     </div>
