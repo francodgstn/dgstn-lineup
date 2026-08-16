@@ -147,7 +147,11 @@
     "coaches": "Coach",
     "pricing": "Prezzi",
     "promoCodes": "Codici promo",
-    "navSearchPrompt": "Cerca pagine, impostazioni e funzionalità"
+    "navSearchPrompt": "Cerca pagine, impostazioni e funzionalità",
+    "navShortcutsClear": "Cancella tutto",
+    "navShortcutsClearTitle": "Cancellare tutte le scorciatoie?",
+    "navShortcutsClearBody": "Rimuove le pagine fissate e quelle visitate di recente. L’azione non è reversibile; gli elementi fissati mantengono il loro ordine finché non li cancelli.",
+    "navShortcutsClearCancel": "Annulla"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",

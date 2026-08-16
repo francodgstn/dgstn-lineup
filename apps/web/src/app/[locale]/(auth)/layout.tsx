@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useTranslations, useMessages } from 'next-intl'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useLocale, useTranslations, useMessages } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrackNavigationDepth } from '@/hooks/useBackNavigation'
@@ -49,6 +53,7 @@ import {
   Calculator,
   Ticket,
 } from 'lucide-react'
+import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
 import { planSupportsAffiliations, type SaasPlan } from '@linyup/shared'
@@ -905,8 +910,9 @@ function ShortcutsNav({
   onLinkClick?: () => void
 }) {
   const t = useTranslations('Nav')
-  const { pinnedIds, setPinOrder } = useNavPins()
+  const { pinnedIds, setPinOrder, clearShortcuts } = useNavPins()
   const [expanded, setExpanded] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   // Insertion index (in the displayed list) the dragged row would drop into.
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -954,7 +960,46 @@ function ShortcutsNav({
 
   return (
     <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'mt-3'}>
-      {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
+      {/* Header row: the group label, with "clear all" pushed to the right.
+          Confirmed, because pins are hand-curated and drag-ordered — rebuilding
+          them is minutes of fiddling, and there is no undo. */}
+      {!collapsed && (
+        <div className="flex items-center pb-1">
+          <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
+            {t('navGroupShortcuts')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setClearOpen(true)}
+            title={t('navShortcutsClear')}
+            aria-label={t('navShortcutsClear')}
+            className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Eraser className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {!collapsed && (
+        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('navShortcutsClearTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('navShortcutsClearBody')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('navShortcutsClearCancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  clearShortcuts()
+                  setClearOpen(false)
+                }}
+              >
+                {t('navShortcutsClear')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       <div className={collapsed ? 'space-y-0.5' : `${SHORTCUTS_RULE} space-y-0.5`}>
         {shown.map((entry, idx) => (
           <div key={entry.id}>
@@ -1414,6 +1459,7 @@ function SidebarContent({
   const unsectionedEntries = pluginEntries.filter(
     (e) => !(e.section && PLUGIN_SECTION_TO_LABEL_KEY[e.section])
   )
+  const locale = useLocale()
   const { open: openSection, toggle: toggleSection } = useAccordionSection()
 
   // Whether a main-nav item passes its plan/plugin/org/shop gates — shared by the
@@ -1608,10 +1654,31 @@ function SidebarContent({
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
-              const items = section.items.filter(mainItemVisible)
-              const secPlugins = sectionedEntries.filter(
-                (e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey
-              )
+              // ALPHABETICAL within the section, by the TRANSLATED label — so the
+              // order is the one the reader can see, and it differs per locale on
+              // purpose. The hand-tuned declaration order stopped being worth
+              // defending once a section could hold a dozen items: nobody can
+              // recall a curated order that long, and anyone who wants their own
+              // has Shortcuts, which is drag-ordered and sits above this.
+              const byLabel = (a: string, b: string) => a.localeCompare(b, locale)
+              const items = section.items
+                .filter(mainItemVisible)
+                .slice()
+                .sort((a, b) =>
+                  byLabel(
+                    t(a.labelKey as Parameters<typeof t>[0]),
+                    t(b.labelKey as Parameters<typeof t>[0])
+                  )
+                )
+              const secPlugins = sectionedEntries
+                .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
+                .slice()
+                .sort((a, b) =>
+                  byLabel(
+                    tp(a.labelKey as Parameters<typeof tp>[0]),
+                    tp(b.labelKey as Parameters<typeof tp>[0])
+                  )
+                )
               if (items.length === 0 && secPlugins.length === 0) return null
               const SectionIcon = section.icon
               const label = t(section.labelKey as Parameters<typeof t>[0])

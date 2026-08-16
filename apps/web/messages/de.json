@@ -147,7 +147,11 @@
     "coaches": "Coaches",
     "pricing": "Preise",
     "promoCodes": "Aktionscodes",
-    "navSearchPrompt": "Seiten, Einstellungen und Funktionen durchsuchen"
+    "navSearchPrompt": "Seiten, Einstellungen und Funktionen durchsuchen",
+    "navShortcutsClear": "Alle entfernen",
+    "navShortcutsClearTitle": "Alle Verknüpfungen entfernen?",
+    "navShortcutsClearBody": "Damit werden deine angehefteten Seiten und die zuletzt besuchten entfernt. Das lässt sich nicht rückgängig machen; angeheftete Einträge behalten ihre Reihenfolge, bis du sie entfernst.",
+    "navShortcutsClearCancel": "Abbrechen"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",

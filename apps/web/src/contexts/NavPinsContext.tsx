@@ -59,6 +59,8 @@ interface NavPinsValue {
   recordVisit: (id: string) => void
   /** Remove an item from Shortcuts entirely (unpin + drop from recents). */
   removeShortcut: (id: string) => void
+  /** Empty Shortcuts: no pins, no recents. */
+  clearShortcuts: () => void
 }
 
 const NavPinsContext = createContext<NavPinsValue | null>(null)
@@ -169,6 +171,23 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
     hasUserPinsRef.current = true
   }, [])
 
+  /**
+   * Clear the whole block.
+   *
+   * Persists an EMPTY pin list and marks the pins as user-authored, so this
+   * reads as "I want none" rather than "I have not chosen yet" — otherwise the
+   * team's `settings.defaultNavPins` (or DEFAULT_PINNED_IDS) would flow straight
+   * back in and the button would look broken. That precedence is documented at
+   * the top of this file; this is the case it exists for.
+   */
+  const clearShortcuts = useCallback(() => {
+    setPinnedIds([])
+    persistPins([])
+    hasUserPinsRef.current = true
+    setRecentIds([])
+    persistRecents([])
+  }, [])
+
   const removeShortcut = useCallback(
     (id: string) => {
       if (pinnedIds.includes(id)) {
@@ -198,6 +217,7 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
         recentIds,
         recordVisit: pushRecent,
         removeShortcut,
+        clearShortcuts,
       }}
     >
       {children}

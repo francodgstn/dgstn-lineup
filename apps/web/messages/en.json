@@ -147,7 +147,11 @@
     "coaches": "Coaches",
     "pricing": "Pricing",
     "promoCodes": "Promo codes",
-    "navSearchPrompt": "Search pages, settings and features"
+    "navSearchPrompt": "Search pages, settings and features",
+    "navShortcutsClear": "Clear all",
+    "navShortcutsClearTitle": "Clear all shortcuts?",
+    "navShortcutsClearBody": "This removes your pinned pages and your recently visited ones. It can't be undone, and pinned items keep their order until you clear them.",
+    "navShortcutsClearCancel": "Cancel"
   },
   "PublicHub": {
     "title": "Public pages",

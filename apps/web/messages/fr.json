@@ -147,7 +147,11 @@
     "coaches": "Coachs",
     "pricing": "Tarifs",
     "promoCodes": "Codes promo",
-    "navSearchPrompt": "Rechercher des pages, réglages et fonctionnalités"
+    "navSearchPrompt": "Rechercher des pages, réglages et fonctionnalités",
+    "navShortcutsClear": "Tout effacer",
+    "navShortcutsClearTitle": "Effacer tous les raccourcis ?",
+    "navShortcutsClearBody": "Cela supprime vos pages épinglées et celles récemment visitées. L’action est irréversible ; les éléments épinglés conservent leur ordre jusqu’à ce que vous les effaciez.",
+    "navShortcutsClearCancel": "Annuler"
   },
   "PublicHub": {
     "title": "Pages publiques",
