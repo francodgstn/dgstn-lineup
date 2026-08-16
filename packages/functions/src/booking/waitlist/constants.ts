@@ -123,10 +123,20 @@ export function isSessionCancelled(session: {
 
 /** How many people may WAIT for one session. Offered/claimed/expired/left
  *  entries do not count — only the live queue is capped, so a class whose queue
- *  keeps rolling never wedges. */
+ *  keeps rolling never wedges.
+ *
+ *  CLAMPED TO THE SCAN LIMIT, because the cap is enforced by counting the
+ *  `waiting` entries the join transaction reads, and that read is itself capped
+ *  at WAITLIST_QUEUE_SCAN_LIMIT. Unclamped, any class with more than
+ *  `SCAN_LIMIT / MULTIPLIER` seats got a cap the observed count could never
+ *  reach: the check silently stopped binding, and `waitlist_count` — derived
+ *  from the same read — froze at the scan limit on the session and its public
+ *  mirror. Raising the scan limit raises the real ceiling; changing this
+ *  multiplier alone cannot. */
 export function waitlistQueueCap(maxParticipants: number | null | undefined): number {
   const seats = typeof maxParticipants === 'number' && maxParticipants > 0 ? maxParticipants : 0
-  return Math.max(seats * WAITLIST_MAX_QUEUE_MULTIPLIER, WAITLIST_MIN_QUEUE_CAP)
+  const wanted = Math.max(seats * WAITLIST_MAX_QUEUE_MULTIPLIER, WAITLIST_MIN_QUEUE_CAP)
+  return Math.min(wanted, WAITLIST_QUEUE_SCAN_LIMIT)
 }
 
 export interface OfferHeadSelection<T> {

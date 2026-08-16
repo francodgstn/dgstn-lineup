@@ -128,7 +128,8 @@ function entryToStage(entry: ContactEntry): {
     case 'import': return { acquisition_stage: 'joined', converted_at: serverTimestamp() }
     case 'form':
     case 'shop':
-    case 'waitlist': return {} // off-funnel entry — no acquisition stage
+    case 'waitlist':
+    case 'manual': return {} // off-funnel entry — no acquisition stage
   }
 }
 

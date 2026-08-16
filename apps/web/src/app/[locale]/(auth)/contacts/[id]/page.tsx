@@ -392,7 +392,11 @@ const profileSchema = z.object({
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
   // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist'] as const).optional(),
+  // Derived from the union, never re-typed: a hand-copied list silently went
+  // stale against `entry: 'manual'` (written by createStaffAppointment), and a
+  // z.enum that rejects a value already ON the contact fails validation of the
+  // form's own default — blocking submit on that contact for every field.
+  entry: z.enum(CONTACT_ENTRIES).optional(),
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),

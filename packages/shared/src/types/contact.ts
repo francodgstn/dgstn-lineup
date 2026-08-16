@@ -30,7 +30,15 @@ export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
 //                   joining a queue is not a trial booking, and stamping
 //                   'trial_booked' on someone who may never get a seat would
 //                   corrupt the funnel. The stage is stamped when they CLAIM.
-export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist'] as const
+//      'manual'   → created BY STAFF, not by the person (today: createStaffAppointment
+//                   booking an appointment for a new client). Off-funnel because
+//                   the trial funnel measures what a PROSPECT did, and a staff
+//                   member typing a name is not an act of the prospect. Listed
+//                   here because staffBooking has always written it: it was
+//                   absent from this union, so the contact detail page rendered
+//                   the raw key `Contacts.entry_manual` and the profile form's
+//                   z.enum rejected its own stored value, blocking submit.
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist', 'manual'] as const
 export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 
 // Source axis — marketing CHANNEL (attribution only), set once, never overwritten.

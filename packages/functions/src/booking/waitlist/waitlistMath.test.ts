@@ -8,6 +8,7 @@ import {
 import {
   WAITLIST_DEFAULT_CLAIM_MINUTES,
   WAITLIST_MIN_WINDOW_MINUTES,
+  WAITLIST_QUEUE_SCAN_LIMIT,
   isSessionCancelled,
   offerWasDelivered,
   resolveClaimCheckoutWindow,
@@ -39,6 +40,20 @@ describe('waitlistQueueCap', () => {
     assert.equal(waitlistQueueCap(null), 20)
     assert.equal(waitlistQueueCap(0), 20)
     assert.equal(waitlistQueueCap(-5), 20)
+  })
+
+  it('never exceeds what the join transaction can actually COUNT', () => {
+    // The cap is enforced against a read limited to WAITLIST_QUEUE_SCAN_LIMIT.
+    // A cap above that can never be reached by the observed count, so the check
+    // silently stops binding and waitlist_count freezes at the limit.
+    assert.equal(waitlistQueueCap(100), 200, 'the boundary: 100 seats × 2 is exactly the limit')
+    assert.equal(waitlistQueueCap(101), 200, 'one seat past the boundary must NOT give 202')
+    assert.equal(waitlistQueueCap(5000), 200)
+    // …and the clamp is the scan limit itself, not a hard-coded twin of it.
+    assert.ok(
+      waitlistQueueCap(Number.MAX_SAFE_INTEGER) <= WAITLIST_QUEUE_SCAN_LIMIT,
+      'the cap must never exceed the scan limit'
+    )
   })
 })
 
