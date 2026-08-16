@@ -6,6 +6,7 @@
 // website publisher (site_published) and the documents plugin's public_profile
 // sync — keep the allowlist here so the two never diverge.
 import sanitizeHtml from 'sanitize-html'
+import { DOCUMENT_LINK_ID_ATTR, DOCUMENT_LINK_VERSION_ATTR } from '@linyup/shared'
 
 // Allowlist matching the RichTextEditor's output (headings, lists, marks,
 // blockquote/code, tables, links, images incl. ResizableImage width, and Tiptap
@@ -18,7 +19,13 @@ export const RICH_TEXT_OPTIONS: sanitizeHtml.IOptions = {
     'table', 'thead', 'tbody', 'tr', 'td', 'th', 'div', 'span', 'label', 'input',
   ],
   allowedAttributes: {
-    a: ['href', 'target', 'rel'],
+    // The two document-link attributes are the whole widening, and they are on
+    // `a` alone: they carry a document id and an integer, they are never a URL,
+    // and a renderer that ignores them sees an ordinary anchor. Strip them and a
+    // link inside a published terms page loses its target for good — the raw
+    // body is sanitized on the way INTO the immutable version snapshot, so
+    // there is no second chance to recover the reference.
+    a: ['href', 'target', 'rel', DOCUMENT_LINK_ID_ATTR, DOCUMENT_LINK_VERSION_ATTR],
     img: ['src', 'alt', 'width', 'height'],
     input: ['type', 'checked', 'disabled'],
     ul: ['data-type'],
