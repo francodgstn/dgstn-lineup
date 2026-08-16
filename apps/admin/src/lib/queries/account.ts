@@ -13,6 +13,7 @@ import type {
 import {
   contactUsageForPlan,
   PLAN_PRICING,
+  readGatewayData,
   subscriptionCancellation,
   subscriptionIsCancelling,
 } from '@linyup/shared'
@@ -202,6 +203,7 @@ function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
   // `cancel_at` timestamp instead, so an operator reading only the boolean was
   // told "No" about a studio that had already left.
   const cancellation = subscriptionCancellation(sub)
+  const gateway = readGatewayData(sub as unknown as Record<string, unknown>)
   return {
     plan: sub.plan,
     status: sub.status,
@@ -215,9 +217,12 @@ function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
     currentPeriodStartMs: sub.current_period_start?.toMillis?.() ?? null,
     currentPeriodEndMs: sub.current_period_end?.toMillis?.() ?? null,
     trialEndsAtMs: sub.trial_ends_at?.toMillis?.() ?? null,
-    customerId: sub.gateway_data?.customer_id ?? null,
-    subscriptionId: sub.gateway_data?.subscription_id ?? null,
-    lastPaymentStatus: sub.gateway_data?.last_payment_status ?? null,
+    // Through readGatewayData: docs written before the dotted-key fix keep these
+    // as literal "gateway_data.customer_id" fields, and reading only the nested
+    // map showed the operator a blank Stripe id for a live paying studio.
+    customerId: gateway.customer_id ?? null,
+    subscriptionId: gateway.subscription_id ?? null,
+    lastPaymentStatus: gateway.last_payment_status ?? null,
     baseMonthly: PLAN_PRICING[sub.plan].baseMonthly,
   }
 }

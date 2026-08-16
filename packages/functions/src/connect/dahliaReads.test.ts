@@ -475,27 +475,37 @@ describe('THE BACKFILL WRITES WHAT THE WEBHOOK WRITES', () => {
     )
   })
 
-  it('the SaaS rail reads the subscription id from the shape that is actually stored', () => {
+  it('the SaaS rail reads the subscription id from BOTH shapes that are stored', () => {
     // The blocker this replaces: `data.gateway_data?.subscription_id` is
-    // `undefined` for every doc the webhook has written, so the SaaS half could
-    // not repair a single real document. saas-billing/index.ts builds dotted
-    // STRING KEYS and persists them with set(), which stores them LITERALLY —
-    // update() would have made a nested map, set() does not.
+    // `undefined` for every doc the webhook wrote before the shape was fixed, so
+    // the SaaS half could not repair a single real document. saas-billing built
+    // dotted STRING KEYS and persisted them with set(), which stores them
+    // LITERALLY — update() would have made a nested map, set() does not.
+    //
+    // The writer now emits a nested map (see saas-billing/gatewayData.test.ts),
+    // but this reader must keep BOTH arms: every doc written before that fix
+    // still carries the literal until `pnpm backfill:gateway-data` converges it,
+    // and this script is one of the things that has to work on those docs.
     const src = code(script)
     assert.ok(
       /data\['gateway_data\.subscription_id'\]/.test(src),
-      'the literal dotted field is the one the webhook writes; reading only the nested map ' +
+      'the literal dotted field is what un-migrated docs carry; reading only the nested map ' +
         'makes this script a no-op that reports success'
     )
-    // The writer side of that claim, so this guard notices if it ever moves to update().
     assert.ok(
-      /update\['gateway_data\.subscription_id'\] = event\.subscriptionId/.test(saasWebhook),
-      'the SaaS writer no longer uses a dotted key here — re-check what shape it stores'
+      /data\.gateway_data as \{ subscription_id\?: unknown \}/.test(src),
+      'the nested arm is what the fixed writer and the backfill produce'
+    )
+    // The writer side of that claim, so this guard notices if the shape moves again.
+    assert.ok(
+      !/update\['gateway_data\.[^']+'\]\s*=(?!\s*FieldValue\.delete)/.test(saasWebhook),
+      'the SaaS writer is writing dotted keys again — set() stores those literally, which is ' +
+        'the whole defect this guard exists for'
     )
     assert.ok(
       /await subRef\.set\(update, \{ merge: true \}\)/.test(saasWebhook),
-      'the SaaS writer no longer persists with set() — if it moved to update(), the dotted ' +
-        'keys are now real nested maps and the backfill fallback order should be revisited'
+      'the SaaS writer no longer persists with set() — if it moved to update(), dotted ' +
+        'keys would be real nested maps and this reader could drop its literal arm'
     )
   })
 })

@@ -44,6 +44,7 @@
     "audit:document-visibility": "tsx scripts/audit-document-visibility.ts",
     "backfill:document-mirrors": "tsx scripts/backfill-document-mirrors.ts",
     "backfill:subscription-lifecycle": "tsx scripts/backfill-subscription-lifecycle.ts",
+    "backfill:gateway-data": "tsx scripts/backfill-gateway-data.ts",
     "verify:waiver-ledger": "tsx scripts/verify-waiver-ledger.ts"
   },
   "devDependencies": {
