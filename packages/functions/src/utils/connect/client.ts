@@ -9,9 +9,42 @@
 //
 // Built on the Accounts v2 API (`stripe.v2.core.accounts` / `accountLinks`) with
 // controller-property style responsibilities — NOT the legacy Standard/Express/
-// Custom account types. The runtime Stripe SDK (stripe@22, OpenAPI v2252) pins an
-// API version that already supports Accounts v2; we deliberately do NOT override
-// `apiVersion` (a drifting string would diverge from the bundled types).
+// Custom account types.
+//
+// ─── apiVersion: still UNPINNED, and now guarded (decided 2026-08-16) ──────────
+// An unpinned version is what let three fields move underneath working code with
+// zero test failures (see utils/stripe/objectShape.ts), so the decision was re-taken from
+// scratch rather than inherited. It stands, for one reason:
+//
+//   Pinning would DECOUPLE the wire from the types. The SDK's `.d.ts` describes
+//   exactly the version it bundles (today 2026-04-22.dahlia). Leave it unpinned
+//   and a `pnpm update stripe` moves BOTH together, so the declarations keep
+//   telling the truth. Pin it, and the next SDK bump moves the types while the
+//   wire stays put — the same silent divergence as this defect, pointing the
+//   other way, and with no version string left to blame.
+//
+// What was actually missing was never the pin. It was that nothing checked. So
+// the pin is replaced by two guards, both in utils/stripe/objectShape.ts:
+//
+//   • COMPILE TIME — assertions stating, against the SDK's own declarations,
+//     where each migrated field is and is not, plus one comparing the bundled
+//     wire version to the version those readers were verified against. A `pnpm
+//     update stripe` that moves any of them turns `turbo run typecheck` red
+//     BEFORE deploy. That is the loud failure a pin was being asked to provide.
+//   • RUNTIME — every migrated read reports where it found its value, and logs
+//     `[stripe-shape] MISSING …` at error level when it is in neither the modern
+//     nor the legacy location.
+//
+// The one place a version IS pinned is the webhook ENDPOINT (scripts/stripe-sync.ts
+// sets `api_version` at creation, from this same SDK constant) — so deliveries
+// match the SDK the functions are deployed with, instead of following an account
+// default that drifts on its own schedule. Re-running `pnpm stripe:sync` is
+// therefore part of upgrading the SDK.
+//
+// The rich `Stripe.X` type NAMESPACE is genuinely not reachable from the default
+// import in this build — but the resource interfaces are, through the return type
+// of the method that fetches them. objectShape.ts shows how, and that is what
+// makes the compile-time guards above possible at all.
 
 import Stripe from 'stripe'
 import {

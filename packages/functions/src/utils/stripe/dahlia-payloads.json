@@ -1,0 +1,1526 @@
+{
+  "_provenance": {
+    "note": "Captured live from Stripe TEST mode on the Linyup Connect platform account, then scrubbed: any *email* field is member@example.test and any name field is \"Member Example\". ALSO REDACTED, because they are credentials rather than shapes and no fixture asserts on them: client_secret (it confirms the PaymentIntent from any browser), and the durable hosted_invoice_url / invoice_pdf / receipt_url links (each embeds an access token that renders a real invoice or receipt to anyone holding the URL). Every other value is the real Dahlia shape — which is the whole point of the file, so do not 'tidy' an id or a timestamp.",
+    "api_version": "2026-04-22.dahlia",
+    "connected_account": "acct_1TkCaqGz6xp8VQ38",
+    "captured_on": "2026-08-16",
+    "objects": {
+      "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0 (cancelled in the billing portal)",
+      "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+      "invoice_payment": "inpay_1U4jteGz6xp8VQ38wyNV4bAa",
+      "payment_intent": "pi_3U4jtbGz6xp8VQ38150eBCOy"
+    }
+  },
+  "subscription_retrieved": {
+    "id": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+    "object": "subscription",
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "application_fee_percent": 0.7,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null
+    },
+    "billing_cycle_anchor": 1786809199,
+    "billing_cycle_anchor_config": null,
+    "billing_mode": {
+      "flexible": {
+        "proration_discounts": "included"
+      },
+      "type": "flexible",
+      "updated_at": 1786809165
+    },
+    "billing_thresholds": null,
+    "cancel_at": 1789487599,
+    "cancel_at_period_end": false,
+    "canceled_at": 1786810613,
+    "cancellation_details": {
+      "comment": null,
+      "feedback": "switched_service",
+      "feedback_option": null,
+      "reason": "cancellation_requested"
+    },
+    "collection_method": "charge_automatically",
+    "created": 1786809199,
+    "currency": "chf",
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "days_until_due": null,
+    "default_payment_method": "pm_1U4jtaGz6xp8VQ38JJLxtqh3",
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "ended_at": null,
+    "invoice_settings": {
+      "account_tax_ids": null,
+      "custom_fields": null,
+      "description": null,
+      "footer": null,
+      "issuer": {
+        "type": "self"
+      }
+    },
+    "items": {
+      "object": "list",
+      "data": [
+        {
+          "id": "si_V4thmx8dHxcC3x",
+          "object": "subscription_item",
+          "billing_thresholds": null,
+          "created": 1786809199,
+          "current_period_end": 1789487599,
+          "current_period_start": 1786809199,
+          "discounts": [],
+          "metadata": {},
+          "plan": {
+            "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+            "object": "plan",
+            "active": false,
+            "amount": 8900,
+            "amount_decimal": "8900",
+            "billing_scheme": "per_unit",
+            "created": 1786809165,
+            "currency": "chf",
+            "interval": "month",
+            "interval_count": 1,
+            "livemode": false,
+            "metadata": {},
+            "meter": null,
+            "nickname": null,
+            "product": "prod_V4tg2HrdvMNQ1l",
+            "tiers_mode": null,
+            "transform_usage": null,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "price": {
+            "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+            "object": "price",
+            "active": false,
+            "billing_scheme": "per_unit",
+            "created": 1786809165,
+            "currency": "chf",
+            "custom_unit_amount": null,
+            "livemode": false,
+            "lookup_key": null,
+            "metadata": {},
+            "nickname": null,
+            "product": "prod_V4tg2HrdvMNQ1l",
+            "recurring": {
+              "interval": "month",
+              "interval_count": 1,
+              "meter": null,
+              "trial_period_days": null,
+              "usage_type": "licensed"
+            },
+            "tax_behavior": "unspecified",
+            "tiers_mode": null,
+            "transform_quantity": null,
+            "type": "recurring",
+            "unit_amount": 8900,
+            "unit_amount_decimal": "8900"
+          },
+          "quantity": 1,
+          "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+          "tax_rates": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/subscription_items?subscription=sub_1U4jtdGz6xp8VQ38RRkK37D0"
+    },
+    "latest_invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+    "livemode": false,
+    "managed_payments": {
+      "enabled": false
+    },
+    "metadata": {
+      "contactId": "seed-team-studio-contact-008",
+      "contactMode": "full",
+      "kind": "membership",
+      "priceId": "seed-team-studio-sub-starter-monthly",
+      "recurrence": "monthly",
+      "subscriptionTypeId": "seed-team-studio-sub-starter",
+      "subscriptionTypeName": "Starter",
+      "teamId": "seed-team-studio"
+    },
+    "next_pending_invoice_item_invoice": null,
+    "on_behalf_of": null,
+    "pause_collection": null,
+    "payment_settings": {
+      "payment_method_options": {
+        "acss_debit": null,
+        "bancontact": null,
+        "card": {
+          "network": null,
+          "request_three_d_secure": "automatic"
+        },
+        "customer_balance": null,
+        "konbini": null,
+        "payto": null,
+        "pix": null,
+        "sepa_debit": null,
+        "upi": null,
+        "us_bank_account": null
+      },
+      "payment_method_types": null,
+      "save_default_payment_method": "off"
+    },
+    "pending_invoice_item_interval": null,
+    "pending_setup_intent": null,
+    "pending_update": null,
+    "plan": {
+      "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+      "object": "plan",
+      "active": false,
+      "amount": 8900,
+      "amount_decimal": "8900",
+      "billing_scheme": "per_unit",
+      "created": 1786809165,
+      "currency": "chf",
+      "interval": "month",
+      "interval_count": 1,
+      "livemode": false,
+      "metadata": {},
+      "meter": null,
+      "nickname": null,
+      "product": "prod_V4tg2HrdvMNQ1l",
+      "tiers_mode": null,
+      "transform_usage": null,
+      "trial_period_days": null,
+      "usage_type": "licensed"
+    },
+    "quantity": 1,
+    "schedule": null,
+    "start_date": 1786809199,
+    "status": "active",
+    "test_clock": null,
+    "transfer_data": null,
+    "trial_end": null,
+    "trial_settings": {
+      "end_behavior": {
+        "missing_payment_method": "create_invoice"
+      }
+    },
+    "trial_start": null
+  },
+  "subscription_updated_event_object": {
+    "id": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+    "object": "subscription",
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "application_fee_percent": 0.7,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null
+    },
+    "billing_cycle_anchor": 1786809199,
+    "billing_cycle_anchor_config": null,
+    "billing_mode": {
+      "flexible": {
+        "proration_discounts": "included"
+      },
+      "type": "flexible",
+      "updated_at": 1786809165
+    },
+    "billing_thresholds": null,
+    "cancel_at": 1789487599,
+    "cancel_at_period_end": false,
+    "canceled_at": 1786810613,
+    "cancellation_details": {
+      "comment": null,
+      "feedback": "switched_service",
+      "feedback_option": null,
+      "reason": "cancellation_requested"
+    },
+    "collection_method": "charge_automatically",
+    "created": 1786809199,
+    "currency": "chf",
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "days_until_due": null,
+    "default_payment_method": "pm_1U4jtaGz6xp8VQ38JJLxtqh3",
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "ended_at": null,
+    "invoice_settings": {
+      "account_tax_ids": null,
+      "custom_fields": null,
+      "description": null,
+      "footer": null,
+      "issuer": {
+        "type": "self"
+      }
+    },
+    "items": {
+      "object": "list",
+      "data": [
+        {
+          "id": "si_V4thmx8dHxcC3x",
+          "object": "subscription_item",
+          "billing_thresholds": null,
+          "created": 1786809199,
+          "current_period_end": 1789487599,
+          "current_period_start": 1786809199,
+          "discounts": [],
+          "metadata": {},
+          "plan": {
+            "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+            "object": "plan",
+            "active": false,
+            "amount": 8900,
+            "amount_decimal": "8900",
+            "billing_scheme": "per_unit",
+            "created": 1786809165,
+            "currency": "chf",
+            "interval": "month",
+            "interval_count": 1,
+            "livemode": false,
+            "metadata": {},
+            "meter": null,
+            "nickname": null,
+            "product": "prod_V4tg2HrdvMNQ1l",
+            "tiers_mode": null,
+            "transform_usage": null,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "price": {
+            "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+            "object": "price",
+            "active": false,
+            "billing_scheme": "per_unit",
+            "created": 1786809165,
+            "currency": "chf",
+            "custom_unit_amount": null,
+            "livemode": false,
+            "lookup_key": null,
+            "metadata": {},
+            "nickname": null,
+            "product": "prod_V4tg2HrdvMNQ1l",
+            "recurring": {
+              "interval": "month",
+              "interval_count": 1,
+              "meter": null,
+              "trial_period_days": null,
+              "usage_type": "licensed"
+            },
+            "tax_behavior": "unspecified",
+            "tiers_mode": null,
+            "transform_quantity": null,
+            "type": "recurring",
+            "unit_amount": 8900,
+            "unit_amount_decimal": "8900"
+          },
+          "quantity": 1,
+          "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+          "tax_rates": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/subscription_items?subscription=sub_1U4jtdGz6xp8VQ38RRkK37D0"
+    },
+    "latest_invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+    "livemode": false,
+    "managed_payments": {
+      "enabled": false
+    },
+    "metadata": {
+      "contactId": "seed-team-studio-contact-008",
+      "contactMode": "full",
+      "kind": "membership",
+      "priceId": "seed-team-studio-sub-starter-monthly",
+      "recurrence": "monthly",
+      "subscriptionTypeId": "seed-team-studio-sub-starter",
+      "subscriptionTypeName": "Starter",
+      "teamId": "seed-team-studio"
+    },
+    "next_pending_invoice_item_invoice": null,
+    "on_behalf_of": null,
+    "pause_collection": null,
+    "payment_settings": {
+      "payment_method_options": {
+        "acss_debit": null,
+        "bancontact": null,
+        "card": {
+          "network": null,
+          "request_three_d_secure": "automatic"
+        },
+        "customer_balance": null,
+        "konbini": null,
+        "payto": null,
+        "pix": null,
+        "sepa_debit": null,
+        "upi": null,
+        "us_bank_account": null
+      },
+      "payment_method_types": null,
+      "save_default_payment_method": "off"
+    },
+    "pending_invoice_item_interval": null,
+    "pending_setup_intent": null,
+    "pending_update": null,
+    "plan": {
+      "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+      "object": "plan",
+      "active": false,
+      "amount": 8900,
+      "amount_decimal": "8900",
+      "billing_scheme": "per_unit",
+      "created": 1786809165,
+      "currency": "chf",
+      "interval": "month",
+      "interval_count": 1,
+      "livemode": false,
+      "metadata": {},
+      "meter": null,
+      "nickname": null,
+      "product": "prod_V4tg2HrdvMNQ1l",
+      "tiers_mode": null,
+      "transform_usage": null,
+      "trial_period_days": null,
+      "usage_type": "licensed"
+    },
+    "quantity": 1,
+    "schedule": null,
+    "start_date": 1786809199,
+    "status": "active",
+    "test_clock": null,
+    "transfer_data": null,
+    "trial_end": null,
+    "trial_settings": {
+      "end_behavior": {
+        "missing_payment_method": "create_invoice"
+      }
+    },
+    "trial_start": null
+  },
+  "invoice_delivered_event_object": {
+    "id": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+    "object": "invoice",
+    "account_country": "CH",
+    "account_name": "Sunrise Yoga Studio",
+    "account_tax_ids": null,
+    "amount_due": 8900,
+    "amount_overpaid": 0,
+    "amount_paid": 8900,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "attempt_count": 0,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "collection_method": "charge_automatically",
+    "created": 1786809199,
+    "currency": "chf",
+    "custom_fields": null,
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "customer_address": {
+      "city": null,
+      "country": "CH",
+      "line1": null,
+      "line2": null,
+      "postal_code": null,
+      "state": null
+    },
+    "customer_email": "member@example.test",
+    "customer_name": "Member Example",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1786809199,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "[redacted — durable Stripe link, not asserted on]",
+    "invoice_pdf": "[redacted — durable Stripe link, not asserted on]",
+    "issuer": {
+      "type": "self"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1U4jtbGz6xp8VQ38Bsda7ORH",
+          "object": "line_item",
+          "amount": 8900,
+          "currency": "chf",
+          "description": "1 × Starter (at CHF 89.00 / month)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+          "livemode": false,
+          "metadata": {
+            "contactId": "seed-team-studio-contact-008",
+            "contactMode": "full",
+            "kind": "membership",
+            "priceId": "seed-team-studio-sub-starter-monthly",
+            "recurrence": "monthly",
+            "subscriptionTypeId": "seed-team-studio-sub-starter",
+            "subscriptionTypeName": "Starter",
+            "teamId": "seed-team-studio"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+              "subscription_item": "si_V4thmx8dHxcC3x"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1789487599,
+            "start": 1786809199
+          },
+          "pretax_credit_amounts": [],
+          "pricing": {
+            "price_details": {
+              "price": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+              "product": "prod_V4tg2HrdvMNQ1l"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "8900"
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subtotal": 8900,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1U4jtbGz6xp8VQ38TFp0ScIe/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "RFAUEOEZ-0001",
+    "on_behalf_of": null,
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "contactId": "seed-team-studio-contact-008",
+          "contactMode": "full",
+          "kind": "membership",
+          "priceId": "seed-team-studio-sub-starter-monthly",
+          "recurrence": "monthly",
+          "subscriptionTypeId": "seed-team-studio-sub-starter",
+          "subscriptionTypeName": "Starter",
+          "teamId": "seed-team-studio"
+        },
+        "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0"
+      },
+      "type": "subscription_details"
+    },
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": {
+        "acss_debit": null,
+        "bancontact": null,
+        "card": {
+          "request_three_d_secure": "automatic"
+        },
+        "customer_balance": null,
+        "konbini": null,
+        "payto": null,
+        "pix": null,
+        "sepa_debit": null,
+        "upi": null,
+        "us_bank_account": null
+      },
+      "payment_method_types": null
+    },
+    "period_end": 1786809199,
+    "period_start": 1786809199,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1786809199,
+      "marked_uncollectible_at": null,
+      "paid_at": 1786809200,
+      "voided_at": null
+    },
+    "subtotal": 8900,
+    "subtotal_excluding_tax": 8900,
+    "test_clock": null,
+    "total": 8900,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 8900,
+    "total_pretax_credit_amounts": [],
+    "total_taxes": [],
+    "webhooks_delivered_at": null
+  },
+  "invoice_retrieved_expanded": {
+    "id": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+    "object": "invoice",
+    "account_country": "CH",
+    "account_name": "Sunrise Yoga Studio",
+    "account_tax_ids": null,
+    "amount_due": 8900,
+    "amount_overpaid": 0,
+    "amount_paid": 8900,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "attempt_count": 0,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "collection_method": "charge_automatically",
+    "created": 1786809199,
+    "currency": "chf",
+    "custom_fields": null,
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "customer_address": {
+      "city": null,
+      "country": "CH",
+      "line1": null,
+      "line2": null,
+      "postal_code": null,
+      "state": null
+    },
+    "customer_email": "member@example.test",
+    "customer_name": "Member Example",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1786809199,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "[redacted — durable Stripe link, not asserted on]",
+    "invoice_pdf": "[redacted — durable Stripe link, not asserted on]",
+    "issuer": {
+      "type": "self"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1U4jtbGz6xp8VQ38Bsda7ORH",
+          "object": "line_item",
+          "amount": 8900,
+          "currency": "chf",
+          "description": "1 × Starter (at CHF 89.00 / month)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+          "livemode": false,
+          "metadata": {
+            "contactId": "seed-team-studio-contact-008",
+            "contactMode": "full",
+            "kind": "membership",
+            "priceId": "seed-team-studio-sub-starter-monthly",
+            "recurrence": "monthly",
+            "subscriptionTypeId": "seed-team-studio-sub-starter",
+            "subscriptionTypeName": "Starter",
+            "teamId": "seed-team-studio"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+              "subscription_item": "si_V4thmx8dHxcC3x"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1789487599,
+            "start": 1786809199
+          },
+          "pretax_credit_amounts": [],
+          "pricing": {
+            "price_details": {
+              "price": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+              "product": "prod_V4tg2HrdvMNQ1l"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "8900"
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subtotal": 8900,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1U4jtbGz6xp8VQ38TFp0ScIe/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "RFAUEOEZ-0001",
+    "on_behalf_of": null,
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "contactId": "seed-team-studio-contact-008",
+          "contactMode": "full",
+          "kind": "membership",
+          "priceId": "seed-team-studio-sub-starter-monthly",
+          "recurrence": "monthly",
+          "subscriptionTypeId": "seed-team-studio-sub-starter",
+          "subscriptionTypeName": "Starter",
+          "teamId": "seed-team-studio"
+        },
+        "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0"
+      },
+      "type": "subscription_details"
+    },
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": {
+        "acss_debit": null,
+        "bancontact": null,
+        "card": {
+          "request_three_d_secure": "automatic"
+        },
+        "customer_balance": null,
+        "konbini": null,
+        "payto": null,
+        "pix": null,
+        "sepa_debit": null,
+        "upi": null,
+        "us_bank_account": null
+      },
+      "payment_method_types": null
+    },
+    "payments": {
+      "object": "list",
+      "data": [
+        {
+          "id": "inpay_1U4jteGz6xp8VQ38wyNV4bAa",
+          "object": "invoice_payment",
+          "amount_paid": 8900,
+          "amount_requested": 8900,
+          "created": 1786809199,
+          "currency": "chf",
+          "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+          "is_default": true,
+          "livemode": false,
+          "payment": {
+            "payment_intent": "pi_3U4jtbGz6xp8VQ38150eBCOy",
+            "type": "payment_intent"
+          },
+          "status": "paid",
+          "status_transitions": {
+            "canceled_at": null,
+            "paid_at": 1786809200
+          }
+        }
+      ],
+      "has_more": false,
+      "url": "/v1/invoices/payments"
+    },
+    "period_end": 1786809199,
+    "period_start": 1786809199,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1786809199,
+      "marked_uncollectible_at": null,
+      "paid_at": 1786809200,
+      "voided_at": null
+    },
+    "subtotal": 8900,
+    "subtotal_excluding_tax": 8900,
+    "test_clock": null,
+    "total": 8900,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 8900,
+    "total_pretax_credit_amounts": [],
+    "total_taxes": [],
+    "webhooks_delivered_at": 1786809204
+  },
+  "subscription_retrieved_expanded_latest_invoice_payments": {
+    "id": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+    "object": "subscription",
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "application_fee_percent": 0.7,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null
+    },
+    "billing_cycle_anchor": 1786809199,
+    "billing_cycle_anchor_config": null,
+    "billing_mode": {
+      "flexible": {
+        "proration_discounts": "included"
+      },
+      "type": "flexible",
+      "updated_at": 1786809165
+    },
+    "billing_thresholds": null,
+    "cancel_at": 1789487599,
+    "cancel_at_period_end": false,
+    "canceled_at": 1786810613,
+    "cancellation_details": {
+      "comment": null,
+      "feedback": "switched_service",
+      "feedback_option": null,
+      "reason": "cancellation_requested"
+    },
+    "collection_method": "charge_automatically",
+    "created": 1786809199,
+    "currency": "chf",
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "days_until_due": null,
+    "default_payment_method": "pm_1U4jtaGz6xp8VQ38JJLxtqh3",
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "ended_at": null,
+    "invoice_settings": {
+      "account_tax_ids": null,
+      "custom_fields": null,
+      "description": null,
+      "footer": null,
+      "issuer": {
+        "type": "self"
+      }
+    },
+    "items": {
+      "object": "list",
+      "data": [
+        {
+          "id": "si_V4thmx8dHxcC3x",
+          "object": "subscription_item",
+          "billing_thresholds": null,
+          "created": 1786809199,
+          "current_period_end": 1789487599,
+          "current_period_start": 1786809199,
+          "discounts": [],
+          "metadata": {},
+          "plan": {
+            "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+            "object": "plan",
+            "active": false,
+            "amount": 8900,
+            "amount_decimal": "8900",
+            "billing_scheme": "per_unit",
+            "created": 1786809165,
+            "currency": "chf",
+            "interval": "month",
+            "interval_count": 1,
+            "livemode": false,
+            "metadata": {},
+            "meter": null,
+            "nickname": null,
+            "product": "prod_V4tg2HrdvMNQ1l",
+            "tiers_mode": null,
+            "transform_usage": null,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "price": {
+            "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+            "object": "price",
+            "active": false,
+            "billing_scheme": "per_unit",
+            "created": 1786809165,
+            "currency": "chf",
+            "custom_unit_amount": null,
+            "livemode": false,
+            "lookup_key": null,
+            "metadata": {},
+            "nickname": null,
+            "product": "prod_V4tg2HrdvMNQ1l",
+            "recurring": {
+              "interval": "month",
+              "interval_count": 1,
+              "meter": null,
+              "trial_period_days": null,
+              "usage_type": "licensed"
+            },
+            "tax_behavior": "unspecified",
+            "tiers_mode": null,
+            "transform_quantity": null,
+            "type": "recurring",
+            "unit_amount": 8900,
+            "unit_amount_decimal": "8900"
+          },
+          "quantity": 1,
+          "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+          "tax_rates": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/subscription_items?subscription=sub_1U4jtdGz6xp8VQ38RRkK37D0"
+    },
+    "latest_invoice": {
+      "id": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+      "object": "invoice",
+      "account_country": "CH",
+      "account_name": "Sunrise Yoga Studio",
+      "account_tax_ids": null,
+      "amount_due": 8900,
+      "amount_overpaid": 0,
+      "amount_paid": 8900,
+      "amount_remaining": 0,
+      "amount_shipping": 0,
+      "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+      "attempt_count": 0,
+      "attempted": true,
+      "auto_advance": false,
+      "automatic_tax": {
+        "disabled_reason": null,
+        "enabled": false,
+        "liability": null,
+        "provider": null,
+        "status": null
+      },
+      "automatically_finalizes_at": null,
+      "billing_reason": "subscription_create",
+      "collection_method": "charge_automatically",
+      "created": 1786809199,
+      "currency": "chf",
+      "custom_fields": null,
+      "customer": "cus_V4tgs0Tf8sLuPB",
+      "customer_account": "acct_1U4jtaGz6xD07um7",
+      "customer_address": {
+        "city": null,
+        "country": "CH",
+        "line1": null,
+        "line2": null,
+        "postal_code": null,
+        "state": null
+      },
+      "customer_email": "member@example.test",
+      "customer_name": "Member Example",
+      "customer_phone": null,
+      "customer_shipping": null,
+      "customer_tax_exempt": "none",
+      "customer_tax_ids": [],
+      "default_payment_method": null,
+      "default_source": null,
+      "default_tax_rates": [],
+      "description": null,
+      "discounts": [],
+      "due_date": null,
+      "effective_at": 1786809199,
+      "ending_balance": 0,
+      "footer": null,
+      "from_invoice": null,
+      "hosted_invoice_url": "[redacted — durable Stripe link, not asserted on]",
+      "invoice_pdf": "[redacted — durable Stripe link, not asserted on]",
+      "issuer": {
+        "type": "self"
+      },
+      "last_finalization_error": null,
+      "latest_revision": null,
+      "lines": {
+        "object": "list",
+        "data": [
+          {
+            "id": "il_1U4jtbGz6xp8VQ38Bsda7ORH",
+            "object": "line_item",
+            "amount": 8900,
+            "currency": "chf",
+            "description": "1 × Starter (at CHF 89.00 / month)",
+            "discount_amounts": [],
+            "discountable": true,
+            "discounts": [],
+            "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+            "livemode": false,
+            "metadata": {
+              "contactId": "seed-team-studio-contact-008",
+              "contactMode": "full",
+              "kind": "membership",
+              "priceId": "seed-team-studio-sub-starter-monthly",
+              "recurrence": "monthly",
+              "subscriptionTypeId": "seed-team-studio-sub-starter",
+              "subscriptionTypeName": "Starter",
+              "teamId": "seed-team-studio"
+            },
+            "parent": {
+              "invoice_item_details": null,
+              "subscription_item_details": {
+                "invoice_item": null,
+                "proration": false,
+                "proration_details": {
+                  "credited_items": null
+                },
+                "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+                "subscription_item": "si_V4thmx8dHxcC3x"
+              },
+              "type": "subscription_item_details"
+            },
+            "period": {
+              "end": 1789487599,
+              "start": 1786809199
+            },
+            "pretax_credit_amounts": [],
+            "pricing": {
+              "price_details": {
+                "price": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+                "product": "prod_V4tg2HrdvMNQ1l"
+              },
+              "type": "price_details",
+              "unit_amount_decimal": "8900"
+            },
+            "quantity": 1,
+            "quantity_decimal": "1",
+            "subtotal": 8900,
+            "taxes": []
+          }
+        ],
+        "has_more": false,
+        "total_count": 1,
+        "url": "/v1/invoices/in_1U4jtbGz6xp8VQ38TFp0ScIe/lines"
+      },
+      "livemode": false,
+      "metadata": {},
+      "next_payment_attempt": null,
+      "number": "RFAUEOEZ-0001",
+      "on_behalf_of": null,
+      "parent": {
+        "quote_details": null,
+        "subscription_details": {
+          "metadata": {
+            "contactId": "seed-team-studio-contact-008",
+            "contactMode": "full",
+            "kind": "membership",
+            "priceId": "seed-team-studio-sub-starter-monthly",
+            "recurrence": "monthly",
+            "subscriptionTypeId": "seed-team-studio-sub-starter",
+            "subscriptionTypeName": "Starter",
+            "teamId": "seed-team-studio"
+          },
+          "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0"
+        },
+        "type": "subscription_details"
+      },
+      "payment_settings": {
+        "default_mandate": null,
+        "payment_method_options": {
+          "acss_debit": null,
+          "bancontact": null,
+          "card": {
+            "request_three_d_secure": "automatic"
+          },
+          "customer_balance": null,
+          "konbini": null,
+          "payto": null,
+          "pix": null,
+          "sepa_debit": null,
+          "upi": null,
+          "us_bank_account": null
+        },
+        "payment_method_types": null
+      },
+      "payments": {
+        "object": "list",
+        "data": [
+          {
+            "id": "inpay_1U4jteGz6xp8VQ38wyNV4bAa",
+            "object": "invoice_payment",
+            "amount_paid": 8900,
+            "amount_requested": 8900,
+            "created": 1786809199,
+            "currency": "chf",
+            "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+            "is_default": true,
+            "livemode": false,
+            "payment": {
+              "payment_intent": "pi_3U4jtbGz6xp8VQ38150eBCOy",
+              "type": "payment_intent"
+            },
+            "status": "paid",
+            "status_transitions": {
+              "canceled_at": null,
+              "paid_at": 1786809200
+            }
+          }
+        ],
+        "has_more": false,
+        "url": "/v1/invoices/payments"
+      },
+      "period_end": 1786809199,
+      "period_start": 1786809199,
+      "post_payment_credit_notes_amount": 0,
+      "pre_payment_credit_notes_amount": 0,
+      "receipt_number": null,
+      "rendering": null,
+      "shipping_cost": null,
+      "shipping_details": null,
+      "starting_balance": 0,
+      "statement_descriptor": null,
+      "status": "paid",
+      "status_transitions": {
+        "finalized_at": 1786809199,
+        "marked_uncollectible_at": null,
+        "paid_at": 1786809200,
+        "voided_at": null
+      },
+      "subtotal": 8900,
+      "subtotal_excluding_tax": 8900,
+      "test_clock": null,
+      "total": 8900,
+      "total_discount_amounts": [],
+      "total_excluding_tax": 8900,
+      "total_pretax_credit_amounts": [],
+      "total_taxes": [],
+      "webhooks_delivered_at": 1786809204
+    },
+    "livemode": false,
+    "managed_payments": {
+      "enabled": false
+    },
+    "metadata": {
+      "contactId": "seed-team-studio-contact-008",
+      "contactMode": "full",
+      "kind": "membership",
+      "priceId": "seed-team-studio-sub-starter-monthly",
+      "recurrence": "monthly",
+      "subscriptionTypeId": "seed-team-studio-sub-starter",
+      "subscriptionTypeName": "Starter",
+      "teamId": "seed-team-studio"
+    },
+    "next_pending_invoice_item_invoice": null,
+    "on_behalf_of": null,
+    "pause_collection": null,
+    "payment_settings": {
+      "payment_method_options": {
+        "acss_debit": null,
+        "bancontact": null,
+        "card": {
+          "network": null,
+          "request_three_d_secure": "automatic"
+        },
+        "customer_balance": null,
+        "konbini": null,
+        "payto": null,
+        "pix": null,
+        "sepa_debit": null,
+        "upi": null,
+        "us_bank_account": null
+      },
+      "payment_method_types": null,
+      "save_default_payment_method": "off"
+    },
+    "pending_invoice_item_interval": null,
+    "pending_setup_intent": null,
+    "pending_update": null,
+    "plan": {
+      "id": "price_1U4jt3Gz6xp8VQ38g9KaKVNu",
+      "object": "plan",
+      "active": false,
+      "amount": 8900,
+      "amount_decimal": "8900",
+      "billing_scheme": "per_unit",
+      "created": 1786809165,
+      "currency": "chf",
+      "interval": "month",
+      "interval_count": 1,
+      "livemode": false,
+      "metadata": {},
+      "meter": null,
+      "nickname": null,
+      "product": "prod_V4tg2HrdvMNQ1l",
+      "tiers_mode": null,
+      "transform_usage": null,
+      "trial_period_days": null,
+      "usage_type": "licensed"
+    },
+    "quantity": 1,
+    "schedule": null,
+    "start_date": 1786809199,
+    "status": "active",
+    "test_clock": null,
+    "transfer_data": null,
+    "trial_end": null,
+    "trial_settings": {
+      "end_behavior": {
+        "missing_payment_method": "create_invoice"
+      }
+    },
+    "trial_start": null
+  },
+  "checkout_session_completed_event_object": {
+    "id": "cs_test_a1JwDzgnLOYD3k3wfo08GyoboEWUmpa3REap3v3KRk9J6INSN0j1dZ7CLo",
+    "object": "checkout.session",
+    "adaptive_pricing": {
+      "enabled": true
+    },
+    "after_expiration": null,
+    "allow_promotion_codes": null,
+    "amount_subtotal": 8900,
+    "amount_total": 8900,
+    "automatic_tax": {
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "billing_address_collection": null,
+    "branding_settings": {
+      "background_color": "#ffffff",
+      "border_style": "rounded",
+      "button_color": "#0074d4",
+      "display_name": "Sunrise Yoga Studio",
+      "font_family": "default",
+      "icon": null,
+      "logo": null
+    },
+    "cancel_url": "http://localhost:3000/en/pay/result?status=cancelled&slug=iron-circle-gym&seg=shop",
+    "client_reference_id": null,
+    "client_secret": null,
+    "collected_information": {
+      "business_name": null,
+      "individual_name": null,
+      "shipping_details": null
+    },
+    "consent": null,
+    "consent_collection": null,
+    "created": 1786809165,
+    "currency": "chf",
+    "currency_conversion": null,
+    "custom_fields": [],
+    "custom_text": {
+      "after_submit": null,
+      "shipping_address": null,
+      "submit": null,
+      "terms_of_service_acceptance": null
+    },
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "customer_creation": "always",
+    "customer_details": {
+      "address": {
+        "city": null,
+        "country": "CH",
+        "line1": null,
+        "line2": null,
+        "postal_code": null,
+        "state": null
+      },
+      "business_name": null,
+      "email": "member@example.test",
+      "individual_name": null,
+      "name": "Member Example",
+      "phone": null,
+      "tax_exempt": "none",
+      "tax_ids": []
+    },
+    "customer_email": "member@example.test",
+    "discounts": [],
+    "expires_at": 1786895565,
+    "integration_identifier": null,
+    "invoice": "in_1U4jtbGz6xp8VQ38TFp0ScIe",
+    "invoice_creation": null,
+    "livemode": false,
+    "locale": null,
+    "managed_payments": {
+      "enabled": false
+    },
+    "metadata": {
+      "contactId": "seed-team-studio-contact-008",
+      "contactMode": "full",
+      "kind": "membership",
+      "priceId": "seed-team-studio-sub-starter-monthly",
+      "recurrence": "monthly",
+      "subscriptionTypeId": "seed-team-studio-sub-starter",
+      "subscriptionTypeName": "Starter",
+      "teamId": "seed-team-studio"
+    },
+    "mode": "subscription",
+    "origin_context": null,
+    "payment_intent": null,
+    "payment_link": null,
+    "payment_method_collection": "always",
+    "payment_method_configuration_details": {
+      "id": "pmc_1TkCbOGz6xp8VQ38RjjjXewZ",
+      "parent": "pmc_1Tk4N4Gz6xwscm1evB0WsxbV"
+    },
+    "payment_method_options": {
+      "card": {
+        "request_three_d_secure": "automatic"
+      }
+    },
+    "payment_method_types": [
+      "card",
+      "link",
+      "klarna"
+    ],
+    "payment_status": "paid",
+    "permissions": null,
+    "phone_number_collection": {
+      "enabled": false
+    },
+    "recovered_from": null,
+    "saved_payment_method_options": {
+      "allow_redisplay_filters": [
+        "always"
+      ],
+      "payment_method_remove": "disabled",
+      "payment_method_save": null
+    },
+    "setup_intent": null,
+    "shipping_address_collection": null,
+    "shipping_cost": null,
+    "shipping_options": [],
+    "status": "complete",
+    "submit_type": null,
+    "subscription": "sub_1U4jtdGz6xp8VQ38RRkK37D0",
+    "success_url": "http://localhost:3000/en/pay/result?status=success&slug=iron-circle-gym&seg=shop",
+    "total_details": {
+      "amount_discount": 0,
+      "amount_shipping": 0,
+      "amount_tax": 0
+    },
+    "ui_mode": "hosted_page",
+    "url": null,
+    "wallet_options": null
+  },
+  "payment_intent_succeeded_event_object": {
+    "id": "pi_3U4jtbGz6xp8VQ38150eBCOy",
+    "object": "payment_intent",
+    "allowed_payment_method_types": null,
+    "amount": 8900,
+    "amount_capturable": 0,
+    "amount_details": {
+      "tip": {}
+    },
+    "amount_received": 8900,
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "application_fee_amount": 62,
+    "automatic_payment_methods": null,
+    "canceled_at": null,
+    "cancellation_reason": null,
+    "capture_method": "automatic",
+    "client_secret": "[redacted — a client_secret confirms this PaymentIntent from any browser]",
+    "confirmation_method": "automatic",
+    "created": 1786809199,
+    "currency": "chf",
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "customer_account": "acct_1U4jtaGz6xD07um7",
+    "description": "Subscription creation",
+    "excluded_payment_method_types": null,
+    "last_payment_error": null,
+    "latest_charge": "ch_3U4jtbGz6xp8VQ381owxOrUH",
+    "livemode": false,
+    "managed_payments": {
+      "enabled": false
+    },
+    "metadata": {},
+    "next_action": null,
+    "on_behalf_of": null,
+    "payment_details": {
+      "customer_reference": null,
+      "order_reference": "cs_test_a1JwDzgnLOYD3k3wfo08GyoboEWUmpa3REap3v3KRk9J6INSN0j1dZ7CLo"
+    },
+    "payment_method": "pm_1U4jtaGz6xp8VQ38JJLxtqh3",
+    "payment_method_configuration_details": null,
+    "payment_method_options": {
+      "card": {
+        "installments": null,
+        "mandate_options": null,
+        "network": null,
+        "request_three_d_secure": "automatic",
+        "setup_future_usage": "off_session"
+      }
+    },
+    "payment_method_types": [
+      "card"
+    ],
+    "processing": null,
+    "receipt_email": null,
+    "review": null,
+    "setup_future_usage": "off_session",
+    "shared_payment_granted_token": null,
+    "shipping": null,
+    "source": null,
+    "statement_descriptor": null,
+    "statement_descriptor_suffix": null,
+    "status": "succeeded",
+    "transfer_data": null,
+    "transfer_group": null
+  },
+  "charge_succeeded_event_object": {
+    "id": "ch_3U4jtbGz6xp8VQ381owxOrUH",
+    "object": "charge",
+    "amount": 8900,
+    "amount_captured": 8900,
+    "amount_refunded": 0,
+    "application": "ca_UjXQAcgDIHmFWYZlJNPC4nKIhWQNxBbE",
+    "application_fee": "fee_1U4jtcGz6xp8VQ38m5dLRPrJ",
+    "application_fee_amount": 62,
+    "balance_transaction": "txn_3U4jtbGz6xp8VQ381RJR04LP",
+    "billing_details": {
+      "address": {
+        "city": null,
+        "country": "CH",
+        "line1": null,
+        "line2": null,
+        "postal_code": null,
+        "state": null
+      },
+      "email": "member@example.test",
+      "name": "Member Example",
+      "phone": null,
+      "tax_id": null
+    },
+    "calculated_statement_descriptor": "HMDBASE.COM",
+    "captured": true,
+    "created": 1786809200,
+    "currency": "chf",
+    "customer": "cus_V4tgs0Tf8sLuPB",
+    "description": "Subscription creation",
+    "destination": null,
+    "dispute": null,
+    "disputed": false,
+    "failure_balance_transaction": null,
+    "failure_code": null,
+    "failure_message": null,
+    "fraud_details": {},
+    "livemode": false,
+    "metadata": {},
+    "on_behalf_of": null,
+    "order": null,
+    "outcome": {
+      "advice_code": null,
+      "network_advice_code": null,
+      "network_decline_code": null,
+      "network_status": "approved_by_network",
+      "reason": null,
+      "risk_level": "normal",
+      "risk_score": 10,
+      "seller_message": "Payment complete.",
+      "type": "authorized"
+    },
+    "paid": true,
+    "payment_intent": "pi_3U4jtbGz6xp8VQ38150eBCOy",
+    "payment_method": "pm_1U4jtaGz6xp8VQ38JJLxtqh3",
+    "payment_method_details": {
+      "card": {
+        "amount_authorized": 8900,
+        "authorization_code": "108466",
+        "brand": "visa",
+        "checks": {
+          "address_line1_check": null,
+          "address_postal_code_check": null,
+          "cvc_check": "pass"
+        },
+        "country": "US",
+        "exp_month": 1,
+        "exp_year": 2029,
+        "extended_authorization": {
+          "status": "disabled"
+        },
+        "fingerprint": "oUVk5i3V3YWJYdBb",
+        "funding": "credit",
+        "incremental_authorization": {
+          "status": "unavailable"
+        },
+        "installments": null,
+        "last4": "4242",
+        "mandate": null,
+        "multicapture": {
+          "status": "unavailable"
+        },
+        "network": "visa",
+        "network_token": {
+          "used": false
+        },
+        "network_transaction_id": "117100120531011",
+        "overcapture": {
+          "maximum_amount_capturable": 8900,
+          "status": "unavailable"
+        },
+        "regulated_status": "unregulated",
+        "three_d_secure": null,
+        "transaction_link_id": null,
+        "wallet": null
+      },
+      "type": "card"
+    },
+    "radar_options": {},
+    "receipt_email": null,
+    "receipt_number": null,
+    "receipt_url": "[redacted — durable Stripe link, not asserted on]",
+    "refunded": false,
+    "review": null,
+    "shipping": null,
+    "source": null,
+    "source_transfer": null,
+    "statement_descriptor": null,
+    "statement_descriptor_suffix": null,
+    "status": "succeeded",
+    "transfer_data": null,
+    "transfer_group": null
+  }
+}

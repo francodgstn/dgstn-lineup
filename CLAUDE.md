@@ -504,6 +504,89 @@ So, in order of preference:
    boundary on purpose — that boundary is where corrections stop travelling).
    That file is where a bare number is allowed, because there it is executable.
 
+### Stripe fields move — never read one inline
+
+`apiVersion` is deliberately **unpinned**, so the wire version follows whatever
+`stripe-node` bundles (today `2026-04-22.dahlia`). Stripe moves fields between
+versions, and an `obj.field` read on an `any` that stops matching returns
+`undefined` **silently** — no exception, no failing test, just wrong data written
+confidently. Three shipped defects came from exactly that.
+
+So every read of a field Stripe has moved goes through
+**`packages/functions/src/utils/stripe/objectShape.ts`**, which is the ONE place
+that knows where each one lives: modern location first, narrow legacy fallback
+(so an older pinned deployment still works), and a report of which one answered
+so the caller can log `[stripe-shape] MISSING …` when it is neither. Add a reader
+there; never re-inline one at a call site.
+
+That module also holds what a pin was being asked to provide: compile-time
+assertions — checked against the SDK's own declarations, reachable via
+`Awaited<ReturnType<StripeInstance['x']['retrieve']>>` even though the
+`Stripe.X` namespace is not — stating where each field is and is not, plus one
+comparing the bundled wire version to the version the readers were verified
+against. **A `pnpm update stripe` that moves any of them fails
+`turbo run typecheck`**, and the upgrade then also needs `pnpm stripe:sync`
+re-run (endpoints are pinned to the SDK's version at creation). The full
+reasoning is in the header of `utils/connect/client.ts`; the fixtures are real
+captured payloads in `utils/stripe/dahlia-payloads.json`.
+
+### A cancellation is a RECORD, not a boolean
+
+"Cancels at period end" is a **third state** — still live, will not renew — and
+the billing portal expresses it as a `cancel_at` **timestamp** while leaving
+`cancel_at_period_end` false. So both subscription kinds
+(`MemberSubscription`, `SaasSubscription`) store the whole record: `cancel_at`
+(when it stops), `canceled_at` (when it was asked for — the two bracket the
+win-back window) and `cancellation_details` (`reason`, `feedback`, `comment`).
+
+**`reason` is the load-bearing one.** `payment_failed` and
+`cancellation_requested` are the same stored state and completely different
+studio actions, and a boolean could not tell them apart — which is most of why
+this was worth more than a date.
+
+`shared/utils/subscriptionLifecycle.ts` owns the predicates every surface reads
+it through. **WHETHER and WHEN are two questions**, and fusing them was its own
+bug: **`subscriptionIsCancelling()`** answers whether (gate UI on this),
+**`subscriptionEndsAt()`** answers when *if the date is known* — it returns null
+for a pre-migration doc that is plainly cancelling — and
+**`subscriptionCancellation()`** returns the whole record or null. All three gate
+on the current LIFECYCLE STATE, never on the presence of a cancellation field, so
+a stale record left by a reactivation is stale data, not a wrong screen.
+
+Two writer rules, each of which was a bug first:
+
+- **On a LIVE event (`created` / `updated`), write the record whole — every
+  field, nulls included.** A reactivation is the event that must ERASE a stored
+  end date and reason, and an omitted key on a `merge` leaves them standing.
+  **On the ENDING event the two rails differ, deliberately:** the SaaS
+  `subscription.cancelled` branch writes `canceled_at` /
+  `cancellation_details` only when the payload carries them, so a `deleted`
+  event stating no reason cannot erase the one an earlier `updated` recorded.
+  Connect routes `deleted` into the same `handleSubscription` and so writes them
+  unconditionally — that is the HAZARD, not the standard: a `deleted` payload
+  without `cancellation_details` blanks a member's churn reason at the moment it
+  is most worth having. The SaaS rule is the safe direction if it ever bites.
+  Both behaviours are pinned in `connect/dahliaReads.test.ts`; anything
+  repairing these docs reproduces ITS RAIL's rule rather than picking one.
+- **`cancellation_details` is set whole or set to null — never key-by-key.**
+  Firestore DEEP-merges a nested map, so a partial write keeps the previous
+  cancellation's `feedback` behind the new `reason`.
+
+Surfaces: the studio sees the date + the full record (contact detail, operator
+console); a studio reading its OWN subscription sees the date + the reason but
+not the survey it wrote itself (`audience` on
+`components/payments/SubscriptionCancellationNote.tsx`, whose copy lives in the
+ONE `SubscriptionCancellation` message namespace); the member's Space sees the
+date only — `Contact.active_subscriptions` mirrors only LIVE subscriptions, so a
+reason never reaches it.
+
+Docs written before the readers existed carry a null period end, and — where the
+cancellation came from the billing portal — a false `cancel_at_period_end` with
+no `cancel_at` at all. `pnpm backfill:subscription-lifecycle` repairs them from
+Stripe through the same readers — see its header for why the webhook's
+self-healing is not enough (the `updated` event that carried the cancellation has
+already been consumed, and the next one fires when the member is already gone).
+
 ### SaaS plan tiers (Phase 2)
 
 ```typescript

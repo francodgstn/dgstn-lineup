@@ -9,71 +9,156 @@ Every entry states what was **verified**, so whoever picks it up starts from
 evidence rather than from a symptom. Delete an entry when it ships; do not let it
 rot into a claim nobody has re-checked.
 
-Found during manual testing of the local stack on **2026-08-15**, against
-commit `129a8c9` (Wave 3 Phase 3). All were **pre-existing** — none was
-introduced by Wave 3 — and all survived a full static pass (typecheck, 784
-tests, lint, four adversarial review lenses). They are integration-boundary
-defects: the code is correct about itself and wrong about the outside world,
-which is the category automated verification is structurally blind to.
+**Refer to an entry by its TITLE, never by its number.** The numbers renumber
+every time something ships: on 2026-08-16 two entries shipped and were deleted
+(below), so every number after them moved in a single day. The one code comment
+that points at this file names its entry by title
+(`apps/web/src/lib/publicQueryError.ts`); keep it that way.
 
-Entry 3 (Space "My courses" 403) shipped on **2026-08-16** and was deleted from
-this file per the rule above. The fix lives in the `{path=**}/purchases` block in
+The appointment-picker entry was found during manual testing of the local stack
+on **2026-08-15**, against commit `129a8c9` (Wave 3 Phase 3); the Stripe ones
+while migrating the Stripe reads on **2026-08-16**. All are **pre-existing**, and
+all survived a full static pass (typecheck, tests, lint, adversarial review).
+They are integration-boundary defects: the code is correct about itself and wrong
+about the outside world, which is the category automated verification is
+structurally blind to.
+
+The Space "My courses" 403 shipped on **2026-08-16** and was deleted from this
+file per the rule above. The fix lives in the `{path=**}/purchases` block in
 `firestore.rules` and is held in place by
 `packages/functions/src/connect/coursePurchaseAccess.test.ts`.
 
----
+"Stripe Connect reads a pre-Basil object model" shipped on **2026-08-16** and was
+likewise deleted. Every migrated field now reads through
+`packages/functions/src/utils/stripe/objectShape.ts` — modern location first,
+narrow legacy fallback, and a report of which one answered. That module also
+carries the guard that replaced the rejected `apiVersion` pin: compile-time
+assertions, checked against the SDK's own declarations, stating where each field
+is and is not, plus one comparing the bundled wire version to the version the
+readers were verified against. A `pnpm update stripe` that moves any of them
+fails `turbo run typecheck` before it can reach production. The fixtures holding
+the modern shape are real captured Dahlia payloads
+(`packages/functions/src/utils/stripe/dahlia-payloads.json`, exercised by
+`objectShape.test.ts`); the reasoning for leaving `apiVersion` unpinned is
+recorded in the header of `packages/functions/src/utils/connect/client.ts`.
 
-## 1. Stripe Connect reads a pre-Basil object model
-
-**Severity: high.** Three symptoms, one root cause.
-
-`stripe-node` is `^22.1.1` and `apiVersion` is deliberately unpinned
-(`packages/functions/src/utils/connect/client.ts`, with a stated reason), so the
-bundled default is Stripe's **Basil** API version (2025-03-31) or later. Three
-fields the Connect webhook reads were moved or removed in Basil. Each read yields
-`undefined`/`false` silently — no exception, no failing test, just wrong data
-written confidently.
-
-| Symptom | Field read | Where it lives now |
-|---|---|---|
-| Subscription's first payment shows "unassigned" in the admin Payments Contact column | `invoice.payment_intent` | `invoice.payments.data[].payment.payment_intent` |
-| Membership expiry stored `null` | `subscription.current_period_end` | `subscription.items.data[].current_period_end` |
-| A billing-portal cancellation surfaces nowhere | `subscription.cancel_at_period_end` | `subscription.cancel_at` (a timestamp; the boolean stays `false`) |
-
-**Verified live**, not inferred:
-
-- invoice `in_1U4jtbGz6xp8VQ38TFp0ScIe` — `payment_intent` key **absent**;
-  `payments.data[0].payment.payment_intent = pi_3U4jtbGz6xp8VQ38150eBCOy`
-- subscription `sub_1U4jtdGz6xp8VQ38RRkK37D0` — top-level `current_period_end:
-  None`; `items.data[0].current_period_end: 1789487599`
-- same subscription after cancelling in the portal — `status: active`,
-  `cancel_at_period_end: False`, `cancel_at: 1789487599 (2026-09-15)`,
-  `cancellation_details: {reason: cancellation_requested}`
-
-**Webhook delivery is NOT the problem**: two `customer.subscription.updated`
-events were forwarded and both returned 200; `last_event_id` on the stored doc
-matches the second. The handler ran and stored the wrong thing.
-
-Consequences beyond the visible ones: `stampFinanceContact` never runs, so the
-**finance row** for every subscription's first charge is also missing its
-contact; and `membershipExpiration` is written `null` — check whether anything
-treats a null expiry as "never expires" for access gating.
-
-**The work is a migration, not three patches**: audit every Stripe field read
-across `connect/`, `appointments/`, `booking/`, `finance/` and `scripts/`
-(including `handleInvoice`, the renewal path, and the SaaS-side
-`handleStripeWebhook`), fix modern-first with a legacy fallback, and **decide
-explicitly on pinning `apiVersion`** — an unpinned version is exactly what let
-three fields move underneath working code. If it stays unpinned, add a guard
-that fails loudly on an absent expected field.
-
-Also needed: the UI cannot currently express "cancels at period end", which is a
-third state distinct from active and cancelled. Storing `cancel_at` is not enough
-— the admin subscription views and the contact Space need to show it.
+What that migration left behind is NOT fixed, and is recorded below as its own
+entries rather than left inside a deleted one. The one worry in the shipped
+entry's own "verified live" list — that a null membership expiry might be treated
+as "never expires" for access gating — was checked and is NOT a risk:
+`writeContactMembership` discards the expiry outright (`void
+opts.membershipExpiration`), gating runs off `Contact.active_subscriptions`, and
+the rollup keys on `status` + `pause_collection` only. That symptom was a
+data-quality defect, not an entitlement leak.
 
 ---
 
-## 2. The appointment picker ignores the signed-in contact session
+## 1. A BYO studio can double-count its own recurring revenue
+
+**Severity: medium.** Structural, and only partly ours to fix.
+
+`handleTeamStripeWebhook` keys every payment row on the underlying PaymentIntent
+so that all events about one payment converge on one `payment_events` doc. Under
+the current Stripe API version an `invoice.*` payload can no longer name its
+PaymentIntent (`invoice.payment_intent` was removed; the replacement `payments`
+list is **expand-only** and confirmed absent from the delivered payload), and a
+`payment_intent.*` / `charge.*` payload can no longer name its invoice
+(`payment_intent.invoice` was removed in the same change). The BYO rail holds NO
+Stripe credentials by design, so it cannot expand or retrieve to bridge them.
+
+Consequence: a studio subscribed to BOTH `invoice.payment_succeeded` and
+`payment_intent.succeeded` gets two rows — and two finance-journal rows — for one
+recurring payment.
+
+**What shipped instead of a fix:** the divergence is now visible rather than
+silent. A row keyed on anything other than the payment carries
+`gateway_ref_kind: 'fallback'`, and the reader logs `[stripe-shape] MISSING …`.
+The module header states which events a studio should subscribe to.
+
+**What would actually close it** (each has a real cost — pick deliberately):
+subscribe BYO studios to `invoice_payment.paid` instead of
+`invoice.payment_succeeded` (it carries both ids, so it converges — but adding it
+*alongside* the invoice event makes the double-count worse, so it is a swap, not
+an addition); or give the rail read-only credentials, which contradicts its
+stated design; or dedupe across keys, which needs a second doc per payment.
+
+---
+
+## 2. Nothing tells a BYO studio which webhook events to subscribe to
+
+**Severity: low**, but it is what turns entry 1 from a trap into a live bug.
+
+The correct event set is now written down in the header of
+`packages/functions/src/billing/handleTeamStripeWebhook.ts`, where a studio will
+never see it. The BYO integration settings screen shows the endpoint URL and the
+signing-secret field and says nothing about events.
+
+---
+
+## 3. Stripe endpoint drift on staging (ops, not code)
+
+Found while auditing the delivery side on 2026-08-16, against live Stripe:
+
+- `linyup-staging/handleConnectWebhook` is **missing `payment_intent.succeeded`,
+  `payment_intent.payment_failed` and `payout.paid`**, and carries an extra
+  `payout.created`. On staging, **no member payment is recorded at all.**
+- The three registered endpoints disagreed on `api_version`: staging's Connect
+  endpoint pinned to `2026-04-22.dahlia`, the other two following the account
+  default.
+
+`pnpm stripe:sync --project <p>` now reports both (it pins `api_version` at
+creation from the installed SDK, and reports drift on existing endpoints —
+Stripe does not allow the version to be changed after creation, so a wrong one
+must be recreated). Running it, and recreating the staging Connect endpoint, is
+ops work that has not been done.
+
+---
+
+## 4. The subscription lifecycle backfill has not been run anywhere
+
+Ops, not code — the companion to entry 3, and the same shape: the tool exists and
+nobody has run it.
+
+Every `member_subscriptions` and `saas_subscriptions` doc written before the
+Dahlia readers shipped carries `current_period_end: null`, and none carries
+`cancel_at` / `canceled_at` / `cancellation_details` at all — those fields were
+not being read. `cancel_at_period_end` is the one that is only half wrong: the
+old code read Stripe's boolean directly, so an API-initiated cancellation stored
+`true`, while a BILLING-PORTAL one (which leaves that boolean false and states a
+`cancel_at` instead) stored `false` and nothing else. **The webhook self-heals**
+— on both rails the `created`/`updated` branches rewrite every lifecycle field
+unconditionally, nulls included (the `cancelled` branches deliberately do not;
+see CLAUDE.md, "A cancellation is a RECORD, not a boolean") — but the timing is
+the problem, and it differs per symptom:
+
+- a null period end heals at the next RENEWAL: up to a month, or a YEAR on an
+  annual plan;
+- a portal cancellation does **not** heal in any useful window. The `updated`
+  event carrying `cancel_at` was already delivered, answered 200 and recorded in
+  `last_event_id`; Stripe will not redeliver. The next event is the `deleted`
+  one, which fires when the member is already gone — so the entire period a
+  studio needs the warning for is the period nothing gives it.
+
+The two interact: a STORED doc from that window that carries the boolean and no
+`cancel_at` (nothing was reading one) leaves `subscriptionEndsAt()` falling back
+to `current_period_end` for the date — which is null on the same doc. So its
+third state stays dateless even after the code fix, until this runs.
+
+`pnpm backfill:subscription-lifecycle --project <p>` re-fetches each subscription
+from Stripe and repairs it through the same readers the webhook uses (dry-run by
+default, `--apply` to write, re-runnable, exits non-zero on anything it cannot
+repair). It was exercised end-to-end against live Stripe test data on 2026-08-16
+— but its `payload()` has since been made PER-RAIL (it was writing a
+`current_period_start` the Connect rail does not have, and a billing period on
+the SaaS ended path that the `subscription.cancelled` branch never writes), and
+that change has NOT been re-exercised end-to-end. What holds it today is
+`connect/dahliaReads.test.ts`, which pins each branch against the handler it
+mirrors. Re-run the dry run before trusting an `--apply`. **Not yet run against
+sandbox, staging or production.**
+
+---
+
+## 5. The appointment picker ignores the signed-in contact session
 
 **Severity: medium-high** (pending the pricing question below).
 

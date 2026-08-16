@@ -43,6 +43,7 @@
     "backfill:document-versions": "tsx scripts/backfill-document-versions.ts",
     "audit:document-visibility": "tsx scripts/audit-document-visibility.ts",
     "backfill:document-mirrors": "tsx scripts/backfill-document-mirrors.ts",
+    "backfill:subscription-lifecycle": "tsx scripts/backfill-subscription-lifecycle.ts",
     "verify:waiver-ledger": "tsx scripts/verify-waiver-ledger.ts"
   },
   "devDependencies": {

@@ -244,6 +244,9 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
         if (event.currentPeriodEnd)
           update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
         update.cancel_at_period_end = false
+        update.cancel_at = null
+        update.canceled_at = null
+        update.cancellation_details = null
         update.trial_ends_at = null
         update['gateway_data.activeAddOns'] = addonActive
         if (!existing.exists) {
@@ -257,8 +260,18 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
           update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
         if (event.currentPeriodEnd)
           update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-        if (event.cancelAtPeriodEnd !== undefined)
+        if (event.cancelAtPeriodEnd !== undefined) {
           update.cancel_at_period_end = event.cancelAtPeriodEnd
+          // The WHOLE record, written on every subscription.updated with nulls
+          // included: a reactivation is exactly the event that must ERASE a
+          // previous end date and reason, and an omitted key on a merge would
+          // leave them standing. `cancellation_details` is set whole or nulled —
+          // Firestore deep-merges a nested map, so a partial write would keep
+          // the old cancellation's feedback behind the new reason.
+          update.cancel_at = event.cancelAt ? Timestamp.fromDate(event.cancelAt) : null
+          update.canceled_at = event.canceledAt ? Timestamp.fromDate(event.canceledAt) : null
+          update.cancellation_details = event.cancellationDetails ?? null
+        }
         if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
         if (event.customerId) update['gateway_data.customer_id'] = event.customerId
         update['gateway_data.activeAddOns'] = addonActive
@@ -266,7 +279,15 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
 
       case 'subscription.cancelled':
         update.status = 'cancelled'
+        // It has ENDED — there is no longer a future end to announce.
         update.cancel_at_period_end = false
+        update.cancel_at = null
+        // …but WHEN and WHY it was cancelled are KEPT, and this is the event that
+        // carries them most reliably. Only overwritten when the payload actually
+        // says something: a `deleted` event with no cancellation_details must not
+        // erase the reason an earlier `updated` already recorded.
+        if (event.canceledAt) update.canceled_at = Timestamp.fromDate(event.canceledAt)
+        if (event.cancellationDetails) update.cancellation_details = event.cancellationDetails
         break
 
       case 'payment.succeeded':
@@ -438,6 +459,13 @@ export const reactivateSaasSubscription = onCall(async (request) => {
 
   await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
     cancel_at_period_end: false,
+    // Clear the whole record, not just the boolean. Reactivating after a
+    // BILLING-PORTAL cancel is the case where the DATE, not the boolean, was
+    // carrying the state — and a reason left behind would outlive the
+    // cancellation it describes.
+    cancel_at: null,
+    canceled_at: null,
+    cancellation_details: null,
     updated_at: FieldValue.serverTimestamp(),
   })
 

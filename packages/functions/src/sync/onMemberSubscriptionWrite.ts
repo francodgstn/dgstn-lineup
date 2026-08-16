@@ -12,6 +12,8 @@ import {
   CONTACTS_COLLECTION,
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
+  subscriptionEndsAtMs,
+  subscriptionIsCancelling,
   type SubscriptionRollupStatus,
   type ActiveSubscriptionSummary,
 } from '@linyup/shared'
@@ -87,6 +89,15 @@ export const onMemberSubscriptionWrite = onDocumentWritten(
           recurrence: (data.recurrence as string | null) ?? null,
           amount: Math.round((data.amount as number) ?? 0) / 100, // Rappen → major units
           status: s,
+          // A subscription that is cancelled but still LIVE stays 'active' here —
+          // the member still trains until it lapses. The date is what says it is
+          // winding down, and it rides the summary so the member's own Space can
+          // show it without reading member_subscriptions (which it cannot).
+          cancels_at_ms: subscriptionEndsAtMs(data),
+          // …and WHETHER, which the date cannot express on its own: a
+          // pre-migration doc is cancelling with no date to give, and a Space
+          // keyed only on the date told that member nothing.
+          cancelling: subscriptionIsCancelling(data),
         })
       }
     }

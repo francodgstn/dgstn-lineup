@@ -80,6 +80,15 @@ export interface ExternalPayment {
   payment_mode?: string | null
   /** The gateway's own reference: Payrexx transaction id / Stripe event id / manual autoId. */
   gatewayRef: string
+  /**
+   * Whether `gatewayRef` names the PAYMENT (the intended dedup key, so every
+   * event about one payment converges on one row) or something else the event
+   * happened to carry. `'fallback'` warns that a sibling event about the same
+   * money would write a SECOND row — see the caveat in
+   * functions/src/billing/handleTeamStripeWebhook.ts. Absent on rows written
+   * before the field existed, and on rails that never fall back.
+   */
+  gateway_ref_kind?: 'payment' | 'fallback'
   /** Linked Linyup contact, or null when unassigned (manager assigns later). */
   contact_id: string | null
   assignment_status: PaymentAssignmentStatus

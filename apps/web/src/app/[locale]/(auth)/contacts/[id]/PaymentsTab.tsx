@@ -20,6 +20,8 @@ import {
   SUBSCRIPTION_ROLLUP_STATUSES,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  subscriptionEndsAtMs,
+  subscriptionIsCancelling,
 } from '@linyup/shared'
 import { useContactPayments } from '@/hooks/useConnect'
 import { connectToUnified, byoToUnified, mergePaymentRows, formatMoneyMinor } from '@/lib/payments'
@@ -29,6 +31,7 @@ import {
 } from '@/components/payments/AssignPaymentDialog'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
+import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -164,6 +167,27 @@ export function MemberSubscriptionsSection({
     return (sub.status === 'active' || sub.status === 'trialing') && !isBillingPaused(sub)
   }
 
+  // "Cancels on …" is a THIRD state, distinct from active and cancelled: the
+  // member is still training and still has access, but this will not renew. The
+  // date comes from the ONE shared predicate so this tab and the member's own
+  // Space can never disagree about it.
+  //
+  // WHETHER IS ASKED SEPARATELY FROM WHEN, and the fallback line is the whole
+  // point. A pre-migration member_subscriptions doc carries the cancellation
+  // boolean and NO dates at all — the period had moved onto the subscription
+  // item and the writer stored null — so keying the line on the date alone
+  // rendered nothing whatsoever for that population: no date, and no
+  // SubscriptionCancellationNote either (it has no `canceled_at` and no
+  // `cancellation_details` to print, so it returns null too). A member winding
+  // down looked identical to one renewing. This is the same gap that was closed
+  // for the operator console, which says "at period end (date not recorded)"
+  // rather than falling silent.
+  function endsAtLabel(sub: MemberSubscription): string | null {
+    const ms = subscriptionEndsAtMs(sub)
+    if (ms !== null) return t('subCancelsOn', { date: new Date(ms).toLocaleDateString() })
+    return subscriptionIsCancelling(sub) ? t('subCancelsAtPeriodEnd') : null
+  }
+
   return (
     <>
       <div className="rounded-lg border divide-y">
@@ -171,9 +195,10 @@ export function MemberSubscriptionsSection({
           const paused = isBillingPaused(sub)
           const freezable = canFreeze(sub)
           const resumable = paused
+          const endsAt = endsAtLabel(sub)
 
           return (
-            <div key={sub.id} className="flex items-center gap-3 p-3">
+            <div key={sub.id} className="flex items-start gap-3 p-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">
                   {sub.subscriptionTypeName || formatMoneyMinor(sub.amount, sub.currency)}
@@ -183,6 +208,12 @@ export function MemberSubscriptionsSection({
                     ? formatMoneyMinor(sub.amount, sub.currency)
                     : sub.subscriptionId}
                 </p>
+                {endsAt && <p className="text-xs text-amber-600 truncate">{endsAt}</p>}
+                {/* WHEN it was asked for and WHY — the record the boolean could not
+                    carry. Shown for an ENDED subscription too (where there is no
+                    "cancels on" line left): a studio reviewing a lapsed member
+                    needs to know whether they walked or their card did. */}
+                <SubscriptionCancellationNote subscription={sub} audience="studio" />
               </div>
               <Badge
                 variant="secondary"

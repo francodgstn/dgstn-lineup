@@ -81,6 +81,23 @@ import {
   retrieveChargeFees,
   upgradeChargeFeesIfDegraded,
 } from '../finance/journal'
+// Stripe moved several of the fields this file reads (Basil → Dahlia). Every one
+// of those reads goes through objectShape.ts, which knows the modern location,
+// keeps a narrow legacy fallback, and says out loud when a field is in neither.
+// Never re-inline one of these reads — see that module for what it cost last
+// time.
+import {
+  INVOICE_PAYMENTS_EXPAND,
+  SUBSCRIPTION_LATEST_INVOICE_PAYMENTS_EXPAND,
+  invoiceBillsSubscription,
+  readInvoicePaymentIntentId,
+  readInvoiceSubscriptionId,
+  readInvoiceSubscriptionMetadata,
+  readOrReport,
+  readSubscriptionCancellation,
+  readSubscriptionPeriod,
+  reportStripeShape,
+} from '../utils/stripe/objectShape'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
 // Covers classic Connect account events and v2 thin account events.
@@ -499,13 +516,38 @@ async function handlePaymentIntent(
 ): Promise<void> {
   const md = (pi.metadata ?? {}) as Record<string, string>
   const now = FieldValue.serverTimestamp()
+
+  // ── WHAT THE OTHER HANDLER MAY ALREADY KNOW ────────────────────────────────
+  // An invoice-generated PaymentIntent — every subscription charge — carries NO
+  // metadata of its own. So on that rail this handler knows the money and
+  // `handleCheckoutCompleted` knows the buyer, and which of them runs first is up
+  // to Stripe: event order is explicitly not guaranteed, and on the live test
+  // account the two are 1–4 seconds apart (on one one-off checkout, the same
+  // second). Every field this handler writes from `md` therefore has to be safe
+  // in BOTH orders — a `merge` that writes a default over a resolved value is
+  // still a write.
+  //
+  // One read, answering that for `contactId` and `purpose` (the two fields the
+  // "unassigned subscription payment" symptom was actually made of) and for the
+  // finance journal row further down.
+  const prior = (await memberPaymentRef(team.teamId, pi.id).get()).data()
+  const knownContactId = md.contactId ?? (prior?.contactId as string | undefined) ?? null
+
   await memberPaymentRef(team.teamId, pi.id).set(
     {
       teamId: team.teamId,
       paymentIntentId: pi.id,
       chargeId: typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null),
-      contactId: md.contactId ?? null,
-      purpose: md.purpose ?? 'payment',
+      // OMITTED, never nulled — the same rule handleSubscription already applies
+      // to its own identity fields. `contactId: md.contactId ?? null` merged an
+      // unconditional null straight over the contact the checkout handler had
+      // just resolved.
+      ...(knownContactId ? { contactId: knownContactId } : {}),
+      // `purpose` has a DEFAULT, so unlike contactId it cannot simply be omitted
+      // (a row with no purpose is worse than a stale one). Metadata first, then
+      // whatever is already recorded, then the default — so the checkout
+      // handler's 'membership' is never overwritten with 'payment'.
+      purpose: md.purpose ?? (prior?.purpose as string | undefined) ?? 'payment',
       // Product sales (kind === 'product') carry the catalogue reference so the
       // payments dashboard can show what was bought + which variant.
       ...(md.kind === 'product'
@@ -590,6 +632,14 @@ async function handlePaymentIntent(
       const chargeId =
         typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null)
       const fees = accountId && chargeId ? await retrieveChargeFees(accountId, chargeId) : null
+      // THE OTHER HALF OF THE ORDERING FIX, using the same `knownContactId`
+      // resolved at the top. `stampFinanceContact` covers the order we actually
+      // observe (payment_intent.succeeded first, then checkout.session.completed):
+      // the journal row exists by then, and the checkout handler stamps the
+      // contact onto it. In the REVERSE order that stamp silently no-ops —
+      // `linkFinanceTxnContact` swallows NOT_FOUND — and this create would write
+      // the row with contact_id null and leave it there until someone ran
+      // `pnpm backfill:finance`.
       await recordFinanceTransaction(
         buildConnectChargeTxn({
           teamId: team.teamId,
@@ -599,7 +649,7 @@ async function handlePaymentIntent(
           applicationFeeAmount: (pi.application_fee_amount as number) ?? 0,
           fees,
           kind: md.kind ?? null,
-          contactId: md.contactId ?? null,
+          contactId: knownContactId,
           description: financeDescription(md),
           occurredAtMs: typeof pi.created === 'number' ? pi.created * 1000 : Date.now(),
           eventId,
@@ -864,6 +914,21 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
   const md = (sub.metadata ?? {}) as Record<string, string>
   const item = sub.items?.data?.[0]
   const now = FieldValue.serverTimestamp()
+
+  // The billing period moved onto the subscription ITEM, and a billing-portal
+  // cancellation is expressed as a `cancel_at` TIMESTAMP with the boolean left
+  // false. Both were read from their old homes here and came back
+  // undefined/false — the second and third symptoms of the Basil→Dahlia field
+  // migration (utils/stripe/objectShape.ts).
+  const period = readSubscriptionPeriod(sub)
+  // A subscription that has ENDED has no current period, so a missing one there
+  // is the truth rather than a shape surprise — `customer.subscription.deleted`
+  // must not cry wolf on every cancellation.
+  if (sub.status !== 'canceled' && sub.status !== 'incomplete_expired') {
+    reportStripeShape('subscription.current_period_end', sub.id, period.source, `event ${eventId}`)
+  }
+  const periodEnd = period.end === null ? null : Timestamp.fromMillis(period.end * 1000)
+  const cancellation = readSubscriptionCancellation(sub)
   await memberSubscriptionRef(team.teamId, sub.id).set(
     {
       teamId: team.teamId,
@@ -886,10 +951,24 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       status: sub.status ?? 'incomplete',
       // Billing freeze (summer break / injury). When set, the rollup → 'paused'.
       pause_collection: sub.pause_collection ?? null,
-      current_period_end: sub.current_period_end
-        ? Timestamp.fromMillis((sub.current_period_end as number) * 1000)
-        : null,
-      cancel_at_period_end: sub.cancel_at_period_end ?? false,
+      current_period_end: periodEnd,
+      cancel_at_period_end: cancellation.cancelsAtPeriodEnd,
+      // THE WHOLE CANCELLATION RECORD, and every field written on every event —
+      // never omitted, never merged key-by-key. A REACTIVATION clears all of
+      // these on Stripe's side, and a merge that skipped the nulls would leave a
+      // dead end-date and a dead reason standing on a subscription that is
+      // renewing again. `cancellation_details` in particular is set whole or
+      // nulled, because Firestore DEEP-merges a nested map: writing just
+      // `{reason}` over an older cancellation keeps that one's `feedback`.
+      cancel_at:
+        cancellation.cancelAt === null
+          ? null
+          : Timestamp.fromMillis(cancellation.cancelAt * 1000),
+      canceled_at:
+        cancellation.canceledAt === null
+          ? null
+          : Timestamp.fromMillis(cancellation.canceledAt * 1000),
+      cancellation_details: cancellation.details,
       last_event_id: eventId,
       updated_at: now,
       created_at: now,
@@ -902,25 +981,64 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
   if (sub.status === 'active' || sub.status === 'trialing') {
     await applyMembership(team.teamId, md, {
       amountRappen: item?.price?.unit_amount ?? 0,
-      membershipExpiration: sub.current_period_end
-        ? Timestamp.fromMillis((sub.current_period_end as number) * 1000)
-        : null,
+      membershipExpiration: periodEnd,
     })
   }
 }
 
+/**
+ * invoice.paid / invoice.payment_failed — the RENEWAL path.
+ *
+ * Every read in here used to miss: `invoice.subscription` was removed, so the
+ * guard below returned on every delivery and the whole handler was dead. What
+ * that silently cost is the contact stamp on every renewal charge — which is why
+ * the "unassigned subscription payment" symptom would have recurred monthly even
+ * after the checkout path was fixed.
+ *
+ * It did NOT cost a status: this handler does not own `status` and no longer
+ * writes one. See the note at the write below.
+ */
 async function handleInvoice(
   team: TeamRef,
   invoice: any,
   status: 'paid' | 'failed',
-  eventId: string
+  eventId: string,
+  accountId?: string
 ): Promise<void> {
-  const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+  // A one-off invoice has no subscription by design and leaves quietly; an
+  // invoice that SAYS it bills one and cannot name it is the shape surprise.
+  const subRead = readInvoiceSubscriptionId(invoice)
+  const subId = invoiceBillsSubscription(invoice)
+    ? readOrReport(subRead, 'invoice.subscription', invoice.id, `event ${eventId}`)
+    : subRead.value
   if (!subId) return
   const subRef = memberSubscriptionRef(team.teamId, subId)
+  // ── WHO OWNS `status`: customer.subscription.*, and ONLY that handler ────────
+  //
+  // This path deliberately does NOT write `status`, and must not start. It used
+  // to derive one from the invoice outcome (paid → 'active', failed →
+  // 'past_due') — harmless only for as long as the whole handler was dead. Now
+  // that it runs, that write FIGHTS handleSubscription, which stores the status
+  // off the subscription object itself.
+  //
+  // Stripe gives no delivery-order guarantee between the two, so a late or
+  // retried `invoice.paid` landing after `customer.subscription.deleted` would
+  // flip a cancelled subscription back to 'active' — resurrecting a membership
+  // nobody is paying for, and re-granting the entitlement behind it.
+  //
+  // Nothing is lost by staying out of it: the status an invoice implies is
+  // carried by a `customer.subscription.updated` of its own, which is the event
+  // this handler's counterpart already consumes. Observed once, on a live Stripe
+  // test account (test clock, declining card, 2026-04-22.dahlia): a failed
+  // renewal emitted `customer.subscription.updated` with `status: 'past_due'`,
+  // in that trace ahead of `invoice.payment_failed`. ONE trace shows the event
+  // exists, not an ordering — Stripe promises none, which is the whole reason
+  // this handler must not write a status of its own.
+  //
+  // What the invoice IS authoritative for is the payment outcome, so that is all
+  // it writes here.
   await subRef.set(
     {
-      status: status === 'paid' ? 'active' : 'past_due',
       last_invoice_id: invoice.id ?? null,
       last_payment_status: status,
       last_event_id: eventId,
@@ -932,24 +1050,73 @@ async function handleInvoice(
   // Link + label the invoice's charge: invoice-generated PaymentIntents carry no
   // metadata, so handlePaymentIntent records them as bare unassigned 'payment' rows.
   // The member_subscriptions doc holds the contact + type name — stamp them on.
-  const piId =
-    typeof invoice.payment_intent === 'string' ? invoice.payment_intent : invoice.payment_intent?.id
+  //
+  // The invoice→payment link now lives at `payments.data[].payment.payment_intent`,
+  // and that list is EXPAND-ONLY: it is not in the delivered payload, so this
+  // costs one retrieve. A failed invoice has no payment to link, so it does not
+  // pay that cost (and must not report a missing field it never expected).
+  let piId = readInvoicePaymentIntentId(invoice).value
+  if (!piId && status === 'paid' && accountId && typeof invoice.id === 'string') {
+    try {
+      const stripe = await getConnectStripe()
+      const full: any = await stripe.invoices.retrieve(
+        invoice.id,
+        { expand: [INVOICE_PAYMENTS_EXPAND] },
+        { stripeAccount: accountId }
+      )
+      piId = readOrReport(
+        readInvoicePaymentIntentId(full),
+        'invoice.payment_intent',
+        invoice.id,
+        'after expand: payments'
+      )
+    } catch (err) {
+      console.error(`[connect] invoice payments expand failed (in=${invoice.id}):`, err)
+    }
+  }
   if (piId) {
     const subSnap = await subRef.get()
     const s = subSnap.data()
+
+    // THE STORED DOC FIRST, THE INVOICE'S OWN METADATA SECOND.
+    //
+    // `parent.subscription_details.metadata` is the subscription's metadata
+    // riding along on the invoice, which is how a RENEWAL invoice can still say
+    // what was bought. It matters because Stripe gives no ordering guarantee: an
+    // `invoice.paid` that lands before the `customer.subscription.*` event which
+    // stamps these fields finds a member_subscriptions doc that does not carry
+    // them yet, and the payment row is then labelled from nothing.
+    //
+    // LABELS ONLY, deliberately. `contactId` is NOT taken from here even though
+    // the metadata carries one: metadata is client-supplied at checkout creation,
+    // and attributing a journal row to another team's contact is a tenant leak.
+    // The checkout path re-verifies it through `verifiedMetadataContact` before
+    // trusting it; a renewal has no reason to re-open that question, so this
+    // keeps contact assignment on the stored-doc path exactly as it was.
+    const md = readInvoiceSubscriptionMetadata(invoice)
+    const typeId = (s?.subscriptionTypeId as string | undefined) || md.subscriptionTypeId || null
+    const typeName =
+      (s?.subscriptionTypeName as string | undefined) || md.subscriptionTypeName || null
+    const priceId = (s?.priceId as string | undefined) || md.priceId || null
+
     await memberPaymentRef(team.teamId, piId).set(
       {
         ...(s?.contactId ? { contactId: s.contactId } : {}),
         kind: 'membership',
-        subscriptionTypeName: (s?.subscriptionTypeName as string | undefined) ?? null,
+        // OMITTED, not nulled, when unknown — the same rule `contactId` above
+        // follows and for the same reason. This row is written with
+        // `{merge: true}` on a document the checkout path may already have
+        // labelled correctly, so an unconditional `?? null` is not "no opinion",
+        // it is an opinion that overwrites a resolved value with nothing.
+        ...(typeName ? { subscriptionTypeName: typeName } : {}),
         purpose: 'membership',
-        ...(s?.subscriptionTypeId
+        ...(typeId
           ? {
               line_item: {
                 kind: 'subscription',
-                subscriptionTypeId: s.subscriptionTypeId,
-                priceId: (s.priceId as string | undefined) ?? null,
-                label: (s.subscriptionTypeName as string | undefined) ?? null,
+                subscriptionTypeId: typeId,
+                priceId,
+                label: typeName,
               },
             }
           : {}),
@@ -997,6 +1164,18 @@ async function handleCheckoutCompleted(
         // checkout creation, and a journal row attributed to another team's
         // contact is a tenant leak that no later step would catch.
         contactId: await verifiedMetadataContact(team.teamId, md),
+        // `session.payment_intent` is ALWAYS null on a mode:'subscription'
+        // session — but that is not a hole here, because no subscription
+        // checkout ever carries a gift card: exactly three rails set
+        // `giftCardHold` — drop-in (booking/dropIn.ts), product and course
+        // (connect/payments.ts) — and all three are mode:'payment'.
+        // `createAppointmentCheckout` is NOT one of them: it takes no
+        // `giftCardCode` at all, so an appointment never reaches this block.
+        // Should a gift card ever be accepted for a
+        // MEMBERSHIP, this null stops the redemption being stamped onto the
+        // payment row — and that stamp is what lets a refund restore the card's
+        // value (connect/giftCards.ts, commitGiftCardDrawdown). Resolve the
+        // intent through the session's `invoice` before adding that rail.
         paymentIntentId:
           typeof session.payment_intent === 'string'
             ? session.payment_intent
@@ -1089,15 +1268,40 @@ async function handleCheckoutCompleted(
           { metadata: { ...md, contactId } },
           { stripeAccount: accountId }
         )
+        // `latest_invoice.payment_intent` no longer exists as an expand path, and
+        // Stripe SILENTLY IGNORES an unknown expand rather than erroring — so the
+        // old call succeeded and handed back two undefineds. The invoice's
+        // payments list is the modern route to the first charge.
         const sub: any = await stripe.subscriptions.retrieve(
           subId,
-          { expand: ['latest_invoice.payment_intent'] },
+          { expand: [SUBSCRIPTION_LATEST_INVOICE_PAYMENTS_EXPAND] },
           { stripeAccount: accountId }
         )
-        const cpe = sub.current_period_end as number | undefined
-        membershipExpiration = cpe ? Timestamp.fromMillis(cpe * 1000) : null
-        const pi = sub.latest_invoice?.payment_intent
-        latestPaymentIntentId = typeof pi === 'string' ? pi : (pi?.id ?? null)
+        const period = readSubscriptionPeriod(sub)
+        reportStripeShape('subscription.current_period_end', subId, period.source, 'checkout')
+        membershipExpiration = period.end === null ? null : Timestamp.fromMillis(period.end * 1000)
+        latestPaymentIntentId = readInvoicePaymentIntentId(sub.latest_invoice).value
+
+        // Fallback: the session names its own invoice (`payment_intent` is always
+        // null on a mode:'subscription' session), so a subscription that came back
+        // without an expandable latest_invoice is still reachable from here.
+        if (!latestPaymentIntentId) {
+          const invoiceId =
+            typeof session.invoice === 'string' ? session.invoice : (session.invoice?.id ?? null)
+          if (invoiceId) {
+            const full: any = await stripe.invoices.retrieve(
+              invoiceId,
+              { expand: [INVOICE_PAYMENTS_EXPAND] },
+              { stripeAccount: accountId }
+            )
+            latestPaymentIntentId = readOrReport(
+              readInvoicePaymentIntentId(full),
+              'invoice.payment_intent',
+              invoiceId,
+              'checkout first charge'
+            )
+          }
+        }
       } catch (err) {
         console.error('[connect] subscription backfill/retrieve failed:', err)
       }
@@ -1126,6 +1330,16 @@ async function handleCheckoutCompleted(
               reason: 'duplicate',
               idempotencyKey: `dup-refund:${subId}`,
             })
+          } else {
+            // Money, not display: the subscription IS cancelled above, so a
+            // charge we cannot name is a charge nobody gives back. This branch
+            // ran silently for every duplicate while the PaymentIntent was
+            // unreachable — never let it be quiet again.
+            console.error(
+              `[connect] duplicate subscription ${subId} cancelled but its charge could NOT be ` +
+                `resolved — the member has paid and has NOT been refunded. Refund by hand ` +
+                `(team=${team.teamId}, contact=${contactId}).`
+            )
           }
         } catch (err) {
           console.error('[connect] duplicate subscription cancel/refund failed:', err)
@@ -1135,10 +1349,20 @@ async function handleCheckoutCompleted(
         { status: 'canceled', duplicate: true, updated_at: FieldValue.serverTimestamp() },
         { merge: true }
       )
+      // Say which of the two actually happened. The refund is CONDITIONAL — it
+      // is skipped whenever the PaymentIntent could not be resolved, and the
+      // branch above logs an error saying the member has NOT been refunded. A
+      // success line that claims "cancelled + refunded" regardless contradicts
+      // that error five lines up, and the cheerful line is the one a reader
+      // believes.
       console.log(
-        `[connect] duplicate same-type subscription ${subId} (type=${md.subscriptionTypeId}, contact=${contactId}) — cancelled + refunded`
+        `[connect] duplicate same-type subscription ${subId} (type=${md.subscriptionTypeId}, ` +
+          `contact=${contactId}) — cancelled, ` +
+          (latestPaymentIntentId
+            ? `refunded (pi=${latestPaymentIntentId})`
+            : `NOT refunded (charge unresolved — needs a manual refund)`)
       )
-      return // do NOT snapshot the refunded duplicate onto the contact
+      return // do NOT snapshot the duplicate onto the contact
     }
 
     // Link + label the FIRST charge: the invoice-generated PaymentIntent carries no
@@ -2229,10 +2453,10 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
           await handleSubscription(team, { ...obj, status: 'canceled' }, event.id)
           break
         case 'invoice.paid':
-          await handleInvoice(team, obj, 'paid', event.id)
+          await handleInvoice(team, obj, 'paid', event.id, accountId)
           break
         case 'invoice.payment_failed':
-          await handleInvoice(team, obj, 'failed', event.id)
+          await handleInvoice(team, obj, 'failed', event.id, accountId)
           break
         default:
           console.log(`[connect] unhandled event type ${event.type}`)

@@ -89,6 +89,10 @@ export default function AccountHome() {
           recurrence: contact.subscription_recurrence ?? null,
           amount: undefined as number | undefined,
           status: 'active' as string,
+          // A legacy single-field membership has no Stripe subscription behind
+          // it, so there is no scheduled end to announce.
+          cancels_at_ms: null as number | null,
+          cancelling: false,
         }]
       : []
   const shownSubs = subs.length ? subs : legacy
@@ -142,10 +146,39 @@ export default function AccountHome() {
         ) : (
           <div className="space-y-2">
             {shownSubs.map((s, i) => (
-              <div key={s.subscription_type_id ?? i} className="flex items-center justify-between gap-3">
+              <div key={s.subscription_type_id ?? i} className="flex items-start justify-between gap-3">
                 <span className="text-sm font-medium" style={{ color: textMain }}>
                   {s.subscription_type_name ?? t('membershipActive')}
                   {s.recurrence ? <span style={{ color: textMuted }}> · {s.recurrence}</span> : null}
+                  {/* A membership that has been cancelled but still runs is a
+                      third state — the member keeps training until this date.
+                      Saying nothing was the old behaviour, and it meant somebody
+                      who cancelled in the billing portal saw no acknowledgement
+                      of it anywhere.
+
+                      THE DATE ONLY, deliberately. The rest of the cancellation
+                      record (reason, churn survey, comment) is stored and shown
+                      to the STUDIO, not read back to the member who wrote it —
+                      and it could not reach here anyway: this list is
+                      Contact.active_subscriptions, which onMemberSubscriptionWrite
+                      builds from LIVE subscriptions only, so a lapsed one is
+                      already gone by the time its reason would matter. */}
+                  {typeof s.cancels_at_ms === 'number' ? (
+                    <span className="block text-xs font-normal" style={{ color: '#b45309' }}>
+                      {t('membershipEndsOn', {
+                        date: new Date(s.cancels_at_ms).toLocaleDateString(),
+                      })}
+                    </span>
+                  ) : s.cancelling ? (
+                    // WITHOUT the date, when that is all we have. A membership
+                    // whose subscription doc predates the Dahlia field migration
+                    // is cancelling with no date stored anywhere, and keying this
+                    // line on the date alone showed that member nothing —
+                    // exactly the acknowledgement gap the date was added to fix.
+                    <span className="block text-xs font-normal" style={{ color: '#b45309' }}>
+                      {t('membershipEndsAtPeriodEnd')}
+                    </span>
+                  ) : null}
                 </span>
                 {typeof s.amount === 'number' && (
                   <span className="text-sm" style={{ color: textMuted }}>{formatCurrency(s.amount, currency)}</span>

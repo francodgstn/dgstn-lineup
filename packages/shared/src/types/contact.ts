@@ -60,6 +60,30 @@ export interface ActiveSubscriptionSummary {
   recurrence: string | null
   amount: number // major units (CHF), per period
   status: SubscriptionRollupStatus
+  /**
+   * Epoch MILLISECONDS at which this subscription stops, when it is winding down
+   * (cancelled but still live) — otherwise absent. Computed by
+   * onMemberSubscriptionWrite via `subscriptionEndsAtMs`, the epoch-ms form of
+   * `subscriptionEndsAt`, so the member's Space and the studio's contact detail
+   * answer "when does this end" the same way.
+   *
+   * A plain number rather than a Timestamp on purpose: this is a denormalised
+   * display mirror living inside an array, and the trigger compares the whole
+   * array by JSON equality to stay idempotent.
+   */
+  cancels_at_ms?: number | null
+  /**
+   * WHETHER this subscription is winding down, asked apart from WHEN — via the
+   * shared `subscriptionIsCancelling`.
+   *
+   * `cancels_at_ms` alone could not carry the answer. A pre-migration
+   * member_subscriptions doc holds the cancellation boolean and NO dates (the
+   * period had moved onto the subscription item and the writer stored null), so
+   * its summary gets `cancels_at_ms: null` and a member's Space showed them
+   * nothing at all about a membership they had cancelled. Same population gap
+   * the operator console and the studio's contact detail both had to close.
+   */
+  cancelling?: boolean
 }
 
 export type ContactGender = 'M' | 'F' | 'other'

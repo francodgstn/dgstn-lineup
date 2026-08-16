@@ -2,6 +2,18 @@
 import Stripe from 'stripe'
 import type { StripeGatewayConfig } from '@linyup/shared'
 import type { GatewayAdapter, CheckoutSession, Invoice, WebhookEvent } from './interface'
+// The SaaS rail reads the same fields Stripe moved on the Connect rail, and had
+// the same three silent failures — an unset "next billing date" in the studio UI
+// and the operator console, and a portal cancellation that left the studio being
+// offered "Cancel subscription" a second time. See utils/stripe/objectShape.ts.
+import {
+  invoiceBillsSubscription,
+  readInvoiceSubscriptionId,
+  readOrReport,
+  readSubscriptionCancellation,
+  readSubscriptionPeriod,
+  reportStripeShape,
+} from '../stripe/objectShape'
 
 // InstanceType extracts the instance type from the callable constructor
 type StripeInstance = InstanceType<typeof Stripe>
@@ -109,6 +121,22 @@ export class StripeAdapter implements GatewayAdapter {
   }
 
   async reactivateSubscription(params: { subscriptionId: string }): Promise<void> {
+    // ONE PARAMETER, NEVER BOTH. Stripe rejects the pair outright:
+    //
+    //   update{cancel_at_period_end:false, cancel_at:''}
+    //     → invalid_request_error "Received both cancel_at_period_end and
+    //       cancel_at parameters. Please pass in only one."
+    //
+    // so sending both does not "clear whichever one expressed it", it fails
+    // every reactivation — the studio stays cancelled and the callable throws.
+    //
+    // `cancel_at_period_end: false` alone is sufficient for BOTH expressions.
+    // Verified on a live Stripe test account (2026-04-22.dahlia): from an
+    // API cancel, from an explicit `cancel_at: <timestamp>` (the billing-portal
+    // shape), and from `cancel_at: 'max_period_end'`, this single parameter
+    // comes back with cancel_at, canceled_at AND cancellation_details all
+    // cleared. It is also the exact inverse of `cancelSubscription` above, which
+    // is the property worth keeping: the two cannot drift apart.
     await this.stripe.subscriptions.update(params.subscriptionId, {
       cancel_at_period_end: false,
     })
@@ -170,6 +198,57 @@ export class StripeAdapter implements GatewayAdapter {
     }))
   }
 
+  /**
+   * The subscription lifecycle fields, from wherever the current API version
+   * keeps them. Shared by created/updated so the two can never disagree.
+   */
+  private subscriptionLifecycle(obj: any, eventId: string) {
+    const period = readSubscriptionPeriod(obj)
+    // An ENDED subscription has no current period — that absence is the truth,
+    // not a shape surprise.
+    if (obj.status !== 'canceled' && obj.status !== 'incomplete_expired') {
+      reportStripeShape('subscription.current_period_end', obj.id, period.source, `event ${eventId}`)
+    }
+    return {
+      currentPeriodStart: period.start === null ? undefined : new Date(period.start * 1000),
+      currentPeriodEnd: period.end === null ? undefined : new Date(period.end * 1000),
+      ...this.cancellation(obj),
+    }
+  }
+
+  /**
+   * The cancellation record. Split out from `subscriptionLifecycle` because
+   * `customer.subscription.deleted` needs it WITHOUT the period (an ended
+   * subscription has no current period, and reporting its absence would cry wolf
+   * on every cancellation) — and that event is the one carrying the final reason.
+   *
+   * `cancellationDetails` is always present in the returned object, `null`
+   * included: null is what CLEARS a stored record on reactivation, and an
+   * omitted key would leave the old one standing.
+   */
+  private cancellation(obj: any) {
+    const c = readSubscriptionCancellation(obj)
+    return {
+      cancelAtPeriodEnd: c.cancelsAtPeriodEnd,
+      cancelAt: c.cancelAt === null ? undefined : new Date(c.cancelAt * 1000),
+      canceledAt: c.canceledAt === null ? undefined : new Date(c.canceledAt * 1000),
+      cancellationDetails: c.details,
+    }
+  }
+
+  /**
+   * The subscription an invoice bills for. `invoice.subscription` is gone; the
+   * link hangs off `parent` now. A one-off invoice has none by design and is not
+   * reported as a surprise.
+   */
+  private invoiceSubscriptionId(obj: any, eventId: string): string | undefined {
+    const read = readInvoiceSubscriptionId(obj)
+    if (invoiceBillsSubscription(obj)) {
+      readOrReport(read, 'invoice.subscription', obj.id, `event ${eventId}`)
+    }
+    return read.value ?? undefined
+  }
+
   private mapStripeEvent(event: any): WebhookEvent {
     const base = { eventId: event.id as string, raw: event }
     const obj = event.data?.object ?? {}
@@ -185,9 +264,7 @@ export class StripeAdapter implements GatewayAdapter {
           orgId: obj.metadata?.orgId as string | undefined,
           plan: this.extractPlanFromSubscription(obj),
           items: this.extractItems(obj),
-          currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
-          currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
-          cancelAtPeriodEnd: obj.cancel_at_period_end as boolean | undefined,
+          ...this.subscriptionLifecycle(obj, base.eventId),
         }
 
       case 'customer.subscription.updated':
@@ -200,9 +277,7 @@ export class StripeAdapter implements GatewayAdapter {
           orgId: obj.metadata?.orgId as string | undefined,
           plan: this.extractPlanFromSubscription(obj),
           items: this.extractItems(obj),
-          currentPeriodStart: obj.current_period_start ? new Date((obj.current_period_start as number) * 1000) : undefined,
-          currentPeriodEnd: obj.current_period_end ? new Date((obj.current_period_end as number) * 1000) : undefined,
-          cancelAtPeriodEnd: obj.cancel_at_period_end as boolean | undefined,
+          ...this.subscriptionLifecycle(obj, base.eventId),
         }
 
       case 'customer.subscription.deleted':
@@ -213,14 +288,22 @@ export class StripeAdapter implements GatewayAdapter {
           subscriptionId: obj.id as string,
           teamId: obj.metadata?.teamId as string | undefined,
           orgId: obj.metadata?.orgId as string | undefined,
+          // The moment a studio actually leaves is the moment its reason matters
+          // most, and this payload carries it. Without this the operator console
+          // can only say a studio is gone, never whether it chose to go.
+          ...this.cancellation(obj),
         }
 
+      // `invoice.subscription` is gone; the link hangs off `parent` now. Nothing
+      // in saas-billing/ consumes subscriptionId on these two branches today —
+      // but the WebhookEvent contract promises it, and a contract that quietly
+      // lies is the next reader's bug.
       case 'invoice.payment_succeeded':
         return {
           ...base,
           type: 'payment.succeeded',
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
-          subscriptionId: typeof obj.subscription === 'string' ? obj.subscription : obj.subscription?.id,
+          subscriptionId: this.invoiceSubscriptionId(obj, base.eventId),
           amount: obj.amount_paid as number,
           currency: obj.currency as string,
           lastInvoiceId: obj.id as string,
@@ -232,7 +315,7 @@ export class StripeAdapter implements GatewayAdapter {
           ...base,
           type: 'payment.failed',
           customerId: typeof obj.customer === 'string' ? obj.customer : obj.customer?.id,
-          subscriptionId: typeof obj.subscription === 'string' ? obj.subscription : obj.subscription?.id,
+          subscriptionId: this.invoiceSubscriptionId(obj, base.eventId),
           amount: obj.amount_due as number,
           currency: obj.currency as string,
           lastInvoiceId: obj.id as string,
