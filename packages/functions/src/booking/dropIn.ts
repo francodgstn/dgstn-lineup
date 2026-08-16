@@ -64,6 +64,14 @@ import { generateSecureToken, generateBookingReference } from '../utils/crypto'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 import { resolveSingleContact } from '../utils/contacts'
+import { matchGuestContact } from './guestContactMatch'
+import {
+  attachWaiverContact,
+  enforceWaiverGate,
+  parseWaiverSubmissions,
+  type WaiverGateOutcome,
+} from '../waivers/gate'
+import { recordWaiverEvents } from '../waivers/accept'
 // Pure trial-gate helpers, shared with bookSession's free trial door — see
 // booking/index.ts's module doc comment. Mirrors the appointments/index.ts
 // same-directory-index import pattern already used elsewhere in this package.
@@ -116,6 +124,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
      *  hold's deadline replaces the ordinary 30-minute one on both the booking
      *  and the Stripe session. See booking/waitlist/claim.ts. */
     waitlistToken?: string
+    /** Ticks from the waiver step (see waivers/gate.ts). On a CLAIM the seat was
+     *  already gated by `claimWaitlistSeat` and the acceptance is already on the
+     *  ledger, so the claim page sends nothing across the payable hop and the
+     *  gate finds the signature valid. */
+    waiverAcceptances?: unknown
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   if (!data?.sessionId) throw new HttpsError('invalid-argument', 'sessionId is required')
@@ -229,7 +242,14 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   let resolved: PaymentOptionsResult
 
   // Resolve the contact (payment is proof — no email verification needed here).
-  let contactId: string
+  //
+  // Empty until resolved, because a brand-new guest's contact is now created
+  // BELOW the waiver gate rather than inside the branch that discovers them —
+  // the gate has to refuse before the first contact write, and this is that
+  // write. `pendingGuestContact` carries the decision across those few lines and
+  // a guard immediately after the create makes the empty string unreachable.
+  let contactId = ''
+  let pendingGuestContact = false
   let email: string
   let firstname: string
   let lastname: string
@@ -389,45 +409,96 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       throw new HttpsError('invalid-argument', 'firstname, lastname and a valid email are required')
     }
     // Exact match (email + name) → reuse; else create a trial contact.
-    const existing = await db
-      .collection('contacts')
-      .where('teamId', '==', teamId)
-      .where('email', '==', email)
-      .get()
-    guestEmailMatches = existing.docs.map((d) => ({ ...d.data(), id: d.id }))
-    const match = existing.docs.find((d) => {
-      const c = d.data()
-      return (
-        c.firstname?.toLowerCase().trim() === firstname.toLowerCase() &&
-        c.lastname?.toLowerCase().trim() === lastname.toLowerCase()
-      )
-    })
+    //
+    // The predicate moved to `booking/guestContactMatch.ts` — the same code
+    // `bookSession` runs, and now also the code `resolveWaiverRequirement` runs,
+    // so a public probe cannot resolve a shared household mailbox to a different
+    // person than the rail that charges it.
+    const guest = await matchGuestContact(teamId, { email, firstname, lastname }, db)
+    guestEmailMatches = guest.emailMatches.map((d) => ({ ...d.data(), id: d.id }))
+    const match = guest.match
     if (match) {
       contactId = match.id
       contactDoc = { ...match.data(), id: match.id }
       if (!match.data().acquisition_stage) funnelEntryRef = match.ref
     } else {
-      isNewContact = true
-      const ref = db.collection('contacts').doc()
-      await ref.set({
-        firstname,
-        lastname,
-        email,
-        phone,
-        acquisition_stage: 'trial_booked',
-        acquisition_stage_updated_at: FieldValue.serverTimestamp(),
-        entry: 'booking',
-        // Doesn't count toward the cap until they attend/pay (the drop-in payment
-        // webhook clears the flag on success). See Contact.provisional.
-        provisional: true,
-        teamId,
-        archived_at: null,
-        deleted_at: null,
-        created_at: FieldValue.serverTimestamp(),
-      })
-      contactId = ref.id
+      // DEFERRED, not created. The waiver gate below must run above the first
+      // contact write, and this is it — see the gate's own comment.
+      pendingGuestContact = true
     }
   }
+
+  // ── The waiver gate — ABOVE the guest contact create ───────────────────────
+  // Earlier than every other gate on this callable, and deliberately so: this
+  // rail's refusals otherwise sit below a contact that has already been minted,
+  // a gift-card drawdown that has already been reserved and a promo use that has
+  // already been consumed. Nothing above this line has written anything.
+  //
+  // A brand-new guest has no contact id yet, and that is fine: with no contact
+  // there is no signer row, so every required waiver reads `none` — the answer
+  // is identical either way, and `attachWaiverContact` binds the acceptance to
+  // the id once the contact exists.
+  const waiverNowMs = Date.now()
+  let waiverOutcome: WaiverGateOutcome = await enforceWaiverGate({
+    teamId,
+    activityId,
+    subject: {
+      contactId: contactId || null,
+      name: `${firstname} ${lastname}`.trim(),
+      email,
+    },
+    submissions: parseWaiverSubmissions(data.waiverAcceptances),
+    source: 'drop_in',
+    signerEmailVerifiedBy: contactSession && contactSession.teamId === teamId ? 'session' : 'none',
+    ip: request.rawRequest?.ip ?? null,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale,
+    nowMs: waiverNowMs,
+    // A CLAIM arriving here has already been gated by `claimWaitlistSeat` and is
+    // not re-prompted across the payable hop: its acceptance is already on the
+    // ledger, so the gate finds it valid and asks for nothing. (There used to be
+    // a second, explicit inheritance here — the claim rail's guardian DEFERRAL,
+    // which had to be carried across the hop or a claim that deferred would be
+    // refused by the rail it was sent to. No rail defers any more, so the
+    // valid-signature path is the whole of it.)
+  })
+
+  if (pendingGuestContact) {
+    isNewContact = true
+    const ref = db.collection('contacts').doc()
+    await ref.set({
+      firstname,
+      lastname,
+      email,
+      phone,
+      acquisition_stage: 'trial_booked',
+      acquisition_stage_updated_at: FieldValue.serverTimestamp(),
+      entry: 'booking',
+      // Doesn't count toward the cap until they attend/pay (the drop-in payment
+      // webhook clears the flag on success). See Contact.provisional.
+      provisional: true,
+      teamId,
+      archived_at: null,
+      deleted_at: null,
+      created_at: FieldValue.serverTimestamp(),
+    })
+    contactId = ref.id
+  }
+  if (!contactId) throw new HttpsError('internal', 'The buyer could not be resolved')
+  waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
+
+  // The acceptance is written HERE — before Stripe, in its own transaction, and
+  // NOT conditional on payment. A signature is a fact about a person: they read
+  // the text and ticked, and that is true whether or not the card clears. The
+  // asymmetry with a promo reservation is deliberate — a promo guards a finite
+  // counter and must be consumed only by a completed sale; a signature guards
+  // nothing and reserves nothing.
+  //
+  // It is a TRANSACTION rather than a bare write because Firestore's
+  // optimistic-concurrency detection is the only thing standing between a
+  // manager revoking at 10:00:00 and an acceptance that read the row at
+  // 09:59:59 landing at 10:00:01 and silently undoing it.
+  await recordWaiverEvents(waiverOutcome.accepts, waiverNowMs)
 
   // ── The promo, loaded before Stage A and NEVER throwing ───────────────────
   // A code that does not apply is REPORTED, never silently charged, and never
@@ -811,6 +882,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
           authenticated_booking: !!contactSession,
           status: 'confirmed',
           payment_status: 'gift_card',
+          // Denormalised for the day sheet / printed manifest only; absent when
+          // no required waiver applied.
+          ...(waiverOutcome.bookingWaiverState
+            ? { waiver_state: waiverOutcome.bookingWaiverState }
+            : {}),
         })
         if (claim && entrySnap?.exists) {
           tx.update(claim.entryRef, {
@@ -972,6 +1048,11 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         // on abandonment expirePendingBookings would delete it and leave the
         // entry stuck at 'offered' forever — a permanently blocked queue.
         ...(claim ? { waitlist_claim: true, claim_expires_at: claim.expiresAt } : {}),
+        // Denormalised for the day sheet / printed manifest only; absent when no
+        // required waiver applied.
+        ...(waiverOutcome.bookingWaiverState
+          ? { waiver_state: waiverOutcome.bookingWaiverState }
+          : {}),
       })
       tx.set(
         sessionRef,

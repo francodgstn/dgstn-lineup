@@ -400,6 +400,86 @@ member, no reclass pair, no CSV column. The record is
 client payload, carried forward across a manager's edit) plus the
 `redemptions/{identityKey}` ledger. Full docs: `docs/promo-codes.md`.
 
+### Waivers — a FACT about a person, never a scarce resource
+
+**A signature is a fact about a person, not a claim on a scarce resource.**
+Nothing about a waiver is reserved, held, released or restored — the promo
+phase's reserve→commit→release apparatus has no analogue here, and reaching
+for it is the single biggest way this area goes wrong. There is no price (no
+arm in `resolvePaymentOptions`, checkable by `git diff`), no journal row, no
+counter but `rounds`, and **no job, cron or sweep anywhere**.
+
+A waiver is a Document (`kind: 'waiver'`) whose published versions are
+**immutable snapshots** — `documents/{d}/versions/v0001…`, `allow write: if
+false`, minted only by `publishDocumentVersion`, which replaced the old client
+status flip **for every kind** (the rules now deny a client *transition* into
+`published`). The sanitizer runs THERE, once, and the public mirror **copies**
+the frozen `bodyHtml`: two sanitize calls with a library upgrade between them
+would break every acceptance hash. `scripts/backfill-document-versions.ts` is a
+**deploy precondition** — every already-published document needs a v1 to copy
+from.
+
+**The ledger has two halves** (`packages/functions/src/waivers/accept.ts` is
+its ONE writer): append-only EVENT rows hold the immutable facts, and one
+mutable CURRENT-STATE row per `(document, contact)` holds the answer the gate
+asks. The event id derives from the EVENT (`…:intentId`), not the relationship
+— which is what makes re-signing, renewal after expiry and re-signing after
+revocation expressible at all. The event is ALWAYS created; the signer row is
+updated **only when the event strictly improves it**
+(`waiverEventImprovesSigner`), against a row re-read **inside the same
+transaction**, with `rounds = read + 1` and no `FieldValue.increment`. Two
+traps, both learned the hard way: **never** copy `recordFinanceTransaction`'s
+`.create()`+catch-gRPC-6 idiom into a transaction (a collision fails the whole
+commit and takes the seat) — `tx.get` the acceptance ref in the read phase and
+skip; and `accepted_at` is captured **before** the transaction, because a retry
+that re-stamps it silently beats a revocation.
+
+**ONE predicate** — `waiverAcceptanceState` (`packages/shared/src/types/waiver.ts`),
+fixed order `none → revoked → superseded → expired → valid`. Supersession and
+expiry are **never stored**: a `require_resign` publish moves ONE number
+(`min_valid_version`) and writes **zero** signer rows. The validity rule is
+frozen onto each signature, so editing `validityMonths` governs future
+signatures only.
+
+**Authorization reads `teams/{t}/waiver_policy/current`** — server-written,
+patched (never rebuilt) inside the same transaction as the document write, and
+it fails **CLOSED**. `TeamPublicProfile.required_waivers` is a display mirror
+that fails open and is **never** read for a decision; the client calls
+`resolveWaiverRequirement` iff that mirror is non-empty, so a tenant with no
+waiver pays zero extra round-trips.
+
+**The gate** is `enforceWaiverGate` → `decideWaiverGate`, called once per rail.
+**The census owner is the module header of
+`packages/functions/src/waivers/gate.ts`** — never restate it, and never state a
+count of it; `gate.test.ts` re-derives the caller set from the source so a new
+rail that is never added fails the build. Two ordering rules: **refuse before
+any contact write**, and **record with the commit** (free rails: inside the seat
+transaction; paid rails: before Stripe, in their own transaction, not
+conditional on payment). **Every rail refuses** — there is no `defer` arm and no
+posture parameter, so no booking anywhere commits with a required waiver
+unsigned. **Not gated, deliberately:** staff add-participant (no server seam),
+`checkInContact` (a coach chose to admit them), event attendance (a different
+primitive), `rebookSession`, `joinWaitlist`, shop purchases.
+
+**Minors are a PROMPT, not an enforcement.** `WaiverConfig.mayIncludeMinors`
+(off by default) adds one required choice to the consent step — *I am the
+participant* vs *I am signing as a parent or guardian*, plus an optional name —
+and puts a chip on the roster and the printed manifest so the studio checks at
+the door. It is a **self-declaration**: nothing verifies it, and no copy may
+imply otherwise. The control renders **inline** in the waiver editor because its
+failure mode is silent; moving it behind "advanced" removes the only guard there
+is. The emailed-guardian link this replaced (2026-08-16) proved control of a
+mailbox, not parenthood — see `docs/waivers.md` → "Minors" for why ~2,500 lines
+of it were deleted rather than fixed.
+
+The **`notify` publish outcome is deferred to v2**: `PublishOutcome` has two
+members and the callable refuses `'notify'` by name. The `notices/{id}`
+subcollection stays declared and **writer-less** on purpose — removing it would
+make notify a migration rather than an addition.
+
+Full docs: `docs/waivers.md`, including **"What the gate does NOT cover"** and
+the sixteen recorded decisions.
+
 ### Comments must not assert a COUNT of code sites
 
 A comment saying "the two X", "all three Y", "six copies" or "the only Z" is a
@@ -411,9 +491,12 @@ So, in order of preference:
 1. **Point at the owner.** A list of call sites (a "census") is written down
    ONCE and referred to everywhere else. Existing owners:
    `packages/functions/src/appointments/holdRelease.ts`'s module header (every
-   site that can release an appointment hold) and `docs/promo-codes.md`
+   site that can release an appointment hold), `docs/promo-codes.md`
    ("The census — every site that removes a reservation", "The ownership rules",
-   "The mounts"). Add to the owner; never copy it.
+   "The mounts"), and `packages/functions/src/waivers/gate.ts`'s module header
+   (every site that puts a person in a room, with its re-derivation recipe and
+   the exemptions stated as explicitly as the inclusions). Add to the owner;
+   never copy it.
 2. **Name the members and drop the number** — a claim checkable by reading the
    names beside it fails visibly rather than silently.
 3. **Assert it in a test.** `packages/functions/src/connect/commitSites.test.ts`

@@ -310,8 +310,22 @@ growth is monetised by moving up a tier (or, for Studio, buying flat blocks).
   and **"contacts"** in data/CRM contexts. A studio's sellable recurring plans are
   **"subscriptions"** (not "memberships"). Reserve **"membership"** for the
   Organisation level only (a studio's membership in an org / member teams).
-* **Guardians are not contact records.** Guardian / emergency info is stored as
-  fields on the contact (name + phone), never as a separate counted record.
+* **Guardians are not contact records**, and the counting invariant is the whole
+  of what that sentence means: a guardian never becomes a separate counted row.
+  **Corrected 2026-08 (Wave 3 Phase 4):** it used to add "guardian / emergency
+  info is stored as fields on the contact (name + phone)", which conflated two
+  different things. `Contact.emergency_contacts` is freely-edited operational
+  data that identifies nobody. A **guardian declaration** is a consent record and
+  is not stored on the contact at all: it is `signer_role` / `signer_name` on an
+  acceptance event in the waiver ledger. No `Guardian[]` field was built,
+  deliberately — it would be a second source of truth for a question the ledger
+  already answers.
+  **Amended 2026-08-16:** the declaration is exactly that — a self-declaration on
+  the consent step, made only when the studio flags a waiver
+  `mayIncludeMinors`. Nothing verifies it. The emailed one-time link that used to
+  bind it to a guardian's own mailbox was removed: it proved control of a
+  mailbox, not parenthood. The studio verifies at the door, prompted by a chip on
+  the roster. See `docs/waivers.md` → "Minors".
 
 ### Archived contacts & retention
 

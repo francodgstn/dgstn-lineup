@@ -139,6 +139,14 @@ export const getWaitlistEntry = onCall(async (request) => {
     // teardown write nothing but `status` + `expired_at`.
     wasOffered: !!entry.offered_at,
     firstname: (entry.firstname as string) ?? '',
+    // Their OWN name and address, back to the holder of their own link — the
+    // page already renders `firstname`. Both are here so the claim page's
+    // consent step can identify the caller through the SAME email+name predicate
+    // the booking rails use: without them `resolveWaiverRequirement` answers
+    // conservatively for nobody, which would ask a member who signed last year
+    // to sign again and could not resolve an `if_minor` age at all.
+    lastname: (entry.lastname as string) ?? '',
+    email: (entry.email as string | undefined) ?? null,
     // The claim page needs both to reach createDropInCheckout for a paid seat.
     teamId,
     sessionId,
@@ -147,6 +155,13 @@ export const getWaitlistEntry = onCall(async (request) => {
       start: start ? start.toDate().toISOString() : null,
       end: end ? end.toDate().toISOString() : null,
       location: (session.location as string | undefined) ?? null,
+      // The claim page's consent step needs it, and needs it to be the SAME
+      // activity the claim's own gate resolves from the session document. Absent,
+      // `resolveWaiverRequirement` would be called with a null activity — which
+      // deliberately EXCLUDES an activity-scoped waiver rather than widening it —
+      // so the page would show nothing, the claim would refuse, and the queued
+      // member would spend their one offer on a document they were never shown.
+      activityId: (session.activityId as string | undefined) ?? null,
       activityName: (session.activityName as string | undefined) ?? null,
       // BOTH cancellation shapes. A called-off OCCURRENCE of a recurring class
       // carries `isException` + `exceptionType` and leaves `status` untouched,

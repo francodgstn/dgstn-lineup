@@ -36,7 +36,7 @@
 import type { Timestamp } from './common'
 import type { BenefitEffect } from './benefit'
 import type { SaasPlan } from './team'
-import { normalizeEmail } from '../utils/normalizeEmail'
+import { contactIdentityKey, type Sha256Hex } from '../utils/identity'
 import { normalizeRedemptionCode } from '../utils/codes'
 
 // ─── Vocabulary ──────────────────────────────────────────────────────────────
@@ -646,39 +646,31 @@ export function promoModifier(
  * stays crypto-free and browser-safe — the same split formatGiftCardCode uses
  * for its random bytes. The functions package supplies `sha256Hex`
  * (utils/crypto.ts); there must be exactly one implementation.
+ *
+ * DECLARED in utils/identity.ts and re-exported here so the many existing
+ * `import { Sha256Hex } from '@linyup/shared'` call sites keep resolving to the
+ * one binding.
  */
-export type Sha256Hex = (input: string) => string
+export type { Sha256Hex }
 
 /**
- * The strongest identity a one-off purchase rail actually has.
+ * The strongest identity a one-off purchase rail actually has — the normalised
+ * EMAIL, hashed. See `contactIdentityKey` (utils/identity.ts) for the full
+ * reasoning and for what it does NOT promise.
  *
- * NOT the contact id. On the two rails a guest can reach, the contact document
- * is minted BY THE VISITOR, FOR FREE, at purchase time: createDropInCheckout
- * reuses an existing contact only on an exact
- * (teamId, email, lowercased firstname, lowercased lastname) match and
- * otherwise creates a new one, so a contact-keyed cap would read "once per
- * (email, exact spelling of name)" — "Ann Smith" and "A. Smith" would be two
- * people. It would also reset whenever purgeProvisionalContacts hard-deletes an
- * abandoned provisional contact overnight.
- *
- * So: the normalised EMAIL, because every rail collects one and every rail
- * normalises it the same way (normalizeEmail). Hashed so the ledger's DOC IDS
- * are not a harvestable list of a studio's customer emails, and hex so the
- * result is always safe as a Firestore doc id, a map key and a FieldPath
- * segment. Prefixed so the two kinds of key can never collide.
- *
- * WHAT THIS DOES NOT PROMISE: it is not unforgeable. A second mailbox, or a +1
- * alias, is a different identity. The admin copy says "counted per email
- * address" rather than claiming a guarantee, and a public code should be paired
- * with a total cap.
+ * THIS IS A NAMED ALIAS, NOT A SECOND DERIVATION. Waivers needed the same
+ * identity, and two hashers that disagree by so much as an encoding would mean
+ * a promo cap and a consent export disagreed about who a person is. The name
+ * stays because `promoIdentityKey` is what the promo docs, the ledger doc ids
+ * and `docs/promo-codes.md` call it; the bytes are the shared helper's.
+ * `identityKeysAgree` in packages/functions/src/waivers/ledger.test.ts pins
+ * that they are byte-identical.
  */
 export function promoIdentityKey(
   input: { email?: string | null; contactId: string },
   sha256Hex: Sha256Hex
 ): string {
-  const email = input.email ? normalizeEmail(input.email) : ''
-  if (email) return `e_${sha256Hex(email).slice(0, 32)}`
-  return `c_${input.contactId}`
+  return contactIdentityKey(input, sha256Hex)
 }
 
 /**

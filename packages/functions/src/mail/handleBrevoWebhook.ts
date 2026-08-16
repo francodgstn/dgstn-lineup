@@ -43,7 +43,10 @@ export function classifyBrevoEvent(event: string): {
   ledgerStatus?: string
 } {
   const key = eventKey(event)
-  return { suppression: SUPPRESSION_EVENTS[key], ledgerStatus: LEDGER_STATUS[key] }
+  return {
+    suppression: SUPPRESSION_EVENTS[key],
+    ledgerStatus: LEDGER_STATUS[key],
+  }
 }
 
 function messageId(e: BrevoWebhookEvent): string | undefined {

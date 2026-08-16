@@ -233,6 +233,49 @@ export {
   clearPromoRedemption,
   releasePromoReservations,
 } from './connect/promoCodes'
+// Waivers (Wave 3 Phase 4) — document authoring, version publishing and the
+// team's waiver policy. `publishDocumentVersion` replaces the client status flip
+// for EVERY document kind (signup consent has to be recorded against a real
+// version of a real terms document); the plan gate fires only for waivers.
+// A waiver document is callable-only, so all five of these exist: without
+// `updateWaiver` and `archiveWaiver` a studio could mint a waiver and never
+// author, correct or retire it.
+export {
+  createWaiver,
+  updateWaiver,
+  publishDocumentVersion,
+  setWaiverRequirement,
+  archiveWaiver,
+} from './waivers/publish'
+// The public half: the ONE answer a booking surface renders its consent step
+// from. It writes nothing, and the client calls it only when the team's public
+// mirror lists a required waiver — so a tenant with no waivers pays zero extra
+// round-trips on the acquisition path. The GATE itself is not a callable: it is
+// composed into each booking rail above its first contact write (waivers/gate.ts
+// carries the census of which rails, and which are deliberately exempt).
+export { resolveWaiverRequirement } from './waivers/requirement'
+// One member's COMPLETE consent history, as a self-contained artefact — the
+// answer to "show me what this person signed", which is the whole reason a
+// studio keeps a waiver at all. A callable rather than a client read because it
+// materialises the frozen text from every version an acceptance names and
+// verifies each stored fingerprint against it, and because the SECOND, mandatory
+// query — every record under the same email address — is an operator tool that a
+// member's own download must never receive.
+export { exportContactConsentHistory } from './waivers/export'
+// A member re-signing from their own account. NOT an attendance rail and
+// deliberately outside waivers/gate.ts's census — it books nothing and admits
+// nobody — but composed from the same policy read, the same pure decision and
+// the same ledger writer, so there is still one answer to "does this tick
+// count". Without it, a `require_resign` publish is discovered by being refused
+// mid-booking, which is a compliance feature choosing the worst possible moment
+// to introduce itself.
+export { signWaiverInSpace } from './waivers/space'
+// Withdrawing a signature. A manager-only sibling of the ledger rather than part
+// of it: the accepted event is never touched, a revocation is a NEW row naming
+// the one it revokes, and the only thing that moves is the current-state row's
+// status. Ungated by plan — retiring is not creating, and a team must always be
+// able to withdraw a signature it holds.
+export { revokeWaiverAcceptance } from './waivers/revoke'
 // No-show policy fees (E5) — manager resend-link + waive. The strike counter
 // itself (processNoShowStrike) is wired into automation/onBookingWrite, not a
 // callable.

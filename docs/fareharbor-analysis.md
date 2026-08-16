@@ -150,7 +150,7 @@ reason).
 | FareHarbor concept | Linyup today | Verdict | Effort |
 |---|---|---|---|
 | **Custom fields on the book form** — per-item, conditional, whole-booking vs per-person, and optionally private (staff-only) | **Absent.** The public booking form's only extra fields are two team-wide booleans, `showPhone` and `showFitnessAppField` (`team.ts:364-373`) | **Port.** Every piece already exists: the Forms plugin's field schema (`shared/src/types/form.ts:18-29` — text, choice, date, checkbox…), the per-type field precedent on events (`event.ts:41-63`), and contact custom fields. What's missing is **attaching a question set to an activity**, storing answers **on the booking**, and surfacing them on the roster and manifest. "Any injuries?", "shoe size", "how did you hear about us?" | M–L |
-| **Waivers** — liability release signed at booking, status visible at a glance on the manifest | **No first-class concept.** The Documents plugin covers `terms \| privacy \| regulation \| other`, wired to the *signup* consent checkbox via `signup_documents` (`team.ts:420-425`). There is **no per-booking signature, no acceptance record, and no versioned acceptance ledger** | **Port.** More relevant here than at FareHarbor — martial arts, contact sport, and kids' classes make this a genuine liability question, and it's the compliance story that closes studio leads. Shape: a `Document` of kind `waiver` + a required-on-booking flag + an acceptance record keyed by contact **and document version** + a status column on the roster. Must handle **minor / guardian consent** (`Contact` already carries guardian fields) | L |
+| **Waivers** — liability release signed at booking, status visible at a glance on the manifest | **No first-class concept.** The Documents plugin covers `terms \| privacy \| regulation \| other`, wired to the *signup* consent checkbox via `signup_documents` (`team.ts:420-425`). There is **no per-booking signature, no acceptance record, and no versioned acceptance ledger** | **Port.** More relevant here than at FareHarbor — martial arts, contact sport, and kids' classes make this a genuine liability question, and it's the compliance story that closes studio leads. Shape: a `Document` of kind `waiver` + a required-on-booking flag + an acceptance record keyed by contact **and document version** + a status column on the roster. Must handle **minor / guardian consent** (`Contact` already carries guardian fields) — **BUILT, Wave 3 Phase 4 (`docs/waivers.md`).** Three corrections from the implementation: the acceptance is keyed on the EVENT, not on `(contact, version)`, or re-signing after a revocation is unrepresentable; the contact's "guardian fields" are `emergency_contacts`, which identify nobody and were never a consent mechanism; and minor consent is a **self-declaration on the consent step plus a chip on the roster**, not a verification — an emailed one-time link was built and then removed (2026-08-16) because it proved control of a mailbox rather than parenthood, at the price of a public mail-sending surface | L |
 | **Health & safety policies** shown throughout booking | — | **Adapt.** Generalise into the same policy block as cancellation notes (Theme A) rather than a separate field | S |
 | **Receipts** — printable branded transaction record | Stripe emails its own receipt; no branded document | **Adapt.** Ties into the manifest's print infrastructure | M |
 | **Permission groups** | Roles + capabilities (`shared/src/types/capabilities.ts`) | **Already have** | — |
@@ -210,14 +210,41 @@ Mostly **M**.
 - ~~Promo codes / campaigns~~ **done** (Phase 3) — `docs/promo-codes.md`
 - Waivers with a real acceptance ledger
 
-### Wave 4 — structural
+### Wave 3.5 — surface discipline (queued 2026-08-15)
 
-**L–XL**.
+**S–M.** Not a FareHarbor finding — a consequence of shipping Wave 3. Three
+capabilities landed that a *new* studio does not need on day one, and a crowded
+first impression is its own product defect. Franco's call, with the reasoning in
+§7.8.
 
-- Room conflict checking → resources with shared pools
-- Guest count on a booking
-- Crew assignment + staff notifications
-- Tenant content translation *(but see the timing caveat in §6)*
+- Gift Cards → **plugin** (`commerce`)
+- Promo Codes → **plugin** (`commerce`); the Studio *plan gate* becomes a plan
+  *limit* — one gate, not two
+- Waitlist → **NOT a plugin**; a team default in `Settings → Booking` beside
+  `cutoffMinutes`, with the existing per-activity toggle kept as an override
+
+Sequencing is open: this can land before or after the waivers phase. It touches
+no waiver surface either way, so the choice is about what Franco wants demoable
+first, not about a dependency.
+
+### Wave 4 — dissolved (2026-08-15)
+
+**There is no Wave 4.** Franco cut it: room conflicts / resources, guest count and
+crew assignment are advanced features that a small or medium studio does not
+actually need. They are recorded in §5 with their reasons rather than left on a
+roadmap nobody intends to run.
+
+**Tenant content translation is the exception** — it left Wave 4 alive rather than
+declined. Not as a per-locale authoring UI (that is rejected outright), but as
+machine translation written into the `public_profile` mirrors so the German-language
+pages are *indexable*. The driver is findability, not comprehension: see §6.1.
+Unscheduled, and shaped there in enough detail to be picked up directly.
+
+One carve-out survives, and it is not a Wave 4 item: `PlaceRoom` is settable on a
+session and **never validated**, so a studio can already assign two classes to one
+room and get no warning. That is a half-built field that lies, not a missing
+feature — either validate it or stop offering it. Small, unscheduled, worth doing
+the next time someone is in `sessions/`.
 
 <!-- ─────────────────────────────────────────────────────────────────────────
      EXECUTION QUICK-REF (Claude Code settings per wave) — not product content.
@@ -270,8 +297,13 @@ Against `docs/product-strategy.md` §2 tiering:
 | Waitlist | **Coach** | Already listed under Coach in the strategy doc |
 | Promo codes | **Studio** | A growth lever, and it sits alongside Referrals |
 | Waivers | **Studio** | Compliance is a studio/club concern; plausibly its own plugin add-on |
-| Crew assignment | **Studio** | Requires multiple managers, which is already Studio-gated |
-| Resources | **Studio** | Multi-room is a studio problem by definition |
+| ~~Crew assignment~~ | — | Declined 2026-08-15, §5 |
+| ~~Resources~~ | — | Declined 2026-08-15, §5 |
+
+Superseded for two rows by Wave 3.5 (§7.8): **Gift Cards** and **Promo Codes**
+become `commerce` plugins, so install state is their gate and the plan decides
+limits, not access. The waitlist stays a Coach-plan feature with a team-level
+booking setting.
 
 ---
 
@@ -293,25 +325,104 @@ Recorded so these don't come back around:
 | Tips / gratuity | Culturally out of place for CH coaching; muddies the subscription relationship |
 | **Full customer-type pricing matrix** | Adapted, not rejected outright — see Theme C. The full matrix fights the subscription model; the guest-count subset is kept |
 
+**Added 2026-08-15**, when Franco dissolved Wave 4. These were *scheduled* and are
+now declined — a stronger statement than never having considered them:
+
+| Rejected | Reason |
+|---|---|
+| **Resources with shared pools** (8 reformer beds across three class types) | Advanced. A small or medium studio does not have a contended equipment pool; the ones that do are not the first market. The cheap half — validating `roomId` so one room cannot host two concurrent sessions — is kept as an unscheduled integrity fix, because the field already exists and currently promises something it does not deliver |
+| **Guest count on a booking** | Supersedes §6.2, which asked whether the demand was real: the answer is that it is not, for the studios being sold to now. Bookings are keyed by `contactId`, so this is an **L** that touches capacity, pricing and the webhook. A parent booking for two children is already expressible as contact selection at sign-in |
+| **Crew assignment + staff notifications** | Needs multiple managers, which is Studio-gated anyway. A single `providerId` covers the small-studio reality, and the studios large enough to want a second assigned coach can name them in the session headline |
+| **Tenant content translation** (as *per-locale authoring*) | Only the authoring UI is rejected — owners will not maintain four versions and a half-filled page reads as broken. **Machine translation into the public mirrors is NOT rejected**: see §6.1, revised 2026-08-15 once it became clear the driver is findability, not comprehension, and that browser translation does nothing for SEO |
+
 ---
 
 ## 6. Open questions
 
-Three decisions this analysis surfaces but cannot make.
+Three decisions this analysis surfaced but could not make. **Two are now resolved**
+(2026-08-15) and are kept with their answers rather than deleted, so the reasoning
+survives the decision.
 
-**1. Tenant content translation — and it's time-sensitive.**
-Wave 1 adds several new public content fields (meeting point, what's included,
-policies, FAQ). If per-tenant translation is ever going to happen, the cheap moment
-to design for it is *before* those fields exist, not after. The question isn't
-"should we build it now" but "should Wave 1's fields be shaped as localisable maps
-from day one". Deciding "no, single-language forever" is a perfectly good answer —
-it just needs to be a decision rather than a default.
+**1. Tenant content translation — RESOLVED 2026-08-15: no per-locale authoring,
+ever. Machine translation into the PUBLIC MIRRORS, for findability. Shaped below;
+not yet scheduled.**
 
-**2. Guest count — real demand or theoretical?**
-Bring-a-friend, parent-books-child, couples classes. Worth asking the lead studios
-directly before spending an **L** on it. If a parent booking for two children is the
-actual need, note that Linyup already models that as *contact selection at sign-in*,
-which may be sufficient.
+> **Revised later the same day, and the revision is the important part.** The
+> first answer below was "don't build it", resting on two claims. One of them was
+> wrong.
+>
+> **The driver is discoverability, not comprehension.** Franco's own club (HMD
+> Basel) targets an English-speaking audience, and its website analytics show
+> visitors from Basel and the surrounding region switching to German anyway —
+> people who are perfectly happy speaking English in the room. Wanting the page in
+> your own language is about trust and search, not about understanding.
+>
+> **And browser translation does not solve SEO.** Chrome translates *after* the
+> page is served, in the visitor's browser; Googlebot indexes the served HTML. An
+> English-only page is therefore invisible to someone searching "Kampfsport
+> Basel". The "browsers translate anyway" argument answers comprehension and is
+> simply irrelevant to acquisition — which is the half that has revenue attached.
+>
+> What survives unchanged: **no per-locale authoring UI**, for the half-filled-page
+> reason below. The studio authors once, in its own language.
+
+The timing question below is now moot and is kept as a record: Wave 1 shipped
+those fields as plain strings, so the cheap moment passed. Retro-fitting locale
+maps is now strictly more expensive than it would have been — which is an argument
+against doing it, not for hurrying.
+
+*The decision, and the reasoning.* A per-locale authoring UI fails on the studio's
+side before it fails on ours: owners will not write and maintain four versions of
+every activity description, and a **half-filled** translation is worse than none —
+a page that is half German and half English reads as broken. Meanwhile browsers
+translate whole pages competently now, so the honest marginal value of building it
+is *quality and control*, not capability. Not worth an XL schema change across
+every public content field.
+
+*What to do instead, at no cost:* make sure the public pages declare `lang`
+correctly and do nothing that fights browser translation. That is the 90% answer
+for free, and it should be verified rather than assumed.
+
+### The shape, if and when it is scheduled
+
+**Translate into the `public_profile` mirrors at sync time.** This is smaller and
+better-formed than the read-time cache the first draft proposed, and the revision
+above is what made it visible.
+
+- The public surfaces already read only from `public_profile` mirrors — denormalised
+  projections written by the `sync*PublicProfile` functions. Those functions gain a
+  translation step. **Growing a projection is a projection's job**, so there is no
+  schema churn on the source of truth and no locale maps on `Activity`, `Course` or
+  `Team`.
+- The routing already exists: `next-intl` with `localePrefix: 'as-needed'`, so
+  English keeps clean URLs and German is `/de/...`. What is missing is content at
+  those URLs, plus `hreflang`.
+- Because the pages are server-rendered from the mirror, the result is **genuinely
+  indexable** — which is the entire point, and the thing a read-time client cache
+  would not have delivered.
+- The studio authors **once**, in its own language. No per-locale UI, ever.
+
+**Never machine-translate binding text.** Marketing copy — activity description,
+what's included, FAQ, meeting point — is safe, and a small muted disclaimer on the
+page is sufficient for it (Franco's call, and correct). A **cancellation policy, a
+waiver, or terms** are not: a mistranslated refund rule is a dispute you lose on
+time even where you would win on law. Those render in the original with a note.
+
+The reason this costs nothing to obey: **nobody searches for a cancellation
+policy.** All of the findability value sits in the marketing surface, so keeping
+binding text untranslated forfeits none of the benefit. The split is free.
+
+**Cost is not the blocker**, and it is worth recording so it stops being raised as
+one. The translatable surface is tens of thousands of characters per studio,
+one-time plus edits — cents to low single-digit francs per tenant at commodity
+machine-translation rates, and an LLM pass is cheaper still and better at short
+marketing copy it can be given domain context for. The real costs are re-translation
+on every content edit, mirror growth, and accountability for a wrong translation —
+all three bounded by the marketing/binding split above.
+
+**2. Guest count — RESOLVED 2026-08-15: declined.** See §5. The demand is not real
+for the studios being sold to now, and contact selection at sign-in already covers
+the parent-books-children case that motivated it.
 
 **3. The fitness-aggregator partner rail — bet or distraction?**
 The pieces are half-built already (the fitness-app field on the guest form,
@@ -510,11 +621,29 @@ further decisions changed the shipped shape against what was designed here:
   at all, so a promo used *without* a card would never have committed.
 
 **Phase 4 — Waivers.** Last, because it has the largest independent surface
-(versioning, immutable snapshots, acceptance ledger, guardian model, rules
+(versioning, immutable snapshots, acceptance ledger, minors model, rules
 tightening, a new public mirror) and the smallest interaction footprint — no
 waiver arm in `resolvePaymentOptions`, so it never contends for the price
 pipeline. Its one prerequisite is Phase 2's transactional `bookSession`: the
 gate must refuse *before* contact creation and write *after* the booking commits.
+**Shipped 2026-08-15 — `docs/waivers.md` is the shipped-behaviour document.**
+**Correction (2026-08, from implementation):** the footprint claim held — `git
+diff` on `paymentOptions.ts` is empty for the whole phase — and the *placement*
+rule reversed on the second half. The acceptance is written **inside** the commit
+transaction, not after it: post-commit on `bookSession` is the zone where the
+partner ledger and the contact alert swallow their own failures, and an
+acceptance that can fail while the seat commits is an evidence hole in a
+compliance feature. That satisfies the rule's intent (nothing recorded for a
+booking that never happened) more strictly, and costs one extra single-document
+read. Three further shipped shapes differ from what was designed here: the
+deterministic acceptance id had to gain the **event's own nonce** or re-signing,
+renewal and re-signing-after-revocation are all unrepresentable (§7.7's blocker);
+the **`notify` publish outcome was deferred to v2**, leaving two outcomes and a
+declared-but-writer-less `notices` subcollection so adding it later is an
+addition rather than a migration; and **every rail refuses** — the two deferring
+rails this section originally described (the waitlist claim and the kiosk
+walk-in) existed only because a guardian's emailed signature could not be
+completed in the window, and both went with that mechanism on 2026-08-16.
 
 ### 7.5 Commits that must not be split
 
@@ -541,7 +670,50 @@ Each of these is atomic — splitting produces a broken intermediate:
 
 Both settled 2026-08 by a second design pass (`wf_9aab7697-8e6`).
 
-**Guardians — a distinct `Guardian` type, not an extended `EmergencyContact`.**
+> **SHIPPED 2026-08-15, AND THE GUARDIAN HALF WAS THEN WITHDRAWN IN FULL
+> (Franco, 2026-08-16). `docs/waivers.md` is the current document; everything
+> below about `Guardian[]`, minor detection, `guardianRequired` and the emailed
+> link is kept as the reasoning it was decided on and describes NO CODE.**
+>
+> - **The emailed guardian link is gone**, with the ~2,500 lines, the
+>   `guardian_requests` store, the three public callables, the signing page, the
+>   mail template, the four rate-limit counters and the date-of-birth question.
+>   An emailed link proves control of a MAILBOX, not parenthood — a teenager with
+>   a parent's phone defeats it — so it bought evidence barely stronger than a
+>   checkbox at the price of a public, studio-branded mail-sending surface on the
+>   booking path. What replaces it: one optional flag on the waiver
+>   (`mayIncludeMinors`), a second required choice on the consent step (*I am the
+>   participant* / *I am signing as a parent or guardian*, with an optional
+>   name), stored as a **self-declaration** nothing verifies, and a chip on the
+>   roster and the printed manifest so the studio — the party with the exposure,
+>   and the only party who can actually check — verifies at the door.
+>
+> - **No `Guardian[]` type was built.** With the ledger snapshotting the signer —
+>   which this section already specifies two paragraphs down — a freely-editable
+>   array on the contact would be a second source of truth for a question the
+>   ledger already answers, and would invite exactly the read the emailed-link
+>   decision forbids. A repeat guardian's pre-fill comes from their most recent
+>   guardian acceptance instead.
+> - **`guardianRequired` defaults to `never`, not `if_minor`** (Franco, D3): the
+>   common case is an adults-only studio, and a date-of-birth field on the
+>   acquisition path is a real conversion cost for a guard most tenants never
+>   need. Its failure mode is silent, so the compensating requirement is
+>   **visibility** — the control renders inline in the waiver editor, never
+>   collapsed, with one line stating what `never` means.
+> - **De-gating went further than this section proposes** (Franco, D2): the
+>   public document pages are de-gated too, with **indexability** gated on a paid,
+>   *active* plan instead — `noindex` below it, so the page always works and
+>   nothing has to be withdrawn later. The `installed_plugins/documents` teardown
+>   arm was **deleted** rather than worked around, so a downgrade no longer
+>   destroys a team's document mirrors at all.
+>
+> One clause below is also wrong on its own terms and is corrected rather than
+> deleted: **Coach has no "one-plugin explore slot" to free** — no per-plan
+> install count exists anywhere in the repo, and a Coach team could never install
+> Documents in the first place (the client-side install route the plan is sent
+> down is denied by the rules). The de-gating case stands without it.
+
+**NOT BUILT — Guardians as a distinct `Guardian` type.**
 They look structurally similar but differ where it counts: a guardian's `email`
 is **required** (it is the identity consent is recorded against, and
 `EmergencyContact.email` is optional), a guardian is legally load-bearing where
@@ -554,7 +726,7 @@ contact**, never counted rows, preserving the contact-cap invariant.
 The acceptance ledger **snapshots the signer** rather than referencing the
 guardian array, so removing a guardian never rewrites history.
 
-**Minor detection — three states, and the system asks rather than guesses.**
+**NOT BUILT — minor detection, three states, and an age question.**
 `minor | adult | unknown`, with a declared `requires_guardian_consent` flag
 beating any computed value. Since the guest booking form collects no birthdate,
 *every* guest-booked contact starts `unknown` — so neither default is acceptable:
@@ -566,11 +738,15 @@ inside the waiver step, with the reason stated** — and nowhere else in the
 product. An adults-only studio (`never`) pays zero age questions; a kids' club
 (`always`) skips the age question entirely.
 
-> ⚠️ Amend `docs/product-strategy.md:313-314`. It currently says *"Guardians are
-> not contact records. Guardian / emergency info is stored as fields on the
-> contact (name + phone)"* — the counting invariant holds, but it conflates
-> guardian with emergency info and specifies "name + phone" where a guardian
-> needs a required email.
+> ⚠️ ~~Amend `docs/product-strategy.md:313-314`~~ — **DONE, and not as written
+> here (2026-08-16).** That line was amended twice. The first correction stands:
+> the counting invariant holds, and it conflated guardians with
+> `Contact.emergency_contacts`, which is freely-edited operational data that
+> identifies nobody. But the fix this callout asked for — *"a guardian needs a
+> required email"* — is now the wrong correction, because the required guardian
+> email went with the emailed link. A guardian declaration is not stored on the
+> contact at all: it is `signer_role` / `signer_name` on an acceptance event in
+> the waiver ledger, self-declared and unverified.
 
 **Documents becomes a default feature, not a plugin.** It was never monetised —
 `minPlan: 'free'`, no `addon` field, gated purely by install state — so this
@@ -620,9 +796,46 @@ discovered during implementation:
   a use consumed and a buyer's per-person cap burned for a discount never given.
 - **Waivers** — re-signing is structurally impossible as specified (deterministic
   doc id + `.create()` deadlocks both expiry and revocation).
+  **Resolved** in `docs/wave3-phase4-spec.md` §1.1 and closed in the
+  implementation: the ledger splits into append-only EVENT rows plus one mutable
+  CURRENT-STATE row, and the event id derives from the event (its `intentId`
+  nonce) rather than from the relationship — which makes a second, genuine
+  signing a second row instead of a collision. That pass also found fifteen
+  pre-existing defects neither the design nor its critique had caught (§0.3 of
+  that spec), including a live Delete button that destroys the text of a document
+  somebody has already accepted, `signup_documents` failing **open** to empty
+  while being proposed as an authorization source, and
+  `teams/{teamId}/settings/*` having no security rule at all.
 - **Guardians** — the authenticated-guardian path is unimplementable as designed:
   the contact session token records `contactId` but not *which* email opened the
   session, so it cannot prove a guardian is signing rather than the minor.
+  **Resolved 2026-08-15** by an emailed link bound to the guardian's own address,
+  and then **withdrawn 2026-08-16**: that link proved mailbox control, which is
+  not parenthood either. The product stopped trying to prove the relationship and
+  started prompting the studio to check it (`docs/waivers.md` → "Minors").
+
+### 7.8 Wave 3.5 — what to gate, and what not to
+
+Three Wave 3 capabilities are useful and none of them belong in a new studio's
+first ten minutes. The split is not uniform, and the reasoning is the point:
+
+| Capability | Gated today | Becomes | Why |
+|---|---|---|---|
+| **Gift Cards** | **nothing** | plugin (`commerce`) | The biggest first-impression offender precisely because it is ungated. A studio consciously decides to sell gift cards, often seasonally — a clean on/off |
+| **Promo Codes** | plan: Studio (creation only) | plugin (`commerce`); the plan gate demotes to a plan **limit** | Do **not** stack a plugin on the plan gate — a Studio-tier user asking "why can't I see this?" must have one answer. `plan.ts` already states the rule: plugin-delivered features are gated by install state, *not* feature flags (see Courses, Referrals). `PROMO_CODE_LIMITS` (0/0/20/100) stays as the ceiling |
+| **Waitlist** | plan: Coach + per-activity toggle | **team default in `Settings → Booking`** + the per-activity toggle as override | Not a plugin. It has **no nav item**, so it adds no clutter — the argument that justifies the other two does not apply. And it is not a capability a studio adopts; it is a fix for a broken state. A full class silently loses bookings, and a studio does not know it needs a queue until after the revenue is gone — behind an install step, the studios who need it most never find it. The real defect in today's shape is that per-activity is the *only* control, so 40 activities means 40 toggles |
+
+**Plugins are also a monetisation surface**, not only a simplicity lever —
+`plugin-addons.ts` carries `PluginAddonPrice`. Gift Cards and Promo Codes are
+plausible paid add-ons; the waitlist is not, because nobody will pay to un-break
+a dead end. That asymmetry is a second, independent reason the split falls here.
+
+**Two implementation cautions.** Gating a shipped feature touches every entry
+point — the incomplete-enumeration shape that cost Phase 3 three rounds — so it
+wants the census treatment: enumerate the entry points first, one gate helper,
+machine-checked. And **the seeders**: lead sandboxes and demo tenants have gift
+cards seeded, so the moment Gift Cards is install-gated those tenants need the
+plugin marked installed or their data vanishes mid prospect demo.
 
 ---
 
@@ -640,6 +853,12 @@ discovered during implementation:
   lifecycle and its ownership rules, the identity the per-person cap binds
   to and what it does not promise, and the four decisions (§10 Q8/Q9/Q11/Q12)
   with their user-visible consequences
+- `docs/waivers.md` — Wave 3 Phase 4 as built: the ledger's two halves and the
+  event-nonce id that makes re-signing expressible, the two publish outcomes and
+  why the third is deferred, why the emailed guardian link was removed rather
+  than fixed, the honest paragraph on what a click-wrap signature is worth, and —
+  the section a studio will otherwise get wrong by inference — **"What the gate
+  does NOT cover"**
 - `docs/appointments.md` — the appointment model (activity owns the *what*,
   availability owns the *when*), which is what makes appointment slots
   un-pre-generatable and therefore constrains any waitlist design on that side

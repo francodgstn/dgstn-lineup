@@ -93,18 +93,25 @@ interface ConfirmationParams {
 
 export function buildBookingConfirmationEmail(params: ConfirmationParams) {
   const {
-    firstname,
-    teamName,
-    activityName,
     sessionStart,
     sessionEnd,
-    locationName,
     manageBookingUrl,
     instructions,
     cancellationPolicy,
     reference,
     lang = 'en',
   } = params
+  // THE ESCAPING IDIOM THIS FILE USES, and the reason it shadows: every
+  // interpolated string is escaped once at the top under the name the template
+  // below reaches for, so a line added later cannot pick up a raw value by using
+  // the obvious identifier. `firstname` here is typed by a guest on a public
+  // form. Where a value must go out RAW — a mail SUBJECT, which Brevo takes as
+  // its own API field and `buildEmailTemplate` escapes for the HTML header — the
+  // template reads `params.x` explicitly, and that explicitness is the signal.
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const activityName = escapeHtml(params.activityName)
+  const locationName = params.locationName ? escapeHtml(params.locationName) : params.locationName
 
   const date = formatDate(sessionStart, lang)
   const endTime = formatTime(sessionEnd, lang)
@@ -201,17 +208,14 @@ interface ReminderParams {
 }
 
 export function buildBookingReminderEmail(params: ReminderParams) {
-  const {
-    firstname,
-    teamName,
-    activityName,
-    sessionStart,
-    sessionEnd,
-    locationName,
-    locationAddress,
-    manageBookingUrl,
-    lang = 'en',
-  } = params
+  const { sessionStart, sessionEnd, manageBookingUrl, lang = 'en' } = params
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const activityName = escapeHtml(params.activityName)
+  const locationName = params.locationName ? escapeHtml(params.locationName) : params.locationName
+  const locationAddress = params.locationAddress
+    ? escapeHtml(params.locationAddress)
+    : params.locationAddress
 
   const date = formatDate(sessionStart, lang)
   const endTime = formatTime(sessionEnd, lang)
@@ -323,25 +327,26 @@ interface NotificationParams {
 }
 
 export function buildTeacherNotificationEmail(params: NotificationParams) {
-  const {
-    teamOwnerFirstname,
-    contactName,
-    contactEmail,
-    contactPhone,
-    activityName,
-    sessionStart,
-    sessionEnd,
-    lang = 'en',
-  } = params
+  const { sessionStart, sessionEnd, lang = 'en' } = params
+  // THE HIGHEST-VALUE ESCAPE IN THIS FILE. `contactName`, `contactEmail` and
+  // `contactPhone` are typed by an anonymous guest on a public booking form, and
+  // this message is delivered to the STUDIO — so unescaped they put attacker-
+  // authored markup and links in front of the one reader who trusts this mail
+  // most. The booker's own confirmation is self-injection; this one is not.
+  const teamOwnerFirstname = escapeHtml(params.teamOwnerFirstname)
+  const contactName = escapeHtml(params.contactName)
+  const contactEmail = escapeHtml(params.contactEmail)
+  const contactPhone = params.contactPhone ? escapeHtml(params.contactPhone) : params.contactPhone
+  const activityName = escapeHtml(params.activityName)
 
   const date = formatDate(sessionStart, lang)
   const endTime = formatTime(sessionEnd, lang)
 
   const titles: Record<Lang, string> = {
-    en: `New Booking: ${contactName}`,
-    de: `Neue Buchung: ${contactName}`,
-    fr: `Nouvelle réservation : ${contactName}`,
-    it: `Nuova prenotazione: ${contactName}`,
+    en: `New Booking: ${params.contactName}`,
+    de: `Neue Buchung: ${params.contactName}`,
+    fr: `Nouvelle réservation : ${params.contactName}`,
+    it: `Nuova prenotazione: ${params.contactName}`,
   }
 
   const lines: Record<Lang, string[]> = {
@@ -384,13 +389,14 @@ interface VerificationCodeParams {
 }
 
 export function buildVerificationCodeEmail(params: VerificationCodeParams) {
-  const { code, teamName, expiresInMinutes, lang = 'en' } = params
+  const { expiresInMinutes, lang = 'en' } = params
+  const code = escapeHtml(params.code)
 
   const titles: Record<Lang, string> = {
-    en: `Your verification code for ${teamName}`,
-    de: `Ihr Verifizierungscode für ${teamName}`,
-    fr: `Votre code de vérification pour ${teamName}`,
-    it: `Il tuo codice di verifica per ${teamName}`,
+    en: `Your verification code for ${params.teamName}`,
+    de: `Ihr Verifizierungscode für ${params.teamName}`,
+    fr: `Votre code de vérification pour ${params.teamName}`,
+    it: `Il tuo codice di verifica per ${params.teamName}`,
   }
 
   const codeStyle = `font-size:2rem;font-weight:bold;letter-spacing:0.25em;color:${BRAND.primaryDeep};text-align:center;`
@@ -465,17 +471,11 @@ interface WaitlistJoinedParams {
 }
 
 export function buildWaitlistJoinedEmail(params: WaitlistJoinedParams) {
-  const {
-    firstname,
-    teamName,
-    activityName,
-    sessionStart,
-    sessionEnd,
-    locationName,
-    position,
-    statusUrl,
-    lang = 'en',
-  } = params
+  const { sessionStart, sessionEnd, position, statusUrl, lang = 'en' } = params
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const activityName = escapeHtml(params.activityName)
+  const locationName = params.locationName ? escapeHtml(params.locationName) : params.locationName
 
   const date = formatDate(sessionStart, lang)
   const endTime = formatTime(sessionEnd, lang)
@@ -553,17 +553,11 @@ interface WaitlistOfferParams {
 }
 
 export function buildWaitlistOfferEmail(params: WaitlistOfferParams) {
-  const {
-    firstname,
-    teamName,
-    activityName,
-    sessionStart,
-    sessionEnd,
-    locationName,
-    claimUrl,
-    expiresAt,
-    lang = 'en',
-  } = params
+  const { sessionStart, sessionEnd, claimUrl, expiresAt, lang = 'en' } = params
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const activityName = escapeHtml(params.activityName)
+  const locationName = params.locationName ? escapeHtml(params.locationName) : params.locationName
 
   const date = formatDate(sessionStart, lang)
   const endTime = formatTime(sessionEnd, lang)
@@ -662,7 +656,10 @@ interface WaitlistExpiredParams {
 }
 
 export function buildWaitlistExpiredEmail(params: WaitlistExpiredParams) {
-  const { firstname, teamName, activityName, sessionStart, rejoinUrl, lang = 'en' } = params
+  const { sessionStart, rejoinUrl, lang = 'en' } = params
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const activityName = escapeHtml(params.activityName)
 
   const date = formatDate(sessionStart, lang)
 

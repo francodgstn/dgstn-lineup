@@ -12,8 +12,6 @@ import { ChevronLeft, ExternalLink, FileText } from 'lucide-react'
 import type { DocumentPublicProfile } from '@linyup/shared'
 import { usePublicTeam } from '../../PublicTeamProvider'
 
-export const dynamic = 'force-dynamic'
-
 type LoadState =
   | { status: 'loading' }
   | { status: 'notfound' }
@@ -53,7 +51,7 @@ function usePublicDocument(teamId: string, documentSlug: string): LoadState {
   return state
 }
 
-export default function PublicDocumentDetailPage() {
+export function DocumentDetail() {
   const t = useTranslations('Documents')
   const params = useParams()
   const documentSlug = String(params.documentSlug)

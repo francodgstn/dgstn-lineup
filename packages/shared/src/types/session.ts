@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { BookingWaiverState } from './waiver'
 
 /** Has a paid-booking hold lapsed? A 'pending_payment' session whose
  *  `hold_expires_at` has passed no longer blocks its slot — readers treat it as
@@ -531,6 +532,11 @@ export interface Booking {
    *  it is for the manifest, the day sheet and anyone asking where a booking
    *  came from. */
   claimed_from_waitlist?: boolean
+  /** Waiver state AT COMMIT, denormalised for the day sheet and the printed
+   *  manifest so neither has to read a signer row per attendee. Never read for
+   *  a decision, and ABSENT means "no required waiver applied" — see
+   *  `BookingWaiverState` for why the roster must render nothing for that. */
+  waiver_state?: BookingWaiverState
 }
 
 /** The lifecycle of one queue entry. 'offered' is the only status that owns a

@@ -1,13 +1,37 @@
 'use client'
 
+// NOTE ON THIS DIRECTORY'S NAME: `src/plugins/documents/` is historical.
+// Documents stopped being a plugin — there is no manifest, no marketplace card
+// and no install gate — but the module namespace was left where it is, because
+// moving it renames a dozen import paths and changes nothing. The ROUTE did
+// move: the pages live at `/documents`, with a redirect shim at the old
+// `/plugins/documents`.
+
 import { useQuery } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy,
   setDoc, updateDoc, deleteDoc, serverTimestamp, getCountFromServer,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { DOCUMENTS_COLLECTION } from '@linyup/shared'
-import type { StudioDocument, DocumentKind, DocumentSource } from '@linyup/shared'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
+import {
+  DOCUMENTS_COLLECTION,
+  DOCUMENTS_SETTINGS_DOC_ID,
+  DOCUMENT_VERSIONS_SUBCOLLECTION,
+  INSTALLED_PLUGINS_SUBCOLLECTION,
+  TEAMS_COLLECTION,
+  TEAM_SETTINGS_SUBCOLLECTION,
+  resolveSignupDocumentIds,
+} from '@linyup/shared'
+import type {
+  StudioDocument,
+  DocumentKind,
+  DocumentSource,
+  DocumentStatus,
+  DocumentVersion,
+  PublishOutcome,
+  WaiverConfig,
+} from '@linyup/shared'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -60,6 +84,65 @@ export function useDocument(id: string | null) {
   })
 }
 
+/**
+ * The document's immutable published snapshots, newest first.
+ *
+ * This is a direct client read, and it is the one the rules grant on purpose:
+ * `documents/{id}/versions/{v}` is `allow read: if isAuthed() && isTeamMember(…)`
+ * so the studio's own version history is a plain list. The no-client-reads rule
+ * that covers acceptances and signer rows is about the PUBLIC
+ * surfaces, where the reader is a visitor with no membership and every answer has
+ * to come from a callable.
+ *
+ * Ordered by document id rather than by `published_at`: version ids are
+ * zero-padded (`v0001`), so id order IS chronological and no index is needed.
+ */
+export function useDocumentVersions(documentId: string | null) {
+  return useQuery<DocumentVersion[]>({
+    queryKey: ['document-versions', documentId],
+    enabled: !!documentId,
+    queryFn: async () => {
+      const snap = await getDocs(
+        collection(doc(documentsCol(), documentId!), DOCUMENT_VERSIONS_SUBCOLLECTION),
+      )
+      return snap.docs
+        .map((d) => d.data() as DocumentVersion)
+        .sort((a, b) => b.version - a.version)
+    },
+  })
+}
+
+// ─── Signup-consent settings (teams/{teamId}/settings/documents) ─────────────
+// Documents is no longer a plugin, so this config moved out of
+// `installed_plugins/documents.config`. Reads are DUAL and go through the shared
+// resolveSignupDocumentIds so this panel and syncTeamPublicProfile cannot
+// disagree about which location wins; writes only ever go to the new home.
+
+export function useSignupDocumentIds(teamId: string | null) {
+  return useQuery<string[]>({
+    queryKey: ['documents-settings', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const [settings, legacy] = await Promise.all([
+        getDoc(doc(db, TEAMS_COLLECTION, teamId!, TEAM_SETTINGS_SUBCOLLECTION, DOCUMENTS_SETTINGS_DOC_ID)),
+        getDoc(doc(db, TEAMS_COLLECTION, teamId!, INSTALLED_PLUGINS_SUBCOLLECTION, 'documents')),
+      ])
+      return resolveSignupDocumentIds({
+        settings: settings.data() as { signupDocumentIds?: string[] } | undefined,
+        legacyPluginConfig: legacy.data()?.config as { signupDocumentIds?: unknown } | undefined,
+      })
+    },
+  })
+}
+
+export async function saveSignupDocumentIds(teamId: string, ids: string[]): Promise<void> {
+  await setDoc(
+    doc(db, TEAMS_COLLECTION, teamId, TEAM_SETTINGS_SUBCOLLECTION, DOCUMENTS_SETTINGS_DOC_ID),
+    { signupDocumentIds: ids, updated_at: serverTimestamp() },
+    { merge: true },
+  )
+}
+
 // ─── Mutations (plain async helpers; call from useMutation in components) ──
 
 export async function createDocument(input: {
@@ -89,6 +172,7 @@ export async function createDocument(input: {
 
 export async function updateDocument(
   id: string,
+  // `status` is deliberately absent — see setDocumentStatus / publishDocument.
   patch: Partial<
     Pick<
       StudioDocument,
@@ -98,7 +182,6 @@ export async function updateDocument(
       | 'body'
       | 'externalUrl'
       | 'summary'
-      | 'status'
       | 'isPublic'
       | 'order'
       | 'archived_at'
@@ -111,8 +194,171 @@ export async function updateDocument(
   })
 }
 
+/**
+ * Unpublish / archive. Publishing is NOT here: it mints an immutable version
+ * snapshot, which only the server can do, and `firestore.rules` denies a client
+ * transition into 'published' so this signature is enforced rather than merely
+ * documented.
+ */
+export async function setDocumentStatus(
+  id: string,
+  status: Exclude<DocumentStatus, 'published'>,
+): Promise<void> {
+  await updateDoc(doc(documentsCol(), id), {
+    status,
+    // isPublic can only be true while published — leaving 'published' forces it off.
+    isPublic: false,
+    updated_at: serverTimestamp(),
+  })
+}
+
+export interface PublishResult {
+  version: number
+  bodyHash: string
+}
+
+/**
+ * THE publish path, for every document kind. Mints `versions/v{NNNN}` from the
+ * sanitized body, moves `current_version`, and — for a `require_resign` outcome —
+ * the supersession floor, all in one transaction.
+ */
+export async function publishDocument(
+  documentId: string,
+  outcome: PublishOutcome,
+): Promise<PublishResult> {
+  const fn = httpsCallable<{ documentId: string; outcome: PublishOutcome }, PublishResult>(
+    functions,
+    'publishDocumentVersion',
+  )
+  return (await fn({ documentId, outcome })).data
+}
+
 export async function deleteDocument(id: string): Promise<void> {
   await deleteDoc(doc(documentsCol(), id))
+}
+
+// ─── Waivers — CALLABLE-ONLY ────────────────────────────────────────────────
+// `firestore.rules` denies a client create, update AND delete on a
+// `kind: 'waiver'` document: its content is somebody's evidence and its
+// required-ness is an authorization fact. So every write below goes through a
+// callable, and the editor routes its Save through `updateWaiver` for this kind
+// while keeping its direct client write for every other.
+//
+// The wrappers are `createWaiver`, `updateWaiverContent`, `updateWaiverSettings`
+// (both onto `updateWaiver`), `setWaiverRequirement` and `archiveWaiver`;
+// publishing goes through `publishDocument` above, which is universal rather
+// than waiver-only. The census of the callables themselves lives in the module
+// header of `packages/functions/src/waivers/publish.ts`.
+
+export async function createWaiver(input: {
+  teamId: string
+  title: string
+  source: DocumentSource
+}): Promise<string> {
+  const fn = httpsCallable<typeof input, { documentId: string }>(functions, 'createWaiver')
+  return (await fn(input)).data.documentId
+}
+
+/** Title / body / summary / source / externalUrl. The PAID half: text edits are
+ *  authoring, and a downgraded studio cannot do them. */
+export async function updateWaiverContent(
+  documentId: string,
+  patch: {
+    title?: string
+    summary?: string
+    body?: string
+    source?: DocumentSource
+    externalUrl?: string
+  },
+): Promise<void> {
+  const fn = httpsCallable(functions, 'updateWaiver')
+  await fn({ documentId, ...patch })
+}
+
+/** `mayIncludeMinors`, `validityMonths` and `scope`. UNGATED on purpose — a
+ *  downgraded studio must still be able to narrow a scope or flag a waiver for
+ *  minors. `required` is deliberately NOT here: it may only be written where
+ *  the policy entry is patched in the same transaction, and `updateWaiver`
+ *  refuses the key outright rather than dropping it silently. */
+export async function updateWaiverSettings(
+  documentId: string,
+  patch: Partial<Pick<WaiverConfig, 'mayIncludeMinors' | 'validityMonths' | 'scope'>>,
+): Promise<void> {
+  const fn = httpsCallable(functions, 'updateWaiver')
+  await fn({ documentId, ...patch })
+}
+
+/** ASYMMETRIC: turning it ON calls `requirePlan`, turning it OFF never does. */
+export async function setWaiverRequirement(documentId: string, required: boolean): Promise<void> {
+  const fn = httpsCallable(functions, 'setWaiverRequirement')
+  await fn({ documentId, required })
+}
+
+/** No plan gate at all — retiring is not creating. */
+export async function archiveWaiver(documentId: string): Promise<void> {
+  const fn = httpsCallable(functions, 'archiveWaiver')
+  await fn({ documentId })
+}
+
+/**
+ * Every refusal a studio can ACT ON, mapped to copy — the `details.reason`
+ * values raised by `createWaiver`, `updateWaiver`, `publishDocumentVersion`,
+ * `setWaiverRequirement` and `archiveWaiver`.
+ *
+ * A studio told only "could not save" will not find the empty body, the plan
+ * gate or the version cap — and this docblock claimed all three while the switch
+ * mapped only the plan gate, so two of the three examples it named fell through
+ * to the generic string. Each named case now has an arm.
+ *
+ * `plan_required` and `plan_inactive` carry `requirePlan`'s English billing
+ * prose, which is written for a coach and must never be rendered raw even here.
+ *
+ * DELIBERATELY UNMAPPED, so `default` is a decision rather than a gap:
+ * `document_not_found` and `not_a_waiver`, plus the argument validators that
+ * carry no `reason` at all ("title is required", "required must be a boolean").
+ * All of those are client bugs — nothing a studio types produces them, and
+ * inventing copy would tell a manager to fix something that is not theirs.
+ *
+ * `PublishDialog` keeps its OWN map, because it shows the message inline in the
+ * dialog with publish-specific wording rather than as a toast. Every reason that
+ * map handles is handled here too; the wording differs deliberately.
+ */
+export function waiverCallableError(
+  err: unknown,
+  t: (key: string) => string,
+): string {
+  const reason = (err as { details?: { reason?: string } })?.details?.reason
+  switch (reason) {
+    case 'plan_required':
+    case 'plan_inactive':
+      return t('errorPlanRequired')
+    case 'waiver_limit_reached':
+      return t('errorLimitReached')
+    case 'waiver_not_published':
+      return t('errorNotPublished')
+    case 'waiver_unavailable':
+      return t('errorUnavailable')
+    case 'document_archived':
+      return t('errorArchived')
+    case 'invalid_external_url':
+      return t('errorExternalUrl')
+    case 'document_body_empty':
+      return t('errorBodyEmpty')
+    case 'version_limit_reached':
+      return t('errorVersionLimit')
+    case 'version_exists':
+      return t('errorVersionExists')
+    case 'waiver_required_limit_reached':
+      return t('errorRequiredLimit')
+    case 'publish_outcome_unavailable':
+      return t('errorPublishOutcome')
+    case 'required_not_writable_here':
+      // A client bug rather than a studio mistake, but it still has to say
+      // something true rather than nothing.
+      return t('errorRequiredElsewhere')
+    default:
+      return t('errorGeneric')
+  }
 }
 
 // Live document count for the team — used to enforce the per-team cap even

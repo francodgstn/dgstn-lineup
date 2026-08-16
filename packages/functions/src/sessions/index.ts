@@ -9,6 +9,7 @@ import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
 import { closeSessionWaitlist } from '../booking/waitlist/teardown'
+import { enforceWaiverGate } from '../waivers/gate'
 import { confirmClearedHoldFields, publicUrl, type SeatHold } from '@linyup/shared'
 
 const SESSION_SERIES_COLLECTION = 'session_series'
@@ -948,6 +949,59 @@ export const selfCheckIn = onCall(async (request) => {
 
   const bookingRef = sessionRef.collection('bookings').doc(contactId)
   const [bErr, bookingDoc] = await to(bookingRef.get())
+
+  // ── The waiver gate — REFUSE ONLY ──────────────────────────────────────────
+  // This callable writes `participants` with NO booking required and none looked
+  // for (the booking read above only CONFIRMS an existing one; its absence is
+  // not an error). Left ungated, a member who never signed — or whose signature
+  // a `require_resign` publish superseded — walks up, scans the kiosk QR, and is
+  // written into the room. They attend unsigned and the studio's evidence is
+  // nothing at all.
+  //
+  // It is gated because it CAN be: it is a callable, the contactId is on the
+  // contact-session token, and the cost is the same one policy read plus a
+  // signer read per applicable waiver every other rail pays.
+  //
+  // It writes NO acceptance, because a check-in collects no tick — there is no
+  // consent step on a QR scan and inventing one would record a signature nobody
+  // gave.
+  //
+  // ── THE REFUSAL CARRIES ITS OWN WAY OUT, and it has to come from HERE ──────
+  // The mobile app is the surface that raises this refusal most, and it cannot
+  // build the link itself: the web origin lives in a server-side env param
+  // (`HOSTING_URL`), the app has no equivalent, and a client that guessed one
+  // would send a member at a door to a hostname that may not exist. So the
+  // server — which holds both the origin and the team slug the QR carried —
+  // attaches `signUrl` to the refusal, pointing at the member's own Space, the
+  // one surface a person standing at a door can complete on their phone.
+  try {
+    await enforceWaiverGate({
+      teamId,
+      activityId: (session.activityId as string | undefined) ?? null,
+      subject: {
+        contactId,
+        name: `${(contact.firstname as string) ?? ''} ${(contact.lastname as string) ?? ''}`.trim(),
+        email: (contact.email as string) ?? null,
+      },
+      submissions: [],
+      source: 'kiosk',
+      signerEmailVerifiedBy: 'session',
+      ip: request.rawRequest?.ip ?? null,
+      userAgent: null,
+      locale: null,
+      nowMs: Date.now(),
+    })
+  } catch (err) {
+    const e = err as HttpsError & { details?: { reason?: string } }
+    const reason = e?.details?.reason
+    if (typeof reason === 'string' && reason.startsWith('waiver_')) {
+      throw new HttpsError(e.code ?? 'failed-precondition', e.message, {
+        ...(e.details as Record<string, unknown>),
+        signUrl: publicUrl(getHostingUrl(), teamSlug, 'space'),
+      })
+    }
+    throw err
+  }
 
   const batch = db.batch()
   batch.set(participantRef, participantData)

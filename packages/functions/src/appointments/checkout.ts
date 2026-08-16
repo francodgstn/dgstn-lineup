@@ -39,6 +39,8 @@ import {
   type PromoReservationTicket,
 } from '../connect/promoCodes'
 import { loadContactPaymentSnapshot } from '../booking/access'
+import { attachWaiverContact, enforceWaiverGate, parseWaiverSubmissions } from '../waivers/gate'
+import { recordWaiverEvents } from '../waivers/accept'
 import { generateSecureToken } from '../utils/crypto'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
 import {
@@ -131,6 +133,8 @@ export const createAppointmentCheckout = onCall(
       /** The price the surface rendered, major units. Disagreement → refuse with
        *  `price_changed` rather than charge a figure the caller never saw. */
       quotedAmount?: number
+      /** Ticks from the waiver step — see waivers/gate.ts. */
+      waiverAcceptances?: unknown
     }
     if (
       !data?.teamId ||
@@ -247,6 +251,32 @@ export const createAppointmentCheckout = onCall(
     })
     const promoApplied = priced.promo?.status === 'applied'
 
+    // ── The waiver gate — before the contact write, and therefore before the
+    // promo reserve, the hold transaction and the Stripe session. ──
+    const waiverNowMs = Date.now()
+    let waiverOutcome = await enforceWaiverGate({
+      teamId,
+      activityId,
+      subject: {
+        contactId: caller.authenticatedContact?.id ?? null,
+        name: `${caller.sanitized.firstname} ${caller.sanitized.lastname}`.trim(),
+        email: caller.sanitized.email,
+      },
+      submissions: parseWaiverSubmissions(data.waiverAcceptances),
+      source: 'appointment_checkout',
+      signerEmailVerifiedBy: data.authenticatedContactId
+        ? 'verified_code'
+        : caller.authenticatedContact
+          ? 'session'
+          : 'none',
+      // The address that strength is ABOUT — see the twin in window.ts.
+      signerEmail: caller.verifiedEmail,
+      ip: request.rawRequest?.ip ?? null,
+      userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+      locale,
+      nowMs: waiverNowMs,
+    })
+
     // ── Resolve/create the contact — guests always allowed; there is no access gate. ──
     const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
       teamId,
@@ -254,6 +284,13 @@ export const createAppointmentCheckout = onCall(
       sanitized: caller.sanitized,
       authenticatedContact: caller.authenticatedContact,
     })
+    waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
+
+    // Written BEFORE Stripe, in its own transaction, and NOT conditional on
+    // payment: they read the text and ticked, and that is true whether or not
+    // the card clears. Nothing about it is reserved, so nothing about it needs
+    // releasing when a checkout is abandoned.
+    await recordWaiverEvents(waiverOutcome.accepts, waiverNowMs)
 
     // The resolver's discount clamp guarantees derived prices are already ≥ the
     // floor; this guards the AUTHORED base price.
@@ -319,6 +356,9 @@ export const createAppointmentCheckout = onCall(
       status: 'pending',
       payment_status: 'required',
       expires_at: holdExpiresAt,
+      ...(waiverOutcome.bookingWaiverState
+        ? { waiver_state: waiverOutcome.bookingWaiverState }
+        : {}),
     }
 
     // ── Create the Connect checkout; the webhook (kind: 'appointment') confirms. ──

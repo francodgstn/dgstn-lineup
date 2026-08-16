@@ -103,6 +103,25 @@ export const restoreContact = onCall(async (request) => {
 })
 
 // ─── checkInContact ───────────────────────────────────────────────────────────
+//
+// TAKES NO WAIVER, and the omission is a decision. This is the STAFF-side QR
+// scanner (a coach opens the session detail page and scans the member's code),
+// and it is the structural twin of `selfCheckIn`: it writes `participants` with
+// no booking required — the booking read below only CONFIRMS an existing one.
+// `selfCheckIn` IS gated; this is not, and the axis that separates them is WHO
+// IS ACTING, not whether a gate is technically possible.
+//
+// A member scanning at a kiosk is acting alone and unsupervised, so the gate is
+// the only thing between an unsigned person and the room. A coach scanning is a
+// team member standing at the door who has chosen to admit this person, and an
+// override a human chose is exactly what "surface, do not block" means — the
+// same reasoning that leaves `createStaffAppointment` unblocked. Refusing here
+// would stop a queue at the door over a document the coach cannot resolve from
+// that screen, and they can add the same person to `participants` by hand from
+// the same page anyway.
+//
+// The surfacing is the roster's waiver chip. The full census of attendance write
+// sites, gated and exempt, lives in `waivers/gate.ts`.
 
 export const checkInContact = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')

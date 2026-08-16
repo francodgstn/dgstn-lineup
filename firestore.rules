@@ -485,6 +485,23 @@ service cloud.firestore {
         allow read, write: if hasTeamRole(teamId, 'owner');
       }
 
+      // Per-team settings for features that are NOT plugins
+      // (teams/{teamId}/settings/{settingId}). This block previously did not
+      // exist at all — the `match /teams/{teamId}` block enumerates its
+      // subcollections one by one with no catch-all, and Firestore denies any
+      // path no rule matches — which was dormant only because nothing wrote
+      // there. It landed in the SAME commit as its first writer (the
+      // signup-consent selection, moved out of installed_plugins/documents when
+      // Documents stopped being a plugin): without it the studio's first save
+      // fails outright with a permission error.
+      //
+      // Owner-write, member-read, matching integrations/ next door: these are
+      // studio-wide configuration, not per-feature content.
+      match /settings/{settingId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'owner');
+      }
+
       // Installed plugins — teams enable/configure add-on plugins here.
       // All members can read (needed by automation UI and nav display).
       // Studio/Org owners install client-side (plugins are included). Coach plans
@@ -720,6 +737,23 @@ service cloud.firestore {
         allow update: if hasTeamRole(teamId, 'owner')
           && request.resource.data.system == resource.data.system;
         allow delete: if hasTeamRole(teamId, 'owner') && resource.data.system != true;
+      }
+
+      // THE booking gate's authorization source: which waivers a booking here
+      // requires, and at what version floor. Server-written by
+      // publishDocumentVersion / setWaiverRequirement / archiveWaiver, each
+      // patching exactly the one entry for the document it is writing, inside
+      // the same transaction as that write.
+      //
+      // It exists because the DISPLAY mirror (TeamPublicProfile.required_waivers,
+      // and signup_documents beside it) fails OPEN — it skips any id whose public
+      // summary is missing. That is right for a list of consent links and
+      // catastrophic for an authorization gate, where "silently skipped" becomes
+      // "the required waiver vanished and the booking went through". This
+      // document fails CLOSED.
+      match /waiver_policy/{policyId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if false;
       }
 
       // Custom event types (team-level; org-level event types live under organizations/{orgId}/event_types)
@@ -1350,9 +1384,109 @@ service cloud.firestore {
       // `where('teamId','==', <team>)` and rejects any unscoped / cross-tenant list.
       // The public document page reads via public_profile (collection group), never this.
       allow list: if isAuthed() && isMemberOfResourceTeam(resource);
-      allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
-      allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
 
+      // Waiver documents are CALLABLE-ONLY, exactly as promo codes are. Their
+      // content is somebody's evidence and their required-ness is an
+      // authorization fact; neither may be a client write. createWaiver /
+      // updateWaiver / publishDocumentVersion / setWaiverRequirement /
+      // archiveWaiver are the only writers.
+      //
+      // CREATE CONSTRAINS THE PUBLISH STATE TOO, WHICH IT USED TO LEAVE FREE.
+      // The clause below `kind` was the only one here, so `status`,
+      // `current_version` and `min_valid_version` were client-writable at
+      // creation on every kind — the one write that decides a document's whole
+      // starting state was the one write that constrained none of it. That
+      // breaks both invariants the update clause is built around: W3 says the
+      // two version pointers are unwritable by any client on any kind, and W29
+      // says a published document always has a version. A single client `setDoc`
+      // could arrive at `status: 'published'` with no snapshot behind it, or —
+      // worse — with a `current_version` pointing at a version document that
+      // does not exist, which is the state the acceptance ledger's central
+      // assumption (an acceptance names a version whose frozen text can be
+      // served) has no defence against. `createDocument` in
+      // apps/web/src/plugins/documents/hooks.ts already writes exactly this
+      // shape — status 'draft', neither pointer present — so no legitimate
+      // create changes.
+      allow create: if hasTeamRole(request.resource.data.teamId, 'manager')
+                    && request.resource.data.get('kind', 'other') != 'waiver'
+                    && request.resource.data.get('status', 'draft') != 'published'
+                    && request.resource.data.get('current_version', null) == null
+                    && request.resource.data.get('min_valid_version', null) == null;
+
+      // Publish state is minted by publishDocumentVersion only, on EVERY kind —
+      // a client can never move current_version or the supersession floor, and
+      // can never TRANSITION a document into 'published'.
+      //
+      // The status clause is what leaves exactly one publisher. Without it the
+      // editor's old client status flip and the callable could both publish, and
+      // only one of them mints the immutable snapshot every acceptance pins — so
+      // a client-published document would sit at status 'published' with no
+      // version, which is the state the backfill and the ledger verifier exist to
+      // keep empty. Note it forbids the TRANSITION, not the value: an ordinary
+      // edit to an already-published document carries status 'published' in
+      // request.resource and is still allowed, and UNpublishing (back to draft or
+      // archived) stays a client write.
+      allow update: if hasTeamRole(resource.data.teamId, 'manager')
+                    && resource.data.get('kind', 'other') != 'waiver'
+                    && request.resource.data.get('kind', 'other') != 'waiver'
+                    && request.resource.data.get('current_version', null) == resource.data.get('current_version', null)
+                    && request.resource.data.get('min_valid_version', null) == resource.data.get('min_valid_version', null)
+                    && (request.resource.data.get('status', 'draft') != 'published'
+                        || resource.data.get('status', 'draft') == 'published');
+
+      // A document that is published, or that has ever been published, cannot be
+      // deleted — its text may be somebody's evidence. An unpublished draft
+      // still can. BOTH clauses are needed: every document published before
+      // waivers existed has current_version == null, so the version clause alone
+      // would protect nothing that already carries acceptances, and the status
+      // clause makes the narrowing independent of whether
+      // scripts/backfill-document-versions.ts has run.
+      //
+      // AND THE KIND CLAUSE, WHICH THIS USED TO OMIT. Create and update already
+      // excluded `kind == 'waiver'`; delete did not, so a manager could hard-
+      // delete an UNPUBLISHED waiver from the client — and an unpublished waiver
+      // is not an empty one. `recordSignupConsent` writes under documents/{id},
+      // so a draft can already own acceptance events and signer rows; deleting
+      // the parent leaves every one
+      // of them addressable only by a path whose head is gone, which is precisely
+      // the orphaned-ledger state the version and status clauses above exist to
+      // prevent. Retiring a waiver is `archiveWaiver` — a callable that clears the
+      // policy entry in the same transaction. There is deliberately no waiver
+      // delete anywhere: the ledger outlives the document by design.
+      allow delete: if hasTeamRole(resource.data.teamId, 'manager')
+                    && resource.data.get('kind', 'other') != 'waiver'
+                    && resource.data.status != 'published'
+                    && resource.data.get('current_version', null) == null;
+
+      // IMMUTABLE published snapshots. The one place the exact accepted text
+      // lives, which is why an acceptance can store only its hash. The parent
+      // get() costs one document read per rule evaluation and is used ONLY here,
+      // because versions are listed rarely; the sibling subcollections below
+      // match on their own denormalised teamId instead.
+      match /versions/{versionId} {
+        allow read: if isAuthed()
+                    && isTeamMember(get(/databases/$(database)/documents/documents/$(documentId)).data.teamId);
+        allow write: if false;
+      }
+
+      // APPEND-ONLY acceptance/revocation events, the ONE mutable signer row,
+      // and the notice rows. All server-written: every public answer comes from
+      // a callable, so a contact session never reads any of them directly.
+      match /acceptances/{acceptanceId} {
+        allow read:  if isAuthed() && isTeamMember(resource.data.teamId);
+        allow write: if false;
+      }
+      // Declared with NO WRITER: the `notify` publish outcome is deferred to v2
+      // and the model stayed so adding it is an addition rather than a
+      // migration. See WaiverNoticeRow in @linyup/shared.
+      match /notices/{noticeId} {
+        allow read:  if isAuthed() && isTeamMember(resource.data.teamId);
+        allow write: if false;
+      }
+      match /signers/{contactId} {
+        allow read:  if isAuthed() && isTeamMember(resource.data.teamId);
+        allow write: if false;
+      }
       // documents/{id}/public_profile/{id} is world-readable via the global
       // /{path=**}/public_profile rule (drives the public document page + signup
       // consent links + website links) and written only by the sync — no block here.

@@ -37,7 +37,18 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ??= 'localhost:9099'
 process.env.FIRESTORE_EMULATOR_HOST ??= 'localhost:8080'
 
 import admin from 'firebase-admin'
-import { DEFAULT_PAYMENT_MODES, DEFAULT_KIOSK_CONFIG, toKioskPublicConfig } from '@linyup/shared'
+import {
+  DEFAULT_PAYMENT_MODES,
+  DEFAULT_KIOSK_CONFIG,
+  documentVersionId,
+  toKioskPublicConfig,
+} from '@linyup/shared'
+// The SAME sanitizer and the SAME hasher the publish callable uses — a seeded
+// version snapshot whose hash was computed by a second implementation would
+// make verify-waiver-ledger report a difference between two hashers rather than
+// a difference in the text.
+import { sanitizeRichHtml } from '../packages/functions/src/utils/sanitizeHtml'
+import { sha256Hex } from '../packages/functions/src/utils/crypto'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -1863,7 +1874,7 @@ async function seedTeam(opts: {
     await seedKiosk(teamId, uid)
   }
 
-  // ── documents plugin (free & up — all plans) ──────────────────────────────────
+  // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
 }
 
@@ -2391,21 +2402,19 @@ async function seedDocuments(
   teamName: string,
   uid: string,
 ) {
-  // Install the Documents plugin (minPlan 'free' — available to every plan).
+  // NO PLUGIN INSTALL. Documents is a default feature on every plan; its
+  // signup-consent selection lives in teams/{teamId}/settings/documents, which is
+  // where the panel writes it and where syncTeamPublicProfile reads it (falling
+  // back to the retired plugin config only for teams the backfill has not
+  // reached — a fresh seed is never one of those).
   await db
     .collection('teams')
     .doc(teamId)
-    .collection('installed_plugins')
+    .collection('settings')
     .doc('documents')
     .set({
-      pluginId: 'documents',
-      teamId,
-      installedAt: ts(daysFromNow(-30)),
-      installedBy: uid,
-      status: 'active',
-      config: {
-        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      },
+      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      updated_at: ts(daysFromNow(-30)),
     })
 
   const docSeeds = [
@@ -2487,6 +2496,12 @@ async function seedDocuments(
   const now = ts(new Date())
   for (const doc of docSeeds) {
     const docRef = db.collection('documents').doc(doc.id)
+    // A PUBLISHED document has a VERSION. Seeding one without a version would
+    // reproduce, on every fresh emulator run, exactly the state
+    // scripts/backfill-document-versions.ts exists to clear — and
+    // scripts/verify-waiver-ledger.ts would fail on clean seed data, which is
+    // how a real alarm gets learned as noise.
+    const bodyHtml = sanitizeRichHtml(doc.body)
     await docRef.set({
       id: doc.id,
       teamId,
@@ -2499,10 +2514,32 @@ async function seedDocuments(
       status: 'published',
       isPublic: true,
       order: doc.order,
+      current_version: 1,
+      min_valid_version: null,
       created_at: ts(daysFromNow(-25)),
       updated_at: now,
       createdBy: uid,
       archived_at: null,
+    })
+
+    // The IMMUTABLE snapshot the mirror copies and an acceptance would pin.
+    await docRef.collection('versions').doc(documentVersionId(1)).set({
+      teamId,
+      documentId: doc.id,
+      version: 1,
+      kind: doc.kind,
+      title: doc.title,
+      bodyHtml,
+      bodyHash: sha256Hex(bodyHtml),
+      bodyChars: bodyHtml.length,
+      externalUrl: null,
+      mayIncludeMinors: null,
+      publish_outcome: 'silent',
+      supersedes: null,
+      published_at: now,
+      published_by: uid,
+      published_by_name: 'Seed',
+      backfilled_at: null,
     })
 
     // World-readable public_profile summary (what syncDocumentPublicProfile writes)
@@ -2514,7 +2551,9 @@ async function seedDocuments(
       kind: doc.kind,
       source: doc.source,
       summary: doc.summary,
-      bodyHtml: doc.body,
+      bodyHtml,
+      bodyHash: sha256Hex(bodyHtml),
+      version: 1,
       updated_at: now,
     })
   }

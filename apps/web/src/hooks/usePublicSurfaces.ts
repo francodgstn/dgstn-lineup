@@ -38,9 +38,10 @@ export interface PublicSurfaceFlags {
   shopLive: boolean
   /** Booking is a base feature — always live. */
   bookingLive: boolean
-  /** `documents` plugin installed. */
-  documentsActive: boolean
-  /** ≥1 published + public Document exists (plugin + content) — the /documents surface is live. */
+  /** ≥1 public document MIRROR exists — the /documents surface is live.
+   *  There is deliberately no `documentsActive` beside this: Documents is a
+   *  default feature on every plan, so there is no install to be "active", and
+   *  the two flags would only ever have disagreed by drifting. */
   documentsLive: boolean
   /** `custom-forms` plugin installed. */
   formsActive: boolean
@@ -101,7 +102,6 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     spaceLive: activeSurfaces?.space ?? false,
     shopLive: activeSurfaces?.shop ?? false,
     bookingLive: activeSurfaces?.booking ?? true,
-    documentsActive: isInstalled('documents'),
     documentsLive: activeSurfaces?.documents ?? false,
     formsActive: isInstalled('custom-forms'),
     formsLive: activeSurfaces?.forms ?? false,

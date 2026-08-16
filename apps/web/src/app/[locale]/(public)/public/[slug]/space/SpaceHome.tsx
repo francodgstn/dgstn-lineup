@@ -20,6 +20,7 @@ import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRigh
 import { resolvePaymentOptions, heldSubscriptionTypeIds, type CourseAccessRule } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { formatCurrency } from '@/lib/format'
+import { SpaceWaiverCard } from './SpaceWaiverCard'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpaceContact } from './useSpaceContact'
@@ -269,6 +270,12 @@ export default function SpaceHome() {
             </Link>
           </div>
         ) : null)}
+
+      {/* A superseded or missing signature, surfaced to a member who is NOT
+          currently booking — which is the only way a `require_resign` publish
+          reaches somebody before it refuses them mid-flow. Renders nothing when
+          everything is in order. */}
+      <SpaceWaiverCard variant="banner" />
 
       {/* Membership */}
       <section className="rounded-2xl p-4" style={cardStyle}>

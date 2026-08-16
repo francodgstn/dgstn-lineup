@@ -55,7 +55,7 @@ import { planSupportsAffiliations, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
-import { OpenTabsProvider } from '@/contexts/OpenTabsContext'
+import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
@@ -206,12 +206,16 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Package,
         requiresPlugin: 'products',
       },
+      // Documents is a DEFAULT FEATURE on every plan — no `requiresPlugin`, no
+      // `minPlan`. It was never monetised (the retired manifest declared
+      // minPlan 'free' with no add-on), and its install gate was actively
+      // harmful under a waiver gate: deactivating it deleted every public
+      // document mirror the team had.
       {
         id: 'documents',
-        href: '/plugins/documents',
+        href: '/documents',
         labelKey: 'documents',
         icon: FileText,
-        requiresPlugin: 'documents',
       },
       // The public storefront that aggregates subscriptions, products and courses.
       // Managed at its /public-page/shop detail page; shown once a sellable channel
@@ -1038,15 +1042,28 @@ function normalizeSearch(s: string) {
 // label — "members" for Contacts — maintained per locale).
 type SearchEntry = ResolvedNavEntry & { keywords: string; pinnable: boolean }
 
+// ⌘ on Apple, Ctrl elsewhere. Deliberately NOT translated — these are key CAPS,
+// the same glyph on a German keyboard as on an English one. Guards `navigator`
+// so it is safe during SSR, where it resolves to the Ctrl form and is corrected
+// on hydration (the hint is decorative; the handler accepts either modifier).
+function modKeyLabel(): string {
+  if (typeof navigator === 'undefined') return 'Ctrl+'
+  return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl+'
+}
+
 // Sidebar quick-search (Firebase-style). Phase 1 searches nav destinations only,
 // but results are already grouped so later search providers (contacts, products,
 // courses… — async, Zoho-Books-style) can append their own result groups.
 function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate?: () => void }) {
   const t = useTranslations('Nav')
   const router = useRouter()
+  const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
+  const { isPinned, togglePin } = useNavPins()
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const q = normalizeSearch(query.trim())
   const results = q
@@ -1059,6 +1076,26 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
   // Future providers append their groups here (each may resolve asynchronously).
   const groups = [{ label: t('navSearchGroupPages'), results }]
   const open = focused && q.length > 0
+
+  // Keyboard selection indexes the FLATTENED result order, so it keeps working
+  // when later providers append their own groups — the visual grouping and the
+  // arrow-key order must not diverge.
+  const flat = groups.flatMap((g) => g.results)
+  const active = flat[activeIndex]
+
+  // A new query is a new result set; an index carried over from the old one
+  // would highlight an unrelated row (or nothing).
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [q])
+
+  // Keep the highlighted row visible in the scrollable dropdown.
+  useEffect(() => {
+    if (!open) return
+    listRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [open, activeIndex])
 
   // Close when clicking anywhere outside the search box + dropdown.
   useEffect(() => {
@@ -1073,6 +1110,23 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
   const close = () => {
     setQuery('')
     setFocused(false)
+    setActiveIndex(0)
+  }
+
+  const openEntry = (entry: SearchEntry) => {
+    router.push(entry.href as Route)
+    close()
+    onNavigate?.()
+  }
+
+  // Background tab, matching the ctrl/⌘/middle-click convention OpenTabsContext
+  // already documents. With the strip switched off (Settings → General) there is
+  // nowhere to put a tab, so fall back to opening normally rather than no-op —
+  // a shortcut that silently does nothing reads as broken.
+  const openEntryAsTab = (entry: SearchEntry) => {
+    if (!tabsEnabled) return openEntry(entry)
+    openInNewTab(entry.href, entry.label)
+    close()
   }
 
   return (
@@ -1082,13 +1136,31 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => setFocused(true)}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls="nav-search-results"
+        aria-activedescendant={open && active ? `nav-search-opt-${active.id}` : undefined}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') close()
-          if (e.key === 'Enter' && results[0]) {
+          if (e.key === 'Escape') return close()
+          if (!open || flat.length === 0) return
+          if (e.key === 'ArrowDown') {
             e.preventDefault()
-            router.push(results[0].href as Route)
-            close()
-            onNavigate?.()
+            setActiveIndex((i) => (i + 1) % flat.length)
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActiveIndex((i) => (i - 1 + flat.length) % flat.length)
+            // Home/End are deliberately NOT bound: this is a text input the
+            // visitor is still typing in, and there they move the caret. Arrows
+            // are the list-navigation convention precisely because they are the
+            // keys a text field does not need.
+          } else if (e.key === 'Enter' && active) {
+            e.preventDefault()
+            if (e.metaKey || e.ctrlKey) openEntryAsTab(active)
+            else openEntry(active)
+          } else if ((e.key === 'p' || e.key === 'P') && e.altKey && active?.pinnable) {
+            // Alt rather than ⌘/Ctrl: ⌘P is Print in every browser.
+            e.preventDefault()
+            togglePin(active.id)
           }
         }}
         placeholder={t('navSearchPlaceholder')}
@@ -1096,46 +1168,91 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
         className="h-8 pl-8 text-sm"
       />
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-md">
+        <div
+          ref={listRef}
+          id="nav-search-results"
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-md"
+        >
           {results.length === 0 ? (
             <p className="px-2 py-2 text-sm text-muted-foreground">{t('navSearchNoResults')}</p>
           ) : (
-            groups.map((group) =>
-              group.results.length === 0 ? null : (
-                <div key={group.label}>
-                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
-                    {group.label}
-                  </p>
-                  <div className="space-y-0.5">
-                    {group.results.map((entry) => {
-                      const Icon = entry.icon
-                      const row = (
-                        <Link
-                          href={entry.href as Route}
-                          onClick={() => {
-                            close()
-                            onNavigate?.()
-                          }}
-                          className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
-                            entry.pinnable ? 'pr-8' : ''
-                          }`}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{entry.label}</span>
-                        </Link>
-                      )
-                      if (!entry.pinnable) return <div key={entry.id}>{row}</div>
-                      return (
-                        <div key={entry.id} className="group relative">
-                          {row}
-                          <PinButton id={entry.id} pinOnly />
-                        </div>
-                      )
-                    })}
+            <>
+              {groups.map((group) =>
+                group.results.length === 0 ? null : (
+                  <div key={group.label}>
+                    <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
+                      {group.label}
+                    </p>
+                    <div className="space-y-0.5">
+                      {group.results.map((entry) => {
+                        const Icon = entry.icon
+                        const isActive = active?.id === entry.id
+                        const row = (
+                          <Link
+                            href={entry.href as Route}
+                            id={`nav-search-opt-${entry.id}`}
+                            role="option"
+                            aria-selected={isActive}
+                            data-active={isActive}
+                            // Pointer and keyboard drive ONE selection, so hovering
+                            // moves the highlight instead of fighting it.
+                            onMouseEnter={() => setActiveIndex(flat.indexOf(entry))}
+                            onClick={(e) => {
+                              if (e.metaKey || e.ctrlKey) {
+                                e.preventDefault()
+                                openEntryAsTab(entry)
+                                return
+                              }
+                              close()
+                              onNavigate?.()
+                            }}
+                            className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground ${
+                              isActive ? 'bg-accent text-foreground' : 'text-muted-foreground'
+                            } ${entry.pinnable ? 'pr-8' : ''}`}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{entry.label}</span>
+                            {isPinned(entry.id) && (
+                              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
+                                {t('navSearchPinned')}
+                              </span>
+                            )}
+                          </Link>
+                        )
+                        if (!entry.pinnable) return <div key={entry.id}>{row}</div>
+                        return (
+                          <div key={entry.id} className="group relative">
+                            {row}
+                            <PinButton id={entry.id} pinOnly />
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )
-            )
+                )
+              )}
+              {/* Shortcuts are invisible without a hint, and an undiscoverable
+                  shortcut is the same as an absent one. */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t px-2 pb-0.5 pt-1.5 text-[10px] text-muted-foreground/70">
+                <span>
+                  <kbd className="font-sans">↑↓</kbd> {t('navSearchHintNavigate')}
+                </span>
+                <span>
+                  <kbd className="font-sans">↵</kbd> {t('navSearchHintOpen')}
+                </span>
+                {tabsEnabled && (
+                  <span>
+                    <kbd className="font-sans">{modKeyLabel()}↵</kbd> {t('navSearchHintTab')}
+                  </span>
+                )}
+                {active?.pinnable && (
+                  <span>
+                    <kbd className="font-sans">Alt+P</kbd> {t('navSearchHintPin')}
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}

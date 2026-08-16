@@ -520,8 +520,88 @@ export async function closeTeamCheckoutSession(
 
 export const CHECKOUT_RATE_LIMIT_PER_HOUR = 30
 
+/**
+ * The public waiver probe's own bucket.
+ *
+ * `prefix` exists so unrelated public surfaces do not share one counter, and
+ * this is the case that most needs it: a gym's NAT burning its checkout quota
+ * on booking attempts must not lock the same IP out of merely READING the
+ * document it is being asked to sign. Naming it here (rather than as a literal
+ * at the call site) keeps the taken prefixes visible in one place — the others
+ * are the default `'checkout'`, `'gift-buy'`, `'gift-check'`, `'promo-check'`
+ * and `WAITLIST_CLAIM_RATE_LIMIT_BUCKET`.
+ *
+ * Two prefixes are DERIVED from the constant below rather than declared beside
+ * it, by suffixing it (`-mint`, `-to`, `-team`). Derivation is what makes them
+ * unable to collide with anything named here, and it keeps the counters that
+ * bound a MESSAGE — which are keyed on a recipient and on a tenant, not on an
+ * IP — out of a module about money. Their sizes and their reasoning live at the
+ * single site that owns them.
+ *
+ * This constant is the ONLY waiver-shaped identifier permitted in this module:
+ * a waiver has no price, so no waiver logic may appear anywhere on the money
+ * path. (There was a second, `waiver-guardian`, for the emailed guardian link's
+ * mint and redemption. That mechanism was removed and the bucket with it.)
+ */
+export const WAIVER_CHECK_RATE_LIMIT_BUCKET = 'waiver-check'
+
+/**
+ * THE COUNTER'S SUBJECT — whatever the quota belongs to, sanitised into a
+ * document-id fragment.
+ *
+ * An IP is the commonest subject and was the only one this module used to
+ * accept. It is the WRONG subject whenever the cost being bounded is not the
+ * caller's: a message costs the recipient's inbox and the sender's reputation,
+ * so its counters are keyed on a hashed address and on a tenant id. Same
+ * mechanism, same doc shape, different subject — which is the point of naming
+ * the key rather than the IP.
+ */
+export function rateLimitKey(raw: string | undefined): string {
+  return (raw || 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
+}
+
 function rateLimitIp(ipRaw: string | undefined): string {
-  return (ipRaw ?? 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
+  return rateLimitKey(ipRaw)
+}
+
+function currentRateLimitBucket(nowMs = Date.now()): number {
+  return Math.floor(nowMs / 3_600_000)
+}
+
+/** When the current hour bucket rolls. A refusal that can quote this reads as a
+ *  delay; one that cannot reads as a permanent lockout. */
+export function rateLimitWindowEndMs(nowMs = Date.now()): number {
+  return (currentRateLimitBucket(nowMs) + 1) * 3_600_000
+}
+
+/** Read one counter without spending it. */
+export async function rateLimitCount(key: string | undefined, prefix: string): Promise<number> {
+  const snap = await rateLimitBucketRef(rateLimitKey(key), prefix, currentRateLimitBucket()).get()
+  return (snap.data()?.count as number | undefined) ?? 0
+}
+
+/**
+ * Spend one unit and report the new total. The CALLER decides what exceeding it
+ * means, because one mechanism serves surfaces that owe the visitor different
+ * sentences — "too many attempts" is right for a probe and wrong for a family
+ * who has been told a link is on its way.
+ */
+export async function spendRateLimit(key: string | undefined, prefix: string): Promise<number> {
+  const id = rateLimitKey(key)
+  const bucket = currentRateLimitBucket()
+  const ref = rateLimitBucketRef(id, prefix, bucket)
+  return admin.firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    const next = ((snap.data()?.count as number | undefined) ?? 0) + 1
+    tx.set(
+      ref,
+      // `ip` is the stored field name and stays one, so existing counter
+      // documents keep working. It holds the SUBJECT, whatever that is.
+      { prefix, ip: id, bucket, count: next, updated_at: FieldValue.serverTimestamp() },
+      { merge: true }
+    )
+    return next
+  })
 }
 
 /** The bucket doc id shape is shared by the charge and the peek below — one
@@ -552,9 +632,7 @@ export async function assertUnderCheckoutRateLimit(
   prefix = 'checkout',
   limitPerHour = CHECKOUT_RATE_LIMIT_PER_HOUR
 ): Promise<void> {
-  const bucket = Math.floor(Date.now() / 3_600_000)
-  const snap = await rateLimitBucketRef(rateLimitIp(ipRaw), prefix, bucket).get()
-  if (((snap.data()?.count as number | undefined) ?? 0) >= limitPerHour) {
+  if ((await rateLimitCount(rateLimitIp(ipRaw), prefix)) >= limitPerHour) {
     throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again later.', {
       reason: 'rate_limited',
     })
@@ -578,19 +656,7 @@ export async function checkoutRateLimit(
   prefix = 'checkout',
   limitPerHour = CHECKOUT_RATE_LIMIT_PER_HOUR
 ): Promise<void> {
-  const ip = rateLimitIp(ipRaw)
-  const bucket = Math.floor(Date.now() / 3_600_000)
-  const ref = rateLimitBucketRef(ip, prefix, bucket)
-  const count = await admin.firestore().runTransaction(async (tx) => {
-    const snap = await tx.get(ref)
-    const next = ((snap.data()?.count as number | undefined) ?? 0) + 1
-    tx.set(
-      ref,
-      { prefix, ip, bucket, count: next, updated_at: FieldValue.serverTimestamp() },
-      { merge: true }
-    )
-    return next
-  })
+  const count = await spendRateLimit(rateLimitIp(ipRaw), prefix)
   if (count > limitPerHour) {
     // Reason code, because 'resource-exhausted' also means "this class is full"
     // on the booking callables — and a full class offers the waitlist while a

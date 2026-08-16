@@ -22,7 +22,13 @@ import {
   waitingEntries,
   type DaySheetEntry,
 } from '@/hooks/useDaySheet'
-import type { Booking, WaitlistEntry } from '@linyup/shared'
+import {
+  waiverDoorCheckFromBookingState,
+  type Booking,
+  type WaitlistEntry,
+} from '@linyup/shared'
+import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
+import { useWaiverRoster } from '@/hooks/useWaiverStates'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -192,6 +198,21 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
   const bookedContactIds = new Set(roster.map((b) => b.contact))
   const walkIns = entry.participants.filter((p) => !bookedContactIds.has(p.contactId))
 
+  // THE ROWS THAT NEED THE CHIP MOST ARE THE ONES THE BOOKING FIELD CANNOT REACH.
+  // A roster row carries `booking.waiver_state`, written by the rail that
+  // committed the seat — a snapshot, and the right one for a sheet that
+  // describes the booking as taken. A walk-in row has no booking document at
+  // all: a staff add (never gated, by design) or a check-in scan. Left as the
+  // booking field alone, the printed sheet would show no chip for exactly the
+  // person whose waiver nobody ever collected. So these rows read the signer
+  // rows — bounded by the walk-ins on this one session, and skipped entirely
+  // when there are none.
+  const walkInWaivers = useWaiverRoster(
+    session.teamId ?? null,
+    walkIns.map((p) => p.contactId),
+    session.activityId ?? null
+  )
+
   const cap = session.max_participants
   // Seats taken = the roster + walk-ins who checked in without a booking + the
   // seats held by unclaimed offers. This is what capacity is read against, and
@@ -279,6 +300,22 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
                 {b.payment_status === 'required' && (
                   <span className="shrink-0 text-xs text-amber-700">{t('unpaid')}</span>
                 )}
+                {/* Immediately after `unpaid`, which is the template: one word,
+                    colour-coded, `shrink-0`, read off data already loaded. It is
+                    text and a stroke rather than a filled pill because
+                    `globals.css` forces these backgrounds transparent for print
+                    and most browsers drop background graphics anyway — a pill
+                    would print as invisible text. */}
+                {/* THE DOOR CHECK, off the booking's own stamp. A snapshot at
+                    commit — the right one for a sheet that describes the booking
+                    as taken — and the only reach the sheet has to a booked row,
+                    which carries no signer lookup. Absent on every booking that
+                    needs no check, which is every booking at a studio that has
+                    not flagged a waiver for minors. */}
+                <WaiverDoorCheckChip
+                  check={waiverDoorCheckFromBookingState(b.waiver_state)}
+                  print
+                />
                 {b.phone && (
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                     {b.phone}
@@ -302,6 +339,8 @@ function ManifestSession({ entry }: { entry: DaySheetEntry }) {
                 <Users className="mr-1 inline h-3 w-3" />
                 {t('walkIn')}
               </span>
+              <WaiverChip state={walkInWaivers.states.get(p.contactId)} print />
+              <WaiverDoorCheckChip check={walkInWaivers.checks.get(p.contactId)} print />
             </li>
           ))}
         </ul>

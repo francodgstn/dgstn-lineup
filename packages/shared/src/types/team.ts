@@ -1,6 +1,10 @@
 import type { Timestamp } from './common'
-// Type-only import — no runtime cycle (document.ts only imports Timestamp).
+// Type-only import — no runtime cycle. document.ts imports only types
+// (Timestamp, WaiverConfig), and waiver.ts's only runtime import is
+// utils/identity, which imports nothing from here.
 import type { DocumentKind } from './document'
+// Type-only — waiver.ts imports SaasPlan from here; erased at compile (no cycle).
+import type { PublicRequiredWaiver } from './waiver'
 // Type-only import — no runtime cycle (connect.ts imports SaasPlan from here).
 import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
 import type { PublicMainAddress } from './place'
@@ -73,12 +77,44 @@ export interface ActivePublicSurfaces {
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
   // surface, so this is a discovery signal (e.g. a bio-link entry), NOT a landing.
   forms?: boolean
-  // ≥1 published + public Document exists (documents plugin active). Reached via the
+  // ≥1 public_profile MIRROR exists for one of the team's documents. Documents is
+  // no longer a plugin, so there is no install to probe — and the probe is
+  // deliberately over the MIRRORS rather than over the root `documents`
+  // collection: a team that was torn down by a downgrade still has its documents,
+  // only its mirrors were deleted, so a root-collection probe would flip the
+  // surface live over a page that renders empty. Reached via the
   // /public/{slug}/documents index, so — unlike forms — it CAN be a default landing.
   documents?: boolean
   // kiosk plugin active — the entrance-tablet surface at /public/{slug}/kiosk.
   // Reached by its own URL (paired to a device), never a default landing.
   kiosk?: boolean
+}
+
+// ─── Documents settings (teams/{teamId}/settings/documents) ──────────────────
+// Documents is a DEFAULT FEATURE, not a plugin, so its per-team config cannot
+// live in `installed_plugins/documents.config` any more. This is its new home.
+export interface TeamDocumentsSettings {
+  /** Published documents attached to the public signup consent checkbox. */
+  signupDocumentIds: string[]
+}
+
+/**
+ * The ONE dual read for the signup-consent selection, used by every reader —
+ * the sync that denormalises it and the panel that edits it — so the two cannot
+ * disagree about which location wins while teams are being migrated.
+ *
+ * New location first, retired plugin config second. It stays until the backfill
+ * has run everywhere; deleting the fallback before then blanks `signup_documents`
+ * for un-migrated teams, which silently drops the consent links off the anonymous
+ * signup form.
+ */
+export function resolveSignupDocumentIds(input: {
+  settings?: Partial<TeamDocumentsSettings> | null
+  legacyPluginConfig?: { signupDocumentIds?: unknown } | null
+}): string[] {
+  const pick = (v: unknown): string[] | null =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x) : null
+  return pick(input.settings?.signupDocumentIds) ?? pick(input.legacyPluginConfig?.signupDocumentIds) ?? []
 }
 
 export interface RankLevel {
@@ -161,7 +197,7 @@ export interface TeamNavDefaults {
 //  - shop-courses     → /shop?tab=courses         (sellable courses section)
 //  - space            → /space                   (member course library; online-courses plugin)
 //  - site             → /site                    (studio website; website plugin)
-//  - documents        → /documents               (studio's public documents; documents plugin)
+//  - documents        → /documents               (studio's public documents; every plan)
 // `route` may carry a query (e.g. 'shop?tab=products') — the public link is a plain
 // <a href>, so the query rides through to deep-link the right shop tab.
 export type SystemLinkTarget =
@@ -450,12 +486,52 @@ export interface TeamPublicProfile {
   // denormalized by syncTeamPublicProfile MINUS the PIN, so the public kiosk page
   // reads layout/features from one world-readable doc. Present only when installed.
   kiosk?: KioskPublicConfig
-  // Documents the studio attached to the signup consent checkbox (documents
-  // plugin config). Denormalized by syncTeamPublicProfile from the published +
-  // public documents referenced in installed_plugins/documents.config so the
-  // ANONYMOUS signup form can render consent links from a single world-readable
-  // doc (never the private installed_plugins nor the root `documents` collection).
-  signup_documents?: Array<{ slug: string; title: string; kind: DocumentKind }>
+  // Documents the studio attached to the signup consent checkbox. Denormalized by
+  // syncTeamPublicProfile from the published + public documents named in
+  // `teams/{id}/settings/documents` (TeamDocumentsSettings) — read through
+  // resolveSignupDocumentIds, which still falls back to the retired
+  // installed_plugins/documents.config for un-migrated teams — so the ANONYMOUS
+  // signup form can render consent links from one world-readable doc (never a
+  // private team subcollection, never the root `documents` collection).
+  //
+  // `documentId` and `version` are what turn the signup tick into a REAL
+  // acceptance. Before waivers, the form sent `version: ''` for every document
+  // and the server wrote it into an advisory blob nothing read — a consent
+  // record that recorded nothing. `completeSignup` now writes a ledger event per
+  // document, and it needs the id (to find the document without trusting a
+  // client-supplied slug) and the version the visitor was ACTUALLY SHOWN (to
+  // avoid recording a signature against text published a minute later).
+  // `version: null` marks a document published before versioning existed and not
+  // yet covered by scripts/backfill-document-versions.ts — no ledger row is
+  // written for one, because there is nothing to pin it to.
+  signup_documents?: Array<{
+    documentId: string
+    slug: string
+    title: string
+    kind: DocumentKind
+    version: number | null
+  }>
+  // Whether this team's PUBLIC pages may be indexed by search engines. Computed by
+  // syncTeamPublicProfile from `publicPagesIndexable(team)`; denormalized because
+  // the pages that need it are rendered from public_profile alone and must not
+  // read the private team doc. See the predicate for why a trial reads as
+  // not-indexable.
+  public_pages_indexable?: boolean
+  // The team's required waivers, SUMMARY ONLY (id, slug, title, version, minors
+  // flag) — never the body: this document is served by an
+  // unauthenticated collection-group read, so anything put here is
+  // world-readable by anyone. Computed by syncTeamPublicProfile FROM
+  // teams/{id}/waiver_policy/current.
+  //
+  // IT IS A RENDERING HINT AND NEVER A DECISION. The public surface calls
+  // resolveWaiverRequirement if and only if this list is non-empty, so a tenant
+  // with no waiver pays zero extra round-trips on the acquisition path; the
+  // AUTHORIZATION answer always comes from the policy document, which fails
+  // closed. A briefly-stale empty list therefore degrades to a server refusal
+  // the surface can act on, never to a compliance hole — and the publish path
+  // touches the team document in the same transaction so it is never stale by
+  // more than one sync.
+  required_waivers?: PublicRequiredWaiver[]
   // Denormalized from teams/{id}.settings.space.signup_nudge (absent ⇒ true): whether
   // the Space shows the "complete your signup" reminder to contacts who haven't
   // finished the full registration. The Space only ever reads public_profile.

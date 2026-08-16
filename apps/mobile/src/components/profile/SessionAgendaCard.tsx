@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Alert } from 'react-native';
+import { StyleSheet, View, Alert, Linking } from 'react-native';
 import { Card, Icon, Text, useTheme, Button, ActivityIndicator, IconButton } from 'react-native-paper';
 import { SessionWithStatus, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
+import { waiverRefusal } from '../../utils/waiverRefusal';
 
 interface SessionAgendaCardProps {
   sessions: SessionWithStatus[];
@@ -32,7 +33,27 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'Failed to book session. Please try again.');
+      // A WAIVER REFUSAL IS NOT A FAILED BOOKING, and "please try again" is the
+      // one instruction that can never work for it: the member would retry
+      // forever over a document they were never shown. The app has no waiver
+      // step by design (§3.9 — it mirrors shared shapes locally, so a step here
+      // is a port), but it does have the refusal mapper written for exactly
+      // this, and the same rail is gated server-side. So: name the document,
+      // say who has to sign, and open the signing page when the server sent one.
+      const waiver = waiverRefusal(error, 'booking');
+      if (!waiver) {
+        Alert.alert('Error', 'Failed to book session. Please try again.');
+        return;
+      }
+      if (waiver.signUrl) {
+        const url = waiver.signUrl;
+        Alert.alert('Signature needed', waiver.message, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open', onPress: () => { Linking.openURL(url).catch(() => undefined); } },
+        ]);
+        return;
+      }
+      Alert.alert('Signature needed', waiver.message);
     } finally {
       setLoadingSessionId(null);
     }

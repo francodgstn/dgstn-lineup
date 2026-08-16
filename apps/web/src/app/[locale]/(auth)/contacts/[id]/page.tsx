@@ -28,6 +28,7 @@ import {
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { formatCurrency } from '@/lib/format'
+import { ConsentHistoryPanel } from '@/components/contacts/ConsentHistoryPanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Badge } from '@/components/ui/badge'
@@ -5256,13 +5257,24 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {/* Tab content */}
           <div>
             {tab === 'profile' && (
-              <ProfileTab
-                contact={contact}
-                teamId={currentTeamId}
-                orgId={team?.org_id}
-                onSaved={invalidate}
-                onOpenNotes={() => setNotesOpen(true)}
-              />
+              <div className="space-y-4">
+                <ProfileTab
+                  contact={contact}
+                  teamId={currentTeamId}
+                  orgId={team?.org_id}
+                  onSaved={invalidate}
+                  onOpenNotes={() => setNotesOpen(true)}
+                />
+                {/* The operator's copy of this person's consent history. Renders
+                    only where the studio requires something — a control that
+                    always produced an empty artefact would teach a coach the
+                    feature is broken. */}
+                <ConsentHistoryPanel
+                  contactId={contact.id}
+                  teamId={currentTeamId}
+                  contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
+                />
+              </div>
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}

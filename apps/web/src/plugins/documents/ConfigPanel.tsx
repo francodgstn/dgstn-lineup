@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { doc, setDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION, INSTALLED_PLUGINS_SUBCOLLECTION } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
-import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useDocuments } from '@/plugins/documents/hooks'
+import {
+  useDocuments,
+  useSignupDocumentIds,
+  saveSignupDocumentIds,
+} from '@/plugins/documents/hooks'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FileText } from 'lucide-react'
@@ -16,35 +16,36 @@ import { toast } from 'sonner'
 
 // Owner config: which of the team's PUBLISHED documents are attached to the
 // public signup consent checkbox. Suggests terms/privacy but allows any kind.
-// Writes teams/{teamId}/installed_plugins/documents.config.signupDocumentIds
-// (setDoc merge — never touches the rest of the installed-plugin doc).
+//
+// Writes teams/{teamId}/settings/documents.signupDocumentIds. That location is
+// new: it used to be installed_plugins/documents.config, which the de-gating
+// retires. The read is dual (new ?? old) and lives in one shared helper, and the
+// read, the write and the security rule for the new path all landed together —
+// split, a studio's save silently does nothing, or fails with a permission error.
 export function ConfigPanel() {
   const t = useTranslations('Documents')
-  const { currentTeamId, user } = useAuth()
-  const { getConfig } = useInstalledPlugins()
+  const { currentTeamId } = useAuth()
   const { data: documents = [], isLoading } = useDocuments(currentTeamId)
+  const { data: savedIds, isLoading: idsLoading } = useSignupDocumentIds(currentTeamId)
   const queryClient = useQueryClient()
 
   const published = documents.filter((d) => d.status === 'published')
-  const savedIds = (getConfig('documents')?.signupDocumentIds as string[] | undefined) ?? []
 
-  const [selected, setSelected] = useState<string[]>(savedIds)
+  const [selected, setSelected] = useState<string[]>([])
   // Re-sync local selection when the persisted config changes underneath us
-  // (e.g. after a successful save invalidates the installed-plugins snapshot).
+  // (e.g. after a successful save invalidates the settings query).
   useEffect(() => {
-    setSelected(savedIds)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(savedIds)])
+    if (savedIds) setSelected(savedIds)
+  }, [savedIds])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!currentTeamId || !user) throw new Error('Not authenticated')
-      const ref = doc(db, TEAMS_COLLECTION, currentTeamId, INSTALLED_PLUGINS_SUBCOLLECTION, 'documents')
-      await setDoc(ref, { config: { signupDocumentIds: selected } }, { merge: true })
+      if (!currentTeamId) throw new Error('Not authenticated')
+      await saveSignupDocumentIds(currentTeamId, selected)
     },
     onSuccess: () => {
       toast.success(t('configSaved'))
-      queryClient.invalidateQueries({ queryKey: ['documents', currentTeamId] })
+      queryClient.invalidateQueries({ queryKey: ['documents-settings', currentTeamId] })
     },
     onError: () => toast.error(t('configSaveError')),
   })
@@ -53,7 +54,7 @@ export function ConfigPanel() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
-  if (isLoading) {
+  if (isLoading || idsLoading) {
     return <Skeleton className="h-32 w-full" />
   }
 

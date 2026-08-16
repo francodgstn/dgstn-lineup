@@ -119,6 +119,28 @@ export interface Contact {
   // Emergency contacts (max 2)
   emergency_contacts?: EmergencyContact[]
 
+  /**
+   * @deprecated Superseded by the acceptance ledger
+   * (`documents/{documentId}/acceptances/*` + `signers/{contactId}`). Read
+   * NOTHING from this field.
+   *
+   * Declared here for the first time in order to mark it. It was written by
+   * `completeSignup` and existed on no type, was read by no code and rendered on
+   * no screen; the only client that filled it sent `version: ''` for every
+   * document, so it recorded that a checkbox was ticked and not what was ticked.
+   * `completeSignup` now writes real events against real immutable version
+   * snapshots (`waivers/signup.ts`) and keeps writing this blob for one release
+   * so nothing breaks mid-deploy.
+   *
+   * Two proofs of acceptance with different evidential weight and no marker
+   * saying which is which is the state to avoid — hence the marker. Removal is a
+   * follow-up once no reader remains.
+   */
+  consent?: {
+    privacyAcceptedAt?: Timestamp
+    documents?: Array<{ slug: string; kind: string | null; version: string | null }>
+  }
+
   // ─── Acquisition axis ──────────────────────────────────────────────────────
   // Sticky high-water funnel position (trial_booked → trial_attended → joined).
   // Advances on transition, never regresses. Per-session attendance is a fact on

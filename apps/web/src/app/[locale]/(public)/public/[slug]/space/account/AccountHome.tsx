@@ -6,6 +6,8 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { formatCurrency } from '@/lib/format'
 import { CreditCard, BadgeCheck, User, Pencil, Check, LogIn } from 'lucide-react'
+import { SpaceWaiverCard } from '../SpaceWaiverCard'
+import { ConsentHistoryDownload } from './ConsentHistoryDownload'
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 import { useSpaceContact } from '../useSpaceContact'
@@ -223,6 +225,22 @@ export default function AccountHome() {
           </dl>
         )}
       </section>
+
+      {/* Signed documents — a member's own answer to "what have I agreed to",
+          with the version, the date and the current state. It renders as a CARD
+          here (always) and as a BANNER on Space Home (only when something is
+          outstanding), from one component: two copies would disagree about what
+          "signed" means the first time the predicate moved.
+
+          `AccountHome` deliberately grows NO second date-of-birth prompt. The
+          one in the profile form above is an optional profile field; the one
+          compliance ask lives inside the waiver step and nowhere else. */}
+      <SpaceWaiverCard variant="card" />
+
+      {/* The member's own copy, free once the operator export exists — and
+          scoped by the SERVER to the session's own contact, so it can only ever
+          return their history and never a household's. */}
+      <ConsentHistoryDownload />
     </div>
   )
 }

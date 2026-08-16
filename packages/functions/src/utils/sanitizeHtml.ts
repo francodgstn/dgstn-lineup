@@ -32,3 +32,14 @@ export const RICH_TEXT_OPTIONS: sanitizeHtml.IOptions = {
 export function sanitizeRichHtml(html: string): string {
   return html ? sanitizeHtml(html, RICH_TEXT_OPTIONS) : ''
 }
+
+/**
+ * Allow only absolute http(s) URLs; everything else (javascript:, data:, …) is
+ * dropped. Lives here beside the HTML allowlist because it is the same job on
+ * the other half of a document — an `external_link` document's URL is what its
+ * version snapshot freezes, and the publish callable and the public mirror sync
+ * must agree on what a safe URL is.
+ */
+export function safeExternalUrl(v: unknown): string | undefined {
+  return typeof v === 'string' && /^https?:\/\/.+/.test(v) ? v.slice(0, 2000) : undefined
+}

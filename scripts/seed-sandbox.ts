@@ -2835,12 +2835,9 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     { id: 'gamification' }, // seed already writes scores/badges/settings
     { id: 'website' },
     { id: 'online-courses' },
-    {
-      id: 'documents',
-      config: {
-        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      },
-    },
+    // NOT 'documents' — it is a default feature on every plan, not a plugin. Its
+    // signup-consent selection is written to teams/{teamId}/settings/documents
+    // below.
   ]
   for (const p of plugins) {
     await db
@@ -2858,6 +2855,17 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
         updated_at: ts(daysFromNow(-200)),
       })
   }
+
+  // Documents settings — the signup-consent selection, in its post-plugin home.
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('settings')
+    .doc('documents')
+    .set({
+      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      updated_at: ts(daysFromNow(-200)),
+    })
 
   // ── website plugin: a published one-page site (draft + public snapshot) ──────
   // hero + about + schedule (live sessions) + contact — every section populated.

@@ -32,6 +32,9 @@ import {
 import { ReturningSignIn, type ContactData } from '@/components/booking/ReturningSignIn'
 import { StickyBar } from '@/components/booking/StickyBar'
 import { BackButton } from '@/components/booking/BackButton'
+import { WaiverStep } from '@/components/booking/WaiverStep'
+import { useWaiverGate } from '@/hooks/useWaiverGate'
+import { waiverErrorMessage, type WaiverAcceptancePayload } from '@/lib/waiver'
 import { CalendarClock, MapPin, Video, Clock, User, Check, ChevronRight, Tag } from 'lucide-react'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -87,12 +90,26 @@ type PickerStep = 'coach' | 'activity' | 'time' | 'book'
 // sticky bar shows its Confirm only on the guest screen (the sign-in and
 // member-pay screens carry their own action buttons) — the same rule the class
 // BookingForm applies (Confirm only on its 'details' step).
-type BookScreen = 'guest' | 'signIn' | 'memberPay' | 'autobooking'
+// 'waiver' is a screen of its own for the same reason it is a step of its own in
+// the class flow: this file's terminal submits are `onSubmitGuest`,
+// `onVerifiedAppointment` (via `autobooking`) and `onMemberPay`, and only the
+// first has a form. `autobooking` books the instant a covered member's code verifies, with
+// no confirm control at all — a consent block hung off the guest form would be
+// invisible on exactly that path, and the refusal that followed would arrive
+// after `resolveAppointmentCaller` had already marked the code used, against a
+// three-per-hour re-request budget.
+type BookScreen = 'guest' | 'signIn' | 'memberPay' | 'autobooking' | 'waiver'
 
 // Args passed to whichever booking/checkout callable backs the form.
-type BookArgs =
+type BookArgs = (
   | { contactDetails: { firstname: string; lastname: string; email: string; phone?: string } }
   | { authenticatedContactId: string; verificationCodeId: string }
+) & {
+  /** The ticks from the consent screen, straight back as the server issued them.
+   *  Recorded before Stripe on the paid arm and not conditional on payment: they
+   *  read the text and ticked, and that is true whether or not the card clears. */
+  waiverAcceptances?: WaiverAcceptancePayload[]
+}
 
 /** What `checkout` adds on top of the identity: the Stage A MODIFIER the visitor
  *  typed, and the figure this screen actually rendered. `bookAppointment` (the
@@ -240,6 +257,8 @@ function SlotBookingForm({
   const t = useTranslations('AppointmentBooking')
   const tPublic = useTranslations('PublicBooking')
   const tPromo = useTranslations('Promo')
+  const tWaiver = useTranslations('Waiver')
+  const { team: publicTeam } = usePublicTeam()
   const [error, setError] = useState<string | null>(null)
   const [submittingGuest, setSubmittingGuest] = useState(false)
   const [submittingPay, setSubmittingPay] = useState(false)
@@ -275,6 +294,31 @@ function SlotBookingForm({
   } | null>(null)
   // Transient state while an INCLUDED member's free booking is in flight.
   const [autobooking, setAutobooking] = useState(false)
+
+  // ── The consent gate ──────────────────────────────────────────────────────
+  // Inert unless the team's public mirror lists a required waiver. This
+  // component is keyed on provider/activity/start/duration, so picking a
+  // different slot builds a fresh one — which is right: a different activity may
+  // carry a different scoped waiver, and a tick must never survive the change.
+  const waiverGate = useWaiverGate({
+    teamId,
+    requiredWaivers: publicTeam.required_waivers,
+    activityId,
+  })
+  /** Which of the three submits the consent screen is standing in front of. */
+  const [pendingBook, setPendingBook] = useState<
+    | { kind: 'guest'; values: GuestDetailsValues }
+    | {
+        kind: 'memberFree'
+        contactId: string
+        verificationCodeId: string
+        firstname: string
+        email: string
+        held: string[]
+      }
+    | { kind: 'memberPay' }
+    | null
+  >(null)
 
   // ── The recovery half of the `price_changed` guard ────────────────────────
   // The server's own figure, once it has refused this screen's quote. It is BOTH
@@ -353,13 +397,15 @@ function SlotBookingForm({
   const offersMemberBenefit = !!memberBenefit?.subscriptionTypeIds.length
 
   // Report the current screen UP so the sticky bar can gate its Confirm button.
-  const currentScreen: BookScreen = autobooking
-    ? 'autobooking'
-    : memberPay
-      ? 'memberPay'
-      : screen === 'signIn'
-        ? 'signIn'
-        : 'guest'
+  const currentScreen: BookScreen = waiverGate.presented
+    ? 'waiver'
+    : autobooking
+      ? 'autobooking'
+      : memberPay
+        ? 'memberPay'
+        : screen === 'signIn'
+          ? 'signIn'
+          : 'guest'
   useEffect(() => {
     onScreenChange(currentScreen)
   }, [currentScreen, onScreenChange])
@@ -375,6 +421,21 @@ function SlotBookingForm({
     setError(null)
     setSubmittingGuest(true)
     try {
+      // THE GUEST FORM — this file's one submit that has a form to interrupt. The consent screen goes before
+      // the call, not after the refusal: `bookAppointment` refuses above its
+      // contact write, so this costs nothing, and it is the only path where a
+      // form exists to interrupt.
+      if (
+        !(await waiverGate.ensure({
+          email: values.email,
+          firstname: values.firstname,
+          lastname: values.lastname,
+        }))
+      ) {
+        setPendingBook({ kind: 'guest', values })
+        return
+      }
+      const waiverAcceptances = waiverGate.acceptances
       const contactDetails = {
         firstname: values.firstname,
         lastname: values.lastname,
@@ -382,11 +443,15 @@ function SlotBookingForm({
         phone: values.phone || undefined,
       }
       if (!hasAnyPrice) {
-        await book({ contactDetails })
+        await book({ contactDetails, ...(waiverAcceptances.length ? { waiverAcceptances } : {}) })
         onBooked({ firstname: values.firstname, email: values.email })
         return
       }
-      const res = await checkout({ contactDetails, ...checkoutExtras(guestAmount) })
+      const res = await checkout({
+        contactDetails,
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
+        ...checkoutExtras(guestAmount),
+      })
       if (res?.url) {
         window.location.href = res.url
         return
@@ -394,6 +459,27 @@ function SlotBookingForm({
       throw new Error('no-url')
     } catch (err) {
       const { code } = errorDetails(err)
+      // A waiver refusal is a SCREEN, not a sentence: the requirement moved
+      // between the resolve and the call. Re-resolve and present rather than
+      // printing "this slot is unavailable", which is both wrong and a dead end.
+      // `recover` rather than `reset` + `ensure`, because the refusal also tells
+      // us the team's public mirror may be stale-empty — and `ensure` answers
+      // "clear" for an empty mirror, leaving the sentence with nothing behind it.
+      const waiverMsg = waiverErrorMessage(err, tWaiver)
+      if (waiverMsg) {
+        if (
+          await waiverGate.recover(err, {
+            email: values.email,
+            firstname: values.firstname,
+            lastname: values.lastname,
+          })
+        ) {
+          setPendingBook({ kind: 'guest', values })
+          return
+        }
+        setError(waiverMsg)
+        return
+      }
       // RECOVERY FIRST: the server has told us what this slot really costs. Show
       // that figure and let the visitor confirm again — the next attempt sends
       // it back as the quote and the booking completes. Without this the screen
@@ -451,35 +537,37 @@ function SlotBookingForm({
     const effective = toEffectivePrice(options[0])
 
     if (effective.free) {
-      setAutobooking(true)
-      try {
-        await book({ authenticatedContactId: contactId, verificationCodeId })
-        onBooked({ firstname: contactFirstname, email: contactData.email })
-      } catch (bookErr) {
-        const { code, reason, priceAmount: amt } = errorDetails(bookErr)
-        if (code === 'functions/already-exists') {
-          throw new Error(t('errorAlreadyBooked'))
-        } else if (code === 'functions/failed-precondition' && reason === 'payment_required') {
-          // Race: pricing/coverage changed between our check and the free
-          // attempt — the server is authoritative, fall back to the pay CTA.
-          if (typeof amt === 'number') {
-            setMemberPay({
-              contactId,
-              verificationCodeId,
-              held,
-              amount: amt,
-              firstname: contactFirstname,
-              email: contactData.email,
-            })
-          } else {
-            throw new Error(t('errorPaymentRequired'))
-          }
-        } else {
-          throw new Error(t('errorGeneric'))
-        }
-      } finally {
-        setAutobooking(false)
+      // THE COVERED MEMBER'S FREE BOOKING, AND THE ONE WITH NO CONTROL AT ALL — this path
+      // renders a spinner and books. `resolveAppointmentCaller` marks the
+      // verification code used before any gate, so a `waiver_required` refusal
+      // here funnels into "something went wrong" and costs the member their code
+      // against a three-per-hour budget. The screen is interposed HERE, before
+      // `setAutobooking(true)`, so the spinner never appears for a booking that
+      // cannot complete.
+      if (
+        !(await waiverGate.ensure({
+          authenticatedContactId: contactId,
+          verificationCodeId,
+          email: contactData.email,
+        }))
+      ) {
+        setPendingBook({
+          kind: 'memberFree',
+          contactId,
+          verificationCodeId,
+          firstname: contactFirstname,
+          email: contactData.email,
+          held,
+        })
+        return
       }
+      await runMemberFreeBooking({
+        contactId,
+        verificationCodeId,
+        firstname: contactFirstname,
+        email: contactData.email,
+        held,
+      })
       return
     }
 
@@ -498,15 +586,93 @@ function SlotBookingForm({
     throw new Error(t('errorPaymentRequired'))
   }
 
+  /**
+   * The covered member's free booking, extracted so the consent screen's Confirm
+   * can re-enter EXACTLY what it interrupted rather than the file growing a
+   * fourth place that builds a `bookAppointment` payload.
+   */
+  async function runMemberFreeBooking(m: {
+    contactId: string
+    verificationCodeId: string
+    firstname: string
+    email: string
+    held: string[]
+  }) {
+    const waiverAcceptances = waiverGate.acceptances
+    setAutobooking(true)
+    try {
+      await book({
+        authenticatedContactId: m.contactId,
+        verificationCodeId: m.verificationCodeId,
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
+      })
+      onBooked({ firstname: m.firstname, email: m.email })
+    } catch (bookErr) {
+      const { code, reason, priceAmount: amt } = errorDetails(bookErr)
+      const waiverMsg = waiverErrorMessage(bookErr, tWaiver)
+      if (waiverMsg) {
+        // The requirement moved under the member. Re-present; their code is
+        // already spent and the screen is the only way forward — which is also
+        // why this forces the resolve rather than asking `applies` first.
+        if (
+          await waiverGate.recover(bookErr, {
+            authenticatedContactId: m.contactId,
+            verificationCodeId: m.verificationCodeId,
+            email: m.email,
+          })
+        ) {
+          setPendingBook({ kind: 'memberFree', ...m })
+          return
+        }
+        throw new Error(waiverMsg)
+      }
+      if (code === 'functions/already-exists') {
+        throw new Error(t('errorAlreadyBooked'))
+      } else if (code === 'functions/failed-precondition' && reason === 'payment_required') {
+        // Race: pricing/coverage changed between our check and the free
+        // attempt — the server is authoritative, fall back to the pay CTA.
+        if (typeof amt === 'number') {
+          setMemberPay({
+            contactId: m.contactId,
+            verificationCodeId: m.verificationCodeId,
+            held: m.held,
+            amount: amt,
+            firstname: m.firstname,
+            email: m.email,
+          })
+        } else {
+          throw new Error(t('errorPaymentRequired'))
+        }
+      } else {
+        throw new Error(t('errorGeneric'))
+      }
+    } finally {
+      setAutobooking(false)
+    }
+  }
+
   // A verified member's effective price is an AMOUNT — pay to confirm.
   async function onMemberPay() {
     if (!memberPay) return
     setSubmittingPay(true)
     setError(null)
     try {
+      // THE MEMBER'S PAID CTA.
+      if (
+        !(await waiverGate.ensure({
+          authenticatedContactId: memberPay.contactId,
+          verificationCodeId: memberPay.verificationCodeId,
+          email: memberPay.email,
+        }))
+      ) {
+        setPendingBook({ kind: 'memberPay' })
+        return
+      }
+      const waiverAcceptances = waiverGate.acceptances
       const res = await checkout({
         authenticatedContactId: memberPay.contactId,
         verificationCodeId: memberPay.verificationCodeId,
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
         // The figure THIS screen is showing — re-quoted, not the one frozen at
         // verify time, or removing the code here would send a number the button
         // stopped displaying.
@@ -528,15 +694,33 @@ function SlotBookingForm({
         setError(priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale)))
         return
       }
+      const waiverMsg = waiverErrorMessage(err, tWaiver)
       const promoMsg = promoCheckoutErrorMessage(err, tPromo)
-      if (promoMsg) {
+      if (waiverMsg) {
+        if (
+          await waiverGate.recover(err, {
+            authenticatedContactId: memberPay.contactId,
+            verificationCodeId: memberPay.verificationCodeId,
+            email: memberPay.email,
+          })
+        ) {
+          setPendingBook({ kind: 'memberPay' })
+          return
+        }
+        setError(waiverMsg)
+      } else if (promoMsg) {
         setError(promoMsg)
       } else if (code === 'functions/failed-precondition' && reason === 'covered') {
-        // Race: became covered since we checked — retry the free path.
+        // Race: became covered since we checked — retry the free path. It
+        // carries the acceptances too: the resolver's answer does not change,
+        // but a signature collected on this screen must ride whichever call
+        // actually books the seat.
         try {
+          const carried = waiverGate.acceptances
           await book({
             authenticatedContactId: memberPay.contactId,
             verificationCodeId: memberPay.verificationCodeId,
+            ...(carried.length ? { waiverAcceptances: carried } : {}),
           })
           onBooked({ firstname: memberPay.firstname, email: memberPay.email })
         } catch {
@@ -564,6 +748,60 @@ function SlotBookingForm({
       {error}
     </p>
   ) : null
+
+  /** Finish what the consent screen interrupted, by re-entering the SAME
+   *  function. Three submits, three resumptions, no fourth booking path. */
+  async function resumePendingBook() {
+    const pending = pendingBook
+    if (!pending) return
+    if (pending.kind === 'guest') {
+      await onSubmitGuest(pending.values)
+      return
+    }
+    if (pending.kind === 'memberPay') {
+      await onMemberPay()
+      return
+    }
+    setSubmittingGuest(true)
+    try {
+      await runMemberFreeBooking(pending)
+    } catch (err) {
+      setError((err as { message?: string }).message ?? t('errorGeneric'))
+    } finally {
+      setSubmittingGuest(false)
+    }
+  }
+
+  // ── The consent screen — FIRST, because it stands in front of all three ──
+  // submits and must win over `autobooking`'s spinner and `memberPay`'s CTA.
+  // It carries its own Confirm for the same reason the member-pay screen does:
+  // the parent's sticky bar drives the guest form and nothing else.
+  if (waiverGate.presented) {
+    return (
+      <>
+        <div>
+          <BackButton
+            label={backLabel}
+            onClick={() => {
+              waiverGate.dismiss()
+              setPendingBook(null)
+            }}
+          />
+        </div>
+        <WaiverStep gate={waiverGate} teamName={publicTeam.name || ''} disabled={submittingGuest} />
+        {errorBox}
+        <button
+          type="button"
+          disabled={!waiverGate.ready || submittingGuest || submittingPay}
+          onClick={() => void resumePendingBook()}
+          style={accentColor ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+          className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {submittingGuest || submittingPay ? tPublic('ctaBooking') : tPublic('ctaConfirm')}
+        </button>
+      </>
+    )
+  }
 
   // ── An INCLUDED member's free booking is in flight. ──
   if (autobooking) {

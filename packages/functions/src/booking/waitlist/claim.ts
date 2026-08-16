@@ -45,6 +45,8 @@ import {
 } from '@linyup/shared'
 import { denialMessage, loadContactPaymentContext } from '../access'
 import { buildBookingConfirmationEmail } from '../templates'
+import { enforceWaiverGate, parseWaiverSubmissions } from '../../waivers/gate'
+import { commitWaiverLedgerWrites, planWaiverLedgerWrites } from '../../waivers/accept'
 import { assertUnderCheckoutRateLimit, checkoutRateLimit } from '../../connect/checkout'
 import { optionalContactSessionFromRequest } from '../../utils/contactSession'
 import { sendEmail } from '../../utils/email'
@@ -64,6 +66,9 @@ export const claimWaitlistSeat = onCall(async (request) => {
      *  person, so a claim page holding nothing but a link still works. */
     teamId?: string
     sessionId?: string
+    /** Ticks from the waiver step the claim page renders inside the claim
+     *  window — see waivers/gate.ts. */
+    waiverAcceptances?: unknown
   }
   const offerToken = typeof data?.offerToken === 'string' ? data.offerToken.trim() : ''
   if (!offerToken) throw new HttpsError('invalid-argument', 'offerToken is required')
@@ -247,10 +252,56 @@ export const claimWaitlistSeat = onCall(async (request) => {
           type: activity.type as ActivityType | undefined,
         })
 
+  // ── The waiver gate — PRESENTABLE, not merely refusable ────────────────────
+  // The claim page shows the waiver inside the claim window and sends the tick
+  // with the claim, which is why this runs here rather than being left to
+  // bookSession: a bare refusal would silently cost a queued member the ONE
+  // offer their entry will ever get, for a document they were never shown.
+  //
+  // It adds NO second timer. The tick happens inside the existing claim window
+  // and holds nothing — a waiver is not a price modifier, so the argument that
+  // refused a promo code on this rail (a code would lock a strictly-capped use
+  // for the whole claim window) does not carry, and is cited rather than
+  // inherited.
+  //
+  // THIS RAIL USED TO DEFER, AND NO LONGER DOES — a behaviour change, not a
+  // refactor. The divergence existed only for a guardian's EMAILED signature: a
+  // link ran 72 hours against a claim window whose default is 120 minutes, the
+  // offer is one per entry ever, and refusing would have spent a queued member's
+  // only offer on a document nobody could complete in time. With the emailed
+  // guardian path gone, the consent step is completable by the claimant on the
+  // screen they are already looking at, inside the claim window, so there is
+  // nothing left that refusing would destroy. The claim now refuses like every
+  // other rail, and no booking in the product commits with a waiver unsigned.
+  const waiverNowMs = Date.now()
+  const waiverOutcome = await enforceWaiverGate({
+    teamId,
+    activityId,
+    subject: {
+      contactId,
+      name: `${(contactSnap.data()?.firstname as string) ?? ''} ${
+        (contactSnap.data()?.lastname as string) ?? ''
+      }`.trim(),
+      email: (contactSnap.data()?.email as string) ?? null,
+    },
+    submissions: parseWaiverSubmissions(data.waiverAcceptances),
+    source: 'waitlist_claim',
+    // The offer token proves control of the mailbox the offer was emailed to,
+    // but it names the CONTACT rather than the person reading it — the same
+    // strength a contact session carries, and no more.
+    signerEmailVerifiedBy: 'session',
+    ip: request.rawRequest?.ip ?? null,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale: null,
+    nowMs: waiverNowMs,
+  })
+
   const committed = await db.runTransaction(async (tx) => {
     // ── READS ──
     const freshEntry = await tx.get(entryRef)
     const freshBooking = await tx.get(bookingRef)
+    // The acceptance commits with the seat — same read set, same transaction.
+    const waiverPlans = await planWaiverLedgerWrites(tx, waiverOutcome.accepts, waiverNowMs)
     const e = freshEntry.data()
     const b = freshBooking.data()
     const nowMs = Date.now()
@@ -350,6 +401,7 @@ export const claimWaitlistSeat = onCall(async (request) => {
     }
 
     // ── WRITES ──
+    commitWaiverLedgerWrites(tx, waiverPlans)
     if (grant) tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
     if (usageSpend && windowRef) {
       tx.set(
@@ -383,6 +435,12 @@ export const claimWaitlistSeat = onCall(async (request) => {
             usage_window_type_id: usageSpend.subscriptionTypeId,
           }
         : {}),
+      // The denormalised stamp for the day sheet and the printed manifest —
+      // `ok`, or one of the two "check who is actually here" prompts a
+      // minors-flagged waiver produces. Never read for a decision.
+      ...(waiverOutcome.bookingWaiverState
+        ? { waiver_state: waiverOutcome.bookingWaiverState }
+        : {}),
       updated_at: FieldValue.serverTimestamp(),
     })
     tx.update(entryRef, {
@@ -402,6 +460,7 @@ export const claimWaitlistSeat = onCall(async (request) => {
   })
 
   // ── After the commit: everything that must not be able to fail the claim ───
+
   // Partner (aggregator) visit ledger — reporting only, idempotent by doc id.
   if (matchedSubscriptionTypeId && !creditSpendTypeId) {
     try {

@@ -8,7 +8,6 @@ import {
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
-  DOCUMENTS_COLLECTION,
 } from '@linyup/shared'
 
 /**
@@ -76,29 +75,14 @@ export async function deleteAllCoursePublicProfiles(teamId: string): Promise<voi
   }
 }
 
-/**
- * Batch-deletes every documents/{documentId}/public_profile/{documentId} summary
- * belonging to the team, effectively unpublishing all public documents. Mirrors
- * what syncDocumentPublicProfile does for a single document on delete/unpublish,
- * applied to all of the team's documents at once when the plugin is removed.
- */
-export async function deleteAllDocumentPublicProfiles(teamId: string): Promise<void> {
-  const db = admin.firestore()
-  const docsSnap = await db
-    .collection(DOCUMENTS_COLLECTION)
-    .where('teamId', '==', teamId)
-    .get()
-
-  if (docsSnap.empty) return
-
-  const BATCH_SIZE = 400
-  const docs = docsSnap.docs
-  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-    const batch = db.batch()
-    for (const docDoc of docs.slice(i, i + BATCH_SIZE)) {
-      const profileRef = docDoc.ref.collection('public_profile').doc(docDoc.id)
-      batch.delete(profileRef)
-    }
-    await batch.commit()
-  }
-}
+// There is deliberately NO deleteAllDocumentPublicProfiles here.
+//
+// It existed to tear down every document mirror when the Documents plugin was
+// deactivated — which `downgradeTeamToFree` triggers for every lapsed team.
+// Documents is now a default feature with no install to deactivate, and under a
+// waiver gate that teardown was actively dangerous: a downgrade would have
+// deleted the public copy of a document the booking gate points at, and emptied
+// `signup_documents` in the same beat. Retiring a plan must not delete evidence.
+//
+// If some future feature needs a bulk mirror teardown, write it for that feature
+// — do not resurrect this one.

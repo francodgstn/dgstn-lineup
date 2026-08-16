@@ -26,6 +26,11 @@ import { getTeam } from '../utils/teams'
 import { resolveSingleContact } from '../utils/contacts'
 import { canCreateContact } from '../utils/contactCap'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import {
+  commitWaiverLedgerWrites,
+  planWaiverLedgerWrites,
+  type WaiverEventInput,
+} from '../waivers/accept'
 import { getDatePartsInTz, localTimeToUtc } from './index'
 
 export type Lang = 'en' | 'de' | 'fr' | 'it'
@@ -199,6 +204,15 @@ export interface AppointmentCallerResult {
    *  types). */
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
   sanitized: { firstname: string; lastname: string; email: string; phone: string | null }
+  /**
+   * The address the six-digit code was actually MAILED TO, on the OTP path only
+   * — null on the contact-session and guest paths, where there is no second
+   * address. It is not, in general, the contact's own: a parent verifies with
+   * theirs and selects their child from the matched list. The waiver ledger
+   * records it as `signer_email`, so that a record claiming `verified_code`
+   * names the mailbox that was actually proved. See WaiverGateParams.signerEmail.
+   */
+  verifiedEmail: string | null
 }
 
 /** The 3 trust paths a caller can identify themselves with, checked in trust
@@ -234,6 +248,9 @@ export async function resolveAppointmentCaller(
         email: (c.email || '').toLowerCase().trim(),
         phone: c.phone || null,
       },
+      // A session identifies the CONTACT, never the person at the keyboard, so
+      // it proves no mailbox and contributes no second address.
+      verifiedEmail: null,
     }
   }
 
@@ -273,6 +290,7 @@ export async function resolveAppointmentCaller(
         email: (c.email || '').toLowerCase().trim(),
         phone: c.phone || null,
       },
+      verifiedEmail: ((cd.email as string | undefined) ?? '').toLowerCase().trim() || null,
     }
   }
 
@@ -289,6 +307,9 @@ export async function resolveAppointmentCaller(
       email: cd.email.toLowerCase().trim(),
       phone: cd.phone?.trim() || null,
     },
+    // A typed address proves nothing, which `signerEmailVerifiedBy: 'none'`
+    // already says. There is no second address here either.
+    verifiedEmail: null,
   }
 }
 
@@ -352,6 +373,19 @@ export interface AppointmentSlotTxParams {
   /** A contactId allowed to rewrite ITS OWN still-live 'pending_payment' hold at
    *  this doc id (checkout retry — a fresh Stripe session for the same slot). */
   allowRewriteByHolder?: string
+  /**
+   * Waiver acceptances to commit WITH the seat. Supplied only by the FREE path
+   * (`bookAppointment`), where the signature and the seat must be atomic.
+   *
+   * Deliberately absent on the other three callers of this transaction, and
+   * each absence is a decision rather than an omission: `createAppointmentCheckout`
+   * writes its acceptance BEFORE Stripe in its own transaction (the tick is a
+   * fact whether or not the card clears); the Connect webhook only CONFIRMS a
+   * hold whose acceptance is already on the ledger; and `createStaffAppointment`
+   * is the manual-override tool, which surfaces an unsigned waiver on the roster
+   * rather than blocking a coach booking a client by phone.
+   */
+  waiverLedger?: { accepts: WaiverEventInput[]; nowMs: number }
 }
 
 /** The overlap-safe create/reuse transaction for an appointment session —
@@ -371,11 +405,20 @@ export async function runAppointmentSlotTransaction(params: AppointmentSlotTxPar
     bufferMs,
     creditSpend,
     allowRewriteByHolder,
+    waiverLedger,
   } = params
 
   await db.runTransaction(async (tx) => {
     // ── READS ──
     const nowMs = Date.now()
+    // The acceptance's read phase, in the same read set as the slot. Each plan
+    // `tx.get`s its own acceptance ref and skips the create when it exists — a
+    // bare `tx.create` collision would fail the WHOLE commit as a precondition
+    // violation and take the slot with it, which is what a client retrying after
+    // a network timeout produces.
+    const waiverPlans = waiverLedger
+      ? await planWaiverLedgerWrites(tx, waiverLedger.accepts, waiverLedger.nowMs)
+      : []
     const existing = await tx.get(sessionRef)
     let staleBookingRefs: FirebaseFirestore.DocumentReference[] = []
 
@@ -476,6 +519,7 @@ export async function runAppointmentSlotTransaction(params: AppointmentSlotTxPar
     }
 
     // ── WRITES ──
+    commitWaiverLedgerWrites(tx, waiverPlans)
     for (const ref of staleBookingRefs) tx.delete(ref)
     if (grant) tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
     tx.set(sessionRef, sessionDoc)

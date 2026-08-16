@@ -19,7 +19,7 @@ import { useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
-  ExternalLink, X, Check, Ban, AlertTriangle, ListOrdered, Send,
+  Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send,
 } from 'lucide-react'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
@@ -28,6 +28,8 @@ import {
   bookingHoldsSeat, confirmClearedHoldFields, seatsFree,
 } from '@linyup/shared'
 import type { Session, Booking, Contact, Activity, WaitlistEntry } from '@linyup/shared'
+import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
+import { useWaiverPolicy, useWaiverRoster } from '@/hooks/useWaiverStates'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 
@@ -189,6 +191,14 @@ function useQrScanner(onScan: (text: string) => void) {
 
 // ─── add participants dialog ──────────────────────────────────────────────────
 
+// STAFF CLASS BOOKING IS THE HOLE THE GATE CANNOT CLOSE, and this dialog is it.
+// It writes `sessions/{id}/participants/{contactId}` DIRECTLY from the browser,
+// permitted by the `schedule.manage` capability, so there is no server seam to
+// gate — closing it would need a `bookParticipant` callable and a rules
+// narrowing on a path coaches use daily. The posture is therefore SURFACE, DO
+// NOT BLOCK: the note below says plainly that nobody is asked to sign, and the
+// roster chip carries the state permanently. Stated here rather than left to be
+// discovered, because "we have a waiver gate" is not literally true of this path.
 function AddParticipantsDialog({
   open, onOpenChange, teamId, sessionId, existingIds, onAdded, requiredSubscriptionTypeIds,
 }: {
@@ -202,6 +212,11 @@ function AddParticipantsDialog({
   requiredSubscriptionTypeIds: string[] | null
 }) {
   const t = useTranslations('SessionDetail')
+  // One cached policy read, shared with the roster chip's own lookup. Absent a
+  // required waiver the note never renders — a studio that asks for nothing must
+  // not be told about a mechanism it does not use.
+  const { data: waiverPolicy = [] } = useWaiverPolicy(open ? teamId : null)
+  const teamRequiresWaiver = waiverPolicy.length > 0
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
   // Contact awaiting the "no valid subscription — add anyway?" confirmation.
@@ -279,7 +294,7 @@ function AddParticipantsDialog({
         <DialogHeader className="px-4 pt-4 pb-3 border-b">
           <DialogTitle className="text-base">{t('addContactToSession')}</DialogTitle>
         </DialogHeader>
-        <div className="px-3 pt-3 pb-2">
+        <div className="px-3 pt-3 pb-2 space-y-2">
           <input
             autoFocus
             value={search}
@@ -287,6 +302,9 @@ function AddParticipantsDialog({
             placeholder={t('searchContactsPlaceholder')}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          {teamRequiresWaiver && (
+            <p className="text-xs text-muted-foreground">{t('addParticipantWaiverNote')}</p>
+          )}
         </div>
         {confirming ? (
           <div className="px-4 py-4 space-y-3">
@@ -379,8 +397,10 @@ export default function SessionDetailPage() {
   const sessionId = params.id as string
   const router = useRouter()
   const i18nRouter = useI18nRouter()
-  const { currentTeamId, user } = useAuth()
+  const { currentTeamId, user, team } = useAuth()
+  const teamSlug = team?.slug ?? ''
   const qc = useQueryClient()
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -394,6 +414,31 @@ export default function SessionDetailPage() {
   const [waitlistBusy, setWaitlistBusy] = useState<string | null>(null)
   const [waitlistRemoving, setWaitlistRemoving] = useState<WaitlistEntry | null>(null)
   const [waitlistError, setWaitlistError] = useState<string | null>(null)
+
+  // Share the public booking link for THIS session. Native share sheet where the
+  // platform has one (a coach on a phone sends it straight into WhatsApp), else
+  // the clipboard. An ABSOLUTE url either way — a relative path is useless the
+  // moment it leaves the app. A cancelled share sheet throws AbortError, which is
+  // not a failure and must not surface as one.
+  async function shareBookingLink() {
+    if (!teamSlug) return
+    const url = `${window.location.origin}/public/${teamSlug}/booking?session=${sessionId}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ url })
+        return
+      } catch {
+        /* dismissed, or unavailable in this context — fall through to copy */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1500)
+    } catch {
+      /* clipboard blocked (insecure origin, denied permission) — no-op */
+    }
+  }
 
   // ── data fetching ────────────────────────────────────────────────────────────
 
@@ -527,6 +572,32 @@ export default function SessionDetailPage() {
   )
   const showsNoSubBadge = (contactId?: string | null) =>
     !!contactId && rosterCoverage.get(contactId) === false
+
+  // ── The waiver chip ───────────────────────────────────────────────────────
+  // Read LIVE from the signer rows for exactly the people on this roster, rather
+  // than from the denormalised `booking.waiver_state`. That field is a snapshot
+  // at booking time — right for the printed sheet, which describes the booking
+  // as taken — and wrong here, where a revocation or a `require_resign` publish
+  // since then is the thing a coach at the door needs to see. State both, or
+  // "why does the sheet say signed and the screen say expired" becomes a support
+  // ticket.
+  //
+  // Deliberately NOT `rosterContactsQ`'s shape: that fetches the whole active
+  // contact list and is enabled only for gated activities, while a waiver chip
+  // is wanted on every session. This is bounded by the roster.
+  const waiverContactIds = [
+    ...(bookingsQ.data ?? []).map((b) => b.contact),
+    ...(participantsQ.data ?? []).map((p) => p.contact),
+  ].filter((id): id is string => !!id)
+  const waiverRoster = useWaiverRoster(
+    currentTeamId,
+    waiverContactIds,
+    sessionQ.data?.activityId ?? null
+  )
+  const waiverStateOf = (contactId?: string | null) =>
+    contactId ? waiverRoster.states.get(contactId) : undefined
+  const waiverCheckOf = (contactId?: string | null) =>
+    contactId ? waiverRoster.checks.get(contactId) : undefined
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['session', sessionId] })
@@ -814,14 +885,31 @@ export default function SessionDetailPage() {
           >
             <UserPlus className="h-4 w-4" /> {t('addContact')}
           </button>
-          {session.allowBooking && (
-            <a
-              href={`/portal/${currentTeamId}/booking`}
-              target="_blank" rel="noopener noreferrer"
+          {/* SHARE the link to THIS session, don't open it — the coach's actual
+              need is sending it to someone, and they can already see the session
+              on the page they are standing on.
+              `?session=` is the booking form's highest-precedence entry point and
+              degrades on its own to the slot list when the session can't be
+              honoured (past, full, unpublished), so a link that has aged in
+              someone's inbox is never a dead end.
+              Slug, not team id: public routes are slug-addressed. The previous
+              href pointed at a `/portal/` prefix that is not a route at all, so
+              this button 404'd. */}
+          {session.allowBooking && teamSlug && (
+            <button
+              onClick={shareBookingLink}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors text-muted-foreground"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> {t('bookingPortalLink')}
-            </a>
+              {linkCopied ? (
+                <>
+                  <Check className="h-3.5 w-3.5" /> {t('bookingLinkCopied')}
+                </>
+              ) : (
+                <>
+                  <Share2 className="h-3.5 w-3.5" /> {t('bookingLinkShare')}
+                </>
+              )}
+            </button>
           )}
         </div>
       </div>
@@ -875,6 +963,8 @@ export default function SessionDetailPage() {
                   {t('noSubBadge')}
                 </span>
               )}
+              <WaiverChip state={waiverStateOf(b.contact)} />
+              <WaiverDoorCheckChip check={waiverCheckOf(b.contact)} />
               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{t('pendingBadge')}</Badge>
               <div className="flex items-center gap-1">
                 <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('confirmAttendanceTitle')}>
@@ -1043,6 +1133,12 @@ export default function SessionDetailPage() {
                 {t('noSubBadge')}
               </span>
             )}
+            {/* A participant row may have NO booking at all — a staff add, or a
+                kiosk/self check-in — which is exactly the person whose waiver
+                nobody collected. `booking.waiver_state` cannot reach them, so
+                this reads the signer row. */}
+            <WaiverChip state={waiverStateOf(p.contact)} />
+            <WaiverDoorCheckChip check={waiverCheckOf(p.contact)} />
             <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
               <X className="h-3.5 w-3.5" />
             </button>

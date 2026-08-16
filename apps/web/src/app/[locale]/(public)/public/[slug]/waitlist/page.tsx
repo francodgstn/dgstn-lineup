@@ -34,6 +34,9 @@ import {
   giftCardCheckoutErrorMessage,
   type AppliedGiftCard,
 } from '@/components/booking/GiftCardRedeemField'
+import { WaiverStep } from '@/components/booking/WaiverStep'
+import { useWaiverGate } from '@/hooks/useWaiverGate'
+import { waiverErrorMessage } from '@/lib/waiver'
 import { usePublicTeam } from '../PublicTeamProvider'
 
 export const dynamic = 'force-dynamic'
@@ -50,6 +53,8 @@ interface WaitlistEntryView {
    *  completely differently to the person, and this is what separates them. */
   wasOffered: boolean
   firstname: string
+  lastname: string
+  email: string | null
   teamId: string
   sessionId: string
   offerExpiresAt: string | null
@@ -57,6 +62,10 @@ interface WaitlistEntryView {
     start: string | null
     end: string | null
     location: string | null
+    /** Needed so the consent step resolves the SAME scope the claim's own gate
+     *  does — a null would exclude an activity-scoped waiver here while the
+     *  server still enforced it. */
+    activityId: string | null
     activityName: string | null
     cancelled: boolean
   }
@@ -166,6 +175,7 @@ function claimErrorKey(err: unknown): string {
 export default function WaitlistPage() {
   const t = useTranslations('Waitlist')
   const tShop = useTranslations('Shop')
+  const tWaiver = useTranslations('Waiver')
   const locale = useLocale()
   const { slug, team } = usePublicTeam()
   const searchParams = useSearchParams()
@@ -182,6 +192,27 @@ export default function WaitlistPage() {
   const [giftCard, setGiftCard] = useState<AppliedGiftCard | null>(null)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [left, setLeft] = useState(false)
+
+  // ── The consent step, INSIDE the claim window ─────────────────────────────
+  // It adds no second timer: a waiver is not a price modifier and holds nothing,
+  // so the tick happens inside the existing deadline and consumes none of it
+  // beyond the seconds it takes to read. (`docs/waitlist.md`'s single-deadline
+  // rule is why a promo code is refused on this rail; the reasoning is cited
+  // rather than inherited, because it does not carry.)
+  //
+  // THIS RAIL USED TO PRESENT A WAIVER RATHER THAN GATE ON IT, and no longer
+  // does. The exception existed only for a guardian's emailed signature — a link
+  // ran 72 hours against a claim window whose floor is 35 minutes, and the entry
+  // gets one offer ever, so refusing spent that offer on a document nobody could
+  // complete in time. The consent step is now completable by the claimant on
+  // this screen, inside the window, so the claim is gated like every other rail
+  // and no booking in the product commits with a waiver unsigned.
+  const waiverGate = useWaiverGate({
+    teamId: entry?.teamId ?? null,
+    requiredWaivers: team.required_waivers,
+    activityId: entry?.session.activityId ?? null,
+  })
+  const [claimStep, setClaimStep] = useState<'idle' | 'waiver'>('idle')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -214,11 +245,32 @@ export default function WaitlistPage() {
     setBusy(true)
     setError(null)
     try {
-      const fn = httpsCallable<
-        { offerToken: string; teamId: string; sessionId: string },
-        ClaimResult
-      >(functions, 'claimWaitlistSeat')
-      const res = await fn({ offerToken: token, teamId: entry.teamId, sessionId: entry.sessionId })
+      // The consent step, once. On the SECOND pass — the step's own Confirm —
+      // `ensure` is skipped rather than re-asked, so the version the claimant
+      // just read is not replaced under them.
+      if (waiverGate.applies && claimStep === 'idle') {
+        const clear = await waiverGate.ensure({
+          email: entry.email ?? undefined,
+          firstname: entry.firstname,
+          lastname: entry.lastname,
+        })
+        if (!clear) {
+          setClaimStep('waiver')
+          return
+        }
+      }
+      const waiverAcceptances = waiverGate.acceptances
+
+      const fn = httpsCallable<Record<string, unknown>, ClaimResult>(
+        functions,
+        'claimWaitlistSeat'
+      )
+      const res = await fn({
+        offerToken: token,
+        teamId: entry.teamId,
+        sessionId: entry.sessionId,
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
+      })
       if (res.data.requiresPayment) {
         // Nothing was written server-side — an abandoned pay screen has to leave
         // the offer exactly as it was, still claimable until its own deadline.
@@ -227,6 +279,27 @@ export default function WaitlistPage() {
         setClaimed(true)
       }
     } catch (err: unknown) {
+      // A waiver refusal on this rail means the requirement moved under the
+      // claimant. Re-present.
+      // `recover` forces the resolve: an offer can outlive the mirror write that
+      // was supposed to list the waiver, and `ensure` would answer "clear" from
+      // its `!applies` line — leaving this claimant with a sentence, no step,
+      // and exactly one offer they can never use.
+      const waiverMsg = waiverErrorMessage(err, tWaiver)
+      if (waiverMsg) {
+        setClaimStep('idle')
+        const presented = await waiverGate.recover(err, {
+          email: entry.email ?? undefined,
+          firstname: entry.firstname,
+          lastname: entry.lastname,
+        })
+        if (presented) {
+          setClaimStep('waiver')
+          return
+        }
+        setError(waiverMsg)
+        return
+      }
       setError(t(claimErrorKey(err)))
     } finally {
       setBusy(false)
@@ -252,6 +325,13 @@ export default function WaitlistPage() {
         locale,
         origin: typeof window !== 'undefined' ? window.location.origin : undefined,
         ...(giftCard ? { giftCardCode: giftCard.code } : {}),
+        // NO SECOND PROMPT ACROSS THE PAYABLE HOP. A payable claim returns
+        // `requiresPayment` and writes nothing — it never even reaches its own
+        // gate — so the tick collected on the claim step has to ride the
+        // checkout that actually books the seat.
+        ...(waiverGate.acceptances.length
+          ? { waiverAcceptances: waiverGate.acceptances }
+          : {}),
       })
       // A gift card that covers the whole price moves no money through Stripe —
       // there is no session to redirect to, the seat is simply confirmed.
@@ -392,9 +472,21 @@ export default function WaitlistPage() {
 
       {sessionCard}
 
+      {/* ── The consent step, inside the claim window ────────────────────── */}
+      {isClaim && !lapsed && !payment && claimStep === 'waiver' && (
+        <WaiverStep gate={waiverGate} teamName={entry.team.name} disabled={busy} />
+      )}
+
       {/* ── Claim ───────────────────────────────────────────────────────── */}
       {isClaim && !lapsed && !payment && (
-        <Button onClick={handleClaim} disabled={busy} className="w-full">
+        <Button
+          onClick={handleClaim}
+          // `waiverGate.ready` and not a bare predicate over the item list: over
+          // the empty list a FAILED load leaves behind, that would be `true`,
+          // which put a live Claim on an error screen.
+          disabled={busy || (claimStep === 'waiver' && !waiverGate.ready)}
+          className="w-full"
+        >
           {busy ? t('claiming') : t('claimCta')}
         </Button>
       )}

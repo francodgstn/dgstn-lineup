@@ -19,7 +19,16 @@ import {
 import { resolveBookingAccessGate } from './access'
 import { healSessionSeatCount } from './seatCount'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import { isKioskDeviceForTeam } from '../utils/kioskSession'
 import { resolveSingleContact } from '../utils/contacts'
+import { matchGuestContact } from './guestContactMatch'
+import {
+  attachWaiverContact,
+  enforceWaiverGate,
+  parseWaiverSubmissions,
+  type WaiverGateOutcome,
+} from '../waivers/gate'
+import { commitWaiverLedgerWrites, planWaiverLedgerWrites } from '../waivers/accept'
 import {
   resolveActivityAccessRule,
   resolveAutoConfirm,
@@ -494,6 +503,10 @@ export const bookSession = onCall(async (request) => {
     source?: string
     /** Answers to the activity's bookingQuestions, keyed by field id. */
     questionAnswers?: Record<string, unknown>
+    /** Ticks from the waiver step, each echoing the version and text hash the
+     *  visitor was actually shown. Coerced by `parseWaiverSubmissions`; anything
+     *  malformed is dropped and the gate refuses in the ordinary way. */
+    waiverAcceptances?: unknown
   }
 
   if (!data?.teamId || !data?.sessionId) {
@@ -570,6 +583,11 @@ export const bookSession = onCall(async (request) => {
   //      has to type an emailed code to book something it's already authenticated for.
   // Neither present → guest booking from contactDetails, below.
   let authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null = null
+  // The address the six-digit code was actually MAILED TO, kept because it is
+  // not, in general, the contact's own — path 1 above exists precisely so a
+  // parent can verify with their address and book for their child. The waiver
+  // ledger records it as `signer_email`; see WaiverGateParams.signerEmail.
+  let verifiedSignerEmail: string | null = null
 
   if (data.authenticatedContactId) {
     // The code is MANDATORY. It is the ONLY thing that proves the caller is this
@@ -598,6 +616,7 @@ export const bookSession = onCall(async (request) => {
       throw new HttpsError('permission-denied', 'Code does not match team')
     const isValid = (codeData.matched_contact_ids || []).includes(data.authenticatedContactId)
     if (!isValid) throw new HttpsError('permission-denied', 'Contact not found in verified matches')
+    verifiedSignerEmail = ((codeData.email as string | undefined) ?? '').toLowerCase().trim() || null
     await admin
       .firestore()
       .collection('booking_verification_codes')
@@ -812,22 +831,16 @@ export const bookSession = onCall(async (request) => {
   // have let through. Reads only: the contact is still CREATED far below, after
   // every refusal path, and the guest branch would run this same exact
   // email+name match anyway.
+  //
+  // The email+name predicate itself lives in `booking/guestContactMatch.ts` —
+  // moved, not changed. `createDropInCheckout` had a byte-identical copy, and
+  // `resolveWaiverRequirement` now needs the SAME answer: a public callable that
+  // resolved a shared household mailbox differently from this rail would tell a
+  // 12-year-old there is nothing to sign and then have the gate refuse him on
+  // his mother's signature.
   let guestMatch: admin.firestore.QueryDocumentSnapshot | null = null
   if (!authenticatedContact) {
-    const existingSnap = await admin
-      .firestore()
-      .collection('contacts')
-      .where('teamId', '==', data.teamId)
-      .where('email', '==', sanitized.email)
-      .get()
-    guestMatch =
-      existingSnap.docs.find((d) => {
-        const c = d.data()
-        return (
-          c.firstname?.toLowerCase().trim() === sanitized.firstname.toLowerCase() &&
-          c.lastname?.toLowerCase().trim() === sanitized.lastname.toLowerCase()
-        )
-      }) ?? null
+    guestMatch = (await matchGuestContact(data.teamId, sanitized)).match
   }
   const callerContactId = authenticatedContact?.id ?? guestMatch?.id
 
@@ -918,6 +931,86 @@ export const bookSession = onCall(async (request) => {
     // Meter usage limits against the week the CLASS happens, not the booking
     // moment — advance bookings must debit the session's own window.
     usageAt: (sessionData.start as Timestamp).toDate(),
+  })
+
+  // ── The waiver gate ────────────────────────────────────────────────────────
+  // HERE, and not one line lower: the first CONTACT write is immediately below,
+  // so a refusal creates no contact, stamps no funnel, burns no `trial_used_at`
+  // and records no acceptance.
+  //
+  // ONE side effect does precede it and cannot be moved: the verification code
+  // was marked `used: true` at the identity check near the top of this callable,
+  // long before any gate. What that actually costs is worth stating precisely,
+  // because the obvious reading is wrong in a way that TESTS AS FINE — this
+  // callable never re-checks `used` (its entry checks are `exists`, `verified`,
+  // `team_id` and `matched_contact_ids`), so re-calling it with the same
+  // `codeId` still succeeds. The cost only materialises if the SURFACE unwinds
+  // to the email step, because `verifyBookingCode` does refuse a used code and
+  // re-requesting is capped per email+team per hour. That is why the returning-
+  // member path must present the waiver step BEFORE calling this callable rather
+  // than reacting to the refusal: the refusal is the floor, not the plan.
+  //
+  // The caller is already identified at this point — `callerContactId` above,
+  // from the guest email+name match this rail runs regardless for the seat
+  // count — so the gate's cost is one policy read plus one signer read per
+  // applicable waiver, and a team with no waivers pays exactly one document
+  // read per booking.
+  //
+  // `nowMs` is captured ONCE, here, and carried into the commit transaction.
+  // Stamping the tick inside the transaction instead would re-stamp it on a
+  // Firestore retry, and a retried acceptance that overtakes a manager's
+  // revocation silently undoes it.
+  const waiverNowMs = Date.now()
+  // THE ONE PLACE THIS RAIL ASKS WHETHER THE DEVICE IS A KIOSK. The answer feeds
+  // two `source` stamps and nothing else — the acceptance's below, and the
+  // booking document's further down — so it changes ATTRIBUTION, not
+  // authorization.
+  //
+  // The tablet used to buy a guardian DEFERRAL here — the walk-in was admitted
+  // with the waiver outstanding and a link was mailed to a parent afterwards.
+  // That mechanism is gone; the consent step is completable by the person at the
+  // desk, so the kiosk refuses like every other rail.
+  //
+  // What survives is the reason the check is a real identity rather than
+  // `data.source`: an acceptance may claim `source: 'kiosk'` only when the
+  // device PROVED it was one (the custom token `unlockKiosk` mints after a
+  // timing-safe PIN comparison), so the one value a caller might want to claim
+  // is the one value they cannot fake into the record. See utils/kioskSession.ts.
+  const isKiosk = await isKioskDeviceForTeam(request, data.teamId)
+  let waiverOutcome: WaiverGateOutcome = await enforceWaiverGate({
+    teamId: data.teamId,
+    activityId: (sessionData.activityId as string | undefined) ?? null,
+    subject: {
+      contactId: callerContactId ?? null,
+      name: `${sanitized.firstname} ${sanitized.lastname}`.trim(),
+      email: sanitized.email,
+    },
+    submissions: parseWaiverSubmissions(data.waiverAcceptances),
+    // The LEDGER's source, and it is evidence rather than a dashboard label: an
+    // acceptance claims `kiosk` only when the device proved it was one. A studio
+    // running the tablet without the PIN lock therefore files its walk-in ticks
+    // as `booking`, which is exactly what we can stand behind about them.
+    source: isKiosk ? 'kiosk' : 'booking',
+    // The three strengths this rail can honestly claim, and they are different
+    // facts: an OTP means the signer received and typed a code sent to THAT
+    // mailbox; a contact session means only that a session was open, which
+    // identifies the CONTACT and not the person at the keyboard; a guest form
+    // means the address was merely typed. The record says which.
+    signerEmailVerifiedBy: data.authenticatedContactId
+      ? 'verified_code'
+      : isAuthenticatedBooking
+        ? 'session'
+        : 'none',
+    // …and the address that strength is ABOUT. Recording `verified_code` beside
+    // the contact's own address would claim a mailbox proof for whoever the
+    // booking is for, which on this rail is routinely somebody else: the parent
+    // typed the code, the child is the subject. null on the session and guest
+    // paths, where the subject's address is the only one there is.
+    signerEmail: verifiedSignerEmail,
+    ip: bookingIp,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale: null,
+    nowMs: waiverNowMs,
   })
 
   // Resolve or create contact
@@ -1031,6 +1124,12 @@ export const bookSession = onCall(async (request) => {
     }
   }
 
+  // The gate ran above the contact write and therefore could not know this id.
+  // Rebinding here — rather than resolving the gate a second time now that the
+  // contact exists — is what keeps ONE answer to "does this person need to
+  // sign".
+  waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
+
   // Add booking to session
   const bookingToken = generateSecureToken()
   const bookingReference = generateBookingReference()
@@ -1054,10 +1153,13 @@ export const bookSession = onCall(async (request) => {
     is_new_contact: isNewContact,
     booking_token: bookingToken,
     booking_reference: bookingReference,
-    // Attribution. Client-supplied but validated against the union — the kiosk
-    // is the one caller that isn't the public booking page, and an unrecognised
-    // value falls back to 'online' rather than persisting junk.
-    source: parseBookingSource(data.source) ?? 'online',
+    // Attribution, and ONLY attribution — it decides what a dashboard says and
+    // nothing else. Client-supplied but validated against the union; an
+    // unrecognised value falls back to 'online' rather than persisting junk. A
+    // VERIFIED kiosk device overrides whatever was typed, so the one value a
+    // caller might want to claim is also the one value they cannot fake into the
+    // record. Nothing on a decision path may read this field.
+    source: isKiosk ? 'kiosk' : (parseBookingSource(data.source) ?? 'online'),
     // Narrowed to the activity's own questions — unknown ids and off-list
     // choices are dropped rather than persisted.
     ...(() => {
@@ -1074,6 +1176,11 @@ export const bookSession = onCall(async (request) => {
       status: 'confirmed' as const,
       fullname: `${sanitized.firstname} ${sanitized.lastname}`,
     }),
+    // Denormalised for the day sheet and the printed manifest only. Absent when
+    // no required waiver applied, which the roster renders as nothing.
+    ...(waiverOutcome.bookingWaiverState
+      ? { waiver_state: waiverOutcome.bookingWaiverState }
+      : {}),
   }
   const db = admin.firestore()
   const bookingRef = db
@@ -1111,6 +1218,20 @@ export const bookSession = onCall(async (request) => {
     const freshSession = await tx.get(sessionRef)
     if (!freshSession.exists) throw new HttpsError('not-found', 'Session not found')
     const bookingsSnap = await tx.get(bookingsRef)
+
+    // The acceptance's READ phase, inside the same read set as the seat. Two
+    // single-document gets per signed waiver, both on documents only this
+    // contact ever writes, so neither adds contention.
+    //
+    // The get of the ACCEPTANCE REF is not optional and is the trap this whole
+    // module exists to disarm: `recordFinanceTransaction`'s `.create()` +
+    // catch-gRPC-6 idiom works only OUTSIDE a transaction. Inside one, a
+    // `tx.create` collision does not throw at the call — it fails the WHOLE
+    // commit as a precondition violation and takes the seat with it. A client
+    // retrying after a network timeout, or a visitor who ticks once and books
+    // Tuesday's class and then Thursday's from the same mounted flow, both
+    // produce the identical derived id.
+    const waiverPlans = await planWaiverLedgerWrites(tx, waiverOutcome.accepts, waiverNowMs)
 
     interface UsableGrant {
       ref: FirebaseFirestore.DocumentReference
@@ -1207,6 +1328,12 @@ export const bookSession = onCall(async (request) => {
     const bookingDocToWrite = { ...bookingDoc, booking_token: effectiveToken }
 
     // ── WRITES ──
+    // The acceptance and the seat commit together or not at all: a signature
+    // that could fail while the seat succeeded is an evidence hole in a
+    // compliance feature, and the alternative placement — beside the partner
+    // ledger and the contact alert after the commit — is the zone where
+    // failures are logged and swallowed.
+    commitWaiverLedgerWrites(tx, waiverPlans)
     if (grant) {
       tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
       tx.set(bookingRef, { ...bookingDocToWrite, credit_grant_id: grant.ref.id, credit_spent: 1 })
@@ -1833,6 +1960,15 @@ export const getBookingDetails = onCall(async (request) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // rebookSession — public, token-based (unauthenticated)
+//
+// TAKES NO WAIVER, deliberately. It MOVES an existing seat and creates no new
+// attendance relationship, and a publish never retroactively invalidates a
+// booking that already committed. Its two callers — the studio's bookings list
+// and the public manage-booking link — have no waiver step to send anyone to,
+// so a refusal here would be a dead end on one and would break a coach's daily
+// workflow on the other, while that same coach can add the same person to the
+// same session directly. Gating it would be stricter on the reversible
+// operation than on the irreversible one. See the census in waivers/gate.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const rebookSession = onCall(async (request) => {

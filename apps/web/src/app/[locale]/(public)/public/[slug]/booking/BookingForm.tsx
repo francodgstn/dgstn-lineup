@@ -55,6 +55,9 @@ import {
 } from '@/components/booking/ReturningSignIn'
 import { StickyBar, activityGradient } from '@/components/booking/StickyBar'
 import { BackButton } from '@/components/booking/BackButton'
+import { WaiverStep } from '@/components/booking/WaiverStep'
+import { useWaiverGate } from '@/hooks/useWaiverGate'
+import { waiverErrorMessage } from '@/lib/waiver'
 import {
   GiftCardRedeemField,
   giftCardCheckoutErrorMessage,
@@ -147,6 +150,18 @@ type Step =
   | 'who'
   | 'returning'
   | 'details'
+  // The consent step. NON-TERMINAL on purpose (unlike 'confirmed'/'waitlisted'):
+  // Back into it must be safe, and booking a second class from the same mounted
+  // flow with the same intentId has to succeed — the ledger reads its own
+  // acceptance ref and skips the create, so a repeat is one row, not an aborted
+  // commit.
+  //
+  // It is a STEP rather than a block inside 'details' because two of this file's
+  // three terminal submits never render 'details' at all: `nextStepAfterSession`
+  // routes a gated class with no guest door to 'returning', and `onVerified`
+  // then books directly. A block inside the details form would be silently
+  // skipped on exactly that path.
+  | 'waiver'
   | 'confirmed'
   // A full class with a queue behind it. 'waitlist' collects what joining needs
   // (nothing, for a signed-in contact); 'waitlisted' is its terminal
@@ -322,6 +337,9 @@ export default function BookingForm({
   // (Which mounts those are is in docs/promo-codes.md → "The mounts", and only
   // there; connect/commitSites.test.ts asserts the tally against the source.)
   const tPromo = useTranslations('Promo')
+  // The public waiver namespace — one key per server refusal reason, shared with
+  // every other surface that can hit one.
+  const tWaiver = useTranslations('Waiver')
   const tSurfaces = useTranslations('PublicSurfaceLinks')
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
@@ -446,6 +464,27 @@ export default function BookingForm({
   // Ref to trigger the shared guest-details form's submit from the sticky bar
   // (the Confirm button lives outside the <form> element).
   const guestFormRef = useRef<GuestDetailsFormHandle>(null)
+
+  // ── The waiver gate ───────────────────────────────────────────────────────
+  // Inert unless the team's public mirror lists a required waiver, so every
+  // tenant on the day this ships pays zero extra round-trips on this path.
+  //
+  // `activityId` is passed because this rail always resolves one: an
+  // activity-scoped waiver that the step could not see would be enforced by the
+  // server and invisible here, which is a refusal with no step behind it.
+  const waiverGate = useWaiverGate({
+    teamId,
+    requiredWaivers: team.required_waivers,
+    activityId: selectedActivity?.id ?? null,
+  })
+  // The submit the consent step is standing in front of. Stashed rather than
+  // re-derived, because the returning-member path has no form to re-read: its
+  // identity is a contact id and a verification code that were resolved once.
+  const [pendingSubmit, setPendingSubmit] = useState<
+    | { kind: 'guest'; values: GuestDetailsValues }
+    | { kind: 'returning'; contactId: string; verificationCodeId: string; contactData: ContactData }
+    | null
+  >(null)
 
   // Load activities + sessions for the resolved team
   useEffect(() => {
@@ -814,6 +853,29 @@ export default function BookingForm({
     setIsSubmitting(true)
     setBookingError(null)
 
+    // THE GUEST DOOR — free and paid both leave through here. (This file's other
+    // terminal submit is `onVerified`; the queue join is deliberately not one.
+    // The census that owns that list is `waivers/surfaces.test.ts`, which
+    // re-derives it from the source.)
+    //
+    // The consent step goes BEFORE the call and not after the refusal:
+    // `createDropInCheckout` would refuse above its contact write and cost
+    // nothing, but `bookSession` has already marked the verification code used
+    // by the time it gates, and unwinding to the email step is capped per hour.
+    if (
+      !(await waiverGate.ensure({
+        email: values.email,
+        firstname: values.firstname,
+        lastname: values.lastname,
+      }))
+    ) {
+      setPendingSubmit({ kind: 'guest', values })
+      setStep('waiver')
+      setIsSubmitting(false)
+      return
+    }
+    const waiverAcceptances = waiverGate.acceptances
+
     // Shared checkout call — drop-in (pay-per-class) and priced-trial bookings
     // both redirect to Stripe Checkout; `trial: true` charges the activity's
     // TRIAL price instead of the drop-in price (`createDropInCheckout`'s
@@ -862,6 +924,10 @@ export default function BookingForm({
             }
           : {}),
         ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
+        // The ticks from the consent step, straight back as the server issued
+        // them. Recorded before Stripe and NOT conditional on payment: they read
+        // the text and ticked, and that is true whether or not the card clears.
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
         // Carried into the PENDING booking doc the checkout creates, so the
         // answers survive the Stripe round-trip without a client re-submit.
         ...(Object.keys(answers).length ? { questionAnswers: answers } : {}),
@@ -901,6 +967,7 @@ export default function BookingForm({
         // Free path only — createDropInCheckout takes no referral code, which is
         // right: a referral link invites a newcomer to their first free booking.
         ...(referral ? { referralCode: referral } : {}),
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
         ...(Object.keys(answers).length ? { questionAnswers: answers } : {}),
       })
       setBookingReference(bookRes.data.bookingReference ?? null)
@@ -924,6 +991,32 @@ export default function BookingForm({
         setBookingError(
           priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale))
         )
+        return
+      }
+      // A WAIVER refusal is a step, not a message: the requirement moved under
+      // the visitor (a `require_resign` publish, a revocation, a policy flipped
+      // on between page load and submit). Re-resolve and re-present rather than
+      // printing a sentence with nothing behind it — and the refusal is thrown
+      // above the contact write on every rail here, so it costs nothing.
+      //
+      // `recover` and not `reset` + `ensure`: the refusal is also proof that the
+      // team's public mirror may be stale-EMPTY, in which case `ensure` returns
+      // "clear" from its `!applies` line and the sentence prints with nothing
+      // behind it — which is the dead end this branch exists to prevent.
+      const waiverMsg = waiverErrorMessage(err, tWaiver)
+      if (waiverMsg) {
+        if (
+          await waiverGate.recover(err, {
+            email: values.email,
+            firstname: values.firstname,
+            lastname: values.lastname,
+          })
+        ) {
+          setPendingSubmit({ kind: 'guest', values })
+          setStep('waiver')
+          return
+        }
+        setBookingError(waiverMsg)
         return
       }
       const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, tShop) : null
@@ -1096,20 +1189,94 @@ export default function BookingForm({
         throw new Error(t('errorNoSubscriptionForActivity'))
       }
     }
+    // THE RETURNING-MEMBER DOOR, AND THE ONE MOST EASILY MISSED — a member on a
+    // gated class NEVER renders `details`, so anything hung off the guest form
+    // is not on this path at all.
+    //
+    // The step goes here, between verification and the call, because
+    // `bookSession` marks the verification code used long before it gates. The
+    // callable never re-checks `used`, so re-calling it with the same codeId
+    // still works — but a surface that unwound to the email step would hit
+    // `verifyBookingCode`, which does refuse a used code, against a
+    // three-per-hour re-request budget. The refusal is the floor, not the plan.
+    if (
+      !(await waiverGate.ensure({
+        authenticatedContactId: contactId,
+        verificationCodeId,
+        email: contactData.email,
+      }))
+    ) {
+      setPendingSubmit({ kind: 'returning', contactId, verificationCodeId, contactData })
+      setStep('waiver')
+      return
+    }
+    const waiverAcceptances = waiverGate.acceptances
+
     const bookSessionFn = httpsCallable<Record<string, unknown>, { bookingReference?: string }>(
       functions,
       'bookSession'
     )
-    const bookRes = await bookSessionFn({
-      teamId,
-      sessionId: selectedSession.id,
-      authenticatedContactId: contactId,
-      verificationCodeId,
-      ...(referral ? { referralCode: referral } : {}),
-    })
-    setBookingReference(bookRes.data.bookingReference ?? null)
-    setConfirmedSession(selectedSession)
-    setStep('confirmed')
+    try {
+      const bookRes = await bookSessionFn({
+        teamId,
+        sessionId: selectedSession.id,
+        authenticatedContactId: contactId,
+        verificationCodeId,
+        ...(referral ? { referralCode: referral } : {}),
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
+      })
+      setBookingReference(bookRes.data.bookingReference ?? null)
+      setConfirmedSession(selectedSession)
+      setStep('confirmed')
+    } catch (err) {
+      // The requirement moved between the step and the call. Re-present rather
+      // than throwing a sentence onto the sign-in screen with no way forward —
+      // this member has already spent their code, and the step is the only exit.
+      // `recover` forces the resolve even when the public mirror lists nothing,
+      // which is precisely when this member would otherwise be stranded.
+      const waiverMsg = waiverErrorMessage(err, tWaiver)
+      if (!waiverMsg) throw err
+      if (
+        await waiverGate.recover(err, {
+          authenticatedContactId: contactId,
+          verificationCodeId,
+          email: contactData.email,
+        })
+      ) {
+        setPendingSubmit({ kind: 'returning', contactId, verificationCodeId, contactData })
+        setStep('waiver')
+        return
+      }
+      throw new Error(waiverMsg)
+    }
+  }
+
+  /**
+   * Leave the consent step by finishing what it interrupted.
+   *
+   * It re-enters the SAME function — `onSubmitGuest` or `onVerified` — rather
+   * than duplicating either call site. That is the whole reason the step stashes
+   * its submit instead of the surface growing a third booking path: two places
+   * that build a `bookSession` payload is how one of them ends up without the
+   * acceptances.
+   */
+  async function resumePendingSubmit() {
+    const pending = pendingSubmit
+    if (!pending) return
+    if (pending.kind === 'guest') {
+      await onSubmitGuest(pending.values)
+      return
+    }
+    setIsSubmitting(true)
+    setBookingError(null)
+    try {
+      await onVerified(pending)
+    } catch (err) {
+      const e = err as { message?: string }
+      setBookingError(e.message || t('errorGeneric'))
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -1196,6 +1363,11 @@ export default function BookingForm({
         } else if (sub === 'returning') {
           setStep('returning')
         } else {
+          // `step=waiver` lands here DELIBERATELY. The consent step has no state
+          // a URL can carry — its ticks and the submit it is standing in front
+          // of are in memory — so restoring it from a pasted or forward-
+          // navigated link would render a Confirm with nothing behind it. The
+          // visitor re-enters the funnel and reaches it again in one step.
           setStep(nextStepAfterSession(activity))
         }
         return
@@ -1312,6 +1484,11 @@ export default function BookingForm({
   function resetToStart() {
     setSelectedSession(null)
     setBookingError(null)
+    // Book-another starts a fresh consent resolution: the next class may be a
+    // different activity with a different scoped waiver, and carrying the old
+    // answer forward would submit a tick for a document that was never shown.
+    setPendingSubmit(null)
+    waiverGate.reset()
     // Must clear, or the step↔URL restore guard keeps treating the flow as
     // terminal and ejects the visitor on their next Back.
     setConfirmedSession(null)
@@ -1365,19 +1542,29 @@ export default function BookingForm({
               location={selectedSession?.location ?? null}
               accentColor={accentColor}
               position={chrome.kind === 'overlay' ? 'container' : 'viewport'}
-              // The queue step submits from the same bar as the booking step —
-              // one Confirm control, two verbs, so the visitor never has to
-              // hunt for a different button in the same layout.
-              showConfirm={step === 'details' || step === 'waitlist'}
+              // The queue step and the consent step submit from the same bar as
+              // the booking step — one Confirm control, three verbs, so the
+              // visitor never has to hunt for a different button in the same
+              // layout.
+              showConfirm={step === 'details' || step === 'waitlist' || step === 'waiver'}
               submitting={isSubmitting}
+              // Greyed, not hidden, until every outstanding waiver is satisfied
+              // by what the visitor did here — the tick, plus the "who is
+              // signing" choice on a waiver flagged for minors.
+              confirmDisabled={step === 'waiver' && !waiverGate.ready}
               confirmLabel={step === 'waitlist' ? t('waitlistJoinCta') : t('ctaConfirm')}
               submittingLabel={step === 'waitlist' ? t('waitlistCtaJoining') : t('ctaBooking')}
               onConfirm={() =>
-                step === 'waitlist' && isAuthenticated
-                  ? // A signed-in contact has no form to submit — their identity
-                    // comes from the session token the callable verifies.
-                    onJoinWaitlist(null)
-                  : guestFormRef.current?.submit()
+                step === 'waiver'
+                  ? // Re-enters the SAME submit the step interrupted. `ensure()`
+                    // is cleared by the local ticks on this second pass, so the
+                    // rail is called with the acceptances attached.
+                    resumePendingSubmit()
+                  : step === 'waitlist' && isAuthenticated
+                    ? // A signed-in contact has no form to submit — their identity
+                      // comes from the session token the callable verifies.
+                      onJoinWaitlist(null)
+                    : guestFormRef.current?.submit()
               }
             />
           ) : null
@@ -2015,6 +2202,36 @@ export default function BookingForm({
         }
         intro={accessIntro}
       />
+    )
+  }
+
+  // ─── Step: Consent ────────────────────────────────────────────────────────
+  // Reached from BOTH terminal submits and rendered identically for each, which
+  // is the point: the guest path and the returning-member path collect the same
+  // signature under the same wording, and the record cannot depend on which door
+  // somebody came through.
+  //
+  // NON-TERMINAL: Back is safe. The submit it interrupted is held in memory, so
+  // going back and returning re-enters it — and booking a second class from the
+  // same mounted flow reuses the same `intentId`, which the ledger collapses to
+  // one row rather than aborting the commit.
+  if (step === 'waiver' && selectedSession) {
+    return withBar(
+      <>
+        <BackButton
+          label={t('back')}
+          onClick={() => {
+            waiverGate.dismiss()
+            setStep(pendingSubmit?.kind === 'returning' ? 'returning' : 'details')
+          }}
+        />
+        <WaiverStep gate={waiverGate} teamName={teamName} disabled={isSubmitting} />
+        {bookingError && (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {bookingError}
+          </div>
+        )}
+      </>
     )
   }
 

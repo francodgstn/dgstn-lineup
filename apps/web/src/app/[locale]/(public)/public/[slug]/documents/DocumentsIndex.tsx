@@ -10,8 +10,6 @@ import { FileText, Link2, ChevronRight } from 'lucide-react'
 import type { DocumentPublicProfile } from '@linyup/shared'
 import { usePublicTeam } from '../PublicTeamProvider'
 
-export const dynamic = 'force-dynamic'
-
 // World-readable summaries only — collection-group query over
 // documents/{id}/public_profile/{id}, never the root `documents` collection.
 function usePublicDocuments(teamId: string) {
@@ -48,7 +46,7 @@ function usePublicDocuments(teamId: string) {
   return state
 }
 
-export default function PublicDocumentsIndexPage() {
+export function DocumentsIndex() {
   const t = useTranslations('Documents')
   const { slug, teamId, team } = usePublicTeam()
   const { loading, docs } = usePublicDocuments(teamId)
