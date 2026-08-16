@@ -240,6 +240,12 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
+  // Marketing opt-out. Honoured by the automation engine and by outreach sends;
+  // DISTINCT from the ESP suppression list (mail_suppressions), which records
+  // bounces/blocks/spam reports and is applied inside the mail service.
+  // Transactional mail (bookings, codes, receipts) is unaffected.
+  email_unsubscribed?: boolean
+
   // Tags — free-form labels attached by automations or manually
   tags?: string[]
 

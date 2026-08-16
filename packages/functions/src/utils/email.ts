@@ -24,6 +24,8 @@ export interface SendEmailOptions {
   attachments?: MailAttachment[]
   tags?: string[]
   idempotencyKey?: string
+  // Bulk mail only — see OutboundMessage.listUnsubscribe.
+  listUnsubscribe?: string
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<SendOutcome> {
