@@ -69,6 +69,7 @@ import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { recordGiftCardReclass } from '../finance/journal'
 import { writeManualPaymentEvent } from '../payments/recordManualPayment'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
+import { assertPluginInstalled } from '../utils/plugins'
 
 /** Fallback ONLY, for a caller with no Checkout Session behind its hold. Every
  *  money path passes `holdMinutes` derived from the session it is guarding
@@ -739,6 +740,11 @@ export const createGiftCardCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORC
   const { teamId } = data
   const locale = data.locale ?? 'en'
 
+  // SELLING is plugin-gated; redeeming is not (utils/plugins.ts). Refused before
+  // the rate-limit spend so a studio that never sells gift cards cannot have its
+  // quota burned by traffic to an offer it does not make.
+  await assertPluginInstalled(teamId, 'gift-cards')
+
   // Own bucket: buying a gift card must never spend the quota a customer needs
   // to REDEEM one from the same NAT'd network (see checkoutRateLimit).
   await checkoutRateLimit(request.rawRequest?.ip, 'gift-buy')
@@ -901,6 +907,10 @@ export const issueGiftCard = onCall(async (request) => {
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
+
+  // Minting is CREATION — gated. (voidGiftCard is not: retiring an outstanding
+  // card is winding DOWN a liability, which an uninstalled studio still needs.)
+  await assertPluginInstalled(teamId, 'gift-cards')
 
   // Same bar as voidGiftCard and recordManualPayment: whoever may destroy a
   // card's value, or record cash, may also create one. Requiring owner here

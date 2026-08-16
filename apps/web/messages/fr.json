@@ -2142,7 +2142,11 @@
     "sectionAvailable": "Disponibles",
     "financeName": "Finances & comptabilité",
     "financeDescription": "Rapports financiers mensuels avec export CSV pour votre comptable, plus un grand livre en partie double léger : plan comptable, écritures automatiques pour chaque paiement, écritures manuelles, balance, compte de résultat et bilan.",
-    "financeNavLabel": "Finances"
+    "financeNavLabel": "Finances",
+    "giftCardsName": "Cartes cadeaux",
+    "giftCardsDescription": "Vendez des cartes cadeaux dans votre boutique et émettez-les à l’accueil. Utilisables pour tout ce que vous facturez.",
+    "promoCodesName": "Codes promo",
+    "promoCodesDescription": "Lancez des campagnes de réduction avec des codes saisis au paiement, avec plafonds d’utilisation et périodes de validité."
   },
   "AiAssistant": {
     "launcherLabel": "Assistant IA",

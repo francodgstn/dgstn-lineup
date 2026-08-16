@@ -3,11 +3,13 @@
 // (saas-billing) so teardown logic is never duplicated.
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
+import { HttpsError } from 'firebase-functions/v2/https'
 import {
   TEAMS_COLLECTION,
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
+  INSTALLED_PLUGINS_SUBCOLLECTION,
 } from '@linyup/shared'
 
 /**
@@ -29,6 +31,46 @@ export async function touchTeamForSurfaceRecompute(teamId: string): Promise<void
     .collection(TEAMS_COLLECTION)
     .doc(teamId)
     .set({ surfaces_updated_at: FieldValue.serverTimestamp() }, { merge: true })
+}
+
+/** Is a plugin installed AND active for this team? */
+export async function pluginIsActive(teamId: string, pluginId: string): Promise<boolean> {
+  const snap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+    .doc(pluginId)
+    .get()
+  return snap.exists && snap.data()?.status === 'active'
+}
+
+/**
+ * THE install gate for a plugin-delivered capability. One helper, so a new entry
+ * point is a one-line addition rather than a re-derivation of what "installed"
+ * means.
+ *
+ * ── WHERE IT BELONGS, AND WHERE IT MUST NOT GO ──────────────────────────────
+ * On CREATION — selling a gift card, minting one, creating a promo code. NEVER
+ * on consuming what already exists:
+ *
+ *   • An outstanding gift card is money the studio has ALREADY TAKEN. Refusing
+ *     to redeem it because somebody unticked a plugin would be the studio
+ *     keeping a customer's money and giving nothing back.
+ *   • A live promo code caught mid-checkout belongs to a visitor who did
+ *     nothing wrong. This matches the `requirePlan` gate it replaces, which was
+ *     creation-only for the same reason.
+ *
+ * `packages/functions/src/connect/pluginGate.test.ts` re-derives the call sites
+ * from the source, so a new creation path that forgets this fails the build,
+ * and a redemption path that adds it fails too.
+ */
+export async function assertPluginInstalled(teamId: string, pluginId: string): Promise<void> {
+  if (await pluginIsActive(teamId, pluginId)) return
+  throw new HttpsError('failed-precondition', `The ${pluginId} plugin is not installed`, {
+    reason: 'plugin_not_installed',
+    pluginId,
+  })
 }
 
 /**

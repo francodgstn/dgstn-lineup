@@ -321,7 +321,9 @@ export default function PaymentsDashboardPage() {
           {hasAggregatorType && (
             <TabsTrigger value="partnerVisits">{t('partnerVisitsHeading')}</TabsTrigger>
           )}
-          <TabsTrigger value="giftCards">{t('giftCardsHeading')}</TabsTrigger>
+          {isInstalled('gift-cards') && (
+            <TabsTrigger value="giftCards">{t('giftCardsHeading')}</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="payments" className="space-y-6">
@@ -477,11 +479,18 @@ export default function PaymentsDashboardPage() {
           </TabsContent>
         )}
 
-        {/* Gift cards (E3) — settings + recent cards. Always a tab so a manager
-            can find the toggle even before the first card is ever sold. */}
-        <TabsContent value="giftCards">
-          <GiftCardsSection showHeading={false} />
-        </TabsContent>
+        {/* Gift cards — settings + recent cards, behind the gift-cards plugin
+            (Wave 3.5). Being ungated was the point: every new studio met a
+            gift-card tab before it had a member. Discovery moved to the plugin
+            marketplace card, which is a better place to explain it anyway.
+
+            Uninstalling hides SELLING, never redeeming: an outstanding card is
+            money already taken (see utils/plugins.ts). */}
+        {isInstalled('gift-cards') && (
+          <TabsContent value="giftCards">
+            <GiftCardsSection showHeading={false} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {teamId && (

@@ -2398,6 +2398,11 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     ...(profile.customFieldDefinitions?.length ? [{ id: 'custom-fields' }] : []),
     ...(profile.contactGroups?.length ? [{ id: 'contact-groups' }] : []),
     ...(profile.forms?.length ? [{ id: 'custom-forms' }] : []),
+    // Gift cards are install-gated (Wave 3.5), and syncTeamPublicProfile refuses
+    // to mirror `giftCards.enabled` without the plugin — so a lead tenant with
+    // gift cards configured needs it, or the offer silently vanishes from the
+    // shop mid prospect demo.
+    ...(profile.giftCards?.enabled ? [{ id: 'gift-cards' }] : []),
     // NOT 'documents' — a default feature on every plan, not a plugin. Its
     // signup-consent selection goes to teams/{teamId}/settings/documents below.
   ]

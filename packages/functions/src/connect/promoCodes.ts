@@ -194,8 +194,8 @@ import {
   type SaasPlan,
 } from '@linyup/shared'
 import { generateSecureToken, sha256Hex } from '../utils/crypto'
+import { assertPluginInstalled } from '../utils/plugins'
 import { assertManager } from './access'
-import { requirePlan } from '../utils/plan'
 import { checkoutRateLimit, requireChargeableAmountFromMajor } from './checkout'
 import { giftCardCurrency } from './giftCards'
 import { loadCoursePricing } from './coursePricing'
@@ -2280,9 +2280,11 @@ async function loadPreviewRail(params: {
 // the fragile surface every coded instrument in this codebase has avoided
 // (`gift_cards` and `referral_codes` both deny client writes outright).
 //
-// THE PLAN GATE IS ON CREATION ONLY. A team downgraded to free keeps its live
-// codes previewable, reservable, committable and releasable — `createPromoCode`
-// is the only function in this file that calls `requirePlan`.
+// THE GATE IS ON CREATION ONLY. A team that downgrades, or uninstalls the
+// promo-codes plugin, keeps its live codes previewable, reservable, committable
+// and releasable — a visitor part-way through a checkout did nothing wrong, and
+// a studio winding a campaign down still needs to manage what it issued.
+// `createPromoCode` is the only function in this file that gates at all.
 
 const MAX_LABEL_LEN = 80
 // Shared with the admin form (@linyup/shared) rather than declared twice: the
@@ -2490,10 +2492,14 @@ export const createPromoCode = onCall(async (request) => {
   const data = (request.data ?? {}) as Record<string, unknown> & { teamId?: string }
   const teamId = requireTeamId(data)
   await requireAuthedManager(request, teamId)
-  // CREATION ONLY — nothing else in this file calls requirePlan. Its two
-  // refusals (`plan_required` / `plan_inactive`) never reach a public surface
-  // because no public caller gates on the plan.
-  await requirePlan(teamId, 'studio')
+  // CREATION ONLY, and ONE door. The plan requirement moved into the plugin
+  // manifest's `minPlan: 'studio'`, so `requirePlan(teamId, 'studio')` is gone
+  // from here: stacking it on the install gate would mean a Studio user could be
+  // refused by either and get a different explanation each time. Install state
+  // is the single runtime answer, matching every other plugin-delivered feature.
+  //
+  // PROMO_CODE_LIMITS survives as the ceiling (0/0/20/100) — a cap, not a door.
+  await assertPluginInstalled(teamId, 'promo-codes')
   await assertUnderActiveCap(teamId)
 
   const db = admin.firestore()

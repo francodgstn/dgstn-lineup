@@ -2142,7 +2142,11 @@
     "sectionAvailable": "Verfügbar",
     "financeName": "Finanzen & Buchhaltung",
     "financeDescription": "Monatliche Finanzberichte mit CSV-Export für die Buchhaltung, plus ein schlankes doppeltes Hauptbuch: Kontenplan, automatische Buchungen für jede Zahlung, manuelle Buchungen, Saldenliste, Erfolgsrechnung und Bilanz.",
-    "financeNavLabel": "Finanzen"
+    "financeNavLabel": "Finanzen",
+    "giftCardsName": "Geschenkkarten",
+    "giftCardsDescription": "Verkaufe Geschenkkarten in deinem Shop und stelle sie am Empfang aus. Einlösbar für alles, was du verrechnest.",
+    "promoCodesName": "Aktionscodes",
+    "promoCodesDescription": "Führe Rabattaktionen mit Codes durch, die deine Kundinnen und Kunden beim Bezahlen eingeben — mit Nutzungslimit und Gültigkeitszeitraum."
   },
   "AiAssistant": {
     "launcherLabel": "KI-Assistent",

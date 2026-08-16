@@ -205,6 +205,11 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/products`)
     .get()
   const productsPluginActive = productsPluginSnap.exists && productsPluginSnap.data()?.status === 'active'
+  const giftCardsPluginSnap = await db
+    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/gift-cards`)
+    .get()
+  const giftCardsPluginActive =
+    giftCardsPluginSnap.exists && giftCardsPluginSnap.data()?.status === 'active'
   const onlineCoursesActive =
     onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active'
   const connectEnabled =
@@ -283,7 +288,15 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // Gift cards (E3): public-safe config only (enabled + purchasable face values —
     // never balances/codes) so the public shop can offer them without reading the
     // private team doc. Mirrors teams/{id}.settings.giftCards.
+    // Gated on the gift-cards PLUGIN as well as the setting: uninstalling must
+    // take the offer off the public shop, and the mirror is the only thing the
+    // shop reads. This recomputes on install/uninstall because
+    // onInstalledPluginStatusChange touches the team doc.
+    //
+    // SELLING only. Redeeming an already-issued card does not consult this — it
+    // is money the studio has taken, and a plugin toggle must not void it.
     giftCards: (() => {
+      if (!giftCardsPluginActive) return { enabled: false, amounts: [] }
       const raw = (data.settings as { giftCards?: GiftCardSettings } | undefined)?.giftCards
       return raw?.enabled === true && Array.isArray(raw.amounts)
         ? { enabled: true, amounts: raw.amounts }

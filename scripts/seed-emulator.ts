@@ -1823,6 +1823,26 @@ async function seedTeam(opts: {
   // ── gift cards (E3) — one pre-minted active card, studio tier only ─────────
   // Mirrors what mintGiftCard writes on a real purchase, minus payment_intent_id
   // (there was no real Stripe checkout behind this one).
+  //
+  // The PLUGIN must be installed alongside the data (Wave 3.5): gift cards are
+  // install-gated now, and syncTeamPublicProfile refuses to mirror
+  // `giftCards.enabled` without it — so seeding the card without the plugin
+  // gives a demo tenant an invisible gift-card offer and an empty Payments tab.
+  if (plan === 'studio') {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('installed_plugins')
+      .doc('gift-cards')
+      .set({
+        pluginId: 'gift-cards',
+        teamId,
+        installedAt: ts(daysFromNow(-30)),
+        installedBy: uid,
+        status: 'active',
+        config: {},
+      })
+  }
   if (plan === 'studio') {
     await db
       .collection('teams')

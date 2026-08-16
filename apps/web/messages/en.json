@@ -2142,7 +2142,11 @@
     "sectionAvailable": "Available",
     "financeName": "Finance & Accounting",
     "financeDescription": "Monthly financial reports with CSV export for your accountant, plus a lightweight double-entry ledger: chart of accounts, automatic postings for every payment, manual entries, trial balance, P&L and balance sheet.",
-    "financeNavLabel": "Finance"
+    "financeNavLabel": "Finance",
+    "giftCardsName": "Gift Cards",
+    "giftCardsDescription": "Sell gift cards in your shop and mint them at the desk. Redeemable against anything you charge for.",
+    "promoCodesName": "Promo Codes",
+    "promoCodesDescription": "Run discount campaigns with codes your clients enter at checkout, with usage caps and validity windows."
   },
   "AiAssistant": {
     "launcherLabel": "AI assistant",

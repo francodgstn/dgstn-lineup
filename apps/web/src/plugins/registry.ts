@@ -20,6 +20,8 @@ import { customFormsManifest } from './custom-forms/manifest'
 // button that means nothing — and, on Free and Coach, one that the rules refuse.
 import { kioskManifest } from './kiosk/manifest'
 import { financeManifest } from './finance/manifest'
+import { giftCardsManifest } from './gift-cards/manifest'
+import { promoCodesManifest } from './promo-codes/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiAssistantManifest,
@@ -36,6 +38,8 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   customFormsManifest,
   kioskManifest,
   financeManifest,
+  giftCardsManifest,
+  promoCodesManifest,
 ]
 
 /** All plugin-contributed event type IDs (built-in type IDs from installed plugins). */

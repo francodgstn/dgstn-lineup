@@ -2142,7 +2142,11 @@
     "sectionAvailable": "Disponibili",
     "financeName": "Finanze & contabilità",
     "financeDescription": "Report finanziari mensili con esportazione CSV per il commercialista, più una contabilità in partita doppia essenziale: piano dei conti, registrazioni automatiche per ogni pagamento, registrazioni manuali, bilancio di verifica, conto economico e stato patrimoniale.",
-    "financeNavLabel": "Finanze"
+    "financeNavLabel": "Finanze",
+    "giftCardsName": "Carte regalo",
+    "giftCardsDescription": "Vendi carte regalo nel tuo shop ed emettile alla reception. Utilizzabili per tutto ciò che fatturi.",
+    "promoCodesName": "Codici promozionali",
+    "promoCodesDescription": "Lancia campagne di sconto con codici inseriti al pagamento, con limiti di utilizzo e periodi di validità."
   },
   "AiAssistant": {
     "launcherLabel": "Assistente IA",
