@@ -160,3 +160,39 @@ Three things to fix, and the second is arguably the most important:
   session-close event beats the retry's own hold write; the members-only door
   card dropping its struck-through price once a promo beats the member benefit
   (display only); one under-qualified `only` comment in `staffBooking.ts`.
+
+---
+
+## Feature requests, queued (not defects)
+
+Recorded here for the same reason as the defects above — the follow-up chips are
+session-scoped and do not survive a restart.
+
+### Link one document from another in the editor
+
+Requested 2026-08-16. From the "/" slash menu and the toolbar, link another
+document inside a document's body.
+
+**Smaller than it sounds:** `apps/web/src/components/RichTextEditor.tsx` is TipTap
+3.26 with a working slash menu (`components/editor/SlashCommand.tsx`), a toolbar,
+and `@tiptap/suggestion` already a dependency; the server sanitizer already permits
+`a` with `href`/`target`/`rel`. A new slash item is one array entry.
+
+**Store a reference, never the rendered URL.** Both the team slug and the document
+slug are editable, so a stored URL breaks silently — inside a legal document.
+Validate at publish that every linked document is actually published and public,
+or a visitor follows a link mid-consent into a 404.
+
+**The decision that matters — a live link breaks a waiver version's immutability.**
+A published waiver freezes `bodyHtml` and stores a `bodyHash`, which is what makes
+an acceptance mean *this person agreed to THIS EXACT TEXT*. A link to "our
+cancellation policy" ends that: the studio edits the policy in June, the March
+signature still verifies, and what was agreed has silently changed.
+
+**Franco's decision: pin the link to the target's version as of publish**, so the
+pinned reference travels inside the frozen snapshot and a reader sees the document
+as it was. Render the target's title with an "as published" affordance, and a route
+to the current version. Open question recorded for whoever builds it: what
+non-waiver documents do, where there is no snapshot and a live link is the natural
+behaviour — one mechanism differing by kind is fine if the difference is visible to
+the author; two mechanisms are not.
