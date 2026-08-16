@@ -15,18 +15,55 @@ every time something ships: on 2026-08-16 two entries shipped and were deleted
 that points at this file names its entry by title
 (`apps/web/src/lib/publicQueryError.ts`); keep it that way.
 
-The appointment-picker entry was found during manual testing of the local stack
-on **2026-08-15**, against commit `129a8c9` (Wave 3 Phase 3); the Stripe ones
-while migrating the Stripe reads on **2026-08-16**. All are **pre-existing**, and
-all survived a full static pass (typecheck, tests, lint, adversarial review).
-They are integration-boundary defects: the code is correct about itself and wrong
-about the outside world, which is the category automated verification is
-structurally blind to.
+The Stripe entries were found while migrating the Stripe reads on
+**2026-08-16**; the appointment-picker one during manual testing of the local
+stack on **2026-08-15**, against commit `129a8c9` (Wave 3 Phase 3). All were
+**pre-existing**, and all survived a full static pass (typecheck, tests, lint,
+adversarial review). They are integration-boundary defects: the code is correct
+about itself and wrong about the outside world, which is the category automated
+verification is structurally blind to.
 
 The Space "My courses" 403 shipped on **2026-08-16** and was deleted from this
 file per the rule above. The fix lives in the `{path=**}/purchases` block in
 `firestore.rules` and is held in place by
 `packages/functions/src/connect/coursePurchaseAccess.test.ts`.
+
+"The appointment picker ignores the signed-in contact session" shipped on
+**2026-08-16** and was deleted too. The picker now derives ONE `Caller`
+(`sessionCaller ?? verified ?? GUEST` — the same precedence
+`resolveAppointmentCaller` uses), and every screen, price and payload comes off
+it; see `docs/appointments.md` → "Who the picker is booking for". Its three
+severity questions were answered against the running emulator before the fix and
+**none was a money bug**: the contact session is a Firebase custom-token sign-in,
+so its ID token rides on every callable the page makes regardless of what the
+component knows, and the server was already resolving the member. The pricing
+divergence was DISPLAY only (the member saw the guest figure and was charged the
+member one); the `new_contacts` promo was refused at Apply time by
+`previewPromoCode` and again inside the reserve; the per-contact cap keys on the
+session contact's own normalised email and never reset. What the investigation
+DID turn up, and what made the fix worth its size, was not in the entry: a
+**covered** member was routed into `createAppointmentCheckout`, refused
+`{ reason: 'covered' }` by design, and told *"This slot is no longer available."*
+— a hard stop for the studio's own subscribers — and a signed-in contact filling
+the guest form for someone else had the appointment booked under themselves.
+Held in place by `packages/functions/src/appointments/callerIdentity.test.ts` and
+the surface census in
+`packages/functions/src/auth/publicSurfaceIdentity.test.ts`.
+
+**What that census turned up and did NOT fix**, recorded here rather than left
+inside a deleted entry:
+
+- **`/public/{slug}/contact-update` still runs its own OTP.** It proves the
+  visitor with `sendContactVerificationCode` + `verifyContactCode` against the
+  `?contactId=` in the mailed link, and does not accept a contact session — so a
+  contact who is already signed in is made to fetch a code to correct their own
+  phone number. Closing it is a change to `verifyContactCode`'s caller
+  resolution, not to the surface, which is why it was left alone.
+- **`trial-booking/TrialBookingForm.tsx` is reachable from no route.**
+  `trial-booking/page.tsx` is a redirect shim to `/booking`, and nothing else
+  imports the component — 336 lines of dead surface, including the failed-read
+  defect recorded at the bottom of this file, which therefore cannot be reached
+  by a visitor today. Deleting it would settle that entry; nobody has.
 
 "Stripe Connect reads a pre-Basil object model" shipped on **2026-08-16** and was
 likewise deleted. Every migrated field now reads through
@@ -158,38 +195,6 @@ sandbox, staging or production.**
 
 ---
 
-## 5. The appointment picker ignores the signed-in contact session
-
-**Severity: medium-high** (pending the pricing question below).
-
-`PublicContactAuthProvider` wraps **every** `/public/{slug}/*` route from
-`layout.tsx`, so a signed-in contact's session is in context on the appointments
-page. `AppointmentPicker.tsx` references `usePublicContactAuth` **zero times** —
-it is the only public surface that does not. Booking, shop, signup, site, kiosk,
-forms and Space all consume it (`BookingForm.tsx` does so at its component top).
-
-Symptom: an already-signed-in contact opening the appointments flow is asked for
-contact details or to sign in again.
-
-**Unanswered questions that decide the severity** — answer them, do not assume:
-
-1. Does a member with an appointments `memberBenefit` get quoted the **guest
-   price**? The rail builds a client snapshot and calls `resolvePaymentOptions`;
-   an unrecognised caller may not resolve their coverage. Determine whether the
-   guest path re-matches by email later (self-correcting) or whether they are
-   genuinely charged wrongly.
-2. Can an existing member take a `new_contacts`-scoped promo code here? That is
-   the laundering hole already closed on the drop-in rail via
-   `resolvePromoCaller`. Check whether the server-side resolver saves us.
-3. Does the per-contact promo cap reset for an unrecognised caller?
-
-Coordination: Wave 3 Phase 4 adds a waiver gate to this same rail and also needs
-contact identity — see `docs/wave3-phase4-spec.md` §7.3, which documents the
-picker's three terminal submits including an `autobooking` path that books
-automatically on verification.
-
----
-
 ## Smaller, unfiled
 
 - **`stripe:listen` is unusable in a worktree.** The npm script hardcodes
@@ -217,6 +222,24 @@ Left open deliberately: closing it means threading an error state through the
 whole trial flow, which is more than the surrounding sweep was scoped for. It is
 the one acknowledged exception to rule 1 in `apps/web/src/lib/publicQueryError.ts`,
 and that header points here rather than quietly weakening the rule.
+
+**Update, 2026-08-16 (from the public-surface identity census):** no visitor can
+reach this component. `trial-booking/page.tsx` redirects to `/booking` with the
+query intact, and nothing imports `TrialBookingForm`. So the exception above is
+currently an exception to nothing — which makes deleting the file the cheapest
+close, not threading the error state. Verify the redirect before acting on that.
+
+### A priced appointment at a studio without Stripe Connect says the slot is gone
+
+`AppointmentPicker.tsx` — a paying visitor at a studio whose Connect account is
+not onboarded is told **"This slot is no longer available."** The slot is fine;
+the studio simply cannot take money yet. Same false-sentence dead end that was
+fixed for covered members in the same file (2026-08-16), one refusal reason over.
+
+Pre-existing, and deliberately out of scope for that change: the honest fix needs
+a decision about what a visitor should be offered when a studio cannot charge —
+book anyway and settle at the door, or say plainly that online payment is not set
+up. That is Franco's call, not a mechanical repair.
 
 ## Feature requests, queued (not defects)
 

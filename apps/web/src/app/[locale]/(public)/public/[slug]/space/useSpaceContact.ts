@@ -1,39 +1,20 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION } from '@linyup/shared'
-import type { Contact } from '@linyup/shared'
-import { reportPublicLoadFailure } from '@/lib/publicQueryError'
-import { useSpaceAuth } from './SpaceAuthProvider'
+export { usePublicContactRecord as useSpaceContact } from '../usePublicContactRecord'
 
 // The session `contact` is minimal (id/name/subscription_type_id). Modules that
 // need the full record (membership, profile) read the own contact doc — permitted
 // by the `isSelfContact` Firestore rule. Cached + shared across modules.
+//
+// THE READ ITSELF NOW LIVES ONE LEVEL UP, in `usePublicContactRecord`, because
+// Space stopped being the only surface that needs it: the appointment picker
+// prices a member off what they hold, and the session's frozen
+// `subscription_type_id` is not that. Two copies of this query would have been
+// two cache keys and two answers to "what does this contact hold" on the same
+// page. This file stays as the name Space already calls it by.
 //
 // EVERY consumer must read `isError`, not just `data`: this doc is where a
 // member's subscriptions and credits live, so a failed read means "we don't know
 // what you hold", which is NOT the same claim as "you hold nothing" — and it also
 // silently shrinks the subscription-tier courses in "My courses". Both SpaceHome
 // and AccountHome surface it; see `lib/publicQueryError.ts`.
-export function useSpaceContact() {
-  const { contact, isAuthenticated } = useSpaceAuth()
-  const contactId = contact?.id ?? null
-
-  return useQuery<Contact | null>({
-    queryKey: ['space-contact', contactId],
-    enabled: isAuthenticated && !!contactId,
-    queryFn: async () => {
-      try {
-        const snap = await getDoc(doc(db, CONTACTS_COLLECTION, contactId!))
-        return snap.exists() ? ({ ...snap.data(), id: snap.id } as Contact) : null
-      } catch (err: unknown) {
-        // Log and rethrow: the trace is for the developer, `isError` for the
-        // visitor. Neither substitutes for the other.
-        reportPublicLoadFailure('space/contact', err)
-        throw err
-      }
-    },
-  })
-}

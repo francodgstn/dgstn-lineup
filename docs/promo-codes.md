@@ -1433,7 +1433,7 @@ cannot silently fall behind a new mount.
 |---|---|---|
 | Booking form, drop-in step | above `GiftCardRedeemField`, gated **`willCharge && !isPricedTrial`** | modifier above tender, in the UI as in the maths |
 | Shop buy modal | above `GiftCardRedeemField` | products **and** courses; the `checkoutKey` reset effect clears the code when the item changes |
-| Appointment picker | the **guest** screen (input + chip) **and** the member-pay screen (chip only, `applied` branch) | the applied code lives in `SlotBookingForm`'s state and survives the sign-in offer, so `onVerifiedAppointment`'s resolution already carries it — the INPUT stays guest-only, because mounting it after the member price is computed would quote a code against an anonymous caller. The second mount exists so a pay-time reserve refusal on the member screen can be *removed*: without it the visitor pressed a button that could not succeed, and the sale was lost to a discount that no longer existed |
+| Appointment picker | the **guest** screen and the **member** screen, input + chip on both | the second mount exists so a pay-time reserve refusal on the member screen can be *removed*: without it the visitor pressed a button that could not succeed, and the sale was lost to a discount that no longer existed. **An applied code does NOT survive an identity change** — `previewPromoCode` resolves ITS caller from a contact session and nothing else, so a code quoted anonymously on the guest screen and carried onto a member screen is re-priced by the client for an audience the server judges differently, and an audience-restricted code shows as applied on a screen whose checkout is obliged to refuse it. The picker's one identity rule retires the code with the identity that applied it and says so (`AppointmentBooking.identityChangedPromo`). Because nothing can be carried, the member screen shows the input to every recognised caller rather than a chip-only variant: whatever is there was applied by that caller, under the same advisory-preview contract the guest screen has always had, recovered at pay time by `promoCheckoutErrorMessage` / `priceChangedMessage` |
 | **Not**: waitlist claim | — | see "The waitlist claim takes no code" |
 | **Not**: priced trial door | — | `willCharge` is literally `(dropInAvailable && guestPath !== 'trial') \|\| isPricedTrial`, so it is TRUE on the trial door — the one door a promo is guaranteed to fail on. Rendering the field there would show a newcomer a code box that must fail, on the acquisition surface, while the same person taking the *dearer* drop-in door gets the discount |
 | **Not**: trial booking, kiosk walk-in, Space | — | `bookSession` (no charge path) and entitlement display |
@@ -1448,8 +1448,12 @@ independent computations do not become exclusive by assertion:
 > −10 row. The breakdown renders 40 / −8 / −10 / **22**, and Stripe charges **30**.
 
 `BookingForm`'s `dropInMemberPrice` became a derivation of one `dropInQuote`,
-`ShopHome` grew one `checkoutQuote`, and `AppointmentPicker` grew one
-`quote(held, authenticated)` that both screens call.
+`ShopHome` grew one `checkoutQuote`, and `AppointmentPicker` grew one `quote(caller)`
+that every screen calls. That argument used to be `(held, authenticated)`, supplied
+per screen — which is how the picker managed to compute one price correctly and
+still show a signed-in member the guest's: it passed `([], false)` on the screen a
+member was looking at, because nothing in the file knew the member was there. It now
+takes the DERIVED caller, so "which price" and "whose price" are the same question.
 
 ### The preview callable
 

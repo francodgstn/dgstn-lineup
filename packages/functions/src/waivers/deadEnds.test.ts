@@ -139,12 +139,44 @@ describe('A STALE-EMPTY MIRROR IS RECOVERABLE — the server outranks the mirror
     // Every `ensure(` left in these files is a HAPPY-path interposition; the
     // recovery ones are `recover(`. If a recovery branch is ever written back as
     // reset+ensure, the stale-empty case silently becomes a dead end again.
+    //
+    // The numbers count HAPPY-PATH ENTRIES into a terminal submit, which is not
+    // quite the same as counting submits: a submit reachable from two places
+    // needs a gate in front of each, or the second way in is ungated.
     const bookingForm = code(web(BOOKING_SURFACES[0]))
-    assert.equal(count(bookingForm, 'waiverGate.ensure('), 2, 'one per terminal submit, no more')
+    assert.equal(count(bookingForm, 'waiverGate.ensure('), 2, 'one per entry, no more')
     assert.equal(count(bookingForm, 'waiverGate.reset()'), 1, 'only the flow reset survives')
+    // The picker has three terminal submits and FOUR ways into them:
+    // `onSubmitGuest`, `onMemberPay`, and two entries to `runMemberFreeBooking`
+    // — `onVerifiedAppointment`'s autobooking path (a covered member's code has
+    // just verified) and `onMemberBook` (a signed-in contact pressing Confirm on
+    // the member screen, which has no verification moment to hang off). The
+    // second entry arrived with the contact-session fix; before it, that Confirm
+    // would have booked with no consent step in front of it.
     const picker = code(web(BOOKING_SURFACES[1]))
-    assert.equal(count(picker, 'waiverGate.ensure('), 3, 'one per terminal submit, no more')
-    assert.equal(count(picker, 'waiverGate.reset()'), 0)
+    assert.equal(count(picker, 'waiverGate.ensure('), 4, 'one per entry, no more')
+
+    // ONE `reset()` on the picker, and it is the IDENTITY TEARDOWN, not a
+    // recovery. The two are opposites and the count alone cannot tell them
+    // apart — which is why this used to assert 0 and would have blocked the
+    // teardown from ever being written correctly.
+    //   • recovery-as-reset is the hazard: it re-asks `ensure()`, gets the same
+    //     "clear" from a stale-empty mirror, and restores the dead end.
+    //   • the teardown is required: on an identity change, consent gathered for
+    //     the person who just stopped being signed in must not survive into the
+    //     next `ensure()`. `dismiss()` only hides the step and keeps `items`,
+    //     `ticks` and `choices` — on an immutable acceptance ledger, reusing
+    //     them would attribute one person's consent to another.
+    assert.equal(count(picker, 'waiverGate.reset()'), 1, 'the identity teardown, and only it')
+
+    // The distinction, enforced rather than asserted: a reset that is followed
+    // closely by an `ensure(` IS the recovery shape this describes.
+    const resetAt = picker.indexOf('waiverGate.reset()')
+    const after = picker.slice(resetAt, resetAt + 400)
+    assert.ok(
+      !after.includes('waiverGate.ensure('),
+      'a reset() followed by ensure() is a recovery branch — use recover() instead'
+    )
   })
 })
 

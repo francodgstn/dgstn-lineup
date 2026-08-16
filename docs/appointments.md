@@ -122,6 +122,89 @@ both kinds**: an appointment cancel flips the session to `status: 'cancelled'`
 (unpublishing it via the sync gate) and frees the provider's time, which
 reappears in `listAvailability`.
 
+### Who the picker is booking for — one derived caller, the server's precedence
+
+`resolveAppointmentCaller` (`appointments/booking.ts`) accepts **three** proofs and
+checks them in trust order — **contact session → `authenticatedContactId` +
+`verificationCodeId` → typed `contactDetails`** — returning from the first that
+answers. A contact session therefore wins over everything in the request body, and
+this is not a subtlety the client may skip: `PublicContactAuthProvider` is mounted
+at the team root, so the session's ID token is attached by `httpsCallable` to every
+callable the picker makes, whether or not the picker knows it exists.
+
+`AppointmentPicker.tsx` mirrors that order in a `Caller` derived on every render
+(`sessionCaller ?? verified ?? GUEST`), and every screen, price and payload comes
+off it:
+
+| Caller | Screen | Body identity | Price snapshot |
+|---|---|---|---|
+| `session` (signed in anywhere under `/public/{slug}`) | member screen — name, price or "included", one CTA | **none** — the token is the proof | the contact's held type |
+| `code` (took the sign-in offer on the guest form) | member screen, or the `autobooking` spinner when covered | `authenticatedContactId` + `verificationCodeId` | `held_subscription_type_ids` from `verifyBookingCode` |
+| `guest` | guest details form + the sign-in offer | `contactDetails` | `GUEST_SNAPSHOT` |
+
+**A signed-in contact is never shown the guest form or the sign-in offer**, because
+the server would discard what they typed and would ignore a second sign-in. Until
+2026-08-16 this file read the session zero times, and all three of the consequences
+were live: a member was quoted the guest price (display only — the server charged
+the member price), a member typing a partner's details had the appointment booked
+under themselves, and — the real one — a **covered** member was routed into
+`createAppointmentCheckout`, which refuses `{ reason: 'covered' }` by design, and
+the picker rendered that as *"This slot is no longer available."* Both paid submits
+now answer a `covered` refusal by booking through the free door.
+
+Free-vs-paid routing comes from the resolved quote (`owesPayment`), never from
+"does this duration have a price" — that substitution is what sent a covered member
+to the paid door in the first place. The three terminal submits are unchanged in
+number and are the census `waivers/surfaces.test.ts` counts: `onSubmitGuest`,
+`runMemberFreeBooking` (entered from `onVerifiedAppointment`'s autobooking path and
+from the member screen's Confirm) and `onMemberPay`.
+
+#### The caller can move while the step is open
+
+Deriving the caller is half of it; the other half is that the derivation can
+CHANGE mid-flow, because the corner sign-in pill belongs to the provider that
+wraps this page. Everything the screen has already said or captured was quoted
+for whoever was there before, so one rule retires all of it:
+
+| What | How it retires | What it did before |
+|---|---|---|
+| the accepted `price_changed` figure | `useAcceptedPrice` scope (shared) | a guest's 40.00 re-sent on a member screen quoting 24.00 |
+| the server's `payment_required` figure | read through `identityKey` | — |
+| **the error sentence** | read through `identityKey` (it NAMES a figure) | "…the price without the code is CHF 40.00" rendered verbatim above a member's 24.00 button; only the OTP arm cleared it, the contact-session arm had nobody |
+| **the captured submit** (`pendingBook`) | stamped with its identity; a foreign one is dropped and the consent screen dismissed | a resume replayed `pending.caller` / `pending.values.email` from before against a price, body identity and acceptances re-derived after |
+| **the applied promo** | dropped, and said out loud | a code previewed anonymously on the guest screen was carried onto the member screen and re-priced there for an audience the server judges differently |
+
+The sentences are `AppointmentBooking.identityChanged` /
+`identityChangedPromo`. Because a carried code is now impossible, the member
+screen's `PromoCodeField` renders its INPUT for every recognised caller (it used
+to be `session`-only): whatever is on that screen was applied by that caller,
+under the same advisory-preview contract the guest screen has always had.
+
+#### The member's price is re-resolved, not read off the session
+
+The persisted contact session is a **seven-day snapshot** — it carries the one
+`subscription_type_id` the contact had at sign-in and is never refreshed. On
+other surfaces that is a label; here it is the price, and its divergence points
+the **unsafe** way: a lapsed or changed subscription still reads as held, the
+screen quotes the benefit, and `loadContactPaymentSnapshot` charges the real
+figure. `assertQuotedAmount` does not catch it either — it returns on its first
+line unless the checkout carried a promo code.
+
+So the picker re-resolves the held set on load from the contact's own document
+(`usePublicContactRecord`, the `isSelfContact` get Space already makes) through
+the shared `heldSubscriptionTypeIds` union — the same one the OTP path gets from
+`verifyBookingCode`. The frozen value survives only as the fallback for a read
+that FAILED, and the member CTA + code field wait for the answer rather than
+offering a figure derived from the stale one. On the `payment_required` race
+(client resolved free, server did not) the CTA turns from Confirm into Pay, and
+`AppointmentBooking.coverageEnded` says why.
+
+**The census of which public surfaces read the session at all** —
+and, for the ones that do not, what they use instead — is
+`packages/functions/src/auth/publicSurfaceIdentity.test.ts`. It enumerates the
+route tree rather than a hand-kept list, so a new surface that forgets the session
+fails the build.
+
 ## Paid appointments
 
 A duration can carry a price; a client whose effective price is an amount books it

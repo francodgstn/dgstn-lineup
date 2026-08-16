@@ -22,6 +22,18 @@ export interface PublicContact {
   firstname: string
   lastname: string
   subscription_type_id?: string
+  /** The contact's own address, as `buildContactSession` returns it. Optional
+   *  because it is the contact's, not the mailbox that authenticated (a parent
+   *  can verify with theirs and select a child), and because a session persisted
+   *  by an older build may not carry one. Surfaces that name it — "sent to …" —
+   *  must handle its absence rather than render `undefined`.
+   *
+   *  `| null` because that is what the server actually sends: `buildContactSession`
+   *  returns `contactEmail ?? contactData.email ?? null`, so a contact with no
+   *  address arrives as an explicit null, not as a missing key. Typing it away
+   *  did not remove the null — it removed the compiler's knowledge of it, which
+   *  is how `string | null` values end up flowing into props typed `string`. */
+  email?: string | null
 }
 
 export interface MatchedContact {
@@ -149,11 +161,29 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
       void user
         .getIdTokenResult()
         .then((token) => {
-          if (token.claims.contactId === session.contactId) {
+          // BOTH halves of the identity, and the TOKEN is the authority for both.
+          //
+          // The storage key is global (one browser, one stored session), so a
+          // contact signed in at studio A carries that session onto studio B's
+          // public pages. Checking only `contactId` let the restore succeed
+          // there: the surfaces then read `isAuthenticated`, suppress the guest
+          // form, and act for a contact who belongs to a different tenant — up
+          // to and including sending them mail from a studio they never joined.
+          //
+          // Gating on the CLAIM rather than on anything persisted also fixes
+          // every session already in a browser: sessions predating this carry no
+          // team of their own, and the claim has always been there.
+          const sameContact = token.claims.contactId === session.contactId
+          const sameTeam = token.claims.teamId === teamId
+          if (sameContact && sameTeam) {
             setContact(session.contact)
             setStep('authenticated')
           } else {
-            clearSession()
+            // Only drop the stored session when the CONTACT is wrong. A session
+            // that is simply for another studio is still valid where it came
+            // from, and clearing it here would sign the visitor out of their own
+            // studio for having glanced at someone else's page.
+            if (!sameContact) clearSession()
           }
         })
         .catch((err: unknown) => {
@@ -165,7 +195,9 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
         })
     })
     return unsubscribe
-  }, [])
+    // `teamId` is load-bearing here, not incidental: it is half of the identity
+    // check above, and the provider is remounted per team by the route.
+  }, [teamId])
 
   const openSignIn = useCallback((options?: { allowRegistration?: boolean }) => {
     setError(null)
