@@ -21,7 +21,6 @@ import {
   Wallet,
   ChevronLeft,
   ChevronRight,
-  ChevronsRight,
   ChevronDown,
   Lock,
   Puzzle,
@@ -117,6 +116,17 @@ const DASHBOARD_ITEM: NavItem = {
   labelKey: 'dashboard',
   icon: LayoutDashboard,
 }
+// Plugin catalogue. Was a text link at the FOOT of the features group, which put
+// discovery of most of the product below everything already installed — the one
+// place a new studio, whose nav is nearly empty, is least likely to look. Now an
+// icon button in the utility row at the top, first of the three.
+const EXPLORE_PLUGINS_ITEM: NavItem = {
+  id: 'explorePlugins',
+  href: '/settings/plugins',
+  labelKey: 'explorePlugins',
+  icon: Puzzle,
+  exact: true,
+}
 const ALL_SETTINGS_ITEM: NavItem = {
   id: 'allSettings',
   href: '/settings',
@@ -179,18 +189,20 @@ const NAV_SECTIONS: NavSection[] = [
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
       { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
-      // Promo codes — a thin pricing lever, not a plugin (plugin gating is for
-      // substantial à-la-carte modules). `minPlan`, NOT `requiresPlan`: the item
-      // stays visible and locked so the upsell modal can explain it, because
-      // hiding a growth lever teaches nobody that it exists. The server gate is
-      // requirePlan(teamId, 'studio') on createPromoCode only, so a downgraded
-      // team keeps its live codes redeemable.
+      // Promo codes — a plugin as of Wave 3.5, so the item appears only once
+      // installed, exactly like Courses and Products above and below it. The
+      // plan requirement lives in the manifest (`minPlan: 'studio'`) and the
+      // marketplace card is where a studio discovers it, which is why hiding
+      // the nav item here no longer hides the feature's existence.
+      //
+      // The server gate is assertPluginInstalled on createPromoCode ONLY, so a
+      // studio that uninstalls keeps its live codes redeemable and manageable.
       {
         id: 'promoCodes',
         href: '/offer/promo-codes',
         labelKey: 'promoCodes',
         icon: Ticket,
-        minPlan: 'studio',
+        requiresPlugin: 'promo-codes',
       },
       {
         id: 'onlineCourses',
@@ -360,38 +372,10 @@ function NavLink({
   return link
 }
 
-// Dashboard as the left element of the top toolbar (alongside the settings/help
-// icons), NOT a nav-list row. It deliberately uses the quiet icon-button active
-// style — tinted, no inset accent bar or bold — because here it reads as part of
-// this mini toolbar, not the working-area menu below.
-function DashboardToolbarLink({ collapsed, onClick }: { collapsed: boolean; onClick?: () => void }) {
-  const pathname = usePathname()
-  const t = useTranslations('Nav')
-  const Icon = DASHBOARD_ITEM.icon
-  const label = t(DASHBOARD_ITEM.labelKey as Parameters<typeof t>[0])
-  const isActive = pathname === DASHBOARD_ITEM.href
-  return (
-    <Link
-      href={DASHBOARD_ITEM.href as Route}
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      className={`flex h-8 items-center rounded-lg transition-colors ${
-        collapsed ? 'w-8 justify-center' : 'flex-1 gap-2 px-2'
-      } ${
-        isActive
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-      }`}
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      {!collapsed && <span className="text-sm font-medium">{label}</span>}
-    </Link>
-  )
-}
-
-// A compact icon-only link for the utility actions (settings, help) that sit in
-// their own row under the search bar rather than in the nav list. Always shows
-// its label as a tooltip, since there's no text beside the icon.
+// A compact icon-only link for the utility destinations (plugins, settings,
+// how-to) that sit in their own row under the search bar rather than in the nav
+// list. Always shows its label as a tooltip, since there's no text beside the
+// icon.
 function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
@@ -1435,23 +1419,30 @@ function SidebarContent({
         </div>
       )}
 
-      {/* Top toolbar — Dashboard on the left, settings + help as icon buttons on
-          the right, split by a light divider. Dashboard lives here rather than in
-          the menu below, which is why it wears the quiet toolbar active style.
-          In icon-only mode the three stack as centred icons (no divider). */}
+      {/* Utility row — three icon buttons, in order: plugins, settings, how-to.
+          These are destinations you go to occasionally and deliberately, which is
+          why they are icons rather than rows competing with the working areas.
+          RIGHT-aligned so they read as secondary to the menu below, and closed by
+          a rule that separates them from Dashboard — the first working row.
+          In icon-only mode they stack as centred icons. */}
       <div
-        className={`px-2 pt-2 shrink-0 flex gap-1 ${
-          collapsed ? 'flex-col items-center' : 'items-center'
+        className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 border-b ${
+          collapsed ? 'flex-col items-center' : 'items-center justify-end'
         }`}
       >
-        <DashboardToolbarLink collapsed={collapsed} onClick={onLinkClick} />
-        {!collapsed && <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />}
+        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
+        {/* Dashboard — a full menu row of its own, directly under the utility
+            icons. It used to share the toolbar with them and wear their quiet
+            active style; it is a working destination people return to daily, not
+            a utility, so it now reads like every other nav row. */}
+        <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
 
@@ -1558,29 +1549,11 @@ function SidebarContent({
               )
             })}
 
-            {/* Subtle discovery link to the plugin catalogue. Most features are
-                off by default (kept lightweight on purpose, even on Studio), so
-                nudge users to explore without bloating the nav. */}
-            {collapsed ? (
-              <Link
-                href={'/settings/plugins' as Route}
-                onClick={onLinkClick}
-                title={t('explorePlugins')}
-                className="flex items-center justify-center rounded-lg px-2 py-2 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Puzzle className="h-4 w-4 shrink-0" />
-              </Link>
-            ) : (
-              <Link
-                href={'/settings/plugins' as Route}
-                onClick={onLinkClick}
-                className="group/exp mt-1 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/60 transition-colors hover:text-primary"
-              >
-                <Puzzle className="h-3.5 w-3.5 shrink-0" />
-                <span>{t('explorePlugins')}</span>
-                <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover/exp:translate-x-0.5" />
-              </Link>
-            )}
+            {/* The plugin-catalogue link that used to sit here moved to the
+                utility icon row at the top (EXPLORE_PLUGINS_ITEM). At the foot of
+                the features group it was below everything already installed —
+                the least visible spot for the thing that reveals the rest of the
+                product. */}
           </div>
         </div>
 
