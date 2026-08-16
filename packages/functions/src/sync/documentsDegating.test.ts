@@ -119,6 +119,38 @@ describe('the documents teardown is gone', () => {
     assert.ok(!src.includes('documentsPluginActive'), 'the plugin probe must be gone')
   })
 
+  it('the signup-consent save NUDGES the team doc, or the mirror never recomputes', () => {
+    // The defect this pins: `signup_documents` on the public profile is the ONLY
+    // thing the public signup form reads, and it is computed by
+    // syncTeamPublicProfile — which triggers on `teams/{teamId}`. NOTHING
+    // triggers on `teams/{teamId}/settings/{settingId}`. So when the consent
+    // config moved out of installed_plugins (whose trigger touched the team on
+    // every write), a save stopped reaching the mirror: the form rendered its
+    // fallback sentence with no link to the studio's Terms, and since it echoes
+    // back only what it displayed, recordSignupConsent wrote ZERO acceptance
+    // rows. Silent, unbounded, and the missed rows are not recoverable.
+    const hooks = readFileSync(
+      join(root, '../../../apps/web/src/plugins/documents/hooks.ts'),
+      'utf8'
+    )
+    const save = hooks.slice(hooks.indexOf('export async function saveSignupDocumentIds'))
+    const body = save.slice(0, save.indexOf('\n}\n') + 1)
+    assert.ok(
+      body.includes('surfaces_updated_at'),
+      'saveSignupDocumentIds must stamp surfaces_updated_at on the team doc — writing only ' +
+        'the settings doc leaves TeamPublicProfile.signup_documents stale forever'
+    )
+    assert.ok(
+      /batch\.set\(\s*doc\(db, TEAMS_COLLECTION, teamId\)/.test(body),
+      'the nudge must target the TEAM document — that is the only path syncTeamPublicProfile ' +
+        'triggers on'
+    )
+    assert.ok(
+      body.includes('writeBatch(db)') && body.includes('batch.commit()'),
+      'both writes must be atomic, or a partial save reproduces the original silent staleness'
+    )
+  })
+
   it('the public profile carries the indexability flag the crawler path reads', () => {
     const src = readFileSync(join(root, 'sync/syncTeamPublicProfile.ts'), 'utf8')
     // Denormalised because the pages that need it read public_profile alone. If

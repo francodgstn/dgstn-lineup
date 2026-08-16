@@ -10,7 +10,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy,
-  setDoc, updateDoc, deleteDoc, serverTimestamp, getCountFromServer,
+  setDoc, updateDoc, deleteDoc, serverTimestamp, getCountFromServer, writeBatch,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -135,12 +135,42 @@ export function useSignupDocumentIds(teamId: string | null) {
   })
 }
 
+/**
+ * Saves the selection AND nudges the team doc, in one batch.
+ *
+ * The nudge is not optional. `TeamPublicProfile.signup_documents` — the ONLY
+ * thing the public signup form reads — is computed by `syncTeamPublicProfile`,
+ * which triggers on writes to `teams/{teamId}`. Nothing triggers on
+ * `teams/{teamId}/settings/{settingId}`, so a save that touched only the
+ * settings doc left the mirror exactly as it was: empty for a studio
+ * configuring consent for the first time. The form then rendered its fallback
+ * sentence with no link to the Terms, and because it echoes back only what it
+ * displayed, `recordSignupConsent` received an empty echo and wrote ZERO
+ * acceptance rows — a studio believing it collects consent, with no record of
+ * any of it, and no error anywhere.
+ *
+ * This regressed when the config moved out of `installed_plugins/documents`:
+ * that path fires `onInstalledPluginStatusChange`, which touches the team on
+ * every write. `surfaces_updated_at` is the same nudge the server-side
+ * `touchTeamForSurfaceRecompute` writes, and the waiver policy stamps it inside
+ * its own transaction (waivers/publish.ts) for exactly this reason.
+ *
+ * Batched so the two cannot diverge: both writes are owner-only, so anyone
+ * allowed to make the selection is allowed to nudge the team.
+ */
 export async function saveSignupDocumentIds(teamId: string, ids: string[]): Promise<void> {
-  await setDoc(
+  const batch = writeBatch(db)
+  batch.set(
     doc(db, TEAMS_COLLECTION, teamId, TEAM_SETTINGS_SUBCOLLECTION, DOCUMENTS_SETTINGS_DOC_ID),
     { signupDocumentIds: ids, updated_at: serverTimestamp() },
     { merge: true },
   )
+  batch.set(
+    doc(db, TEAMS_COLLECTION, teamId),
+    { surfaces_updated_at: serverTimestamp() },
+    { merge: true },
+  )
+  await batch.commit()
 }
 
 // ─── Mutations (plain async helpers; call from useMutation in components) ──
