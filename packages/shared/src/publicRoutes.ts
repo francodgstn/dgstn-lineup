@@ -84,6 +84,16 @@ export interface FromOnlyParams {
 }
 
 /**
+ * `/public/{slug}/documents` and `/public/{slug}/documents/{documentSlug}`.
+ *
+ * `v` is a PINNED document link's version (utils/documentLink.ts). Absent means
+ * the latest published version, which is what the public mirror serves.
+ */
+export interface DocumentsParams extends FromOnlyParams {
+  v?: number
+}
+
+/**
  * `?from=` values. Every `PublicSurface` plus `'checkout'` (the Stripe return,
  * which is not a surface a visitor can go "back" to). Unknown values are not an
  * error — `returnHref` falls back to the team's default surface.
@@ -98,7 +108,7 @@ export interface PublicRouteParams {
   booking: BookingParams
   shop: ShopParams
   signup: SignupParams
-  documents: FromOnlyParams
+  documents: DocumentsParams
   kiosk: Record<string, never>
   appointments: AppointmentParams
   'appointments/cancel': TokenParams

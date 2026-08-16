@@ -254,6 +254,10 @@ export {
 // composed into each booking rail above its first contact write (waivers/gate.ts
 // carries the census of which rails, and which are deliberately exempt).
 export { resolveWaiverRequirement } from './waivers/requirement'
+// The frozen text of an OLDER version of a publicly shared document — the one
+// thing a PINNED document link needs and the public mirror (latest only) cannot
+// give. Same double gate as the mirror, waivers refused; see documents/publicVersion.ts.
+export { getPublicDocumentVersion } from './documents/publicVersion'
 // One member's COMPLETE consent history, as a self-contained artefact — the
 // answer to "show me what this person signed", which is the whole reason a
 // studio keeps a waiver at all. A callable rather than a client read because it

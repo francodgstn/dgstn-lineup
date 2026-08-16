@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -28,7 +28,7 @@ import { toast } from 'sonner'
 import { ChevronLeft, Trash2, Archive, QrCode, FileText, Link2, Upload } from 'lucide-react'
 import type { PublishOutcome, StudioDocument, DocumentKind, DocumentSource } from '@linyup/shared'
 import {
-  useDocument, updateDocument, deleteDocument, setDocumentStatus, publishDocument,
+  useDocument, useDocuments, updateDocument, deleteDocument, setDocumentStatus, publishDocument,
   updateWaiverContent, archiveWaiver, waiverCallableError,
 } from '@/plugins/documents/hooks'
 import { getDocumentsLimits } from '@/plugins/documents/limits'
@@ -66,6 +66,7 @@ export default function DocumentDetailPage() {
   const queryClient = useQueryClient()
   const { team, currentTeamId } = useAuth()
   const { data: document, isLoading } = useDocument(documentId)
+  const { data: allDocuments } = useDocuments(currentTeamId)
   const limits = getDocumentsLimits()
 
   const tWaivers = useTranslations('Waivers')
@@ -151,6 +152,45 @@ export default function DocumentDetailPage() {
       return uploadFile(file, `teams/${currentTeamId}/documents/${documentId}/images/${Date.now()}`)
     },
     [currentTeamId, documentId, limits.maxImageSizeMB, t],
+  )
+
+  // Everything this document could link to. Stable identity for the same reason
+  // as uploadBodyImage — RichTextEditor is memoized and remounting it mid-edit
+  // steals focus.
+  const linkOptions = useMemo(
+    () =>
+      (allDocuments ?? []).map((d) => ({
+        id: d.id,
+        title: d.title,
+        version: d.current_version ?? null,
+        isPublic: d.status === 'published' && d.isPublic,
+      })),
+    [allDocuments],
+  )
+  const documentLinks = useMemo(
+    () => ({
+      options: linkOptions,
+      currentDocumentId: documentId,
+      labels: {
+        toolbar: t('linkToolbar'),
+        slashTitle: t('linkSlashTitle'),
+        insertTitle: t('linkInsertTitle'),
+        insertDescription: t('linkInsertDescription'),
+        search: t('linkSearch'),
+        empty: t('linkEmpty'),
+        noResults: t('linkNoResults'),
+        pinLabel: t('linkPinLabel'),
+        pinHint: t('linkPinHint'),
+        unpublished: t('linkUnpublished'),
+        latest: t('linkLatest'),
+        version: (n: number) => t('linkVersion', { version: n }),
+        unlink: t('linkUnlink'),
+        repin: t('linkRepin'),
+        cancel: t('cancel'),
+        insert: t('linkInsert'),
+      },
+    }),
+    [linkOptions, documentId, t],
   )
 
   if (isLoading || !draft) {
@@ -354,6 +394,7 @@ export default function DocumentDetailPage() {
               minHeight={320}
               placeholder={t('contentPlaceholder')}
               onUploadImage={uploadBodyImage}
+              documentLinks={documentLinks}
             />
           </div>
         ) : (

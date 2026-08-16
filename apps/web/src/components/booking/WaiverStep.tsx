@@ -173,6 +173,12 @@ function WaiverCard({
     <div className="space-y-3">
       <p className="font-medium">{item.title}</p>
 
+      {/* DELIBERATELY NOT hydrating document links here — no `documentLinks`
+          prop, so any link the studio wrote into the waiver renders as the
+          author's own words in plain text (the documented baseline; see
+          shared/utils/documentLink.ts). Two reasons: following a link mid-consent
+          navigates out of the booking flow and loses the seat, and the text a
+          person is agreeing to should be exactly what is in front of them. */}
       <div className="max-h-[45vh] overflow-y-auto rounded-xl border bg-card p-4">
         <RichTextContent html={item.bodyHtml} className="prose-relaxed max-w-none text-sm" />
       </div>

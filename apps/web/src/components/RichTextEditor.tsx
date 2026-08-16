@@ -12,13 +12,35 @@ import { DragHandle } from '@tiptap/extension-drag-handle-react'
 import {
   Bold, Italic, Strikethrough, Type, Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks, Quote, Code, Minus, ImageIcon, GripVertical,
-  Table as TableIcon, Trash2,
+  Table as TableIcon, Trash2, Link2, Pin, PinOff, Unlink,
 } from 'lucide-react'
 import { SlashCommand } from './editor/SlashCommand'
 import { SlashCommandList, type SlashItem, type SlashCommandListRef } from './editor/SlashCommandList'
 import { ResizableImage } from './editor/ResizableImage'
+import { DocumentLink } from './editor/DocumentLink'
+import {
+  DocumentLinkPicker,
+  type DocumentLinkLabels,
+  type DocumentLinkOption,
+} from './editor/DocumentLinkPicker'
+import {
+  DOCUMENT_LINK_ID_ATTR,
+  DOCUMENT_LINK_VERSION_ATTR,
+  parseDocumentLinkVersion,
+  resolveDocumentLink,
+  type DocumentLinkTarget,
+} from '@linyup/shared'
 
 type Range = { from: number; to: number }
+
+/** Everything the editor needs to offer, pin and unpin document links. */
+export interface DocumentLinksConfig {
+  /** Every document that could be linked — the current one is filtered out. */
+  options: DocumentLinkOption[]
+  /** The document being edited; it can never link to itself. */
+  currentDocumentId: string
+  labels: DocumentLinkLabels & { toolbar: string; slashTitle: string; unlink: string; repin: string }
+}
 
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +68,17 @@ function ToolbarButton({
   )
 }
 
-function Toolbar({ editor, onImage }: { editor: Editor | null; onImage?: () => void }) {
+function Toolbar({
+  editor,
+  onImage,
+  onDocumentLink,
+  documentLinks,
+}: {
+  editor: Editor | null
+  onImage?: () => void
+  onDocumentLink?: () => void
+  documentLinks?: DocumentLinksConfig
+}) {
   if (!editor) return null
   // Start a fresh chain on every click — a cached chain captures a stale state
   // and throws "Applying a mismatched transaction" on the second use.
@@ -108,6 +140,70 @@ function Toolbar({ editor, onImage }: { editor: Editor | null; onImage?: () => v
           <ImageIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
       )}
+      {onDocumentLink && (
+        <ToolbarButton
+          title={documentLinks?.labels.toolbar ?? 'Link to document'}
+          active={editor.isActive('documentLink')}
+          onClick={onDocumentLink}
+        >
+          <Link2 className="h-3.5 w-3.5" />
+        </ToolbarButton>
+      )}
+
+      {/* Pin controls — only while the cursor is inside a document link, which
+          is the only moment "latest vs this version" means anything. Without a
+          visible control the choice made at insert time is invisible and
+          unchangeable, and a pin is exactly the kind of thing an author needs
+          to see to trust. */}
+      {documentLinks && editor.isActive('documentLink') && (
+        <>
+          <div className="w-px h-4 bg-border mx-1" />
+          {(() => {
+            const attrs = editor.getAttributes('documentLink') as {
+              documentId?: string
+              version?: number | null
+            }
+            const target = documentLinks.options.find((d) => d.id === attrs.documentId)
+            const isPinned = attrs.version != null
+            const latest = target?.version ?? null
+            return (
+              <>
+                <ToolbarButton
+                  title={
+                    isPinned
+                      ? `${documentLinks.labels.version(attrs.version!)} — ${documentLinks.labels.repin}`
+                      : documentLinks.labels.pinLabel
+                  }
+                  active={isPinned}
+                  // Unpin returns to "latest"; pin binds to the target's
+                  // current latest, which is the only version an author can
+                  // mean by "this one".
+                  onClick={() =>
+                    editor
+                      .chain()
+                      .focus()
+                      .setDocumentLinkVersion(isPinned ? null : latest)
+                      .run()
+                  }
+                >
+                  {isPinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
+                </ToolbarButton>
+                <span className="px-1 text-[10px] text-muted-foreground">
+                  {isPinned
+                    ? documentLinks.labels.version(attrs.version!)
+                    : documentLinks.labels.latest}
+                </span>
+                <ToolbarButton
+                  title={documentLinks.labels.unlink}
+                  onClick={() => editor.chain().focus().unsetDocumentLink().run()}
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                </ToolbarButton>
+              </>
+            )
+          })()}
+        </>
+      )}
 
       {/* Table editing controls — only while the cursor is inside a table */}
       {editor.isActive('table') && (
@@ -139,6 +235,8 @@ function Toolbar({ editor, onImage }: { editor: Editor | null; onImage?: () => v
 function buildSlashItems(opts: {
   placeholderText?: string
   requestImage?: () => void
+  requestDocumentLink?: () => void
+  documentLinkTitle?: string
 }): SlashItem[] {
   const items: SlashItem[] = [
     { title: 'Text', icon: Type, command: ({ editor, range }) => (editor as Editor).chain().focus().deleteRange(range as Range).setNode('paragraph').run() },
@@ -160,6 +258,18 @@ function buildSlashItems(opts: {
       command: ({ editor, range }) => {
         (editor as Editor).chain().focus().deleteRange(range as Range).run()
         opts.requestImage!()
+      },
+    })
+  }
+  if (opts.requestDocumentLink) {
+    items.push({
+      title: opts.documentLinkTitle ?? 'Link to document',
+      icon: Link2,
+      command: ({ editor, range }) => {
+        // Clear the "/query" first: the picker inserts a mark over text it adds
+        // itself, and leaving the query in place would put the link inside it.
+        (editor as Editor).chain().focus().deleteRange(range as Range).run()
+        opts.requestDocumentLink!()
       },
     })
   }
@@ -213,6 +323,7 @@ export const RichTextEditor = memo(function RichTextEditor({
   placeholder,
   minHeight = 220,
   onUploadImage,
+  documentLinks,
 }: {
   /** Initial HTML. Editor is uncontrolled after mount — remount via `key` to reset. */
   value: string
@@ -221,13 +332,17 @@ export const RichTextEditor = memo(function RichTextEditor({
   minHeight?: number
   /** When provided, enables image insertion (slash + toolbar) that uploads via this fn. */
   onUploadImage?: (file: File) => Promise<string>
+  /** When provided, enables linking to another document (slash + toolbar + pin). */
+  documentLinks?: DocumentLinksConfig
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   // DragHandle touches the DOM/floating-ui — only mount it client-side.
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const requestImage = onUploadImage ? () => fileRef.current?.click() : undefined
+  const requestDocumentLink = documentLinks ? () => setPickerOpen(true) : undefined
 
   const editor = useEditor({
     extensions: [
@@ -239,15 +354,18 @@ export const RichTextEditor = memo(function RichTextEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       TableKit.configure({ table: { resizable: true } }),
+      DocumentLink,
       SlashCommand.configure({
         suggestion: {
           char: '/',
           command: ({ editor, range, props }: { editor: unknown; range: unknown; props: SlashItem }) =>
             props.command({ editor, range }),
           items: ({ query }: { query: string }) =>
-            buildSlashItems({ requestImage }).filter((i) =>
-              i.title.toLowerCase().includes(query.toLowerCase()),
-            ),
+            buildSlashItems({
+              requestImage,
+              requestDocumentLink,
+              documentLinkTitle: documentLinks?.labels.slashTitle,
+            }).filter((i) => i.title.toLowerCase().includes(query.toLowerCase())),
           render: makeSlashRenderer,
         },
       }),
@@ -275,9 +393,30 @@ export const RichTextEditor = memo(function RichTextEditor({
     }
   }
 
+  /**
+   * Insert the link, using the target's title as the anchor text when nothing
+   * is selected. With a selection, the author's own words are marked instead —
+   * "see our <house rules>" reads better than a title dropped mid-sentence.
+   */
+  function insertDocumentLink(attrs: { documentId: string; version: number | null }, title: string) {
+    if (!editor) return
+    const { empty } = editor.state.selection
+    const chain = editor.chain().focus()
+    if (empty) chain.insertContent(title).setTextSelection({
+      from: editor.state.selection.from,
+      to: editor.state.selection.from + title.length,
+    })
+    chain.setDocumentLink(attrs).run()
+  }
+
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      <Toolbar editor={editor} onImage={requestImage} />
+      <Toolbar
+        editor={editor}
+        onImage={requestImage}
+        onDocumentLink={requestDocumentLink}
+        documentLinks={documentLinks}
+      />
       <div className="relative">
         {mounted && editor && (
           <DragHandle editor={editor}>
@@ -291,13 +430,92 @@ export const RichTextEditor = memo(function RichTextEditor({
       {onUploadImage && (
         <input ref={fileRef} type="file" accept="image/*" onChange={handleImageFile} className="hidden" />
       )}
+      {documentLinks && (
+        <DocumentLinkPicker
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          documents={documentLinks.options}
+          currentDocumentId={documentLinks.currentDocumentId}
+          labels={documentLinks.labels}
+          onPick={insertDocumentLink}
+        />
+      )}
     </div>
   )
 })
 
-export function RichTextContent({ html, className }: { html: string; className?: string }) {
+/** What a renderer needs to turn stored document-link references into real links. */
+export interface DocumentLinkRenderContext {
+  /** The tenant whose public routes the links point into. */
+  teamSlug: string
+  /** documentId → its public mirror summary. A missing id means "not linkable". */
+  targets: Map<string, DocumentLinkTarget>
+  /**
+   * Wraps the unprefixed public path — the caller owns locale prefixing, so
+   * this never has to know about next-intl.
+   */
+  hrefFor?: (path: string) => string
+  /** Appended to a pinned link's tooltip, e.g. "Version 3". */
+  versionLabel?: (n: number) => string
+}
+
+export function RichTextContent({
+  html,
+  className,
+  documentLinks,
+}: {
+  html: string
+  className?: string
+  /** Omit and document links render as plain text — the deliberate baseline. */
+  documentLinks?: DocumentLinkRenderContext
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  /**
+   * Hydration happens on the DOM, not by rewriting the HTML string.
+   *
+   * The stored anchor carries no href on purpose (see shared/documentLink.ts),
+   * so the un-hydrated baseline is the author's words as plain text rather than
+   * a dead link. Setting the attribute here — rather than splicing strings into
+   * `dangerouslySetInnerHTML` — means the sanitized markup is never re-parsed by
+   * hand, and a target that has gone away simply stays plain text.
+   */
+  useEffect(() => {
+    const root = ref.current
+    if (!root) return
+    const anchors = root.querySelectorAll<HTMLAnchorElement>(`a[${DOCUMENT_LINK_ID_ATTR}]`)
+    for (const a of anchors) {
+      const documentId = a.getAttribute(DOCUMENT_LINK_ID_ATTR)
+      if (!documentId) continue
+      const version = parseDocumentLinkVersion(a.getAttribute(DOCUMENT_LINK_VERSION_ATTR))
+      const resolved = documentLinks
+        ? resolveDocumentLink(
+            { documentId, version, label: a.textContent ?? '' },
+            documentLinks.targets.get(documentId) ?? null,
+            documentLinks.teamSlug,
+          )
+        : ({ kind: 'unavailable' as const, label: a.textContent ?? '' })
+
+      if (resolved.kind === 'link') {
+        a.setAttribute('href', documentLinks!.hrefFor?.(resolved.path) ?? resolved.path)
+        a.classList.add('underline', 'underline-offset-2')
+        if (resolved.pinned && resolved.version != null && documentLinks!.versionLabel) {
+          a.setAttribute('title', documentLinks!.versionLabel(resolved.version))
+        }
+      } else {
+        // Explicitly REMOVE rather than leave whatever was there: this effect
+        // re-runs when the targets arrive, and a link that has since gone away
+        // must lose its href, not keep a stale one.
+        a.removeAttribute('href')
+        a.removeAttribute('title')
+        a.classList.remove('underline', 'underline-offset-2')
+      }
+    }
+  }, [html, documentLinks])
+
   return (
     <div
+      ref={ref}
       className={`prose-notes text-sm ${className ?? ''}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
