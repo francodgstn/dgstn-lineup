@@ -15,7 +15,7 @@ import { substituteVariables, renderBody, buildOutreachEmail } from './outreachE
 import { pluginActionHandlers } from '../plugins/index'
 import type { PluginActionId, PluginTriggerId, ContactGroup, EngagementThresholds } from '@linyup/shared'
 import {
-  contactMatchesGroup, expandGroupSelection,
+  matchesFilter,
   TEAMS_COLLECTION, CONTACT_GROUPS_SUBCOLLECTION,
 } from '@linyup/shared'
 
@@ -334,20 +334,19 @@ export function evaluateContactConditions(
       // and a dynamic group resolves its rule right here. Both go through the
       // shared resolver so "in the group" means one thing everywhere.
       case 'in_group': {
-        const all = ctx.groups ?? []
-        const wanted = expandGroupSelection(all, [cond.group_id])
-        const byId = new Map(all.map((g) => [g.id, g]))
-        const filterCtx = { groups: all, engagementThresholds: ctx.engagementThresholds, nowMs: now.getTime() }
-        let matched = false
-        for (const gid of wanted) {
-          const group = byId.get(gid)
-          if (group
-            ? contactMatchesGroup(contact, group, filterCtx)
-            : (contact.group_ids ?? []).includes(gid)) {
-            matched = true
-            break
-          }
-        }
+        // Delegated, NOT reimplemented: descendant expansion, dynamic-rule
+        // resolution and the not-in-context fallback all live in the shared
+        // resolver. Duplicating them here is exactly the parallel check its
+        // docstring forbids — the copies would drift on the next change.
+        const matched = matchesFilter(
+          contact,
+          { groups: [cond.group_id] },
+          {
+            groups: ctx.groups ?? [],
+            engagementThresholds: ctx.engagementThresholds,
+            nowMs: now.getTime(),
+          },
+        )
         if (!matched) return false
         break
       }

@@ -760,7 +760,8 @@
     "editingRuleFor": "Editing the rule for “{name}”",
     "saveRule": "Save rule",
     "cancelRuleEdit": "Cancel",
-    "ruleSaved": "Rule updated for “{name}”"
+    "ruleSaved": "Rule updated for “{name}”",
+    "ruleDropsGroups": "The group filter won’t be kept — a rule can’t depend on another group."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2141,7 +2142,8 @@
     "convertToManual": "Freeze into a manual group",
     "convertToManualBody": "Copies the current {count} members in and drops the rule. Membership stops updating.",
     "convertedToast": "“{name}” is now a manual group",
-    "editInContacts": "Edit in contacts"
+    "editInContacts": "Edit in contacts",
+    "dynamicDropsGroupsWarning": "A rule can’t depend on another group, so that filter is dropped — this group will match {count} contacts, not the list behind this dialog. Use Snapshot to keep the current members."
   },
   "Org": {
     "tabPlaces": "Places",

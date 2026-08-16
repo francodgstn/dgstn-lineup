@@ -26,7 +26,7 @@ import {
 import { GroupPickerPopover } from '@/plugins/contact-groups/GroupPickerPopover'
 import {
   useContactGroups, useInvalidateContactGroups, buildGroupTree, groupWithDescendantIds,
-  createGroup, updateGroup, deleteGroup, setGroupRule,
+  createGroup, updateGroup, deleteGroup, freezeGroupToManual,
   contactMatchesGroup, groupsForContact, isDynamicGroup, useContactFilterContext,
 } from '@/plugins/contact-groups/hooks'
 import type { GroupTreeNode } from '@/plugins/contact-groups/hooks'
@@ -442,16 +442,13 @@ export default function ContactGroupsPage() {
     }
   }
 
-  // Freeze a dynamic group: write today's matches into group_ids, then drop the
-  // rule. Order matters — members first, so a failure leaves a still-correct
-  // dynamic group rather than an empty manual one.
+  // Freeze a dynamic group. One atomic batch where it fits, so the group can
+  // never be left carrying BOTH a rule and stored membership — see
+  // freezeGroupToManual.
   const handleConvertToManual = async (memberIds: string[]) => {
     if (!currentTeamId || !ruleGroup) return
     try {
-      await Promise.all(memberIds.map((id) =>
-        updateDoc(doc(db, CONTACTS_COLLECTION, id), { group_ids: arrayUnion(ruleGroup.id) })
-      ))
-      await setGroupRule(currentTeamId, ruleGroup.id, null)
+      await freezeGroupToManual(currentTeamId, ruleGroup.id, memberIds)
       invalidateGroups()
       invalidateContacts()
       toast.success(t('convertedToast', { name: ruleGroup.name }))

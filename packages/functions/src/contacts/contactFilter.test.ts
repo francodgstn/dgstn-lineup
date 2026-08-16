@@ -13,6 +13,7 @@ import {
   type ContactFilterSubject,
   type ContactGroup,
 } from '@linyup/shared'
+import { evaluateContactConditions } from '../utils/automationEngine'
 
 // Fixtures for the ONE contact predicate — the resolver shared by the contacts
 // list, saved filter presets, dynamic contact groups and the automation
@@ -307,5 +308,69 @@ describe('filterContacts', () => {
     ]
     const out = filterContacts(contacts, filter({ stages: ['joined'], tags: ['comp'] }), { nowMs: NOW })
     assert.deepEqual(out.map((c) => c.firstname), ['A'])
+  })
+})
+
+// ─── the automation engine's in_group condition ───────────────────────────────
+// It must resolve membership exactly as every other surface does — delegating to
+// the shared resolver rather than reimplementing expansion/fallback.
+
+describe('evaluateContactConditions — in_group', () => {
+  const manual = group({ id: 'squad-a' })
+  const juniors = group({
+    id: 'juniors',
+    rule: filter({ age: { mode: 'age', min: null, max: 12 } }),
+  })
+  const parent = group({ id: 'seniors' })
+  const child = group({ id: 'seniors-comp', parent_id: 'seniors' })
+  const groups = [manual, juniors, parent, child]
+  const now = new Date(NOW)
+
+  function evalIn(groupId: string, c: ContactFilterSubject, ctx = { groups }) {
+    return evaluateContactConditions([{ type: 'in_group', group_id: groupId }], c as never, now, ctx)
+  }
+
+  it('matches manual membership', () => {
+    assert.equal(evalIn('squad-a', contact({ group_ids: ['squad-a'] })), true)
+    assert.equal(evalIn('squad-a', contact()), false)
+  })
+
+  it('resolves a dynamic group per contact, with nothing materialized', () => {
+    assert.equal(evalIn('juniors', contact({ birthdate: ts('2016-05-02') })), true)
+    // Stored membership must NOT win over the rule.
+    assert.equal(evalIn('juniors', contact({ birthdate: ts('1990-05-02'), group_ids: ['juniors'] })), false)
+  })
+
+  it('expands to descendants, like every other surface', () => {
+    assert.equal(evalIn('seniors', contact({ group_ids: ['seniors-comp'] })), true)
+    assert.equal(evalIn('seniors', contact({ group_ids: ['unrelated'] })), false)
+  })
+
+  it('falls back to stored membership when groups are unavailable', () => {
+    // Context load failed / plugin absent: never widen the result set.
+    assert.equal(evalIn('squad-a', contact({ group_ids: ['squad-a'] }), { groups: [] }), true)
+    assert.equal(evalIn('squad-a', contact(), { groups: [] }), false)
+  })
+
+  it('matches nobody when the group_id is blank', () => {
+    assert.equal(evalIn('', contact({ group_ids: ['squad-a'] })), false)
+  })
+
+  it('ANDs with the other conditions', () => {
+    const c = contact({ group_ids: ['squad-a'], total_sessions: 3 })
+    assert.equal(
+      evaluateContactConditions(
+        [{ type: 'in_group', group_id: 'squad-a' }, { type: 'sessions_attended_min', value: 5 }],
+        c as never, now, { groups },
+      ),
+      false,
+    )
+    assert.equal(
+      evaluateContactConditions(
+        [{ type: 'in_group', group_id: 'squad-a' }, { type: 'sessions_attended_min', value: 2 }],
+        c as never, now, { groups },
+      ),
+      true,
+    )
   })
 })

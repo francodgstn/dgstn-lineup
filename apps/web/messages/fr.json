@@ -760,7 +760,8 @@
     "editingRuleFor": "Modification de la règle de « {name} »",
     "saveRule": "Enregistrer la règle",
     "cancelRuleEdit": "Annuler",
-    "ruleSaved": "Règle mise à jour pour « {name} »"
+    "ruleSaved": "Règle mise à jour pour « {name} »",
+    "ruleDropsGroups": "Le filtre de groupe ne sera pas conservé : une règle ne peut pas dépendre d’un autre groupe."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2141,7 +2142,8 @@
     "convertToManual": "Figer en groupe manuel",
     "convertToManualBody": "Copie les {count} membres actuels et supprime la règle. L’appartenance cesse de se mettre à jour.",
     "convertedToast": "« {name} » est désormais un groupe manuel",
-    "editInContacts": "Modifier dans les contacts"
+    "editInContacts": "Modifier dans les contacts",
+    "dynamicDropsGroupsWarning": "Une règle ne peut pas dépendre d’un autre groupe : ce filtre est retiré — ce groupe correspondra à {count} contacts, pas à la liste derrière cette fenêtre. Choisissez Instantané pour conserver les membres actuels."
   },
   "Org": {
     "tabPlaces": "Lieux",

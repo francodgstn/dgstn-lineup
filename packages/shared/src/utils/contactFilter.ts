@@ -309,7 +309,7 @@ export function contactMatchesGroup(
   ctx: ContactFilterContext = {},
 ): boolean {
   if (group.rule) {
-    return matchesFilter(subject, { ...normalizeContactFilter(group.rule), groups: [] }, ctx)
+    return matchesFilter(subject, toGroupRule(group.rule), ctx)
   }
   return (subject.group_ids ?? []).includes(group.id)
 }
@@ -478,6 +478,24 @@ export function filterContacts<T extends ContactFilterSubject>(
   ctx: ContactFilterContext = {},
 ): T[] {
   return contacts.filter((c) => matchesFilter(c, filter, ctx))
+}
+
+/**
+ * The filter a dynamic group will ACTUALLY evaluate.
+ *
+ * The `groups` dimension cannot survive into a rule — a dynamic group filtering
+ * on group membership can recurse (A -> B -> A), so it is stripped structurally
+ * rather than merely discouraged. That makes this a LOSSY conversion: callers
+ * that save a rule must save THIS, and preview from THIS, or the group will
+ * quietly resolve to something wider than the list the user was looking at.
+ */
+export function toGroupRule(filter: Partial<ContactFilter> | null | undefined): ContactFilter {
+  return { ...normalizeContactFilter(filter), groups: [] }
+}
+
+/** Would saving this filter as a dynamic rule drop a constraint? */
+export function ruleWouldDropGroups(filter: Partial<ContactFilter> | null | undefined): boolean {
+  return (filter?.groups?.length ?? 0) > 0
 }
 
 /** Narrowing helper so callers can pass a full `Contact` without casting. */

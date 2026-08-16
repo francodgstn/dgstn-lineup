@@ -760,7 +760,8 @@
     "editingRuleFor": "Modifica della regola di «{name}»",
     "saveRule": "Salva regola",
     "cancelRuleEdit": "Annulla",
-    "ruleSaved": "Regola aggiornata per «{name}»"
+    "ruleSaved": "Regola aggiornata per «{name}»",
+    "ruleDropsGroups": "Il filtro per gruppo non verrà mantenuto: una regola non può dipendere da un altro gruppo."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -2141,7 +2142,8 @@
     "convertToManual": "Congela in un gruppo manuale",
     "convertToManualBody": "Copia gli attuali {count} membri e rimuove la regola. L’appartenenza smette di aggiornarsi.",
     "convertedToast": "«{name}» ora è un gruppo manuale",
-    "editInContacts": "Modifica nei contatti"
+    "editInContacts": "Modifica nei contatti",
+    "dynamicDropsGroupsWarning": "Una regola non può dipendere da un altro gruppo, quindi quel filtro viene rimosso: questo gruppo corrisponderà a {count} contatti, non all’elenco dietro questa finestra. Usa Istantanea per mantenere i membri attuali."
   },
   "Org": {
     "tabPlaces": "Sedi",

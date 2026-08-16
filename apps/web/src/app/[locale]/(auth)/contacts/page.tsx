@@ -31,15 +31,15 @@ import {
   planHasHardContactCap,
 } from '@linyup/shared'
 import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
-import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, computeEngagementBand } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS } from '@linyup/shared'
 // The ONE contact predicate — see packages/shared/src/utils/contactFilter.ts.
 // Never re-implement matching here; extend the resolver instead.
 import {
   EMPTY_CONTACT_FILTER, emptyContactFilter, normalizeContactFilter, countActiveFilters,
-  filterContacts, flattenGroupTree, isDynamicGroup,
+  filterContacts, flattenGroupTree, isDynamicGroup, toGroupRule, ruleWouldDropGroups,
 } from '@linyup/shared'
 import type {
-  ContactFilter, ContactFilterContext, InactivityPreset, RankFilter,
+  ContactFilter, InactivityPreset, RankFilter,
   AgeFilter, CustomFieldCondition, CustomFieldOp,
 } from '@linyup/shared'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -934,34 +934,61 @@ function CustomFieldsFilterContent({ defs, value, onChange }: {
         const needsValue = cond.op !== 'is_set' && cond.op !== 'is_empty'
         return (
           <div key={i} className="flex items-center gap-1">
-            <select value={cond.fieldId}
-              onChange={(e) => {
-                const next = defs.find((d) => d.id === e.target.value)
-                update(i, { fieldId: e.target.value, op: next ? CUSTOM_FIELD_OPS[next.type][0] : 'equals', value: undefined })
-              }}
-              className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-xs">
-              {defs.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-            </select>
-            <select value={cond.op}
-              onChange={(e) => update(i, { op: e.target.value as CustomFieldOp, value: undefined })}
-              className="h-7 shrink-0 rounded-md border border-input bg-background px-1.5 text-xs">
-              {ops.map((op) => <option key={op} value={op}>{t(`customFieldOp_${op}` as Parameters<typeof t>[0])}</option>)}
-            </select>
+            <Select value={cond.fieldId}
+              onValueChange={(v) => {
+                const next = defs.find((d) => d.id === v)
+                update(i, { fieldId: v ?? '', op: next ? CUSTOM_FIELD_OPS[next.type][0] : 'equals', value: undefined })
+              }}>
+              <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
+                <span className="flex flex-1 text-left text-xs truncate">{def?.label ?? cond.fieldId}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {defs.map((d) => <SelectItem key={d.id} value={d.id} className="text-xs">{d.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={cond.op}
+              onValueChange={(v) => update(i, { op: (v ?? 'equals') as CustomFieldOp, value: undefined })}>
+              <SelectTrigger className="h-7 w-28 shrink-0 text-xs">
+                <span className="flex flex-1 text-left text-xs truncate">
+                  {t(`customFieldOp_${cond.op}` as Parameters<typeof t>[0])}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {ops.map((op) => (
+                  <SelectItem key={op} value={op} className="text-xs">
+                    {t(`customFieldOp_${op}` as Parameters<typeof t>[0])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {needsValue && (
               def?.type === 'select' ? (
-                <select value={String(cond.value ?? '')}
-                  onChange={(e) => update(i, { value: e.target.value })}
-                  className="h-7 w-24 shrink-0 rounded-md border border-input bg-background px-1.5 text-xs">
-                  <option value="">—</option>
-                  {(def.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
+                <Select value={String(cond.value ?? '')}
+                  onValueChange={(v) => update(i, { value: v ?? '' })}>
+                  <SelectTrigger className="h-7 w-24 shrink-0 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {String(cond.value ?? '') || '—'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(def.options ?? []).map((o) => (
+                      <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : def?.type === 'checkbox' ? (
-                <select value={cond.value === true ? 'true' : 'false'}
-                  onChange={(e) => update(i, { value: e.target.value === 'true' })}
-                  className="h-7 w-24 shrink-0 rounded-md border border-input bg-background px-1.5 text-xs">
-                  <option value="true">{t('customFieldYes')}</option>
-                  <option value="false">{t('customFieldNo')}</option>
-                </select>
+                <Select value={cond.value === true ? 'true' : 'false'}
+                  onValueChange={(v) => update(i, { value: v === 'true' })}>
+                  <SelectTrigger className="h-7 w-24 shrink-0 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {cond.value === true ? t('customFieldYes') : t('customFieldNo')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true" className="text-xs">{t('customFieldYes')}</SelectItem>
+                    <SelectItem value="false" className="text-xs">{t('customFieldNo')}</SelectItem>
+                  </SelectContent>
+                </Select>
               ) : (
                 <Input
                   type={def?.type === 'number' ? 'number' : def?.type === 'date' ? 'date' : 'text'}
@@ -2235,6 +2262,14 @@ export default function ContactsPage() {
     : tab === 'leads' ? filteredLeads
     : tab === 'archived' ? filteredArchived
     : filteredDeleted
+  // The same tab BEFORE filtering — a dynamic rule can resolve wider than the
+  // current view (it can't keep the `groups` dimension), so previewing it
+  // against `currentList` would understate the group.
+  const currentUnfilteredList =
+    tab === 'active' ? active
+    : tab === 'leads' ? leads
+    : tab === 'archived' ? archived
+    : deleted
   const isLoading =
     tab === 'active' || tab === 'leads' ? loadingActive
     : tab === 'archived' ? loadingArchived
@@ -2471,6 +2506,11 @@ export default function ContactsPage() {
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/5 px-3 py-2">
           <span className="text-sm">
             {t('editingRuleFor', { name: editingRuleFor.name })}
+            {ruleWouldDropGroups(filters) && (
+              <span className="block text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                {t('ruleDropsGroups')}
+              </span>
+            )}
           </span>
           <div className="ml-auto flex items-center gap-1.5">
             <Button size="sm" variant="ghost" onClick={() => setEditingRuleFor(null)}>
@@ -2478,7 +2518,10 @@ export default function ContactsPage() {
             </Button>
             <Button size="sm" onClick={async () => {
               if (!currentTeamId) return
-              await setGroupRule(currentTeamId, editingRuleFor.groupId, filters)
+              // Store what will actually evaluate — a rule can't keep the
+              // `groups` dimension, so saving `filters` verbatim would persist a
+              // constraint that silently vanishes on every read.
+              await setGroupRule(currentTeamId, editingRuleFor.groupId, toGroupRule(filters))
               invalidateGroups()
               setEditingRuleFor(null)
               toast.success(t('ruleSaved', { name: editingRuleFor.name }))
@@ -2563,7 +2606,9 @@ export default function ContactsPage() {
 
           {!isLoading && currentList.length === 0 && (
             <div className="px-4 py-16 text-center text-muted-foreground text-sm">
-              {search || filters.stages.length || filters.sources.length || filters.statuses.length ? t('emptySearch') : t('empty')}
+              {/* Any active dimension means "nothing matched", not "nothing exists".
+                  The old hand-listed check missed every dimension added after it. */}
+              {countActiveFilters(filters) > 0 ? t('emptySearch') : t('empty')}
             </div>
           )}
 
@@ -2707,10 +2752,12 @@ export default function ContactsPage() {
           filter={filters}
           groups={contactGroups}
           matches={currentList}
-          onCreate={async ({ name, parentId, mode, memberIds }) => {
+          allContacts={currentUnfilteredList}
+          filterContext={filterContext}
+          onCreate={async ({ name, parentId, mode, rule, memberIds }) => {
             if (!currentTeamId || !user) return
             await createGroupFromFilter(currentTeamId, user.uid, {
-              name, parentId, mode, filter: filters, memberIds,
+              name, parentId, mode, filter: rule, memberIds,
             })
             invalidateGroups()
             if (mode === 'snapshot') qc.invalidateQueries({ queryKey: ['contacts'] })

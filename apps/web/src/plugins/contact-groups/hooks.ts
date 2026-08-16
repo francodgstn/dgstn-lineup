@@ -199,6 +199,45 @@ export async function setGroupRule(
 }
 
 /**
+ * Freeze a dynamic group: copy its current members into group_ids and drop the
+ * rule, so membership stops updating.
+ *
+ * The two writes go in ONE batch whenever they fit (Firestore commits a batch
+ * atomically), because a half-applied conversion is the one state the model
+ * forbids — a group carrying both a rule and stored membership. Above the batch
+ * limit atomicity isn't available, so the rule is cleared LAST: an interrupted
+ * run then leaves a still-correct dynamic group with some harmless, ignored
+ * group_ids, rather than a manual group missing most of its members.
+ */
+export async function freezeGroupToManual(
+  teamId: string,
+  groupId: string,
+  memberIds: string[],
+): Promise<void> {
+  const groupRef = doc(db, TEAMS_COLLECTION, teamId, CONTACT_GROUPS_SUBCOLLECTION, groupId)
+  const clearRule = { rule: deleteField(), updated_at: serverTimestamp() }
+
+  if (memberIds.length < 450) {
+    const batch = writeBatch(db)
+    for (const id of memberIds) {
+      batch.update(doc(db, CONTACTS_COLLECTION, id), { group_ids: arrayUnion(groupId) })
+    }
+    batch.update(groupRef, clearRule)
+    await batch.commit()
+    return
+  }
+
+  for (let i = 0; i < memberIds.length; i += 450) {
+    const batch = writeBatch(db)
+    for (const id of memberIds.slice(i, i + 450)) {
+      batch.update(doc(db, CONTACTS_COLLECTION, id), { group_ids: arrayUnion(groupId) })
+    }
+    await batch.commit()
+  }
+  await updateDoc(groupRef, clearRule)
+}
+
+/**
  * Delete a group: direct subgroups are re-parented to the deleted group's
  * parent (they move up one level) and, for a MANUAL group, the id is removed
  * from every contact's group_ids. A dynamic group stores no membership, so

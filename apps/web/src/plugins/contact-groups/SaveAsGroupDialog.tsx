@@ -18,12 +18,16 @@ import { useTranslations } from 'next-intl'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Check, FolderTree, Zap } from 'lucide-react'
-import { flattenGroupTree } from '@linyup/shared'
-import type { ContactFilter, ContactGroup, Contact } from '@linyup/shared'
+import { flattenGroupTree, filterContacts, toGroupRule, ruleWouldDropGroups } from '@linyup/shared'
+import type { ContactFilter, ContactFilterContext, ContactGroup, Contact } from '@linyup/shared'
+
+/** Sentinel: the Select needs a non-empty value for "no parent". */
+const NO_PARENT = '__none__'
 
 export function SaveAsGroupDialog({
-  open, onOpenChange, filter, groups, matches, onCreate,
+  open, onOpenChange, filter, groups, matches, allContacts, filterContext, onCreate,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -33,10 +37,17 @@ export function SaveAsGroupDialog({
    *  not a re-derived set, so the count in the dialog can never disagree with
    *  the list behind it. */
   matches: Contact[]
+  /** The tab's UNFILTERED rows. The dynamic rule drops `groups` and therefore
+   *  resolves WIDER than `matches`; re-filtering the already-narrowed list
+   *  would understate it. */
+  allContacts: Contact[]
+  filterContext: ContactFilterContext
   onCreate: (args: {
     name: string
     parentId: string | null
     mode: 'snapshot' | 'dynamic'
+    /** The rule to store — already stripped for dynamic mode. */
+    rule: ContactFilter
     memberIds: string[]
   }) => Promise<void>
 }) {
@@ -50,6 +61,17 @@ export function SaveAsGroupDialog({
   // written when someone ages out, so a copied membership silently goes wrong.
   const timeDerived = !!filter.age && (filter.age.min != null || filter.age.max != null)
 
+  // A dynamic rule cannot keep the `groups` dimension (it could recurse), so a
+  // filter built on top of another group resolves WIDER than the list behind
+  // this dialog. Preview the rule that will actually run, and say so — a silent
+  // count that disagrees with the saved group is worse than no preview.
+  const dropsGroups = ruleWouldDropGroups(filter)
+  const dynamicRule = toGroupRule(filter)
+  const dynamicMatches = dropsGroups
+    ? filterContacts(allContacts, dynamicRule, filterContext)
+    : matches
+  const shownMatches = mode === 'dynamic' ? dynamicMatches : matches
+
   async function submit() {
     if (!name.trim() || saving) return
     setSaving(true)
@@ -58,6 +80,7 @@ export function SaveAsGroupDialog({
         name: name.trim(),
         parentId: parentId || null,
         mode,
+        rule: mode === 'dynamic' ? dynamicRule : filter,
         memberIds: mode === 'snapshot' ? matches.map((c) => c.id) : [],
       })
       setName(''); setParentId(''); setMode('dynamic')
@@ -119,16 +142,31 @@ export function SaveAsGroupDialog({
             </p>
           )}
 
+          {dropsGroups && mode === 'dynamic' && (
+            <p className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-400">
+              {t('dynamicDropsGroupsWarning', { count: shownMatches.length })}
+            </p>
+          )}
+
           {groups.length > 0 && (
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">{t('parentGroup')}</span>
-              <select value={parentId} onChange={(e) => setParentId(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                <option value="">{t('noParent')}</option>
-                {flattenGroupTree(groups).map(({ group, depth }) => (
-                  <option key={group.id} value={group.id}>{' '.repeat(depth * 2)}{group.name}</option>
-                ))}
-              </select>
+              <Select value={parentId || NO_PARENT}
+                onValueChange={(v) => setParentId(v === NO_PARENT ? '' : (v ?? ''))}>
+                <SelectTrigger className="h-9 w-full text-sm">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {groups.find((g) => g.id === parentId)?.name ?? t('noParent')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PARENT}>{t('noParent')}</SelectItem>
+                  {flattenGroupTree(groups).map(({ group, depth }) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      <span style={{ paddingLeft: `${depth * 12}px` }}>{group.name}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           )}
         </div>
