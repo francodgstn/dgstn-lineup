@@ -146,7 +146,8 @@
     "affiliations": "Affiliations",
     "coaches": "Coaches",
     "pricing": "Pricing",
-    "promoCodes": "Promo codes"
+    "promoCodes": "Promo codes",
+    "navSearchPrompt": "Search pages, settings and features"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1698,9 +1699,7 @@
   "TopBar": {
     "qrTitle": "QR Codes",
     "qrCheckinTab": "Check-in",
-    "qrBioLinkTab": "Bio link",
     "qrCheckinDesc": "Members scan this to self check-in to active sessions.",
-    "qrBioLinkDesc": "Share this to let people discover and book your sessions.",
     "qrDownloadPng": "Download",
     "qrDownloadBranded": "Branded",
     "qrDownloadPoster": "Download A4 Poster (PDF)",
@@ -1712,7 +1711,8 @@
     "analytics": "Usage analytics",
     "analyticsHint": "Helps us improve the product",
     "analyticsOn": "On",
-    "analyticsOff": "Off"
+    "analyticsOff": "Off",
+    "qrSurfaceDesc": "Scanning opens this page in the visitor's browser."
   },
   "BioLink": {
     "title": "Bio link",

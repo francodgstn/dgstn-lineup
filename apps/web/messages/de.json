@@ -146,7 +146,8 @@
     "affiliations": "Affiliationen",
     "coaches": "Coaches",
     "pricing": "Preise",
-    "promoCodes": "Aktionscodes"
+    "promoCodes": "Aktionscodes",
+    "navSearchPrompt": "Seiten, Einstellungen und Funktionen durchsuchen"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -1698,9 +1699,7 @@
   "TopBar": {
     "qrTitle": "QR-Codes",
     "qrCheckinTab": "Check-in",
-    "qrBioLinkTab": "Bio-Link",
     "qrCheckinDesc": "Mitglieder scannen diesen Code zum Selbst-Check-in in aktive Stunden.",
-    "qrBioLinkDesc": "Teilen Sie diesen Link, damit Interessierte Ihre Stunden entdecken und buchen können.",
     "qrDownloadPng": "Download",
     "qrDownloadBranded": "Markenversion",
     "qrDownloadPoster": "A4-Poster herunterladen (PDF)",
@@ -1712,7 +1711,8 @@
     "analytics": "Nutzungsanalyse",
     "analyticsHint": "Hilft uns, das Produkt zu verbessern",
     "analyticsOn": "Ein",
-    "analyticsOff": "Aus"
+    "analyticsOff": "Aus",
+    "qrSurfaceDesc": "Beim Scannen öffnet sich diese Seite im Browser der Besucherin oder des Besuchers."
   },
   "BioLink": {
     "title": "Bio-Link",

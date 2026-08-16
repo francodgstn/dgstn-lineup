@@ -1,14 +1,39 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { QRCodeCanvas } from 'qrcode.react'
-import type { Team } from '@linyup/shared'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { publicUrl, TEAMS_COLLECTION, PUBLIC_SURFACES } from '@linyup/shared'
+import type { ActivePublicSurfaces, PublicSurface, Team } from '@linyup/shared'
 import { Copy, Download, Check, ExternalLink } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 
-type QRTab = 'checkin' | 'bioLink'
+/**
+ * What a QR can point at: the check-in payload, or any public surface the team
+ * actually has LIVE.
+ *
+ * Check-in is not a surface — it encodes a JSON payload the scanner app reads,
+ * not a URL — which is why it is a separate member rather than an entry in
+ * PUBLIC_SURFACES.
+ */
+type QRTarget = 'checkin' | PublicSurface
+
+/** The `PublicHub` message key for a surface's label — reused rather than
+ *  duplicated, so a rename lands in one place. */
+const SURFACE_LABEL_KEY: Record<PublicSurface, string> = {
+  'bio-link': 'surfaceBioLink',
+  site: 'surfaceWebsite',
+  space: 'surfaceSpace',
+  booking: 'surfaceBooking',
+  shop: 'surfaceShop',
+  signup: 'surfaceSignup',
+  documents: 'surfaceDocuments',
+  kiosk: 'surfaceKiosk',
+}
 
 export function QRDialog({
   open,
@@ -20,20 +45,59 @@ export function QRDialog({
   team: Team | null
 }) {
   const t = useTranslations('TopBar')
-  const [tab, setTab] = useState<QRTab>('checkin')
+  const tHub = useTranslations('PublicHub')
+  const [target, setTarget] = useState<QRTarget>('checkin')
   const [copied, setCopied] = useState(false)
-  const checkinRef = useRef<HTMLCanvasElement>(null)
-  const bioLinkRef = useRef<HTMLCanvasElement>(null)
+  const [live, setLive] = useState<PublicSurface[] | null>(null)
+  // ONE canvas whose value changes with the selection. The old two-canvas
+  // arrangement existed to keep a ref per tab; with a list of surfaces that
+  // would mean a canvas each, all but one hidden.
+  const qrRef = useRef<HTMLCanvasElement>(null)
 
-  const bioLinkUrl =
-    typeof window !== 'undefined' && team?.slug
-      ? `${window.location.origin}/public/${team.slug}`
-      : ''
+  // Which surfaces this team actually has live — the same
+  // `active_public_surfaces` the public root uses to pick a landing. Offering a
+  // QR for a surface that 404s would be worse than not offering it.
+  useEffect(() => {
+    if (!open || !team?.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const snap = await getDoc(doc(db, TEAMS_COLLECTION, team.id, 'public_profile', team.id))
+        if (cancelled) return
+        const active = (snap.data()?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>
+        // bio-link is the tenant root and always exists; the rest must be live.
+        setLive(
+          PUBLIC_SURFACES.filter(
+            (sf) => sf === 'bio-link' || active[sf as keyof ActivePublicSurfaces] === true
+          )
+        )
+      } catch {
+        // Degrade to the always-true surface rather than an empty dropdown: a
+        // rules or network failure should not make the studio think it has no
+        // public presence.
+        if (!cancelled) setLive(['bio-link'])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, team?.id])
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const checkinValue = team?.slug ? JSON.stringify({ team: team.slug }) : ''
+  // The URL a scan lands on — empty for check-in, which encodes a payload.
+  const targetUrl =
+    target === 'checkin' || !team?.slug ? '' : publicUrl(origin, team.slug, target)
+  const qrValue = target === 'checkin' ? checkinValue : targetUrl
+
+  const options = useMemo<QRTarget[]>(() => ['checkin', ...(live ?? ['bio-link'])], [live])
+
+  function labelFor(v: QRTarget): string {
+    return v === 'checkin' ? t('qrCheckinTab') : tHub(SURFACE_LABEL_KEY[v] as never)
+  }
 
   function activeRef() {
-    return tab === 'checkin' ? checkinRef : bioLinkRef
+    return qrRef
   }
 
   function download(filename: string) {
@@ -75,7 +139,7 @@ export function QRDialog({
   }
 
   async function downloadCheckinPdf() {
-    const qrCanvas = checkinRef.current
+    const qrCanvas = qrRef.current
     if (!qrCanvas || !team) return
 
     // Scale QR 4× for crisp print resolution
@@ -163,8 +227,8 @@ export function QRDialog({
   }
 
   async function copyUrl() {
-    if (!bioLinkUrl) return
-    await navigator.clipboard.writeText(bioLinkUrl)
+    if (!targetUrl) return
+    await navigator.clipboard.writeText(targetUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -182,44 +246,40 @@ export function QRDialog({
           <p className="text-sm text-muted-foreground py-4 text-center">{t('qrNoSlug')}</p>
         ) : (
           <div className="space-y-4">
-            {/* Tabs */}
-            <div className="flex rounded-lg border overflow-hidden w-fit">
-              {(['checkin', 'bioLink'] as QRTab[]).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setTab(v)}
-                  className={`px-4 py-1.5 text-sm transition-colors ${
-                    tab === v
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {t(v === 'checkin' ? 'qrCheckinTab' : 'qrBioLinkTab')}
-                </button>
-              ))}
-            </div>
+            {/* A DROPDOWN, not tabs: how many entries there are depends on what the
+                team has installed and published, so the control has to scale from
+                two to nine without reflowing the dialog. */}
+            <Select value={target} onValueChange={(v) => setTarget(v as QRTarget)}>
+              <SelectTrigger className="w-full">
+                <SelectValue>{labelFor(target)}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {labelFor(v)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Description */}
             <p className="text-xs text-muted-foreground">
-              {t(tab === 'checkin' ? 'qrCheckinDesc' : 'qrBioLinkDesc')}
+              {target === 'checkin' ? t('qrCheckinDesc') : t('qrSurfaceDesc')}
             </p>
 
-            {/* QR codes (both rendered, only one visible — preserves canvas ref) */}
+            {/* One canvas — its value follows the selection. */}
             <div className="flex justify-center py-2">
-              <div className={tab === 'checkin' ? '' : 'hidden'}>
-                <QRCodeCanvas ref={checkinRef} value={checkinValue} size={200} level="M" />
-              </div>
-              <div className={tab === 'bioLink' ? '' : 'hidden'}>
-                <QRCodeCanvas ref={bioLinkRef} value={bioLinkUrl} size={200} level="M" />
-              </div>
+              <QRCodeCanvas ref={qrRef} value={qrValue} size={200} level="M" />
             </div>
 
-            {/* Bio-link URL */}
-            {tab === 'bioLink' && (
+            {/* The URL a scan lands on. Check-in has none — it encodes a payload. */}
+            {target !== 'checkin' && (
               <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-1.5">
-                <span className="text-xs font-mono flex-1 truncate text-muted-foreground">
-                  {bioLinkUrl}
+                {/* min-w-0 is what makes `truncate` actually bind on a flex
+                    child: without it the span takes its content's intrinsic
+                    width and a long surface URL widened the whole dialog. */}
+                <span className="min-w-0 flex-1 truncate text-xs font-mono text-muted-foreground">
+                  {targetUrl}
                 </span>
                 <button
                   type="button"
@@ -233,7 +293,7 @@ export function QRDialog({
                   )}
                 </button>
                 <a
-                  href={bioLinkUrl}
+                  href={targetUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -250,7 +310,7 @@ export function QRDialog({
                 variant="outline"
                 size="sm"
                 className="flex-1 gap-1.5"
-                onClick={() => download(`linyup-qr-${tab}.png`)}
+                onClick={() => download(`linyup-qr-${target}.png`)}
               >
                 <Download className="h-3.5 w-3.5" />
                 {t('qrDownloadPng')}
@@ -261,7 +321,7 @@ export function QRDialog({
                 size="sm"
                 className="flex-1 gap-1.5"
                 onClick={() =>
-                  downloadBranded(team?.name ?? 'Linyup', `linyup-qr-${tab}-branded.png`)
+                  downloadBranded(team?.name ?? 'Linyup', `linyup-qr-${target}-branded.png`)
                 }
               >
                 <Download className="h-3.5 w-3.5" />
@@ -269,8 +329,8 @@ export function QRDialog({
               </Button>
             </div>
 
-            {/* PDF poster — check-in tab only */}
-            {tab === 'checkin' && (
+            {/* PDF poster — check-in only: the poster's copy says "check in". */}
+            {target === 'checkin' && (
               <Button
                 type="button"
                 variant="secondary"

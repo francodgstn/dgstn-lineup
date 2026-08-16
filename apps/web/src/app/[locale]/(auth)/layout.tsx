@@ -1066,7 +1066,11 @@ function NavSearch({
 
   const openPanel = () => {
     const r = triggerRef.current?.getBoundingClientRect()
-    if (r) setAnchor({ left: r.left, top: r.top })
+    // Offset right of the trigger on desktop so the panel is visibly detached
+    // from the window edge rather than pinned to it. Not on narrow viewports,
+    // where every pixel of width counts more than the gap.
+    const nudge = typeof window !== 'undefined' && window.innerWidth >= 768 ? 24 : 0
+    if (r) setAnchor({ left: r.left + nudge, top: r.top })
     setExpanded(true)
   }
 
@@ -1190,6 +1194,12 @@ function NavSearch({
   }
 
   return (
+    // PORTALLED TO document.body. `fixed` is only viewport-relative while no
+    // ancestor creates a containing block, and the sidebar sits inside a
+    // sticky/transformed tree — on the settings page the overlay rendered
+    // BEHIND the page content because of it. A portal removes the whole class
+    // of bug rather than chasing z-index.
+    createPortal(
     <>
       {/* Dim the page behind the panel — enough to actually read as a mode the
           app is in, not a translucent box floating over live content. */}
@@ -1247,6 +1257,16 @@ function NavSearch({
         className="h-8 pl-8 text-sm"
       />
       </div>
+      {/* Before anything is typed the panel would otherwise be a bare field with
+          a void under it, which reads as broken rather than ready. One quiet row,
+          shaped like the result rows it will be replaced by. */}
+      {!showResults && (
+        <div className="mt-1.5 rounded-md px-2 py-3 text-sm text-muted-foreground">
+          {/* No icon — the field above already has one, and repeating it made
+              the row read as a result rather than a prompt. */}
+          {t('navSearchPrompt')}
+        </div>
+      )}
       {showResults && (
         <div
           ref={listRef}
@@ -1337,7 +1357,9 @@ function NavSearch({
         </div>
       )}
       </div>
-    </>
+    </>,
+    document.body
+    )
   )
 }
 
@@ -1522,7 +1544,13 @@ function SidebarContent({
           like every other piece of text in the sidebar. */}
       {!collapsed && team?.name && (
         <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
-          <p className="min-w-0 flex-1 truncate px-1 text-xs font-medium">{team.name}</p>
+          <Link
+            href={'/dashboard' as Route}
+            onClick={onLinkClick}
+            className="min-w-0 flex-1 truncate rounded px-1 text-xs font-medium transition-colors hover:text-primary"
+          >
+            {team.name}
+          </Link>
           <TeamQrButton />
         </div>
       )}
@@ -1540,15 +1568,14 @@ function SidebarContent({
           Closed by a rule that separates it from Dashboard, the first working
           row. In icon-only mode they stack as centred icons. */}
       <div
-        className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 border-b ${
+        // No bottom rule: the row already reads as part of the header block
+        // above it, and a second line so close to the studio row's was clutter.
+        // The padding stays, so the spacing below is unchanged.
+        className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 ${
           collapsed ? 'flex-col items-center' : 'items-center'
         }`}
       >
         <NavSearch entries={searchEntries} onNavigate={onLinkClick} collapsed={collapsed} />
-        {/* Search is a FIELD; the rest are destinations. */}
-        {!collapsed && (
-          <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />
-        )}
         {collapsed && <TeamQrButton collapsed />}
         <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />

@@ -146,7 +146,8 @@
     "affiliations": "Affiliazioni",
     "coaches": "Coach",
     "pricing": "Prezzi",
-    "promoCodes": "Codici promo"
+    "promoCodes": "Codici promo",
+    "navSearchPrompt": "Cerca pagine, impostazioni e funzionalità"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -1698,9 +1699,7 @@
   "TopBar": {
     "qrTitle": "Codici QR",
     "qrCheckinTab": "Check-in",
-    "qrBioLinkTab": "Bio link",
     "qrCheckinDesc": "I membri scansionano questo per il self check-in nelle sessioni attive.",
-    "qrBioLinkDesc": "Condividi questo link per far scoprire e prenotare le tue sessioni.",
     "qrDownloadPng": "Download",
     "qrDownloadBranded": "Con logo",
     "qrDownloadPoster": "Scarica poster A4 (PDF)",
@@ -1712,7 +1711,8 @@
     "analytics": "Analisi d'uso",
     "analyticsHint": "Ci aiuta a migliorare il prodotto",
     "analyticsOn": "Attivo",
-    "analyticsOff": "Disattivato"
+    "analyticsOff": "Disattivato",
+    "qrSurfaceDesc": "La scansione apre questa pagina nel browser del visitatore."
   },
   "BioLink": {
     "title": "Bio link",
