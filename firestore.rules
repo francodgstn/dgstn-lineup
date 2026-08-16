@@ -1221,6 +1221,37 @@ service cloud.firestore {
       allow write: if false;  // callables only — see the nested block above
     }
 
+    // purchases (collection group) — a contact reading their OWN course entitlements.
+    //
+    // What this authorises, precisely: the query the Space ("My courses") and the
+    // shop ("Open" instead of "Buy") both issue —
+    //   collectionGroup('purchases').where('contactId','==',me).where('teamId','==',myTeam)
+    // The nested courses/{courseId}/purchases block (further down, under "Online
+    // Courses plugin") cannot serve it: a collection-group read is matched only
+    // by a `{path=**}` statement.
+    //
+    // A LIST is authorised from the QUERY, not from the documents it would
+    // return. Firestore admits the query only if its own constraints prove that
+    // every matching document satisfies the condition below, and both operands
+    // here are pinned to the caller's token — so BOTH `where` clauses are
+    // mandatory, and naming another contact, another team, or dropping either
+    // clause fails the whole query rather than silently filtering it. Staff read
+    // these documents through the nested block, one at a time.
+    //
+    // Verified 2026-08-16 against the emulator with a real contact-session token
+    // (uid `contact:{id}`, claims contactId/teamId/sessionExpires) over the
+    // Firestore REST API: the scoped query returns the caller's own row, while
+    // naming another contact, naming another team, or dropping either clause is
+    // refused. packages/functions/src/connect/coursePurchaseAccess.test.ts fails
+    // if this block or either of its two constraints goes missing.
+    match /{path=**}/purchases/{purchaseId} {
+      allow list: if request.auth != null
+                  && request.auth.token.contactId != null
+                  && resource.data.contactId == request.auth.token.contactId
+                  && isContactOfTeam(resource.data.teamId);
+      allow write: if false;  // Connect webhook (Admin SDK) only
+    }
+
     // public_profile (collection group for trial booking)
     match /{path=**}/public_profile/{publicProfileId} {
       allow read;  // Public read access for trial booking
@@ -1333,12 +1364,30 @@ service cloud.firestore {
       }
 
       // Lifetime purchase entitlements. Granted only by the Connect webhook (admin SDK);
-      // clients never write. Read by the owning contact (Space unlock check) or staff.
-      // This block also governs the Space's `purchases` collection-group query.
+      // clients never write.
+      //
+      // This block covers reads AT THIS PATH ONLY — a staff member of the owning
+      // team, or the owning contact fetching their own entitlement document. It
+      // does NOT cover the Space/shop `purchases` collection-group query: a
+      // collection-group read is only ever matched by a `{path=**}` block, never
+      // by a nested match, so that query needs the `{path=**}/purchases` block
+      // in the "Group queries" section above. (This comment claimed the opposite until
+      // 2026-08-16, and the query 403'd with "No matching allow statements" for
+      // exactly as long as the claim stood.)
+      //
+      // The contact branch goes through `isContactOfTeam` for the same reason the
+      // collection-group block does: `request.auth.token.contactId` on its own is
+      // an identity, not a tenant boundary, and it carries no expiry. Checking it
+      // alone let an EXPIRED contact session — and a session minted for a
+      // different studio — fetch an entitlement document by id. Tightened
+      // 2026-08-16; no client reads this path (both the Space and the shop go
+      // through the collection group), and every server reader is the Admin SDK,
+      // so the narrowing takes nothing away from anyone.
       match /purchases/{contactId} {
         allow read: if (isAuthed()
             && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId))
-          || (request.auth != null && request.auth.token.contactId == resource.data.contactId);
+          || (isContactOfTeam(resource.data.teamId)
+            && request.auth.token.contactId == resource.data.contactId);
         allow write: if false;
       }
     }

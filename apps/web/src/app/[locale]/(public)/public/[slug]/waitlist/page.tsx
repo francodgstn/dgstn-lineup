@@ -37,6 +37,7 @@ import {
 import { WaiverStep } from '@/components/booking/WaiverStep'
 import { useWaiverGate } from '@/hooks/useWaiverGate'
 import { waiverErrorMessage } from '@/lib/waiver'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { usePublicTeam } from '../PublicTeamProvider'
 
 export const dynamic = 'force-dynamic'
@@ -221,11 +222,16 @@ export default function WaitlistPage() {
       const fn = httpsCallable<{ token: string }, WaitlistEntryView>(functions, 'getWaitlistEntry')
       const res = await fn({ token })
       setEntry(res.data)
-    } catch {
-      // Every failure here is the same failure to the reader: the link no longer
+    } catch (err: unknown) {
+      // Every failure here is the same failure TO THE READER: the link no longer
       // opens anything. The offer token is DELETED when an offer resolves, so
       // "expired" and "already claimed" are genuinely indistinguishable from
       // outside — and must be, or the credential would outlive its own offer.
+      //
+      // They are NOT indistinguishable to us, and the log is where that
+      // distinction has to live: without it, a broken callable and a spent offer
+      // both read as "invalid link" from the inside too.
+      reportPublicLoadFailure('waitlist/entry', err)
       setError(t('invalidLink'))
     } finally {
       setLoading(false)

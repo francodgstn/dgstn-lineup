@@ -13,6 +13,7 @@ import { Link } from '@/i18n/navigation'
 import { publicHref, returnHref } from '@/lib/publicRoutes'
 import { useWaiverGate } from '@/hooks/useWaiverGate'
 import { waiverErrorMessage } from '@/lib/waiver'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { WaiverStep } from '@/components/booking/WaiverStep'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
@@ -153,8 +154,11 @@ export default function SignupForm({ slug, from }: Props) {
           setStep((s) => (s === 'email' || s === 'code' ? 'success' : s))
           return
         }
-      } catch {
-        /* self-read failed — fall through to the normal details step */
+      } catch (err: unknown) {
+        // Falls through to the normal details step, which is the right default
+        // either way — but a self-read that fails for everyone would otherwise
+        // be invisible, since its success path only ever SKIPS a step.
+        reportPublicLoadFailure('signup/self-contact', err)
       }
       if (cancelled) return
       setStep((s) => (s === 'email' || s === 'code' ? 'details' : s))

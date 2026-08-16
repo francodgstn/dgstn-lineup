@@ -62,6 +62,7 @@ import {
   type WaiverRequirementResponse,
   type WaiverSignerChoice,
 } from '@/lib/waiver'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { usePublicTeam } from '../PublicTeamProvider'
@@ -107,11 +108,17 @@ export function SpaceWaiverCard({ variant }: { variant: 'banner' | 'card' }) {
           ...(contact?.id ? { contactId: contact.id } : {}),
         })
         setItems(res.data.waivers ?? [])
-      } catch {
-        // Silence is correct HERE and nowhere else: this is an ambient panel, not
-        // a step standing between somebody and a booking. Rendering a failure as
-        // "you owe a signature" would be an accusation produced by a network
-        // error.
+      } catch (err: unknown) {
+        // Silence TO THE VISITOR is correct here and nowhere else: this is an
+        // ambient panel, not a step standing between somebody and a booking.
+        // Rendering a failure as "you owe a signature" would be an accusation
+        // produced by a network error.
+        //
+        // Silence to the DEVELOPER is never correct. The two obligations are
+        // separate (lib/publicQueryError.ts), and only the first one is argued
+        // above — without the log, a rules change that breaks this panel for
+        // every studio looks exactly like every studio being up to date.
+        reportPublicLoadFailure('space/waivers', err)
         setItems([])
       }
     },

@@ -10,11 +10,16 @@ evidence rather than from a symptom. Delete an entry when it ships; do not let i
 rot into a claim nobody has re-checked.
 
 Found during manual testing of the local stack on **2026-08-15**, against
-commit `129a8c9` (Wave 3 Phase 3). All three are **pre-existing** — none was
-introduced by Wave 3 — and all three survived a full static pass (typecheck, 784
+commit `129a8c9` (Wave 3 Phase 3). All were **pre-existing** — none was
+introduced by Wave 3 — and all survived a full static pass (typecheck, 784
 tests, lint, four adversarial review lenses). They are integration-boundary
 defects: the code is correct about itself and wrong about the outside world,
 which is the category automated verification is structurally blind to.
+
+Entry 3 (Space "My courses" 403) shipped on **2026-08-16** and was deleted from
+this file per the rule above. The fix lives in the `{path=**}/purchases` block in
+`firestore.rules` and is held in place by
+`packages/functions/src/connect/coursePurchaseAccess.test.ts`.
 
 ---
 
@@ -100,52 +105,6 @@ automatically on verification.
 
 ---
 
-## 3. Space "My courses" 403s on the entitlements query
-
-**Severity: high** — a customer who has paid does not receive what they bought.
-
-A `purchase`-tier course a contact has paid for never appears in their Space.
-
-**Reproduced** with a real contact-session token (uid `contact:<id>`, claims
-`{contactId, teamId, sessionExpires}`) running the two queries `SpaceHome`
-issues:
-
-```
-QUERY 1  collectionGroup('public_profile') type==course, teamId==…  ->  4 docs, OK
-QUERY 2  collectionGroup('purchases')      contactId==…, teamId==…  ->  HTTP 403
-                                                "No matching allow statements"
-```
-
-So `purchasedCourseIds` is always empty, `ownsCourse` is always false,
-`hasAccess()` returns false, and the card never renders. Everything upstream is
-correct and was verified: the webhook wrote the entitlement, the course mirror
-carries `accessType: 'purchase'`, and the `ownsCourse` plumbing is intact through
-`clientPaymentSnapshot` into `resolvePaymentOptions`.
-
-The rule (`firestore.rules`, the `match /purchases/{contactId}` block) carries a
-comment saying it "governs the Space's `purchases` collection-group query". **It
-does not.** A collection-group LIST is evaluated without knowing which documents
-match, so a `resource.data` comparison cannot authorise it, and the sibling
-clause's `get()` cannot bind `$(courseId)` in that context.
-
-Three things to fix, and the second is arguably the most important:
-
-1. **The rule** — authorise from the request's own constraints (the query is
-   already scoped by `contactId` *and* `teamId`), never from `resource.data`.
-   Verify with a real contact token against the emulator, not by reading the
-   rule; reading it is what produced the false comment. Include negative tests:
-   contact A must not list contact B's entitlements, nor another team's.
-2. **The silent failure.** `SpaceHome.tsx` ends **both** effects with
-   `.catch(() => {})`, so a hard 403 renders as "no courses" rather than an
-   error. Without this fix the next rules regression is equally invisible.
-   `QueryErrorState` is already imported in that file. Audit other public
-   surfaces for the same pattern.
-3. **The index.** `firestore.index.json` needs a collection-group index on
-   `purchases (contactId, teamId)`. The emulator auto-creates indexes, so this
-   works locally and fails in staging/production even after the rule is fixed.
-
----
-
 ## Smaller, unfiled
 
 - **`stripe:listen` is unusable in a worktree.** The npm script hardcodes
@@ -162,6 +121,17 @@ Three things to fix, and the second is arguably the most important:
   (display only); one under-qualified `only` comment in `staffBooking.ts`.
 
 ---
+
+### Trial booking hides a failed read as "no trial sessions"
+
+`apps/web/src/app/[locale]/(public)/public/[slug]/trial-booking/TrialBookingForm.tsx`
+logs its failed session read (2026-08-16), but still renders the failure as an
+empty list — a visitor who came to book a trial is told the studio offers none.
+
+Left open deliberately: closing it means threading an error state through the
+whole trial flow, which is more than the surrounding sweep was scoped for. It is
+the one acknowledged exception to rule 1 in `apps/web/src/lib/publicQueryError.ts`,
+and that header points here rather than quietly weakening the rule.
 
 ## Feature requests, queued (not defects)
 

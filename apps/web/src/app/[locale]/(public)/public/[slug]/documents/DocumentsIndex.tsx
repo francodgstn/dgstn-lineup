@@ -8,15 +8,19 @@ import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { FileText, Link2, ChevronRight } from 'lucide-react'
 import type { DocumentPublicProfile } from '@linyup/shared'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { usePublicTeam } from '../PublicTeamProvider'
 
 // World-readable summaries only — collection-group query over
 // documents/{id}/public_profile/{id}, never the root `documents` collection.
 function usePublicDocuments(teamId: string) {
-  const [state, setState] = useState<{ loading: boolean; docs: DocumentPublicProfile[] }>({
-    loading: true,
-    docs: [],
-  })
+  const [state, setState] = useState<{
+    loading: boolean
+    docs: DocumentPublicProfile[]
+    error: unknown
+  }>({ loading: true, docs: [], error: null })
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -33,23 +37,34 @@ function usePublicDocuments(teamId: string) {
         const docs = snap.docs
           .map((d) => d.data() as DocumentPublicProfile)
           .sort((a, b) => a.title.localeCompare(b.title))
-        setState({ loading: false, docs })
-      } catch {
-        if (!cancelled) setState({ loading: false, docs: [] })
+        setState({ loading: false, docs, error: null })
+      } catch (err: unknown) {
+        // These are a studio's terms, policies and waivers. "This studio has
+        // published no documents" is a statement about their legal posture —
+        // never make it on the strength of a query that failed.
+        if (cancelled) return
+        reportPublicLoadFailure('documents/index', err)
+        setState({ loading: false, docs: [], error: err })
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [teamId])
+  }, [teamId, retryKey])
 
-  return state
+  return {
+    ...state,
+    retry: () => {
+      setState((s) => ({ ...s, loading: true, error: null }))
+      setRetryKey((k) => k + 1)
+    },
+  }
 }
 
 export function DocumentsIndex() {
   const t = useTranslations('Documents')
   const { slug, teamId, team } = usePublicTeam()
-  const { loading, docs } = usePublicDocuments(teamId)
+  const { loading, docs, error, retry } = usePublicDocuments(teamId)
 
   return (
     <div className="mx-auto max-w-xl py-8 px-4 space-y-5">
@@ -64,6 +79,8 @@ export function DocumentsIndex() {
             <div key={i} className="h-14 rounded-lg border bg-muted/40 animate-pulse" />
           ))}
         </div>
+      ) : error != null ? (
+        <QueryErrorState onRetry={retry} detail={loadFailureDetail(error)} />
       ) : docs.length === 0 ? (
         <div className="rounded-lg border border-dashed py-12 text-center">
           <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />

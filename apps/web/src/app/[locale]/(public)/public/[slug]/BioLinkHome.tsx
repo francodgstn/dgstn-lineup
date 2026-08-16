@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
   Instagram,
   Facebook,
@@ -85,8 +86,10 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
       .then((snap) => {
         if (!snap.empty) setTeam(snap.docs[0].data() as BioLinkTeamData)
       })
-      .catch(() => {
-        /* leave team null → not-found state */
+      .catch((err: unknown) => {
+        // Terminal not-found is right for the visitor; silence is not right for
+        // us — this is the same lookup every public surface depends on.
+        reportPublicLoadFailure('bio-link/resolve-slug', err)
       })
       .finally(() => setLoading(false))
   }, [slug, teamProp])

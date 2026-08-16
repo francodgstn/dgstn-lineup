@@ -32,6 +32,8 @@ import {
   type CourseAccessRule,
 } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { publicHref, publicSubHref } from '@/lib/publicRoutes'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
@@ -158,6 +160,7 @@ export default function ShopHome({
   initialTab: Tab | null
 }) {
   const t = useTranslations('Shop')
+  const tCommon = useTranslations('Common')
   // The promo widget's own namespace — a promo is not a shop item, and one
   // namespace serves every mount of PromoCodeField rather than a fork per
   // surface. (docs/promo-codes.md → "The mounts" owns that list.)
@@ -189,7 +192,55 @@ export default function ShopHome({
   const [courseFocusHandled, setCourseFocusHandled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Distinct from `error` (a checkout failure): this one means the CATALOGUE
+  // itself did not load, and it must never be shown as "this studio sells
+  // nothing" — the shape that hid the Space entitlements 403 for months.
+  // …and it is kept SEPARATE from the entitlements failure below, because the two
+  // say different things and the page owes a different answer to each:
+  //
+  //   catalogueLoadError  the shop's own contents did not load → the page failed.
+  //   entitlementsError   the catalogue is fine; we just don't know what the
+  //                       visitor already owns, so an owned course may read
+  //                       "Buy" → a caveat over a real page, not a failed page.
+  //
+  // One shared slot made an EMPTY catalogue plus a failed entitlements read
+  // render as "we couldn't load what this studio sells", which is false. Each is
+  // also cleared where its own success is stored, so a transient failure cannot
+  // pin a stale banner over data that has since loaded correctly.
+  const [catalogueLoadError, setCatalogueLoadError] = useState<unknown>(null)
+  const [entitlementsError, setEntitlementsError] = useState<unknown>(null)
+  // Has an entitlements answer actually arrived FOR THE CURRENT IDENTITY?
+  // `purchasedCourseIds.size === 0` cannot say: it is the same empty set for
+  // "owns nothing", "still loading" and "the read was refused". Only the last two
+  // are dangerous, and only for the paths that open a checkout WITHOUT the
+  // visitor asking for that specific item again (the ?course= deep link, and its
+  // resume after sign-in) — see both effects below.
+  /**
+   * WHO the entitlement set belongs to — not whether a read finished.
+   *
+   * `undefined` = never resolved; `null` = resolved for a signed-out visitor;
+   * a string = resolved for that contact. `entitlementsResolved` is then DERIVED
+   * during render, which is what makes it impossible to read a stale answer.
+   *
+   * A boolean could not do this. On the render where `isAuthenticated` flips,
+   * the fetch effect below (declared first) calls its setter — which only
+   * SCHEDULES a re-render — and the consumer effects then run later in the SAME
+   * commit still holding the guest's `true`. They would open a checkout against
+   * the empty set the page starts with, which is the precise thing the guard
+   * exists to prevent. A dependency array does not help: the value is stale
+   * within the commit, not between commits.
+   */
+  const [entitlementsFor, setEntitlementsFor] = useState<string | null | undefined>(undefined)
+  const entitlementsResolved = entitlementsFor === (contact?.id ?? null)
+  const [retryKey, setRetryKey] = useState(0)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  function retryCatalogue() {
+    setCatalogueLoadError(null)
+    setEntitlementsError(null)
+    setLoading(true)
+    setRetryKey((k) => k + 1)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -260,9 +311,12 @@ export default function ShopHome({
           .filter((a) => a.name && hasMoneyStory(a))
           .sort(compareActivities)
         setPayPerVisitActivities(activityList)
+        setCatalogueLoadError(null)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return
+        reportPublicLoadFailure('shop/catalogue', err)
+        setCatalogueLoadError(err)
         setPlans([])
         setProducts([])
         setCourses([])
@@ -275,16 +329,25 @@ export default function ShopHome({
     return () => {
       cancelled = true
     }
-  }, [teamId])
+  }, [teamId, retryKey])
 
   // Which 'purchase'-tier courses the signed-in contact already owns (lifetime
   // entitlements) — so an owned course shows "Open" instead of "Buy".
   useEffect(() => {
     if (!isAuthenticated || !contact?.id) {
       setPurchasedCourseIds(new Set())
+      setEntitlementsError(null)
+      // Nobody is signed in, so there is no entitlement this page could be
+      // hiding: the question is answered, not pending. (What a guest CAN'T do is
+      // buy — startCheckout sends them to sign-in first, and the resume below
+      // re-asks this question as the contact they turn out to be.)
+      setEntitlementsFor(null)
       return
     }
     let cancelled = false
+    // No need to mark "in flight": `entitlementsFor` already names the PREVIOUS
+    // identity, so the derived `entitlementsResolved` is false from the first
+    // render on which the contact changed.
     getDocs(
       query(
         collectionGroup(db, 'purchases'),
@@ -297,12 +360,26 @@ export default function ShopHome({
         setPurchasedCourseIds(
           new Set(snap.docs.map((d) => (d.data().courseId as string | undefined) ?? d.id))
         )
+        setEntitlementsError(null)
+        setEntitlementsFor(contact.id)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (cancelled) return
+        // A failure here re-sells a course the contact already owns — the button
+        // says "Buy" for something they paid for. Loud in the log, and the
+        // partial banner tells them the page is not showing the whole truth. It
+        // does NOT claim the catalogue failed: the catalogue is right here.
+        // `entitlementsFor` is deliberately NOT advanced, so the derived
+        // `entitlementsResolved` stays false: a card the visitor clicks
+        // themselves is their own decision, but nothing may OPEN a checkout on
+        // their behalf off an answer we never got.
+        reportPublicLoadFailure('shop/purchases', err)
+        setEntitlementsError(err)
+      })
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, contact?.id, teamId])
+  }, [isAuthenticated, contact?.id, teamId, retryKey])
 
   useEffect(() => {
     if (team?.bioLinkTheme !== 'auto') return
@@ -317,6 +394,21 @@ export default function ShopHome({
   const hasProducts = products.length > 0
   const hasCourses = courses.length > 0
   const hasGiftCards = giftCardAmounts.length > 0
+  const catalogueIsEmpty = !hasSubscriptions && !hasProducts && !hasCourses && !hasGiftCards
+  // The full-page error is reserved for the case where the CATALOGUE query is the
+  // thing that failed — which, here, always means NOTHING loaded: the three reads
+  // are one `Promise.all`, so a single rejection skips the whole `then`, and the
+  // catch empties every list. There is no partial catalogue to preserve, so
+  // `&& catalogueIsEmpty` only ever restated `catalogueLoadError != null` and is
+  // gone. (Should the load ever become per-query and keep what succeeded, this is
+  // the line that has to grow the distinction back.)
+  const showCatalogueError = catalogueLoadError != null
+  // The caveat banner is for the OTHER failure, which is not a failure of the
+  // page: the catalogue is right here and correct, we just don't know what the
+  // visitor already owns. An EMPTY catalogue is a legitimate answer and keeps
+  // this banner over it — "nothing for sale" stays true, "and we know what you
+  // own" does not.
+  const showPartialWarning = !showCatalogueError && entitlementsError != null
   const availableTabs = useMemo<Tab[]>(() => {
     const out: Tab[] = []
     if (hasSubscriptions) out.push('subscriptions')
@@ -367,14 +459,41 @@ export default function ShopHome({
 
   // Deep-link from the Space "Buy" CTA (?course=): open that course's checkout once.
   // Only purchase-tier courses are buyable — ignore the param for other tiers.
+  //
+  // AND ONLY ONCE OWNERSHIP IS KNOWN. This is the one place the page opens a
+  // payment panel without the visitor having pressed anything on it, so it is the
+  // one place `purchasedCourseIds` may not be read as fact before the query
+  // behind it has answered: on the empty set every page starts with, an owned
+  // course reads "not owned" and the deep link invites the buyer to pay for it a
+  // second time. Unresolved is not "not owned" — it is "don't know", and "don't
+  // know" does not open a checkout.
   useEffect(() => {
     if (!focusCourseId || loading || courseFocusHandled) return
+    if (!entitlementsResolved) {
+      // In flight: come back when it lands (this effect re-runs on it).
+      if (entitlementsError == null) return
+      // Refused, and it will not answer itself. Give the deep link up rather
+      // than leave it armed: the catalogue is on screen with its caveat banner,
+      // and a Buy the visitor presses there is a decision they made knowing the
+      // page told them it may be incomplete.
+      setCourseFocusHandled(true)
+      return
+    }
     const c = courses.find((x) => x.id === focusCourseId)
     if (c && c.accessType === 'purchase' && !purchasedCourseIds.has(c.id)) {
       startCheckout({ kind: 'course', course: c })
     }
     setCourseFocusHandled(true)
-  }, [focusCourseId, loading, courseFocusHandled, courses, purchasedCourseIds, startCheckout])
+  }, [
+    focusCourseId,
+    loading,
+    courseFocusHandled,
+    courses,
+    purchasedCourseIds,
+    entitlementsResolved,
+    entitlementsError,
+    startCheckout,
+  ])
 
   const isDark = team?.bioLinkTheme === 'dark' || (team?.bioLinkTheme === 'auto' && systemDark)
   const bg = team?.bioLinkBackground
@@ -435,12 +554,36 @@ export default function ShopHome({
   // Resume a pending checkout once sign-in (or registration) resolves — always as
   // the authenticated contact. Unknown emails register in the sign-in dialog; there
   // is no anonymous fallback anymore.
+  //
+  // A COURSE waits here on the same fact the deep link waits on, and for a
+  // sharper version of the same reason: signing in is the exact moment ownership
+  // becomes knowable, so resuming the instant `isAuthenticated` flips would open
+  // the panel on the guest's empty set every time. A read that FAILED does
+  // release the wait — the caveat banner is up, and refusing a purchase the
+  // visitor has now asked for twice would be a dead end with no way out of it.
   useEffect(() => {
     if (!pendingCheckout || !isAuthenticated) return
+    if (pendingCheckout.kind === 'course') {
+      if (!entitlementsResolved && entitlementsError == null) return
+      if (purchasedCourseIds.has(pendingCheckout.course.id)) {
+        // Already theirs. Selling it again is the failure mode; say so and let
+        // the card behind this — now reading "Open" — take them to it.
+        setPendingCheckout(null)
+        toast.info(t('alreadyOwned'))
+        return
+      }
+    }
     setCheckout(pendingCheckout)
     setError(null)
     setPendingCheckout(null)
-  }, [isAuthenticated, pendingCheckout])
+  }, [
+    isAuthenticated,
+    pendingCheckout,
+    entitlementsResolved,
+    entitlementsError,
+    purchasedCourseIds,
+    t,
+  ])
 
   function openMembership(
     typeId: string,
@@ -862,6 +1005,29 @@ export default function ShopHome({
           </div>
         </div>
 
+        {/* Something the page needed didn't load — most often the entitlements
+            query, which decides whether an owned course reads "Open" or "Buy".
+            Say so rather than letting the page present a partial truth as the
+            truth. Shown over an empty catalogue too: "nothing for sale" is then
+            still true, but "and we know what you own" is not. */}
+        {!loading && showPartialWarning && (
+          <div
+            role="alert"
+            className="mt-6 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm"
+            style={{ background: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}
+          >
+            <span style={{ color: textMuted }}>{t('loadPartial')}</span>
+            <button
+              type="button"
+              onClick={retryCatalogue}
+              className="shrink-0 text-xs font-semibold hover:underline"
+              style={{ color: accent }}
+            >
+              {tCommon('errorRetry')}
+            </button>
+          </div>
+        )}
+
         {/* Memberships ⇄ Products ⇄ Courses toggle (only when 2+ surfaces exist) */}
         {showTabs && (
           <div
@@ -903,7 +1069,21 @@ export default function ShopHome({
           <div className="mt-10 flex justify-center">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: textMuted }} />
           </div>
-        ) : !hasSubscriptions && !hasProducts && !hasCourses && !hasGiftCards ? (
+        ) : showCatalogueError ? (
+          // The CATALOGUE query is the one that failed, and nothing loaded.
+          // "This studio sells nothing" would be a lie told confidently — say the
+          // page failed and offer the retry. Painted in the studio's own theme:
+          // app tokens go near-black on a dark bio-link theme, i.e. invisible in
+          // precisely the case this block exists for.
+          <QueryErrorState
+            onRetry={retryCatalogue}
+            title={t('loadFailed')}
+            detail={loadFailureDetail(catalogueLoadError)}
+            theme={{ textMain, textMuted, accent, border: cardBorder }}
+          />
+        ) : catalogueIsEmpty ? (
+          // The catalogue loaded and is genuinely empty. True regardless of what
+          // else failed — the banner above carries that part.
           <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
             {t('noItems')}
           </p>

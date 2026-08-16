@@ -14,6 +14,7 @@ import { collectionGroup, query, where, getDocs, Timestamp } from 'firebase/fire
 import { httpsCallable } from 'firebase/functions'
 import { browseDurationMinutes, mergeAvailabilitySlots } from '@linyup/shared'
 import { db, functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import type { KioskSession } from './useKioskSessions'
 
 interface AvailCoachLite {
@@ -88,11 +89,15 @@ export function useKioskAvailability(teamId: string, enabled: boolean, days = 7)
       if (alive) setWindows(out)
     }
 
-    load().catch(() => {
+    load().catch((err: unknown) => {
       // Additive — a failure must leave the real schedule untouched.
+      reportPublicLoadFailure('kiosk/availability', err)
       if (alive) setWindows([])
     })
-    const id = setInterval(() => void load().catch(() => {}), REFRESH_MS)
+    const id = setInterval(
+      () => void load().catch((err: unknown) => reportPublicLoadFailure('kiosk/availability', err)),
+      REFRESH_MS
+    )
     return () => {
       alive = false
       clearInterval(id)

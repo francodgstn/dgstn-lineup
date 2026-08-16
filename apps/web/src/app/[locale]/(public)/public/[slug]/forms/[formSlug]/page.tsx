@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { collectionGroup, getDocs, limit, query, where } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,7 +46,8 @@ function usePublicForm(teamId: string, formSlug: string): LoadState {
         }
         const doc = snap.docs[0]
         setState({ status: 'ready', formId: doc.id, profile: doc.data() as FormPublicProfile })
-      } catch {
+      } catch (err: unknown) {
+        reportPublicLoadFailure('forms/resolve-slug', err)
         if (!cancelled) setState({ status: 'notfound' })
       }
     })()

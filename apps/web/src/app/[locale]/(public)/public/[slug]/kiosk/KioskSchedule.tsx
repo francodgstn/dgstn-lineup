@@ -39,6 +39,11 @@ interface Props {
   view: 'calendar' | 'list'
   /** Team id — enables the optional appointment-availability overlay. */
   teamId?: string
+  /** Set when the session feed failed — see the empty state below. */
+  error?: unknown
+  /** True once the feed has successfully loaded at least once — which is what
+   *  makes an empty board a fact rather than a failure. See the empty state. */
+  loaded?: boolean
 }
 
 /**
@@ -51,7 +56,7 @@ interface Props {
  */
 const AVAILABILITY_AUTO_OFF_MS = 60_000
 
-export default function KioskSchedule({ sessions, loading, view, teamId }: Props) {
+export default function KioskSchedule({ sessions, loading, view, teamId, error, loaded }: Props) {
   const t = useTranslations('Kiosk')
   const [selected, setSelected] = useState<PlannerSession | null>(null)
   const [showAvailability, setShowAvailability] = useState(false)
@@ -85,9 +90,23 @@ export default function KioskSchedule({ sessions, loading, view, teamId }: Props
   }
 
   if (sessions.length === 0) {
+    // Two different facts, two different sentences. "No classes today" closes the
+    // desk; "we couldn't load the schedule" tells the front desk to check, and is
+    // the only one we can honestly say when the feed failed and left us nothing.
+    //
+    // "LEFT US NOTHING" IS THE WHOLE TEST, and `error != null` is not it. The feed
+    // keeps its last good result across a failed refresh, and on a genuinely quiet
+    // day that result is an empty list — so a board correctly reading "no classes"
+    // flipped to "couldn't load the schedule" the first time a five-minute refresh
+    // blipped, and stayed there, unattended, asserting a fault over a day that
+    // simply had nothing on it. A feed that has loaded ONCE has an answer; only
+    // one that never has is unavailable.
+    const neverLoaded = error != null && loaded !== true
     return (
       <div className="flex h-full items-center justify-center py-10 text-center">
-        <p className="text-muted-foreground">{t('noSessions')}</p>
+        <p className="text-muted-foreground">
+          {neverLoaded ? t('sessionsUnavailable') : t('noSessions')}
+        </p>
       </div>
     )
   }

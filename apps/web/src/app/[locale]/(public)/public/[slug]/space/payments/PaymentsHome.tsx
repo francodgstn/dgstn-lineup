@@ -6,6 +6,8 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { formatCurrency } from '@/lib/format'
 import { CreditCard, Receipt, ExternalLink, LogIn, Loader2 } from 'lucide-react'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 import { usePublicTeam } from '../../PublicTeamProvider'
@@ -23,7 +25,9 @@ export default function PaymentsHome() {
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
   const currency = team?.default_currency ?? 'CHF'
-  const { data, isLoading } = useSpacePayments()
+  // A failed MONEY read must never render as "No payments yet": that tells
+  // somebody who paid that there is no record of it.
+  const { data, isLoading, isError, error, refetch } = useSpacePayments()
   const [portalLoading, setPortalLoading] = useState(false)
 
   const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
@@ -54,8 +58,11 @@ export default function PaymentsHome() {
       const res = await fn({ slug, locale, origin: window.location.origin })
       if (res.data?.url) window.location.href = res.data.url
       else setPortalLoading(false)
-    } catch {
-      // Portal not configured / no customer — leave the button and stop the spinner.
+    } catch (err: unknown) {
+      // Portal not configured / no customer — leave the button and stop the
+      // spinner. Silent to the visitor by design, but never silent in the log:
+      // a button that does nothing on click has to be diagnosable.
+      reportPublicLoadFailure('space/billing-portal', err)
       setPortalLoading(false)
     }
   }
@@ -99,6 +106,13 @@ export default function PaymentsHome() {
               style={{ borderColor: accent, borderTopColor: 'transparent' }}
             />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            onRetry={() => void refetch()}
+            title={t('paymentsLoadFailed')}
+            detail={loadFailureDetail(error)}
+            theme={{ textMain, textMuted, accent, border: cardBorder }}
+          />
         ) : payments.length === 0 ? (
           <p className="text-sm py-4" style={{ color: textMuted }}>{t('paymentsEmpty')}</p>
         ) : (

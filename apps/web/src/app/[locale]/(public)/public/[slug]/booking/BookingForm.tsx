@@ -58,6 +58,7 @@ import { BackButton } from '@/components/booking/BackButton'
 import { WaiverStep } from '@/components/booking/WaiverStep'
 import { useWaiverGate } from '@/hooks/useWaiverGate'
 import { waiverErrorMessage } from '@/lib/waiver'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
   GiftCardRedeemField,
   giftCardCheckoutErrorMessage,
@@ -619,8 +620,13 @@ export default function BookingForm({
           if (data && data.type === 'session' && data.teamId === teamId) {
             target = { ...data, id: snap.id } as SessionProfile
           }
-        } catch {
-          // Unreadable → treated as gone below.
+        } catch (err: unknown) {
+          // Unreadable → treated as gone below. The DEGRADATION is acceptable
+          // (the visitor lands on the activity's next available times and can
+          // still book) but the SILENCE was not: a rules or index change that
+          // breaks every deep link from a reminder email would look exactly like
+          // people clicking stale links.
+          reportPublicLoadFailure('booking/deep-link-session', err)
         }
       }
 

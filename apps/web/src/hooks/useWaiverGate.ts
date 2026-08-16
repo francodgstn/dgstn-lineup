@@ -66,6 +66,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
   waiverAcceptancePayload,
   waiverNeedsVisitor,
@@ -189,9 +190,18 @@ export function useWaiverGate({ teamId, requiredWaivers, activityId }: Options):
   const resolvedRef = useRef(false)
   const errorRef = useRef<'load' | 'rate_limited' | null>(null)
 
+  // BOTH catches in this hook end here — the first resolve and the step's Retry —
+  // so this is the only place either read can leave a trace. The blocking screen
+  // it raises is for the VISITOR and is not a trace: a studio reporting "nobody
+  // can get past the waiver step" needs a line to grep, and the reason the
+  // requirement call is failing (a rules change, a rate limit, a cold callable)
+  // is only visible from inside the error. Rule 1 of lib/publicQueryError.ts —
+  // there is no acceptable silent catch on a read path, not even one that already
+  // shows the visitor something.
   const fail = useCallback((err: unknown) => {
-    const reason = (err as { details?: { reason?: string } }).details?.reason
+    const reason = (err as { details?: { reason?: string } } | null)?.details?.reason
     const next = reason === 'rate_limited' ? 'rate_limited' : 'load'
+    reportPublicLoadFailure(`waiver-gate/${next === 'rate_limited' ? 'rate-limited' : 'requirement'}`, err)
     errorRef.current = next
     setError(next)
   }, [])

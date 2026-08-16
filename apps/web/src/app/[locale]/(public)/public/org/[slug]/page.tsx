@@ -4,6 +4,7 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { ORG_SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
 import type { OrgPublishedSite } from '@linyup/shared'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import PublicOrgSite from './PublicOrgSite'
 
 // Public organization website route. Sibling to the team site's static `org`
@@ -27,7 +28,12 @@ async function fetchPublishedOrgSite(slug: string): Promise<OrgPublishedSite | n
       query(collection(db, ORG_SITE_PUBLISHED_COLLECTION), where('slug', '==', slug), limit(1))
     )
     return snap.empty ? null : (snap.docs[0].data() as OrgPublishedSite)
-  } catch {
+  } catch (err: unknown) {
+    // Metadata falls back to the generic title, but never silently — a broken
+    // server-side read otherwise masquerades as a missing site. (The team-site
+    // twin, (public)/public/[slug]/site/page.tsx, has said so since it was
+    // written; this sibling was the copy that never got the line.)
+    reportPublicLoadFailure('org-site/metadata', err)
     return null
   }
 }

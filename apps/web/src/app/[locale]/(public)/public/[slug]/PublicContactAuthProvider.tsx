@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions'
 import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth'
 import { functions } from '@/lib/firebase'
 import { auth } from '@/lib/firebase-auth'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { usePublicTeam } from './PublicTeamProvider'
 
 // The passwordless CONTACT-SESSION auth, lifted from Space to the team root so it
@@ -155,8 +156,11 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
             clearSession()
           }
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           // Token refresh failed (revoked/stale session) — treat as signed out.
+          // Logged because "it keeps signing me out" is otherwise a report with
+          // nothing behind it: this is the only place that decides it.
+          reportPublicLoadFailure('contact-auth/token-refresh', err)
           clearSession()
         })
     })

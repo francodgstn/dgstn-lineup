@@ -6,6 +6,8 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { formatCurrency } from '@/lib/format'
 import { CreditCard, BadgeCheck, User, Pencil, Check, LogIn } from 'lucide-react'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail } from '@/lib/publicQueryError'
 import { SpaceWaiverCard } from '../SpaceWaiverCard'
 import { ConsentHistoryDownload } from './ConsentHistoryDownload'
 import { useSpaceAuth } from '../SpaceAuthProvider'
@@ -34,7 +36,10 @@ export default function AccountHome() {
   const { accent, onDark, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
   const currency = team?.default_currency ?? 'CHF'
-  const { data: contact, isLoading } = useSpaceContact()
+  // Same read, same rule as SpaceHome's membership block: a failure here means we
+  // do not know what this contact holds, which is a different statement from
+  // "they hold nothing" — and this page renders it to the member's own face.
+  const { data: contact, isLoading, isError, error, refetch } = useSpaceContact()
 
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ firstname: '', lastname: '', phone: '', birthdate: '', note: '' })
@@ -125,6 +130,13 @@ export default function AccountHome() {
         </div>
         {isLoading ? (
           <div className="h-5 w-40 rounded animate-pulse" style={{ background: cardBorder }} />
+        ) : isError ? (
+          <QueryErrorState
+            onRetry={() => void refetch()}
+            title={t('membershipLoadFailed')}
+            detail={loadFailureDetail(error)}
+            theme={{ textMain, textMuted, accent, border: cardBorder }}
+          />
         ) : !hasMembership ? (
           <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
         ) : (
@@ -160,7 +172,10 @@ export default function AccountHome() {
               {t('profileTitle')}
             </h2>
           </div>
-          {!editing && (
+          {/* No editing on top of a failed read: the form prefills FROM `contact`,
+              so opening it after the read failed would offer blank name fields and
+              submit them as the member's new details. */}
+          {!editing && !isError && (
             <button
               onClick={() => { setEditing(true); setStatus('idle') }}
               className="inline-flex items-center gap-1 text-xs font-medium"
@@ -216,6 +231,31 @@ export default function AccountHome() {
               </button>
             </div>
           </form>
+        ) : isLoading ? (
+          <div className="space-y-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-4 rounded animate-pulse" style={{ background: cardBorder }} />
+            ))}
+          </div>
+        ) : isError ? (
+          // The list below renders '—' in every row when there is no contact, and
+          // '—' is a statement: it says the studio holds no phone number for you,
+          // no date of birth, and — with the name row falling back the same way —
+          // barely a record at all. After a FAILED read that is four claims we
+          // cannot make, laid out as this member's current details.
+          //
+          // Deliberately the SENTENCE and not a second QueryErrorState: this is
+          // the same `useSpaceContact` read that already failed in the membership
+          // block above, which carries the block and the Retry that fixes both.
+          // One failure, reported once, said in both places it matters.
+          <p
+            role="alert"
+            className="text-sm"
+            style={{ color: textMuted }}
+            title={loadFailureDetail(error) ?? undefined}
+          >
+            {t('profileLoadFailed')}
+          </p>
         ) : (
           <dl className="space-y-1.5">
             <Row label={t('fieldName')} value={`${contact?.firstname ?? ''} ${contact?.lastname ?? ''}`.trim() || '—'} textMain={textMain} textMuted={textMuted} />

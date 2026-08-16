@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { ORG_SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
 import type { OrgPublishedSite } from '@linyup/shared'
 import WebsiteRenderer from '@/components/site/WebsiteRenderer'
@@ -25,8 +26,8 @@ export default function PublicOrgSite({ slug }: { slug: string }) {
       .then((snap) => {
         if (!snap.empty) setSite(snap.docs[0].data() as OrgPublishedSite)
       })
-      .catch(() => {
-        /* leave null → not-found */
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('org-site/published', err) // terminal not-found, but never silent
       })
       .finally(() => setLoading(false))
   }, [slug])

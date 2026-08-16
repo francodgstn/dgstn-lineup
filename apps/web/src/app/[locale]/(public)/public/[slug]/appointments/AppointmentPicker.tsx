@@ -21,6 +21,7 @@ import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/ui/query-error'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { FlowShell } from '@/components/booking/FlowShell'
 import { useBookingChrome } from '@/components/booking/BookingChrome'
 import { MiniCalendar, toDateKey } from '@/components/booking/MiniCalendar'
@@ -1473,6 +1474,9 @@ export default function AppointmentPicker({
         }
       } catch (err) {
         if (!alive) return
+        // The visitor gets QueryErrorState below; the developer gets this. Two
+        // separate obligations — this surface had the first and not the second.
+        reportPublicLoadFailure('appointments/availability', err)
         setCoaches([])
         setLoadError(errorDetails(err).message ?? null)
       } finally {

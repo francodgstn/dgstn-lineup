@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { useLocale, useTranslations } from 'next-intl'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
   SITE_PUBLISHED_COLLECTION,
   parseDocId,
@@ -53,8 +54,8 @@ export default function PublicSite({ slug }: { slug: string }) {
       .then((snap) => {
         if (!snap.empty) setSite(snap.docs[0].data() as PublishedSite)
       })
-      .catch(() => {
-        /* leave null → not-found */
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('site/published', err) // terminal not-found, but never silent
       })
       .finally(() => setLoading(false))
   }, [slug])

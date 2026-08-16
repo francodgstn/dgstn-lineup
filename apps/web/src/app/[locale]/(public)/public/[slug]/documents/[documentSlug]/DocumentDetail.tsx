@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { collectionGroup, getDocs, limit, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { RichTextContent } from '@/components/RichTextEditor'
@@ -39,7 +40,8 @@ function usePublicDocument(teamId: string, documentSlug: string): LoadState {
           return
         }
         setState({ status: 'ready', profile: snap.docs[0].data() as DocumentPublicProfile })
-      } catch {
+      } catch (err: unknown) {
+        reportPublicLoadFailure('documents/detail', err)
         if (!cancelled) setState({ status: 'notfound' })
       }
     })()

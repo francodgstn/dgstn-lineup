@@ -20,6 +20,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 
 export interface KioskSession {
   id: string
@@ -41,6 +42,16 @@ const REFRESH_MS = 5 * 60 * 1000 // 5 minutes — plenty fresh for a wall displa
 export function useKioskSessions(teamId: string) {
   const [sessions, setSessions] = useState<KioskSession[]>([])
   const [loading, setLoading] = useState(true)
+  // A wall display cannot be asked to retry, so the board must not lie while
+  // unattended: `error` is what lets it say "couldn't load" instead of showing a
+  // blank day, and the last good feed is KEPT on failure (see the catch below).
+  const [error, setError] = useState<unknown>(null)
+  // …and keeping the last good feed is exactly why `error` alone cannot decide
+  // the wording: an EMPTY last good feed is a real answer about a real day, and
+  // it stays real when a later refresh fails. Only a board that has never once
+  // loaded can honestly say the schedule is unavailable, so the consumer needs
+  // this fact too — `sessions.length === 0` cannot tell the two apart.
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -66,9 +77,17 @@ export function useKioskSessions(teamId: string) {
             (d) => ({ ...(d.data() as Omit<KioskSession, 'id'>), id: d.id }) as KioskSession
           )
           setSessions(list)
+          setError(null)
+          setLoaded(true)
         })
-        .catch(() => {
-          if (alive) setSessions([])
+        .catch((err: unknown) => {
+          if (!alive) return
+          // The old behaviour blanked the board on any failure — one refresh
+          // through a flaky router and a studio's whole day read "no classes".
+          // Keep the last good feed; the schedule surfaces the error only when
+          // it has nothing left to show.
+          reportPublicLoadFailure('kiosk/sessions', err)
+          setError(err)
         })
         .finally(() => {
           if (alive) setLoading(false)
@@ -83,5 +102,5 @@ export function useKioskSessions(teamId: string) {
     }
   }, [teamId])
 
-  return { sessions, loading }
+  return { sessions, loading, error, loaded }
 }

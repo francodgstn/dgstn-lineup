@@ -10,7 +10,7 @@
 // visitors get a sign-in wall (this is a "my account" area), so free-course
 // discovery also flows through the shop.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
@@ -20,6 +20,9 @@ import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRigh
 import { resolvePaymentOptions, heldSubscriptionTypeIds, type CourseAccessRule } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { formatCurrency } from '@/lib/format'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { Skeleton } from '@/components/ui/skeleton'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { SpaceWaiverCard } from './SpaceWaiverCard'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
@@ -76,6 +79,48 @@ function hasAccess(
   )
 }
 
+// ─── One entry in "My courses" ────────────────────────────────────────────────
+// Extracted because the section renders the grid from two branches: the normal
+// one, and the degraded one where a query failed and we show the error state
+// above whatever entitlements we could still resolve.
+
+function CourseCard({
+  course,
+  slug,
+  cardStyle,
+}: {
+  course: PublicCourseCard
+  slug: string
+  cardStyle: CSSProperties
+}) {
+  const t = useTranslations('Space')
+  const { textMain, textMuted } = useSpaceTheme()
+  return (
+    <Link
+      href={`/public/${slug}/space/courses/${course.slug}` as Route}
+      className="rounded-xl overflow-hidden transition-all hover:scale-[1.015] hover:shadow-lg"
+      style={cardStyle}
+    >
+      <div className="aspect-video bg-muted/30 flex items-center justify-center overflow-hidden">
+        {course.coverImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={course.coverImageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
+        )}
+      </div>
+      <div className="p-3">
+        <p className="font-semibold text-sm leading-snug" style={{ color: textMain }}>
+          {course.title}
+        </p>
+        <p className="text-xs mt-1" style={{ color: textMuted }}>
+          {t('lessonCount', { count: course.lessonCount ?? 0 })}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceHome() {
@@ -84,10 +129,25 @@ export default function SpaceHome() {
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
   const currency = team?.default_currency ?? 'CHF'
-  const { data: fullContact } = useSpaceContact()
+  const {
+    data: fullContact,
+    isError: contactFailed,
+    isPending: contactPending,
+    error: contactError,
+    refetch: refetchContact,
+  } = useSpaceContact()
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
   const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  // ONE SLOT PER QUERY, deliberately. Any of these failing makes the library
+  // WRONG rather than empty — a 403 on the entitlements query hides exactly the
+  // courses the contact paid for — but they fail and recover independently, so a
+  // shared slot would let whichever one succeeded LAST erase a live error (and,
+  // conversely, pin a stale one over correct data). Each effect owns its slot and
+  // clears it on its own success; the section below reads the union.
+  const [courseListError, setCourseListError] = useState<unknown>(null)
+  const [entitlementsError, setEntitlementsError] = useState<unknown>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   // Load published courses (only needed once signed in — to compute "My courses").
   useEffect(() => {
@@ -110,20 +170,31 @@ export default function SpaceHome() {
         }))
         cards.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         setCourses(cards)
+        // Clear where the success is stored: a transient failure must not leave a
+        // banner sitting over data that has since loaded correctly.
+        setCourseListError(null)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (cancelled) return
+        reportPublicLoadFailure('space/courses', err)
+        setCourseListError(err)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, teamId])
+  }, [isAuthenticated, teamId, retryKey])
 
   // Which 'purchase'-tier courses this contact has bought (lifetime entitlements).
+  // Authorised by the {path=**}/purchases collection-group block in
+  // firestore.rules — which is scoped by BOTH `where` clauses below, so neither
+  // may be dropped without the whole query being refused.
   useEffect(() => {
     if (!isAuthenticated || !contact?.id) {
       setPurchasedCourseIds(new Set())
+      setEntitlementsError(null)
       return
     }
     let cancelled = false
@@ -138,14 +209,39 @@ export default function SpaceHome() {
         setPurchasedCourseIds(
           new Set(snap.docs.map((d) => (d.data().courseId as string | undefined) ?? d.id))
         )
+        setEntitlementsError(null)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (cancelled) return
+        reportPublicLoadFailure('space/purchases', err)
+        setEntitlementsError(err)
+      })
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, contact?.id, teamId])
+  }, [isAuthenticated, contact?.id, teamId, retryKey])
+
+  // The contact doc decides which subscription-tier courses are open, so its
+  // failure belongs in the library's error slot too — not only in the membership
+  // block above it. Only where it can actually hide something, though: against a
+  // course list that loaded and came back empty there is nothing to hide, and
+  // claiming otherwise would be its own false alarm.
+  const membershipError = contactFailed ? contactError : null
+  const coursesError =
+    courseListError ?? entitlementsError ?? (courses.length > 0 ? membershipError : null)
+
+  function retryCourses() {
+    setCourseListError(null)
+    setEntitlementsError(null)
+    setLoading(true)
+    setRetryKey((k) => k + 1)
+    void refetchContact()
+  }
 
   const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
+  // The Space is painted from the STUDIO's bio-link theme, so the error block has
+  // to be too — app tokens render it near-black on a dark studio theme.
+  const errorTheme = { textMain, textMuted, accent, border: cardBorder }
 
   // Anonymous → sign-in wall. Space is a personal area; discovery lives in the shop.
   if (!isAuthenticated || !contact) {
@@ -285,7 +381,21 @@ export default function SpaceHome() {
             {t('membershipTitle')}
           </h2>
         </div>
-        {!hasMembership ? (
+        {membershipError != null ? (
+          // "You have no membership" is a claim about a paying member's account.
+          // A failed read cannot make it — say the read failed instead.
+          <QueryErrorState
+            onRetry={() => void refetchContact()}
+            title={t('membershipLoadFailed')}
+            detail={loadFailureDetail(membershipError)}
+            theme={errorTheme}
+          />
+        ) : contactPending ? (
+          // Same rule one step earlier: while the read is still in flight we do
+          // not know either, and a paying member should not be told they have
+          // nothing for the duration of every load.
+          <Skeleton className="h-5 w-40" />
+        ) : !hasMembership ? (
           <div>
             <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
             {/* Prompt to pick a plan — only when the studio actually sells subscriptions */}
@@ -324,8 +434,16 @@ export default function SpaceHome() {
       </section>
 
       {/* Lesson credits — compact list of credit-pack balances (denormalised
-          Contact.credit_summary). Hidden entirely when the contact holds none. */}
-      {(fullContact?.credit_summary?.length ?? 0) > 0 && (
+          Contact.credit_summary). Hidden entirely when the contact holds none —
+          but NOT when the contact read FAILED. `credit_summary` lives on the doc
+          that just refused to load, so the gate below cannot tell "no credits"
+          from "no answer", and the whole section disappearing off the page is
+          read by a member as the first one: lessons they paid for, gone. Absence
+          because we could not look is not absence in fact.
+          The sentence rather than a second QueryErrorState, for the same reason
+          as AccountHome's profile card: this IS the membership block's failure,
+          one section above, and that block already carries the Retry. */}
+      {(membershipError != null || (fullContact?.credit_summary?.length ?? 0) > 0) && (
         <section className="rounded-2xl p-4" style={cardStyle}>
           <div className="flex items-center gap-2 mb-3">
             <Ticket className="h-4 w-4" style={{ color: accent }} />
@@ -333,30 +451,37 @@ export default function SpaceHome() {
               {t('creditsTitle')}
             </h2>
           </div>
-          <div className="space-y-2">
-            {fullContact!.credit_summary!.map((entry) => (
-              <div key={entry.subscription_type_id} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium" style={{ color: textMain }}>
-                  {entry.subscription_type_name ?? t('membershipActive')}
-                </span>
-                <span className="text-sm" style={{ color: textMuted }}>
-                  {t('creditsRemaining', { count: entry.remaining })}
-                  {entry.next_expires_at && (
-                    <>
-                      {' '}
-                      · {t('creditsExpiresOn', { date: entry.next_expires_at.toDate().toLocaleDateString() })}
-                    </>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
+          {membershipError != null ? (
+            <p role="alert" className="text-sm" style={{ color: textMuted }}>
+              {t('creditsUnknown')}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {fullContact!.credit_summary!.map((entry) => (
+                <div key={entry.subscription_type_id} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium" style={{ color: textMain }}>
+                    {entry.subscription_type_name ?? t('membershipActive')}
+                  </span>
+                  <span className="text-sm" style={{ color: textMuted }}>
+                    {t('creditsRemaining', { count: entry.remaining })}
+                    {entry.next_expires_at && (
+                      <>
+                        {' '}
+                        · {t('creditsExpiresOn', { date: entry.next_expires_at.toDate().toLocaleDateString() })}
+                      </>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
       {/* My courses — accessible entitlements only; discovery/buying is in the shop.
-          Hidden entirely when the studio publishes no courses. */}
-      {(loading || courses.length > 0) && (
+          Hidden entirely when the studio publishes no courses — but NOT when a
+          query failed, because "no courses" would then be a claim we cannot make. */}
+      {(loading || courses.length > 0 || coursesError != null) && (
         <section className="rounded-2xl p-4" style={cardStyle}>
           <div className="flex items-center gap-2 mb-3">
             <GraduationCap className="h-4 w-4" style={{ color: accent }} />
@@ -372,34 +497,30 @@ export default function SpaceHome() {
                 style={{ borderColor: accent, borderTopColor: 'transparent' }}
               />
             </div>
+          ) : coursesError != null ? (
+            // A failure never renders as an empty library. Anything that DID
+            // resolve still shows below it — the list is incomplete, not absent.
+            <>
+              <QueryErrorState
+                onRetry={retryCourses}
+                title={t('coursesLoadFailed')}
+                detail={loadFailureDetail(coursesError)}
+                theme={errorTheme}
+              />
+              {myCourses.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {myCourses.map((course) => (
+                    <CourseCard key={course.id} course={course} slug={slug} cardStyle={cardStyle} />
+                  ))}
+                </div>
+              )}
+            </>
           ) : myCourses.length === 0 ? (
             <p className="text-sm py-4" style={{ color: textMuted }}>{t('noAccessibleCourses')}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {myCourses.map((course) => (
-                <Link
-                  key={course.id}
-                  href={`/public/${slug}/space/courses/${course.slug}` as Route}
-                  className="rounded-xl overflow-hidden transition-all hover:scale-[1.015] hover:shadow-lg"
-                  style={cardStyle}
-                >
-                  <div className="aspect-video bg-muted/30 flex items-center justify-center overflow-hidden">
-                    {course.coverImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={course.coverImageUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="font-semibold text-sm leading-snug" style={{ color: textMain }}>
-                      {course.title}
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: textMuted }}>
-                      {t('lessonCount', { count: course.lessonCount ?? 0 })}
-                    </p>
-                  </div>
-                </Link>
+                <CourseCard key={course.id} course={course} slug={slug} cardStyle={cardStyle} />
               ))}
             </div>
           )}
