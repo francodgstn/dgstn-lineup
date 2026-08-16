@@ -1,5 +1,6 @@
 import type { Timestamp } from './common'
 import type { AffiliationSummary } from './affiliation'
+import type { ContactFilter } from '../utils/contactFilter'
 
 // ─── Acquisition axis (sticky, event-named funnel) ───────────────────────────
 // Single ordered, OPEN vocab. The stage is a high-water milestone: it advances on
@@ -289,6 +290,12 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
+  // Marketing opt-out. Honoured by the automation engine and by outreach sends;
+  // DISTINCT from the ESP suppression list (mail_suppressions), which records
+  // bounces/blocks/spam reports and is applied inside the mail service.
+  // Transactional mail (bookings, codes, receipts) is unaffected.
+  email_unsubscribed?: boolean
+
   // Tags — free-form labels attached by automations or manually
   tags?: string[]
 
@@ -319,6 +326,13 @@ export interface ContactGroup {
   parent_id: string | null
   color?: string
   description?: string
+  // DYNAMIC group: membership is derived from this filter, evaluated lazily
+  // wherever it's needed, and NEVER materialized into Contact.group_ids.
+  // Absent ⇒ a manual group (membership is the stored group_ids array).
+  // The two sources are disjoint by design: a group is manual OR dynamic, which
+  // is what makes every mixed-mode question ("can I pin a manual member into a
+  // dynamic group?") unaskable rather than merely undefined.
+  rule?: ContactFilter
   created_at?: Timestamp
   created_by?: string
   updated_at?: Timestamp

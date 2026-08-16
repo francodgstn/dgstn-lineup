@@ -53,6 +53,35 @@ describe('brevoProvider', () => {
     assert.equal(req.headers, undefined) // no idempotency key → no headers
   })
 
+  // Bulk mail (outreach) carries a machine-readable opt-out; transactional mail
+  // must not, or every booking confirmation would claim to be a mailing list.
+  it('forwards List-Unsubscribe only when the message sets it', async () => {
+    await brevoProvider.send(
+      { to: 'a@b.com', subject: 's', text: 't', listUnsubscribe: '<mailto:coach@hmd.ch?subject=Unsubscribe>' },
+      { name: 'N', email: 'e@e.com' },
+    )
+    assert.deepEqual(captured.req!.headers, {
+      'List-Unsubscribe': '<mailto:coach@hmd.ch?subject=Unsubscribe>',
+    })
+
+    await brevoProvider.send(
+      { to: 'a@b.com', subject: 's', text: 't' },
+      { name: 'N', email: 'e@e.com' },
+    )
+    assert.equal(captured.req!.headers, undefined)
+  })
+
+  it('sends both headers together on an idempotent bulk send', async () => {
+    await brevoProvider.send(
+      { to: 'a@b.com', subject: 's', text: 't', idempotencyKey: 'k9', listUnsubscribe: '<mailto:x@y.z>' },
+      { name: 'N', email: 'e@e.com' },
+    )
+    assert.deepEqual(captured.req!.headers, {
+      'Idempotency-Key': 'k9',
+      'List-Unsubscribe': '<mailto:x@y.z>',
+    })
+  })
+
   it('base64-encodes attachments', async () => {
     await brevoProvider.send(
       { to: 'a@b.com', subject: 's', text: 't', attachments: [{ filename: 'invite.ics', content: 'BEGIN:VCAL' }] },

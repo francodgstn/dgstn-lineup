@@ -1,8 +1,12 @@
 import { defineString } from 'firebase-functions/params'
 
+// Default is the APP host, not linyup.com — that is apps/landing on Firebase
+// Hosting, which 404s on /login, /dashboard and /public/*. Every environment
+// sets HOSTING_URL explicitly, so this only bites a new one that forgets to,
+// which is exactly when a wrong default does the most damage.
 export const HOSTING_URL = defineString('HOSTING_URL', {
-  description: 'Base URL for hosting (used in links)',
-  default: 'https://linyup.com',
+  description: 'Base URL of the WEB APP (not the marketing site) — used in emailed links and redirects',
+  default: 'https://app.linyup.com',
 })
 
 export function getHostingUrl(): string {

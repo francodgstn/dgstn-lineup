@@ -66,30 +66,12 @@ export async function setSecret(secretName: string, value: string): Promise<void
   await client().addSecretVersion({ parent: secretPath, payload })
 }
 
-/**
- * Reads the latest value of a secret. Used by the operator "send test email"
- * action, which needs the actual Brevo API key to call Brevo.
- *
- * Against the emulators (no Secret Manager) it falls back to the matching env var
- * (e.g. brevo-api-key → BREVO_API_KEY); if that is unset it throws
- * SecretManagerUnavailableError so the caller can warn the operator.
- */
-export async function getSecretValue(secretName: string): Promise<string> {
-  if (useEmulators) {
-    const envKey = secretName.replace(/-/g, '_').toUpperCase()
-    const value = process.env[envKey]
-    if (value) return value
-    throw new SecretManagerUnavailableError(
-      `Secret Manager is unavailable against the emulators — set ${envKey} in the admin env to test sends.`,
-    )
-  }
-
-  const name = `projects/${projectId}/secrets/${secretName}/versions/latest`
-  const [version] = await client().accessSecretVersion({ name })
-  const data = version.payload?.data
-  if (!data) throw new Error(`Secret ${secretName} has no value`)
-  return Buffer.from(data).toString('utf8')
-}
+// There is deliberately NO getSecretValue here. The console never reads a secret
+// payload: it writes values and reports whether one is SET. Keeping it that way
+// is what lets the runtime SA hold roles/secretmanager.viewer (versions.get —
+// metadata only) instead of roles/secretmanager.secretAccessor (versions.access
+// — plaintext). Adding a reader back means widening that grant across every
+// environment, so treat it as a security decision, not a convenience.
 
 /**
  * Reports whether the named secret has at least one accessible version (i.e. a

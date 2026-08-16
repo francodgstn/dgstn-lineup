@@ -147,6 +147,41 @@ to avoid redirecting to a dead surface. Sub-routes are siblings: `/public/{slug}
 `/public/{slug}/manage-booking`, `/public/{slug}/contact-update`, `/public/{slug}/coaching`.
 Token-only routes stay standalone: `/public/event-invitation` and `/public/team-invitation/{token}`.
 
+### Contact filtering + dynamic groups — ONE predicate
+
+`matchesFilter(contact, filter, ctx)` in `packages/shared/src/utils/contactFilter.ts`
+is the **only** contact-matching implementation, shared by the contacts list,
+saved filter presets, dynamic contact groups and the automation engine's
+`in_group` condition. **Never add a parallel contact-matching check — extend the
+resolver** (fixtures: `functions/src/contacts/contactFilter.test.ts`). Tree
+helpers live beside it in `utils/contactGroups.ts` so web and functions expand
+descendants identically.
+
+**Groups have two disjoint membership sources**, and a group is one or the other:
+
+| Kind | Membership | Written? | Edited by |
+|---|---|---|---|
+| Manual | `Contact.group_ids[]` | yes | anyone who can write the contact |
+| Dynamic | `ContactGroup.rule` (a `ContactFilter`) | **never** | manager/owner (the rule is on the group doc) |
+
+A dynamic group is **derived lazily, never materialized** — there is no sync job,
+no cache, nothing to invalidate, and it cannot go stale. This works because every
+membership question is asked from a position that already holds the data: a page
+with the contact list filters it, a page with one contact tests that contact
+(`groupsForContact` — the reverse lookup, asked the cheap way, no index), and the
+automation scan tests the contact already in hand. Consequently a dynamic group
+is **excluded from every UI that writes membership** (group picker, bulk dialog,
+`add_to_group`/`remove_from_group`) but **included** wherever membership is read.
+The `groups` dimension is stripped when evaluating a rule, so rules can't recurse.
+
+**Age is the reason dynamic groups exist.** Every other dimension changes only
+when data changes (an event fires, a snapshot can be corrected); age changes with
+no write at all, so a snapshot group silently goes wrong and no event trigger can
+notice. `AgeFilter` therefore carries two modes — `'age'` (today's age) and
+`'birth_year'` (the calendar year, which is what rosters and competition
+categories actually use) — plus `includeUnknown`, because a missing birthdate is
+common and dropping those contacts silently is exactly the failure nobody spots.
+
 ### Public Space — the contacts' personal portal
 
 `/public/{slug}/space` is a minimal, team-branded public area (sibling to `/public/{slug}`

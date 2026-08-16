@@ -20,7 +20,7 @@ variable "admin_sa_email" {
 
 variable "admin_writable_secret_ids" {
   type        = list(string)
-  description = "Secret IDs the admin console may write new versions to (must be a subset of secret_ids). The Settings UI sets the global SMTP password here."
+  description = "Secret IDs the admin console MANAGES — granted secretVersionAdder (write a new version) and viewer (see that a version exists) on each. Must be a subset of secret_ids. The console never reads payloads: viewer covers versions.get (metadata) and deliberately NOT versions.access (plaintext), which is what secretAccessor would add."
   default     = ["smtp-password"]
 }
 

@@ -29,15 +29,39 @@ resource "google_secret_manager_secret_iam_member" "accessor" {
   depends_on = [google_secret_manager_secret.secret]
 }
 
-# Admin console runtime SA may ADD new versions of specific secrets (it does not
-# read them). The Settings UI writes the global SMTP password this way; code
-# tracks a password_set flag in Firestore instead of reading the value back.
+# Admin console runtime SA may ADD new versions of the secrets it manages.
 resource "google_secret_manager_secret_iam_member" "admin_version_adder" {
   for_each = toset(var.admin_writable_secret_ids)
 
   project   = var.project_id
   secret_id = each.value
   role      = "roles/secretmanager.secretVersionAdder"
+  member    = "serviceAccount:${var.admin_sa_email}"
+
+  depends_on = [google_secret_manager_secret.secret]
+}
+
+# ...and see WHETHER a version exists — metadata only, never the payload.
+#
+# The console's settings pages report a "configured / not configured" status via
+# secretExists(), which calls getSecretVersion → secretmanager.versions.get. With
+# secretVersionAdder alone (versions.add) that read returned PERMISSION_DENIED,
+# which secret-manager.ts swallows into `false`. So a save succeeded and the UI
+# then said "not configured", in every environment — the value was there, the
+# console just could not see it.
+#
+# viewer, NOT secretAccessor, is the right role: secretAccessor grants
+# versions.access (the plaintext payload), which the console does not need and
+# must not have. The two actions that did read plaintext (Brevo test-send, Stripe
+# key verify) were removed for exactly this reason — see the notes in
+# apps/admin/src/lib/secret-manager.ts. Adding either back means widening this to
+# secretAccessor across every environment.
+resource "google_secret_manager_secret_iam_member" "admin_viewer" {
+  for_each = toset(var.admin_writable_secret_ids)
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.viewer"
   member    = "serviceAccount:${var.admin_sa_email}"
 
   depends_on = [google_secret_manager_secret.secret]
