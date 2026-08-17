@@ -4778,7 +4778,7 @@
       "alwaysOn": "Toujours actif",
       "perForm": "Par formulaire",
       "booking_confirmation": "Confirmations de réservation",
-      "booking_confirmationDesc": "Envoyée pour une réservation gratuite — création, modification ou annulation — et pour les rendez-vous, avec invitation calendrier. Une réservation payée est toujours confirmée (voir ci-dessous).",
+      "booking_confirmationDesc": "Envoyé pour une réservation gratuite — créée, modifiée ou annulée — et pour un rendez-vous gratuit, avec une invitation d'agenda. Tout ce qui est payé est toujours confirmé (voir ci-dessous).",
       "booking_reminder": "Rappels de réservation",
       "booking_reminderDesc": "Rappel avant une session réservée à venir.",
       "session_cancellation": "Avis d'annulation de session",
@@ -4788,7 +4788,7 @@
       "otp": "Codes de connexion",
       "otpDesc": "Codes à usage unique pour la connexion des membres et le paiement. Requis pour la sécurité.",
       "paidBookingReceipt": "Reçus de réservation payée",
-      "paidBookingReceiptDesc": "Confirmation d'un cours payé — le cours, l'horaire, vos conditions d'annulation, une invitation calendrier et le lien pour gérer ou annuler. C'est le seul moyen pour l'acheteur d'obtenir ce lien : il ne peut donc pas être désactivé.",
+      "paidBookingReceiptDesc": "Confirmation d'un cours ou d'un rendez-vous payé — ce que c'est, l'horaire, vos conditions d'annulation, une invitation d'agenda et le lien pour gérer ou annuler. C'est le seul moyen pour l'acheteur d'obtenir ce lien, elle ne peut donc pas être désactivée.",
       "formReceipt": "Accusés de réception de formulaire",
       "formReceiptDesc": "Confirmation à l'expéditeur — activée par formulaire, dans ses paramètres."
     },

@@ -4778,7 +4778,7 @@
       "alwaysOn": "Immer aktiv",
       "perForm": "Pro Formular",
       "booking_confirmation": "Buchungsbestätigungen",
-      "booking_confirmationDesc": "Für kostenlose Buchungen — bei Buchung, Änderung oder Stornierung — und für Termine, mit Kalendereinladung. Eine bezahlte Buchung wird immer bestätigt (siehe unten).",
+      "booking_confirmationDesc": "Wird bei einer kostenlosen Buchung gesendet — erstellt, geändert oder storniert — und bei einem kostenlosen Termin, mit Kalendereintrag. Alles Bezahlte wird immer bestätigt (siehe unten).",
       "booking_reminder": "Buchungserinnerungen",
       "booking_reminderDesc": "Erinnerung vor einer anstehenden gebuchten Session.",
       "session_cancellation": "Absage-Benachrichtigungen",
@@ -4788,7 +4788,7 @@
       "otp": "Anmeldecodes",
       "otpDesc": "Einmal-Codes für Mitglieder-Anmeldung und Checkout. Aus Sicherheitsgründen erforderlich.",
       "paidBookingReceipt": "Belege für bezahlte Buchungen",
-      "paidBookingReceiptDesc": "Bestätigung für einen bezahlten Kurs — Kurs, Zeit, deine Stornobedingungen, eine Kalendereinladung und der Link zum Verwalten oder Stornieren. Nur über diese E-Mail erhält der Käufer diesen Link, daher lässt sie sich nicht ausschalten.",
+      "paidBookingReceiptDesc": "Bestätigung für eine bezahlte Klasse oder einen bezahlten Termin — was, wann, Ihre Stornobedingungen, ein Kalendereintrag und der Link zum Verwalten oder Stornieren. Nur so erhält die Käuferin diesen Link, deshalb lässt sie sich nicht abschalten.",
       "formReceipt": "Formular-Eingangsbestätigungen",
       "formReceiptDesc": "Bestätigung an den Absender — pro Formular in dessen Einstellungen aktivierbar."
     },

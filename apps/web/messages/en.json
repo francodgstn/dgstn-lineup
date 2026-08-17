@@ -4778,7 +4778,7 @@
       "alwaysOn": "Always on",
       "perForm": "Per form",
       "booking_confirmation": "Booking confirmations",
-      "booking_confirmationDesc": "Sent for a free booking — made, changed or cancelled — and for appointments, with a calendar invite. A booking that was paid for is always confirmed (see below).",
+      "booking_confirmationDesc": "Sent for a free booking — made, changed or cancelled — and for a free appointment, with a calendar invite. Anything that was paid for is always confirmed (see below).",
       "booking_reminder": "Booking reminders",
       "booking_reminderDesc": "Reminder ahead of an upcoming booked session.",
       "session_cancellation": "Session cancellation notices",
@@ -4788,7 +4788,7 @@
       "otp": "Sign-in codes",
       "otpDesc": "One-time verification codes for member sign-in and checkout. Required for security.",
       "paidBookingReceipt": "Paid booking receipts",
-      "paidBookingReceiptDesc": "Confirmation for a class someone paid for — the class, the time, your cancellation terms, a calendar invite and the link to manage or cancel. It is the only way the buyer gets that link, so it cannot be switched off.",
+      "paidBookingReceiptDesc": "Confirmation for a class or appointment someone paid for — what it is, the time, your cancellation terms, a calendar invite and the link to manage or cancel. It is the only way the buyer gets that link, so it cannot be switched off.",
       "formReceipt": "Form submission receipts",
       "formReceiptDesc": "Confirmation to the submitter — switched on per form, in each form's settings."
     },
