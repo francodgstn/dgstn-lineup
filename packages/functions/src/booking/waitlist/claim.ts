@@ -45,12 +45,13 @@ import {
 } from '@linyup/shared'
 import { denialMessage, loadContactPaymentContext } from '../access'
 import { loadBookingSettings } from '../bookingSettings'
-import { buildBookingConfirmationEmail } from '../templates'
+import { buildClassBookingConfirmationMail } from '../templates'
 import { enforceWaiverGate, parseWaiverSubmissions } from '../../waivers/gate'
 import { commitWaiverLedgerWrites, planWaiverLedgerWrites } from '../../waivers/accept'
 import { assertUnderCheckoutRateLimit, checkoutRateLimit } from '../../connect/checkout'
 import { optionalContactSessionFromRequest } from '../../utils/contactSession'
 import { sendEmail } from '../../utils/email'
+import { getTeamContactEmail } from '../../mail/senderConfig'
 import { getHostingUrl } from '../../utils/env'
 import { systemEmailEnabledFor } from '../../utils/systemEmails'
 import { getTeam } from '../../utils/teams'
@@ -530,7 +531,7 @@ export const claimWaitlistSeat = onCall(async (request) => {
               token: committed.bookingToken,
             })
           : null
-      const confirmEmail = buildBookingConfirmationEmail({
+      const mail = buildClassBookingConfirmationMail({
         firstname: (entry.firstname as string) || '',
         teamName: team.name || 'Our Team',
         activityName,
@@ -538,6 +539,7 @@ export const claimWaitlistSeat = onCall(async (request) => {
         sessionEnd: (session.end as Timestamp).toDate(),
         locationName: (session.location as string) || null,
         manageBookingUrl,
+        spaceUrl: team.slug ? publicUrl(getHostingUrl(), team.slug, 'space') : null,
         instructions:
           (activity.confirmationInstructions as string)?.trim() ||
           ((team.settings as Record<string, unknown> | undefined)
@@ -546,18 +548,20 @@ export const claimWaitlistSeat = onCall(async (request) => {
         cancellationPolicy: (activity.cancellationPolicy as string)?.trim() || null,
         reference: committed.bookingReference,
         lang,
+        bookingId: `${sessionId}-${contactId}`,
+        attendeeName: `${(entry.firstname as string) || ''} ${(entry.lastname as string) || ''}`.trim(),
+        attendeeEmail: (entry.email as string) || '',
+        organizerEmail: await getTeamContactEmail(
+          teamId,
+          team as unknown as Record<string, unknown>
+        ),
       })
-      const subjects: Record<Lang, string> = {
-        en: `Booking Confirmed – ${activityName}`,
-        de: `Buchung bestätigt – ${activityName}`,
-        fr: `Réservation confirmée – ${activityName}`,
-        it: `Prenotazione confermata – ${activityName}`,
-      }
       await sendEmail({
         to: (entry.email as string) || '',
-        subject: subjects[lang],
-        html: confirmEmail.html,
-        text: confirmEmail.text,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+        attachments: mail.attachments,
         teamId,
       })
     }

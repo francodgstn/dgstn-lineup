@@ -1,6 +1,7 @@
 import { buildEmailTemplate } from '../utils/email'
 import { detailsBox, ctaButton, factLines, BRAND } from '../utils/emailLayout'
 import { escapeHtml } from '../utils/html'
+import { buildICalEvent, icalAttachment, ICAL_FALLBACK_ORGANIZER_EMAIL } from '../utils/ical'
 
 // Localised heading for the studio's custom instructions box (confirmation emails).
 const INSTRUCTIONS_TITLES: Record<'en' | 'de' | 'fr' | 'it', string> = {
@@ -82,12 +83,23 @@ interface ConfirmationParams {
   sessionEnd: Date
   locationName?: string | null
   manageBookingUrl?: string | null
+  /** The contact's own portal (`/public/{slug}/space`) — bookings, membership,
+   *  profile. Sent on BOTH the free and the paid path: per UX-C2-5 the only
+   *  place a booker ever hears that the portal exists is this email. */
+  spaceUrl?: string | null
   /** Studio-authored plain-text note (activity override ?? team setting). */
   instructions?: string | null
   /** Cancellation/refund policy (activity override ?? team default). */
   cancellationPolicy?: string | null
   /** Short human-readable code (e.g. "BK-7F3K9Q") for phone/desk lookups. */
   reference?: string | null
+  /** Set ONLY when this booking was paid for — money or stored value — which
+   *  turns the confirmation into the receipt for it. Major units, so
+   *  `{ amount: 25, currency: 'CHF' }` reads "CHF 25.00". */
+  paid?: { amount: number; currency: string } | null
+  /** Set by `buildClassBookingConfirmationMail`, which attaches the file. Never
+   *  set by hand: it prints "a calendar invite is attached". */
+  calendarAttached?: boolean
   lang?: Lang
 }
 
@@ -96,9 +108,11 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     sessionStart,
     sessionEnd,
     manageBookingUrl,
+    spaceUrl,
     instructions,
     cancellationPolicy,
     reference,
+    paid,
     lang = 'en',
   } = params
   // THE ESCAPING IDIOM THIS FILE USES, and the reason it shadows: every
@@ -137,30 +151,40 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     it: `La tua sessione presso <strong>${teamName}</strong> è stata confermata.`,
   }
 
+  // "CHF 25.00" — the currency code as the studio's Stripe account reports it,
+  // and two decimals because this line is a receipt, not a price tag.
+  const paidLine = paid
+    ? `${escapeHtml(paid.currency.toUpperCase())} ${paid.amount.toFixed(2)}`
+    : null
+
   const facts: Record<Lang, string[]> = {
     en: [
       `<strong>Activity:</strong> ${activityName}`,
       `<strong>Date:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Location:</strong> ${locationName}` : '',
       reference ? `<strong>Reference:</strong> ${escapeHtml(reference)}` : '',
+      paidLine ? `<strong>Paid:</strong> ${paidLine}` : '',
     ],
     de: [
       `<strong>Aktivität:</strong> ${activityName}`,
       `<strong>Datum:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Ort:</strong> ${locationName}` : '',
       reference ? `<strong>Referenz:</strong> ${escapeHtml(reference)}` : '',
+      paidLine ? `<strong>Bezahlt:</strong> ${paidLine}` : '',
     ],
     fr: [
       `<strong>Activité :</strong> ${activityName}`,
       `<strong>Date :</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Lieu :</strong> ${locationName}` : '',
       reference ? `<strong>Référence :</strong> ${escapeHtml(reference)}` : '',
+      paidLine ? `<strong>Payé :</strong> ${paidLine}` : '',
     ],
     it: [
       `<strong>Attività:</strong> ${activityName}`,
       `<strong>Data:</strong> ${date} – ${endTime}`,
       locationName ? `<strong>Luogo:</strong> ${locationName}` : '',
       reference ? `<strong>Riferimento:</strong> ${escapeHtml(reference)}` : '',
+      paidLine ? `<strong>Pagato:</strong> ${paidLine}` : '',
     ],
   }
 
@@ -178,21 +202,100 @@ export function buildBookingConfirmationEmail(params: ConfirmationParams) {
     it: 'Gestisci / Annulla prenotazione',
   }
 
+  // Only ever true when the caller really is attaching the file — a mail that
+  // announces an invite it did not send is worse than one that stays quiet.
+  const icsNotes: Record<Lang, string> = {
+    en: 'A calendar invite (.ics) is attached to this email.',
+    de: 'Eine Kalender-Einladung (.ics) ist dieser E-Mail beigefügt.',
+    fr: 'Une invitation de calendrier (.ics) est jointe à cet e-mail.',
+    it: 'Un invito al calendario (.ics) è allegato a questa email.',
+  }
+
+  // The Space is mentioned in prose, under the manage button, rather than as a
+  // second CTA: one booking has one primary action, and this line exists to tell
+  // a first-time buyer that the portal is there at all.
+  const spaceLines: Record<Lang, string> = {
+    en: `You can see this booking, your membership and your courses any time in your <a href="${spaceUrl}">member area</a> — sign in with this email address, no password needed.`,
+    de: `Diese Buchung, Ihre Mitgliedschaft und Ihre Kurse finden Sie jederzeit in Ihrem <a href="${spaceUrl}">Mitgliederbereich</a> — Anmeldung mit dieser E-Mail-Adresse, ohne Passwort.`,
+    fr: `Vous pouvez consulter cette réservation, votre abonnement et vos cours à tout moment dans votre <a href="${spaceUrl}">espace membre</a> — connexion avec cette adresse e-mail, sans mot de passe.`,
+    it: `Puoi vedere questa prenotazione, il tuo abbonamento e i tuoi corsi in qualsiasi momento nella tua <a href="${spaceUrl}">area riservata</a> — accesso con questo indirizzo e-mail, senza password.`,
+  }
+
   const body = [
     `<p>${greetings[lang]}</p>`,
     `<p>${intros[lang]}</p>`,
     detailsBox({ content: factLines(facts[lang]) }),
     instructions?.trim() ? instructionsBox(instructions, lang) : '',
     cancellationPolicy?.trim() ? cancellationPolicyBox(cancellationPolicy, lang) : '',
+    params.calendarAttached ? `<p>${icsNotes[lang]}</p>` : '',
     `<p>${closings[lang]}</p>`,
     manageBookingUrl
       ? `<p style="text-align:center;margin-top:24px;">${ctaButton(manageBookingUrl, manageLabels[lang])}</p>`
       : '',
+    spaceUrl ? `<p style="font-size:14px;">${spaceLines[lang]}</p>` : '',
   ]
     .filter(Boolean)
     .join('\n')
 
   return buildEmailTemplate({ title: titles[lang], body })
+}
+
+/** The mail SUBJECT for a class booking confirmation, in one place: three call
+ *  sites send this message (free booking, free waitlist claim, paid drop-in) and
+ *  a receipt whose subject differed by tender would read as a different mail. */
+export const BOOKING_CONFIRMATION_SUBJECTS: Record<Lang, (activityName: string) => string> = {
+  en: (a) => `Booking Confirmed – ${a}`,
+  de: (a) => `Buchung bestätigt – ${a}`,
+  fr: (a) => `Réservation confirmée – ${a}`,
+  it: (a) => `Prenotazione confermata – ${a}`,
+}
+
+/**
+ * The class booking confirmation, ready to hand to `sendEmail` — subject, body
+ * and the calendar invite.
+ *
+ * It exists because there are three senders of this one message and they had
+ * drifted: the free path built it inline, the waitlist claim built it inline
+ * again, and the PAID path did not build it at all (UX-76). A class booking had
+ * no `.ics` on any of them, because the iCal writer was private to the
+ * appointments module.
+ */
+export function buildClassBookingConfirmationMail(
+  params: ConfirmationParams & {
+    /** Stable per booking (`{sessionId}-{contactId}`) so a re-sent invite
+     *  UPDATES the calendar entry instead of adding a second one. */
+    bookingId: string
+    attendeeName: string
+    attendeeEmail: string
+    /** The studio's published address (`getTeamContactEmail`), if it has one. */
+    organizerEmail?: string | null
+  }
+): {
+  subject: string
+  html: string
+  text: string
+  attachments: { filename: string; content: string; contentType: string }[]
+} {
+  const lang = params.lang ?? 'en'
+  const { html, text } = buildBookingConfirmationEmail({ ...params, calendarAttached: true })
+  const ics = buildICalEvent({
+    uid: `booking-${params.bookingId}@linyup.com`,
+    title: params.activityName,
+    start: params.sessionStart,
+    end: params.sessionEnd,
+    location: params.locationName,
+    organizer: {
+      name: params.teamName,
+      email: params.organizerEmail?.trim() || ICAL_FALLBACK_ORGANIZER_EMAIL,
+    },
+    attendee: { name: params.attendeeName, email: params.attendeeEmail },
+  })
+  return {
+    subject: BOOKING_CONFIRMATION_SUBJECTS[lang](params.activityName),
+    html,
+    text,
+    attachments: [icalAttachment('booking.ics', ics)],
+  }
 }
 
 interface ReminderParams {

@@ -73,6 +73,9 @@ import {
   type WaiverGateOutcome,
 } from '../waivers/gate'
 import { recordWaiverEvents } from '../waivers/accept'
+// The paid booking's receipt, shared with the Connect webhook's drop-in confirm
+// — always on, outside the `booking_confirmation` toggle. See its header.
+import { sendPaidBookingConfirmation } from './paidConfirmation'
 // Pure trial-gate helpers, shared with bookSession's free trial door — see
 // booking/index.ts's module doc comment. Mirrors the appointments/index.ts
 // same-directory-index import pattern already used elsewhere in this package.
@@ -970,6 +973,23 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
         console.error('[promo] full-cover drop-in commit failed:', err)
       })
     }
+    // THE SAME RECEIPT THE STRIPE-PAID DROP-IN GETS (UX-76). Stored value is
+    // money: this branch confirms a seat, spends a balance and — until now —
+    // said nothing, so a card-paying buyer got a confirmation with a
+    // manage-booking link and a gift-card-paying one got silence. Always on for
+    // the same reason; see booking/paidConfirmation.ts. `giftCardHoldKey` is the
+    // tender ref, minted once per attempt, so a client retry cannot mail twice.
+    await sendPaidBookingConfirmation({
+      teamId,
+      sessionId,
+      contactId,
+      tenderRef: `gc:${giftCardHoldKey}`,
+      paid: {
+        amount: giftCardPlan.drawdown,
+        currency: giftCardCurrency(team.data?.default_currency as string | undefined),
+      },
+      recipient: { firstname, lastname, email },
+    })
     return {
       url: null,
       sessionId: null,

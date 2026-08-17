@@ -5,6 +5,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { getTeam, isTeamMember } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
+import { getTeamContactEmail } from '../mail/senderConfig'
 import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { hashVerificationCode, verifyCode, generateSecureToken, generateBookingReference } from '../utils/crypto'
@@ -12,7 +13,7 @@ import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { resolveReferralCode, createReferral } from '../utils/referrals'
 import {
-  buildBookingConfirmationEmail,
+  buildClassBookingConfirmationMail,
   buildTeacherNotificationEmail,
   buildVerificationCodeEmail,
 } from './templates'
@@ -1479,36 +1480,53 @@ export const bookSession = onCall(async (request) => {
 
   // Send confirmation email — member-facing, per-team toggleable (Automations →
   // System emails). Coach/studio notifications below are unaffected.
+  //
+  // THIS IS THE FREE PATH, AND ITS TOGGLE STAYS. A free booking's confirmation
+  // is a courtesy: a studio may legitimately run its own from the automations
+  // engine, and switching this off leaves nobody stuck. The PAID path
+  // deliberately has no toggle at all (booking/paidConfirmation.ts, reached from
+  // the Connect webhook and the gift-card full cover) because there the same
+  // mail is the receipt, the manage-booking link and the only invitation into
+  // the member area. Free-is-switchable / paid-is-not is the design — do not
+  // "tidy" the two into one flag.
   const confirmationEnabled = await systemEmailEnabledFor(data.teamId, 'booking_confirmation')
   const sessionStart: Date = sessionData.start.toDate()
   const sessionEnd: Date = sessionData.end.toDate()
 
   try {
-    const confirmEmail = buildBookingConfirmationEmail({
-      firstname: sanitized.firstname,
-      teamName,
-      activityName,
-      sessionStart,
-      sessionEnd,
-      locationName: sessionData.location || null,
-      manageBookingUrl,
-      instructions: bookingInstructions,
-      cancellationPolicy,
-      reference: bookingReference,
-      lang,
-    })
-    const subjects: Record<Lang, string> = {
-      en: `Booking Confirmed – ${activityName}`,
-      de: `Buchung bestätigt – ${activityName}`,
-      fr: `Réservation confirmée – ${activityName}`,
-      it: `Prenotazione confermata – ${activityName}`,
-    }
     if (confirmationEnabled) {
+      const mail = buildClassBookingConfirmationMail({
+        firstname: sanitized.firstname,
+        teamName,
+        activityName,
+        sessionStart,
+        sessionEnd,
+        locationName: sessionData.location || null,
+        manageBookingUrl,
+        // The Space link rides on the free path too: the complaint it answers —
+        // nobody is ever told the portal exists — is not about the tender.
+        spaceUrl: teamSlug ? publicUrl(getHostingUrl(), teamSlug, 'space') : null,
+        instructions: bookingInstructions,
+        cancellationPolicy,
+        reference: bookingReference,
+        lang,
+        bookingId: `${data.sessionId}-${contactId}`,
+        attendeeName: `${sanitized.firstname} ${sanitized.lastname}`.trim(),
+        attendeeEmail: sanitized.email,
+        // The ORGANIZER of the calendar invite: the studio's published address,
+        // through the ONE resolver that owns that precedence (the same one
+        // `sendEmail` uses for Reply-To) rather than a second reading of it.
+        organizerEmail: await getTeamContactEmail(
+          data.teamId,
+          team as unknown as Record<string, unknown>
+        ),
+      })
       await sendEmail({
         to: sanitized.email,
-        subject: subjects[lang],
-        html: confirmEmail.html,
-        text: confirmEmail.text,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+        attachments: mail.attachments,
         teamId: data.teamId,
       })
       console.log(`Confirmation email sent to ${sanitized.email}`)

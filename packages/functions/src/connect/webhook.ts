@@ -41,9 +41,12 @@ import {
   publicUrl,
 } from '@linyup/shared'
 import { releaseWaitlistOffer } from '../booking/waitlist/release'
+// The paid CLASS booking's receipt — always on, deliberately outside the
+// `booking_confirmation` toggle. See that module's header.
+import { sendPaidBookingConfirmation } from '../booking/paidConfirmation'
 import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
-import { generateSecureToken } from '../utils/crypto'
+import { generateBookingReference, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { buildEmailTemplate, sendEmail } from '../utils/email'
 import {
@@ -1852,10 +1855,22 @@ async function handleDropInCheckout(
     const others = countHoldingSeats(bookingsSnap.docs, Date.now(), contactId)
     if (seatsFree(sSnap.data()?.max_participants as number | undefined, others) <= 0) return true
 
-    const isNew = !bookingsSnap.docs.some((d) => d.id === contactId)
+    const existing = bookingsSnap.docs.find((d) => d.id === contactId)?.data()
+    const isNew = !existing
+    // THE MANAGE-BOOKING CREDENTIAL. `createDropInCheckout` minted one onto the
+    // hold, and the merge below preserves it — but the hold may have been swept
+    // before this payment landed (the resurrection case this whole block exists
+    // for), and then there is nothing to preserve. A confirmation carrying no
+    // manage link is a booking the buyer cannot cancel, and `cancelBooking`
+    // finds a booking ONLY by this token.
+    const bookingToken = (existing?.booking_token as string | undefined) ?? generateSecureToken()
+    const bookingReference =
+      (existing?.booking_reference as string | undefined) ?? generateBookingReference()
     tx.set(
       bookingRef,
       {
+        booking_token: bookingToken,
+        booking_reference: bookingReference,
         firstname: (contact.firstname as string) ?? '',
         lastname: (contact.lastname as string) ?? '',
         email: (contact.email as string) ?? '',
@@ -1958,6 +1973,42 @@ async function handleDropInCheckout(
     )
     return
   }
+
+  // THE RECEIPT (UX-76), and it goes FIRST of the post-confirm effects.
+  //
+  // ALWAYS ON — not behind the `booking_confirmation` toggle the FREE path
+  // honours; see the header of booking/paidConfirmation.ts for why the two
+  // differ on purpose. Past both refund branches above (duplicate charge, class
+  // full), which return before here, so it only ever announces a seat the buyer
+  // actually got.
+  //
+  // ORDER IS LOAD-BEARING. Every step below can throw, and this handler's
+  // redelivery guard is `payment_status !== 'required'` — so a throw after the
+  // seat is confirmed means the retry short-circuits at the top and whatever had
+  // not run yet NEVER runs. Sending here leaves no window: the mail itself never
+  // throws, and the `mail_sends` ledger key carries the PaymentIntent, so a
+  // redelivery cannot mail the buyer twice either.
+  await sendPaidBookingConfirmation({
+    teamId: team.teamId,
+    sessionId,
+    contactId,
+    tenderRef: piId ?? `session:${session?.id ?? 'unknown'}`,
+    // What STRIPE charged, read off the session — never recomputed. A gift card
+    // that covered part of the price is not added in: the card took its own
+    // share, and its own history is where that shows.
+    paid:
+      typeof session.amount_total === 'number'
+        ? {
+            amount: (session.amount_total as number) / 100,
+            currency: (session.currency as string | undefined) ?? 'CHF',
+          }
+        : null,
+    recipient: {
+      firstname: (contact.firstname as string) ?? '',
+      lastname: (contact.lastname as string) ?? '',
+      email: (contact.email as string) ?? '',
+    },
+  })
 
   if (piId) {
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })

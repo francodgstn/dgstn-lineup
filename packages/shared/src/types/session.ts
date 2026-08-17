@@ -173,7 +173,20 @@ export function seatFreedEdge(
 export function isUnclaimedClaimHold(b: SeatHold | null | undefined): boolean {
   if (!b || b.waitlist_claim !== true) return false
   if (b.status && b.status !== 'pending') return false
-  return b.payment_status !== 'paid' && b.payment_status !== 'gift_card'
+  return !bookingWasPaidFor(b)
+}
+
+/** Did this seat cost its holder something? — money (`'paid'`, the Connect
+ *  webhook's confirm) or stored value (`'gift_card'`, the full-cover rail).
+ *
+ *  The two markers are named together because the answer must never depend on
+ *  WHICH tender settled a booking: a gift-card seat is as bought as a card one.
+ *  Read by the release predicates above (a paid seat is never a hold to
+ *  destroy) and by the session-cancellation notice, which is sent to a paying
+ *  attendee even when the studio switched that notice off — nobody who paid
+ *  should turn up to a class that is not happening. */
+export function bookingWasPaidFor(b: SeatHold | null | undefined): boolean {
+  return b?.payment_status === 'paid' || b?.payment_status === 'gift_card'
 }
 
 /** Is this seat actually TAKEN UP — is the person in the class?

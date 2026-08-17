@@ -269,6 +269,25 @@ export function SystemEmailsCard() {
             {t('systemEmails.alwaysOn')}
           </Badge>
         </div>
+        {/* A RECEIPT FOR MONEY IS NOT A PREFERENCE. The confirmation for a
+            booking somebody PAID for carries the manage-booking link and the
+            only invitation into the member area, so switching it off would
+            strand a buyer rather than quieten a mail — the same test the
+            waitlist offer passes. Listed here (rather than hidden) for the same
+            reason the sign-in codes are: a studio should know what goes out in
+            its name, especially the part it cannot turn off. Enforcement:
+            packages/functions/src/booking/paidConfirmation.ts. */}
+        <div className="flex items-center justify-between gap-4 py-2.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t('systemEmails.paidBookingReceipt')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('systemEmails.paidBookingReceiptDesc')}
+            </p>
+          </div>
+          <Badge variant="outline" className="shrink-0 text-xs">
+            {t('systemEmails.alwaysOn')}
+          </Badge>
+        </div>
         <div className="flex items-center justify-between gap-4 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium">{t('systemEmails.formReceipt')}</p>

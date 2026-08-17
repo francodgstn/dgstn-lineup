@@ -10,7 +10,12 @@ import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
 import { closeSessionWaitlist } from '../booking/waitlist/teardown'
 import { enforceWaiverGate } from '../waivers/gate'
-import { confirmClearedHoldFields, publicUrl, type SeatHold } from '@linyup/shared'
+import {
+  bookingWasPaidFor,
+  confirmClearedHoldFields,
+  publicUrl,
+  type SeatHold,
+} from '@linyup/shared'
 import {
   SESSION_SERIES_COLLECTION,
   SESSIONS_COLLECTION,
@@ -177,7 +182,17 @@ async function cancelSingleSession(
   const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
   let bookingsToNotify = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
 
-  // Member cancellation notices are per-team toggleable (Automations → System emails).
+  // Member cancellation notices are per-team toggleable (Automations → System
+  // emails) — EXCEPT for someone who paid.
+  //
+  // Same test as the paid booking's receipt (booking/paidConfirmation.ts) and as
+  // the waitlist offer (booking/waitlist/notify.ts): does switching it off
+  // quieten the feature, or break it? For a FREE booking it quietens a courtesy
+  // — the person loses nothing but news. For a PAID one it breaks it: they have
+  // been charged for a class the studio has just called off, and silence means
+  // they travel to a locked door and only then start asking for their money
+  // back. So a paid seat is notified whatever the toggle says, and the toggle
+  // keeps its meaning for everybody else.
   const cancellationTeamId = (sessionData.teamId || sessionData.teacher) as string | undefined
   const cancellationEmailsEnabled =
     bookingsToNotify.length > 0 || offerHolders.length > 0
@@ -185,8 +200,12 @@ async function cancelSingleSession(
         (await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
       : false
   if (bookingsToNotify.length > 0 && !cancellationEmailsEnabled) {
-    console.log(`cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId}`) // eslint-disable-line no-console
-    bookingsToNotify = []
+    const paidOnly = bookingsToNotify.filter((d) => bookingWasPaidFor(d.data() as SeatHold))
+    console.log( // eslint-disable-line no-console
+      `cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId} — ` +
+        `notifying ${paidOnly.length} of ${bookingsToNotify.length} booking(s) anyway (they paid)`
+    )
+    bookingsToNotify = paidOnly
   }
 
   if (bookingsToNotify.length > 0 || (offerHolders.length > 0 && cancellationEmailsEnabled)) {
