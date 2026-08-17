@@ -756,6 +756,19 @@ apps/web/
 - Import `Link`, `useRouter`, `usePathname` from `@/i18n/navigation` — NOT from `next/link` or `next/navigation`. The i18n wrappers add locale context automatically.
 - Use `useTranslations('Namespace')` for all visible strings. Never hardcode UI text.
 - Message keys live in `en.json` first. Add the same key to `de.json`, `fr.json`, `it.json` immediately.
+- **Working in parallel? Do NOT open the locale files — write a fragment.** The four
+  message files are the busiest contention point in the repo, and the race is at **file**
+  level, not key level: an agent reads the whole file, edits, writes back, so two agents
+  adding keys to entirely different namespaces still silently lose one another's work.
+  Each lane writes `apps/web/messages/_pending/<lane>.json` holding all four translations
+  of each key together, then `pnpm i18n:merge` applies them — refusing, rather than
+  guessing, on a missing locale, a dropped `{placeholder}`, two lanes claiming one key, or
+  a clobber of shipped copy. Contract: `apps/web/messages/_pending/README.md`.
+- `pnpm i18n:check` enforces parity across all keys (including the 18 **arrays** that hold
+  real copy) and runs in CI's Lint job. It is the ONLY enforcement there is: `apps/web` has
+  no test runner, and there is no `IntlMessages` augmentation, so **message keys are untyped
+  strings** — a component referencing a key that was never merged compiles, lints, and
+  renders the raw key id to every visitor.
 - Sport type names in the signup form are kept in English for now (they're international proper nouns); translate when the need arises.
 - Date formatting uses the browser locale via `toLocaleDateString()`. "Today"/"Tomorrow" labels come from `Common.today` / `Common.tomorrow` in messages.
 - `typedRoutes: true` is still enabled. With `[locale]` in the path, many route literals need `as Route` cast. This is expected — use casts rather than disabling typedRoutes.
