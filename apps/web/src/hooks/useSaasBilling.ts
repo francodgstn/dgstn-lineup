@@ -27,6 +27,18 @@
 // (`createOrgCheckoutSession`), so it gets its own mutation below — sharing the
 // error mapper, which is the part that was worth sharing.
 //
+// UX-75 (2026-08-17). `scope` now also picks the CALLABLE, not just the copy.
+// The team callables guard with `hasTeamRole(uid, teamId, 'owner')` — a read of
+// `teams/{teamId}/team_members/{uid}` — so putting an ORG id through them was
+// refused `permission-denied` every time: an org's admins live at
+// `organizations/{orgId}/org_members/{uid}`, and an org admin who owns no team
+// could not cancel, reactivate or open the portal at all. The server grew a
+// second rail (`cancelOrgSubscription`, `reactivateOrgSubscription`,
+// `getOrgBillingPortalUrl`, `getOrgInvoices`) with the org guard, and this hook
+// dispatches on `scope`. Note the argument names below: the mutation takes `id`
+// because the value is a team id or an org id depending on the scope, and
+// calling it `teamId` while it held an org id is exactly how UX-75 hid.
+//
 // Reasons are matched on the callable's CODE, not on its message substring:
 // packages/functions/src/saas-billing/index.ts distinguishes its refusals by
 // code (`resource-exhausted` for the 3-per-hour checkout limit,
@@ -62,6 +74,20 @@ export interface SaasBillingOptions {
 
 function defaultInvalidateKeys(id: string): QueryKey[] {
   return [['saas-subscription', id]]
+}
+
+/**
+ * The callable for `action` on this scope, plus the payload key its rail names
+ * the id with. Two rails, one dispatch point — the alternative was a `scope`
+ * that changed the wording of a refusal while still sending the call somewhere
+ * that could only refuse it.
+ */
+function billingCall(
+  scope: SaasBillingScope,
+  team: string,
+  org: string
+): { name: string; key: 'teamId' | 'orgId' } {
+  return scope === 'org' ? { name: org, key: 'orgId' } : { name: team, key: 'teamId' }
 }
 
 /** Per-action fallback: names what did NOT happen, so "it failed" and "it worked"
@@ -165,42 +191,52 @@ export function useCreateSaasCheckoutSession() {
   })
 }
 
+/** `id` is a team id under scope 'team' and an org id under scope 'org'. */
 export function useCancelSaasSubscription(options: SaasBillingOptions = {}) {
   const onError = useSaasBillingErrorToast('cancel', options.scope)
   const t = useTranslations('SaasBilling')
   const queryClient = useQueryClient()
   const invalidateKeys = options.invalidateKeys ?? defaultInvalidateKeys
+  const scope = options.scope ?? 'team'
 
   return useMutation({
-    mutationFn: async (teamId: string) => {
-      const fn = httpsCallable<{ teamId: string }>(functions, 'cancelSaasSubscription')
-      await fn({ teamId })
+    mutationFn: async (id: string) => {
+      const { name, key } = billingCall(scope, 'cancelSaasSubscription', 'cancelOrgSubscription')
+      const fn = httpsCallable<Record<string, string>>(functions, name)
+      await fn({ [key]: id })
     },
-    onSuccess: async (_data, teamId) => {
+    onSuccess: async (_data, id) => {
       toast.success(t('cancelSuccess'))
       await Promise.all(
-        invalidateKeys(teamId).map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+        invalidateKeys(id).map((queryKey) => queryClient.invalidateQueries({ queryKey }))
       )
     },
     onError,
   })
 }
 
+/** `id` is a team id under scope 'team' and an org id under scope 'org'. */
 export function useReactivateSaasSubscription(options: SaasBillingOptions = {}) {
   const onError = useSaasBillingErrorToast('reactivate', options.scope)
   const t = useTranslations('SaasBilling')
   const queryClient = useQueryClient()
   const invalidateKeys = options.invalidateKeys ?? defaultInvalidateKeys
+  const scope = options.scope ?? 'team'
 
   return useMutation({
-    mutationFn: async (teamId: string) => {
-      const fn = httpsCallable<{ teamId: string }>(functions, 'reactivateSaasSubscription')
-      await fn({ teamId })
+    mutationFn: async (id: string) => {
+      const { name, key } = billingCall(
+        scope,
+        'reactivateSaasSubscription',
+        'reactivateOrgSubscription'
+      )
+      const fn = httpsCallable<Record<string, string>>(functions, name)
+      await fn({ [key]: id })
     },
-    onSuccess: async (_data, teamId) => {
+    onSuccess: async (_data, id) => {
       toast.success(t('reactivateSuccess'))
       await Promise.all(
-        invalidateKeys(teamId).map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+        invalidateKeys(id).map((queryKey) => queryClient.invalidateQueries({ queryKey }))
       )
     },
     onError,
@@ -238,17 +274,19 @@ export function useCreateOrgCheckoutSession() {
   })
 }
 
-/** Stripe billing portal (update payment method). Navigates on success. */
+/**
+ * Stripe billing portal (update payment method). Navigates on success.
+ * `id` is a team id under scope 'team' and an org id under scope 'org'.
+ */
 export function useOpenBillingPortal(options: SaasBillingOptions = {}) {
   const onError = useSaasBillingErrorToast('portal', options.scope)
+  const scope = options.scope ?? 'team'
 
   return useMutation({
-    mutationFn: async ({ teamId, returnUrl }: { teamId: string; returnUrl: string }) => {
-      const fn = httpsCallable<{ teamId: string; returnUrl: string }, { url: string }>(
-        functions,
-        'getBillingPortalUrl'
-      )
-      const url = (await fn({ teamId, returnUrl })).data.url
+    mutationFn: async ({ id, returnUrl }: { id: string; returnUrl: string }) => {
+      const { name, key } = billingCall(scope, 'getBillingPortalUrl', 'getOrgBillingPortalUrl')
+      const fn = httpsCallable<Record<string, string>, { url: string }>(functions, name)
+      const url = (await fn({ [key]: id, returnUrl })).data.url
       if (!url.startsWith('https://billing.stripe.com/')) throw new Error('Unexpected portal URL')
       window.location.href = url
       return url

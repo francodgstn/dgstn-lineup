@@ -8,6 +8,13 @@ import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
 import { unpublishSiteForTeam, deleteAllCoursePublicProfiles } from '../utils/plugins'
 import { StripeAdapter } from '../utils/gateway/stripe'
+import {
+  getPlatformStripeAdapter,
+  cancelSubscriptionFor,
+  reactivateSubscriptionFor,
+  billingPortalUrlFor,
+  invoicesFor,
+} from './actions'
 import { readGatewayData, legacyGatewayDataFields } from '@linyup/shared'
 import type { SaasPlan } from '@linyup/shared'
 import {
@@ -29,18 +36,15 @@ const VALID_PLANS: SaasPlan[] = ['coach', 'studio']
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Returns a StripeAdapter using Linyup's platform Stripe secret key.
- * SaaS billing always uses Linyup's own Stripe account — never a team-level
- * payment gateway integration (those are for teams charging their own clients).
+ * TEAM ownership, and only that — a read of `teams/{teamId}/team_members/{uid}`.
+ *
+ * Every callable in this file is therefore TEAM-ONLY. An organisation pays for
+ * itself through the sibling rail in `../orgs/billing.ts`, guarded by
+ * `assertOrgAdmin` against `organizations/{orgId}/org_members/{uid}`; the two
+ * share their Stripe work via `./actions.ts` and nothing else. Passing an org id
+ * here fails closed (an organisation has no `team_members`), which is the
+ * behaviour that made UX-75 look like a permissions problem for a year.
  */
-async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
-  const secretKey = await getSecret('stripe-secret-key')
-  return StripeAdapter.withSecretKey(
-    { type: 'stripe', publishable_key: '', currency: 'chf' },
-    secretKey
-  )
-}
-
 async function assertOwner(uid: string, teamId: string): Promise<void> {
   const isOwner = await hasTeamRole(uid, teamId, 'owner')
   if (!isOwner) throw new HttpsError('permission-denied', 'Owner access required')
@@ -415,9 +419,13 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// cancelSaasSubscription — marks subscription to cancel at period end
+// The four TEAM billing callables. Each is one line of authorization plus the
+// shared action from ./actions.ts; the organisation's four are in
+// ../orgs/billing.ts and differ only in their guard. `teamId` on the wire is
+// now TRUE of all four — an org id never reaches here (UX-75).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// cancelSaasSubscription — marks subscription to cancel at period end
 export const cancelSaasSubscription = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -425,38 +433,12 @@ export const cancelSaasSubscription = onCall(async (request) => {
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   await assertOwner(request.auth.uid, data.teamId)
-
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) throw new HttpsError('not-found', 'No active subscription found')
-
-  const subData = subDoc.data()!
-  const subscriptionId = readGatewayData(subData).subscription_id
-  if (!subscriptionId)
-    throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
-
-  const adapter = await getPlatformStripeAdapter()
-
-  try {
-    await adapter.cancelSubscription({ subscriptionId })
-  } catch (err) {
-    console.error('cancelSubscription failed:', err)
-    throw new HttpsError('internal', 'Failed to cancel subscription')
-  }
-
-  // Webhook will update cancel_at_period_end when Stripe fires the event.
-  // Optimistically set it here so the UI updates immediately.
-  await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
-    cancel_at_period_end: true,
-    updated_at: FieldValue.serverTimestamp(),
-  })
+  await cancelSubscriptionFor(data.teamId)
 
   return { success: true }
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
 // reactivateSaasSubscription — removes cancel_at_period_end flag
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const reactivateSaasSubscription = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -464,43 +446,12 @@ export const reactivateSaasSubscription = onCall(async (request) => {
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   await assertOwner(request.auth.uid, data.teamId)
-
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
-
-  const subData = subDoc.data()!
-  const subscriptionId = readGatewayData(subData).subscription_id
-  if (!subscriptionId)
-    throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
-
-  const adapter = await getPlatformStripeAdapter()
-
-  try {
-    await adapter.reactivateSubscription({ subscriptionId })
-  } catch (err) {
-    console.error('reactivateSubscription failed:', err)
-    throw new HttpsError('internal', 'Failed to reactivate subscription')
-  }
-
-  await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
-    cancel_at_period_end: false,
-    // Clear the whole record, not just the boolean. Reactivating after a
-    // BILLING-PORTAL cancel is the case where the DATE, not the boolean, was
-    // carrying the state — and a reason left behind would outlive the
-    // cancellation it describes.
-    cancel_at: null,
-    canceled_at: null,
-    cancellation_details: null,
-    updated_at: FieldValue.serverTimestamp(),
-  })
+  await reactivateSubscriptionFor(data.teamId)
 
   return { success: true }
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
-// getBillingPortalUrl — creates a Stripe billing portal session for payment management
-// ─────────────────────────────────────────────────────────────────────────────
-
+// getBillingPortalUrl — Stripe billing portal session (payment method, receipts)
 export const getBillingPortalUrl = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -509,36 +460,11 @@ export const getBillingPortalUrl = onCall(async (request) => {
 
   await assertOwner(request.auth.uid, data.teamId)
 
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
-
-  const customerId = readGatewayData(subDoc.data()).customer_id
-  if (!customerId)
-    throw new HttpsError('failed-precondition', 'No Stripe customer found — contact support')
-
-  const adapter = await getPlatformStripeAdapter()
-  const hostingUrl = getHostingUrl()
-  const returnUrl = data.returnUrl ?? `${hostingUrl}/billing`
-
-  let session: { url: string }
-  try {
-    session = await adapter.createBillingPortalSession({ customerId, returnUrl })
-  } catch (err) {
-    console.error('createBillingPortalSession failed:', err)
-    throw new HttpsError('internal', 'Failed to open billing portal')
-  }
-
-  if (!session.url.startsWith('https://billing.stripe.com/')) {
-    throw new HttpsError('internal', 'Unexpected billing portal URL')
-  }
-
-  return { url: session.url }
+  const returnUrl = data.returnUrl ?? `${getHostingUrl()}/billing`
+  return { url: await billingPortalUrlFor(data.teamId, returnUrl) }
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
 // getSaasInvoices — fetches invoice list live from Stripe (not stored in Firestore)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const getSaasInvoices = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -546,22 +472,7 @@ export const getSaasInvoices = onCall(async (request) => {
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   await assertOwner(request.auth.uid, data.teamId)
-
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) return { invoices: [] }
-
-  const customerId = readGatewayData(subDoc.data()).customer_id
-  if (!customerId) return { invoices: [] }
-
-  const adapter = await getPlatformStripeAdapter()
-
-  try {
-    const invoices = await adapter.fetchInvoices({ customerId, limit: data.limit ?? 10 })
-    return { invoices }
-  } catch (err) {
-    console.error('getSaasInvoices failed:', err)
-    throw new HttpsError('internal', 'Failed to fetch invoices')
-  }
+  return invoicesFor(data.teamId, data.limit ?? 10)
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

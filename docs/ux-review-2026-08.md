@@ -885,6 +885,17 @@ German and the badge is correct without a reload.
 
 ### UX-75 — An org admin cannot cancel, reactivate or pay for her own organisation
 `blocks` · weekly · traced · M10×M6 · *found 2026-08-17 while fixing UX-73* · **functions, not web**
+**✅ Fixed** 2026-08-17 — the org got its own four callables (`cancelOrgSubscription`,
+`reactivateOrgSubscription`, `getOrgBillingPortalUrl`, `getOrgInvoices`, in `orgs/billing.ts`),
+guarded by the existing `assertOrgAdmin` against `organizations/{orgId}/org_members/{uid}`. The
+Stripe work moved to `saas-billing/actions.ts` with **no authorization in it**, so both rails
+share one implementation and "cancel" cannot come to mean two things. `firestore.rules` needed
+no change — it had already named the parameter `entityId` and enumerated both authorization
+models for `saas_subscriptions/{entityId}`, which is what settled the design question. A fourth
+callable was in scope that the finding missed: `getSaasInvoices` refused the same way, and
+because the refusal landed in a `useQuery` with no error surface the org page rendered
+**"No invoices yet"** — a wrong answer with no tell. **Deploy order:** these are four NEW
+function names; they must ship before the web change reaches an environment.
 
 **Now.** `cancelSaasSubscription`, `reactivateSaasSubscription` and `getBillingPortalUrl` all
 guard with `assertOwner(uid, teamId)` (`packages/functions/src/saas-billing/index.ts:427`,
@@ -1105,6 +1116,16 @@ start from. Then reuse `connect/purchaseReceipts.ts` rather than writing a fifth
 
 ### UX-81 — Every email's plain-text half runs its headings into the following sentence
 `confuses` · every-session · traced · C2×M9 · *found while writing UX-77's templates*
+**✅ Fixed** 2026-08-17 — `htmlToPlainText` in `packages/shared/src/emailLayout.ts`, beside the
+chrome that built the HTML; both call sites (`utils/email.ts`, `utils/outreachEmail.ts` — the
+same two-line regex, twice) delegate. The finding named one defect and there were **three**: the
+weld, the whole mail arriving as a single paragraph, and entities never decoded — so
+`&amp;middot;` and everything `escapeHtml` produced went out raw, and a CTA arrived as a label
+with no link. Source whitespace is flattened *first*, so every newline in the output is one the
+function chose; boundaries are paragraph-level (blank line) or line-level (single newline), which
+is why a `<br>` inside a box breaks one line while the box's title takes two. Entities are
+decoded **last**, after every tag is gone, so a decoded `&amp;lt;b&amp;gt;` cannot become markup.
+No existing test pinned the old output, so nothing encoded the bug.
 
 **Now.** `buildEmailTemplate`'s plain-text arm strips tags without inserting separators, so a
 titled block renders as `Cosa succede oraStudio organizza…` — the heading welded to the sentence

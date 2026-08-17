@@ -75,8 +75,11 @@ function InvoicesSection({ orgId, hasGateway }: { orgId: string; hasGateway: boo
     queryKey: ['saas-invoices', orgId],
     enabled: hasGateway,
     queryFn: async () => {
-      const fn = httpsCallable<{ teamId: string }, { invoices: Invoice[] }>(functions, 'getSaasInvoices')
-      const result = await fn({ teamId: orgId })
+      // getOrgInvoices, not getSaasInvoices: the latter guards on team ownership,
+      // so an org id put through it was refused and this list rendered as
+      // "No invoices yet" — a wrong answer with no way to see through it (UX-75).
+      const fn = httpsCallable<{ orgId: string }, { invoices: Invoice[] }>(functions, 'getOrgInvoices')
+      const result = await fn({ orgId })
       return result.data.invoices
     },
   })
@@ -280,7 +283,7 @@ export default function OrgBillingPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() =>
-                        billingPortal.mutate({ teamId: orgId, returnUrl: window.location.href })
+                        billingPortal.mutate({ id: orgId, returnUrl: window.location.href })
                       }
                       disabled={actionPending}
                     >

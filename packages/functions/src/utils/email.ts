@@ -8,7 +8,7 @@
 import { sendStudioMail, sendSystemMail, type SendOutcome } from '../mail/mailService'
 import type { MailAttachment } from '../mail/types'
 import { escapeHtml } from './html'
-import { wrapInLayout } from './emailLayout'
+import { wrapInLayout, htmlToPlainText } from './emailLayout'
 
 export { idempotencyKey } from '../mail/mailService'
 
@@ -71,7 +71,11 @@ export function buildEmailTemplate({ title, body, footer }: { title: string; bod
     footerContent: `<p>${defaultFooter}</p>`,
   })
 
-  const text = `${title}\n${'='.repeat(title.length)}\n\n${body.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()}\n\n---\n${defaultFooter.replace(/<[^>]*>/g, '')}`
+  // The text/plain half. `htmlToPlainText` (in @linyup/shared, beside the layout
+  // that built the HTML) keeps the block boundaries the HTML had — before UX-81
+  // this stripped tags and collapsed all whitespace, so every titled box arrived
+  // as "Cosa succede oraStudio organizza…" and the mail as one paragraph.
+  const text = `${title}\n${'='.repeat(title.length)}\n\n${htmlToPlainText(body)}\n\n---\n${htmlToPlainText(defaultFooter)}`
 
   return { html, text }
 }

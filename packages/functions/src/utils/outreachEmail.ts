@@ -2,7 +2,7 @@
 // Variable substitution, HTML body rendering, and outreach email builder for team-defined templates.
 import { addDays, format } from 'date-fns'
 import { marked } from 'marked'
-import { wrapInLayout, gradients, buildTeamFooter } from './emailLayout'
+import { wrapInLayout, gradients, buildTeamFooter, htmlToPlainText } from './emailLayout'
 import { getHostingUrl } from './env'
 import { publicUrl } from '@linyup/shared'
 
@@ -141,9 +141,9 @@ export function buildOutreachEmail({
     content: body,
     footerContent: buildTeamFooter(teamData, language),
   })
-  const text = body
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  // Same flattener as the transactional mail (UX-81). It matters more here: a
+  // markdown body renders through `marked`, so this is the one rail whose HTML
+  // routinely contains real lists and headings.
+  const text = htmlToPlainText(body)
   return { html, text }
 }

@@ -2,27 +2,20 @@
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { getSecret } from '../utils/secrets'
 import { getHostingUrl, resolveBaseUrl } from '../utils/env'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { getTeam } from '../utils/teams'
-import { StripeAdapter } from '../utils/gateway/stripe'
+import { getPlatformStripeAdapter } from '../saas-billing/actions'
 import type { OrgRole } from '@linyup/shared'
 import { NOTIFICATIONS_SUBCOLLECTION } from '@linyup/shared'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
-  const secretKey = await getSecret('stripe-secret-key')
-  return StripeAdapter.withSecretKey(
-    { type: 'stripe', publishable_key: '', currency: 'chf' },
-    secretKey,
-  )
-}
-
-// Exported so other org-scoped callables (e.g. ../orgWebsite) reuse the exact
-// same org-admin gate instead of re-implementing the org_members role check.
+// Exported so other org-scoped callables (e.g. ../orgWebsite, ./billing) reuse
+// the exact same org-admin gate instead of re-implementing the org_members role
+// check. THIS is what authorizes an organisation's own billing — an org admin is
+// not a team owner and has no `team_members` document anywhere (UX-75).
 export async function assertOrgAdmin(uid: string, orgId: string): Promise<void> {
   const memberDoc = await admin.firestore()
     .collection('organizations').doc(orgId)

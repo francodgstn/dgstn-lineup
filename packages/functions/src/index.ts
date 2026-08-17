@@ -191,6 +191,15 @@ export {
   requestTeamAccess,
 } from './orgs'
 
+// An org's OWN Linyup billing. Separate from the team callables below because
+// the payer is authorized through org_members, not team_members (UX-75).
+export {
+  cancelOrgSubscription,
+  reactivateOrgSubscription,
+  getOrgBillingPortalUrl,
+  getOrgInvoices,
+} from './orgs/billing'
+
 // Team-level billing (BYO — teams charging their own students on their OWN
 // gateway account; no platform fee). Both webhooks record into payment_events.
 export { handlePayrexxWebhook } from './billing/handlePayrexxWebhook'

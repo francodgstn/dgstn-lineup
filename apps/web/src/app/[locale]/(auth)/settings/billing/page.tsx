@@ -283,7 +283,7 @@ function SubscriptionCard({
   }
 
   function handleUpdatePayment() {
-    billingPortal.mutate({ teamId, returnUrl: window.location.href })
+    billingPortal.mutate({ id: teamId, returnUrl: window.location.href })
   }
 
   const periodEndMs = toTs(sub?.current_period_end)
