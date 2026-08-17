@@ -150,6 +150,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
 | 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
 | 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ▶ Open |
+| 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -874,6 +875,62 @@ reason that file exists rather than four local handlers.
 **Surface:** −1 hand-rolled banner, −4 inline callables. **Build:** S. **Owner:** web-agent.
 **Verify:** In German, cancel an org subscription whose Stripe id is missing — the message is
 German and the badge is correct without a reload.
+
+### UX-74 — In 13 dialogs the Save button scrolls away with the form
+`slows` · every-session · counted · M5×M7×M9 · *added 2026-08-17, Franco's observation* · **one fix, in the primitive**
+
+**Now.** `DialogContent` (`components/ui/dialog.tsx:42-60`) is a bare `grid` with no scroll
+region of its own — no `max-h`, no `overflow`. So every dialog with a long form bolts the
+constraint onto `DialogContent` itself via `className`, which makes the **whole popup** the
+scroll container, footer included. Counted:
+
+```
+grep -rn "DialogContent" --include=*.tsx apps/web/src | grep -E "overflow-y-auto|overflow-auto"
+→ 13
+```
+
+`offer/activities/page.tsx:615` · `components/subscriptions/SubscriptionTypesManager.tsx:319` ·
+`offer/promo-codes/page.tsx:460` · `offer/products/page.tsx:357` · `automations/page.tsx:1466` ·
+`automations/WebhookEndpointsDialog.tsx:143` · `settings/event-types/page.tsx:157` ·
+`settings/team/page.tsx:893` · `components/appointments/AppointmentAvailability.tsx:453` ·
+`components/appointments/AppointmentFormDialog.tsx:279` ·
+`plugins/custom-fields/CustomFieldsTab.tsx:90` · `plugins/documents/VersionHistory.tsx:75` ·
+`org/[orgId]/ranking/page.tsx:104`.
+
+The two worst are the two this review already complains about for other reasons: the activity
+dialog, which UX-40 counts at **23 fields**, and the promo dialog, where UX-24 found the
+validation message parked 135 lines from the field it names — and noted that *"the dialog
+scrolls, so on a short viewport the error and the field it names cannot be on screen together."*
+That is this finding, seen from the side. A pinned footer is where a form-level error belongs,
+so fixing this makes UX-24's remaining half nearly free.
+
+**Cost.** The manager finishes a long form and has to scroll back down to commit it — and on a
+short viewport she cannot see the primary action while touching the last field, which is
+exactly when she wants to know it is there. `DialogFooter` is used by **67** files, so the
+pattern is established; it simply is not pinned.
+
+**Fix — in the primitive, once.** Give `DialogContent` an internal scroll region: header and
+footer as fixed rows, the body scrolling between them (a grid with `grid-rows-[auto_minmax(0,1fr)_auto]`
+and `overflow-y-auto` on the middle row, with a sensible default `max-h`). Then **delete the
+`max-h`/`overflow` classes from all 13 call sites** — they become not just redundant but
+harmful, since a scroll container on the popup re-breaks the pin. Every dialog written
+afterwards inherits the behaviour instead of re-deciding it.
+
+Two things to get right, because they are why this is not purely mechanical:
+1. **Not every dialog wants a pinned footer.** A short confirm should not grow a bordered bar.
+   Pin only when the body actually overflows, or make it opt-in on `DialogContent` and set it
+   on the 13 — and say which, so the next author knows the rule rather than guessing from
+   examples.
+2. **`AlertDialog` is a separate component** (`components/ui/alert-dialog.tsx`) with 29 users
+   and its own footer. Decide whether it shares the fix or is deliberately left alone — a
+   confirm dialog rarely scrolls, so "left alone" is defensible, but it should be a decision.
+
+**Surface:** +1 scroll region in one primitive, **−13 hand-rolled `max-h`/`overflow` pairs**,
+±0 routes, ±0 settings. **Build:** M — the primitive is small; the care is in the 13 call sites
+and in not regressing the dialogs that do not scroll. **Owner:** web-agent.
+**Verify:** Open the activity dialog at 900px height, scroll to the last field, and confirm
+Save is visible without scrolling back. Then open a two-line confirm dialog and confirm it has
+not grown a footer bar it does not need.
 
 ### UX-68 — Nothing can be duplicated, so the second of anything costs as much as the first
 `slows` · at-setup · traced · M5×M2 · *added 2026-08-17, from manual exploration*
