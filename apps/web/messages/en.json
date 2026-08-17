@@ -1999,6 +1999,7 @@
     "freePlanName": "Free plan",
     "invoiceView": "View",
     "invoices": "Invoices",
+    "invoicesError": "Couldn't load your invoices.",
     "keepSubscription": "Keep subscription",
     "nextBilling": "Next billing date: {date}",
     "noInvoices": "No invoices yet.",
@@ -2019,6 +2020,20 @@
     "trialStatusBadge": "Trial",
     "updatePayment": "Update payment method",
     "updatingPayment": "Opening…"
+  },
+  "SaasBilling": {
+    "cancelSuccess": "Subscription cancelled. You keep access until the end of the current billing period.",
+    "reactivateSuccess": "Subscription resumed — it will renew as normal.",
+    "errorOwnerOnly": "Only the team owner can manage billing.",
+    "errorSignedOut": "You've been signed out. Sign in again and try once more.",
+    "errorRateLimited": "Too many checkout attempts. Please try again in an hour.",
+    "errorNoSubscription": "We couldn't find a subscription for this team. Reload the page and try again.",
+    "errorContactSupport": "This subscription is missing its payment details, so it can't be changed here. Contact us and we'll sort it out.",
+    "contactSupport": "Contact support",
+    "errorCheckout": "We couldn't open the payment page — nothing has been charged. Please try again.",
+    "errorCancel": "Your subscription was not cancelled. Please try again.",
+    "errorReactivate": "Your subscription was not resumed — it is still set to end. Please try again.",
+    "errorPortal": "We couldn't open your payment settings. Please try again."
   },
   "Pricing": {
     "perMonth": "/mo",

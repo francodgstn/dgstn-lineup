@@ -1999,6 +1999,7 @@
     "freePlanName": "Free-Plan",
     "invoiceView": "Ansehen",
     "invoices": "Rechnungen",
+    "invoicesError": "Ihre Rechnungen konnten nicht geladen werden.",
     "keepSubscription": "Abonnement behalten",
     "nextBilling": "Nächste Abrechnung: {date}",
     "noInvoices": "Noch keine Rechnungen.",
@@ -2019,6 +2020,20 @@
     "trialStatusBadge": "Testphase",
     "updatePayment": "Zahlungsmethode aktualisieren",
     "updatingPayment": "Wird geöffnet…"
+  },
+  "SaasBilling": {
+    "cancelSuccess": "Abonnement gekündigt. Der Zugang bleibt bis zum Ende der laufenden Abrechnungsperiode bestehen.",
+    "reactivateSuccess": "Abo fortgesetzt — es wird normal verlängert.",
+    "errorOwnerOnly": "Nur der Team-Inhaber kann die Abrechnung verwalten.",
+    "errorSignedOut": "Sie wurden abgemeldet. Melden Sie sich erneut an und versuchen Sie es nochmals.",
+    "errorRateLimited": "Zu viele Bezahlversuche. Bitte versuchen Sie es in einer Stunde erneut.",
+    "errorNoSubscription": "Für dieses Team wurde kein Abonnement gefunden. Laden Sie die Seite neu und versuchen Sie es erneut.",
+    "errorContactSupport": "Diesem Abonnement fehlen die Zahlungsdaten, daher kann es hier nicht geändert werden. Kontaktieren Sie uns, wir kümmern uns darum.",
+    "contactSupport": "Support kontaktieren",
+    "errorCheckout": "Die Bezahlseite konnte nicht geöffnet werden — es wurde nichts belastet. Bitte versuchen Sie es erneut.",
+    "errorCancel": "Ihr Abonnement wurde nicht gekündigt. Bitte versuchen Sie es erneut.",
+    "errorReactivate": "Ihr Abonnement wurde nicht fortgesetzt — es endet weiterhin. Bitte versuchen Sie es erneut.",
+    "errorPortal": "Ihre Zahlungseinstellungen konnten nicht geöffnet werden. Bitte versuchen Sie es erneut."
   },
   "Pricing": {
     "perMonth": "/Mt.",

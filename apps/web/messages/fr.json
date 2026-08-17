@@ -1999,6 +1999,7 @@
     "freePlanName": "Offre Gratuite",
     "invoiceView": "Voir",
     "invoices": "Factures",
+    "invoicesError": "Impossible de charger vos factures.",
     "keepSubscription": "Conserver l'abonnement",
     "nextBilling": "Prochaine facturation : {date}",
     "noInvoices": "Aucune facture pour l'instant.",
@@ -2019,6 +2020,20 @@
     "trialStatusBadge": "Essai",
     "updatePayment": "Mettre à jour le moyen de paiement",
     "updatingPayment": "Ouverture…"
+  },
+  "SaasBilling": {
+    "cancelSuccess": "Abonnement annulé. Vous conservez l'accès jusqu'à la fin de la période de facturation en cours.",
+    "reactivateSuccess": "Abonnement repris — il sera renouvelé normalement.",
+    "errorOwnerOnly": "Seul le propriétaire de l'équipe peut gérer la facturation.",
+    "errorSignedOut": "Vous avez été déconnecté. Reconnectez-vous et réessayez.",
+    "errorRateLimited": "Trop de tentatives de paiement. Veuillez réessayer dans une heure.",
+    "errorNoSubscription": "Aucun abonnement trouvé pour cette équipe. Rechargez la page et réessayez.",
+    "errorContactSupport": "Les données de paiement de cet abonnement sont manquantes, il ne peut donc pas être modifié ici. Contactez-nous, nous nous en occupons.",
+    "contactSupport": "Contacter le support",
+    "errorCheckout": "Impossible d'ouvrir la page de paiement — rien n'a été débité. Veuillez réessayer.",
+    "errorCancel": "Votre abonnement n'a pas été annulé. Veuillez réessayer.",
+    "errorReactivate": "Votre abonnement n'a pas été repris — il se termine toujours à la date prévue. Veuillez réessayer.",
+    "errorPortal": "Impossible d'ouvrir vos paramètres de paiement. Veuillez réessayer."
   },
   "Pricing": {
     "perMonth": "/mois",

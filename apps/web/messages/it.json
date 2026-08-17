@@ -1999,6 +1999,7 @@
     "freePlanName": "Piano Free",
     "invoiceView": "Vedi",
     "invoices": "Fatture",
+    "invoicesError": "Impossibile caricare le fatture.",
     "keepSubscription": "Mantieni abbonamento",
     "nextBilling": "Prossima fatturazione: {date}",
     "noInvoices": "Nessuna fattura ancora.",
@@ -2019,6 +2020,20 @@
     "trialStatusBadge": "Prova",
     "updatePayment": "Aggiorna metodo di pagamento",
     "updatingPayment": "Apertura…"
+  },
+  "SaasBilling": {
+    "cancelSuccess": "Abbonamento annullato. Mantieni l'accesso fino alla fine del periodo di fatturazione in corso.",
+    "reactivateSuccess": "Abbonamento ripreso — si rinnoverà normalmente.",
+    "errorOwnerOnly": "Solo il proprietario del team può gestire la fatturazione.",
+    "errorSignedOut": "La sessione è scaduta. Accedi di nuovo e riprova.",
+    "errorRateLimited": "Troppi tentativi di pagamento. Riprova tra un'ora.",
+    "errorNoSubscription": "Nessun abbonamento trovato per questo team. Ricarica la pagina e riprova.",
+    "errorContactSupport": "A questo abbonamento mancano i dati di pagamento, quindi non può essere modificato qui. Contattaci e lo sistemiamo.",
+    "contactSupport": "Contatta il supporto",
+    "errorCheckout": "Non è stato possibile aprire la pagina di pagamento — non è stato addebitato nulla. Riprova.",
+    "errorCancel": "L'abbonamento non è stato annullato. Riprova.",
+    "errorReactivate": "L'abbonamento non è stato ripreso — terminerà comunque alla data prevista. Riprova.",
+    "errorPortal": "Non è stato possibile aprire le impostazioni di pagamento. Riprova."
   },
   "Pricing": {
     "perMonth": "/mese",
