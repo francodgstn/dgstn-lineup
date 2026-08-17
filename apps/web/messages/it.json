@@ -1551,7 +1551,23 @@
     "subTypeLimitPeriodWeek": "alla settimana",
     "subTypeLimitPeriodMonth": "al mese",
     "subTypePayoutPerVisit": "Compenso per visita",
-    "subTypePayoutPerVisitDesc": "Quanto ti paga il partner per ogni visita effettuata. Mostrato nel registro delle visite dei partner."
+    "subTypePayoutPerVisitDesc": "Quanto ti paga il partner per ogni visita effettuata. Mostrato nel registro delle visite dei partner.",
+    "subTypeIntro": "Offerta di lancio",
+    "subTypeIntroDesc": "Chiedi meno — o niente — per i primi periodi di fatturazione. Poi si applica automaticamente il prezzo pieno.",
+    "subTypeIntroBadge": "Offerta di lancio",
+    "subTypeIntroPrice": "A quale prezzo si applica",
+    "subTypeIntroAmount": "Prezzo di lancio per periodo",
+    "subTypeIntroPeriods": "Periodi",
+    "subTypeIntroFreeHint": "Lascia il prezzo a 0 per rendere gratuiti i primi periodi. I membri inseriscono comunque un metodo di pagamento e pagano il prezzo pieno dal periodo successivo.",
+    "subTypeIntroNoRecurring": "Aggiungi prima un prezzo ricorrente — settimanale, quindicinale, mensile, trimestrale o annuale. Un'offerta di lancio ha bisogno di un prezzo pieno a cui tornare.",
+    "subTypeIntroWeeklyLimit": "Stripe misura uno sconto ricorrente in mesi interi, quindi un piano settimanale o quindicinale può scontare solo il primo periodo.",
+    "subTypeIntroErr_no_price": "Scegli a quale prezzo ricorrente si applica questa offerta.",
+    "subTypeIntroErr_not_recurring": "Un'offerta di lancio funziona solo con un prezzo ricorrente — un pagamento unico o a lezione non ha nulla da rinnovare.",
+    "subTypeIntroErr_periods_invalid": "Scegli tra 1 e {max} periodi.",
+    "subTypeIntroErr_interval_not_monthly": "Un piano settimanale o quindicinale può scontare solo il primo periodo.",
+    "subTypeIntroErr_amount_invalid": "Inserisci un prezzo di lancio pari o superiore a 0.",
+    "subTypeIntroErr_below_minimum": "Un addebito deve essere di almeno 0.50. Usa 0 per rendere gratuiti i primi periodi.",
+    "subTypeIntroErr_not_cheaper": "Il prezzo di lancio deve essere inferiore al prezzo normale dell'abbonamento."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -5890,5 +5906,13 @@
     "noShowFeeOnce": "Se salti una sessione prenotata senza cancellarla, viene applicata una penale per assenza di {fee}.",
     "noShowFeeAfter": "Se salti {count} sessioni prenotate senza cancellarle, viene applicata una penale per assenza di {fee}.",
     "noShowFeeNote": "La penale ti viene inviata via e-mail — nulla viene addebitato automaticamente su una carta."
+  },
+  "IntroOffer": {
+    "spanWeek": "{count, plural, one {la prima settimana} other {le prime # settimane}}",
+    "spanMonth": "{count, plural, one {il primo mese} other {i primi # mesi}}",
+    "spanYear": "{count, plural, one {il primo anno} other {i primi # anni}}",
+    "per": "{recurrence, select, weekly {a settimana} biweekly {ogni 2 settimane} monthly {al mese} quarterly {a trimestre} annual {all'anno} other {al mese}}",
+    "linePriced": "{price} per {span} — poi {full} {per}",
+    "lineFree": "Gratis per {span} — poi {full} {per}"
   }
 }

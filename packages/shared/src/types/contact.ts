@@ -490,6 +490,31 @@ export interface SubscriptionUsageLimit {
   per: UsageLimitPeriod
 }
 
+// ─── intro offer ("first 3 months at CHF 1, then the full price") ─────────────
+// A property of the PLAN, and — this is the load-bearing part — a property of
+// the CHECKOUT, never of a price. It is NOT an arm of resolvePaymentOptions:
+// that resolver returns ONE amount, and an intro offer is a SCHEDULE (an amount
+// AND how many periods it survives). The single-amount contract is exactly why
+// memberships were left out of the promo rails, and expressing this as a lower
+// `unit_amount` would make the reduced figure the RECURRING price — the member
+// would pay it forever. It is applied as a Stripe Coupon on the connected
+// account so the price returns to full on its own.
+//
+// Expressibility is constrained by Stripe: `duration: 'repeating'` is measured
+// in `duration_in_months` and nothing else, so "the first N periods" of a
+// WEEKLY plan cannot be stated. See shared/utils/introOffer.ts — the ONE
+// validator, shared by the editor, the public mirror, the pricing card and the
+// checkout callables.
+
+export interface SubscriptionIntroOffer {
+  /** Which of this type's own RECURRING prices the offer applies to. */
+  priceId: string
+  /** How many billing PERIODS of that price are discounted. 1 … INTRO_OFFER_MAX_PERIODS. */
+  periods: number
+  /** What the member pays PER PERIOD while it runs, MAJOR units. 0 = free. */
+  amount: number
+}
+
 export interface SubscriptionType {
   id: string
   name: string
@@ -511,6 +536,13 @@ export interface SubscriptionType {
   // studio per attended visit (major units, team currency). Drives the
   // partner_visits payout ledger — see Phase E1 of the pricing initiative.
   payoutPerVisit?: number
+  // ONE intro offer per plan, naming one of its own recurring prices. Absent /
+  // null = no offer. Never trusted as written: every reader resolves it through
+  // `resolveIntroOffer` (shared/utils/introOffer.ts), which returns null for
+  // anything Stripe cannot express — so an unsellable offer is invisible on the
+  // card AND unapplied at checkout, rather than promised in one place and
+  // charged in another.
+  introOffer?: SubscriptionIntroOffer | null
 }
 
 // ─── partner (aggregator) visit payout ledger ─────────────────────────────────

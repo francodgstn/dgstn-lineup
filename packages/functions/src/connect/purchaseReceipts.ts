@@ -117,6 +117,17 @@ export interface MembershipPurchaseReceiptParams {
   recurring: boolean
   validUntil?: Date | null
   paid?: PaidAmount | null
+  /** The plan's intro offer, ALREADY checked against the first charge by the
+   *  caller (`introReceiptTerms` in connect/webhook.ts). It carries its own
+   *  currency because a FREE intro produces no charge, so `paid` is null and
+   *  there is nothing to borrow one from. */
+  intro?: {
+    periods: number
+    amount: number
+    fullAmount: number
+    recurrence: string
+    currency: string
+  } | null
   fallbackEmail?: string | null
 }
 
@@ -187,6 +198,7 @@ export async function sendMembershipPurchaseReceipt(
             recurring: p.recurring,
             validUntil: p.validUntil ?? null,
             paid: p.paid ?? null,
+            intro: p.intro ?? null,
             spaceUrl,
             lang: team.lang,
           })

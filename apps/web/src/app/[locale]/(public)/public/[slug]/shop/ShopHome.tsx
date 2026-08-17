@@ -52,6 +52,8 @@ import {
   giftCardCheckoutErrorMessage,
   type AppliedGiftCard,
 } from '@/components/booking/GiftCardRedeemField'
+// The plan's intro offer, said the SAME way on the card and in the modal.
+import { IntroOfferLine, readIntroTerms } from '@/components/pricing/IntroOfferLine'
 
 interface PlanPrice {
   id?: string
@@ -60,6 +62,11 @@ interface PlanPrice {
   label?: string
   included_months?: number
   credits?: number
+  /** The plan's INTRO OFFER on this price, already resolved server-side by
+   *  `syncSubscriptionTypesToPublicProfile` — present only when it is sellable,
+   *  so the card can never advertise terms the checkout would refuse. Narrowed
+   *  through `readIntroTerms`, never trusted as typed. */
+  intro?: unknown
 }
 interface PlanEntry {
   id: string
@@ -85,6 +92,12 @@ interface ProductEntry {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** The intro offer mirrored onto a public price, or null. A one-liner so the
+ *  card and the checkout modal ask the same question of the same field. */
+function introTermsOf(price: PlanPrice) {
+  return readIntroTerms(price.intro)
+}
 
 type CourseAccessType = 'free' | 'registered' | 'subscription' | 'purchase'
 
@@ -1136,6 +1149,18 @@ export default function ShopHome({
                               : ''}
                           </span>
                         )}
+                        {/* THE OFFER, STATED BEFORE PURCHASE — the whole
+                            schedule, not just the small number. */}
+                        {introTermsOf(price) && (
+                          <p className="mt-0.5 text-xs font-medium" style={{ color: accent }}>
+                            <IntroOfferLine
+                              intro={introTermsOf(price)!}
+                              fullAmount={price.amount}
+                              recurrence={price.recurrence}
+                              currency={currency}
+                            />
+                          </p>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1441,6 +1466,20 @@ export default function ShopHome({
                   <p className="text-xs" style={{ color: textMuted }}>
                     {formatCurrency(checkoutAmount, currency)}{' '}
                     {checkout.kind === 'membership' ? recurrenceSuffix(checkout.price.recurrence) : ''}
+                  </p>
+                )}
+                {/* The plan price above is the RECURRING one and stays that
+                    way — the intro is a schedule, not a different price tag, so
+                    it is stated as its own sentence rather than by swapping the
+                    figure. This is the last screen before Stripe. */}
+                {checkout.kind === 'membership' && introTermsOf(checkout.price) && (
+                  <p className="mt-1 text-xs font-medium" style={{ color: accent }}>
+                    <IntroOfferLine
+                      intro={introTermsOf(checkout.price)!}
+                      fullAmount={checkout.price.amount}
+                      recurrence={checkout.price.recurrence}
+                      currency={currency}
+                    />
                   </p>
                 )}
               </div>

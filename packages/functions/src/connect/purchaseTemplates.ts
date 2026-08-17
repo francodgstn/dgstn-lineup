@@ -17,6 +17,11 @@
 import { buildEmailTemplate } from '../utils/email'
 import { detailsBox, ctaButton, factLines } from '../utils/emailLayout'
 import { escapeHtml } from '../utils/html'
+import {
+  introOfferSpan,
+  type IntroSpanUnit,
+  type SubscriptionRecurrence,
+} from '@linyup/shared'
 
 export type Lang = 'en' | 'de' | 'fr' | 'it'
 
@@ -198,8 +203,131 @@ export interface MembershipReceiptParams {
   /** One-off memberships that include a run of months — the date they run to. */
   validUntil?: Date | null
   paid?: PaidAmount | null
+  /**
+   * The plan's INTRO OFFER, when one applied — and only when the first charge
+   * corroborated it (`introReceiptTerms` in connect/webhook.ts does that check).
+   *
+   * It is restated HERE because `paid` alone is a smaller number with no story:
+   * a member who was told "CHF 1 for the first 3 months, then CHF 79/month"
+   * before purchase and then receives a receipt saying "Paid: CHF 1.00" has been
+   * shown the discount as if it were the price. The receipt has to carry the
+   * whole schedule, exactly as the pricing card did.
+   */
+  intro?: {
+    periods: number
+    /** Per-period price while it runs, MAJOR units. 0 = free. */
+    amount: number
+    /** The price it returns to, MAJOR units. */
+    fullAmount: number
+    recurrence: string
+    currency: string
+  } | null
   spaceUrl?: string | null
   lang?: Lang
+}
+
+// ─── Intro-offer copy ─────────────────────────────────────────────────────────
+// Four locales, plural-correct, and the span is converted the way a member
+// counts it (introOfferSpan: "your first 6 months", never "2 quarters").
+
+const INTRO_LABELS: Record<Lang, string> = {
+  en: 'Intro offer',
+  de: 'Einführungsangebot',
+  fr: 'Offre de lancement',
+  it: 'Offerta di lancio',
+}
+
+// "the first 3 months", declined. The article + ordinal + noun are written out
+// per language and per unit rather than assembled from parts, because German
+// gender and French/Italian ordinal placement do not survive assembly —
+// "vos 3 mois premiers" is what a naive template produces.
+const FIRST_SPAN: Record<Lang, Record<IntroSpanUnit, (c: number) => string>> = {
+  en: {
+    week: (c) => (c === 1 ? 'the first week' : `the first ${c} weeks`),
+    month: (c) => (c === 1 ? 'the first month' : `the first ${c} months`),
+    year: (c) => (c === 1 ? 'the first year' : `the first ${c} years`),
+  },
+  de: {
+    week: (c) => (c === 1 ? 'die erste Woche' : `die ersten ${c} Wochen`),
+    month: (c) => (c === 1 ? 'den ersten Monat' : `die ersten ${c} Monate`),
+    year: (c) => (c === 1 ? 'das erste Jahr' : `die ersten ${c} Jahre`),
+  },
+  fr: {
+    week: (c) => (c === 1 ? 'la première semaine' : `les ${c} premières semaines`),
+    month: (c) => (c === 1 ? 'le premier mois' : `les ${c} premiers mois`),
+    year: (c) => (c === 1 ? 'la première année' : `les ${c} premières années`),
+  },
+  it: {
+    week: (c) => (c === 1 ? 'la prima settimana' : `le prime ${c} settimane`),
+    month: (c) => (c === 1 ? 'il primo mese' : `i primi ${c} mesi`),
+    year: (c) => (c === 1 ? 'il primo anno' : `i primi ${c} anni`),
+  },
+}
+
+const FREE_WORD: Record<Lang, string> = {
+  en: 'free',
+  de: 'gratis',
+  fr: 'gratuit',
+  it: 'gratis',
+}
+
+/** The preposition that joins a price (or "free") to the span. */
+const FOR_WORD: Record<Lang, string> = { en: 'for', de: 'für', fr: 'pour', it: 'per' }
+
+/** "per month" / "every 2 weeks" — how the renewal price is qualified. */
+const PER_PERIOD: Record<Lang, Record<string, string>> = {
+  en: {
+    weekly: 'per week',
+    biweekly: 'every 2 weeks',
+    monthly: 'per month',
+    quarterly: 'per quarter',
+    annual: 'per year',
+  },
+  de: {
+    weekly: 'pro Woche',
+    biweekly: 'alle 2 Wochen',
+    monthly: 'pro Monat',
+    quarterly: 'pro Quartal',
+    annual: 'pro Jahr',
+  },
+  fr: {
+    weekly: 'par semaine',
+    biweekly: 'toutes les 2 semaines',
+    monthly: 'par mois',
+    quarterly: 'par trimestre',
+    annual: 'par an',
+  },
+  it: {
+    weekly: 'a settimana',
+    biweekly: 'ogni 2 settimane',
+    monthly: 'al mese',
+    quarterly: 'a trimestre',
+    annual: "all'anno",
+  },
+}
+
+/** The fact row ("CHF 1.00 for the first 3 months") + the sentence that says
+ *  what happens after it ("After that, this membership renews at …"). */
+function introLines(
+  intro: NonNullable<MembershipReceiptParams['intro']>,
+  lang: Lang
+): { fact: string; after: string } {
+  const { count, unit } = introOfferSpan(intro.recurrence as SubscriptionRecurrence, intro.periods)
+  const span = escapeHtml(FIRST_SPAN[lang][unit](count))
+  const currency = escapeHtml(intro.currency.toUpperCase())
+  const lead =
+    intro.amount === 0 ? FREE_WORD[lang] : `${currency} ${intro.amount.toFixed(2)}`
+  const fullPrice = `${currency} ${intro.fullAmount.toFixed(2)}`
+  const per = escapeHtml(PER_PERIOD[lang][intro.recurrence] ?? PER_PERIOD[lang].monthly)
+
+  const afters: Record<Lang, string> = {
+    en: `After that, this membership renews at ${fullPrice} ${per}.`,
+    de: `Danach verlängert sich diese Mitgliedschaft zu ${fullPrice} ${per}.`,
+    fr: `Ensuite, cet abonnement se renouvelle à ${fullPrice} ${per}.`,
+    it: `Successivamente, questo abbonamento si rinnova a ${fullPrice} ${per}.`,
+  }
+
+  return { fact: `${lead} ${FOR_WORD[lang]} ${span}`, after: afters[lang] }
 }
 
 export function buildMembershipReceiptEmail(p: MembershipReceiptParams): {
@@ -242,9 +370,14 @@ export function buildMembershipReceiptEmail(p: MembershipReceiptParams): {
   }
   const L = factLabels[lang]
 
+  // Restated from the pricing card, and only when the charge corroborated it —
+  // see MembershipReceiptParams.intro.
+  const intro = p.intro ? introLines(p.intro, lang) : null
+
   const facts = [
     `<strong>${L.plan}:</strong> ${planName}`,
     p.validUntil ? `<strong>${L.until}:</strong> ${formatDay(p.validUntil, lang)}` : '',
+    intro ? `<strong>${INTRO_LABELS[lang]}:</strong> ${intro.fact}` : '',
     paidLine ? `<strong>${PAID_LABELS[lang]}:</strong> ${paidLine}` : '',
   ]
 
@@ -269,6 +402,10 @@ export function buildMembershipReceiptEmail(p: MembershipReceiptParams): {
     `<p>${GREETINGS[lang](firstname)}</p>`,
     `<p>${intros[lang]}</p>`,
     detailsBox({ content: factLines(facts) }),
+    // BEFORE the generic renewal sentence, deliberately: "renews automatically"
+    // read on its own, after a receipt showing CHF 1.00, says the member renews
+    // at CHF 1.00. This is the sentence that corrects that.
+    intro ? `<p>${intro.after}</p>` : '',
     `<p>${p.recurring ? renewalLines[lang] : oneOffLines[lang]}</p>`,
     p.spaceUrl
       ? `<p style="text-align:center;margin-top:24px;">${ctaButton(p.spaceUrl, SPACE_CTA[lang])}</p>`

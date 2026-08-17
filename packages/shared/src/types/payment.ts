@@ -69,6 +69,21 @@ export interface PaymentLineItem {
    * the redemptions ledger — nowhere else.
    */
   promoCode?: string | null
+  /**
+   * The plan's intro offer this membership was sold under (kind ===
+   * 'subscription'), or absent. Same rules as `promoCode` above, and for the
+   * same reason: a SYSTEM STAMP copied by the webhook from the Checkout Session
+   * metadata, never read off a client payload by `normalizePaymentLineItem`,
+   * and carried forward across a manager's edit by `updatePaymentRecord`.
+   *
+   * `amount` is what was charged per period WHILE the offer ran (major units,
+   * 0 = free) and `periods` how many periods that was. Neither is a money event
+   * of its own: like a promo, an intro offer writes NO finance journal row —
+   * the money event is the smaller charge, which the payment row already
+   * carries. This exists so "why did this member pay 1.00 for an 79.00 plan"
+   * has an answer on the row itself.
+   */
+  introOffer?: { periods: number; amount: number } | null
 }
 
 export interface ExternalPayment {

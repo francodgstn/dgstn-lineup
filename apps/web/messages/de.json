@@ -1551,7 +1551,23 @@
     "subTypeLimitPeriodWeek": "pro Woche",
     "subTypeLimitPeriodMonth": "pro Monat",
     "subTypePayoutPerVisit": "Auszahlung pro Besuch",
-    "subTypePayoutPerVisitDesc": "Was der Partner dir pro besuchtem Termin auszahlt. Wird im Partnerbesuchs-Journal angezeigt."
+    "subTypePayoutPerVisitDesc": "Was der Partner dir pro besuchtem Termin auszahlt. Wird im Partnerbesuchs-Journal angezeigt.",
+    "subTypeIntro": "Einführungsangebot",
+    "subTypeIntroDesc": "Für die ersten Abrechnungsperioden weniger oder gar nichts verlangen. Danach gilt automatisch der volle Preis.",
+    "subTypeIntroBadge": "Einführungsangebot",
+    "subTypeIntroPrice": "Für welchen Preis es gilt",
+    "subTypeIntroAmount": "Einführungspreis pro Periode",
+    "subTypeIntroPeriods": "Perioden",
+    "subTypeIntroFreeHint": "Lassen Sie den Preis auf 0, damit die ersten Perioden gratis sind. Mitglieder hinterlegen trotzdem ein Zahlungsmittel und zahlen ab der Periode danach den vollen Preis.",
+    "subTypeIntroNoRecurring": "Fügen Sie zuerst einen wiederkehrenden Preis hinzu — wöchentlich, zweiwöchentlich, monatlich, vierteljährlich oder jährlich. Ein Einführungsangebot braucht einen vollen Preis, zu dem es zurückkehrt.",
+    "subTypeIntroWeeklyLimit": "Stripe misst einen wiederkehrenden Rabatt in ganzen Monaten. Ein wöchentlicher oder zweiwöchentlicher Plan kann daher nur die erste Periode vergünstigen.",
+    "subTypeIntroErr_no_price": "Wählen Sie, für welchen wiederkehrenden Preis dieses Angebot gilt.",
+    "subTypeIntroErr_not_recurring": "Ein Einführungsangebot funktioniert nur bei einem wiederkehrenden Preis — bei einer Einmalzahlung oder einem Preis pro Lektion gibt es nichts zu verlängern.",
+    "subTypeIntroErr_periods_invalid": "Wählen Sie zwischen 1 und {max} Perioden.",
+    "subTypeIntroErr_interval_not_monthly": "Ein wöchentlicher oder zweiwöchentlicher Plan kann nur die erste Periode vergünstigen.",
+    "subTypeIntroErr_amount_invalid": "Geben Sie einen Einführungspreis von 0 oder mehr ein.",
+    "subTypeIntroErr_below_minimum": "Eine Belastung muss mindestens 0.50 betragen. Verwenden Sie 0, um die ersten Perioden gratis zu machen.",
+    "subTypeIntroErr_not_cheaper": "Der Einführungspreis muss tiefer sein als der reguläre Preis des Abos."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -5890,5 +5906,13 @@
     "noShowFeeOnce": "Wenn Sie einen gebuchten Termin ohne Absage verpassen, wird eine Gebühr von {fee} für Nichterscheinen fällig.",
     "noShowFeeAfter": "Wenn Sie {count} gebuchte Termine ohne Absage verpassen, wird eine Gebühr von {fee} für Nichterscheinen fällig.",
     "noShowFeeNote": "Die Gebühr wird Ihnen per E-Mail zugestellt — es wird nichts automatisch von einer Karte abgebucht."
+  },
+  "IntroOffer": {
+    "spanWeek": "{count, plural, one {die erste Woche} other {die ersten # Wochen}}",
+    "spanMonth": "{count, plural, one {den ersten Monat} other {die ersten # Monate}}",
+    "spanYear": "{count, plural, one {das erste Jahr} other {die ersten # Jahre}}",
+    "per": "{recurrence, select, weekly {pro Woche} biweekly {alle 2 Wochen} monthly {pro Monat} quarterly {pro Quartal} annual {pro Jahr} other {pro Monat}}",
+    "linePriced": "{price} für {span} — danach {full} {per}",
+    "lineFree": "Gratis für {span} — danach {full} {per}"
   }
 }

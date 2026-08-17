@@ -32,7 +32,7 @@
 // A REVERSAL NEVER TOUCHES A PROMO REDEMPTION. `reversePaymentEffects` knows
 // nothing about codes by design — there is no restore-on-refund path anywhere
 // (docs/promo-codes.md), and the manager levers delete lifecycle state rather
-// than adjusting a counter. `carryPromoStamp` below keeps the stamp on the row
+// than adjusting a counter. `carrySystemStamps` below keeps the stamp on the row
 // across the move, so the sale's provenance survives the correction.
 
 import * as admin from 'firebase-admin'
@@ -52,24 +52,31 @@ import { lineItemForReversal, reversalPlanFor, reversePaymentEffects } from '../
 
 const MAX_COMMENT_LEN = 500
 
-/** Re-attach the system-stamped promo code to a manager's edited line-item.
+/** Re-attach the SYSTEM STAMPS to a manager's edited line-item.
  *
  * `line_item` is REPLACED wholesale on edit, and the picker
  * (PaymentLineItemPicker) builds a fresh object on every change, so without this
  * the first "what was paid" correction on a discounted sale would erase the only
- * record that a code was used — the payments row is that record, by decision:
- * a promo writes no journal row and no CSV column (docs/promo-codes.md).
+ * record of why it was discounted — the payments row is that record, by
+ * decision: neither a promo code nor a plan's intro offer writes a journal row
+ * or a CSV column (docs/promo-codes.md; the same reasoning applies to an intro
+ * offer, and for the same reason — a discount is not a money event on a cash
+ * basis).
  *
- * The value comes from the STORED document, never from the request, which is the
+ * The values come from the STORED document, never from the request, which is the
  * other half of the rule `normalizePaymentLineItem` states: not forgeable by a
  * client, not loseable by an edit. */
-function carryPromoStamp(
+function carrySystemStamps(
   next: PaymentLineItem | null,
   payment: FirebaseFirestore.DocumentData
 ): PaymentLineItem | null {
   if (!next) return next
-  const stored = (payment.line_item as PaymentLineItem | undefined)?.promoCode
-  return stored ? { ...next, promoCode: stored } : next
+  const stored = payment.line_item as PaymentLineItem | undefined
+  return {
+    ...next,
+    ...(stored?.promoCode ? { promoCode: stored.promoCode } : {}),
+    ...(stored?.introOffer ? { introOffer: stored.introOffer } : {}),
+  }
 }
 
 /** The line-item to apply on assign: the manager's explicit pick, else the row's
@@ -148,7 +155,7 @@ export const updatePaymentRecord = onCall(async (request) => {
 
   // The manager's line-item, with the system-stamped promo code carried across
   // (the picker rebuilds the object from scratch, so it never round-trips).
-  const finalLineItem = carryPromoStamp(newLineItem, payment)
+  const finalLineItem = carrySystemStamps(newLineItem, payment)
 
   // Validate the target contact when assigning a non-empty id.
   let newContactId: string | null = null

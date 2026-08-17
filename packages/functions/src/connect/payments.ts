@@ -19,6 +19,7 @@ import {
   normalizeRedemptionCode,
   resolveProductPrice,
   resolvePaymentOptions,
+  resolveStripeCurrency,
   toMinorUnits,
   GUEST_SNAPSHOT,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
@@ -52,6 +53,9 @@ import {
   giftCardCurrency,
 } from './giftCards'
 import { loadCoursePricing } from './coursePricing'
+// The plan's intro offer — a coupon on the checkout, never a lower price. See
+// connect/introOffer.ts; the validity rule itself lives in @linyup/shared.
+import { introCheckoutMetadata, introCouponSpec } from './introOffer'
 // The shop purchase receipts — ALWAYS ON. Needed HERE, not only in the webhook:
 // a gift card that covers the whole price creates no Stripe session, so the
 // full-cover branches below are the only place those sales can confirm
@@ -271,6 +275,14 @@ export const createMembershipPayment = onCall(async (request) => {
     defaultIdempotencyKey('membership', teamId, request.auth.uid, priceId)
 
   if (isRecurringRecurrence(price.recurrence) && interval) {
+    // The plan's intro offer, if it names THIS price and Stripe can express it.
+    // `amount` stays the full per-period price — the offer is a coupon.
+    const intro = introCouponSpec({
+      subType,
+      subscriptionTypeId,
+      priceId,
+      currency: resolveStripeCurrency(team.data.default_currency as string | undefined),
+    })
     const session = await startSubscriptionCheckout({
       team,
       amountMinor: amount,
@@ -280,9 +292,10 @@ export const createMembershipPayment = onCall(async (request) => {
       successUrl,
       cancelUrl,
       customerEmail: data.customerEmail,
-      metadata,
+      metadata: { ...metadata, ...(intro ? introCheckoutMetadata(intro.offer) : {}) },
       idempotencyKey,
       label: 'createMembershipPayment',
+      ...(intro ? { introCoupon: intro.spec } : {}),
     })
     return { url: session.url, sessionId: session.sessionId, recurring: true }
   }
@@ -431,6 +444,15 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
     defaultIdempotencyKey('membership-pub', teamId, priceId, session.contactId)
 
   if (isRecurringRecurrence(price.recurrence) && interval) {
+    // Same resolver the public pricing card rendered from, so the buyer is
+    // charged exactly what the card said. `amount` is the FULL per-period price
+    // in both places — the offer rides the coupon and expires on its own.
+    const intro = introCouponSpec({
+      subType,
+      subscriptionTypeId,
+      priceId,
+      currency: resolveStripeCurrency(team.data.default_currency as string | undefined),
+    })
     const checkout = await startSubscriptionCheckout({
       team,
       amountMinor: amount,
@@ -440,9 +462,10 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
       successUrl,
       cancelUrl,
       customerEmail: email,
-      metadata,
+      metadata: { ...metadata, ...(intro ? introCheckoutMetadata(intro.offer) : {}) },
       idempotencyKey,
       label: 'createMembershipCheckout',
+      ...(intro ? { introCoupon: intro.spec } : {}),
     })
     return { url: checkout.url, sessionId: checkout.sessionId, recurring: true }
   }

@@ -35,6 +35,7 @@ import {
   isExpiredAppointmentHold,
   mapCategory,
   seatsFree,
+  toMinorUnits,
   type ConnectOnboardingModel,
   type FinanceCategory,
   type SaasPlan,
@@ -455,13 +456,37 @@ async function stampFinanceContact(teamId: string, piId: string, contactId: stri
  * place to forget it every time a branch is added here or a rail is added to
  * `PROMO_TARGETS`. One wrapper cannot be forgotten in a branch it wraps.
  */
+/**
+ * The intro offer the checkout was created with, off the session metadata.
+ *
+ * Written by `introCheckoutMetadata` (connect/introOffer.ts) from an offer that
+ * `resolveIntroOffer` had already accepted — so this only has to survive junk,
+ * not re-decide validity. Returns null when the checkout carried no offer.
+ */
+function readIntroMetadata(md: Record<string, string>): { periods: number; amount: number } | null {
+  if (!md.introPeriods) return null
+  const periods = Number(md.introPeriods)
+  const amount = Number(md.introAmount)
+  if (!Number.isInteger(periods) || periods < 1) return null
+  if (!Number.isFinite(amount) || amount < 0) return null
+  return { periods, amount }
+}
+
 function baseLineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
   if (md.kind === 'membership' && md.subscriptionTypeId) {
+    // The intro offer, if the checkout carried one. Same class of stamp as
+    // `promoCode` below (system-written, never client-supplied) and, for the
+    // same reason, it writes NO finance journal row: a discount is not a money
+    // event on a cash basis — the smaller charge is. It rides the membership
+    // branch rather than the wrapper because an intro offer belongs to a PLAN
+    // and cannot appear on any other kind.
+    const intro = readIntroMetadata(md)
     return {
       kind: 'subscription',
       subscriptionTypeId: md.subscriptionTypeId,
       priceId: md.priceId ?? null,
       label: md.subscriptionTypeName ?? null,
+      ...(intro ? { introOffer: { periods: intro.periods, amount: intro.amount } } : {}),
     }
   }
   if (md.kind === 'product' && md.productId) {
@@ -1283,6 +1308,23 @@ async function handleCheckoutCompleted(
 
   const amountRappen = (session.amount_total as number | undefined) ?? 0
   const sessionCurrency = ((session.currency as string | undefined) ?? 'CHF').toUpperCase()
+  // ── WHAT WAS CHARGED vs WHAT THE MEMBERSHIP COSTS ─────────────────────────
+  // `amount_total` is the DISCOUNTED first invoice when the plan carries an
+  // intro offer, and that is the right number for the receipt — it is what the
+  // member paid. It is the WRONG number for the contact's stored subscription
+  // amount: an intro offer is a temporary discount on invoices, not a different
+  // membership, and the plan still costs the plan price.
+  //
+  // Without this split the two handlers disagree — `handleSubscription` writes
+  // the recurring `unit_amount` (79.00) and this one wrote `amount_total`
+  // (1.00) — so the contact record showed whichever Stripe happened to deliver
+  // last, and settled only at the first renewal. `fullAmount` is stamped by
+  // `introCheckoutMetadata` for exactly this.
+  const introFullMajor = Number(md.fullAmount)
+  const membershipAmountRappen =
+    readIntroMetadata(md) && Number.isFinite(introFullMajor) && introFullMajor > 0
+      ? toMinorUnits(introFullMajor)
+      : amountRappen
   let membershipExpiration: Timestamp | null = null
   // THE SESSION's OWN PaymentIntent. Stripe's semantics do the case split for
   // us: it is present on a one-off ('payment' mode) checkout and ALWAYS null on
@@ -1437,7 +1479,8 @@ async function handleCheckoutCompleted(
   }
 
   await writeContactMembership(team.teamId, contactId, md, {
-    amountRappen,
+    // The PLAN's price, not the discounted first invoice — see the split above.
+    amountRappen: membershipAmountRappen,
     membershipExpiration,
     // TWO CASES, and confusing them breaks the OPPOSITE one — state which is
     // which, or the next reader "fixes" one by reintroducing the other:
@@ -1497,8 +1540,62 @@ async function handleCheckoutCompleted(
     validUntil:
       session.mode === 'subscription' ? null : (membershipExpiration?.toDate() ?? null),
     paid: amountRappen > 0 ? { amount: amountRappen / 100, currency: sessionCurrency } : null,
+    // WHAT THE MEMBER IS TOLD HAS TO MATCH WHAT THEY WERE CHARGED. The pricing
+    // card promised "CHF 1 for the first 3 months, then CHF 79/month" before
+    // purchase, so the receipt must restate the whole schedule — a receipt that
+    // shows only the small figure reads as the new price, which is exactly the
+    // confusion a coupon exists to avoid.
+    //
+    // `session.amount_total` is the DISCOUNTED first-invoice total, so it is
+    // also the check: `introReceiptTerms` refuses to restate an offer the charge
+    // does not corroborate, and says so loudly instead of printing a promise
+    // Stripe did not keep.
+    intro: introReceiptTerms(md, amountRappen, sessionCurrency, session?.id),
     fallbackEmail: email || null,
   })
+}
+
+/**
+ * The intro terms to print on the receipt — CHECKED against the money that
+ * actually moved, not merely copied from the metadata.
+ *
+ * Returns null when there was no offer, and null-with-an-error when there was
+ * one and the first charge does not match it. Both produce the ordinary
+ * membership receipt; only the second is a defect, and it must never be silent:
+ * the alternative is a mail asserting a discount the member did not receive.
+ */
+function introReceiptTerms(
+  md: Record<string, string>,
+  chargedMinor: number,
+  currency: string,
+  sessionId: string | undefined
+): {
+  periods: number
+  amount: number
+  fullAmount: number
+  recurrence: string
+  currency: string
+} | null {
+  const intro = readIntroMetadata(md)
+  if (!intro) return null
+  const fullAmount = Number(md.fullAmount)
+  if (!Number.isFinite(fullAmount) || fullAmount <= 0) return null
+  if (toMinorUnits(intro.amount) !== chargedMinor) {
+    console.error(
+      `[connect] intro offer MISMATCH on session ${sessionId ?? 'unknown'}: promised ` +
+        `${intro.amount} (${toMinorUnits(intro.amount)} minor) for the first ${intro.periods} ` +
+        `period(s), charged ${chargedMinor} minor. The coupon did not apply as stated — the ` +
+        `receipt omits the offer rather than claiming it.`
+    )
+    return null
+  }
+  return {
+    periods: intro.periods,
+    amount: intro.amount,
+    fullAmount,
+    recurrence: md.recurrence ?? '',
+    currency,
+  }
 }
 
 /**

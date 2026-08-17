@@ -1551,7 +1551,23 @@
     "subTypeLimitPeriodWeek": "par semaine",
     "subTypeLimitPeriodMonth": "par mois",
     "subTypePayoutPerVisit": "Reversement par visite",
-    "subTypePayoutPerVisitDesc": "Ce que le partenaire vous verse par visite effectuée. Affiché dans le journal des visites partenaires."
+    "subTypePayoutPerVisitDesc": "Ce que le partenaire vous verse par visite effectuée. Affiché dans le journal des visites partenaires.",
+    "subTypeIntro": "Offre de lancement",
+    "subTypeIntroDesc": "Facturez moins — ou rien — pour les premières périodes. Le prix normal s'applique ensuite automatiquement.",
+    "subTypeIntroBadge": "Offre de lancement",
+    "subTypeIntroPrice": "À quel prix elle s'applique",
+    "subTypeIntroAmount": "Prix de lancement par période",
+    "subTypeIntroPeriods": "Périodes",
+    "subTypeIntroFreeHint": "Laissez le prix à 0 pour offrir les premières périodes. Les membres enregistrent tout de même un moyen de paiement et paient le prix normal dès la période suivante.",
+    "subTypeIntroNoRecurring": "Ajoutez d'abord un prix récurrent — hebdomadaire, bimensuel, mensuel, trimestriel ou annuel. Une offre de lancement a besoin d'un prix normal auquel revenir.",
+    "subTypeIntroWeeklyLimit": "Stripe exprime une remise récurrente en mois entiers : un abonnement hebdomadaire ou bimensuel ne peut donc réduire que sa première période.",
+    "subTypeIntroErr_no_price": "Choisissez le prix récurrent auquel cette offre s'applique.",
+    "subTypeIntroErr_not_recurring": "Une offre de lancement ne fonctionne que sur un prix récurrent — un paiement unique ou à la séance n'a rien à renouveler.",
+    "subTypeIntroErr_periods_invalid": "Choisissez entre 1 et {max} périodes.",
+    "subTypeIntroErr_interval_not_monthly": "Un abonnement hebdomadaire ou bimensuel ne peut réduire que sa première période.",
+    "subTypeIntroErr_amount_invalid": "Saisissez un prix de lancement de 0 ou plus.",
+    "subTypeIntroErr_below_minimum": "Un paiement doit être d'au moins 0.50. Utilisez 0 pour offrir les premières périodes.",
+    "subTypeIntroErr_not_cheaper": "Le prix de lancement doit être inférieur au prix normal de l'abonnement."
   },
   "Bookings": {
     "title": "Réservations",
@@ -5890,5 +5906,13 @@
     "noShowFeeOnce": "Si vous manquez une séance réservée sans l'annuler, des frais d'absence de {fee} s'appliquent.",
     "noShowFeeAfter": "Si vous manquez {count} séances réservées sans les annuler, des frais d'absence de {fee} s'appliquent.",
     "noShowFeeNote": "Les frais vous sont envoyés par e-mail — rien n'est débité automatiquement d'une carte."
+  },
+  "IntroOffer": {
+    "spanWeek": "{count, plural, one {la première semaine} other {les # premières semaines}}",
+    "spanMonth": "{count, plural, one {le premier mois} other {les # premiers mois}}",
+    "spanYear": "{count, plural, one {la première année} other {les # premières années}}",
+    "per": "{recurrence, select, weekly {par semaine} biweekly {toutes les 2 semaines} monthly {par mois} quarterly {par trimestre} annual {par an} other {par mois}}",
+    "linePriced": "{price} pour {span} — ensuite {full} {per}",
+    "lineFree": "Gratuit pour {span} — ensuite {full} {per}"
   }
 }

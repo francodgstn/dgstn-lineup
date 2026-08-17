@@ -11,7 +11,12 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { to } from '../utils/async'
-import { TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION } from '@linyup/shared'
+import {
+  TEAMS_COLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  resolveIntroOffer,
+  type SubscriptionType,
+} from '@linyup/shared'
 
 export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
   `${TEAMS_COLLECTION}/{teamId}/${SUBSCRIPTION_TYPES_SUBCOLLECTION}/{typeId}`,
@@ -61,6 +66,13 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       label?: string
       included_months?: number
       credits?: number
+      // The plan's INTRO OFFER, resolved (never copied raw): present only when
+      // `resolveIntroOffer` says it is sellable, so the public card can never
+      // advertise terms the checkout would refuse to apply. Two whitelisted
+      // numbers — `amount` is what the member pays per period while it runs
+      // (0 = free) and `periods` how many periods that is; `recurrence` and the
+      // full price are already on this entry.
+      intro?: { periods: number; amount: number }
     }
     const publicTypes = docsSorted.map((d) => {
       const data = d.data()
@@ -99,6 +111,8 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
             if (p.label) price.label = p.label
             if (typeof p.included_months === 'number') price.included_months = p.included_months
             if (typeof p.credits === 'number' && p.credits > 0) price.credits = p.credits
+            const intro = resolveIntroOffer(data as SubscriptionType, p.id)
+            if (intro) price.intro = { periods: intro.periods, amount: intro.amount }
             return price
           }
         )

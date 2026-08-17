@@ -72,6 +72,16 @@ export type StripePaymentIntentObject = Awaited<
   ReturnType<StripeInstance['paymentIntents']['retrieve']>
 >
 export type StripeChargeObject = Awaited<ReturnType<StripeInstance['charges']['retrieve']>>
+export type StripeCouponObject = Awaited<ReturnType<StripeInstance['coupons']['retrieve']>>
+/** The CREATE params, not the object — the intro-offer coupon is minted with a
+ *  DETERMINISTIC `id`, so `id` disappearing is a silent behaviour change (Stripe
+ *  would generate a random code and every retry would mint a new coupon). */
+export type StripeCouponCreateParams = NonNullable<
+  Parameters<StripeInstance['coupons']['create']>[0]
+>
+export type StripeCheckoutSessionCreateParams = NonNullable<
+  Parameters<StripeInstance['checkout']['sessions']['create']>[0]
+>
 
 // ─── where a value was found ────────────────────────────────────────────────────
 
@@ -380,6 +390,44 @@ export function readPaymentIntentEmail(paymentIntent: unknown): StripeFieldRead<
   return ABSENT
 }
 
+// ─── Coupon: the intro offer's terms ────────────────────────────────────────────
+
+/**
+ * What a coupon actually promises, as Stripe currently states it.
+ *
+ * `duration_in_months` is the ONLY way Stripe expresses a repeating discount —
+ * there is no weeks/invoices equivalent — and that single fact is what forces
+ * the weekly/biweekly refusal in `shared/utils/introOffer.ts`. It is read
+ * through here (rather than inline) for the ordinary reason this module exists:
+ * an `obj.field` on an `any` that stops matching returns `undefined` SILENTLY,
+ * and here that would mean reusing a coupon whose terms are no longer the terms
+ * the pricing card promised.
+ */
+export interface StripeCouponTerms {
+  duration: 'once' | 'repeating' | 'forever' | null
+  /** Only meaningful for `duration: 'repeating'`. */
+  durationInMonths: number | null
+  /** Fixed discount in MINOR units, or null when the coupon is percentage-based. */
+  amountOffMinor: number | null
+  /** Percentage discount (1–100), or null when the coupon is amount-based. */
+  percentOff: number | null
+  /** Stripe's own verdict on whether it can still be applied. */
+  valid: boolean
+}
+
+const COUPON_DURATIONS = ['once', 'repeating', 'forever'] as const
+
+export function readCouponTerms(coupon: unknown): StripeCouponTerms {
+  const c = asObj(coupon)
+  return {
+    duration: oneOf(c.duration, COUPON_DURATIONS),
+    durationInMonths: typeof c.duration_in_months === 'number' ? c.duration_in_months : null,
+    amountOffMinor: typeof c.amount_off === 'number' ? c.amount_off : null,
+    percentOff: typeof c.percent_off === 'number' ? c.percent_off : null,
+    valid: c.valid === true,
+  }
+}
+
 /** The billing email on a Charge — unmoved, and the only place it survives. */
 export function readChargeBillingEmail(charge: unknown): string | null {
   const ch = asObj(charge)
@@ -593,6 +641,63 @@ type _assert_pi_has_no_invoice = Assert<
   Because<
     Lacks<StripePaymentIntentObject, 'invoice'>,
     'PaymentIntent.invoice is back — the BYO rail could then converge invoice and payment events on one key, which would close the BYO double-count entry in docs/open-defects.md.'
+  >
+>
+
+// Coupon: the intro offer (docs/…: SubscriptionType.introOffer) is a COUPON on
+// the connected account, applied via the Checkout Session's `discounts`. Four
+// facts hold that feature up, and each is load-bearing in a different way.
+type _assert_coupon_has_duration = Assert<
+  Because<
+    Has<StripeCouponObject, 'duration'>,
+    'Coupon.duration is gone — readCouponTerms can no longer tell a first-invoice discount from a repeating one, and the intro offer would be reused blind.'
+  >
+>
+type _assert_coupon_has_duration_in_months = Assert<
+  Because<
+    Has<StripeCouponObject, 'duration_in_months'>,
+    'Coupon.duration_in_months has MOVED or gone. It is the ONLY way Stripe expresses a repeating discount, and the whole weekly/biweekly refusal in shared/utils/introOffer.ts exists because of it. If Stripe has added a weeks/invoices equivalent, introOfferDurationFor should stop refusing "first N periods" on a weekly plan.'
+  >
+>
+type _assert_coupon_has_amount_off = Assert<
+  Because<
+    Has<StripeCouponObject, 'amount_off'>,
+    'Coupon.amount_off is gone — a priced intro offer ("CHF 1 for the first month") is expressed as a fixed amount off the full price.'
+  >
+>
+type _assert_coupon_has_percent_off = Assert<
+  Because<
+    Has<StripeCouponObject, 'percent_off'>,
+    'Coupon.percent_off is gone — a FREE intro offer is percent_off: 100, which produces a zero invoice rather than a charge below the 0.50 floor.'
+  >
+>
+// Our narrowing of Stripe's duration enum must stay a SUBSET of theirs, exactly
+// as the cancellation enums above do.
+type _assert_coupon_duration_enum_is_subset = Assert<
+  Because<
+    'once' | 'repeating' extends NonNullable<StripeCouponObject['duration']> ? true : false,
+    'Coupon.duration no longer offers once/repeating. introOfferDurationFor emits both — re-derive it from whatever replaced them.'
+  >
+>
+// CREATE params: the deterministic id is what makes a retry a REUSE rather than
+// a second coupon, and duration_in_months is how N periods is stated.
+type _assert_coupon_create_takes_id = Assert<
+  Because<
+    Has<StripeCouponCreateParams, 'id'>,
+    'coupons.create no longer accepts an `id`. The intro-offer coupon id is DERIVED from the offer so a retried checkout reuses it — without a caller-supplied id, every click mints a new coupon.'
+  >
+>
+type _assert_coupon_create_takes_duration_in_months = Assert<
+  Because<
+    Has<StripeCouponCreateParams, 'duration_in_months'>,
+    'coupons.create no longer accepts duration_in_months — see the note on the object field above.'
+  >
+>
+// …and the session must still be able to carry the coupon at all.
+type _assert_session_create_takes_discounts = Assert<
+  Because<
+    Has<StripeCheckoutSessionCreateParams, 'discounts'>,
+    'checkout.sessions.create no longer takes `discounts`. The intro offer would silently stop applying — and the pricing card promises it BEFORE purchase, so the member is charged full price against a stated offer.'
   >
 >
 

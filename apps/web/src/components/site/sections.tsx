@@ -68,6 +68,7 @@ import {
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { publicHrefLocalized, publicSubHrefLocalized } from '@/lib/publicRoutes'
+import { IntroOfferLine, readIntroTerms } from '@/components/pricing/IntroOfferLine'
 import type { BookIntent } from '@/components/booking/BookingOverlay'
 import { usePlaces } from '@/hooks/usePlaces'
 import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
@@ -722,6 +723,10 @@ interface PlanPrice {
   recurrence: string
   label?: string
   included_months?: number
+  /** The plan's INTRO OFFER on this price (resolved server-side by
+   *  syncSubscriptionTypesToPublicProfile). Rendered through the same
+   *  `IntroOfferLine` the shop uses — one discount, one sentence. */
+  intro?: unknown
 }
 
 interface PlanEntry {
@@ -837,17 +842,36 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                 </h3>
                 {p.prices && p.prices.length > 0 && (
                   <div className="mt-3 space-y-1">
-                    {p.prices.map((pr, i) => (
-                      <div key={i} className="flex items-baseline gap-1.5">
-                        <span className="text-2xl font-bold" style={{ color: palette.text }}>
-                          {formatCurrency(pr.amount, currency)}
-                        </span>
-                        <span className="text-sm" style={{ color: palette.muted }}>
-                          {RECURRENCE_SUFFIX[pr.recurrence] ?? ''}
-                          {pr.label ? ` · ${pr.label}` : ''}
-                        </span>
-                      </div>
-                    ))}
+                    {p.prices.map((pr, i) => {
+                      const intro = readIntroTerms(pr.intro)
+                      return (
+                        <div key={i}>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-2xl font-bold" style={{ color: palette.text }}>
+                              {formatCurrency(pr.amount, currency)}
+                            </span>
+                            <span className="text-sm" style={{ color: palette.muted }}>
+                              {RECURRENCE_SUFFIX[pr.recurrence] ?? ''}
+                              {pr.label ? ` · ${pr.label}` : ''}
+                            </span>
+                          </div>
+                          {/* The offer, stated on the card the visitor decides
+                              from. This block's own chrome is deliberately not
+                              translated; the intro sentence IS, because it is a
+                              price promise and a mistranslated one is a lie. */}
+                          {intro && (
+                            <p className="mt-1 text-sm font-semibold" style={{ color: palette.accent }}>
+                              <IntroOfferLine
+                                intro={intro}
+                                fullAmount={pr.amount}
+                                recurrence={pr.recurrence}
+                                currency={currency}
+                              />
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
                 {p.description && (

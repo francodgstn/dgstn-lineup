@@ -1551,7 +1551,23 @@
     "subTypeLimitPeriodWeek": "per week",
     "subTypeLimitPeriodMonth": "per month",
     "subTypePayoutPerVisit": "Payout per visit",
-    "subTypePayoutPerVisitDesc": "What the partner pays you per attended visit. Shown in the partner-visits ledger."
+    "subTypePayoutPerVisitDesc": "What the partner pays you per attended visit. Shown in the partner-visits ledger.",
+    "subTypeIntro": "Intro offer",
+    "subTypeIntroDesc": "Charge less — or nothing — for the first few billing periods. The full price then applies automatically.",
+    "subTypeIntroBadge": "Intro offer",
+    "subTypeIntroPrice": "Which price it applies to",
+    "subTypeIntroAmount": "Intro price per period",
+    "subTypeIntroPeriods": "Periods",
+    "subTypeIntroFreeHint": "Leave the price at 0 to make the first periods free. Members still enter a payment method, and are charged the full price from the period after.",
+    "subTypeIntroNoRecurring": "Add a recurring price first — weekly, fortnightly, monthly, quarterly or yearly. An intro offer needs a full price to return to.",
+    "subTypeIntroWeeklyLimit": "Stripe measures a repeating discount in whole months, so a weekly or fortnightly plan can only discount its first period.",
+    "subTypeIntroErr_no_price": "Choose which recurring price this offer applies to.",
+    "subTypeIntroErr_not_recurring": "An intro offer only works on a recurring price — a one-off or per-class price has nothing to renew to.",
+    "subTypeIntroErr_periods_invalid": "Choose between 1 and {max} periods.",
+    "subTypeIntroErr_interval_not_monthly": "A weekly or fortnightly plan can only discount its first period.",
+    "subTypeIntroErr_amount_invalid": "Enter an intro price of 0 or more.",
+    "subTypeIntroErr_below_minimum": "A charge has to be at least 0.50. Use 0 to make the first periods free instead.",
+    "subTypeIntroErr_not_cheaper": "The intro price has to be lower than the plan's own price."
   },
   "Bookings": {
     "title": "Bookings",
@@ -5890,5 +5906,13 @@
     "noShowFeeOnce": "If you miss a booked session without cancelling, a no-show fee of {fee} applies.",
     "noShowFeeAfter": "If you miss {count} booked sessions without cancelling, a no-show fee of {fee} applies.",
     "noShowFeeNote": "The fee is sent to you by email — nothing is charged to a card automatically."
+  },
+  "IntroOffer": {
+    "spanWeek": "{count, plural, one {the first week} other {the first # weeks}}",
+    "spanMonth": "{count, plural, one {the first month} other {the first # months}}",
+    "spanYear": "{count, plural, one {the first year} other {the first # years}}",
+    "per": "{recurrence, select, weekly {per week} biweekly {every 2 weeks} monthly {per month} quarterly {per quarter} annual {per year} other {per month}}",
+    "linePriced": "{price} for {span} — then {full} {per}",
+    "lineFree": "Free for {span} — then {full} {per}"
   }
 }

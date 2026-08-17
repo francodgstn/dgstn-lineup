@@ -23,7 +23,9 @@ import {
   closeCheckoutSession,
   createOneOffCheckoutSession,
   createSubscriptionCheckoutSession,
+  ensureIntroCoupon,
   type CheckoutSessionCloseOutcome,
+  type IntroCouponSpec,
 } from '../utils/connect/client'
 import { resolveBaseUrl } from '../utils/env'
 import { requireChargeableAccount, type EnabledTeam } from './access'
@@ -726,7 +728,16 @@ export async function startOneOffCheckout(params: {
 }
 
 /** Recurring subscription on the connected account: fee per invoice via
- *  application_fee_percent. Same shell as startOneOffCheckout. */
+ *  application_fee_percent. Same shell as startOneOffCheckout.
+ *
+ *  `amountMinor` is ALWAYS the full per-period price. An intro offer never
+ *  lowers it — that would make the intro figure the recurring one — it rides
+ *  `introCoupon` as a Stripe Coupon, which expires on its own.
+ *
+ *  THE COUPON IS FAIL-CLOSED, deliberately. If it cannot be created the whole
+ *  checkout fails, because the pricing card stated the offer BEFORE purchase:
+ *  quietly charging the full price instead is the one outcome worse than an
+ *  error. */
 export async function startSubscriptionCheckout(params: {
   team: EnabledTeam
   amountMinor: number
@@ -739,11 +750,15 @@ export async function startSubscriptionCheckout(params: {
   metadata: Record<string, string>
   idempotencyKey: string
   label: string
+  introCoupon?: IntroCouponSpec
 }): Promise<{ url: string; sessionId: string; applicationFeePercent: number }> {
   const { team } = params
   const { accountId } = requireChargeableAccount(team)
   const applicationFeePercent = takeRatePercent(team.plan)
   try {
+    const discountCouponId = params.introCoupon
+      ? await ensureIntroCoupon({ accountId, spec: params.introCoupon })
+      : undefined
     const session = await createSubscriptionCheckoutSession({
       accountId,
       amount: params.amountMinor,
@@ -757,6 +772,7 @@ export async function startSubscriptionCheckout(params: {
       customerEmail: params.customerEmail,
       metadata: params.metadata,
       idempotencyKey: params.idempotencyKey,
+      discountCouponId,
     })
     return { url: session.url, sessionId: session.sessionId, applicationFeePercent }
   } catch (err) {

@@ -53,6 +53,10 @@ import {
   type ConnectOnboardingModel,
 } from '@linyup/shared'
 import { getSecret } from '../secrets'
+// Every coupon field this module reads goes through objectShape — the ONE place
+// that knows where a Stripe field lives, and the home of the compile-time
+// assertions that fail the build when one moves.
+import { readCouponTerms, type StripeCouponTerms } from '../stripe/objectShape'
 
 // The rich `Stripe.X` type namespace is not merged onto the default import in this
 // SDK build, so (matching the existing utils/gateway/stripe.ts) we type the
@@ -370,12 +374,134 @@ function classifyCheckoutSession(session: {
   return 'failed'
 }
 
+// ─── Intro-offer coupon ─────────────────────────────────────────────────────────
+// "First N periods at CHF X, then the full price" is a DISCOUNT ON A COUPON, not
+// a lower `unit_amount`. Lowering unit_amount appears to work on the first
+// invoice and is wrong: it becomes the RECURRING price, so the member pays the
+// intro figure forever and nothing records why they are on a different price
+// from the plan. A coupon expires on its own and the price returns to full with
+// no further action anywhere.
+//
+// The id is DERIVED FROM THE OFFER (connect/introOffer.ts) rather than generated,
+// which is what makes this a get-or-create instead of a mint-per-click:
+//
+//   • a retried checkout finds the same coupon and reuses it;
+//   • an EDITED offer hashes to a DIFFERENT id, so it mints a new coupon and can
+//     never silently reuse the old terms — which matters because a Stripe coupon
+//     is immutable in every field that carries meaning (`coupons.update` accepts
+//     only name/metadata/currency_options). Members already on the old coupon
+//     keep the deal they bought, which is the correct outcome and needs no work;
+//   • an offer edited BACK to its previous values hashes back to the same id and
+//     reuses the original coupon — same offer, same coupon, by construction.
+//
+// Nothing ever deletes a coupon: deleting affects no existing subscriber, and
+// keeping it is what makes the reuse above possible.
+
+export interface IntroCouponSpec {
+  /** Deterministic id derived from the offer — see connect/introOffer.ts. */
+  id: string
+  /** Shown on the member's Stripe invoice. */
+  name: string
+  /** Fixed discount in MINOR units, or null for a FREE intro (percent_off: 100).
+   *  Two different Stripe shapes on purpose: 100% off produces a ZERO invoice
+   *  (no charge at all), where a tiny amount_off would produce a charge below
+   *  Stripe's 0.50 minimum and fail. */
+  amountOffMinor: number | null
+  currency: string
+  duration: 'once' | 'repeating'
+  /** Required iff duration === 'repeating'. Stripe measures a repeating discount
+   *  in MONTHS and nothing else. */
+  durationInMonths?: number
+  metadata?: Record<string, string>
+}
+
+/**
+ * Get-or-create the coupon for one intro offer on a connected account, and
+ * return its id.
+ *
+ * Reads before writing, because a coupon that already exists cannot be updated
+ * into the right shape — so a MISMATCH is refused loudly rather than papered
+ * over. That can only happen if the id derivation stops covering a field the
+ * coupon carries, which is a bug in `introCouponId`, not a runtime condition.
+ */
+export async function ensureIntroCoupon(params: {
+  accountId: string
+  spec: IntroCouponSpec
+}): Promise<string> {
+  const stripe = await getConnectStripe()
+  const opts = { stripeAccount: params.accountId }
+  const { spec } = params
+
+  const existing = await retrieveCoupon(stripe, spec.id, opts)
+  if (existing) {
+    const terms = readCouponTerms(existing)
+    if (!couponMatchesSpec(terms, spec)) {
+      throw new Error(
+        `Intro coupon ${spec.id} exists on ${params.accountId} with different terms ` +
+          `(duration=${terms.duration}/${terms.durationInMonths}, amount_off=${terms.amountOffMinor}, ` +
+          `percent_off=${terms.percentOff}) — the id is derived from exactly those fields, so this is a bug in introCouponId.`
+      )
+    }
+    return spec.id
+  }
+
+  try {
+    const created = await stripe.coupons.create(
+      {
+        id: spec.id,
+        name: spec.name,
+        duration: spec.duration,
+        ...(spec.duration === 'repeating' ? { duration_in_months: spec.durationInMonths } : {}),
+        // A free intro is percent_off: 100 — see the note on amountOffMinor.
+        ...(spec.amountOffMinor === null
+          ? { percent_off: 100 }
+          : { amount_off: spec.amountOffMinor, currency: spec.currency }),
+        ...(spec.metadata ? { metadata: spec.metadata } : {}),
+      },
+      // The derived id already makes this idempotent; the key covers the network
+      // retry that would otherwise race two creates of the same id.
+      { ...opts, idempotencyKey: `intro-coupon:${spec.id}` }
+    )
+    return created.id
+  } catch (err) {
+    // Lost the create race (or the coupon appeared between our read and write):
+    // whoever won created it from the SAME derived id, so re-read and reuse.
+    const now = await retrieveCoupon(stripe, spec.id, opts)
+    if (now) return spec.id
+    throw err
+  }
+}
+
+async function retrieveCoupon(
+  stripe: StripeInstance,
+  id: string,
+  opts: { stripeAccount: string }
+): Promise<unknown | null> {
+  try {
+    return await stripe.coupons.retrieve(id, {}, opts)
+  } catch {
+    return null
+  }
+}
+
+function couponMatchesSpec(terms: StripeCouponTerms, spec: IntroCouponSpec): boolean {
+  if (terms.duration !== spec.duration) return false
+  if (spec.duration === 'repeating' && terms.durationInMonths !== spec.durationInMonths) return false
+  return spec.amountOffMinor === null
+    ? terms.percentOff === 100
+    : terms.amountOffMinor === spec.amountOffMinor
+}
+
 /** Recurring membership as a subscription on the connected account. Fee → platform
  * per invoice via subscription_data.application_fee_percent. Inline price_data
- * avoids pre-creating Stripe Price objects per studio. */
+ * avoids pre-creating Stripe Price objects per studio.
+ *
+ * `discountCouponId` carries the plan's INTRO OFFER. It is a `discounts` entry
+ * rather than a reduced `unit_amount` on purpose — unit_amount is what the
+ * member pays FOREVER; the coupon's job is to expire. */
 export async function createSubscriptionCheckoutSession(params: {
   accountId: string
-  amount: number // per-period Rappen
+  amount: number // per-period Rappen — ALWAYS the full price; an intro rides the coupon
   currency?: string
   interval: 'day' | 'week' | 'month' | 'year'
   intervalCount?: number // e.g. 2 for biweekly, 3 for quarterly
@@ -386,6 +512,7 @@ export async function createSubscriptionCheckoutSession(params: {
   customerEmail?: string
   metadata?: Record<string, string>
   idempotencyKey: string
+  discountCouponId?: string
 }): Promise<{ url: string; sessionId: string }> {
   const stripe = await getConnectStripe()
   const session = await stripe.checkout.sessions.create(
@@ -402,6 +529,7 @@ export async function createSubscriptionCheckoutSession(params: {
           },
         },
       ],
+      ...(params.discountCouponId ? { discounts: [{ coupon: params.discountCouponId }] } : {}),
       subscription_data: {
         application_fee_percent: params.applicationFeePercent,
         metadata: params.metadata,
