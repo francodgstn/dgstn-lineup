@@ -62,6 +62,12 @@ export {
   rebookSession,
 } from './booking'
 export { createDropInCheckout } from './booking/dropIn'
+// The member's own upcoming bookings. A callable for the same reason
+// `listMyWaitlist` is one — the rules authorise a contact to GET their own
+// booking and never to LIST their bookings across sessions — plus one this
+// surface adds: a booking on a session the STUDIO entered has no public mirror
+// to be found through, because a session is mirrored only while it is on sale.
+export { getMyBookings } from './booking/myBookings'
 // Waitlist (class-only) — join/leave the queue for a full class, and the
 // promoter that offers a seat to the front of it. The promoter is a session
 // TRIGGER, not a call site hook: every event that frees a seat converges on a

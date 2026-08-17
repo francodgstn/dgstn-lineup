@@ -1,14 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import {
-  collectionGroup, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp,
-} from 'firebase/firestore'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
-import { CalendarClock, MapPin, X, LogIn } from 'lucide-react'
+import { CalendarClock, MapPin, X, LogIn, UserRound, Loader2 } from 'lucide-react'
+import type { MyBooking, MyBookingsResult } from '@linyup/shared'
 import { QueryErrorState } from '@/components/ui/query-error'
 import {
   loadFailureDetail,
@@ -18,29 +16,31 @@ import {
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 
-type TsLike = { toDate?: () => Date; seconds?: number }
+// "My bookings" — one server read of HER bookings, through `getMyBookings`.
+//
+// It used to be a client fan-out: list the TEAM's next 80 public session
+// mirrors, then `getDoc` each one's `bookings/{contactId}`. That was wrong three
+// ways (UX-10) and only the first was visible. It filtered on
+// `type == 'session'`, and an appointment is mirrored as
+// `type == 'appointment_session'` — so a member holding a paid appointment was
+// told, flatly, that she had none. It truncated at 80 mirrors of the STUDIO's
+// schedule, so her list got shorter as the studio got busier. And a session is
+// mirrored at all only while `allowBooking` is true, so a booking the studio
+// entered for her had no public document to be found through.
+//
+// The last of those is why this is a callable and not a widened query: the
+// server reads `sessions` directly, so what the studio happens to be selling
+// online stops deciding what the member can see she has booked.
+//
+// Cost: 80 mirror documents + up to 80 `getDoc` per visit, before. One callable
+// round trip now.
 
-interface BookedSession {
-  id: string
-  activityName?: string
-  start?: TsLike
-  end?: TsLike
-  location?: string
-  bookingToken?: string
+function formatDate(iso: string | null): Date | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
-function toDate(v?: TsLike): Date | null {
-  if (!v) return null
-  if (typeof v.toDate === 'function') return v.toDate()
-  if (typeof v.seconds === 'number') return new Date(v.seconds * 1000)
-  return null
-}
-
-// "My bookings": there's no contact-readable collection-group of bookings, so we
-// list the team's upcoming sessions (world-readable public_profile) and keep the
-// ones the contact has a booking doc for (sessions/{id}/bookings/{contactId} —
-// permitted by isSelfContact). Bounded fan-out; a getMyBookings callable is a
-// future optimization.
 export default function BookingsHome() {
   const t = useTranslations('Space')
   const { teamId, contact, isAuthenticated, openSignIn } = useSpaceAuth()
@@ -51,49 +51,57 @@ export default function BookingsHome() {
   // appears on the row whose button was pressed, next to the button.
   const [cancelError, setCancelError] = useState<{ id: string; detail: string | null } | null>(null)
 
-  // `isError` is read, not ignored: a failed probe must not render as "you have
-  // no bookings" — a member who cannot see their booking assumes it was lost.
+  // `isError` is read, not ignored: a failed read must not render as "you have
+  // no bookings" — a member who cannot see her booking assumes it was lost.
   // The visitor-facing state and the developer-facing trace are two separate
   // obligations, so the query also logs (see lib/publicQueryError.ts): without
   // it this is the one Tier-1 public surface a failure leaves no record of.
-  const { data: bookings = [], isLoading, isError, error, refetch } = useQuery<BookedSession[]>({
+  //
+  // Paged, not capped: the server walks back through HER OWN reservations, and
+  // a full page means her history continues rather than that her list ends. In
+  // practice page one is the whole answer — a booking for an upcoming session
+  // is almost always among the most recently made ones — so the "check for
+  // more" control below is an offer, not a chore.
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['space-bookings', teamId, contactId],
     enabled: isAuthenticated && !!teamId && !!contactId,
-    queryFn: async () => {
+    initialPageParam: null as number | null,
+    queryFn: async ({ pageParam }): Promise<MyBookingsResult> => {
       try {
-        const sessQ = query(
-          collectionGroup(db, 'public_profile'),
-          where('teamId', '==', teamId),
-          where('type', '==', 'session'),
-          where('start', '>=', Timestamp.now()),
-          orderBy('start', 'asc'),
-          limit(80)
+        const fn = httpsCallable<{ teamId: string; cursor: number | null }, MyBookingsResult>(
+          functions,
+          'getMyBookings'
         )
-        const snap = await getDocs(sessQ)
-        const sessions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
-        const probes = await Promise.all(
-          sessions.map(async (s) => {
-            const bSnap = await getDoc(doc(db, 'sessions', s.id, 'bookings', contactId!))
-            if (!bSnap.exists()) return null
-            const b = bSnap.data()
-            if (b.status === 'cancelled') return null
-            return {
-              id: s.id,
-              activityName: (s as { activityName?: string }).activityName,
-              start: (s as { start?: TsLike }).start,
-              end: (s as { end?: TsLike }).end,
-              location: (s as { location?: string }).location,
-              bookingToken: b.booking_token as string | undefined,
-            } as BookedSession
-          })
-        )
-        return probes.filter((x): x is BookedSession => x !== null)
+        const res = await fn({ teamId: teamId ?? '', cursor: pageParam })
+        return res.data ?? { bookings: [], cursor: null, scanned: 0 }
       } catch (err: unknown) {
         reportPublicLoadFailure('space/bookings', err)
         throw err
       }
     },
+    // Stop when the server stops moving: the cursor is inclusive of its own
+    // boundary document, so a page that returns the cursor it was given has
+    // nothing further to walk to.
+    getNextPageParam: (last, _pages, lastParam) =>
+      last.cursor !== null && last.cursor !== lastParam ? last.cursor : undefined,
   })
+
+  // One booking per session per contact, so `sessionId` is a key and not just a
+  // grouping — which is what makes the inclusive page boundary harmless.
+  const bookings: MyBooking[] = Array.from(
+    new Map(
+      (data?.pages ?? []).flatMap((page) => page.bookings).map((b) => [b.sessionId, b])
+    ).values()
+  ).sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
 
   // The cancel is the one WRITE on this page, and it used to fail into nothing:
   // no sentence for the member, no line in the console. The old note said a
@@ -103,20 +111,20 @@ export default function BookingsHome() {
   // the member reads "nothing happened", presses Cancel again, and the studio
   // gets a person who believes they are out of a class they are still booked
   // into (or a second attempt against a cutoff rule that refused the first).
-  async function cancel(b: BookedSession) {
-    if (!b.bookingToken) return
-    setCancelling(b.id)
+  async function cancel(b: MyBooking) {
+    if (!b.cancelToken) return
+    setCancelling(b.sessionId)
     setCancelError(null)
     try {
       const fn = httpsCallable(functions, 'cancelBooking')
-      await fn({ token: b.bookingToken })
+      await fn({ token: b.cancelToken })
       await refetch()
     } catch (err: unknown) {
       reportPublicActionFailure('space/cancel-booking', err)
       // Deliberately NO refetch here: the list is unchanged because the cancel
       // did not happen, and re-reading it would only redraw the same row under
       // the message. The booking is still live — which is what the sentence says.
-      setCancelError({ id: b.id, detail: loadFailureDetail(err) })
+      setCancelError({ id: b.sessionId, detail: loadFailureDetail(err) })
     } finally {
       setCancelling(null)
     }
@@ -157,33 +165,56 @@ export default function BookingsHome() {
           detail={loadFailureDetail(error)}
           theme={{ textMain, textMuted, accent, border: cardBorder }}
         />
-      ) : bookings.length === 0 ? (
-        <p className="text-sm text-center py-12" style={{ color: textMuted }}>{t('bookingsEmpty')}</p>
       ) : (
         <div className="space-y-2.5">
+          {/* Empty is stated even when a further page can still be asked for —
+              the sentence and the offer to look further back are two different
+              things, and hiding the first would leave a bare button. */}
+          {bookings.length === 0 && (
+            <p className="text-sm text-center py-12" style={{ color: textMuted }}>{t('bookingsEmpty')}</p>
+          )}
           {bookings.map((b) => {
-            const start = toDate(b.start)
-            const end = toDate(b.end)
+            const start = formatDate(b.start)
+            const end = formatDate(b.end)
+            const isAppointment = b.kind === 'appointment'
+            const Icon = isAppointment ? UserRound : CalendarClock
             return (
-              <div key={b.id} className="flex items-center gap-3 rounded-2xl p-3.5" style={cardStyle}>
+              <div key={b.sessionId} className="flex items-center gap-3 rounded-2xl p-3.5" style={cardStyle}>
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: `${accent}1f`, color: accent }}>
-                  <CalendarClock className="h-5 w-5" />
+                  <Icon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate" style={{ color: textMain }}>
-                    {b.activityName ?? t('bookingsSession')}
+                    {b.activityName ?? (isAppointment ? t('bookingsAppointment') : t('bookingsSession'))}
                   </p>
                   <p className="text-xs" style={{ color: textMuted }}>
                     {start ? start.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : ''}
                     {start ? ` · ${start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : ''}
                     {end ? `–${end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : ''}
                   </p>
+                  {/* The provider is what tells two otherwise identical
+                      appointment slots apart, so it is never dropped from an
+                      appointment row. */}
+                  {isAppointment && b.providerName && (
+                    <p className="text-xs mt-0.5" style={{ color: textMuted }}>
+                      {t('bookingsWithProvider', { name: b.providerName })}
+                    </p>
+                  )}
                   {b.location && (
                     <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: textMuted }}>
                       <MapPin className="h-3 w-3" /> <span className="truncate">{b.location}</span>
                     </p>
                   )}
-                  {cancelError?.id === b.id && (
+                  {/* A called-off session stays on the list and says so. A
+                      booking that simply disappears is read as a booking that
+                      was lost — which is the failure this whole surface is
+                      being repaired for. */}
+                  {b.sessionCancelled && (
+                    <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
+                      {t('bookingsCancelledByStudio')}
+                    </p>
+                  )}
+                  {cancelError?.id === b.sessionId && (
                     <p
                       role="alert"
                       className="text-xs mt-1"
@@ -194,19 +225,35 @@ export default function BookingsHome() {
                     </p>
                   )}
                 </div>
-                {b.bookingToken && (
+                {/* Shown only when the server says `cancelBooking` will accept
+                    it — the token comes back only in that case, so the button
+                    cannot be offered for a call that is going to refuse. */}
+                {b.cancellable && b.cancelToken && (
                   <button
                     onClick={() => cancel(b)}
-                    disabled={cancelling === b.id}
+                    disabled={cancelling === b.sessionId}
                     className="shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                     style={{ border: `1px solid ${cardBorder}`, color: textMuted }}
                   >
-                    <X className="h-3.5 w-3.5" /> {cancelling === b.id ? t('cancelling') : t('bookingsCancel')}
+                    <X className="h-3.5 w-3.5" /> {cancelling === b.sessionId ? t('cancelling') : t('bookingsCancel')}
                   </button>
                 )}
               </div>
             )
           })}
+
+          {hasNextPage && (
+            <button
+              type="button"
+              onClick={() => void fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-2.5 text-xs font-medium disabled:opacity-60"
+              style={{ border: `1px solid ${cardBorder}`, color: textMuted }}
+            >
+              {isFetchingNextPage && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {t('bookingsLoadMore')}
+            </button>
+          )}
         </div>
       )}
     </div>
