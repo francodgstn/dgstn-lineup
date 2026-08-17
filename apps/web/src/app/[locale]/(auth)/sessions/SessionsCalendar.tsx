@@ -328,11 +328,19 @@ function EventCard({ event, onOpen }: { event: Event; onOpen: (e: Event) => void
 const HOUR_PX = 48
 const MIN_BLOCK_PX = 22
 const WEEK_GRID_COLS = { gridTemplateColumns: '3.25rem repeat(7, minmax(0, 1fr))' } as const
-// Left-hand lane reserved in every day column (only when availability is shown)
+// Left-hand gutter reserved in every day column (only when availability is shown)
 // so bands stay visible even under an overlapping session: blocks stop short of
 // it and each band's solid left spine sits in it. When availability is hidden the
-// lane collapses and blocks take the full column width.
+// gutter collapses and blocks take the full column width.
+//
+// With more than one coach in scope the gutter widens slightly and is split into
+// one sub-lane per coach, so two coaches free at the same hour read as two ticks
+// rather than one. Beyond MAX_AVAIL_LANES coaches share the last lane — the week
+// grid is a "who is sellable when" hint, and the coach filter is the precise
+// answer.
 const AVAIL_GUTTER_PX = 10
+const AVAIL_GUTTER_MULTI_PX = 16
+const MAX_AVAIL_LANES = 3
 
 interface PositionedSession {
   session: Session
@@ -409,9 +417,14 @@ function layoutDaySessions(
 // Not a slot computation — just the RAW published window/times from
 // `availability` docs, expanded over the visible dates. Booked appointments
 // already render as solid session blocks on top of these, so "free vs taken"
-// reads correctly for free. Callers filter to a single provider + active
-// status before passing `availability` in — this component doesn't re-derive
-// that scoping (see schedule/page.tsx).
+// reads correctly for free. Callers filter to ACTIVE schedules (and to a coach,
+// if one is in scope) before passing `availability` in — this component doesn't
+// re-derive that scoping (see schedule/page.tsx).
+//
+// Bands are always drawn when there are any. There used to be a second,
+// exclusive "availability mode" that replaced the sessions with per-coach lanes;
+// it was reached from a filter chip that emptied the list while the grid stayed
+// full, and it is gone.
 
 interface RawAvailabilityBand {
   key: string
@@ -496,16 +509,12 @@ interface SessionsCalendarProps {
   sessions: Session[]
   activities: Activity[]
   events?: Event[]
-  /** Active, single-provider-scoped availability to render as translucent
-   *  "free time" bands behind the week grid's session blocks. Pass an empty
-   *  array (or omit) to render none — the caller (schedule/page.tsx) decides
-   *  eligibility (single coach in scope + type filter includes appointments);
-   *  this component just expands+positions whatever it's given. */
+  /** Active availability to render as translucent "free time" bands behind the
+   *  week grid's session blocks — one sub-lane per coach in the left gutter.
+   *  Pass an empty array (or omit) to render none; the caller
+   *  (schedule/page.tsx) decides scoping (active only, narrowed to the coach
+   *  filter), this component just expands+positions whatever it's given. */
   availability?: (Availability & { id: string })[]
-  /** Availability-only view: ALL coaches' free time as one lane per coach in each
-   *  day column (no session blocks, no lane background). The `availability` prop
-   *  then carries every coach's active windows. */
-  availabilityMode?: boolean
   onEdit: (s: Session) => void
   onDelete: (s: Session) => void
   onEventEdit?: (e: Event) => void
@@ -528,7 +537,6 @@ export default function SessionsCalendar({
   activities,
   events = [],
   availability = [],
-  availabilityMode = false,
   onEdit,
   onDelete,
   onEventEdit,
@@ -670,22 +678,23 @@ export default function SessionsCalendar({
 
   const gridHeight = (weekGrid.endHour - weekGrid.startHour) * HOUR_PX
   const hourCount = weekGrid.endHour - weekGrid.startHour
-  // The single-provider lane is reserved ONLY when overlaying availability on the
-  // normal session view (the schedule page passes [] when off) — otherwise blocks
-  // take the full column width. Availability MODE uses per-coach lanes instead.
-  const showLane = availability.length > 0 && !availabilityMode
-  const lanePx = showLane ? AVAIL_GUTTER_PX : 0
-  // Availability mode: the distinct coaches (stable order + lane index) whose
-  // free time is shown this week — one sub-column lane per coach in every day.
+  // The distinct coaches (stable order + lane index) whose free time is shown
+  // this week — derived from the bands actually drawn, so the legend below can
+  // never name a coach the grid doesn't show.
   const availabilityProviders = useMemo(() => {
-    if (!availabilityMode) return [] as { id: string; name: string }[]
     const byId = new Map<string, string>()
     for (const day of weekGrid.days)
       for (const b of day.bands) if (!byId.has(b.providerId)) byId.set(b.providerId, b.providerName)
     return [...byId.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [weekGrid, availabilityMode])
+  }, [weekGrid])
+  // The gutter is reserved only when there is something to draw in it; otherwise
+  // session blocks take the full column width.
+  const showLane = availabilityProviders.length > 0
+  const laneCount = Math.min(Math.max(availabilityProviders.length, 1), MAX_AVAIL_LANES)
+  const lanePx = showLane ? (laneCount > 1 ? AVAIL_GUTTER_MULTI_PX : AVAIL_GUTTER_PX) : 0
+  const laneWidthPx = lanePx / laneCount
 
   // Locale-aware labels
   const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString([], {
@@ -854,6 +863,28 @@ export default function SessionsCalendar({
           </div>
         </div>
 
+        {/* Bookable-hours legend — the bands in the left gutter are a coloured
+            tick; without a name they're a mystery, and this is the only thing on
+            the page that says what they are. Rendered only when there are any. */}
+        {availabilityProviders.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            <span className="font-medium">{t('availabilityLegend')}</span>
+            {availabilityProviders.slice(0, MAX_AVAIL_LANES).map((p) => (
+              <span key={p.id} className="inline-flex items-center gap-1">
+                <span
+                  aria-hidden
+                  className="h-2.5 w-1.5 rounded-sm"
+                  style={{ backgroundColor: providerColor(p.id) }}
+                />
+                {p.name}
+              </span>
+            ))}
+            {availabilityProviders.length > MAX_AVAIL_LANES && (
+              <span>{t('peekMore', { count: availabilityProviders.length - MAX_AVAIL_LANES })}</span>
+            )}
+          </div>
+        )}
+
         {/* ── Week timetable grid ── */}
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="overflow-x-auto">
@@ -961,15 +992,15 @@ export default function SessionsCalendar({
                       )}
                       style={{ height: gridHeight }}
                     >
-                      {/* Availability lane — a faint LEFT gutter the session
+                      {/* Availability gutter — a faint LEFT strip the session
                           blocks stop short of, so a band still reads here even
-                          when a session overlaps its time. Shown only when
-                          availability is on. */}
+                          when a session overlaps its time. Shown only when there
+                          are published hours to draw. */}
                       {showLane && (
                         <div
                           aria-hidden="true"
                           className="absolute inset-y-0 left-0 bg-muted/30 dark:bg-muted/20"
-                          style={{ width: AVAIL_GUTTER_PX }}
+                          style={{ width: lanePx }}
                         />
                       )}
 
@@ -982,51 +1013,32 @@ export default function SessionsCalendar({
                         />
                       ))}
 
-                      {/* Availability bands. In OVERLAY mode (single provider): a
-                          compact colored segment in the left lane only, so it never
-                          fights a session's fill. In availabilityMode: ALL coaches'
-                          free time as one colored sub-column lane per coach across
-                          the full width — no sessions to compete with. Tooltip carries
-                          the coach + schedule name. */}
+                      {/* Availability bands — a compact coloured segment in the
+                          left gutter, one sub-lane per coach, so a band still
+                          reads under an overlapping session and never fights a
+                          session's fill. Tooltip carries the coach + schedule
+                          name; the legend above the grid names the colours. */}
                       {bands.map((band) => {
-                        if (availabilityMode) {
-                          const laneCount = Math.max(availabilityProviders.length, 1)
-                          const laneIdx = Math.max(
-                            availabilityProviders.findIndex((p) => p.id === band.providerId),
-                            0
-                          )
-                          const c = providerColor(band.providerId)
-                          return (
-                            <div
-                              key={band.key}
-                              title={`${band.providerName} · ${band.title}`}
-                              className="absolute z-[2] overflow-hidden rounded-sm"
-                              style={{
-                                top: band.top,
-                                height: band.height,
-                                left: `calc(${(laneIdx / laneCount) * 100}% + 1px)`,
-                                width: `calc(${100 / laneCount}% - 2px)`,
-                                backgroundColor: `${c}2E`,
-                                borderLeft: `2px solid ${c}`,
-                              }}
-                            >
-                              {band.height >= 16 && (
-                                <p
-                                  className="truncate px-1 pt-0.5 text-[9px] font-medium leading-tight"
-                                  style={{ color: c }}
-                                >
-                                  {band.providerName}
-                                </p>
-                              )}
-                            </div>
-                          )
-                        }
+                        const c = providerColor(band.providerId)
+                        // Coaches past the third share the last lane (see
+                        // MAX_AVAIL_LANES) — colour still tells them apart.
+                        const laneIdx = Math.min(
+                          Math.max(availabilityProviders.findIndex((p) => p.id === band.providerId), 0),
+                          laneCount - 1
+                        )
                         return (
                           <div
                             key={band.key}
-                            title={band.title}
-                            className="absolute left-0 z-[2] rounded-r-sm border-l-[3px] border-primary/70 bg-primary/40"
-                            style={{ top: band.top, height: band.height, width: AVAIL_GUTTER_PX }}
+                            title={`${band.providerName} · ${band.title}`}
+                            className="absolute z-[2] rounded-r-sm"
+                            style={{
+                              top: band.top,
+                              height: band.height,
+                              left: laneIdx * laneWidthPx,
+                              width: Math.max(laneWidthPx - 1, 3),
+                              backgroundColor: `${c}66`,
+                              borderLeft: `2px solid ${c}`,
+                            }}
                           />
                         )
                       })}

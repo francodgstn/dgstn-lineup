@@ -1,13 +1,17 @@
 'use client'
 
-// Appointment availability management, extracted from the former /appointments page
-// so it can mount as modals on the Schedule page (an appointment is booked/scheduled
-// as a session — there is no separate appointments page any more).
+// Appointment availability management. An appointment is booked/scheduled as a
+// session, so there is no /appointments page — the pieces here mount on the
+// Schedule surfaces instead:
 //
-//   • AppointmentAvailabilityDialog — manage recurring availability schedules (the
-//     *when*: a time range or a list of explicit times, linked to one or more
-//     type === 'appointment' activities that own the *what* — duration, capacity,
-//     access): list, create, edit, pause/resume.
+//   • AppointmentAvailabilityManager — the "Bookable hours" surface, hosted by the
+//     /schedule/availability ROUTE (it used to be a dialog opened from an unlabelled
+//     caret welded to a filter chip, which no first-time user ever found). Publishes
+//     the *when*: a time range or a list of explicit times, linked to one or more
+//     type === 'appointment' activities that own the *what* — duration, price,
+//     access. Per coach: list, add, edit, pause/resume, delete, plus time off.
+//   • AppointmentAvailabilityFormDialog — add ONE schedule, standalone, for callers
+//     that only want the create action (Schedule → "+ New" → "Add bookable hours").
 //   • AppointmentDetail — a booked appointment session's bookings roster + cancel,
 //     opened from the Schedule calendar when an appointment slot is clicked.
 
@@ -47,7 +51,7 @@ import {
 import type { Availability, AvailabilityException, AppointmentBooking, Session, Activity } from '@linyup/shared'
 import { useActivities } from '@/hooks/useActivities'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, CalendarOff, Trash2, X, ChevronDown, ChevronRight, User } from 'lucide-react'
+import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, CalendarOff, Trash2, X, User } from 'lucide-react'
 
 // ─── error surfacing (mirrors AppointmentFormDialog / TemplateDialog conventions) ──
 
@@ -280,11 +284,11 @@ type TemplateFormValues = z.infer<typeof templateSchema>
  *  "create" form), and a create after an edit shows the edited template. */
 function toTemplateFormValues(
   editing: (Availability & { id: string }) | null,
-  userId: string
+  defaultProviderId: string
 ): TemplateFormValues {
   if (!editing) {
     return {
-      title: '', providerId: userId, activityIds: [], mode: 'range',
+      title: '', providerId: defaultProviderId, activityIds: [], mode: 'range',
       location: '', onlineUrl: '', daysOfWeek: [],
       startDate: new Date().toISOString().split('T')[0], endDate: '',
       windowStart: '09:00', windowEnd: '17:00', granularityMinutes: 15, times: [], bufferMinutes: 0,
@@ -309,13 +313,17 @@ function toTemplateFormValues(
 }
 
 function TemplateDialog({
-  open, onOpenChange, editing, teamId, userId, members, activities, onSaved,
+  open, onOpenChange, editing, teamId, userId, defaultProviderId, members, activities, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   editing: (Availability & { id: string }) | null
   teamId: string
   userId: string
+  /** Coach preselected on a NEW schedule — the manager's per-coach "Add hours"
+   *  passes that coach, so the row you clicked is the row you get. Defaults to
+   *  the signed-in user. Ignored when editing (the doc carries its provider). */
+  defaultProviderId?: string
   members: MemberOption[]
   /** The team's type === 'appointment' activities — class activities are not linkable. */
   activities: Activity[]
@@ -325,18 +333,19 @@ function TemplateDialog({
   const tActivities = useTranslations('Activities')
   const qc = useQueryClient()
   const [creatingActivity, setCreatingActivity] = useState(false)
+  const initialProviderId = defaultProviderId || userId
   const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } =
     useForm<TemplateFormValues>({
       resolver: zodResolver(templateSchema),
-      defaultValues: toTemplateFormValues(editing, userId),
+      defaultValues: toTemplateFormValues(editing, initialProviderId),
     })
 
   // Load the selected template into the form each time the dialog opens (and if
   // `editing` swaps while open). Without this the form keeps whatever it was
   // first mounted with — see toTemplateFormValues.
   useEffect(() => {
-    if (open) reset(toTemplateFormValues(editing, userId))
-  }, [open, editing, userId, reset])
+    if (open) reset(toTemplateFormValues(editing, initialProviderId))
+  }, [open, editing, initialProviderId, reset])
 
   const mode = watch('mode')
   const selectedDays = watch('daysOfWeek') || []
@@ -813,19 +822,25 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
 
 // ─── time off (availability exceptions) ────────────────────────────────────────
 
-/** Add ONE time-off window for a given coach — quick presets fill the range,
- *  or the admin picks a custom start/end. Writes `availability_exceptions`
- *  directly (client-side, same as the templates above); `listAvailability`
- *  subtracts these server-side, no other wiring needed. */
+/** Add ONE time-off window — quick presets fill the range, or the admin picks a
+ *  custom start/end. Writes `availability_exceptions` directly (client-side, same
+ *  as the templates above); `listAvailability` subtracts these server-side, no
+ *  other wiring needed.
+ *
+ *  `providerId` is OPTIONAL: opened from a coach's row it is fixed (that row is
+ *  the answer to "whose time off"), and opened from the page header it is not, so
+ *  the dialog asks — that is what lets blocking a day off be a first-class action
+ *  rather than something you can only reach through a coach's schedule list. */
 function TimeOffDialog({
-  open, onOpenChange, teamId, userId, providerId, providerName, onSaved,
+  open, onOpenChange, teamId, userId, providerId, providerName, members, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   teamId: string
   userId: string
-  providerId: string
-  providerName: string
+  providerId?: string
+  providerName?: string
+  members: MemberOption[]
   onSaved: () => void
 }) {
   const t = useTranslations('Appointments')
@@ -834,6 +849,8 @@ function TimeOffDialog({
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Only used when the caller didn't fix a coach.
+  const [pickedProvider, setPickedProvider] = useState<string>(providerId || userId)
 
   // Reset the form each time the dialog opens (possibly for a different coach).
   useEffect(() => {
@@ -842,8 +859,9 @@ function TimeOffDialog({
       setEnd(undefined)
       setNote('')
       setError(null)
+      setPickedProvider(providerId || userId)
     }
-  }, [open, providerId])
+  }, [open, providerId, userId])
 
   function applyPreset(range: { start: Date; end: Date }) {
     setStart(range.start)
@@ -869,6 +887,11 @@ function TimeOffDialog({
   }
 
   async function handleSave() {
+    const effectiveProviderId = providerId || pickedProvider
+    if (!effectiveProviderId) {
+      setError(t('timeOffPickCoach'))
+      return
+    }
     if (!start || !end || end <= start) {
       setError(t('timeOffEndAfterStart'))
       return
@@ -878,8 +901,11 @@ function TimeOffDialog({
     try {
       await addDoc(collection(db, AVAILABILITY_EXCEPTIONS_COLLECTION), {
         teamId,
-        providerId,
-        providerName,
+        providerId: effectiveProviderId,
+        // The name is denormalised for display; prefer the roster's name and
+        // fall back to the caller's (a coach row already knows it).
+        providerName:
+          members.find((m) => m.id === effectiveProviderId)?.name || providerName || effectiveProviderId,
         start: Timestamp.fromDate(start),
         end: Timestamp.fromDate(end),
         note: note || null,
@@ -902,6 +928,31 @@ function TimeOffDialog({
           <DialogTitle>{t('addTimeOff')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-1">
+          {/* Whose time off. Fixed when opened from a coach's row, asked otherwise. */}
+          <div className="flex items-center justify-between gap-4">
+            <Label className="font-medium">{t('fieldCoach')}</Label>
+            {providerId ? (
+              <span className="text-sm">
+                {members.find((m) => m.id === providerId)?.name || providerName || providerId}
+              </span>
+            ) : (
+              <Select value={pickedProvider} onValueChange={(v) => setPickedProvider(v ?? '')}>
+                <SelectTrigger className="w-48">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {members.find((m) => m.id === pickedProvider)?.name ?? (
+                      <span className="text-muted-foreground">{t('timeOffPickCoach')}</span>
+                    )}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={presetToday}>
               {t('timeOffPresetToday')}
@@ -951,12 +1002,12 @@ function TimeOffDialog({
   )
 }
 
-// ─── availability manager dialog ───────────────────────────────────────────────
+// ─── availability manager ──────────────────────────────────────────────────────
 
 /** Create (or edit) ONE availability schedule, standalone — fetches its own
  *  provider + appointment-activity options so a caller can open it directly.
- *  This is the "+ New entry → Appointment availability" action; the manager
- *  list below uses the inner TemplateDialog directly, having already loaded
+ *  This is the Schedule "+ New → Add bookable hours" action; the manager
+ *  below uses the inner TemplateDialog directly, having already loaded
  *  those options. */
 export function AppointmentAvailabilityFormDialog({
   open, onOpenChange, editing = null, teamId, userId,
@@ -988,43 +1039,40 @@ export function AppointmentAvailabilityFormDialog({
   )
 }
 
-/** The availability MANAGER — the list of a team's schedules, with edit/pause.
- *  A list is a management surface, not a creation action, so it hangs off the
- *  Schedule header rather than the "+ New entry" menu. */
-export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, userId }: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
+/** The availability MANAGER — "Bookable hours", one section per coach: the
+ *  published schedules (add / edit / pause / delete) and that coach's time off.
+ *
+ *  Hosted by the /schedule/availability ROUTE, not a dialog. It was a dialog
+ *  behind an unlabelled caret on a filter chip, which meant the whole surface —
+ *  including time off, one level deeper again — was reachable only by guessing.
+ *  A route is nameable from the Schedule header, linkable, and openable by a
+ *  test. Sections are always expanded for the same reason: nothing here should
+ *  need a second click to be seen. */
+export function AppointmentAvailabilityManager({ teamId, userId }: {
   teamId: string
   userId: string
 }) {
   const t = useTranslations('Appointments')
   const qc = useQueryClient()
-  const templatesQ = useAvailabilityTemplates(open ? teamId : null)
-  const exceptionsQ = useAvailabilityExceptions(open ? teamId : null)
-  const membersQ = useTeamMemberOptions(open ? teamId : null)
-  const activitiesQ = useActivities(open ? teamId : null)
+  const templatesQ = useAvailabilityTemplates(teamId)
+  const exceptionsQ = useAvailabilityExceptions(teamId)
+  const membersQ = useTeamMemberOptions(teamId)
+  const activitiesQ = useActivities(teamId)
   const activities = activitiesQ.data ?? []
   const appointmentActivities = activities.filter((a) => a.type === 'appointment')
   const activityNameById = new Map(activities.map((a) => [a.id, a.name]))
-  const [templateDialog, setTemplateDialog] = useState<{ open: boolean; editing: (Availability & { id: string }) | null }>({ open: false, editing: null })
-  const [timeOffDialog, setTimeOffDialog] = useState<{ open: boolean; providerId: string; providerName: string } | null>(null)
+  const [templateDialog, setTemplateDialog] = useState<{
+    open: boolean
+    editing: (Availability & { id: string }) | null
+    providerId?: string
+  }>({ open: false, editing: null })
+  // `providerId` absent = the dialog asks which coach (page-level "Time off").
+  const [timeOffDialog, setTimeOffDialog] = useState<{ open: boolean; providerId?: string; providerName?: string } | null>(null)
   const [deletingExceptionId, setDeletingExceptionId] = useState<string | null>(null)
+  const [deletingTemplate, setDeletingTemplate] = useState<(Availability & { id: string }) | null>(null)
+  const [deletingTemplateBusy, setDeletingTemplateBusy] = useState(false)
 
-  // Group the schedules by coach so a multi-coach studio's list stays scannable —
-  // one collapsible section per provider, COLLAPSED by default (open on click).
-  const coachGroups = useMemo(() => {
-    const map = new Map<string, { providerId: string; providerName: string; templates: (Availability & { id: string })[] }>()
-    for (const tmpl of templatesQ.data ?? []) {
-      const key = tmpl.providerId || 'unknown'
-      if (!map.has(key)) map.set(key, { providerId: key, providerName: tmpl.providerName || key, templates: [] })
-      map.get(key)!.templates.push(tmpl)
-    }
-    return [...map.values()].sort((a, b) => a.providerName.localeCompare(b.providerName))
-  }, [templatesQ.data])
-
-  // Time off, grouped by provider the same way — only rendered for coaches
-  // already in coachGroups (a coach with time off but no template has nowhere
-  // to hang the subsection off of, by design; see file header for scope).
+  // Time off, grouped by provider.
   const exceptionsByProvider = useMemo(() => {
     const map = new Map<string, (AvailabilityException & { id: string })[]>()
     for (const exc of exceptionsQ.data ?? []) {
@@ -1038,27 +1086,62 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
     return map
   }, [exceptionsQ.data])
 
-  const [expandedCoaches, setExpandedCoaches] = useState<Set<string>>(new Set())
-  function toggleCoach(id: string) {
-    setExpandedCoaches((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  // One section per coach, from the UNION of schedules and time off: a coach who
+  // has only booked time off still gets a row, so nothing written here can end up
+  // with no surface that shows it.
+  const coachGroups = useMemo(() => {
+    const map = new Map<string, { providerId: string; providerName: string; templates: (Availability & { id: string })[] }>()
+    for (const tmpl of templatesQ.data ?? []) {
+      const key = tmpl.providerId || 'unknown'
+      if (!map.has(key)) map.set(key, { providerId: key, providerName: tmpl.providerName || key, templates: [] })
+      map.get(key)!.templates.push(tmpl)
+    }
+    for (const exc of exceptionsQ.data ?? []) {
+      const key = exc.providerId || 'unknown'
+      if (!map.has(key)) map.set(key, { providerId: key, providerName: exc.providerName || key, templates: [] })
+    }
+    return [...map.values()].sort((a, b) => a.providerName.localeCompare(b.providerName))
+  }, [templatesQ.data, exceptionsQ.data])
 
   async function toggleTemplateStatus(tmpl: Availability & { id: string }) {
-    await updateDoc(doc(db, AVAILABILITY_COLLECTION, tmpl.id), {
-      status: tmpl.status === 'active' ? 'paused' : 'active',
-      updated_at: serverTimestamp(),
-    })
-    qc.invalidateQueries({ queryKey: ['coachAvailability'] })
+    try {
+      await updateDoc(doc(db, AVAILABILITY_COLLECTION, tmpl.id), {
+        status: tmpl.status === 'active' ? 'paused' : 'active',
+        updated_at: serverTimestamp(),
+      })
+      qc.invalidateQueries({ queryKey: ['coachAvailability'] })
+    } catch (err) {
+      toast.error(errorMessage(err))
+    }
   }
 
   function invalidateAll() {
     qc.invalidateQueries({ queryKey: ['coachSlots'] })
     qc.invalidateQueries({ queryKey: ['coachAvailability'] })
+  }
+
+  /** Delete = ARCHIVE. `firestore.rules` denies a hard delete on `availability`
+   *  outright ("soft delete only", match /availability/{templateId}), and it is
+   *  right to: a schedule is referenced by the appointments booked inside it.
+   *  Archiving is a real delete from the studio's side — `useAvailabilityTemplates`
+   *  lists only active|paused, so it leaves this page and the calendar bands, and
+   *  the server's `listAvailability` only ever reads `status == 'active'`, so
+   *  nothing can be booked in it again. */
+  async function deleteTemplate() {
+    if (!deletingTemplate) return
+    setDeletingTemplateBusy(true)
+    try {
+      await updateDoc(doc(db, AVAILABILITY_COLLECTION, deletingTemplate.id), {
+        status: 'archived',
+        updated_at: serverTimestamp(),
+      })
+      invalidateAll()
+      setDeletingTemplate(null)
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setDeletingTemplateBusy(false)
+    }
   }
 
   async function deleteException(id: string) {
@@ -1074,7 +1157,7 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
     }
   }
 
-  // A failed fetch must never render as "no templates yet" — that reads as a
+  // A failed fetch must never render as "no bookable hours yet" — that reads as a
   // config problem, not an outage. Both queries feed this list (providers come
   // from membersQ), so either failing blocks it the same way.
   const listErrored = templatesQ.isError || membersQ.isError
@@ -1087,167 +1170,165 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
   }
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t('manageAvailabilityTitle')}</DialogTitle>
-          </DialogHeader>
+    <div className="space-y-4">
+      {/* Both actions this page exists for, named, at the top. Time off is NOT
+          nested inside a coach's schedule list — it is a peer action. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={() => setTemplateDialog({ open: true, editing: null })}>
+          <Plus className="h-4 w-4 mr-1.5" />{t('addHours')}
+        </Button>
+        <Button variant="outline" onClick={() => setTimeOffDialog({ open: true })}>
+          <CalendarOff className="h-4 w-4 mr-1.5" />{t('addTimeOff')}
+        </Button>
+      </div>
 
-          <div className="space-y-4 pt-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">{t('manageAvailabilityHint')}</p>
-              <Button size="sm" className="shrink-0" onClick={() => setTemplateDialog({ open: true, editing: null })}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />{t('newTemplate')}
+      {listErrored ? (
+        <QueryErrorState onRetry={retryList} detail={listErrorDetail} />
+      ) : (
+        <>
+          {templatesQ.isLoading && (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+            </div>
+          )}
+
+          {!templatesQ.isLoading && coachGroups.length === 0 && (
+            <div className="rounded-xl border border-dashed text-center py-12 text-muted-foreground">
+              <CalendarClock className="h-8 w-8 mx-auto mb-3 opacity-40" />
+              <p className="font-medium text-foreground">{t('noTemplates')}</p>
+              <p className="text-sm mt-1 max-w-md mx-auto px-4">{t('noTemplatesHint')}</p>
+              <Button className="mt-4" onClick={() => setTemplateDialog({ open: true, editing: null })}>
+                <Plus className="h-4 w-4 mr-1.5" />{t('addHours')}
               </Button>
             </div>
+          )}
 
-            {listErrored ? (
-              <QueryErrorState onRetry={retryList} detail={listErrorDetail} />
-            ) : (
-              <>
-                {templatesQ.isLoading && (
-                  <div className="space-y-2">
-                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-                  </div>
-                )}
-
-                {!templatesQ.isLoading && templatesQ.data?.length === 0 && (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <CalendarClock className="h-8 w-8 mx-auto mb-3 opacity-40" />
-                    <p className="font-medium">{t('noTemplates')}</p>
-                    <p className="text-sm mt-1">{t('noTemplatesHint')}</p>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {coachGroups.map((group) => {
-                    const isExpanded = expandedCoaches.has(group.providerId)
-                    return (
-                      <div key={group.providerId} className="rounded-xl border overflow-hidden">
-                        {/* Per-coach section header — collapsed by default; click to expand. */}
-                        <button
-                          type="button"
-                          onClick={() => toggleCoach(group.providerId)}
-                          aria-expanded={isExpanded}
-                          className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <User className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="font-medium text-sm flex-1 min-w-0 truncate">{group.providerName}</span>
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {t('templateCount', { count: group.templates.length })}
-                          </span>
-                        </button>
-
-                        {isExpanded && (
-                          <>
-                            <div className="border-t divide-y">
-                              {group.templates.map((tmpl) => (
-                                <div key={tmpl.id} className="p-4 flex items-start gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <p className="font-medium text-sm">{tmpl.title}</p>
-                                      <StatusBadge status={tmpl.status} />
-                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                        {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground mt-0.5">
-                                      {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
-                                    </p>
-                                    <p className="text-sm text-muted-foreground mt-0.5">
-                                      {tmpl.mode === 'range' && tmpl.window
-                                        ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
-                                        : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
-                                    </p>
-                                    {tmpl.location && (
-                                      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                                        <MapPin className="h-3 w-3" />{tmpl.location}
-                                      </p>
-                                    )}
-                                    {tmpl.onlineUrl && (
-                                      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                                        <Video className="h-3 w-3" />{t('onlineSession')}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <button onClick={() => toggleTemplateStatus(tmpl)}
-                                      className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                                      title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
-                                      {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                    </button>
-                                    <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
-                                      className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground">
-                                      <Pencil className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Time off — provider unavailability that overrides the
-                                schedules above (see AvailabilityException / listAvailability). */}
-                            <div className="border-t p-4 space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                  {t('timeOffTitle')}
-                                </p>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setTimeOffDialog({ open: true, providerId: group.providerId, providerName: group.providerName })}
-                                >
-                                  <CalendarOff className="h-3.5 w-3.5 mr-1.5" />{t('addTimeOff')}
-                                </Button>
-                              </div>
-
-                              {exceptionsQ.isLoading ? (
-                                <p className="text-xs text-muted-foreground">{t('loading')}</p>
-                              ) : (exceptionsByProvider.get(group.providerId) ?? []).length === 0 ? (
-                                <p className="text-xs text-muted-foreground">{t('noTimeOff')}</p>
-                              ) : (
-                                <ul className="space-y-1.5">
-                                  {(exceptionsByProvider.get(group.providerId) ?? []).map((exc) => (
-                                    <li key={exc.id} className="flex items-center justify-between gap-2 text-sm">
-                                      <span className="min-w-0 truncate">
-                                        {formatExceptionRange(exc.start.toDate(), exc.end.toDate())}
-                                        {exc.note && <span className="text-muted-foreground"> · {exc.note}</span>}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => void deleteException(exc.id)}
-                                        disabled={deletingExceptionId === exc.id}
-                                        title={t('timeOffRemove')}
-                                        aria-label={t('timeOffRemove')}
-                                        className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
+          <div className="space-y-3">
+            {coachGroups.map((group) => (
+              <div key={group.providerId} className="rounded-xl border overflow-hidden">
+                {/* Per-coach header — both of the coach's actions live here. */}
+                <div className="flex flex-wrap items-center gap-2 bg-muted/30 px-4 py-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <User className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{group.providerName}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {t('templateCount', { count: group.templates.length })}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTemplateDialog({ open: true, editing: null, providerId: group.providerId })}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />{t('addHours')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTimeOffDialog({ open: true, providerId: group.providerId, providerName: group.providerName })}
+                  >
+                    <CalendarOff className="h-3.5 w-3.5 mr-1.5" />{t('addTimeOff')}
+                  </Button>
                 </div>
-              </>
-            )}
+
+                <div className="divide-y border-t">
+                  {group.templates.length === 0 ? (
+                    <p className="p-4 text-sm text-muted-foreground">{t('noTemplatesForCoach')}</p>
+                  ) : (
+                    group.templates.map((tmpl) => (
+                      <div key={tmpl.id} className="p-4 flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-sm">{tmpl.title}</p>
+                            <StatusBadge status={tmpl.status} />
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                              {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {tmpl.mode === 'range' && tmpl.window
+                              ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
+                              : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
+                          </p>
+                          {tmpl.location && (
+                            <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                              <MapPin className="h-3 w-3" />{tmpl.location}
+                            </p>
+                          )}
+                          {tmpl.onlineUrl && (
+                            <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                              <Video className="h-3 w-3" />{t('onlineSession')}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => toggleTemplateStatus(tmpl)}
+                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                            title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}
+                            aria-label={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
+                            {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          </button>
+                          <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
+                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                            title={t('editTemplate')}
+                            aria-label={t('editTemplate')}>
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => setDeletingTemplate(tmpl)}
+                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                            title={t('deleteTemplate')}
+                            aria-label={t('deleteTemplate')}>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Time off — provider unavailability that overrides the
+                    schedules above (see AvailabilityException / listAvailability). */}
+                <div className="border-t p-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('timeOffTitle')}
+                  </p>
+                  {exceptionsQ.isLoading ? (
+                    <p className="text-xs text-muted-foreground">{t('loading')}</p>
+                  ) : (exceptionsByProvider.get(group.providerId) ?? []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">{t('noTimeOff')}</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {(exceptionsByProvider.get(group.providerId) ?? []).map((exc) => (
+                        <li key={exc.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="min-w-0 truncate">
+                            {formatExceptionRange(exc.start.toDate(), exc.end.toDate())}
+                            {exc.note && <span className="text-muted-foreground"> · {exc.note}</span>}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void deleteException(exc.id)}
+                            disabled={deletingExceptionId === exc.id}
+                            title={t('timeOffRemove')}
+                            aria-label={t('timeOffRemove')}
+                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        </>
+      )}
 
       <TemplateDialog
         open={templateDialog.open}
@@ -1255,6 +1336,7 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
         editing={templateDialog.editing}
         teamId={teamId}
         userId={userId}
+        defaultProviderId={templateDialog.providerId}
         members={membersQ.data || []}
         activities={appointmentActivities}
         onSaved={invalidateAll}
@@ -1268,12 +1350,34 @@ export function AppointmentAvailabilityDialog({ open, onOpenChange, teamId, user
           userId={userId}
           providerId={timeOffDialog.providerId}
           providerName={timeOffDialog.providerName}
+          members={membersQ.data || []}
           onSaved={() => {
             qc.invalidateQueries({ queryKey: ['coachSlots'] })
             qc.invalidateQueries({ queryKey: ['availabilityExceptions'] })
           }}
         />
       )}
-    </>
+
+      <AlertDialog open={!!deletingTemplate} onOpenChange={(v) => { if (!v) setDeletingTemplate(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteTemplateTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('deleteTemplateConfirm', { title: deletingTemplate?.title ?? '' })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void deleteTemplate() }}
+              disabled={deletingTemplateBusy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingTemplateBusy ? t('deleting') : t('deleteTemplateYes')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   )
 }

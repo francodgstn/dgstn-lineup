@@ -34,10 +34,12 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import dynamic from 'next/dynamic'
+import type { Route } from 'next'
+import { cn } from '@/lib/utils'
 import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DateTimePicker } from '@/components/ui/date-picker'
@@ -58,7 +60,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -80,7 +81,7 @@ import {
 import { Link } from '@/i18n/navigation'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
-import { AppointmentAvailabilityDialog, AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
+import { AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
 import { AppointmentFormDialog } from '@/components/appointments/AppointmentFormDialog'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
@@ -90,10 +91,12 @@ const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), {
 type CalendarView = 'calendar' | 'list'
 type TimeTab = 'upcoming' | 'past'
 // Shared type filter, applied to both calendar + list. 'classes' = group
-// classes; 'appointment' = 1:1 appointment sessions (activityType === 'appointment').
-// 'availability' is a distinct calendar VIEW (all coaches' free time as lanes),
-// not a subset of 'all' — the filter row separates it visually.
-type ItemFilter = 'all' | 'classes' | 'appointment' | 'events' | 'availability'
+// classes; 'appointment' = appointment sessions (activityType === 'appointment').
+// Published bookable hours are NOT a member here: they render as bands behind
+// the week grid whatever is filtered, and they are MANAGED on their own route
+// (/schedule/availability). They used to be a fifth chip that emptied the list
+// and force-switched the view — a mode wearing a filter's clothes.
+type ItemFilter = 'all' | 'classes' | 'appointment' | 'events'
 type ListItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event }
 
 interface MemberDoc {
@@ -827,11 +830,11 @@ export default function CalendarPage() {
     open: false,
     editing: null,
   })
-  // Appointments, folded into the schedule: the availability MANAGER (the list,
-  // opened from the header — a list isn't a "new" action), the availability
-  // CREATE form (from "+ New entry"), and a bookings-roster modal (clicking a
-  // booked appointment slot).
-  const [availabilityOpen, setAvailabilityOpen] = useState(false)
+  // Appointments, folded into the schedule: the availability CREATE form (from
+  // "+ New → Add bookable hours") and a bookings-roster modal (clicking a booked
+  // appointment slot). MANAGING availability — schedules per coach, pause/resume,
+  // edit, delete, time off — is the /schedule/availability route, reached by name
+  // from the header.
   const [newAvailabilityOpen, setNewAvailabilityOpen] = useState(false)
   const [appointmentSlot, setAppointmentSlot] = useState<Session | null>(null)
   // Manual booking — a manager books an appointment for a client (or blocks
@@ -883,35 +886,31 @@ export default function CalendarPage() {
             return c ? coachLabel(c) : t('coachAll')
           })()
   const isAppointment = (s: Session) => s.activityType === 'appointment'
-  // 'availability' is a dedicated all-coach free-time view — no sessions/events.
-  const availabilityMode = filter === 'availability'
-  const filteredSessions = availabilityMode
-    ? []
-    : (sessionsQ.data ?? []).filter((s) => {
-        // Group classes and appointment (private-lesson) sessions both store the
-        // running provider in providerId.
-        if (providerId && s.providerId !== providerId) return false
-        if (filter === 'events') return false
-        if (filter === 'classes' && isAppointment(s)) return false
-        if (filter === 'appointment' && !isAppointment(s)) return false
-        return true
-      })
+  const filteredSessions = (sessionsQ.data ?? []).filter((s) => {
+    // Group classes and appointment (private-lesson) sessions both store the
+    // running provider in providerId.
+    if (providerId && s.providerId !== providerId) return false
+    if (filter === 'events') return false
+    if (filter === 'classes' && isAppointment(s)) return false
+    if (filter === 'appointment' && !isAppointment(s)) return false
+    return true
+  })
   // Events aren't coach- or appointment-scoped; hidden when a coach or a
-  // class/appointment/availability filter is active, shown for 'all' and 'events'.
+  // class/appointment filter is active, shown for 'all' and 'events'.
   const filteredEvents =
-    !availabilityMode && coachFilter === 'all' && (filter === 'all' || filter === 'events')
+    coachFilter === 'all' && (filter === 'all' || filter === 'events')
       ? (eventsQ.data ?? [])
       : []
 
-  // Availability MODE ('Availability' filter): every coach's active free time as
-  // one lane per coach in each day column (or just the selected coach's, when a
-  // coach filter is set). Empty in every other filter.
+  // Published bookable hours are ALWAYS drawn behind the week grid — they're
+  // context, not a mode: a coach reading her week should see the hours she is
+  // sellable in without having to switch anything. Scoped to the coach filter
+  // when one is set, so "Only me" narrows the bands the same way it narrows the
+  // sessions. Paused schedules never show (they're not bookable).
   const activeAvailability = availabilityQ.data?.filter((a) => a.status === 'active') ?? []
-  const calendarAvailability = !availabilityMode
-    ? []
-    : providerId
-      ? activeAvailability.filter((a) => a.providerId === providerId)
-      : activeAvailability
+  const calendarAvailability = providerId
+    ? activeAvailability.filter((a) => a.providerId === providerId)
+    : activeAvailability
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -939,21 +938,18 @@ export default function CalendarPage() {
     { key: 'upcoming', label: t('tabUpcoming') },
     { key: 'past', label: t('tabPast') },
   ]
-  // 'availability' is separated from the entity filters (all/classes/appointments/
-  // events) — it's a distinct calendar view, not a subset of 'all'.
   const FILTERS: { key: ItemFilter; label: string }[] = [
     { key: 'all', label: t('filterAll') },
     { key: 'classes', label: t('filterClasses') },
     { key: 'appointment', label: t('filterAppointments') },
     { key: 'events', label: t('filterEvents') },
-    { key: 'availability', label: t('filterAvailability') },
   ]
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
@@ -984,9 +980,17 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
-          {/* The availability MANAGER used to be a header button here. It moved
-              onto the Availability filter chip's caret menu — managing schedules
-              belongs next to viewing them, and the header stays down to "+ New". */}
+          {/* Bookable hours — a NAMED link, at every width, to the availability
+              route. This is the control a coach hunts for when she wants to be
+              bookable; it was a bare chevron on a filter chip and she never
+              found it. Never reduce this to an icon. */}
+          <Link
+            href={'/schedule/availability' as Route}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0')}
+          >
+            <CalendarClock className="h-3.5 w-3.5" />
+            {t('bookableHours')}
+          </Link>
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>
@@ -1008,7 +1012,9 @@ export default function CalendarPage() {
                   <CalendarRange className="h-4 w-4 mr-2" />
                   {t('newEvent')}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {/* Four peer verbs, no separator to explain: the last one
+                    publishes hours rather than putting one thing on the
+                    calendar, and its label says so. */}
                 <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
                   <CalendarClock className="h-4 w-4 mr-2" />
                   {t('newAvailability')}
@@ -1019,10 +1025,10 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Filters — ONE control group, read left to right as
-          <who> | <what> | <availability>. The coach and availability chips
-          carry a caret (they open menus); the type options stay flat, so the
-          shape of a chip tells you whether it holds more behind it. */}
+      {/* Filters — ONE control group, read left to right as <who> | <what>.
+          The coach chip carries a caret (it opens a menu); the type options stay
+          flat, so the shape of a chip tells you whether it holds more behind it.
+          Everything here FILTERS — nothing switches the view. */}
       <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
         {/* WHO — first, because it scopes everything to its right. */}
         {coachRoster.length > 1 && (
@@ -1060,7 +1066,7 @@ export default function CalendarPage() {
         )}
 
         {/* WHAT — flat options, no menu. */}
-        {FILTERS.filter((f) => f.key !== 'availability').map(({ key, label }) => (
+        {FILTERS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => {
@@ -1076,59 +1082,6 @@ export default function CalendarPage() {
             {label}
           </button>
         ))}
-
-        <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
-
-        {/* AVAILABILITY — outside "all", so it sits past the divider. One chip,
-            two affordances: the label switches the calendar to availability,
-            the caret opens the manager (which used to be a header button —
-            moved here to keep the top area to just "+ New"). */}
-        <div
-          className={`inline-flex items-center rounded-full text-xs font-medium transition-colors ${
-            availabilityMode
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground'
-          }`}
-        >
-          <button
-            onClick={() => {
-              setFilter('availability')
-              setActivityFilter(null)
-              // Availability is a calendar-only view.
-              setView('calendar')
-            }}
-            className={`py-1.5 pl-3 transition-colors ${
-              // Without the caret (no team/user) this is the whole chip, so it
-              // has to round on both ends rather than keep a flat right edge.
-              currentTeamId && user ? 'rounded-l-full pr-1.5' : 'rounded-full pr-3'
-            } ${availabilityMode ? '' : 'hover:text-foreground'}`}
-          >
-            {t('filterAvailability')}
-          </button>
-          {currentTeamId && user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                title={t('manageAvailability')}
-                aria-label={t('manageAvailability')}
-                className={`rounded-r-full py-1.5 pl-0.5 pr-2.5 transition-colors ${
-                  availabilityMode ? '' : 'hover:text-foreground'
-                }`}
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
-                  <CalendarClock className="h-4 w-4 mr-2" />
-                  {t('manageAvailability')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('newAvailability')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
       </div>
 
       {/* Nudge: sessions hang off activities, so surface activity creation first
@@ -1159,7 +1112,6 @@ export default function CalendarPage() {
           activities={activitiesQ.data ?? []}
           events={filteredEvents}
           availability={calendarAvailability}
-          availabilityMode={availabilityMode}
           onEdit={(s) =>
             s.activityType === 'appointment'
               ? setAppointmentSlot(s)
@@ -1305,7 +1257,6 @@ export default function CalendarPage() {
                 <CalendarRange className="h-4 w-4 mr-2" />
                 {t('newEvent')}
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
                 <CalendarClock className="h-4 w-4 mr-2" />
                 {t('newAvailability')}
@@ -1351,14 +1302,8 @@ export default function CalendarPage() {
             onClose={() => setEventDialog({ open: false, editing: null })}
             onSaved={invalidateEvents}
           />
-          {/* Availability MANAGER — the list of schedules (header button) */}
-          <AppointmentAvailabilityDialog
-            open={availabilityOpen}
-            onOpenChange={setAvailabilityOpen}
-            teamId={currentTeamId}
-            userId={user.uid}
-          />
-          {/* Availability CREATE — one new schedule ("+ New entry") */}
+          {/* Availability CREATE — one new schedule ("+ New → Add bookable
+              hours"). Managing them lives at /schedule/availability. */}
           <AppointmentAvailabilityFormDialog
             open={newAvailabilityOpen}
             onOpenChange={setNewAvailabilityOpen}
