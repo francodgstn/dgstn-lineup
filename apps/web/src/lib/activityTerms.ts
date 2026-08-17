@@ -171,9 +171,31 @@ export interface ActivityPricingDisplay {
   /** null ⇒ no trial offered. `{ priceAmount: null }` ⇒ FREE trial (today's
    *  behaviour). `{ priceAmount: 15 }` ⇒ a paid trial at that price. */
   trial: { priceAmount: number | null } | null
-  /** "Included with {name} — {priceLabel}" — a subscription-gated class OR an
-   *  appointment's INCLUDED member benefit. One per resolvable subscription. */
+  /** "Included with {name} — {priceLabel}" — a class gated at the 'subscription'
+   *  tier OR an appointment's INCLUDED member benefit. One per resolvable
+   *  subscription. ALWAYS EMPTY for a 'members'-tier class, and that is load
+   *  bearing — see `signedUpOnly`. */
   includedWith: ResolvedSub[]
+  /** TRUE for a class gated at the 'members' tier.
+   *
+   *  THE TIER IS NOT ABOUT MONEY. `members` gates on `acquisition_stage ===
+   *  'joined'` (`resolveClassCoverage`, `shared/utils/paymentOptions.ts`), i.e.
+   *  on being SIGNED UP with the studio — which the public signup form grants
+   *  for free, with no plan and no payment (`completeSignup` is the only writer
+   *  of 'joined', and it charges nothing). A contact with no subscription at all
+   *  books these classes.
+   *
+   *  So a surface must NOT name subscription plans or quote a price here: the
+   *  true answer to "what do I have to buy?" is NOTHING, and a price would send
+   *  a prospect to the shop for something they do not need. It points at the
+   *  signup surface instead. This resolver takes no plan catalogue for exactly
+   *  that reason — the wrong line is not merely discouraged, it is
+   *  unrepresentable.
+   *
+   *  Contrast 'subscription' (`includedWith`), where the named plans genuinely
+   *  ARE the key and their prices are the right thing to show. Never merge the
+   *  two tiers. */
+  signedUpOnly: boolean
   /** "Discount with {name} — {percent}%" — an appointment's DISCOUNT benefit. */
   discountWith: Array<{ name: string; percent: number }>
   /** Class drop-in price (major units), or null. */
@@ -190,6 +212,7 @@ export function resolveActivityPricingDisplay(
   const type: 'class' | 'appointment' = a.type === 'appointment' ? 'appointment' : 'class'
 
   const includedIds = new Set<string>()
+  let signedUpOnly = false
   let discount: { percent: number; ids: string[] } | null = null
   let dropInAmount: number | null = null
   let appointmentPrice: { min: number; max: number } | null = null
@@ -201,6 +224,7 @@ export function resolveActivityPricingDisplay(
     else if (term.kind === 'price') appointmentPrice = { min: term.min ?? 0, max: term.max ?? 0 }
     else if (term.kind === 'gate' && term.tier === 'subscription')
       (term.subscriptionTypeIds ?? []).forEach((id) => includedIds.add(id))
+    else if (term.kind === 'gate' && term.tier === 'members') signedUpOnly = true
     else if (term.kind === 'benefitIncluded')
       (term.subscriptionTypeIds ?? []).forEach((id) => includedIds.add(id))
     else if (term.kind === 'benefitDiscount')
@@ -219,5 +243,5 @@ export function resolveActivityPricingDisplay(
         .filter((x): x is { name: string; percent: number } => !!x)
     : []
 
-  return { type, trial, includedWith, discountWith, dropInAmount, appointmentPrice }
+  return { type, trial, includedWith, signedUpOnly, discountWith, dropInAmount, appointmentPrice }
 }

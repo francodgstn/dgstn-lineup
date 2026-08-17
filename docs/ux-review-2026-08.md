@@ -89,7 +89,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 10 | blocks | every-session | The member portal reports "no bookings" while holding a paid appointment | C4 | functions + web | ▶ Open |
 | 11 | costs-money | every-session | The default access tier can never name a plan, and the health check is blind to it | M5×C1×C2 | web | ▶ Open |
 | 12 | costs-money | weekly | Payment corrections make the data worse than the mistake did | M6 | functions + web | ✅ Fixed |
-| 13 | costs-money | weekly | Automations can email the whole list with no preview, and "Run Now" re-sends | M9 | web | ▶ Open |
+| 13 | costs-money | weekly | Automations can email the whole list with no preview, and "Run Now" re-sends | M9 | web | ✅ Fixed |
 | 14 | costs-money | every-session | A visitor commits without seeing cancellation terms or the no-show fee | C2 | web + functions | ▶ Open |
 | 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ▶ Open |
 | 16 | costs-money | once | Plugin removal is one unconfirmed click, including paid add-ons | M8 | web | ▶ Open |
@@ -637,6 +637,28 @@ query to `where('type','in',[…])`, paginate the limit, and label appointment r
 
 ### UX-11 — The default access tier can never name a plan, and the health check is blind to it
 `costs-money` · every-session · **observed** (persona F9) + traced · merges M5-1, C1-2
+**✅ Fixed** 2026-08-17 — **but not as written above: this finding's central premise was wrong.**
+`members` does not mean "holds a subscription". It gates on `acquisition_stage === 'joined'`
+(`paymentOptions.ts:269-271`; `access.ts:263` derives it strictly), and `completeSignup.ts:263`
+— the only server-side writer of `joined` — is reached by a free public form whose own comment
+reads *"signup without a purchase"*. A joined contact who has bought **nothing** books a
+members class. So the "Included with…" framing this finding asked for, and its interim
+*"Included with any membership"*, would have quoted a price **nobody has to pay** — worse than
+the silence it replaced, because silence makes a prospect ask and a wrong price makes them
+leave. The card now states the gate that is actually enforced: **"Members only — signing up is
+free"**, pointing at `/public/{slug}/signup`, with no plan and no price. `cheapestSub()` and the
+plan-catalogue parameter were removed rather than left unused. The flag is `signedUpOnly` —
+named for what is enforced, not for what is sold. The copy deliberately never says *"and you can
+book right away"*: the gate admits them instantly, but `completeSignup.ts:435` sends every
+self-signup a welcome mail saying their request *"is under review"*, so that claim is true of
+the code and contradicted by the studio's own email.
+The `subscription` tier is untouched — there the named plans genuinely ARE the key.
+**Two health checks stayed subscription-only, against this finding's instruction, and correctly:**
+`gated_empty_allowlist` (a `members` rule has no allow-list to be empty — running it would fire
+an *error* on every default class in a tenant that sells no plans) and `acceptedTypeIds` /
+`credits_unusable` (a members class burns no credit, so counting it would have silently
+suppressed a real alarm). Only `gated_no_newcomer_path` now runs on both tiers.
+`activityTermLabel`'s gate branch was confirmed genuinely unreachable and deleted.
 
 **Now.** A new class defaults to `accessTier: 'members'` — deliberately, with the reasoning in
 the comment (`offer/activities/page.tsx:349-355`). But `members` is the one gate that carries
@@ -1141,6 +1163,40 @@ layout code, which is why UX-77 deliberately did not make it mid-feature — it 
 mail the platform sends and wants its own verification, not a rider on a receipt.
 **Build:** S. **Owner:** functions-agent.
 **Verify:** Send any mail with a titled box and read the `text/plain` part.
+
+### UX-82 — A member can buy a plan and still be locked out, with no self-serve way back
+`blocks` · weekly · traced · M5×M8 · *found 2026-08-17 while fixing UX-11* · **functions**
+
+**Now.** Booking gates on `acquisition_stage === 'joined'` (`access.ts:263`, strictly). Two
+things never set it:
+
+1. **Buying in the public shop.** The Connect webhook creates the buyer's contact *off-funnel*,
+   with **no `acquisition_stage` at all** (`connect/webhook.ts:385`) — deliberate, so a shop
+   purchase does not fake a signup.
+2. **Signing up afterwards.** `completeSignup` has three branches, and only the **create**
+   branch (`:263`, no existing contact) writes `joined`. The finalize-existing branch (`:280`)
+   and the session branch (`:241`) write profile fields only, on purpose: *"never overwrite the
+   birth facts (acquisition_stage/entry/converted_at) it holds."*
+
+So under `checkout_contact_mode: 'minimal'`, a person buys a subscription, is matched by
+team+email when they later use the public signup form, receives the welcome mail — and comes out
+**still not joined**. Every members-tier class refuses them with `not_joined`. Their only exits
+are a staff member setting the stage by hand or an automation `update_field` action; there is no
+self-serve route at all.
+
+**Cost.** They have paid. It is the single worst moment to be refused, and the refusal names a
+condition the payer cannot act on. UX-11 removed the copy that pointed these people at the shop
+— which was a false promise, since buying grants no `joined` — so the dead end is now honest but
+still dead.
+
+**Fix.** In the finalize branch, promote when the contact carries **no** stage at all. That
+preserves the rule the comment is protecting (never overwrite a birth fact the contact *holds*)
+while fixing the case where there is nothing to overwrite. Check the session branch for the same
+shape. **Build:** S. **Owner:** functions-agent.
+**Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
+form with that email, then book a members-only class.
+
+---
 
 ### UX-78 — A contact's pending-booking counter moves only if a mail is switched on
 `confuses` · every-session · traced · M4×M3 · *found while fixing UX-76*

@@ -1715,9 +1715,20 @@ export default function BookingForm({
                     // {price}" per granting subscription, "Discount with {sub} — {%}"
                     // per appointment-discount subscription, the drop-in price, and
                     // an appointment's direct price. No generic "Subscription
-                    // required" / "Members only" gate badges, no generic "Included".
+                    // required" gate badge and no generic "Included": where a plan
+                    // is the key it is named, with its price. The 'members' tier
+                    // below is the one line with no plan in it — because none is
+                    // required there.
                     const d = resolveActivityPricingDisplay({ ...a, type: a.activityType }, subLookup)
                     const lines: string[] = []
+                    // 'members' tier — the DEFAULT for every new class — used to
+                    // render NO access line at all. It gets one now, and it names
+                    // the gate that is actually enforced: being signed up with
+                    // this studio, which costs nothing. No plan, no price: the
+                    // true answer to "what am I supposed to buy?" here is
+                    // nothing, and a subscription price would send this visitor
+                    // to the shop for something they don't need to book.
+                    if (d.signedUpOnly) lines.push(t('signedUpOnlyLine'))
                     for (const s of d.includedWith)
                       lines.push(
                         s.priceLabel
@@ -2142,13 +2153,24 @@ export default function BookingForm({
     // A members-only class with no guest door sends a NEWCOMER straight here.
     // "Welcome back" is the wrong thing to tell them: it names no reason, offers
     // no way in, and reads as a dead end to exactly the lead we want to convert.
-    // Explain the gate, name what unlocks it, and offer the shop.
-    const gatedPlans = isMembersOnly
+    // Explain the gate, name what actually unlocks it, and open that door.
+    // `isMembersOnly` covers BOTH gated tiers (isFreeTrial is false for either),
+    // and the two need OPPOSITE doors — which is the whole point of splitting on
+    // `signedUpOnly` here:
+    //  · 'members'      → the gate is being SIGNED UP, which is free. Point at
+    //                     the signup surface. Naming a plan (let alone a price)
+    //                     would sell this visitor something they don't need.
+    //  · 'subscription' → the named plans ARE the key. Point at the shop, with
+    //                     prices. Unchanged.
+    const gatedDisplay = isMembersOnly
       ? resolveActivityPricingDisplay(
           { ...selectedActivity, type: selectedActivity?.activityType },
           subLookup
-        ).includedWith
-      : []
+        )
+      : null
+    const signedUpOnly = gatedDisplay?.signedUpOnly === true
+    // Empty for a 'members' class by construction (see ActivityPricingDisplay).
+    const gatedPlans = gatedDisplay?.includedWith ?? []
     // One plan → deep-link it; several → the subscriptions tab.
     const shopHref = publicHrefLocalized(
       locale,
@@ -2158,8 +2180,25 @@ export default function BookingForm({
         ? { type: gatedPlans[0].id, from: 'booking' }
         : { tab: 'subscriptions', from: 'booking' }
     )
+    const signupHref = publicHrefLocalized(locale, slug, 'signup', { from: 'booking' })
 
-    const accessIntro = isMembersOnly ? (
+    const accessIntro = signedUpOnly ? (
+      <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+        <p className="text-sm text-muted-foreground">{t('accessSignUpBody')}</p>
+        {/* New tab, same reason as the shop link below: signing up is a detour,
+            and losing the class they'd already picked loses the booking. */}
+        <a
+          href={signupHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={accentColor ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          {t('accessSignUpCta')}
+          <ArrowUpRight className="h-4 w-4" />
+        </a>
+      </div>
+    ) : isMembersOnly ? (
       <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
         {gatedPlans.length > 0 && (
           <div>
@@ -2199,12 +2238,22 @@ export default function BookingForm({
         onVerified={onVerified}
         onBack={() => (hadWhoStep ? setStep('who') : backToSessions())}
         accentColor={accentColor}
-        noAccountMessage={isMembersOnly ? t('errorNoAccountMembersOnly') : t('errorNoAccountGeneral')}
+        noAccountMessage={
+          // "Contact your coach to join" is a dead end on the 'members' tier —
+          // this visitor can join themselves, for free, from the button above.
+          signedUpOnly
+            ? t('errorNoAccountSignUp')
+            : isMembersOnly
+              ? t('errorNoAccountMembersOnly')
+              : t('errorNoAccountGeneral')
+        }
         title={isMembersOnly ? t('accessTitle') : undefined}
         subtitle={
-          isMembersOnly
-            ? t('accessSubtitle', { activity: selectedActivity?.name ?? '' })
-            : undefined
+          signedUpOnly
+            ? t('accessSubtitleSignUp', { activity: selectedActivity?.name ?? '' })
+            : isMembersOnly
+              ? t('accessSubtitle', { activity: selectedActivity?.name ?? '' })
+              : undefined
         }
         intro={accessIntro}
       />

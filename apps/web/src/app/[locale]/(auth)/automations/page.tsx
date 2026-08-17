@@ -81,8 +81,10 @@ import {
   Sparkles,
   BookOpen,
   Tag,
+  Users,
   Webhook,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES, CONTACT_SOURCES } from '@linyup/shared'
 import type { SubscriptionType, CustomFieldDefinition, RankingSystem } from '@linyup/shared'
 import { Link, useRouter } from '@/i18n/navigation'
@@ -90,6 +92,7 @@ import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
+import { PreviewRunDialog } from './PreviewRunDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, flattenGroupTree, isDynamicGroup } from '@/plugins/contact-groups/hooks'
 import type { ContactGroup } from '@linyup/shared'
@@ -446,6 +449,7 @@ function TriggerIcon({ type, className }: { type: string; className?: string }) 
 
 function RuleCard({
   rule,
+  teamId,
   templates,
   subscriptionTypes,
   onEdit,
@@ -454,27 +458,25 @@ function RuleCard({
   onDelete,
 }: {
   rule: AutomationRule
+  teamId: string
   templates: OutreachTemplate[]
   subscriptionTypes: SubscriptionType[]
   onEdit: () => void
   onToggle: () => void
-  onRunNow: () => void
+  onRunNow: () => Promise<void>
   onDelete: () => void
 }) {
   const t = useTranslations('Automations')
-  const [running, setRunning] = useState(false)
+  // Both entries into PreviewRunDialog: 'preview' is read-only and available on
+  // a PAUSED rule too (the moment before arming it is exactly when "who does
+  // this hit?" matters); 'run' is the confirmation that used to not exist.
+  const [previewMode, setPreviewMode] = useState<'preview' | 'run' | null>(null)
   const subName = (id: string) => subscriptionTypes.find((s) => s.id === id)?.name ?? id
 
-  async function handleRunNow() {
-    setRunning(true)
-    try {
-      await onRunNow()
-    } finally {
-      setRunning(false)
-    }
-  }
-
   const trigger = rule.trigger ?? { type: 'schedule_daily' }
+  // The same summaries the card's action line renders — the dialog answers
+  // "what will be sent" from this rather than re-deriving the copy.
+  const actionLabels = rule.actions.map((a) => actionSummary(t, a, templates))
 
   return (
     <div
@@ -517,9 +519,15 @@ function RuleCard({
                   </>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleRunNow} disabled={running}>
+              <DropdownMenuItem onClick={() => setPreviewMode('preview')}>
+                <Users className="h-3.5 w-3.5 mr-2" />
+                {t('preview.previewAction')}
+              </DropdownMenuItem>
+              {/* Opens the confirmation — the send itself is one dialog away,
+                  and that dialog states how many people it reaches. */}
+              <DropdownMenuItem onClick={() => setPreviewMode('run')}>
                 <Play className="h-3.5 w-3.5 mr-2" />
-                {running ? t('ruleCard.running') : t('ruleCard.runNow')}
+                {t('ruleCard.runNow')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={onDelete}
@@ -594,6 +602,18 @@ function RuleCard({
           {rule.last_run_sent != null && ` · ${t('ruleCard.sentCount', { count: rule.last_run_sent })}`}
         </p>
       )}
+
+      <PreviewRunDialog
+        open={previewMode !== null}
+        onOpenChange={(o) => !o && setPreviewMode(null)}
+        teamId={teamId}
+        ruleId={rule.id}
+        ruleName={rule.name || t('ruleCard.unnamed')}
+        ruleActive={rule.active}
+        mode={previewMode ?? 'preview'}
+        actionLabels={actionLabels}
+        onRun={onRunNow}
+      />
     </div>
   )
 }
@@ -1816,10 +1836,28 @@ export default function AutomationsPage() {
     invalidateRules()
   }
 
+  // Called by PreviewRunDialog's confirm, never straight off the menu: the run
+  // is forced (it re-sends to people the dedup window would have skipped), so it
+  // gets a dialog that says so and names the number first.
   async function handleRunNow(rule: AutomationRule) {
     if (!currentTeamId) return
-    const fn = httpsCallable(functions, 'triggerAutomationRule')
-    await fn({ teamId: currentTeamId as string, ruleId: rule.id })
+    const fn = httpsCallable<
+      { teamId: string; ruleId: string },
+      { success: boolean; stats: { matched: number; executed: number; failed: number } }
+    >(functions, 'triggerAutomationRule')
+    try {
+      const res = await fn({ teamId: currentTeamId as string, ruleId: rule.id })
+      const stats = res.data?.stats
+      toast.success(t('preview.sentToast', { count: stats?.executed ?? 0 }))
+      if (stats?.failed) toast.error(t('preview.failedCount', { count: stats.failed }))
+    } catch (err) {
+      console.error('[Automations] run now failed:', err)
+      toast.error(t('preview.runFailed'))
+      invalidateRules()
+      // Rethrown so the confirmation stays OPEN on failure — closing it would
+      // leave the studio unsure whether anything went out.
+      throw err
+    }
     invalidateRules()
   }
 
@@ -1927,6 +1965,7 @@ export default function AutomationsPage() {
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  teamId={currentTeamId ?? ''}
                   templates={templates}
                   subscriptionTypes={subscriptionTypes}
                   onEdit={() => {
@@ -1953,6 +1992,7 @@ export default function AutomationsPage() {
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  teamId={currentTeamId ?? ''}
                   templates={templates}
                   subscriptionTypes={subscriptionTypes}
                   onEdit={() => {

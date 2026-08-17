@@ -59,7 +59,12 @@ import {
   type ActivityAccessRule,
   type ActivityMemberBenefit,
 } from '@linyup/shared'
-import { resolveActivityTerms, resolveActivityPricingDisplay, type ActivityTerm, type SubLookup } from '@/lib/activityTerms'
+import {
+  resolveActivityTerms,
+  resolveActivityPricingDisplay,
+  type ActivityTerm,
+  type SubLookup,
+} from '@/lib/activityTerms'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
 import { publicHrefLocalized, publicSubHrefLocalized } from '@/lib/publicRoutes'
@@ -410,13 +415,13 @@ interface ActivityEntry {
 // existing convention (it isn't i18n-aware — see the other literal strings in
 // this block, e.g. "Free trial", "Book"). Benefit chips stay GENERIC (no plan
 // names — the website has no subscription-type list loaded).
+//
+// MONEY TERMS ONLY. Its one caller (payPerVisitLine) filters to price / dropIn /
+// benefit*, so a 'gate' or 'trial' term never arrives here; access is said in
+// full on the activity CARD, not compressed into a chip on the pricing block.
+// A gate arm lived here until 2026-08 and was unreachable the whole time.
 function activityTermLabel(term: ActivityTerm, currency: string): string | null {
   switch (term.kind) {
-    case 'gate':
-      // Default vocabulary is "subscription", not "membership" — a studio may
-      // separately define "membership" as its own term (the affiliation axis),
-      // but the subscription gate stays "Subscription required" by default.
-      return term.tier === 'subscription' ? 'Subscription required' : 'Members only'
     case 'dropIn':
       return `Drop-in ${formatCurrency(term.amount ?? 0, currency)}`
     case 'price':
@@ -591,9 +596,18 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               // stays a ribbon on the image; the card shows a type chip (Class /
               // Appointment) + NAMED pricing lines ("Included with {sub} — {price}",
               // "Discount with {sub} — {%}", drop-in, appointment price). No generic
-              // "Subscription required" / "Members only".
+              // "Subscription required" chip — where a plan IS the key it is named,
+              // with its price. The one exception is the 'members' tier below,
+              // where there is no plan to name because none is required.
               const d = resolveActivityPricingDisplay({ ...a, type: a.activityType }, subLookup)
               const pricingLines: string[] = []
+              // A 'members'-tier class (the DEFAULT for every new class) used to
+              // render nothing at all here: a name, a "Class" chip and a Book
+              // link, with no hint that membership is required — on the surface a
+              // prospect reaches earliest. It gets a line now, and the line names
+              // the gate that is enforced (being signed up) rather than a plan
+              // price nobody has to pay to book it. See `signedUpOnly`.
+              if (d.signedUpOnly) pricingLines.push('Members only — signing up is free')
               for (const s of d.includedWith)
                 pricingLines.push(s.priceLabel ? `Included with ${s.name} — ${s.priceLabel}` : `Included with ${s.name}`)
               for (const s of d.discountWith) pricingLines.push(`Discount with ${s.name} — ${s.percent}%`)

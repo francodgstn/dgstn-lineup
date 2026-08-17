@@ -383,17 +383,33 @@ export function computePricingHealth(
     checkBenefit(a.memberBenefit, a.name, 'activity', a.id)
     if (isAppointment) continue
     const rule = resolveActivityAccessRule(a)
-    if (rule.type !== 'subscription') continue
-    const allowed = rule.subscriptionTypeIds ?? []
-    allowed.forEach((id) => acceptedTypeIds.add(id))
-    if (allowed.length === 0) {
-      warnings.push({
-        code: 'gated_empty_allowlist',
-        severity: 'error',
-        subjectName: a.name,
-        subjectKind: 'activity',
-        subjectId: a.id,
-      })
+    // 'open' is the only tier a newcomer can always walk into. BOTH gated tiers
+    // ('members' and 'subscription') refuse a stranger — resolveClassCoverage
+    // denies 'guest'/'not_joined' before it ever looks at subscriptions — so the
+    // newcomer-path check below must run on both. It used to `continue` on
+    // anything but 'subscription', which blinded it to 'members': the DEFAULT
+    // tier of every new class.
+    if (rule.type === 'open') continue
+    if (rule.type === 'subscription') {
+      const allowed = rule.subscriptionTypeIds ?? []
+      allowed.forEach((id) => acceptedTypeIds.add(id))
+      // Deliberately subscription-only, both of them:
+      //  · an empty allow-list is a broken RULE — 'members' has no allow-list to
+      //    be empty (it gates on joined, not on holding a plan), so a studio that
+      //    sells no subscriptions at all still has a perfectly bookable class;
+      //  · acceptedTypeIds feeds `credits_unusable`, which asks where a credit
+      //    gets SPENT. A 'members' class covers a joined contact outright
+      //    (`via: { reason: 'members' }`) and burns no credit, so it must not
+      //    count as a place a credit pack is usable.
+      if (allowed.length === 0) {
+        warnings.push({
+          code: 'gated_empty_allowlist',
+          severity: 'error',
+          subjectName: a.name,
+          subjectKind: 'activity',
+          subjectId: a.id,
+        })
+      }
     }
     const hasDropIn = a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
     if (!hasDropIn && a.trialEnabled !== true) {
