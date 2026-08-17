@@ -150,7 +150,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
 | 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
 | 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ✅ Fixed |
-| 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ▶ Open |
+| 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ✅ Fixed ✓verified |
 | 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
 | 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ✅ Fixed |
 | 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ▶ Open |
@@ -1103,8 +1103,17 @@ so fixing this makes UX-24's remaining half nearly free.
 
 **Cost.** The manager finishes a long form and has to scroll back down to commit it — and on a
 short viewport she cannot see the primary action while touching the last field, which is
-exactly when she wants to know it is there. `DialogFooter` is used by **67** files, so the
+exactly when she wants to know it is there. `DialogFooter` is used by **52** files, so the
 pattern is established; it simply is not pinned.
+
+> **Corrections, 2026-08-17, from building it.** The 13 is exact and the member list is right,
+> but two of its line numbers had drifted (`SubscriptionTypesManager.tsx` is `:457`,
+> `automations/page.tsx` is `:1467`), and the `DialogFooter` figure above was 67 — the real
+> count is 52. Separately, **four more dialogs had already hand-rolled the pinned layout**
+> (`automations/LibraryDialog.tsx:321`, `settings/emails/TemplateEditor.tsx:291`,
+> `components/sessions/SessionFormDialog.tsx:341`, `components/booking/BookingOverlay.tsx:140`).
+> They are left alone deliberately — they already pin, and they are the evidence the primitive
+> was missing rather than another instance of the defect.
 
 **Fix — in the primitive, once.** Give `DialogContent` an internal scroll region: header and
 footer as fixed rows, the body scrolling between them (a grid with `grid-rows-[auto_minmax(0,1fr)_auto]`
