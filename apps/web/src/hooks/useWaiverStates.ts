@@ -116,70 +116,14 @@ const SEVERITY: Record<WaiverAcceptanceState, number> = {
   revoked: 3,
 }
 
-/** One person, every required waiver, with the row behind each answer.
- *
- *  The roster hook above collapses to the WORST state because a chip has room
- *  for one word. The contact detail page is the opposite case: it is where a
- *  manager decides whether to withdraw a specific signature, so it needs the
- *  per-document breakdown and the signer row itself (who signed, how their
- *  address was established, which version).
- *
- *  Same list-don't-get form and the same reason: a missing signer row reads as
- *  PERMISSION DENIED rather than not-found, and missing is the common case. */
-export interface ContactWaiverRow {
-  entry: RequiredWaiverEntry
-  signer: WaiverSignerState | null
-  state: WaiverAcceptanceState
-}
-
-export function useWaiverSignersForContact(teamId: string | null, contactId: string | null) {
-  const policyQ = useWaiverPolicy(teamId)
-  const policy = policyQ.data ?? []
-  const documentIds = policy.map((e) => e.documentId).join(',')
-
-  const rowsQ = useQuery<ContactWaiverRow[]>({
-    queryKey: ['waiver-contact-signers', teamId, contactId, documentIds],
-    enabled: !!teamId && !!contactId && policy.length > 0,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const nowMs = Date.now()
-      const out: ContactWaiverRow[] = []
-      for (const entry of policy) {
-        const snap = await getDocs(
-          query(
-            collection(db, DOCUMENTS_COLLECTION, entry.documentId, DOCUMENT_SIGNERS_SUBCOLLECTION),
-            where(documentId(), 'in', [contactId!])
-          )
-        )
-        const signer = snap.docs[0] ? (snap.docs[0].data() as WaiverSignerState) : null
-        out.push({
-          entry,
-          signer,
-          state: waiverAcceptanceState(
-            { min_valid_version: entry.min_valid_version },
-            signer
-              ? {
-                  accepted_version: signer.accepted_version,
-                  accepted_at: signer.accepted_at,
-                  valid_until: signer.valid_until ?? null,
-                  status: signer.status,
-                }
-              : null,
-            nowMs
-          ),
-        })
-      }
-      return out
-    },
-  })
-
-  return {
-    rows: rowsQ.data ?? [],
-    active: policy.length > 0,
-    loading: policyQ.isLoading || rowsQ.isLoading,
-    refetch: rowsQ.refetch,
-  }
-}
+// THE PER-CONTACT BREAKDOWN LIVES ELSEWHERE, DELIBERATELY.
+// The roster collapses to the WORST state because a chip has room for one word.
+// The contact record is the opposite case, and it is also a WIDER question: it
+// asks about every document the studio asks for — the signup-consent list as
+// well as the waiver policy — so keying it off this policy alone answered the
+// wrong question and rendered nothing for a team that requires nothing. It is
+// `useContactDocumentRows` in `hooks/useContactDocuments.ts`, which carries the
+// same list-don't-get form as the queries below and says why.
 
 export function useWaiverRoster(
   teamId: string | null,

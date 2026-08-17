@@ -18,13 +18,25 @@
 //
 // The member's own download from Space omits that section, and the SERVER — not
 // this component — is what decides which of the two it is producing.
+//
+// ── IT IS A TAB, AND IT NEVER RETURNS null ──────────────────────────────────
+// This used to render at the bottom of the Profile tab, under a ~557-line edit
+// form, and `return null` unless the team required a waiver. Between the two, a
+// signup-consent acceptance was recorded and displayed on NO screen in the
+// product. So: its own tab, the UNION of both surfaces
+// (`useContactDocumentRows`), and an honest empty state with somewhere to go
+// instead of a disappearing panel.
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { Download, ShieldCheck } from 'lucide-react'
+import type { Route } from 'next'
+import { Download, FileText, ShieldCheck } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { useWaiverSignersForContact } from '@/hooks/useWaiverStates'
+import { Link } from '@/i18n/navigation'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useContactDocumentRows } from '@/hooks/useContactDocuments'
 
 export function ConsentHistoryPanel({
   contactId,
@@ -36,7 +48,11 @@ export function ConsentHistoryPanel({
   contactName: string
 }) {
   const t = useTranslations('Waivers')
-  const { rows, active, refetch } = useWaiverSignersForContact(teamId, contactId)
+  // The two surface labels are owned by the Documents panel that writes them —
+  // one copy of "Shown at signup" / "Required before booking" in the product,
+  // so the tab and the panel can never describe the same flag differently.
+  const tDocuments = useTranslations('Documents')
+  const { rows, asksForAnything, loading, refetch } = useContactDocumentRows(teamId, contactId)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(false)
   // Which document is mid-revocation, and the typed reason. A destructive action
@@ -47,11 +63,6 @@ export function ConsentHistoryPanel({
   const [revokeReason, setRevokeReason] = useState('')
   const [revokeBusy, setRevokeBusy] = useState(false)
   const [revokeError, setRevokeError] = useState<string | null>(null)
-
-  // Offered only where the studio requires something. A team that asks for
-  // nothing has collected nothing, and a control that always produces an empty
-  // artefact teaches a coach the feature is broken.
-  if (!active) return null
 
   const revoke = async (documentId: string) => {
     setRevokeBusy(true)
@@ -104,6 +115,29 @@ export function ConsentHistoryPanel({
     }
   }
 
+  if (loading) return <Skeleton className="h-40 w-full rounded-xl" />
+
+  // THE HONEST EMPTY STATE. A team that asks for nothing has collected nothing —
+  // which is a sentence worth reading, and a thing worth fixing, so it says both
+  // and points at where.
+  if (!asksForAnything) {
+    return (
+      <div className="rounded-xl border bg-card p-8 text-center">
+        <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
+        <p className="font-medium">{t('contactEmptyTitle')}</p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+          {t('contactEmptyBody')}
+        </p>
+        <Link
+          href={'/documents' as Route}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          {t('contactEmptyCta')}
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-xl border bg-card p-4">
       <div className="flex items-center gap-2">
@@ -113,16 +147,27 @@ export function ConsentHistoryPanel({
       <p className="mt-1 text-xs text-muted-foreground">{t('exportHint')}</p>
 
       <ul className="mt-3 space-y-2">
-        {rows.map(({ entry, signer, state }) => (
-          <li key={entry.documentId} className="rounded-lg border p-3">
+        {rows.map(({ documentId: docId, title, atSignup, requiredBeforeBooking, signer, state }) => (
+          <li key={docId} className="rounded-lg border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{entry.title}</p>
+                <p className="truncate text-sm font-medium">{title}</p>
                 <p className="text-xs text-muted-foreground">
                   {signer
                     ? `${t(`state_${state}` as 'state_valid')} · ${t('colVersion')} ${signer.accepted_version} · ${t(`role_${signer.signer_role}` as 'role_self')} · ${signer.accepted_at.toDate().toLocaleDateString()}`
                     : t('state_none')}
                 </p>
+                {/* WHICH SURFACE ASKED. A row can be in both sets, and the two
+                    mean different things: one recorded a tick, the other refuses
+                    a booking without it. Same wording as the Documents panel. */}
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {atSignup && (
+                    <Badge variant="secondary">{tDocuments('surfacesColSignup')}</Badge>
+                  )}
+                  {requiredBeforeBooking && (
+                    <Badge variant="outline">{tDocuments('surfacesColRequired')}</Badge>
+                  )}
+                </div>
               </div>
               {/* Offered only where there IS something to withdraw. A revoked row
                   keeps its history and is never revoked twice. */}
@@ -130,7 +175,7 @@ export function ConsentHistoryPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    setRevoking(entry.documentId)
+                    setRevoking(docId)
                     setRevokeReason('')
                     setRevokeError(null)
                   }}
@@ -141,7 +186,7 @@ export function ConsentHistoryPanel({
               )}
             </div>
 
-            {revoking === entry.documentId && (
+            {revoking === docId && (
               <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
                 <p className="text-sm font-medium">{t('revokeConfirmTitle')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{t('revokeConfirmBody')}</p>
@@ -158,7 +203,7 @@ export function ConsentHistoryPanel({
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => void revoke(entry.documentId)}
+                    onClick={() => void revoke(docId)}
                     disabled={revokeBusy}
                     className="rounded-lg bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground disabled:opacity-50"
                   >

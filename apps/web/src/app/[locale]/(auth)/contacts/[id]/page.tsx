@@ -167,6 +167,7 @@ import {
   IdCard,
   RefreshCw,
   Ticket,
+  FileSignature,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -4836,6 +4837,7 @@ const TAB_IDS = [
   'bookings',
   'affiliation',
   'payments',
+  'documents',
   'goals',
   'gamification',
 ] as const
@@ -4952,6 +4954,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
     { id: 'followups', label: t('tabFollowups'), icon: Bell },
+    // What this person has been asked to accept — at signup, before booking, or
+    // both — and whether they did. Its own tab: buried under the profile form it
+    // was a screen nobody reached, and it rendered nothing at all for a studio
+    // whose consent is signup-only.
+    { id: 'documents', label: t('tabDocuments'), icon: FileSignature },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
     { id: 'gamification', label: t('tabGamification'), icon: Star },
   ]
@@ -5261,24 +5268,23 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {/* Tab content */}
           <div>
             {tab === 'profile' && (
-              <div className="space-y-4">
-                <ProfileTab
-                  contact={contact}
-                  teamId={currentTeamId}
-                  orgId={team?.org_id}
-                  onSaved={invalidate}
-                  onOpenNotes={() => setNotesOpen(true)}
-                />
-                {/* The operator's copy of this person's consent history. Renders
-                    only where the studio requires something — a control that
-                    always produced an empty artefact would teach a coach the
-                    feature is broken. */}
-                <ConsentHistoryPanel
-                  contactId={contact.id}
-                  teamId={currentTeamId}
-                  contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
-                />
-              </div>
+              <ProfileTab
+                contact={contact}
+                teamId={currentTeamId}
+                orgId={team?.org_id}
+                onSaved={invalidate}
+                onOpenNotes={() => setNotesOpen(true)}
+              />
+            )}
+            {/* The operator's copy of this person's consent — every document the
+                studio asks for, on either surface, with state, version, role and
+                date. Its own tab, with an honest empty state. */}
+            {tab === 'documents' && (
+              <ConsentHistoryPanel
+                contactId={contact.id}
+                teamId={currentTeamId}
+                contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
+              />
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
