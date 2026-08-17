@@ -81,7 +81,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 2 | blocks | at-setup | A studio can complete the setup checklist and have a class nobody can book | M2×M3×M5 | web | ◐ Interim shipped |
 | 3 | blocks | weekly | Availability management is an unlabelled caret welded to a filter chip | M3 | web | ▶ Open |
 | 4 | blocks | at-setup | Recurring timetables are create-only and silently expire after six months | M3 | web + functions | ◐ Cliff closed; series surface deferred |
-| 5 | blocks | weekly | 13 of 16 money actions fail invisibly | M6 | web | ◐ Partial — 4 billing callables still silent |
+| 5 | blocks | weekly | 13 of 16 money actions fail invisibly | M6 | web | ✅ Fixed |
 | 6 | blocks | at-setup | A non-owner manager's settings saves fail silently — and the booking cutoff never applies | M7×M3 | web + functions | ✅ Fixed |
 | 7 | costs-money | at-setup | Nobody is told they are on a 30-day trial, and Billing says "No subscription" | M2×M6 | web + functions | ◐ Interim shipped ✓verified |
 | 8 | costs-money | weekly | Refunding returns the money and leaves the member holding the goods | M6 | functions + web | ✅ Fixed |
@@ -149,6 +149,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
 | 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
 | 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
+| 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -854,6 +855,25 @@ pricing) lives under Offer. A place is not a preference; it is part of the offer
 **Fix.** Move it to the Offer section. Same class as UX-61 and UX-28 — an item filed by
 implementation history rather than by the job it belongs to — so do them in one IA pass.
 **Build:** S. **Owner:** web-agent.
+
+### UX-73 — The org billing page repeats every problem UX-5 just fixed, one floor up
+`slows` · weekly · traced · M10×M6 · *added 2026-08-17, found while fixing UX-5*
+
+**Now.** `org/[orgId]/billing/page.tsx:170-209` calls the same four SaaS-billing callables
+that `settings/billing` did. It is not silent — which is why the review's count missed it — but
+it reports through a hand-rolled `setTimeout` banner (`:140-145`) that prints the **raw English
+server message** to French, German and Italian owners; and after a successful cancel or
+reactivate it invalidates nothing, so the badge does not move until a reload.
+
+**Cost.** Lower than UX-5's, because something does appear — but an org owner cancelling a
+subscription gets an English sentence and a page that still says "active".
+
+**Fix.** Adopt `hooks/useSaasBilling.ts`, which now owns these four with code-matched reasons,
+translated copy, invalidation and a success toast. This is the obvious next adopter and the
+reason that file exists rather than four local handlers.
+**Surface:** −1 hand-rolled banner, −4 inline callables. **Build:** S. **Owner:** web-agent.
+**Verify:** In German, cancel an org subscription whose Stripe id is missing — the message is
+German and the badge is correct without a reload.
 
 ### UX-68 — Nothing can be duplicated, so the second of anything costs as much as the first
 `slows` · at-setup · traced · M5×M2 · *added 2026-08-17, from manual exploration*
