@@ -2225,7 +2225,15 @@
     "giftCardsName": "Gift Cards",
     "giftCardsDescription": "Sell gift cards in your shop and mint them at the desk. Redeemable against anything you charge for.",
     "promoCodesName": "Promo Codes",
-    "promoCodesDescription": "Run discount campaigns with codes your clients enter at checkout, with usage caps and validity windows."
+    "promoCodesDescription": "Run discount campaigns with codes your clients enter at checkout, with usage caps and validity windows.",
+    "removeConfirmTitle": "Remove {name}?",
+    "removeConfirmBody": "{name} disappears from your menu and nobody on your team can use it until you install it again. Its data stays in Linyup and comes back with it.",
+    "removeConfirmBodyWebsite": "Your public website goes offline immediately: the published version is deleted and visitors see nothing. Your draft pages are kept, so you can publish again once you install it back.",
+    "removeConfirmBodyCourses": "Every public course listing is deleted, so your courses vanish from your Shop and from your members' Space. Lessons, media and past purchases are kept — but they do not come back on their own: you have to publish each course again after installing it back.",
+    "removeConfirmBilling": "Billing stops now: the CHF {price}/mo add-on is taken off your subscription. The unused part of this period is credited against your next invoice — nothing is refunded to your card.",
+    "removeConfirmBillingUnbilled": "This add-on is not being billed to you at the moment, so removing it changes nothing on your bill.",
+    "removeConfirmLocked": "{name} is unlocked with an access key. You will need that key again to install it.",
+    "removing": "Removing…"
   },
   "AiAssistant": {
     "launcherLabel": "AI assistant",
@@ -4282,7 +4290,7 @@
     "ctaLabelPlaceholder": "e.g. Contact Us",
     "ownerOnly": "Only the owner can change this.",
     "noShowPolicyTitle": "No-show policy",
-    "noShowPolicySubtitle": "Automatically charge a fee after repeated no-shows.",
+    "noShowPolicySubtitle": "Send a fee request by email after repeated no-shows.",
     "noShowFeeAmountLabel": "Fee ({currency})",
     "noShowThresholdLabel": "Strikes before a fee",
     "noShowThresholdHint": "A fee is created once a contact reaches this many no-shows; their strike count then resets.",
@@ -4290,7 +4298,8 @@
     "waitlistClaimMinutesHint": "How long someone has to take an offered seat before it moves to the next person. Always shortened by the booking cutoff and the session start — a seat that frees too close to the start is left free instead of being offered.",
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 hour} =1440 {1 day} other {# minutes}}",
     "toggleWaitlistEnabledLabel": "Waitlists",
-    "toggleWaitlistEnabledDesc": "Let clients queue for a full class and be offered a seat when one frees up. Turn this on to show the waitlist option on each activity."
+    "toggleWaitlistEnabledDesc": "Let clients queue for a full class and be offered a seat when one frees up. Turn this on to show the waitlist option on each activity.",
+    "noShowPublicNote": "These terms are shown to visitors on your public booking pages before they book. The fee is emailed as a payment link — it is never charged to a saved card."
   },
   "SettingsPlaces": {
     "pageTitle": "Places",
@@ -5875,5 +5884,11 @@
     "ask_skipped": "Not sent: this contact is archived, deleted, or not in this team.",
     "ask_not_required": "Not sent: this document is not required before booking, so there is nowhere to sign it.",
     "ask_error": "The request could not be sent."
+  },
+  "BookingTerms": {
+    "title": "Cancellations and no-shows",
+    "noShowFeeOnce": "If you miss a booked session without cancelling, a no-show fee of {fee} applies.",
+    "noShowFeeAfter": "If you miss {count} booked sessions without cancelling, a no-show fee of {fee} applies.",
+    "noShowFeeNote": "The fee is sent to you by email — nothing is charged to a card automatically."
   }
 }

@@ -2225,7 +2225,15 @@
     "giftCardsName": "Carte regalo",
     "giftCardsDescription": "Vendi carte regalo nel tuo shop ed emettile alla reception. Utilizzabili per tutto ciò che fatturi.",
     "promoCodesName": "Codici promozionali",
-    "promoCodesDescription": "Lancia campagne di sconto con codici inseriti al pagamento, con limiti di utilizzo e periodi di validità."
+    "promoCodesDescription": "Lancia campagne di sconto con codici inseriti al pagamento, con limiti di utilizzo e periodi di validità.",
+    "removeConfirmTitle": "Rimuovere {name}?",
+    "removeConfirmBody": "{name} sparisce dal tuo menu e nessuno del tuo team può usarlo finché non lo installi di nuovo. I suoi dati restano in Linyup e tornano con lui.",
+    "removeConfirmBodyWebsite": "Il tuo sito pubblico va offline subito: la versione pubblicata viene eliminata e i visitatori non vedono più nulla. Le tue bozze restano, quindi potrai ripubblicare dopo averlo installato di nuovo.",
+    "removeConfirmBodyCourses": "Tutte le schede pubbliche dei corsi vengono eliminate: i tuoi corsi spariscono dallo Shop e dallo Space dei tuoi membri. Lezioni, media e acquisti passati restano, ma non tornano da soli: dopo una nuova installazione dovrai ripubblicare ogni corso.",
+    "removeConfirmBilling": "L'addebito si ferma subito: l'add-on da CHF {price}/mese viene tolto dal tuo abbonamento. La parte non utilizzata di questo periodo viene accreditata sulla prossima fattura — non viene rimborsato nulla sulla tua carta.",
+    "removeConfirmBillingUnbilled": "Questo add-on al momento non ti viene addebitato: rimuoverlo non cambia nulla sulla tua fattura.",
+    "removeConfirmLocked": "{name} si sblocca con una chiave di accesso. Ti servirà di nuovo quella chiave per installarlo.",
+    "removing": "Rimozione…"
   },
   "AiAssistant": {
     "launcherLabel": "Assistente IA",
@@ -4282,7 +4290,7 @@
     "ctaLabelPlaceholder": "es. Contattaci",
     "ownerOnly": "Solo il titolare può modificare questa impostazione.",
     "noShowPolicyTitle": "Politica sulle mancate presentazioni",
-    "noShowPolicySubtitle": "Addebita automaticamente una penale dopo mancate presentazioni ripetute.",
+    "noShowPolicySubtitle": "Invia una richiesta di pagamento via e-mail dopo mancate presentazioni ripetute.",
     "noShowFeeAmountLabel": "Penale ({currency})",
     "noShowThresholdLabel": "Mancate presentazioni prima della penale",
     "noShowThresholdHint": "Una penale viene creata quando un contatto raggiunge questo numero di mancate presentazioni; il contatore viene poi azzerato.",
@@ -4290,7 +4298,8 @@
     "waitlistClaimMinutesHint": "Quanto tempo ha una persona per accettare un posto offerto prima che passi alla successiva. Viene sempre accorciato dalla chiusura delle prenotazioni e dall’inizio della sessione: un posto che si libera troppo a ridosso resta libero invece di essere offerto.",
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 ora} =1440 {1 giorno} other {# minuti}}",
     "toggleWaitlistEnabledLabel": "Liste d’attesa",
-    "toggleWaitlistEnabledDesc": "Consenti ai clienti di mettersi in coda per una lezione piena e ricevere un posto quando si libera. Attiva per mostrare l’opzione su ogni attività."
+    "toggleWaitlistEnabledDesc": "Consenti ai clienti di mettersi in coda per una lezione piena e ricevere un posto quando si libera. Attiva per mostrare l’opzione su ogni attività.",
+    "noShowPublicNote": "Queste condizioni vengono mostrate ai visitatori sulle tue pagine di prenotazione pubbliche prima che prenotino. La penale viene inviata via e-mail come link di pagamento — non viene mai addebitata su una carta salvata."
   },
   "SettingsPlaces": {
     "pageTitle": "Sedi",
@@ -5875,5 +5884,11 @@
     "ask_skipped": "Non inviata: questo contatto è archiviato, eliminato o non appartiene a questo team.",
     "ask_not_required": "Non inviata: questo documento non è richiesto prima della prenotazione, non c’è una pagina dove firmarlo.",
     "ask_error": "Non è stato possibile inviare la richiesta."
+  },
+  "BookingTerms": {
+    "title": "Cancellazioni e assenze",
+    "noShowFeeOnce": "Se salti una sessione prenotata senza cancellarla, viene applicata una penale per assenza di {fee}.",
+    "noShowFeeAfter": "Se salti {count} sessioni prenotate senza cancellarle, viene applicata una penale per assenza di {fee}.",
+    "noShowFeeNote": "La penale ti viene inviata via e-mail — nulla viene addebitato automaticamente su una carta."
   }
 }

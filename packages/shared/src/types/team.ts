@@ -488,6 +488,21 @@ export interface TeamPublicProfile {
   // teams/{id}.settings.bookingCancellationPolicy (owner-editable, same home as
   // the existing bookingConfirmationInstructions default).
   bookingCancellationPolicy?: string
+  // The no-show policy's PUBLIC TERMS — the fee and the number of strikes that
+  // triggers it, denormalized by syncTeamPublicProfile from
+  // teams/{id}.settings.noShowPolicy via resolveNoShowPolicy.
+  //
+  // This is here because it is the only booking money a visitor can incur AFTER
+  // they commit: `markNoShowBookings` auto-flips an un-checked-in `fromBioLink`
+  // booking to 'no_show', and at the threshold `processNoShowStrike` creates a
+  // real PolicyFee and emails a payment link. Telling somebody about that only
+  // once they owe it is the defect this field exists to close.
+  //
+  // ABSENT/NULL MEANS OFF — `enabled` is deliberately not mirrored, so there is
+  // one way for a public surface to ask the question and no way to read a fee
+  // off a disabled policy. Nothing private here: the fee and the threshold are
+  // terms the visitor is subject to.
+  noShowPolicy?: { feeAmount: number; threshold: number } | null
   // Opt-in coach roster (name + optional photo), maintained by
   // syncTeamCoachesPublicProfile when `public_coaches_enabled` is true. Consumed by
   // the organization website's coaches section. Absent/empty ⇒ not opted in.

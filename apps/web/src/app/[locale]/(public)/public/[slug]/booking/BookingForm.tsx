@@ -56,6 +56,7 @@ import {
 import { StickyBar, activityGradient } from '@/components/booking/StickyBar'
 import { BackButton } from '@/components/booking/BackButton'
 import { WaiverStep } from '@/components/booking/WaiverStep'
+import { BookingTerms, resolveCancellationPolicy } from '@/components/booking/BookingTerms'
 import { useWaiverGate } from '@/hooks/useWaiverGate'
 import { waiverErrorMessage } from '@/lib/waiver'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
@@ -455,6 +456,16 @@ export default function BookingForm({
   // (sanitizeBookingAnswers) — this map is convenience, not trust.
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [answersError, setAnswersError] = useState<string | null>(null)
+  // The terms this flow commits somebody to, resolved ONCE the way the
+  // confirmation email resolves them (activity override → team default) and
+  // rendered by `withBar` on every terminal-submit step. Deriving it here rather
+  // than per step is the point: this file's submits are spread across several
+  // steps, and a per-step copy is how one of them silently loses it.
+  const effectiveCancellationPolicy = resolveCancellationPolicy(
+    selectedActivity?.cancellationPolicy,
+    team.bookingCancellationPolicy
+  )
+
   const bookingQuestions = selectedActivity?.bookingQuestions ?? []
 
   /** Every required question answered? Gates submit on both booking paths. */
@@ -1520,6 +1531,30 @@ export default function BookingForm({
   const showBar =
     selectedActivity && step !== 'activities' && step !== 'confirmed' && step !== 'waitlisted'
 
+  // WHERE THE TERMS BELONG. Every step that can end in a seat — the guest form,
+  // the returning-member sign-in (whose `onVerified` books straight through),
+  // the consent interrupt, and the queue join — gets them, and no step that
+  // cannot does. Kept as ONE list beside `showConfirm` rather than pasted into
+  // each render branch — and deliberately NOT reusing `showConfirm`, which is a
+  // different question: it asks which steps submit FROM THE BAR, and 'returning'
+  // submits from inside ReturningSignIn instead. Two questions, two lists, both
+  // stated where they are read.
+  //
+  // 'waitlist' is in: joining the queue is how you end up holding a seat you can
+  // then no-show, and the claim window is measured in minutes — after the offer
+  // email is not a moment to be reading the fee for the first time.
+  const showTerms =
+    step === 'details' || step === 'returning' || step === 'waiver' || step === 'waitlist'
+
+  const termsBlock = showTerms ? (
+    <BookingTerms
+      cancellationPolicy={effectiveCancellationPolicy}
+      noShowPolicy={team.noShowPolicy}
+      currency={currency}
+      locale={locale}
+    />
+  ) : null
+
   function withBar(content: React.ReactNode, wide?: boolean) {
     return (
       <FlowShell
@@ -1577,6 +1612,7 @@ export default function BookingForm({
         }
       >
         {content}
+        {termsBlock}
       </FlowShell>
     )
   }
@@ -1850,11 +1886,12 @@ export default function BookingForm({
           </p>
         )}
 
+        {/* The browse-time disclosure. It keeps the policy for the visitor who
+            wants it EARLY; it is no longer the only place they can read it,
+            which is what made a collapsed `<details>` on a step before the
+            button the wrong home for a term of sale. It resolves nothing of its
+            own any more — one fallback order, computed once above. */}
         {(() => {
-          const effectiveCancellationPolicy =
-            selectedActivity?.cancellationPolicy?.trim() ||
-            (team as { bookingCancellationPolicy?: string }).bookingCancellationPolicy?.trim() ||
-            null
           const hasDetail =
             selectedActivity &&
             (selectedActivity.whatsIncluded ||

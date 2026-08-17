@@ -115,13 +115,25 @@ export function useSetupChecklist(teamId: string | null, team: Team | null) {
   })
 
   const d = queryResult.data
+  // UX-27: every href must land on the surface that can COMPLETE the step, not
+  // merely on one that reports it. `subscriptions` and `ranks` were landing on
+  // reporting surfaces:
+  //   • subscriptions → `/subscriptions` is the member roster ("who holds
+  //     what"), derived from contacts. On a new team it renders an empty table
+  //     and has no create control at all. Subscription TYPES — the thing the
+  //     step's own done-check reads (teams/{id}/subscription_types) — are
+  //     created by SubscriptionsPanel's "Add subscription type", which lives on
+  //     the Plans hub's first tab.
+  //   • ranks → `/settings/team` has no default tab, so it opens on General;
+  //     the ranking-system manager is behind `?tab=ranking` (same deep link the
+  //     settings rail uses, see lib/settings-nav.ts).
   const steps: SetupStep[] = [
     { key: 'activities', href: '/offer/activities', done: !!d?.activities },
     { key: 'sessions', href: '/schedule', done: !!d?.sessions },
-    { key: 'subscriptions', href: '/subscriptions', done: !!d?.subscriptions },
+    { key: 'subscriptions', href: '/offer/plans?tab=subscriptions', done: !!d?.subscriptions },
     { key: 'bioLink', href: '/team/bio-link', done: !!d?.bioLink },
     { key: 'contacts', href: '/contacts', done: !!d?.contacts },
-    { key: 'ranks', href: '/settings/team', done: ranksDone, optional: true },
+    { key: 'ranks', href: '/settings/team?tab=ranking', done: ranksDone, optional: true },
   ]
 
   const required = steps.filter((s) => !s.optional)

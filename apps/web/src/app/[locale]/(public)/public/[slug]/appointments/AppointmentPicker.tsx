@@ -43,6 +43,7 @@ import { ReturningSignIn, type ContactData } from '@/components/booking/Returnin
 import { StickyBar } from '@/components/booking/StickyBar'
 import { BackButton } from '@/components/booking/BackButton'
 import { WaiverStep } from '@/components/booking/WaiverStep'
+import { BookingTerms, resolveCancellationPolicy } from '@/components/booking/BookingTerms'
 import { useWaiverGate } from '@/hooks/useWaiverGate'
 import {
   waiverErrorMessage,
@@ -72,6 +73,9 @@ interface AvailActivity {
   activityName: string
   durations: AvailDuration[]
   memberBenefit: ActivityMemberBenefit | Benefit | null
+  /** Per-activity override of the team's cancellation terms, from
+   *  `listAvailability`. Display-only; falls back to the team default. */
+  cancellationPolicy: string | null
   location: string | null
   onlineUrl: string | null
   days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
@@ -97,6 +101,8 @@ interface WindowBooking {
   onlineUrl: string | null
   priceAmount: number | null
   memberBenefit: ActivityMemberBenefit | Benefit | null
+  /** Carried to the booking step so the terms are on the screen that commits. */
+  cancellationPolicy: string | null
 }
 
 // The booking form is now an in-page step (not a modal), so it joins the funnel.
@@ -343,6 +349,7 @@ function SlotBookingForm({
   hasAnyPrice,
   priceAmount,
   memberBenefit,
+  cancellationPolicy,
   durationMinutes,
   providerId,
   activityId,
@@ -365,6 +372,8 @@ function SlotBookingForm({
   /** null/empty subscriptionTypeIds = nothing to offer — the sign-in link never
    *  renders (there's no price a member could get that a guest can't). */
   memberBenefit: ActivityMemberBenefit | Benefit | null
+  /** The activity's own cancellation terms, or null to fall back to the team's. */
+  cancellationPolicy: string | null
   durationMinutes: number
   /** The three ids the promo preview needs — its per-rail target key is
    *  `apt:{providerId}:{startMs}:{durationMinutes}`, and preview and checkout
@@ -1071,6 +1080,28 @@ function SlotBookingForm({
     }
   }
 
+  // The cancellation terms + the no-show fee, resolved once (activity override →
+  // team default, exactly as the confirmation email resolves them) and rendered
+  // above every CTA this component can end on. Renders null when the studio has
+  // written no policy and runs no fee — see BookingTerms.
+  //
+  // Three of this component's five screens get it: the consent screen, the
+  // member screen and the guest form, i.e. every screen carrying a control that
+  // takes the slot. `autobooking` is past the decision (it is a spinner over a
+  // booking already sent) and `signIn` is only ever reached FROM the guest form,
+  // which showed them.
+  const termsBlock = (
+    <BookingTerms
+      cancellationPolicy={resolveCancellationPolicy(
+        cancellationPolicy,
+        publicTeam.bookingCancellationPolicy
+      )}
+      noShowPolicy={publicTeam.noShowPolicy}
+      currency={currency}
+      locale={locale}
+    />
+  )
+
   // ── The consent screen — FIRST, because it stands in front of all three ──
   // submits and must win over `autobooking`'s spinner and `memberPay`'s CTA.
   // It carries its own Confirm for the same reason the member-pay screen does:
@@ -1088,6 +1119,7 @@ function SlotBookingForm({
           />
         </div>
         <WaiverStep gate={waiverGate} teamName={publicTeam.name || ''} disabled={submittingGuest} />
+        {termsBlock}
         {errorBox}
         <button
           type="button"
@@ -1236,6 +1268,7 @@ function SlotBookingForm({
           {showsRacePrice && (
             <p className="text-xs text-muted-foreground">{t('coverageEnded')}</p>
           )}
+          {termsBlock}
           {errorBox}
           <button
             type="button"
@@ -1329,6 +1362,8 @@ function SlotBookingForm({
           {t('memberSignInOffer')}
         </button>
       )}
+
+      {termsBlock}
 
       <GuestDetailsForm
         ref={guestFormRef}
@@ -1457,6 +1492,7 @@ function buildWindowBooking(
     onlineUrl: activity.onlineUrl,
     priceAmount: chosen?.priceAmount ?? null,
     memberBenefit: activity.memberBenefit,
+    cancellationPolicy: activity.cancellationPolicy,
   }
 }
 
@@ -2058,6 +2094,7 @@ export default function AppointmentPicker({
               hasAnyPrice={durationIsPriced(windowBooking.priceAmount)}
               priceAmount={windowBooking.priceAmount}
               memberBenefit={windowBooking.memberBenefit}
+              cancellationPolicy={windowBooking.cancellationPolicy}
               durationMinutes={windowBooking.durationMinutes}
               providerId={windowBooking.providerId}
               activityId={windowBooking.activityId}

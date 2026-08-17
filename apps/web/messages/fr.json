@@ -2225,7 +2225,15 @@
     "giftCardsName": "Cartes cadeaux",
     "giftCardsDescription": "Vendez des cartes cadeaux dans votre boutique et émettez-les à l’accueil. Utilisables pour tout ce que vous facturez.",
     "promoCodesName": "Codes promo",
-    "promoCodesDescription": "Lancez des campagnes de réduction avec des codes saisis au paiement, avec plafonds d’utilisation et périodes de validité."
+    "promoCodesDescription": "Lancez des campagnes de réduction avec des codes saisis au paiement, avec plafonds d’utilisation et périodes de validité.",
+    "removeConfirmTitle": "Supprimer {name} ?",
+    "removeConfirmBody": "{name} disparaît de votre menu et personne dans votre équipe ne peut l'utiliser tant que vous ne l'installez pas à nouveau. Ses données restent dans Linyup et reviennent avec lui.",
+    "removeConfirmBodyWebsite": "Votre site public passe hors ligne immédiatement : la version publiée est supprimée et les visiteurs ne voient plus rien. Vos brouillons sont conservés, vous pourrez republier après une nouvelle installation.",
+    "removeConfirmBodyCourses": "Toutes les fiches publiques de cours sont supprimées : vos cours disparaissent de votre Boutique et du Space de vos membres. Les leçons, les médias et les achats passés sont conservés, mais ils ne reviennent pas tout seuls : après une nouvelle installation, vous devrez republier chaque cours.",
+    "removeConfirmBilling": "La facturation s'arrête maintenant : l'option à CHF {price}/mois est retirée de votre abonnement. La partie non utilisée de cette période est créditée sur votre prochaine facture — rien n'est remboursé sur votre carte.",
+    "removeConfirmBillingUnbilled": "Cette option ne vous est pas facturée pour le moment : la supprimer ne change rien à votre facture.",
+    "removeConfirmLocked": "{name} se déverrouille avec une clé d'accès. Vous aurez besoin de cette clé pour l'installer à nouveau.",
+    "removing": "Suppression…"
   },
   "AiAssistant": {
     "launcherLabel": "Assistant IA",
@@ -4282,7 +4290,7 @@
     "ctaLabelPlaceholder": "p. ex. Contactez-nous",
     "ownerOnly": "Seul le propriétaire peut modifier ceci.",
     "noShowPolicyTitle": "Politique de non-présentation",
-    "noShowPolicySubtitle": "Facturer automatiquement des frais après des non-présentations répétées.",
+    "noShowPolicySubtitle": "Envoyer une demande de paiement par e-mail après des non-présentations répétées.",
     "noShowFeeAmountLabel": "Frais ({currency})",
     "noShowThresholdLabel": "Non-présentations avant facturation",
     "noShowThresholdHint": "Des frais sont créés dès qu'un contact atteint ce nombre de non-présentations ; son compteur est ensuite réinitialisé.",
@@ -4290,7 +4298,8 @@
     "waitlistClaimMinutesHint": "Combien de temps une personne a pour accepter une place proposée avant qu’elle ne passe à la suivante. Toujours raccourci par la clôture des réservations et le début de la séance — une place libérée trop tard reste libre au lieu d’être proposée.",
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 heure} =1440 {1 jour} other {# minutes}}",
     "toggleWaitlistEnabledLabel": "Listes d’attente",
-    "toggleWaitlistEnabledDesc": "Permettez aux clients de faire la queue pour un cours complet et de se voir proposer une place dès qu’elle se libère. Activez pour afficher l’option sur chaque activité."
+    "toggleWaitlistEnabledDesc": "Permettez aux clients de faire la queue pour un cours complet et de se voir proposer une place dès qu’elle se libère. Activez pour afficher l’option sur chaque activité.",
+    "noShowPublicNote": "Ces conditions sont affichées aux visiteurs sur vos pages de réservation publiques avant qu'ils ne réservent. Les frais sont envoyés par e-mail sous forme de lien de paiement — ils ne sont jamais débités d'une carte enregistrée."
   },
   "SettingsPlaces": {
     "pageTitle": "Lieux",
@@ -5875,5 +5884,11 @@
     "ask_skipped": "Non envoyé : ce contact est archivé, supprimé ou hors de cette équipe.",
     "ask_not_required": "Non envoyé : ce document n’est pas requis avant réservation, il n’existe aucune page pour le signer.",
     "ask_error": "La demande n’a pas pu être envoyée."
+  },
+  "BookingTerms": {
+    "title": "Annulations et absences",
+    "noShowFeeOnce": "Si vous manquez une séance réservée sans l'annuler, des frais d'absence de {fee} s'appliquent.",
+    "noShowFeeAfter": "Si vous manquez {count} séances réservées sans les annuler, des frais d'absence de {fee} s'appliquent.",
+    "noShowFeeNote": "Les frais vous sont envoyés par e-mail — rien n'est débité automatiquement d'une carte."
   }
 }

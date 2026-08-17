@@ -1,10 +1,16 @@
 'use client'
 
 // No-show policy (E5) — threshold-based fees, collected via an emailed payment
-// link. Off by default. Persisted to teams/{id}.settings.noShowPolicy ONLY
-// (never mirrored to public_profile — this is an internal studio policy, not a
-// public booking setting). Owner-only team-doc write, same pattern as
-// BookingInstructionsCard.
+// link. Off by default. Persisted to teams/{id}.settings.noShowPolicy;
+// owner-only team-doc write, same pattern as BookingInstructionsCard.
+//
+// THE TERMS ARE PUBLIC — this header used to say they were not. `feeAmount` and
+// `threshold` are mirrored to TeamPublicProfile.noShowPolicy by
+// syncTeamPublicProfile and stated on every public booking screen before the
+// button (components/booking/BookingTerms). A fee somebody can incur without
+// being told about it first is not an internal setting; it is a term of sale.
+// `enabled` is not mirrored — absence IS off — so switching this off takes the
+// terms off the public surfaces with it.
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -113,6 +119,12 @@ export function NoShowPolicyCard() {
             />
           </div>
           <p className="sm:col-span-2 text-xs text-muted-foreground">{t('noShowThresholdHint')}</p>
+          {/* Two things the owner cannot see from here and would otherwise
+              discover from a customer: these terms now appear on the public
+              booking screens, and the fee is EMAILED as a payment link rather
+              than taken off a card. `noShowPolicySubtitle` above still says
+              "automatically charge", which overstates the second one. */}
+          <p className="sm:col-span-2 text-xs text-muted-foreground">{t('noShowPublicNote')}</p>
         </div>
       )}
 

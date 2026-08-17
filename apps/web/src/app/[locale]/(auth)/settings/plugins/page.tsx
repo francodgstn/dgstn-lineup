@@ -27,6 +27,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -70,6 +74,30 @@ const ICON_MAP: Record<string, LucideIcon> = {
 function PluginIcon({ name, className }: { name: string; className?: string }) {
   const Icon = ICON_MAP[name] ?? Puzzle
   return <Icon className={className} />
+}
+
+// ─── What removal actually does ───────────────────────────────────────────────
+
+/**
+ * Removing a plugin deletes `teams/{teamId}/installed_plugins/{pluginId}`, which
+ * fires `onInstalledPluginStatusChange`. THAT TRIGGER IS THE OWNER of the list of
+ * plugins whose removal tears public artefacts down — this map only supplies the
+ * copy for the ones it names, so add an arm there and add its key here.
+ *
+ * Everything not listed has no teardown arm: the install doc goes, the feature's
+ * gate closes, the data stays (finance says so in the trigger explicitly, and
+ * `sync/documentsDegating.test.ts` pins that a document's public mirrors are
+ * never torn down at all — that teardown once deleted the public copy of a
+ * document a booking gate pointed at). So the default copy may promise the data
+ * is kept, and the copy for anything named below must NOT.
+ */
+const REMOVE_EFFECT_KEY: Record<string, 'removeConfirmBodyWebsite' | 'removeConfirmBodyCourses'> = {
+  // unpublishSiteForTeam: deletes site_published/{teamId}, flags the draft disabled.
+  website: 'removeConfirmBodyWebsite',
+  // deleteAllCoursePublicProfiles: batch-deletes every course public_profile
+  // mirror. Nothing rewrites them on reinstall — syncCoursePublicProfile only
+  // fires on a courses/{id} write — so each course must be re-published.
+  'online-courses': 'removeConfirmBodyCourses',
 }
 
 // ─── Owner check ──────────────────────────────────────────────────────────────
@@ -694,7 +722,7 @@ function PluginSection({
 export default function PluginsPage() {
   const t = useTranslations('Plugins')
   const { user, currentTeamId } = useAuth()
-  const { plugins: installedPlugins, isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
+  const { plugins: installedPlugins, isInstalled, getConfig, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
   const { plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
@@ -706,6 +734,7 @@ export default function PluginsPage() {
   const [configPlugin, setConfigPlugin] = useState<PluginManifest | null>(null)
   const [detailPlugin, setDetailPlugin] = useState<PluginManifest | null>(null)
   const [confirmAddon, setConfirmAddon] = useState<PluginManifest | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<PluginManifest | null>(null)
   const [unlockTarget, setUnlockTarget] = useState<PluginManifest | null>(null)
   const [installedOpen, setInstalledOpen] = useState(true)
   const [availableOpen, setAvailableOpen] = useState(true)
@@ -787,10 +816,22 @@ export default function PluginsPage() {
     }
   }
 
+  // Removal is never a bare click: it can take a public website offline, delete
+  // every course listing, and (for a paid coach add-on) change the subscription.
+  // The confirm below states which of those applies before anything happens.
   function handleRemove(manifest: PluginManifest) {
+    setConfirmRemove(manifest)
+  }
+
+  function performRemove(manifest: PluginManifest) {
     const access = pluginAccessForPlan(manifest, plan)
-    if (access.kind === 'addon') deactivateAddonMutation.mutate(manifest.id)
-    else removeMutation.mutate(manifest.id)
+    const run = access.kind === 'addon'
+      ? deactivateAddonMutation.mutateAsync(manifest.id)
+      : removeMutation.mutateAsync(manifest.id)
+    // Close on SUCCESS only — a failed removal (Stripe refusing the item change,
+    // say) leaves the confirmation standing behind its toast rather than
+    // dismissing as if it had worked.
+    run.then(() => setConfirmRemove(null)).catch(() => {})
   }
 
   const isLoading = pluginsLoading || roleLoading
@@ -854,6 +895,22 @@ export default function PluginsPage() {
     ? installedPlugins.find((e) => e.manifest.id === detailPlugin.id)
     : null
   const detailInstalledByOrg = detailEntry?.source === 'org'
+
+  // ── Removal confirmation: the real consequence, per plugin ──
+  const removeName = confirmRemove
+    ? t(confirmRemove.nameKey as Parameters<typeof t>[0])
+    : ''
+  const removeBodyKey = confirmRemove
+    ? (REMOVE_EFFECT_KEY[confirmRemove.id] ?? 'removeConfirmBody')
+    : 'removeConfirmBody'
+  const removeAccess = confirmRemove ? pluginAccessForPlan(confirmRemove, plan) : null
+  // `addonItemId` is written by activatePluginAddon ONLY when it actually added a
+  // Stripe subscription item; a trial install carries `addonFreeTrial` instead. So
+  // this — not the plan, and not `isTrialing` — is what says money is involved.
+  const removeAddonItemId = confirmRemove
+    ? (getConfig(confirmRemove.id) as { addonItemId?: string } | undefined)?.addonItemId
+    : undefined
+  const removePending = removeMutation.isPending || deactivateAddonMutation.isPending
 
   if (isLoading) {
     return (
@@ -972,6 +1029,45 @@ export default function PluginsPage() {
         open={!!unlockTarget}
         onClose={() => setUnlockTarget(null)}
       />
+
+      {/* Removal confirmation — names what removal actually does to this
+          plugin's data, and what it does to the money when it is a billed
+          add-on. Never a generic "are you sure". */}
+      <AlertDialog
+        open={!!confirmRemove}
+        onOpenChange={(v) => { if (!v && !removePending) setConfirmRemove(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('removeConfirmTitle', { name: removeName })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(removeBodyKey, { name: removeName })}
+            </AlertDialogDescription>
+            {removeAccess?.kind === 'addon' && (
+              <p className="text-sm text-muted-foreground">
+                {removeAddonItemId
+                  ? t('removeConfirmBilling', { price: removeAccess.priceMonthly })
+                  : t('removeConfirmBillingUnbilled')}
+              </p>
+            )}
+            {confirmRemove?.locked && (
+              <p className="text-sm text-muted-foreground">
+                {t('removeConfirmLocked', { name: removeName })}
+              </p>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removePending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={removePending}
+              onClick={() => { if (confirmRemove) performRemove(confirmRemove) }}
+            >
+              {removePending ? t('removing') : t('remove')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add-on price confirmation (paid coach) */}
       <Dialog open={!!confirmAddon} onOpenChange={(v) => { if (!v) setConfirmAddon(null) }}>

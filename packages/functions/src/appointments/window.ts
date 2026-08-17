@@ -71,6 +71,11 @@ interface ActivityInfo {
   /** Priced duration menu (resolveAppointmentDurations default applied). */
   durations: ActivityDuration[]
   memberBenefit?: ActivityMemberBenefit | Benefit
+  /** Per-activity cancellation-policy override; the picker falls back to the
+   *  team default it already has (TeamPublicProfile.bookingCancellationPolicy).
+   *  Display-only, and the same text the confirmation email appends — the point
+   *  is that the visitor reads it BEFORE the button, not after. */
+  cancellationPolicy?: string | null
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
@@ -81,6 +86,7 @@ function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
     name: a.name || 'Appointment',
     durations,
     memberBenefit: a.memberBenefit,
+    cancellationPolicy: a.cancellationPolicy?.trim() || null,
   }
 }
 
@@ -212,6 +218,7 @@ export const listAvailability = onCall(async (request) => {
     activityName: string
     durations: ActivityDuration[]
     memberBenefit?: ActivityMemberBenefit | Benefit
+    cancellationPolicy: string | null
     location: string | null
     onlineUrl: string | null
     daysMap: Map<number, Record<string, Set<number>>>
@@ -268,6 +275,7 @@ export const listAvailability = onCall(async (request) => {
             activityName: info.name,
             durations: info.durations,
             memberBenefit: info.memberBenefit,
+            cancellationPolicy: info.cancellationPolicy ?? null,
             location: tpl.location ?? null,
             onlineUrl: tpl.onlineUrl ?? null,
             daysMap: new Map(),
@@ -301,6 +309,8 @@ export const listAvailability = onCall(async (request) => {
           // (resolveEffectiveAppointmentPrice) for display; the server always
           // re-resolves authoritatively at booking/checkout.
           memberBenefit: acc.memberBenefit ?? null,
+          // Display-only; the picker falls back to the team-wide default.
+          cancellationPolicy: acc.cancellationPolicy,
           location: acc.location,
           onlineUrl: acc.onlineUrl,
           days,

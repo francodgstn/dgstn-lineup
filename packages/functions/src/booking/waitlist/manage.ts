@@ -13,6 +13,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
+  ACTIVITIES_COLLECTION,
   SESSIONS_COLLECTION,
   TEAMS_COLLECTION,
   WAITLIST_SUBCOLLECTION,
@@ -107,6 +108,17 @@ export const getWaitlistEntry = onCall(async (request) => {
   const session = sessionSnap.data()!
   const team = teamSnap.data()
 
+  // The activity's cancellation-policy override, read only when the session
+  // names an activity. Best-effort: a missing or unreadable activity leaves the
+  // page on the team-wide default it already has, which is the same fallback the
+  // confirmation email applies — never a reason to fail the claim screen.
+  const activityId = (session.activityId as string | undefined) ?? null
+  let activityCancellationPolicy: string | null = null
+  if (activityId) {
+    const actSnap = await db.collection(ACTIVITIES_COLLECTION).doc(activityId).get()
+    activityCancellationPolicy = (actSnap.data()?.cancellationPolicy as string | undefined)?.trim() || null
+  }
+
   // Only meaningful while WAITING — an offered seat is not "third in line", it
   // is held. Derived from `joined_at ASC` at read time, never stored, so nobody
   // ahead leaving has to rewrite every entry behind them.
@@ -169,6 +181,12 @@ export const getWaitlistEntry = onCall(async (request) => {
       // the class was called off — and this page is their only channel for it
       // (the cancellation mail reaches released OFFER holders, not the queue).
       cancelled: isSessionCancelled(session),
+      // The activity's own cancellation terms, so the claim screen can state
+      // them before the button that takes the seat. Null falls back to the
+      // team-wide default, which the page already holds from its public_profile
+      // — resolved client-side by `resolveCancellationPolicy`, the same order
+      // the confirmation email uses.
+      cancellationPolicy: activityCancellationPolicy,
     },
     team: {
       name: (team?.name as string | undefined) ?? '',

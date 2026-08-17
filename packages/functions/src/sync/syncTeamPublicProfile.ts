@@ -13,6 +13,7 @@ import {
   WAIVER_POLICY_SUBCOLLECTION,
   WAIVER_POLICY_DOC_ID,
   publicPagesIndexable,
+  resolveNoShowPolicy,
   resolveSignupDocumentIds,
   resolveSystemLinkTarget,
   toKioskPublicConfig,
@@ -285,6 +286,15 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     bookingCancellationPolicy:
       (data.settings as { bookingCancellationPolicy?: string } | undefined)
         ?.bookingCancellationPolicy || null,
+    // The no-show policy's public TERMS (fee + threshold), so a booking surface
+    // can state them BEFORE the button rather than in the email that follows.
+    // Resolved through the same `resolveNoShowPolicy` the strike counter uses,
+    // so "off" means the same thing on both sides of the mirror; `enabled` is
+    // not carried — null IS off. See TeamPublicProfile.noShowPolicy.
+    noShowPolicy: (() => {
+      const policy = resolveNoShowPolicy(data.settings)
+      return policy ? { feeAmount: policy.feeAmount, threshold: policy.threshold } : null
+    })(),
     // Gift cards (E3): public-safe config only (enabled + purchasable face values —
     // never balances/codes) so the public shop can offer them without reading the
     // private team doc. Mirrors teams/{id}.settings.giftCards.

@@ -2225,7 +2225,15 @@
     "giftCardsName": "Geschenkkarten",
     "giftCardsDescription": "Verkaufe Geschenkkarten in deinem Shop und stelle sie am Empfang aus. Einlösbar für alles, was du verrechnest.",
     "promoCodesName": "Aktionscodes",
-    "promoCodesDescription": "Führe Rabattaktionen mit Codes durch, die deine Kundinnen und Kunden beim Bezahlen eingeben — mit Nutzungslimit und Gültigkeitszeitraum."
+    "promoCodesDescription": "Führe Rabattaktionen mit Codes durch, die deine Kundinnen und Kunden beim Bezahlen eingeben — mit Nutzungslimit und Gültigkeitszeitraum.",
+    "removeConfirmTitle": "{name} entfernen?",
+    "removeConfirmBody": "{name} verschwindet aus deinem Menü und niemand in deinem Team kann es nutzen, bis du es wieder installierst. Die Daten bleiben in Linyup und sind dann wieder da.",
+    "removeConfirmBodyWebsite": "Deine öffentliche Website geht sofort offline: Die veröffentlichte Version wird gelöscht und Besucher sehen nichts mehr. Deine Entwürfe bleiben erhalten — nach einer erneuten Installation kannst du wieder veröffentlichen.",
+    "removeConfirmBodyCourses": "Alle öffentlichen Kurseinträge werden gelöscht — deine Kurse verschwinden aus deinem Shop und aus dem Space deiner Mitglieder. Lektionen, Medien und bisherige Käufe bleiben erhalten, kommen aber nicht von selbst zurück: Nach einer erneuten Installation musst du jeden Kurs neu veröffentlichen.",
+    "removeConfirmBilling": "Die Verrechnung stoppt sofort: Das Add-on für CHF {price}/Mt. wird aus deinem Abo entfernt. Der nicht genutzte Teil dieser Periode wird auf deiner nächsten Rechnung gutgeschrieben — auf deine Karte wird nichts zurückerstattet.",
+    "removeConfirmBillingUnbilled": "Dieses Add-on wird dir aktuell nicht verrechnet — das Entfernen ändert nichts an deiner Rechnung.",
+    "removeConfirmLocked": "{name} wird mit einem Zugangsschlüssel freigeschaltet. Für eine erneute Installation brauchst du diesen Schlüssel wieder.",
+    "removing": "Wird entfernt…"
   },
   "AiAssistant": {
     "launcherLabel": "KI-Assistent",
@@ -4282,7 +4290,7 @@
     "ctaLabelPlaceholder": "z. B. Kontaktieren Sie uns",
     "ownerOnly": "Nur der Inhaber kann dies ändern.",
     "noShowPolicyTitle": "No-Show-Richtlinie",
-    "noShowPolicySubtitle": "Nach wiederholtem Nichterscheinen automatisch eine Gebühr berechnen.",
+    "noShowPolicySubtitle": "Nach wiederholtem Nichterscheinen eine Zahlungsaufforderung per E-Mail senden.",
     "noShowFeeAmountLabel": "Gebühr ({currency})",
     "noShowThresholdLabel": "No-Shows bis zur Gebühr",
     "noShowThresholdHint": "Sobald ein Kontakt diese Anzahl an No-Shows erreicht, wird eine Gebühr erstellt und der Zähler zurückgesetzt.",
@@ -4290,7 +4298,8 @@
     "waitlistClaimMinutesHint": "Wie lange jemand Zeit hat, einen angebotenen Platz anzunehmen, bevor er an die nächste Person geht. Wird immer durch Buchungsschluss und Beginn der Einheit verkürzt — ein Platz, der zu kurz vor Beginn frei wird, bleibt frei statt angeboten zu werden.",
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 Stunde} =1440 {1 Tag} other {# Minuten}}",
     "toggleWaitlistEnabledLabel": "Wartelisten",
-    "toggleWaitlistEnabledDesc": "Lass Kundinnen und Kunden sich für eine volle Klasse anstellen und einen Platz erhalten, sobald einer frei wird. Aktivieren, um die Wartelisten-Option bei jeder Aktivität zu zeigen."
+    "toggleWaitlistEnabledDesc": "Lass Kundinnen und Kunden sich für eine volle Klasse anstellen und einen Platz erhalten, sobald einer frei wird. Aktivieren, um die Wartelisten-Option bei jeder Aktivität zu zeigen.",
+    "noShowPublicNote": "Diese Bedingungen werden Besuchern auf Ihren öffentlichen Buchungsseiten vor der Buchung angezeigt. Die Gebühr wird per E-Mail als Zahlungslink verschickt — sie wird nie von einer gespeicherten Karte abgebucht."
   },
   "SettingsPlaces": {
     "pageTitle": "Standorte",
@@ -5875,5 +5884,11 @@
     "ask_skipped": "Nicht gesendet: dieser Kontakt ist archiviert, gelöscht oder nicht in diesem Team.",
     "ask_not_required": "Nicht gesendet: dieses Dokument ist vor der Buchung nicht erforderlich, es gibt keine Seite zum Unterschreiben.",
     "ask_error": "Die Aufforderung konnte nicht gesendet werden."
+  },
+  "BookingTerms": {
+    "title": "Stornierungen und Nichterscheinen",
+    "noShowFeeOnce": "Wenn Sie einen gebuchten Termin ohne Absage verpassen, wird eine Gebühr von {fee} für Nichterscheinen fällig.",
+    "noShowFeeAfter": "Wenn Sie {count} gebuchte Termine ohne Absage verpassen, wird eine Gebühr von {fee} für Nichterscheinen fällig.",
+    "noShowFeeNote": "Die Gebühr wird Ihnen per E-Mail zugestellt — es wird nichts automatisch von einer Karte abgebucht."
   }
 }

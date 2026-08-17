@@ -35,6 +35,7 @@ import {
   type AppliedGiftCard,
 } from '@/components/booking/GiftCardRedeemField'
 import { WaiverStep } from '@/components/booking/WaiverStep'
+import { BookingTerms, resolveCancellationPolicy } from '@/components/booking/BookingTerms'
 import { useWaiverGate } from '@/hooks/useWaiverGate'
 import { waiverErrorMessage } from '@/lib/waiver'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
@@ -69,6 +70,8 @@ interface WaitlistEntryView {
     activityId: string | null
     activityName: string | null
     cancelled: boolean
+    /** The activity's cancellation-terms override; null ⇒ use the team default. */
+    cancellationPolicy: string | null
   }
   team: { name: string; slug: string | null }
 }
@@ -481,6 +484,24 @@ export default function WaitlistPage() {
       {/* ── The consent step, inside the claim window ────────────────────── */}
       {isClaim && !lapsed && !payment && claimStep === 'waiver' && (
         <WaiverStep gate={waiverGate} teamName={entry.team.name} disabled={busy} />
+      )}
+
+      {/* The terms, on the screen that takes the seat. This is the one claim
+          surface where the window is minutes long, so "it's in the confirmation
+          email" is no answer at all — and the seat this button accepts is
+          exactly the one the no-show fee counts against. Shown above BOTH the
+          free claim and the paid one; renders null when the studio has neither
+          a policy nor a fee. */}
+      {isClaim && !lapsed && (
+        <BookingTerms
+          cancellationPolicy={resolveCancellationPolicy(
+            entry.session.cancellationPolicy,
+            team.bookingCancellationPolicy
+          )}
+          noShowPolicy={team.noShowPolicy}
+          currency={currency}
+          locale={locale}
+        />
       )}
 
       {/* ── Claim ───────────────────────────────────────────────────────── */}
