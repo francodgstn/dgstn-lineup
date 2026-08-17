@@ -152,6 +152,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ✅ Fixed |
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ▶ Open |
 | 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
+| 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -914,6 +915,64 @@ where it may hold an org id.
 **Surface:** +3 callables, or +1 shared guard. **Build:** M. **Owner:** functions-agent.
 **Verify:** As an org admin who owns no team, cancel the organisation's subscription. It
 cancels, and the badge says so.
+
+### UX-76 — A paid drop-in confirms nothing, and its buyer is never told the Space exists
+`costs-money` · every-session · **counted + traced** · C2×C4 · *added 2026-08-17, Franco's observation*
+
+**Now — two halves of one silence.**
+
+**The email.** `packages/functions/src/booking/index.ts` makes **six** `sendEmail` calls: the free
+booking path confirms itself. The Connect webhook contains **exactly one**, at `:1685`, and it
+belongs to the **gift-card** handler. `handleDropInCheckout` (`:1723`) flips the pending hold to
+confirmed, counts the seat, stamps the payment and logs it — and **sends nothing.** So the one
+booking a visitor *paid for* is the one that never confirms itself, while the free one does.
+Whatever Stripe's own receipt says, it names a charge, not a class: no what, no when, no where,
+no cancellation terms, no way to change it.
+
+**The route.** Franco's report was that a lead who books cannot get into the Space to see what
+they bought. Checked, and the auth is **not** the problem: `sendContactVerificationCode` gates
+only on email, team existence and a rate limit; `loginContactWithCode` matches primary `email`
+or `login_emails` and filters only archived/deleted — **no joined, affiliation or subscription
+gate anywhere**; both sides `toLowerCase().trim()`, so case cannot desync; and the Space
+surfaces carry no membership gate either (Space is a base surface, always live). A lead *can*
+sign in.
+
+What a lead cannot do is **find out that they can.** The drop-in returns to the generic result
+page (`buildResultUrls`, `booking/dropIn.ts:1073-1074`, `seg=booking`), and per UX-C2-5 the
+manage-booking link exists **solely in the email** — which for this path does not exist. So the
+buyer leaves with no email, no Space invitation and no manage link. "Cannot log in" is the
+symptom of never being invited.
+
+**Cost.** Someone paid, and the product's entire post-purchase communication is a Stripe
+receipt. They cannot see the class they bought, cannot cancel it, and cannot find the portal
+built for exactly this. It also lands hardest on the acquisition path a studio most wants to
+work: a newcomer's first paid contact with the business.
+
+**Fix.**
+1. **`handleDropInCheckout` sends the booking confirmation** — the same one `bookSession`
+   already builds (`booking/templates.ts`), not a second template. Both paths end in a
+   confirmed booking on a session; only the tender differs, so the confirmation should not.
+   Note UX-C2-5 while you are there: class bookings attach no `.ics` at all (the only
+   `text/calendar` in the whole functions package is `appointments/templates.ts:178`), so
+   adding it here fixes the paid path and the free one together.
+2. **That email carries the Space link**, so the buyer learns the portal exists at the one
+   moment they have a reason to use it. This is the cheapest possible fix for the review's
+   standing complaint that Space has no discoverable entrance.
+3. **The result page stops being generic** for this case: name the class and the time, and offer
+   "see my bookings" rather than only a way back to the shop.
+4. **Send it idempotently.** The webhook is redelivered, and `handleDropInCheckout` is already
+   written to be idempotent — the mail must join that, via the `mail_sends` ledger, or a
+   redelivery mails the buyer twice.
+
+**Check the sibling rails while you are in there.** If the drop-in branch never sent mail, the
+other paid branches deserve the same question — course purchase, product, priced appointment,
+waitlist claim. Report which of them confirm themselves and which do not, rather than fixing
+one and leaving a set.
+
+**Surface:** +1 send in the webhook (reusing an existing template), +1 link, ±0 routes.
+**Build:** M. **Owner:** functions-agent, then web-agent for the result page.
+**Verify:** Buy a drop-in as a brand-new visitor. An email arrives naming the class, its time
+and how to cancel, with a working way into the Space; signing in there shows the booking.
 
 ### UX-74 — In 13 dialogs the Save button scrolls away with the form
 `slows` · every-session · counted · M5×M7×M9 · *added 2026-08-17, Franco's observation* · **one fix, in the primitive**
