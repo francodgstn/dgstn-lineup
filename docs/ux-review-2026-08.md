@@ -86,8 +86,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 7 | costs-money | at-setup | Nobody is told they are on a 30-day trial, and Billing says "No subscription" | M2×M6 | web + functions | ◐ Interim shipped ✓verified |
 | 8 | costs-money | weekly | Refunding returns the money and leaves the member holding the goods | M6 | functions + web | ✅ Fixed |
 | 9 | blocks | every-session | The assistant launcher sits on top of the page's primary button and eats the tap | M1 | web | ✅ Fixed ✓verified |
-| 10 | blocks | every-session | The member portal reports "no bookings" while holding a paid appointment | C4 | functions + web | ▶ Open |
-| 11 | costs-money | every-session | The default access tier can never name a plan, and the health check is blind to it | M5×C1×C2 | web | ▶ Open |
+| 10 | blocks | every-session | The member portal reports "no bookings" while holding a paid appointment | C4 | functions + web | ✅ Fixed |
+| 11 | costs-money | every-session | The default access tier can never name a plan, and the health check is blind to it | M5×C1×C2 | web | ✅ Fixed |
 | 12 | costs-money | weekly | Payment corrections make the data worse than the mistake did | M6 | functions + web | ✅ Fixed |
 | 13 | costs-money | weekly | Automations can email the whole list with no preview, and "Run Now" re-sends | M9 | web | ✅ Fixed |
 | 14 | costs-money | every-session | A visitor commits without seeing cancellation terms or the no-show fee | C2 | web + functions | ▶ Open |
@@ -151,12 +151,12 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
 | 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ✅ Fixed |
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ✅ Fixed ✓verified |
-| 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
+| 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ✅ Fixed |
 | 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ✅ Fixed |
 | 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ✅ Fixed |
 | 79 | slows | weekly | A studio sells a product and the product knows nothing about handing it over | C3×M5 | shared + web | ▶ Open |
 | 80 | costs-money | weekly | Everything sold at the desk still confirms nothing | M6×C4 | functions | ▶ Open |
-| 81 | confuses | every-session | Every email's plain-text half runs its headings into the following sentence | C2×M9 | functions | ▶ Open |
+| 81 | confuses | every-session | Every email's plain-text half runs its headings into the following sentence | C2×M9 | functions | ✅ Fixed |
 | 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
