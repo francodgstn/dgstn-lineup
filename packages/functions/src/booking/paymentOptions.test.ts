@@ -4,8 +4,11 @@ import {
   MIN_CHARGE_MAJOR,
   resolvePaymentOptions,
   type ContactPaymentSnapshot,
+  type PaymentContext,
   type PaymentOptionsResult,
   type PaymentTarget,
+  type PromoEffect,
+  type PromoModifier,
 } from '@linyup/shared'
 
 // Table-driven tests for the ONE coverage/quote resolver (Phase B of the
@@ -690,4 +693,672 @@ describe('resolvePaymentOptions — review-fix regressions', () => {
       },
     },
   ])
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 3 Phase 3 — the `product` arm, the promo modifier, and the B1 fix.
+//
+// These rows are a MATRIX, not anecdotes: every arm crossed with every promo
+// outcome, plus each money edge stated as a value rather than as prose. The
+// whole block exists because of one structural fact — the pay option and the
+// result both follow an OMITTED-WHEN-ABSENT convention, so any key added
+// unconditionally to a pay option breaks ~35 existing rows and any key added
+// unconditionally to the result breaks all 60. Nothing above this line was
+// touched.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ContextRow extends Row {
+  context?: PaymentContext
+}
+
+/** The promo-aware harness. Deliberately a SECOND function rather than a widened
+ *  `runRows`, so the sixty pre-existing fixtures and the code that runs them are
+ *  provably untouched. */
+function runContextRows(rows: ContextRow[]) {
+  for (const row of rows) {
+    it(row.name, () => {
+      assert.deepEqual(resolvePaymentOptions(row.snapshot, row.target, row.context), row.expected)
+    })
+  }
+}
+
+const CODE = 'AUTUMN25'
+const ctx = (promo: PromoModifier): PaymentContext => ({ promo })
+/** percent_off with a well-formed percent. */
+const pct = (percent: number): PromoModifier => ({ code: CODE, effect: 'percent_off', percent })
+/** fixed_price with a well-formed amount. */
+const fixed = (amount: number): PromoModifier => ({ code: CODE, effect: 'fixed_price', amount })
+/** The effect with NO parameter at all — the malformed shape a hand-written or
+ *  half-migrated document produces. */
+const bare = (effect: PromoEffect): PromoModifier => ({ code: CODE, effect })
+
+describe('resolvePaymentOptions — product arm (Phase 3, B2)', () => {
+  const t = (over: Partial<Extract<PaymentTarget, { kind: 'product' }>> = {}): PaymentTarget => ({
+    kind: 'product',
+    priceAmount: 40,
+    ...over,
+  })
+  runRows([
+    {
+      name: 'guest pays the product price',
+      snapshot: GUEST_SNAPSHOT,
+      target: t(),
+      expected: { options: [{ type: 'pay', amount: 40, source: 'product' }], denial: null },
+    },
+    {
+      name: 'the arm IGNORES the snapshot — a subscribed member pays the same price',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: t(),
+      expected: { options: [{ type: 'pay', amount: 40, source: 'product' }], denial: null },
+    },
+    {
+      name: 'a credit-pack holder pays the same price (products never spend credits)',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 5 }] }),
+      target: t(),
+      expected: { options: [{ type: 'pay', amount: 40, source: 'product' }], denial: null },
+    },
+    {
+      name: 'a variant price is just the resolved price the callable passes in',
+      snapshot: GUEST_SNAPSHOT,
+      target: t({ priceAmount: 59.9 }),
+      expected: { options: [{ type: 'pay', amount: 59.9, source: 'product' }], denial: null },
+    },
+    {
+      name: 'an included benefit can never cover a product (coverage effects are excluded)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: t({ benefit: { subscriptionTypeIds: ['gold'], effect: 'included' } }),
+      expected: { options: [{ type: 'pay', amount: 40, source: 'product' }], denial: null },
+    },
+    {
+      name: 'a spend_credits benefit can never spend on a product either',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 5 }] }),
+      target: t({ benefit: { subscriptionTypeIds: ['pack10'], effect: 'spend_credits' } }),
+      expected: { options: [{ type: 'pay', amount: 40, source: 'product' }], denial: null },
+    },
+    {
+      name: 'a price-modifying benefit WOULD apply if Product ever carried one',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: t({ benefit: { subscriptionTypeIds: ['gold'], effect: 'percent_off', percent: 25 } }),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 30,
+            source: 'product',
+            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 40 },
+          },
+        ],
+        denial: null,
+      },
+    },
+  ])
+
+  it('N6: never covers and never denies — exactly one pay option, for every snapshot', () => {
+    const snapshots: ContactPaymentSnapshot[] = [
+      GUEST_SNAPSHOT,
+      contact(),
+      contact({ joined: false }),
+      contact({ heldUnmeteredTypeIds: ['gold'] }),
+      contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 5 }] }),
+      contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 0 }] }),
+      contact({ trialUsed: true, ownsCourse: true, usageRemaining: { gold: 0 } }),
+    ]
+    for (const snapshot of snapshots) {
+      const result = resolvePaymentOptions(snapshot, { kind: 'product', priceAmount: 40 })
+      assert.equal(result.denial, null)
+      assert.equal(result.options.length, 1)
+      assert.equal(result.options[0]!.type, 'pay')
+    }
+  })
+})
+
+describe('resolvePaymentOptions — B1: a modifier never raises a price', () => {
+  runRows([
+    {
+      name: 'drop-in: a fixed_price benefit ABOVE base does not apply (used to charge the member 999)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: {
+        kind: 'drop_in',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['gold'] },
+        dropIn: { enabled: true, priceAmount: 25 },
+        benefit: { subscriptionTypeIds: ['silver'], effect: 'fixed_price', amount: 999 },
+      },
+      expected: { options: [{ type: 'pay', amount: 25, source: 'drop_in' }], denial: null },
+    },
+    {
+      name: 'drop-in: a fixed_price benefit EXACTLY AT base still stamps appliedBenefit (provenance)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: {
+        kind: 'drop_in',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['gold'] },
+        dropIn: { enabled: true, priceAmount: 25 },
+        benefit: { subscriptionTypeIds: ['silver'], effect: 'fixed_price', amount: 25 },
+      },
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 25,
+            source: 'drop_in',
+            appliedBenefit: { subscriptionTypeId: 'silver', effect: 'fixed_price', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+      },
+    },
+    {
+      name: 'appointment: a fixed_price benefit above base does not apply',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 95 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'fixed_price', amount: 120 },
+      },
+      expected: { options: [{ type: 'pay', amount: 95, source: 'base' }], denial: null },
+    },
+    {
+      name: 'course: a fixed_price benefit above base does not apply',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'fixed_price', amount: 200 },
+      },
+      expected: { options: [{ type: 'pay', amount: 120, source: 'course_price' }], denial: null },
+    },
+  ])
+})
+
+describe('resolvePaymentOptions — promo (Phase 3)', () => {
+  const dropIn = (over: Partial<Extract<PaymentTarget, { kind: 'drop_in' }>> = {}): PaymentTarget => ({
+    kind: 'drop_in',
+    accessRule: { type: 'subscription', subscriptionTypeIds: ['gold', 'pack10'] },
+    dropIn: { enabled: true, priceAmount: 25 },
+    ...over,
+  })
+  const memberRate = (percent: number) => ({
+    subscriptionTypeIds: ['silver'],
+    effect: 'percent_off' as const,
+    percent,
+  })
+
+  runContextRows([
+    // ── one row per arm × applied ─────────────────────────────────────────
+    {
+      name: 'drop_in applied: 25% off 25.00 → 18.75, appliedPromo carries the base',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 18.75,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'appointment applied: 25% off 95.00 → 71.25',
+      snapshot: GUEST_SNAPSHOT,
+      target: { kind: 'appointment', duration: { minutes: 60, priceAmount: 95 }, benefit: null },
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 71.25,
+            source: 'base',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 95 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'course applied: 25% off 120.00 → 90.00',
+      snapshot: contact(),
+      target: { kind: 'course', accessRule: { type: 'purchase', priceAmount: 120 } },
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 90,
+            source: 'course_price',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 120 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'product applied: 25% off 40.00 → 30.00 (the arm B2 added)',
+      snapshot: GUEST_SNAPSHOT,
+      target: { kind: 'product', priceAmount: 40 },
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 30,
+            source: 'product',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 40 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+
+    // ── superseded — and by WHAT, because the two sentences differ ─────────
+    {
+      name: 'superseded by base: a fixed_price promo ABOVE list never applies (the promo half of B1)',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(fixed(30)),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'superseded', by: 'base' },
+      },
+    },
+    {
+      name: 'superseded by base: a fixed_price promo EXACTLY AT list changed nothing',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(fixed(25)),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'superseded', by: 'base' },
+      },
+    },
+    {
+      name: 'superseded by benefit: the member rate is lower, and keeps its stamp',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: dropIn({ benefit: memberRate(50) }),
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 12.5,
+            source: 'drop_in',
+            appliedBenefit: { subscriptionTypeId: 'silver', effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'superseded', by: 'benefit' },
+      },
+    },
+    {
+      name: 'a TIE goes to the member benefit — nobody is told their membership stopped mattering',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: dropIn({ benefit: memberRate(20) }),
+      context: ctx(fixed(20)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 20,
+            source: 'drop_in',
+            appliedBenefit: { subscriptionTypeId: 'silver', effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'superseded', by: 'benefit' },
+      },
+    },
+    {
+      name: 'promo BEATS the benefit: appliedBenefit is dropped but rides out on supersededBenefit',
+      snapshot: contact({ heldUnmeteredTypeIds: ['silver'] }),
+      target: dropIn({ benefit: memberRate(10) }),
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 18.75,
+            source: 'drop_in',
+            appliedPromo: {
+              code: CODE,
+              effect: 'percent_off',
+              baseAmount: 25,
+              supersededBenefit: { subscriptionTypeId: 'silver', effect: 'percent_off' },
+            },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'a promo that beats NO benefit carries no supersededBenefit key at all',
+      snapshot: contact({ heldUnmeteredTypeIds: ['other'] }),
+      target: dropIn({ benefit: memberRate(10) }),
+      context: ctx(pct(25)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 18.75,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+
+    // ── not_needed: coverage beats every promo, on every arm ──────────────
+    {
+      name: 'not_needed: a covered member is not sold a discount',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: dropIn(),
+      context: ctx(pct(25)),
+      expected: {
+        ...covered({ reason: 'subscription', subscriptionTypeId: 'gold' }),
+        promo: { code: CODE, status: 'not_needed' },
+      },
+    },
+    {
+      name: 'not_needed: a credit-pack holder spends a credit, price untouched',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 2 }] }),
+      target: dropIn(),
+      context: ctx(pct(25)),
+      expected: {
+        options: [{ type: 'spend_credits', via: { subscriptionTypeId: 'pack10' }, remaining: 2 }],
+        denial: null,
+        promo: { code: CODE, status: 'not_needed' },
+      },
+    },
+    {
+      name: 'not_needed: an unpriced appointment is already free',
+      snapshot: GUEST_SNAPSHOT,
+      target: { kind: 'appointment', duration: { minutes: 60 }, benefit: null },
+      context: ctx(pct(25)),
+      expected: {
+        ...covered({ reason: 'unpriced' }),
+        promo: { code: CODE, status: 'not_needed' },
+      },
+    },
+    {
+      name: 'not_needed: an included benefit covers the appointment before any comparison',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: {
+        kind: 'appointment',
+        duration: { minutes: 60, priceAmount: 95 },
+        benefit: { subscriptionTypeIds: ['gold'], effect: 'included' },
+      },
+      context: ctx(pct(25)),
+      expected: {
+        ...covered({ reason: 'benefit_included', subscriptionTypeId: 'gold' }),
+        promo: { code: CODE, status: 'not_needed' },
+      },
+    },
+    {
+      name: 'not_needed: a free-tier course',
+      snapshot: GUEST_SNAPSHOT,
+      target: { kind: 'course', accessRule: { type: 'free' } },
+      context: ctx(pct(25)),
+      expected: {
+        ...covered({ reason: 'free_tier' }),
+        promo: { code: CODE, status: 'not_needed' },
+      },
+    },
+
+    // ── not_applicable: the trial door, the arms that never price, denials ─
+    {
+      name: 'not_applicable: a promo NEVER stacks on a paid trial',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn({ asTrial: true, trial: { enabled: true, priceAmount: 15 }, dropIn: null }),
+      context: ctx(pct(25)),
+      expected: {
+        options: [{ type: 'pay', amount: 15, source: 'trial' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'not_applicable: class_booking takes no promo, and is otherwise byte-identical',
+      snapshot: contact(),
+      target: { kind: 'class_booking', accessRule: { type: 'members' } },
+      context: ctx(pct(25)),
+      expected: {
+        ...covered({ reason: 'members' }),
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'not_applicable: a class_booking DENIAL is not "not_needed" either',
+      snapshot: GUEST_SNAPSHOT,
+      target: { kind: 'class_booking', accessRule: { type: 'members' } },
+      context: ctx(pct(25)),
+      expected: { ...denied('guest'), promo: { code: CODE, status: 'not_applicable' } },
+    },
+    {
+      name: 'not_applicable: a drop-in denial has no price for a code to modify',
+      snapshot: contact(),
+      target: dropIn({ dropIn: null }),
+      context: ctx(pct(25)),
+      expected: {
+        ...denied('no_subscription'),
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'not_applicable: a course the caller must sign in for',
+      snapshot: GUEST_SNAPSHOT,
+      target: { kind: 'course', accessRule: { type: 'registered' } },
+      context: ctx(pct(25)),
+      expected: {
+        ...denied('sign_in_required'),
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+
+    // ── percent_off money edges ───────────────────────────────────────────
+    {
+      name: 'percent_off clamps to the 0.50 floor, never to free',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn({ dropIn: { enabled: true, priceAmount: 1 } }),
+      context: ctx(pct(90)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: MIN_CHARGE_MAJOR,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 1 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'percent_off >= 100 clamps to the floor (the backstop; creation caps it at 99)',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(pct(150)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: MIN_CHARGE_MAJOR,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'ROUNDING, pinned as a value: 15% off 33.30 is 28.30, not 28.31',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn({ dropIn: { enabled: true, priceAmount: 33.3 } }),
+      context: ctx(pct(15)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 28.3,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'percent_off', baseAmount: 33.3 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'malformed percent (zero): not applied, and never "applied as zero"',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(pct(0)),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'malformed percent (negative): not applied',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(pct(-10)),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'malformed percent (non-finite): not applied, never NaN',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(pct(Number.NaN)),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'malformed percent (missing): not applied',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(bare('percent_off')),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+
+    // ── fixed_price money edges ───────────────────────────────────────────
+    {
+      name: 'fixed_price below list applies',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(fixed(9.9)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: 9.9,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'fixed_price', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'fixed_price below the 0.50 floor clamps up (the backstop; creation throws)',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(fixed(0.1)),
+      expected: {
+        options: [
+          {
+            type: 'pay',
+            amount: MIN_CHARGE_MAJOR,
+            source: 'drop_in',
+            appliedPromo: { code: CODE, effect: 'fixed_price', baseAmount: 25 },
+          },
+        ],
+        denial: null,
+        promo: { code: CODE, status: 'applied' },
+      },
+    },
+    {
+      name: 'malformed amount (non-finite): not applied',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(fixed(Number.NaN)),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+    {
+      name: 'malformed amount (missing): not applied',
+      snapshot: GUEST_SNAPSHOT,
+      target: dropIn(),
+      context: ctx(bare('fixed_price')),
+      expected: {
+        options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+        denial: null,
+        promo: { code: CODE, status: 'not_applicable' },
+      },
+    },
+  ])
+
+  it('a promo-free call carries NO promo key — the convention the 60 fixtures rest on', () => {
+    const target: PaymentTarget = {
+      kind: 'drop_in',
+      accessRule: { type: 'subscription', subscriptionTypeIds: ['gold'] },
+      dropIn: { enabled: true, priceAmount: 25 },
+    }
+    const bare2: PaymentOptionsResult = {
+      options: [{ type: 'pay', amount: 25, source: 'drop_in' }],
+      denial: null,
+    }
+    assert.deepEqual(resolvePaymentOptions(GUEST_SNAPSHOT, target), bare2)
+    assert.deepEqual(resolvePaymentOptions(GUEST_SNAPSHOT, target, {}), bare2)
+    assert.deepEqual(resolvePaymentOptions(GUEST_SNAPSHOT, target, { promo: null }), bare2)
+  })
+
+  it('N4/N5: applied ⟺ exactly one option carries appliedPromo, and no price ever rises', () => {
+    const bases = [0.5, 1, 25, 33.3, 95, 120]
+    const modifiers: PromoModifier[] = [pct(1), pct(25), pct(99), fixed(0.5), fixed(24), fixed(999)]
+    for (const base of bases) {
+      for (const promo of modifiers) {
+        const result = resolvePaymentOptions(
+          GUEST_SNAPSHOT,
+          { kind: 'product', priceAmount: base },
+          ctx(promo)
+        )
+        const option = result.options[0]!
+        assert.equal(result.options.length, 1)
+        assert.equal(option.type, 'pay')
+        if (option.type !== 'pay') continue
+        assert.ok(option.amount <= base, `${option.amount} <= ${base}`)
+        assert.equal(result.promo?.status === 'applied', Boolean(option.appliedPromo))
+        assert.equal(option.appliedBenefit ?? null, null)
+      }
+    }
+  })
 })

@@ -29,7 +29,19 @@ export type PaymentAssignmentStatus = 'assigned' | 'unassigned'
 // same effects a Connect purchase would: subscription → set subscription fields
 // (+ credits if the price carries them); course → grant the lifetime entitlement
 // (unlocks in the Space); product → record only. See applyPaymentEffects.
-export type PaymentLineItemKind = 'subscription' | 'course' | 'product' | 'drop_in' | 'appointment' | 'other'
+//
+// 'gift_card' is deliberately effect-less here: the entitlement is the CODE, and
+// the card doc under teams/{id}/gift_cards is what carries it. This kind exists
+// so the sale is CATEGORISED as a gift-card sale in the journal — without it,
+// normalizePaymentLineItem rejects the kind and the row lands in 'other'.
+export type PaymentLineItemKind =
+  | 'subscription'
+  | 'course'
+  | 'product'
+  | 'drop_in'
+  | 'appointment'
+  | 'gift_card'
+  | 'other'
 
 export interface PaymentLineItem {
   kind: PaymentLineItemKind
@@ -43,6 +55,20 @@ export interface PaymentLineItem {
   variantId?: string | null
   /** Denormalized display label ("what was bought") for the payments list. */
   label?: string | null
+  /**
+   * The promo code this purchase was discounted with (canonical uppercase), or
+   * absent. A SYSTEM STAMP, never manager-editable: the webhook copies it from
+   * the Checkout Session metadata (`lineItemFromMetadata` in connect/webhook.ts)
+   * and `normalizePaymentLineItem` deliberately does NOT read it off a client
+   * payload — `updatePaymentRecord` carries the stored value forward instead, so
+   * editing "what was paid" can never invent or erase a redemption.
+   *
+   * This is the ONLY place the code touches the money side. A promo writes no
+   * finance journal row and no CSV column (docs/promo-codes.md → "Finance"), so
+   * "who used this code and what did they pay" is answered from here and from
+   * the redemptions ledger — nowhere else.
+   */
+  promoCode?: string | null
 }
 
 export interface ExternalPayment {
@@ -54,6 +80,15 @@ export interface ExternalPayment {
   payment_mode?: string | null
   /** The gateway's own reference: Payrexx transaction id / Stripe event id / manual autoId. */
   gatewayRef: string
+  /**
+   * Whether `gatewayRef` names the PAYMENT (the intended dedup key, so every
+   * event about one payment converges on one row) or something else the event
+   * happened to carry. `'fallback'` warns that a sibling event about the same
+   * money would write a SECOND row — see the caveat in
+   * functions/src/billing/handleTeamStripeWebhook.ts. Absent on rows written
+   * before the field existed, and on rails that never fall back.
+   */
+  gateway_ref_kind?: 'payment' | 'fallback'
   /** Linked Linyup contact, or null when unassigned (manager assigns later). */
   contact_id: string | null
   assignment_status: PaymentAssignmentStatus

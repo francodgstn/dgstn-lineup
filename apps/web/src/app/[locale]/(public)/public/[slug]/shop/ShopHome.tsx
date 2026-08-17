@@ -3,9 +3,11 @@
 // Public self-checkout ("shop"): lists what a studio sells — memberships (public
 // subscription types), products (merch/equipment) AND online courses (one-off
 // purchase) — and lets a member pay via Stripe Connect. Branded with the team's
-// bio-link palette. No login required — just an email; the webhook links/creates the
-// contact (and grants a course entitlement). The three surfaces are separated behind
-// a tab toggle so they never visually mix.
+// bio-link palette. Login-first: a purchase runs as a verified contact of the team,
+// because what it grants (membership fields, a course entitlement, credits) has to
+// attach to a person. Gift cards are the exception — the entitlement is a code, so a
+// guest buys with nothing but an address. The surfaces are separated behind a tab
+// toggle so they never visually mix.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { collectionGroup, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
@@ -30,11 +32,21 @@ import {
   type CourseAccessRule,
 } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { publicHref, publicSubHref } from '@/lib/publicRoutes'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { DEFAULT_ACCENT } from '@/lib/colors'
+import {
+  PromoCodeField,
+  priceChangedAmount,
+  priceChangedMessage,
+  promoCheckoutErrorMessage,
+  useAcceptedPrice,
+  type AppliedPromo,
+} from '@/components/booking/PromoCodeField'
 import {
   GiftCardRedeemField,
   giftCardCheckoutErrorMessage,
@@ -71,6 +83,8 @@ interface ProductEntry {
   variantLabel?: string
   variants?: ProductVariantEntry[]
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type CourseAccessType = 'free' | 'registered' | 'subscription' | 'purchase'
 
@@ -146,6 +160,11 @@ export default function ShopHome({
   initialTab: Tab | null
 }) {
   const t = useTranslations('Shop')
+  const tCommon = useTranslations('Common')
+  // The promo widget's own namespace — a promo is not a shop item, and one
+  // namespace serves every mount of PromoCodeField rather than a fork per
+  // surface. (docs/promo-codes.md → "The mounts" owns that list.)
+  const tPromo = useTranslations('Promo')
   const locale = useLocale()
   const { slug, teamId, team } = usePublicTeam()
   const { isAuthenticated, contact, openSignIn, logout } = usePublicContactAuth()
@@ -159,15 +178,69 @@ export default function ShopHome({
   const [currency, setCurrency] = useState('CHF')
   const [giftCardAmounts, setGiftCardAmounts] = useState<number[]>([])
   const [giftCardApplied, setGiftCardApplied] = useState<AppliedGiftCard | null>(null)
+  // The promo is a Stage A MODIFIER, so unlike the gift card it goes INTO the
+  // modal's single price computation rather than being deducted after it.
+  const [promoApplied, setPromoApplied] = useState<AppliedPromo | null>(null)
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
   const [tab, setTab] = useState<Tab>(initialTab ?? 'subscriptions')
   const [tabTouched, setTabTouched] = useState(false)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
+  /** Guest gift-card buyer's address — receipt destination only, never identity
+   *  (the server treats it as a prefill and links a contact only on a unique match). */
+  const [guestEmail, setGuestEmail] = useState('')
   const [courseFocusHandled, setCourseFocusHandled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Distinct from `error` (a checkout failure): this one means the CATALOGUE
+  // itself did not load, and it must never be shown as "this studio sells
+  // nothing" — the shape that hid the Space entitlements 403 for months.
+  // …and it is kept SEPARATE from the entitlements failure below, because the two
+  // say different things and the page owes a different answer to each:
+  //
+  //   catalogueLoadError  the shop's own contents did not load → the page failed.
+  //   entitlementsError   the catalogue is fine; we just don't know what the
+  //                       visitor already owns, so an owned course may read
+  //                       "Buy" → a caveat over a real page, not a failed page.
+  //
+  // One shared slot made an EMPTY catalogue plus a failed entitlements read
+  // render as "we couldn't load what this studio sells", which is false. Each is
+  // also cleared where its own success is stored, so a transient failure cannot
+  // pin a stale banner over data that has since loaded correctly.
+  const [catalogueLoadError, setCatalogueLoadError] = useState<unknown>(null)
+  const [entitlementsError, setEntitlementsError] = useState<unknown>(null)
+  // Has an entitlements answer actually arrived FOR THE CURRENT IDENTITY?
+  // `purchasedCourseIds.size === 0` cannot say: it is the same empty set for
+  // "owns nothing", "still loading" and "the read was refused". Only the last two
+  // are dangerous, and only for the paths that open a checkout WITHOUT the
+  // visitor asking for that specific item again (the ?course= deep link, and its
+  // resume after sign-in) — see both effects below.
+  /**
+   * WHO the entitlement set belongs to — not whether a read finished.
+   *
+   * `undefined` = never resolved; `null` = resolved for a signed-out visitor;
+   * a string = resolved for that contact. `entitlementsResolved` is then DERIVED
+   * during render, which is what makes it impossible to read a stale answer.
+   *
+   * A boolean could not do this. On the render where `isAuthenticated` flips,
+   * the fetch effect below (declared first) calls its setter — which only
+   * SCHEDULES a re-render — and the consumer effects then run later in the SAME
+   * commit still holding the guest's `true`. They would open a checkout against
+   * the empty set the page starts with, which is the precise thing the guard
+   * exists to prevent. A dependency array does not help: the value is stale
+   * within the commit, not between commits.
+   */
+  const [entitlementsFor, setEntitlementsFor] = useState<string | null | undefined>(undefined)
+  const entitlementsResolved = entitlementsFor === (contact?.id ?? null)
+  const [retryKey, setRetryKey] = useState(0)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  function retryCatalogue() {
+    setCatalogueLoadError(null)
+    setEntitlementsError(null)
+    setLoading(true)
+    setRetryKey((k) => k + 1)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -238,9 +311,12 @@ export default function ShopHome({
           .filter((a) => a.name && hasMoneyStory(a))
           .sort(compareActivities)
         setPayPerVisitActivities(activityList)
+        setCatalogueLoadError(null)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return
+        reportPublicLoadFailure('shop/catalogue', err)
+        setCatalogueLoadError(err)
         setPlans([])
         setProducts([])
         setCourses([])
@@ -253,16 +329,25 @@ export default function ShopHome({
     return () => {
       cancelled = true
     }
-  }, [teamId])
+  }, [teamId, retryKey])
 
   // Which 'purchase'-tier courses the signed-in contact already owns (lifetime
   // entitlements) — so an owned course shows "Open" instead of "Buy".
   useEffect(() => {
     if (!isAuthenticated || !contact?.id) {
       setPurchasedCourseIds(new Set())
+      setEntitlementsError(null)
+      // Nobody is signed in, so there is no entitlement this page could be
+      // hiding: the question is answered, not pending. (What a guest CAN'T do is
+      // buy — startCheckout sends them to sign-in first, and the resume below
+      // re-asks this question as the contact they turn out to be.)
+      setEntitlementsFor(null)
       return
     }
     let cancelled = false
+    // No need to mark "in flight": `entitlementsFor` already names the PREVIOUS
+    // identity, so the derived `entitlementsResolved` is false from the first
+    // render on which the contact changed.
     getDocs(
       query(
         collectionGroup(db, 'purchases'),
@@ -275,12 +360,26 @@ export default function ShopHome({
         setPurchasedCourseIds(
           new Set(snap.docs.map((d) => (d.data().courseId as string | undefined) ?? d.id))
         )
+        setEntitlementsError(null)
+        setEntitlementsFor(contact.id)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (cancelled) return
+        // A failure here re-sells a course the contact already owns — the button
+        // says "Buy" for something they paid for. Loud in the log, and the
+        // partial banner tells them the page is not showing the whole truth. It
+        // does NOT claim the catalogue failed: the catalogue is right here.
+        // `entitlementsFor` is deliberately NOT advanced, so the derived
+        // `entitlementsResolved` stays false: a card the visitor clicks
+        // themselves is their own decision, but nothing may OPEN a checkout on
+        // their behalf off an answer we never got.
+        reportPublicLoadFailure('shop/purchases', err)
+        setEntitlementsError(err)
+      })
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, contact?.id, teamId])
+  }, [isAuthenticated, contact?.id, teamId, retryKey])
 
   useEffect(() => {
     if (team?.bioLinkTheme !== 'auto') return
@@ -295,6 +394,21 @@ export default function ShopHome({
   const hasProducts = products.length > 0
   const hasCourses = courses.length > 0
   const hasGiftCards = giftCardAmounts.length > 0
+  const catalogueIsEmpty = !hasSubscriptions && !hasProducts && !hasCourses && !hasGiftCards
+  // The full-page error is reserved for the case where the CATALOGUE query is the
+  // thing that failed — which, here, always means NOTHING loaded: the three reads
+  // are one `Promise.all`, so a single rejection skips the whole `then`, and the
+  // catch empties every list. There is no partial catalogue to preserve, so
+  // `&& catalogueIsEmpty` only ever restated `catalogueLoadError != null` and is
+  // gone. (Should the load ever become per-query and keep what succeeded, this is
+  // the line that has to grow the distinction back.)
+  const showCatalogueError = catalogueLoadError != null
+  // The caveat banner is for the OTHER failure, which is not a failure of the
+  // page: the catalogue is right here and correct, we just don't know what the
+  // visitor already owns. An EMPTY catalogue is a legitimate answer and keeps
+  // this banner over it — "nothing for sale" stays true, "and we know what you
+  // own" does not.
+  const showPartialWarning = !showCatalogueError && entitlementsError != null
   const availableTabs = useMemo<Tab[]>(() => {
     const out: Tab[] = []
     if (hasSubscriptions) out.push('subscriptions')
@@ -321,13 +435,18 @@ export default function ShopHome({
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [focusTypeId, loading, tab])
 
-  // LOGIN-FIRST: every purchase requires a contact session — signed-in buyers go
-  // straight to the confirm sheet (the purchase attaches to their contact via the
-  // session); everyone else signs in or registers (allowRegistration) and the
-  // checkout resumes once auth resolves (effect below). No anonymous checkout.
+  // LOGIN-FIRST — with ONE exception. Signed-in buyers go straight to the confirm
+  // sheet (the purchase attaches to their contact via the session); everyone else
+  // signs in or registers (allowRegistration) and the checkout resumes once auth
+  // resolves (effect below).
+  //
+  // Gift cards skip the gate: what is bought is a CODE, usually for somebody else,
+  // and it grants the buyer nothing that would need an account to hold. Making a
+  // present require registration loses the sale; the buyer just leaves an address
+  // for the receipt.
   const startCheckout = useCallback(
     (c: Checkout) => {
-      if (isAuthenticated) {
+      if (isAuthenticated || c.kind === 'giftcard') {
         setCheckout(c)
         setError(null)
       } else {
@@ -340,14 +459,41 @@ export default function ShopHome({
 
   // Deep-link from the Space "Buy" CTA (?course=): open that course's checkout once.
   // Only purchase-tier courses are buyable — ignore the param for other tiers.
+  //
+  // AND ONLY ONCE OWNERSHIP IS KNOWN. This is the one place the page opens a
+  // payment panel without the visitor having pressed anything on it, so it is the
+  // one place `purchasedCourseIds` may not be read as fact before the query
+  // behind it has answered: on the empty set every page starts with, an owned
+  // course reads "not owned" and the deep link invites the buyer to pay for it a
+  // second time. Unresolved is not "not owned" — it is "don't know", and "don't
+  // know" does not open a checkout.
   useEffect(() => {
     if (!focusCourseId || loading || courseFocusHandled) return
+    if (!entitlementsResolved) {
+      // In flight: come back when it lands (this effect re-runs on it).
+      if (entitlementsError == null) return
+      // Refused, and it will not answer itself. Give the deep link up rather
+      // than leave it armed: the catalogue is on screen with its caveat banner,
+      // and a Buy the visitor presses there is a decision they made knowing the
+      // page told them it may be incomplete.
+      setCourseFocusHandled(true)
+      return
+    }
     const c = courses.find((x) => x.id === focusCourseId)
     if (c && c.accessType === 'purchase' && !purchasedCourseIds.has(c.id)) {
       startCheckout({ kind: 'course', course: c })
     }
     setCourseFocusHandled(true)
-  }, [focusCourseId, loading, courseFocusHandled, courses, purchasedCourseIds, startCheckout])
+  }, [
+    focusCourseId,
+    loading,
+    courseFocusHandled,
+    courses,
+    purchasedCourseIds,
+    entitlementsResolved,
+    entitlementsError,
+    startCheckout,
+  ])
 
   const isDark = team?.bioLinkTheme === 'dark' || (team?.bioLinkTheme === 'auto' && systemDark)
   const bg = team?.bioLinkBackground
@@ -408,12 +554,36 @@ export default function ShopHome({
   // Resume a pending checkout once sign-in (or registration) resolves — always as
   // the authenticated contact. Unknown emails register in the sign-in dialog; there
   // is no anonymous fallback anymore.
+  //
+  // A COURSE waits here on the same fact the deep link waits on, and for a
+  // sharper version of the same reason: signing in is the exact moment ownership
+  // becomes knowable, so resuming the instant `isAuthenticated` flips would open
+  // the panel on the guest's empty set every time. A read that FAILED does
+  // release the wait — the caveat banner is up, and refusing a purchase the
+  // visitor has now asked for twice would be a dead end with no way out of it.
   useEffect(() => {
     if (!pendingCheckout || !isAuthenticated) return
+    if (pendingCheckout.kind === 'course') {
+      if (!entitlementsResolved && entitlementsError == null) return
+      if (purchasedCourseIds.has(pendingCheckout.course.id)) {
+        // Already theirs. Selling it again is the failure mode; say so and let
+        // the card behind this — now reading "Open" — take them to it.
+        setPendingCheckout(null)
+        toast.info(t('alreadyOwned'))
+        return
+      }
+    }
     setCheckout(pendingCheckout)
     setError(null)
     setPendingCheckout(null)
-  }, [isAuthenticated, pendingCheckout])
+  }, [
+    isAuthenticated,
+    pendingCheckout,
+    entitlementsResolved,
+    entitlementsError,
+    purchasedCourseIds,
+    t,
+  ])
 
   function openMembership(
     typeId: string,
@@ -446,7 +616,11 @@ export default function ShopHome({
 
   // Same resolver the server uses (@linyup/shared) for course access — pure
   // function of the course's accessRule + the visitor's optimistic snapshot.
-  const courseOptions = (c: CourseEntry) => {
+  // `promo` is threaded rather than assumed: the CATALOGUE cards resolve without
+  // one (no code has been typed yet at card level) and the checkout MODAL
+  // resolves with it. One function, two inputs — never two independent
+  // computations of the same number.
+  const courseOptions = (c: CourseEntry, promo?: AppliedPromo | null) => {
     const rule: CourseAccessRule = {
       type: c.accessType,
       subscriptionTypeIds: c.subscriptionTypeIds,
@@ -457,7 +631,11 @@ export default function ShopHome({
       heldSubscriptionTypeIds,
       ownsCourse: purchasedCourseIds.has(c.id),
     })
-    return resolvePaymentOptions(snapshot, { kind: 'course', accessRule: rule, benefit: c.benefit })
+    return resolvePaymentOptions(
+      snapshot,
+      { kind: 'course', accessRule: rule, benefit: c.benefit },
+      promo ? { promo } : undefined
+    )
   }
 
   // A signed-in holder's applied benefit on a 'purchase'-tier course, if any —
@@ -485,21 +663,54 @@ export default function ShopHome({
     return denial === 'sign_in_required' ? 'signin' : 'subscribe'
   }
 
-  // The amount shown in the checkout modal.
-  const checkoutAmount = (() => {
+  // ── THE MODAL'S ONE COMPUTATION ────────────────────────────────────────────
+  // Everything the checkout modal renders — the price, the struck-through base,
+  // the promo's verdict — and the `quotedAmount` it sends comes out of THIS
+  // single resolver result. Products go through the resolver too now (the
+  // `product` arm), which is what lets a price MODIFIER exist on merchandise at
+  // all without applying it at the callable, where tenders live.
+  const checkoutQuote = (() => {
+    if (checkout?.kind === 'course') return courseOptions(checkout.course, promoApplied)
+    if (checkout?.kind === 'product') {
+      return resolvePaymentOptions(
+        // The product arm is snapshot-INVARIANT (it never covers, never denies,
+        // and a Product carries no benefit), so the snapshot here cannot change
+        // the answer — it is passed for uniformity with every other rail.
+        clientPaymentSnapshot({ authenticated: isAuthenticated, heldSubscriptionTypeIds }),
+        {
+          kind: 'product',
+          priceAmount: resolveProductPrice(checkout.product, checkout.variantId),
+          benefit: null,
+        },
+        promoApplied ? { promo: promoApplied } : undefined
+      )
+    }
+    return null
+  })()
+
+  // The amount the resolver produced for this modal.
+  const resolvedAmount = (() => {
     if (!checkout) return 0
     if (checkout.kind === 'membership') return checkout.price.amount
     if (checkout.kind === 'giftcard') return checkout.amount
-    if (checkout.kind === 'course') {
-      const { options } = courseOptions(checkout.course)
-      return options[0]?.type === 'pay' ? options[0].amount : (checkout.course.priceAmount ?? 0)
-    }
-    return resolveProductPrice(checkout.product, checkout.variantId)
+    const pay = checkoutQuote?.options[0]
+    if (pay?.type === 'pay') return pay.amount
+    return checkout.kind === 'course'
+      ? (checkout.course.priceAmount ?? 0)
+      : resolveProductPrice(checkout.product, checkout.variantId)
   })()
 
   // Redeeming a gift card only applies to the one-off product/course checkouts
   // (never memberships/subscriptions, never the gift-card purchase itself).
   const giftCardEligible = checkout?.kind === 'product' || checkout?.kind === 'course'
+  // The same two rails take a promo, for the same reason: they are the one-off
+  // purchases. A subscription would need a Stripe coupon rather than an amount
+  // we compute, and a discount on a gift card would mint stored value the studio
+  // was never paid for.
+  const promoEligible = giftCardEligible
+
+  // The only checkout a signed-out visitor can reach — see startCheckout.
+  const needsGuestEmail = checkout?.kind === 'giftcard' && !isAuthenticated
 
   // Reset the applied code when a different item is opened (but NOT on a mere
   // product-variant swap, which re-creates the checkout object in place).
@@ -514,17 +725,73 @@ export default function ShopHome({
           : `giftcard:${checkout.amount}`
   useEffect(() => {
     setGiftCardApplied(null)
+    // A code is quoted against ONE purchase (the reservation key embeds the
+    // product/course id), so opening a different item must not carry the
+    // previous quote across.
+    setPromoApplied(null)
   }, [checkoutKey])
 
-  // The base price to strike through in the modal — set only when a signed-in
-  // holder's benefit actually lowered the course's checkout amount.
+  // ── The recovery half of the `price_changed` guard ────────────────────────
+  // The server's own figure, once it has refused a quote and this modal has
+  // shown it. It is BOTH what the modal renders from here on AND what the next
+  // submit sends back as `quotedAmount` — which is what makes the refusal cost
+  // one extra, informed click instead of looping forever (the modal would
+  // otherwise re-derive the same optimistic number and be refused again).
+  //
+  // AN ACCEPTED FIGURE BELONGS TO ONE (target, code, IDENTITY) — the rule lives
+  // in `useAcceptedPrice`, shared with the class BookingForm and the appointment
+  // picker. Here the TARGET is the item AND its variant (a variant swap re-prices
+  // the same product in place, without opening a different checkout); the
+  // IDENTITY is the public contact session, which this modal can change under
+  // itself — the stale-session branch in `submit()` below logs the buyer out and
+  // re-opens sign-in with the checkout pending, and `courseOptions` re-quotes on
+  // the membership that sign-in produces. Without the identity axis a guest
+  // refused at the list price, who then signed in, would be shown and would
+  // re-send that figure over a member price the resolver had already lowered.
+  const checkoutVariantId = checkout?.kind === 'product' ? (checkout.variantId ?? null) : null
+  const { acceptedPrice, acceptPrice } = useAcceptedPrice(
+    [
+      checkoutKey ?? '',
+      checkoutVariantId ?? '',
+      promoApplied?.code ?? '',
+      isAuthenticated ? (contact?.id ?? 'auth') : 'guest',
+      contact?.subscription_type_id ?? '',
+    ].join('|')
+  )
+
+  // What the modal renders and what the buyer is asked to confirm.
+  const checkoutAmount = acceptedPrice ?? resolvedAmount
+
+  // The base price to strike through in the modal, and WHICH modifier produced
+  // it. Read off the ONE result above — the resolver stamps at most one of
+  // `appliedBenefit` / `appliedPromo`, so "member price" and "code price" are
+  // mutually exclusive structurally rather than by convention.
   const checkoutMemberBase = (() => {
-    if (checkout?.kind !== 'course') return null
-    return courseMemberPrice(checkout.course)
+    // The server has told us what this actually costs, and it is higher than the
+    // modifier we rendered — so there is no discount left to strike a base
+    // through. Showing one over the server's figure would be the same broken
+    // promise the guard exists to refuse.
+    if (acceptedPrice !== null) return null
+    const pay = checkoutQuote?.options[0]
+    if (pay?.type !== 'pay') return null
+    if (pay.appliedBenefit) {
+      return { amount: pay.amount, base: pay.appliedBenefit.baseAmount, via: 'benefit' as const }
+    }
+    if (pay.appliedPromo) {
+      return { amount: pay.amount, base: pay.appliedPromo.baseAmount, via: 'promo' as const }
+    }
+    return null
   })()
 
   async function submit() {
     if (!checkout) return
+    // A guest has no session for the code to land in, so the address typed here
+    // is the ONLY delivery route. Refuse a malformed one before Stripe, not after
+    // the money moved — an unreachable buyer is a card nobody can find.
+    if (needsGuestEmail && !EMAIL_RE.test(guestEmail.trim())) {
+      setError(t('giftCardBuyerEmailInvalid'))
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -561,6 +828,8 @@ export default function ShopHome({
             locale: string
             origin?: string
             giftCardCode?: string
+            promoCode?: string
+            quotedAmount?: number
           },
           { url: string | null; paidWithGiftCard?: boolean }
         >(functions, 'createProductCheckout')
@@ -571,6 +840,15 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          // THE FIGURE THIS MODAL RENDERED, sent WITH the code and only with it.
+          // A code is what turns the rendered price into a promise ("Code X
+          // applied", a struck-through base); without one the number is an
+          // optimistic render the server is entitled to disagree with, and
+          // asserting it would refuse ordinary sales. Disagreement here is
+          // refused as `price_changed` carrying the server's number.
+          ...(promoApplied
+            ? { promoCode: promoApplied.code, quotedAmount: checkoutAmount }
+            : {}),
           ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
         })
         if (res.data?.paidWithGiftCard) {
@@ -590,6 +868,8 @@ export default function ShopHome({
             locale: string
             origin?: string
             giftCardCode?: string
+            promoCode?: string
+            quotedAmount?: number
           },
           { url: string | null; paidWithGiftCard?: boolean }
         >(functions, 'createCourseCheckout')
@@ -599,6 +879,10 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          // Same pairing as the product branch: the quote rides the code.
+          ...(promoApplied
+            ? { promoCode: promoApplied.code, quotedAmount: checkoutAmount }
+            : {}),
           ...(giftCardApplied ? { giftCardCode: giftCardApplied.code } : {}),
         })
         if (res.data?.paidWithGiftCard) {
@@ -612,7 +896,14 @@ export default function ShopHome({
         } else throw new Error('no-url')
       } else {
         const fn = httpsCallable<
-          { teamId: string; amount: number; slug: string; locale: string; origin?: string },
+          {
+            teamId: string
+            amount: number
+            slug: string
+            locale: string
+            origin?: string
+            purchaserEmail?: string
+          },
           { url: string; sessionId: string }
         >(functions, 'createGiftCardCheckout')
         const res = await fn({
@@ -621,13 +912,22 @@ export default function ShopHome({
           slug,
           locale,
           origin: window.location.origin,
+          // Guests only — a signed-in buyer's address comes from their session,
+          // which the server trusts and this field never overrides.
+          ...(!isAuthenticated && guestEmail ? { purchaserEmail: guestEmail.trim() } : {}),
         })
         if (res.data?.url) window.location.href = res.data.url
         else throw new Error('no-url')
       }
     } catch (err) {
       const code = (err as FunctionsError)?.code
-      if (code === 'functions/unauthenticated' || code === 'functions/permission-denied') {
+      // Only a signed-in buyer can have a session to re-establish; a guest hitting
+      // this would be logged out of nothing and shown a sign-in wall they were
+      // explicitly allowed to skip.
+      if (
+        isAuthenticated &&
+        (code === 'functions/unauthenticated' || code === 'functions/permission-denied')
+      ) {
         // Session expired (or went stale) mid-flow — re-run the sign-in and resume.
         setSubmitting(false)
         setCheckout(null)
@@ -637,9 +937,31 @@ export default function ShopHome({
         setError(null)
         return
       }
+      // RECOVERY, before anything else: the server has told us what this really
+      // costs. Render that figure, relabel the button to it, and let the buyer
+      // take it — the next submit sends it back as `quotedAmount` and completes.
+      // Without this branch the modal re-renders the same optimistic number and
+      // is refused again, which is a lost sale wearing a safety feature's badge.
+      // The sentence itself is composed by `priceChangedMessage`, because the
+      // commonest cause is a REFUSED CODE rather than a moved price and only the
+      // server knows which — see its docblock.
+      const serverPrice = priceChangedAmount(err)
+      if (serverPrice !== null) {
+        acceptPrice(serverPrice)
+        setError(
+          priceChangedMessage(err, tPromo, formatCurrency(serverPrice, currency, locale))
+        )
+        setSubmitting(false)
+        return
+      }
       const giftMsg = giftCardApplied ? giftCardCheckoutErrorMessage(err, t) : null
+      // PAY-TIME promo refusals — the preview is advisory about availability
+      // (exhausted / busy / already used are decided by the reserve
+      // transaction).
+      const promoMsg = promoCheckoutErrorMessage(err, tPromo)
       setError(
         giftMsg ??
+          promoMsg ??
           (code === 'functions/already-exists'
             ? t('alreadySubscribed')
             : code === 'functions/failed-precondition'
@@ -683,6 +1005,29 @@ export default function ShopHome({
           </div>
         </div>
 
+        {/* Something the page needed didn't load — most often the entitlements
+            query, which decides whether an owned course reads "Open" or "Buy".
+            Say so rather than letting the page present a partial truth as the
+            truth. Shown over an empty catalogue too: "nothing for sale" is then
+            still true, but "and we know what you own" is not. */}
+        {!loading && showPartialWarning && (
+          <div
+            role="alert"
+            className="mt-6 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm"
+            style={{ background: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}
+          >
+            <span style={{ color: textMuted }}>{t('loadPartial')}</span>
+            <button
+              type="button"
+              onClick={retryCatalogue}
+              className="shrink-0 text-xs font-semibold hover:underline"
+              style={{ color: accent }}
+            >
+              {tCommon('errorRetry')}
+            </button>
+          </div>
+        )}
+
         {/* Memberships ⇄ Products ⇄ Courses toggle (only when 2+ surfaces exist) */}
         {showTabs && (
           <div
@@ -724,7 +1069,21 @@ export default function ShopHome({
           <div className="mt-10 flex justify-center">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: textMuted }} />
           </div>
-        ) : !hasSubscriptions && !hasProducts && !hasCourses && !hasGiftCards ? (
+        ) : showCatalogueError ? (
+          // The CATALOGUE query is the one that failed, and nothing loaded.
+          // "This studio sells nothing" would be a lie told confidently — say the
+          // page failed and offer the retry. Painted in the studio's own theme:
+          // app tokens go near-black on a dark bio-link theme, i.e. invisible in
+          // precisely the case this block exists for.
+          <QueryErrorState
+            onRetry={retryCatalogue}
+            title={t('loadFailed')}
+            detail={loadFailureDetail(catalogueLoadError)}
+            theme={{ textMain, textMuted, accent, border: cardBorder }}
+          />
+        ) : catalogueIsEmpty ? (
+          // The catalogue loaded and is genuinely empty. True regardless of what
+          // else failed — the banner above carries that part.
           <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
             {t('noItems')}
           </p>
@@ -1072,7 +1431,11 @@ export default function ShopHome({
                     <span className="mr-1.5 line-through" style={{ color: textMuted }}>
                       {formatCurrency(checkoutMemberBase.base, currency)}
                     </span>
-                    <span>{t('memberPrice', { price: formatCurrency(checkoutAmount, currency) })}</span>
+                    <span>
+                      {checkoutMemberBase.via === 'benefit'
+                        ? t('memberPrice', { price: formatCurrency(checkoutAmount, currency) })
+                        : formatCurrency(checkoutAmount, currency)}
+                    </span>
                   </p>
                 ) : (
                   <p className="text-xs" style={{ color: textMuted }}>
@@ -1127,6 +1490,31 @@ export default function ShopHome({
               </p>
             )}
 
+            {/* Promo code — the MODIFIER, ABOVE the tender in the UI as in the
+                arithmetic. Product/course only, for the same reason the gift
+                card is. */}
+            {promoEligible && (
+              <div className="mt-4">
+                <PromoCodeField
+                  teamId={teamId}
+                  target={
+                    checkout.kind === 'course'
+                      ? { kind: 'course', courseId: checkout.course.id }
+                      : {
+                          kind: 'product',
+                          productId: checkout.product.id,
+                          ...(checkout.variantId ? { variantId: checkout.variantId } : {}),
+                        }
+                  }
+                  applied={promoApplied}
+                  onApplied={setPromoApplied}
+                  outcome={checkoutQuote?.promo ?? null}
+                  disabled={submitting}
+                  colors={{ textMain, textMuted, borderColor: cardBorder, accentColor: accent }}
+                />
+              </div>
+            )}
+
             {/* Gift card redemption — product/course only (see giftCardEligible). */}
             {giftCardEligible && (
               <div className="mt-4">
@@ -1155,33 +1543,60 @@ export default function ShopHome({
               </div>
             )}
 
-            {/* Login-first: the purchase attaches to the signed-in contact via the
-                session. "Switch account" restarts sign-in keeping the checkout pending
-                (e.g. a parent switching to the right child before buying). */}
-            <div
-              className="mt-4 space-y-1 rounded-lg px-3 py-2 text-sm"
-              style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
-            >
-              <p className="break-words">
-                {contact ? t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` }) : ''}
-              </p>
-              {/* Own line so a long name never gets truncated by the link */}
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={async () => {
-                  const c = checkout
-                  setCheckout(null)
-                  setPendingCheckout(c)
-                  await logout()
-                  openSignIn({ allowRegistration: true })
-                }}
-                className="block text-xs underline-offset-2 hover:underline"
-                style={{ color: textMuted }}
+            {/* Guest gift-card purchase: no account, one address. The code is
+                emailed here, so the field is required — see submit(). */}
+            {needsGuestEmail ? (
+              <div className="mt-4">
+                <label className="block text-xs font-medium" htmlFor="shop-guest-email">
+                  {t('giftCardBuyerEmailLabel')}
+                </label>
+                <input
+                  id="shop-guest-email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  disabled={submitting}
+                  className="mt-1.5 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: cardBorder, background: 'transparent', color: textMain }}
+                />
+                <p className="mt-1.5 text-xs" style={{ color: textMuted }}>
+                  {t('giftCardBuyerEmailHelp')}
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: textMuted }}>
+                  {t('giftCardGuestNote')}
+                </p>
+              </div>
+            ) : (
+              /* Login-first: the purchase attaches to the signed-in contact via the
+                 session. "Switch account" restarts sign-in keeping the checkout pending
+                 (e.g. a parent switching to the right child before buying). */
+              <div
+                className="mt-4 space-y-1 rounded-lg px-3 py-2 text-sm"
+                style={{ background: onDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)', color: textMain }}
               >
-                {t('switchAccount')}
-              </button>
-            </div>
+                <p className="break-words">
+                  {contact ? t('buyingAs', { name: `${contact.firstname} ${contact.lastname}` }) : ''}
+                </p>
+                {/* Own line so a long name never gets truncated by the link */}
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={async () => {
+                    const c = checkout
+                    setCheckout(null)
+                    setPendingCheckout(c)
+                    await logout()
+                    openSignIn({ allowRegistration: true })
+                  }}
+                  className="block text-xs underline-offset-2 hover:underline"
+                  style={{ color: textMuted }}
+                >
+                  {t('switchAccount')}
+                </button>
+              </div>
+            )}
             {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
             <button
               type="button"
@@ -1191,7 +1606,14 @@ export default function ShopHome({
               style={{ background: accent, color: '#ffffff' }}
             >
               {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              {t('continueToPayment')}
+              {/* After a `price_changed` refusal the button IS the consent: it
+                  names the server's figure, and pressing it re-sends that exact
+                  number as the quote. */}
+              {acceptedPrice !== null
+                ? tPromo('continueAtPrice', {
+                    price: formatCurrency(acceptedPrice, currency, locale),
+                  })
+                : t('continueToPayment')}
             </button>
           </div>
         </div>

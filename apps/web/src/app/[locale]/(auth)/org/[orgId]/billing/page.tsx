@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CreditCard, CheckCircle2, AlertTriangle, FileText, ExternalLink } from 'lucide-react'
 import { useLocale } from 'next-intl'
+import { subscriptionEndsAt, subscriptionIsCancelling } from '@linyup/shared'
+import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -208,7 +210,17 @@ export default function OrgBillingPage() {
 
   const status = subscription?.status ?? 'trial'
   const hasActiveSubscription = status === 'active' || status === 'past_due'
-  const isCancelling = subscription?.cancel_at_period_end === true
+  // The ONE shared predicate, so this page and settings/billing cannot drift on
+  // what "cancels at period end" means or when it lands.
+  //
+  // WHETHER and WHEN are two questions, and this page must not fuse them. Asking
+  // `subscriptionEndsAt(...) !== null` additionally demands a DATE — and a
+  // cancelling saas_subscriptions doc from the pre-fix window carries the boolean
+  // and no date at all (see shared/utils/subscriptionLifecycle.ts), so fusing
+  // them hid "Reactivate" from exactly the orgs that are cancelled and still
+  // live. The date is shown when we have it and simply omitted when we do not.
+  const isCancelling = subscriptionIsCancelling(subscription)
+  const endsAt = subscriptionEndsAt(subscription) as { seconds: number } | null
   const hasGateway = !!subscription?.gateway_type
 
   const periodStart = subscription?.current_period_start as { seconds: number } | null | undefined
@@ -270,11 +282,16 @@ export default function OrgBillingPage() {
               )}
 
               {/* Access until (cancelling) */}
-              {isCancelling && periodEnd && (
+              {endsAt && (
                 <p className="text-sm text-amber-600">
-                  {t('activeUntil', { date: formatDate(periodEnd) })}
+                  {t('activeUntil', { date: formatDate(endsAt) })}
                 </p>
               )}
+
+              {/* …and why. Same component and same copy as settings/billing —
+                  two org owners must not read two different sentences about the
+                  same Stripe field. */}
+              <SubscriptionCancellationNote subscription={subscription} audience="self" />
 
               {/* Past due warning */}
               {status === 'past_due' && (

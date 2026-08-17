@@ -10,6 +10,8 @@
 //   • course       → grant the LIFETIME entitlement (courses/{id}/purchases/{cid},
 //                    which the security rules check to unlock the course in the Space).
 //   • product      → record-only (merch): an activity-log entry, no entitlement.
+//   • gift_card    → record-only: the CODE is the entitlement and the card doc
+//                    already carries it (teams/{id}/gift_cards).
 //   • drop_in/other→ last_payment_at + an activity-log entry.
 //
 // Every branch appends ONE activity_log entry carrying the payment id + source so
@@ -39,12 +41,19 @@ const LINE_ITEM_KINDS: PaymentLineItemKind[] = [
   'product',
   'drop_in',
   'appointment',
+  'gift_card',
   'other',
 ]
 
 /** Validate + normalise a client-supplied line-item. Returns null for junk;
  * downgrades an effect-less subscription/course link (missing id) to 'other' so
- * applyPaymentEffects never silently no-ops on what looked like a real link. */
+ * applyPaymentEffects never silently no-ops on what looked like a real link.
+ *
+ * `promoCode` is DELIBERATELY NOT READ HERE. It is a system stamp written by the
+ * webhook from Checkout Session metadata, and this function's input is whatever
+ * a manager's dialog sent — reading it would let a client write a redemption
+ * onto any payment row. `updatePaymentRecord` carries the STORED value forward
+ * across an edit instead, so the field is neither forgeable nor loseable. */
 export function normalizePaymentLineItem(raw: unknown): PaymentLineItem | null {
   if (!raw || typeof raw !== 'object') return null
   const li = raw as Partial<PaymentLineItem>
@@ -288,6 +297,26 @@ export async function applyPaymentEffects(db: Db, input: ApplyPaymentEffectsInpu
         type: 'product_purchased',
         source,
         message: `Product · ${li.label ?? 'Product'}`,
+        paymentRef,
+      })
+      return
+    }
+
+    case 'gift_card': {
+      // Record-only ON PURPOSE — this branch must never mint a card. The card is
+      // minted once by whoever took the money (the Connect webhook, or the
+      // manager mint), whereas applyPaymentEffects is re-run every time a manager
+      // re-assigns or re-links the payment row: minting here would hand out a
+      // fresh code, and a fresh chunk of stored value, on each of those edits.
+      await db
+        .collection(CONTACTS_COLLECTION)
+        .doc(contactId)
+        .set({ last_payment_at: FieldValue.serverTimestamp() }, { merge: true })
+      await logPaymentActivity(db, contactId, {
+        type: 'payment_received',
+        source,
+        // The label carries the code when the caller knows it ("Gift card GC-…").
+        message: li.label ?? 'Gift card',
         paymentRef,
       })
       return

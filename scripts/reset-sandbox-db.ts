@@ -30,6 +30,8 @@
 
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
+import * as path from 'node:path'
+import { requireConsentExport } from './lib/exportConsentLedger'
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
 import { TENANT_DATA_COLLECTIONS } from '@linyup/shared'
@@ -58,6 +60,11 @@ const { values } = parseArgs({
     yes: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     'include-leads': { type: 'boolean', default: false },
+    // Q13's escape hatch. It has to be TYPED, and it is echoed rather than
+    // silently honoured: the console output of a destructive run is its only
+    // record, and this flag is the one that throws away the artefact a studio
+    // most needs after the relationship ends.
+    'no-consent-export': { type: 'boolean', default: false },
     // Back-compat with the old flag; same meaning as --yes.
     confirm: { type: 'boolean', default: false },
   },
@@ -65,11 +72,16 @@ const { values } = parseArgs({
 const dryRun = values['dry-run']
 const includeLeads = values['include-leads']
 const skipPrompt = values.yes || values.confirm
+const skipConsentExport = values['no-consent-export']
 
 admin.initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID })
 
 const db = admin.firestore()
 const auth = admin.auth()
+
+/** Where the pre-teardown consent ledgers land. Under `exports/`, which is
+ *  gitignored: they carry names, addresses and IP addresses. */
+const CONSENT_EXPORT_DIR = path.resolve(process.cwd(), 'exports', 'consent-ledgers')
 
 // Which docs belong to a tenant — taken STRAIGHT from the shared manifest
 // (packages/shared/src/tenantData.ts), never hand-copied. That file has a
@@ -202,6 +214,19 @@ async function main() {
       process.exit(1)
     }
   }
+
+  // ── EXPORT BEFORE TEARDOWN (Q13) ────────────────────────────────
+  // Deleting a team destroys every signature it ever collected — the acceptance
+  // events, the immutable version snapshots their hashes point at, and the
+  // signer rows — and a liability release is the ONE artefact a studio needs
+  // AFTER the relationship ends. So the ledger is written to disk BEFORE the
+  // first delete, and a failure here refuses the whole run.
+  const teamIdsBeingDeleted = (plans.find((p) => p.collection === 'teams')?.refs ?? []).map(
+    (r) => r.id
+  )
+  await requireConsentExport(db, teamIdsBeingDeleted, CONSENT_EXPORT_DIR, {
+    skip: skipConsentExport,
+  })
 
   console.log('\n1/2  Firestore…')
   for (const p of plans) {

@@ -113,7 +113,9 @@ const createSchema = z.object({
 type CreateValues = z.infer<typeof createSchema>
 
 /** Map entry choice → initial acquisition_stage + milestone timestamps. Off-funnel
- *  entries ('shop' / 'form') get NO stage — they're not on the trial funnel. */
+ *  entries ('shop' / 'form' / 'waitlist') get NO stage — they're not on the trial
+ *  funnel. Queueing for a full class is a want, not a booking; the stage is
+ *  stamped if and when the seat is claimed. */
 function entryToStage(entry: ContactEntry): {
   acquisition_stage?: AcquisitionStage
   trial_attended_at?: ReturnType<typeof serverTimestamp>
@@ -125,7 +127,9 @@ function entryToStage(entry: ContactEntry): {
     case 'signup':
     case 'import': return { acquisition_stage: 'joined', converted_at: serverTimestamp() }
     case 'form':
-    case 'shop': return {} // off-funnel entry — no acquisition stage
+    case 'shop':
+    case 'waitlist':
+    case 'manual': return {} // off-funnel entry — no acquisition stage
   }
 }
 

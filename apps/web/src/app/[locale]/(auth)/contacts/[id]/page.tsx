@@ -28,6 +28,7 @@ import {
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { formatCurrency } from '@/lib/format'
+import { ConsentHistoryPanel } from '@/components/contacts/ConsentHistoryPanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Badge } from '@/components/ui/badge'
@@ -144,6 +145,7 @@ import {
   ArchiveRestore,
   AlertTriangle,
   UserPlus,
+  UserX,
   Archive,
   RotateCcw,
   ArrowRightLeft,
@@ -390,7 +392,11 @@ const profileSchema = z.object({
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
   // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const).optional(),
+  // Derived from the union, never re-typed: a hand-copied list silently went
+  // stale against `entry: 'manual'` (written by createStaffAppointment), and a
+  // z.enum that rejects a value already ON the contact fails validation of the
+  // form's own default — blocking submit on that contact for every field.
+  entry: z.enum(CONTACT_ENTRIES).optional(),
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),
@@ -3110,7 +3116,13 @@ type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach'
 
 const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
   sessions: ['session_participant_add', 'session_participant_delete'],
-  bookings: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_rebooked'],
+  bookings: [
+    'booking_created',
+    'booking_confirmed',
+    'booking_cancelled',
+    'booking_rebooked',
+    'booking_no_show',
+  ],
   profile: [
     'contact_add',
     'contact_type_change',
@@ -3145,6 +3157,7 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   booking_confirmed: { Icon: CheckCircle, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   booking_cancelled: { Icon: XCircle, bg: 'bg-red-500/10', fg: 'text-red-600' },
   booking_rebooked: { Icon: CalendarDays, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  booking_no_show: { Icon: UserX, bg: 'bg-red-500/10', fg: 'text-red-600' },
   contact_login: { Icon: Activity, bg: 'bg-green-500/10', fg: 'text-green-600' },
   outreach_email_sent: { Icon: Mail, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   contact_anonymized: { Icon: Trash2, bg: 'bg-muted', fg: 'text-muted-foreground' },
@@ -5248,13 +5261,24 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {/* Tab content */}
           <div>
             {tab === 'profile' && (
-              <ProfileTab
-                contact={contact}
-                teamId={currentTeamId}
-                orgId={team?.org_id}
-                onSaved={invalidate}
-                onOpenNotes={() => setNotesOpen(true)}
-              />
+              <div className="space-y-4">
+                <ProfileTab
+                  contact={contact}
+                  teamId={currentTeamId}
+                  orgId={team?.org_id}
+                  onSaved={invalidate}
+                  onOpenNotes={() => setNotesOpen(true)}
+                />
+                {/* The operator's copy of this person's consent history. Renders
+                    only where the studio requires something — a control that
+                    always produced an empty artefact would teach a coach the
+                    feature is broken. */}
+                <ConsentHistoryPanel
+                  contactId={contact.id}
+                  teamId={currentTeamId}
+                  contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
+                />
+              </div>
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}

@@ -16,6 +16,12 @@ export type ActivityEventType =
   | 'booking_confirmed'
   | 'booking_cancelled'
   | 'booking_rebooked'
+  // Written by trackBookings when a booking flips to 'no_show' — the nightly
+  // markNoShowBookings job is the only thing that sets that status today. It is
+  // a booking event like the four above and belongs in the same filter; leaving
+  // it out of this union made the rows render with the fallback icon and vanish
+  // from the Bookings tab of a contact's activity.
+  | 'booking_no_show'
   | 'contact_login'
   | 'outreach_email_sent'
   | 'contact_anonymized'

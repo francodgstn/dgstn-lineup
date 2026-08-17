@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  updateDoc, deleteDoc, setDoc, increment, serverTimestamp,
+  updateDoc, deleteDoc, setDoc, increment, serverTimestamp, deleteField,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -19,14 +19,17 @@ import { useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
-  ExternalLink, X, Check, Ban, AlertTriangle,
+  Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send,
 } from 'lucide-react'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
-  PARTICIPANTS_SUBCOLLECTION, resolveActivityAccessRule,
+  PARTICIPANTS_SUBCOLLECTION, WAITLIST_SUBCOLLECTION, resolveActivityAccessRule,
   activityRequiresSubscription, contactHoldsCoveringSubscription,
+  bookingHoldsSeat, confirmClearedHoldFields, seatsFree,
 } from '@linyup/shared'
-import type { Session, Booking, Contact, Activity } from '@linyup/shared'
+import type { Session, Booking, Contact, Activity, WaitlistEntry } from '@linyup/shared'
+import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
+import { useWaiverPolicy, useWaiverRoster } from '@/hooks/useWaiverStates'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 
@@ -63,6 +66,55 @@ function formatDate(ts?: { toDate(): Date } | null) {
 function formatTime(ts?: { toDate(): Date } | null) {
   if (!ts) return ''
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * The reason code a waitlist callable refused with → the SessionDetail key that
+ * says it in the coach's language.
+ *
+ * The callables' own `message` strings are English source, so rendering them —
+ * which this page used to do — put "This class has no free seat to offer." in
+ * front of a coach working in French or German. Every waitlist throw carries
+ * `details.reason` for exactly this reason (see booking/waitlist/admin.ts), and
+ * this table is the one place that turns them into copy. Sibling of
+ * `claimErrorKey` on the public claim page, which does the same job for the
+ * member-facing half of the same vocabulary.
+ *
+ * Returns null when nothing matched, so the caller can fall back to the server's
+ * message rather than swallowing a refusal this table has not learned yet.
+ */
+function waitlistErrorKey(err: unknown): string | null {
+  const e = err as { code?: string; details?: { reason?: string } }
+  switch (e.details?.reason) {
+    case 'session_full':
+      return 'waitlistErrorNoSeat'
+    case 'not_waiting':
+      return 'waitlistErrorNotWaiting'
+    case 'already_offered':
+      return 'waitlistErrorAlreadyOffered'
+    case 'booking_closed':
+      return 'waitlistErrorBookingClosed'
+    case 'waitlist_disabled':
+      return 'waitlistErrorDisabled'
+    case 'claim_window_too_short':
+      return 'waitlistErrorWindowTooShort'
+    case 'session_unavailable':
+      return 'waitlistErrorSessionUnavailable'
+    case 'undeliverable':
+      return 'waitlistErrorUndeliverable'
+    case 'entry_not_found':
+      return 'waitlistErrorEntryGone'
+    case 'permission_denied':
+    case 'unauthenticated':
+      return 'waitlistErrorPermission'
+    default:
+      break
+  }
+  // `assertManager` is shared with the Connect callables and throws without a
+  // reason ("Manager access required"), so the code carries this one.
+  const code = e.code?.replace(/^functions\//, '')
+  if (code === 'permission-denied' || code === 'unauthenticated') return 'waitlistErrorPermission'
+  return null
 }
 // ─── participant type (Firestore doc shape) ───────────────────────────────────
 
@@ -139,6 +191,14 @@ function useQrScanner(onScan: (text: string) => void) {
 
 // ─── add participants dialog ──────────────────────────────────────────────────
 
+// STAFF CLASS BOOKING IS THE HOLE THE GATE CANNOT CLOSE, and this dialog is it.
+// It writes `sessions/{id}/participants/{contactId}` DIRECTLY from the browser,
+// permitted by the `schedule.manage` capability, so there is no server seam to
+// gate — closing it would need a `bookParticipant` callable and a rules
+// narrowing on a path coaches use daily. The posture is therefore SURFACE, DO
+// NOT BLOCK: the note below says plainly that nobody is asked to sign, and the
+// roster chip carries the state permanently. Stated here rather than left to be
+// discovered, because "we have a waiver gate" is not literally true of this path.
 function AddParticipantsDialog({
   open, onOpenChange, teamId, sessionId, existingIds, onAdded, requiredSubscriptionTypeIds,
 }: {
@@ -152,6 +212,11 @@ function AddParticipantsDialog({
   requiredSubscriptionTypeIds: string[] | null
 }) {
   const t = useTranslations('SessionDetail')
+  // One cached policy read, shared with the roster chip's own lookup. Absent a
+  // required waiver the note never renders — a studio that asks for nothing must
+  // not be told about a mechanism it does not use.
+  const { data: waiverPolicy = [] } = useWaiverPolicy(open ? teamId : null)
+  const teamRequiresWaiver = waiverPolicy.length > 0
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
   // Contact awaiting the "no valid subscription — add anyway?" confirmation.
@@ -229,7 +294,7 @@ function AddParticipantsDialog({
         <DialogHeader className="px-4 pt-4 pb-3 border-b">
           <DialogTitle className="text-base">{t('addContactToSession')}</DialogTitle>
         </DialogHeader>
-        <div className="px-3 pt-3 pb-2">
+        <div className="px-3 pt-3 pb-2 space-y-2">
           <input
             autoFocus
             value={search}
@@ -237,6 +302,9 @@ function AddParticipantsDialog({
             placeholder={t('searchContactsPlaceholder')}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          {teamRequiresWaiver && (
+            <p className="text-xs text-muted-foreground">{t('addParticipantWaiverNote')}</p>
+          )}
         </div>
         {confirming ? (
           <div className="px-4 py-4 space-y-3">
@@ -329,15 +397,48 @@ export default function SessionDetailPage() {
   const sessionId = params.id as string
   const router = useRouter()
   const i18nRouter = useI18nRouter()
-  const { currentTeamId, user } = useAuth()
+  const { currentTeamId, user, team } = useAuth()
+  const teamSlug = team?.slug ?? ''
   const qc = useQueryClient()
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   // QR scanner state — kept for when scanner is re-enabled; prefixed with _ to suppress unused-var lint
-  const [scanning, _setScanning] = useState(false)
-  const [_scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  // Waitlist row actions: the contactId currently in flight (so one row's
+  // spinner doesn't freeze the whole queue), the entry pending a delete
+  // confirmation, and the last refusal to surface.
+  const [waitlistBusy, setWaitlistBusy] = useState<string | null>(null)
+  const [waitlistRemoving, setWaitlistRemoving] = useState<WaitlistEntry | null>(null)
+  const [waitlistError, setWaitlistError] = useState<string | null>(null)
+
+  // Share the public booking link for THIS session. Native share sheet where the
+  // platform has one (a coach on a phone sends it straight into WhatsApp), else
+  // the clipboard. An ABSOLUTE url either way — a relative path is useless the
+  // moment it leaves the app. A cancelled share sheet throws AbortError, which is
+  // not a failure and must not surface as one.
+  async function shareBookingLink() {
+    if (!teamSlug) return
+    const url = `${window.location.origin}/public/${teamSlug}/booking?session=${sessionId}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ url })
+        return
+      } catch {
+        /* dismissed, or unavailable in this context — fall through to copy */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1500)
+    } catch {
+      /* clipboard blocked (insecure origin, denied permission) — no-op */
+    }
+  }
 
   // ── data fetching ────────────────────────────────────────────────────────────
 
@@ -363,6 +464,18 @@ export default function SessionDetailPage() {
     queryFn: async () => {
       const snap = await getDocs(collection(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
+    },
+  })
+
+  // The queue for this session. Read directly (team members may list it — see
+  // firestore.rules); every WRITE goes through a callable, because the rules
+  // deny client writes here and a browser write would bypass the capacity
+  // transaction the whole feature rests on.
+  const waitlistQ = useQuery<WaitlistEntry[]>({
+    queryKey: ['session-waitlist', sessionId],
+    queryFn: async () => {
+      const snap = await getDocs(collection(db, SESSIONS_COLLECTION, sessionId, WAITLIST_SUBCOLLECTION))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as WaitlistEntry)
     },
   })
 
@@ -460,10 +573,40 @@ export default function SessionDetailPage() {
   const showsNoSubBadge = (contactId?: string | null) =>
     !!contactId && rosterCoverage.get(contactId) === false
 
+  // ── The waiver chip ───────────────────────────────────────────────────────
+  // Read LIVE from the signer rows for exactly the people on this roster, rather
+  // than from the denormalised `booking.waiver_state`. That field is a snapshot
+  // at booking time — right for the printed sheet, which describes the booking
+  // as taken — and wrong here, where a revocation or a `require_resign` publish
+  // since then is the thing a coach at the door needs to see. State both, or
+  // "why does the sheet say signed and the screen say expired" becomes a support
+  // ticket.
+  //
+  // Deliberately NOT `rosterContactsQ`'s shape: that fetches the whole active
+  // contact list and is enabled only for gated activities, while a waiver chip
+  // is wanted on every session. This is bounded by the roster.
+  const waiverContactIds = [
+    ...(bookingsQ.data ?? []).map((b) => b.contact),
+    ...(participantsQ.data ?? []).map((p) => p.contact),
+  ].filter((id): id is string => !!id)
+  const waiverRoster = useWaiverRoster(
+    currentTeamId,
+    waiverContactIds,
+    sessionQ.data?.activityId ?? null
+  )
+  const waiverStateOf = (contactId?: string | null) =>
+    contactId ? waiverRoster.states.get(contactId) : undefined
+  const waiverCheckOf = (contactId?: string | null) =>
+    contactId ? waiverRoster.checks.get(contactId) : undefined
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['session', sessionId] })
     qc.invalidateQueries({ queryKey: ['session-participants', sessionId] })
     qc.invalidateQueries({ queryKey: ['session-bookings', sessionId] })
+    // Freeing a seat can promote the front of the queue within the same
+    // request, so the queue is refetched by every booking action, not only by
+    // the two that touch it directly.
+    qc.invalidateQueries({ queryKey: ['session-waitlist', sessionId] })
     qc.invalidateQueries({ queryKey: ['sessions'] })
   }
 
@@ -471,7 +614,18 @@ export default function SessionDetailPage() {
 
   const confirmBooking = async (booking: Booking) => {
     const bookingRef = doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, booking.id)
-    await updateDoc(bookingRef, { status: 'confirmed' })
+    // Confirming settles a waitlist claim, so its hold markers go with the same
+    // write — a confirmed seat is an ordinary booking. A leftover
+    // `waitlist_claim` would otherwise keep this person out of
+    // `sendBookingReminders` forever, and a claim that was mid-payment carries
+    // the drop-in hold's `payment_status`/`expires_at` too: leaving those frees
+    // the seat again at the deadline and puts a confirmed booking in
+    // `releaseExpiredBookingHolds`' delete query. One shared patch, so all four
+    // confirm surfaces settle a booking into the same shape.
+    await updateDoc(bookingRef, {
+      status: 'confirmed',
+      ...confirmClearedHoldFields(booking, deleteField()),
+    })
     // Add to participants subcollection
     const participantRef = doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, booking.contact || booking.id)
     await setDoc(participantRef, {
@@ -504,6 +658,35 @@ export default function SessionDetailPage() {
     invalidate()
   }
 
+  // ── waitlist actions ──────────────────────────────────────────────────────────
+  //
+  // Both are callables. A client write would be denied by the rules anyway, and
+  // that denial is deliberate: offering a seat mints a booking hold and rewrites
+  // `bookings_count` inside one transaction, and removing an entry may have to
+  // give a held seat back — neither is expressible as a document write.
+
+  const callWaitlist = async (
+    name: 'promoteWaitlistEntry' | 'removeWaitlistEntry',
+    entry: WaitlistEntry
+  ) => {
+    if (!currentTeamId) return
+    setWaitlistBusy(entry.id)
+    setWaitlistError(null)
+    try {
+      const fn = httpsCallable(functions, name)
+      await fn({ teamId: currentTeamId, sessionId, contactId: entry.id })
+      invalidate()
+    } catch (err: unknown) {
+      // The reason code names the guard that refused; the message is English
+      // source and is the LAST resort, for a refusal the table above has not
+      // learned yet.
+      const key = waitlistErrorKey(err)
+      setWaitlistError(key ? t(key) : (err as Error).message || t('waitlistActionFailed'))
+    } finally {
+      setWaitlistBusy(null)
+    }
+  }
+
   // ── QR scanner ────────────────────────────────────────────────────────────────
 
   const handleQrScan = useCallback(async (raw: string) => {
@@ -528,8 +711,11 @@ export default function SessionDetailPage() {
 
   const scanner = useQrScanner(handleQrScan)
 
-  // toggleScanner intentionally removed — QR scanner is "coming soon" (button is disabled)
-  useEffect(() => { if (!scanning) scanner.stop() }, [scanning, scanner])
+  useEffect(() => {
+    if (scanning) scanner.start()
+    else scanner.stop()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning])
 
   // ── derived ───────────────────────────────────────────────────────────────────
 
@@ -540,6 +726,21 @@ export default function SessionDetailPage() {
 
   const pendingBookings = bookings.filter((b) => !b.status || b.status === 'pending')
   const noShowBookings  = bookings.filter((b) => b.status === 'no_show')
+
+  // The live queue, in queue order. 'offered' stays visible — that person's seat
+  // is held but unclaimed, which is precisely the state a coach needs to see.
+  const waitlist = (waitlistQ.data ?? [])
+    .filter((e) => e.status !== 'claimed')
+    .sort((a, b) => (a.joined_at?.toMillis() ?? 0) - (b.joined_at?.toMillis() ?? 0))
+  const waitingCount = waitlist.filter((e) => e.status === 'waiting').length
+  // Same predicate the server's capacity gate uses, so "Offer now" is disabled
+  // for exactly the sessions the promoter would refuse. A live offer already
+  // holds its seat (bookingHoldsSeat counts the claim hold), so it is correctly
+  // subtracted here too.
+  const freeSeats = seatsFree(
+    session?.max_participants,
+    bookings.filter((b) => bookingHoldsSeat(b)).length
+  )
   const existingParticipantIds = new Set(participants.map((p) => p.contact).filter(Boolean) as string[])
   const activity = activities.find((a) => a.id === session?.activityId)
   const { accent } = activityPalette(session?.activityId, activity?.color)
@@ -640,6 +841,13 @@ export default function SessionDetailPage() {
                       <span>{t('pendingBookingsStat')}</span>
                     </div>
                   )}
+                  {waitingCount > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <ListOrdered className="h-3.5 w-3.5" />
+                      <span className="font-medium text-foreground">{waitingCount}</span>
+                      <span>{t('waitlistStat')}</span>
+                    </div>
+                  )}
                   {session.allowBooking && (
                     <Badge variant="secondary" className="text-xs">{t('bookingOpenBadge')}</Badge>
                   )}
@@ -662,39 +870,77 @@ export default function SessionDetailPage() {
 
         {/* Action row */}
         <div className="px-5 pb-4 flex flex-wrap gap-2">
-          {/* QR scanner — coming soon; button is disabled and scanner UI is suppressed */}
-          <div className="relative inline-flex items-center">
-            <button
-              disabled
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
-            >
-              <QrCode className="h-4 w-4" />
-              {t('checkInScannerButton')}
-            </button>
-            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 select-none">
-              {t('comingSoonBadge')}
-            </span>
-          </div>
+          <button
+            onClick={() => setScanning((v) => !v)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              scanning ? 'bg-primary text-primary-foreground' : 'border hover:bg-muted'
+            }`}
+          >
+            <QrCode className="h-4 w-4" />
+            {scanning ? t('stopScannerButton') : t('checkInScannerButton')}
+          </button>
           <button
             onClick={() => setAddOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
           >
             <UserPlus className="h-4 w-4" /> {t('addContact')}
           </button>
-          {session.allowBooking && (
-            <a
-              href={`/portal/${currentTeamId}/booking`}
-              target="_blank" rel="noopener noreferrer"
+          {/* SHARE the link to THIS session, don't open it — the coach's actual
+              need is sending it to someone, and they can already see the session
+              on the page they are standing on.
+              `?session=` is the booking form's highest-precedence entry point and
+              degrades on its own to the slot list when the session can't be
+              honoured (past, full, unpublished), so a link that has aged in
+              someone's inbox is never a dead end.
+              Slug, not team id: public routes are slug-addressed. The previous
+              href pointed at a `/portal/` prefix that is not a route at all, so
+              this button 404'd. */}
+          {session.allowBooking && teamSlug && (
+            <button
+              onClick={shareBookingLink}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors text-muted-foreground"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> {t('bookingPortalLink')}
-            </a>
+              {linkCopied ? (
+                <>
+                  <Check className="h-3.5 w-3.5" /> {t('bookingLinkCopied')}
+                </>
+              ) : (
+                <>
+                  <Share2 className="h-3.5 w-3.5" /> {t('bookingLinkShare')}
+                </>
+              )}
+            </button>
           )}
         </div>
       </div>
 
-      {/* QR scanner section — disabled (coming soon); keep code for future re-enable */}
-      {/* {scanner.active && ( ... )} */}
+      {/* QR scanner */}
+      {scanning && (
+        <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+          <div className="relative aspect-square w-full max-w-sm mx-auto bg-black">
+            <video
+              ref={scanner.videoRef}
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+            />
+            {scanMsg && (
+              <div
+                className={`absolute inset-x-2 top-2 rounded-lg px-3 py-2 text-center text-sm font-medium shadow ${
+                  scanMsg.ok ? 'bg-green-600 text-white' : 'bg-destructive text-destructive-foreground'
+                }`}
+              >
+                {scanMsg.text}
+              </div>
+            )}
+          </div>
+          {scanner.error ? (
+            <p className="px-5 py-3 text-sm text-destructive">{scanner.error}</p>
+          ) : (
+            <p className="px-5 py-3 text-sm text-muted-foreground">{t('qrScannerHint')}</p>
+          )}
+        </div>
+      )}
 
       {/* Portal bookings */}
       {hasBookings && (
@@ -717,6 +963,8 @@ export default function SessionDetailPage() {
                   {t('noSubBadge')}
                 </span>
               )}
+              <WaiverChip state={waiverStateOf(b.contact)} />
+              <WaiverDoorCheckChip check={waiverCheckOf(b.contact)} />
               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{t('pendingBadge')}</Badge>
               <div className="flex items-center gap-1">
                 <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('confirmAttendanceTitle')}>
@@ -764,6 +1012,92 @@ export default function SessionDetailPage() {
         </div>
       )}
 
+      {/* Waitlist — the queue behind a full class.
+          Shown when the activity runs one (so a coach can see the door is open
+          even on a class nobody has queued for yet) or when entries exist at
+          all — never on the sessions that have neither, where it would be noise
+          on the great majority of classes that never fill. */}
+      {(activity?.waitlistEnabled === true || waitlist.length > 0) && (
+        <div className="rounded-xl border bg-card p-4 shadow-sm">
+          <SectionHeader icon={<ListOrdered className="h-3.5 w-3.5" />} label={t('waitlistSection')} count={waitingCount} color="#7C3AED" />
+
+          {waitlistError && (
+            <p className="mb-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{waitlistError}</p>
+          )}
+
+          {waitlist.length === 0 && (
+            <p className="py-4 text-sm text-muted-foreground">{t('waitlistEmpty')}</p>
+          )}
+
+          {waitlist.map((e, i) => {
+            const terminal = e.status === 'expired' || e.status === 'left'
+            const offerMsLeft = e.offer_expires_at ? e.offer_expires_at.toMillis() - Date.now() : null
+            return (
+              <div key={e.id} className={`flex items-center gap-3 py-2.5 border-b last:border-0 ${terminal ? 'opacity-50' : ''}`}>
+                <div className="h-9 w-9 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold flex-shrink-0 tabular-nums">
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{e.lastname} {e.firstname}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {[e.email, e.phone].filter(Boolean).join(' · ')}
+                  </p>
+                  {e.joined_at && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('waitlistWaitingSince', { date: formatDate(e.joined_at) })}
+                    </p>
+                  )}
+                </div>
+                {e.status === 'offered' && offerMsLeft !== null && (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {offerMsLeft > 0
+                      ? t('waitlistOfferExpiresIn', { time: `${Math.max(1, Math.round(offerMsLeft / 60000))} min` })
+                      : t('waitlistOfferLapsed')}
+                  </span>
+                )}
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${e.status === 'offered' ? 'text-amber-600 border-amber-300' : ''}`}
+                >
+                  {e.status === 'waiting'
+                    ? t('waitlistStatusWaiting')
+                    : e.status === 'offered'
+                      ? t('waitlistStatusOffered')
+                      : e.status === 'expired'
+                        ? t('waitlistStatusExpired')
+                        : t('waitlistStatusLeft')}
+                </Badge>
+                <div className="flex items-center gap-1">
+                  {/* Only ever offered to somebody still WAITING, and only when
+                      a seat is genuinely free — the callable re-checks both, but
+                      a button that always fails is not a button. */}
+                  {e.status === 'waiting' && (
+                    <button
+                      onClick={() => callWaitlist('promoteWaitlistEntry', e)}
+                      disabled={waitlistBusy !== null || freeSeats <= 0}
+                      className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                      title={freeSeats <= 0 ? t('waitlistOfferNowDisabled') : t('waitlistOfferNow')}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {!terminal && (
+                    <button
+                      onClick={() => setWaitlistRemoving(e)}
+                      disabled={waitlistBusy !== null}
+                      className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-30"
+                      title={t('waitlistRemove')}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* Participants / check-ins */}
       <div className="rounded-xl border bg-card p-4 shadow-sm">
         <SectionHeader icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={t('checkInsSection')} count={participants.length} color="#059669" />
@@ -799,6 +1133,12 @@ export default function SessionDetailPage() {
                 {t('noSubBadge')}
               </span>
             )}
+            {/* A participant row may have NO booking at all — a staff add, or a
+                kiosk/self check-in — which is exactly the person whose waiver
+                nobody collected. `booking.waiver_state` cannot reach them, so
+                this reads the signer row. */}
+            <WaiverChip state={waiverStateOf(p.contact)} />
+            <WaiverDoorCheckChip check={waiverCheckOf(p.contact)} />
             <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
               <X className="h-3.5 w-3.5" />
             </button>
@@ -840,6 +1180,42 @@ export default function SessionDetailPage() {
           onSaved={invalidate}
         />
       )}
+
+      {/* Removing someone from a queue is destructive and unrecoverable — they
+          would have to join again, at the back. Confirmation dialog, like every
+          other destructive action here. */}
+      <Dialog open={!!waitlistRemoving} onOpenChange={(open) => !open && setWaitlistRemoving(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">{t('waitlistRemove')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('waitlistRemoveConfirm', {
+              name: waitlistRemoving
+                ? `${waitlistRemoving.firstname ?? ''} ${waitlistRemoving.lastname ?? ''}`.trim()
+                : '',
+            })}
+          </p>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                const entry = waitlistRemoving
+                setWaitlistRemoving(null)
+                if (entry) callWaitlist('removeWaitlistEntry', entry)
+              }}
+              className="flex-1 rounded-lg bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              {t('waitlistRemove')}
+            </button>
+            <button
+              onClick={() => setWaitlistRemoving(null)}
+              className="flex-1 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              {t('waitlistRemoveCancel')}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <SessionDeleteDialog
         open={deleteOpen}

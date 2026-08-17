@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { MapPin, ArrowRight } from 'lucide-react'
 import type { ClubsSection, LocationsSection, CoachesSection, TeamPublicProfile } from '@linyup/shared'
 import type { SitePalette } from './theme'
@@ -96,7 +97,11 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
             accentColor: data?.bioLinkAccentColor || undefined,
             address: data?.mainAddress?.address || undefined,
           }
-        } catch {
+        } catch (err: unknown) {
+          // Per-club degradation: the org page still lists this club, just
+          // without its profile. Logged so a rules change is not mistaken for
+          // clubs that never filled their profile in.
+          reportPublicLoadFailure('org-site/club-profile', err)
           return { teamId: t.teamId, slug: t.slug, name: t.name }
         }
       })
@@ -104,7 +109,12 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
       .then((list) => {
         if (alive) setClubs(list)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // Belt-and-braces: the per-club mapper above already catches, so nothing
+        // should reach here. `catch {}` is still not how you say that — an outer
+        // handler that fires unexpectedly and empties the section in silence is
+        // the same defect one level up.
+        reportPublicLoadFailure('org-site/clubs', err)
         if (alive) setClubs([])
       })
       .finally(() => {
@@ -219,7 +229,8 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
             address: main.address,
             mapsLink: main.mapsLink,
           }
-        } catch {
+        } catch (err: unknown) {
+          reportPublicLoadFailure('org-site/club-location', err)
           return null
         }
       })
@@ -237,7 +248,8 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
           ...extraLocations,
         ])
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('org-site/locations', err)
         if (alive) setLocations([])
       })
       .finally(() => {
@@ -342,7 +354,8 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
           const data = snap.data() as TeamPublicProfile | undefined
           const clubName = data?.name || t.name
           return (data?.coaches ?? []).map((c) => ({ ...c, clubName }))
-        } catch {
+        } catch (err: unknown) {
+          reportPublicLoadFailure('org-site/club-coaches', err)
           return []
         }
       })
@@ -350,7 +363,8 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
       .then((lists) => {
         if (alive) setCoaches(lists.flat())
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('org-site/coaches', err)
         if (alive) setCoaches([])
       })
       .finally(() => {

@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useTranslations } from 'next-intl'
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -109,7 +110,11 @@ export default function TrialBookingForm({ teamId, teamName }: Props) {
           .filter((s) => s.start && s.end) // session public profiles have start/end
         setSessions(list)
       } catch (err) {
-        console.error('Error loading sessions', err)
+        // Scope-tagged so it greps with the rest (`[public/…]`). NOTE: the
+        // visitor still sees this as "no trial sessions" — a rule-2 gap this
+        // change does not close, because doing so means threading an error state
+        // through the whole trial flow. Recorded in the review, not silently.
+        reportPublicLoadFailure('trial-booking/sessions', err)
       } finally {
         setLoadingSessions(false)
       }

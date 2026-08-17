@@ -48,6 +48,15 @@ describe('chart templates', () => {
         }
       })
 
+      it('gives gift-card revenue an account of its own', () => {
+        // The compile break from adding a FinanceCategory is satisfied by ANY
+        // code — including the catch-all 'other' account, which would silently
+        // re-merge gift-card sales with no-show fees and make the split a no-op.
+        // Only a distinct account keeps the bucket separable in the ledger.
+        const m = template.mapping.revenue_by_category
+        assert.notEqual(m.gift_card, m.other, `${id} gift_card must not reuse the other account`)
+      })
+
       it('types the mapped accounts sensibly', () => {
         const byCode = new Map(template.accounts.map((a) => [a.code, a]))
         assert.equal(byCode.get(template.mapping.bank_account)!.type, 'asset')

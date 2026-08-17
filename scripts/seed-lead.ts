@@ -70,6 +70,7 @@ import {
 import { buildStorefrontPageLinks } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 import { linkConnectAccount } from './lib/connect'
+import { requireConsentExport } from './lib/exportConsentLedger'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -102,8 +103,16 @@ const { values: cli } = parseArgs({
     // Pin the staff-login password instead of generating a random one — use it
     // when reseeding so the lead's known password keeps working.
     password: { type: 'string' },
+    // Q13's escape hatch, typed rather than defaulted: --reset destroys every
+    // signature the tenant collected, and this is what says "I know it holds
+    // none". Echoed to the console, which is a destructive run's only record.
+    'no-consent-export': { type: 'boolean', default: false },
   },
 })
+
+/** Where the pre-teardown consent ledgers land. Under `exports/`, which is
+ *  gitignored: they carry names, addresses and IP addresses. */
+const CONSENT_EXPORT_DIR = path.resolve(process.cwd(), 'exports', 'consent-ledgers')
 const LEAD = cli.lead ?? process.env.LEAD
 if (!LEAD || !/^[a-z0-9-]+$/.test(LEAD)) {
   console.error(
@@ -468,6 +477,16 @@ const TENANT_DOCID_COLLECTIONS: string[] = TENANT_COLLECTIONS.flatMap((c) =>
 
 async function resetLeadTenant(teamId: string) {
   console.log(`   ⟲ resetting tenant '${teamId}'…`)
+
+  // EXPORT BEFORE TEARDOWN (Q13). `documents` is swept by teamId below, so this
+  // delete destroys every signature the tenant collected — the acceptance
+  // events, the immutable version snapshots their hashes point at, and the
+  // signer rows. The ledger is written to disk FIRST, and a failure refuses the
+  // whole reset rather than proceeding on the guess that there was nothing to
+  // keep. A lead sandbox rarely holds a real signature; the gate is here anyway,
+  // because a teardown path that only exports sometimes is a teardown path
+  // nobody can rely on.
+  await requireConsentExport(db, [teamId], CONSENT_EXPORT_DIR, { skip: cli['no-consent-export'] })
 
   // teams/{teamId} subtree (members, plugins, subscription_types, products, …)
   await db.recursiveDelete(db.collection('teams').doc(teamId))
@@ -2379,9 +2398,13 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     ...(profile.customFieldDefinitions?.length ? [{ id: 'custom-fields' }] : []),
     ...(profile.contactGroups?.length ? [{ id: 'contact-groups' }] : []),
     ...(profile.forms?.length ? [{ id: 'custom-forms' }] : []),
-    ...(profile.documents.length > 0
-      ? [{ id: 'documents', config: { signupDocumentIds: signupDocIds } }]
-      : []),
+    // Gift cards are install-gated (Wave 3.5), and syncTeamPublicProfile refuses
+    // to mirror `giftCards.enabled` without the plugin — so a lead tenant with
+    // gift cards configured needs it, or the offer silently vanishes from the
+    // shop mid prospect demo.
+    ...(profile.giftCards?.enabled ? [{ id: 'gift-cards' }] : []),
+    // NOT 'documents' — a default feature on every plan, not a plugin. Its
+    // signup-consent selection goes to teams/{teamId}/settings/documents below.
   ]
   for (const p of plugins) {
     await db
@@ -2398,6 +2421,15 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
         config: p.config ?? {},
         updated_at: ts(daysFromNow(-200)),
       })
+  }
+
+  if (profile.documents.length > 0) {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('settings')
+      .doc('documents')
+      .set({ signupDocumentIds: signupDocIds, updated_at: ts(daysFromNow(-200)) })
   }
 
   // ── website: profile-authored sections with asset resolution ───────────────

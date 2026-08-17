@@ -209,11 +209,12 @@ export default function PublicPageHub() {
         : <SetupLink href={pluginSetupHref('custom-forms')} label={t('setUp')} />,
     },
     {
+      // Always "Manage": Documents is a default feature, so there is nothing to
+      // set up — the surface is dark only until the studio publishes and shares
+      // a document, which is what the Manage link takes them to.
       key: 'documents', icon: FileText, title: t('surfaceDocuments'), desc: t('documentsDesc'),
       live: flags.documentsLive, previewUrl: publicUrl('documents'),
-      action: flags.documentsActive
-        ? <ManageLink href={'/plugins/documents' as Route} label={t('manage')} />
-        : <SetupLink href={pluginSetupHref('documents')} label={t('setUp')} />,
+      action: <ManageLink href={'/documents' as Route} label={t('manage')} />,
     },
   ]
 

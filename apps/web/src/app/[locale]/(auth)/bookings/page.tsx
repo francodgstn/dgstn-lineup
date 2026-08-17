@@ -15,6 +15,7 @@ import {
   writeBatch,
   serverTimestamp,
   increment,
+  deleteField,
   collection,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -46,7 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Booking } from '@linyup/shared'
+import { confirmClearedHoldFields, type Booking } from '@linyup/shared'
 import {
   Search,
   MoreHorizontal,
@@ -291,8 +292,18 @@ function useBookingAction(teamId: string | null) {
       const batch = writeBatch(db)
 
       if (action === 'confirm') {
-        // Mark booking confirmed
-        batch.update(bookingRef, { status: 'confirmed', confirmed_at: serverTimestamp() })
+        // Mark booking confirmed. The hold markers go with the same write: a
+        // confirmed seat is an ordinary booking, and a leftover `waitlist_claim`
+        // would keep this person out of `sendBookingReminders` forever. For a
+        // claim that was mid-payment the drop-in hold's own markers have to go
+        // too, or the confirmed booking loses its seat at `expires_at` and
+        // `releaseExpiredBookingHolds` deletes it at 02:00 — see
+        // `confirmClearedHoldFields`, which all four confirm surfaces share.
+        batch.update(bookingRef, {
+          status: 'confirmed',
+          confirmed_at: serverTimestamp(),
+          ...confirmClearedHoldFields(booking, deleteField()),
+        })
         // Add participant from booking data
         const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
         batch.set(participantRef, {
@@ -304,9 +315,11 @@ function useBookingAction(teamId: string | null) {
           session: booking.session,
           confirmedFromBooking: true,
         })
-        // Adjust session counters
+        // Conversion only. `bookings_count` is never written from a client:
+        // it has one writing style (an absolute value from a server read set,
+        // or trackBookings' recount, which this status flip fires) and a blind
+        // increment from here would fight the booking transactions for it.
         batch.update(sessionRef, {
-          bookings_count: increment(-1),
           conversions_count: increment(1),
         })
         if (booking.contact) {
@@ -323,9 +336,8 @@ function useBookingAction(teamId: string | null) {
         // Remove participant doc
         const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
         batch.delete(participantRef)
-        // Undo session counters
+        // Undo the conversion only — see the note above.
         batch.update(sessionRef, {
-          bookings_count: increment(1),
           conversions_count: increment(-1),
         })
         if (booking.contact) {
@@ -337,7 +349,7 @@ function useBookingAction(teamId: string | null) {
         batch.update(bookingRef, { status: 'no_show', no_show_at: serverTimestamp() })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { bookings_count: increment(-1) })
+          // The freed seat is trackBookings' recount to write — see above.
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),
@@ -352,7 +364,7 @@ function useBookingAction(teamId: string | null) {
         })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { bookings_count: increment(-1) })
+          // The freed seat is trackBookings' recount to write — see above.
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),

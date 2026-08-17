@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useTranslations } from 'next-intl'
 import { CalendarDays, MapPin, CreditCard, CheckCircle2, AlertCircle, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -100,7 +101,10 @@ export default function EventInvitationPage() {
         setRsvpStatus(result.data.attendee ? 'attending' : 'none')
         setPageState('ready')
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // 'invalid' is deliberate — a bad token and a dead backend are the same
+        // dead end to the reader — but only one of them is our fault to fix.
+        reportPublicLoadFailure('event-invitation/details', err)
         setPageState('invalid')
       })
   }, [token])

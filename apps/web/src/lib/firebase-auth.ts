@@ -1,5 +1,5 @@
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import app, { emulatorProxy, EMULATOR_PORTS } from './firebase'
+import app, { emulatorProxy, EMULATOR_PORTS, emulatorHost } from './firebase'
 
 // In a Codespace, GitHub's tunnel layer 401s any same-origin request whose
 // path contains `googleapis.com` (apparently an anti-abuse rule preventing
@@ -53,7 +53,9 @@ if (
 ) {
   // In a Codespace the auth emulator is proxied through this app's origin
   // (see next.config.ts); locally it's reached directly.
-  const url = emulatorProxy ? emulatorProxy.origin : `http://localhost:${EMULATOR_PORTS.auth}`
+  const url = emulatorProxy
+    ? emulatorProxy.origin
+    : `http://${emulatorHost()}:${EMULATOR_PORTS.auth}`
   connectAuthEmulator(auth, url, { disableWarnings: true })
   ;(globalThis as { _authEmulatorConnected?: boolean })._authEmulatorConnected = true
 }

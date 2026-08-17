@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useTranslations, useMessages } from 'next-intl'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useLocale, useTranslations, useMessages } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrackNavigationDepth } from '@/hooks/useBackNavigation'
@@ -10,17 +14,18 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { UserMenu } from '@/components/layout/UserMenu'
+import { TeamQrButton } from '@/components/layout/TeamQrButton'
 import {
   LayoutDashboard,
   Users,
   Calendar,
   ClipboardList,
+  ClipboardCheck,
   Trophy,
   Globe,
   Wallet,
   ChevronLeft,
   ChevronRight,
-  ChevronsRight,
   ChevronDown,
   Lock,
   Puzzle,
@@ -46,14 +51,16 @@ import {
   TrendingUp,
   Search,
   Calculator,
+  Ticket,
 } from 'lucide-react'
+import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
 import { planSupportsAffiliations, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
-import { OpenTabsProvider } from '@/contexts/OpenTabsContext'
+import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
@@ -115,6 +122,17 @@ const DASHBOARD_ITEM: NavItem = {
   labelKey: 'dashboard',
   icon: LayoutDashboard,
 }
+// Plugin catalogue. Was a text link at the FOOT of the features group, which put
+// discovery of most of the product below everything already installed — the one
+// place a new studio, whose nav is nearly empty, is least likely to look. Now an
+// icon button in the utility row at the top, first of the three.
+const EXPLORE_PLUGINS_ITEM: NavItem = {
+  id: 'explorePlugins',
+  href: '/settings/plugins',
+  labelKey: 'explorePlugins',
+  icon: Puzzle,
+  exact: true,
+}
 const ALL_SETTINGS_ITEM: NavItem = {
   id: 'allSettings',
   href: '/settings',
@@ -140,6 +158,10 @@ const NAV_SECTIONS: NavSection[] = [
     icon: Activity,
     items: [
       { id: 'calendar', href: '/schedule', labelKey: 'calendar', icon: Calendar },
+      // The printable day sheet — what a coach carries to the door. Sits next
+      // to the calendar because it answers the same question ("what's on
+      // today?") for the one context the calendar can't serve: paper.
+      { id: 'manifest', href: '/manifest', labelKey: 'manifest', icon: ClipboardCheck },
       { id: 'bookings', href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { id: 'contacts', href: '/contacts', labelKey: 'contacts', icon: Users },
       // Coaches (team staff) — studio/org only; the coach plan is single-person.
@@ -173,6 +195,21 @@ const NAV_SECTIONS: NavSection[] = [
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
       { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
+      // Promo codes — a plugin as of Wave 3.5, so the item appears only once
+      // installed, exactly like Courses and Products above and below it. The
+      // plan requirement lives in the manifest (`minPlan: 'studio'`) and the
+      // marketplace card is where a studio discovers it, which is why hiding
+      // the nav item here no longer hides the feature's existence.
+      //
+      // The server gate is assertPluginInstalled on createPromoCode ONLY, so a
+      // studio that uninstalls keeps its live codes redeemable and manageable.
+      {
+        id: 'promoCodes',
+        href: '/offer/promo-codes',
+        labelKey: 'promoCodes',
+        icon: Ticket,
+        requiresPlugin: 'promo-codes',
+      },
       {
         id: 'onlineCourses',
         href: '/offer/online-courses',
@@ -187,12 +224,16 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Package,
         requiresPlugin: 'products',
       },
+      // Documents is a DEFAULT FEATURE on every plan — no `requiresPlugin`, no
+      // `minPlan`. It was never monetised (the retired manifest declared
+      // minPlan 'free' with no add-on), and its install gate was actively
+      // harmful under a waiver gate: deactivating it deleted every public
+      // document mirror the team had.
       {
         id: 'documents',
-        href: '/plugins/documents',
+        href: '/documents',
         labelKey: 'documents',
         icon: FileText,
-        requiresPlugin: 'documents',
       },
       // The public storefront that aggregates subscriptions, products and courses.
       // Managed at its /public-page/shop detail page; shown once a sellable channel
@@ -337,38 +378,10 @@ function NavLink({
   return link
 }
 
-// Dashboard as the left element of the top toolbar (alongside the settings/help
-// icons), NOT a nav-list row. It deliberately uses the quiet icon-button active
-// style — tinted, no inset accent bar or bold — because here it reads as part of
-// this mini toolbar, not the working-area menu below.
-function DashboardToolbarLink({ collapsed, onClick }: { collapsed: boolean; onClick?: () => void }) {
-  const pathname = usePathname()
-  const t = useTranslations('Nav')
-  const Icon = DASHBOARD_ITEM.icon
-  const label = t(DASHBOARD_ITEM.labelKey as Parameters<typeof t>[0])
-  const isActive = pathname === DASHBOARD_ITEM.href
-  return (
-    <Link
-      href={DASHBOARD_ITEM.href as Route}
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      className={`flex h-8 items-center rounded-lg transition-colors ${
-        collapsed ? 'w-8 justify-center' : 'flex-1 gap-2 px-2'
-      } ${
-        isActive
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-      }`}
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      {!collapsed && <span className="text-sm font-medium">{label}</span>}
-    </Link>
-  )
-}
-
-// A compact icon-only link for the utility actions (settings, help) that sit in
-// their own row under the search bar rather than in the nav list. Always shows
-// its label as a tooltip, since there's no text beside the icon.
+// A compact icon-only link for the utility destinations (plugins, settings,
+// how-to) that sit in their own row under the search bar rather than in the nav
+// list. Always shows its label as a tooltip, since there's no text beside the
+// icon.
 function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
@@ -897,8 +910,9 @@ function ShortcutsNav({
   onLinkClick?: () => void
 }) {
   const t = useTranslations('Nav')
-  const { pinnedIds, setPinOrder } = useNavPins()
+  const { pinnedIds, setPinOrder, clearShortcuts } = useNavPins()
   const [expanded, setExpanded] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   // Insertion index (in the displayed list) the dragged row would drop into.
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -946,7 +960,46 @@ function ShortcutsNav({
 
   return (
     <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'mt-3'}>
-      {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
+      {/* Header row: the group label, with "clear all" pushed to the right.
+          Confirmed, because pins are hand-curated and drag-ordered — rebuilding
+          them is minutes of fiddling, and there is no undo. */}
+      {!collapsed && (
+        <div className="flex items-center pb-1">
+          <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
+            {t('navGroupShortcuts')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setClearOpen(true)}
+            title={t('navShortcutsClear')}
+            aria-label={t('navShortcutsClear')}
+            className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Eraser className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {!collapsed && (
+        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('navShortcutsClearTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('navShortcutsClearBody')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('navShortcutsClearCancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  clearShortcuts()
+                  setClearOpen(false)
+                }}
+              >
+                {t('navShortcutsClear')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       <div className={collapsed ? 'space-y-0.5' : `${SHORTCUTS_RULE} space-y-0.5`}>
         {shown.map((entry, idx) => (
           <div key={entry.id}>
@@ -1019,15 +1072,52 @@ function normalizeSearch(s: string) {
 // label — "members" for Contacts — maintained per locale).
 type SearchEntry = ResolvedNavEntry & { keywords: string; pinnable: boolean }
 
+// ⌘ on Apple, Ctrl elsewhere. Deliberately NOT translated — these are key CAPS,
+// the same glyph on a German keyboard as on an English one. Guards `navigator`
+// so it is safe during SSR, where it resolves to the Ctrl form and is corrected
+// on hydration (the hint is decorative; the handler accepts either modifier).
+function modKeyLabel(): string {
+  if (typeof navigator === 'undefined') return 'Ctrl+'
+  return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl+'
+}
+
 // Sidebar quick-search (Firebase-style). Phase 1 searches nav destinations only,
 // but results are already grouped so later search providers (contacts, products,
 // courses… — async, Zoho-Books-style) can append their own result groups.
-function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate?: () => void }) {
+function NavSearch({
+  entries,
+  onNavigate,
+  collapsed,
+}: {
+  entries: SearchEntry[]
+  onNavigate?: () => void
+  collapsed?: boolean
+}) {
   const t = useTranslations('Nav')
   const router = useRouter()
+  const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
+  const { isPinned, togglePin } = useNavPins()
   const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Where the panel opens: measured from the trigger at click time, so it grows
+  // out of the control the user actually pressed rather than appearing in the
+  // corner of the window. Falls back to the sidebar's top-left for ⌘K, which
+  // has no click to measure.
+  const [anchor, setAnchor] = useState<{ left: number; top: number }>({ left: 8, top: 8 })
+
+  const openPanel = () => {
+    const r = triggerRef.current?.getBoundingClientRect()
+    // Offset right of the trigger on desktop so the panel is visibly detached
+    // from the window edge rather than pinned to it. Not on narrow viewports,
+    // where every pixel of width counts more than the gap.
+    const nudge = typeof window !== 'undefined' && window.innerWidth >= 768 ? 8 : 0
+    if (r) setAnchor({ left: r.left + nudge, top: r.top })
+    setExpanded(true)
+  }
 
   const q = normalizeSearch(query.trim())
   const results = q
@@ -1039,88 +1129,290 @@ function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate
     : []
   // Future providers append their groups here (each may resolve asynchronously).
   const groups = [{ label: t('navSearchGroupPages'), results }]
-  const open = focused && q.length > 0
+  // Two different things, no longer fused: the PANEL is open because the user
+  // asked for it, and the RESULT LIST appears once there is something to match.
+  const showResults = expanded && q.length > 0
+  const open = showResults
 
-  // Close when clicking anywhere outside the search box + dropdown.
+  // Keyboard selection indexes the FLATTENED result order, so it keeps working
+  // when later providers append their own groups — the visual grouping and the
+  // arrow-key order must not diverge.
+  const flat = groups.flatMap((g) => g.results)
+  const active = flat[activeIndex]
+
+  // A new query is a new result set; an index carried over from the old one
+  // would highlight an unrelated row (or nothing).
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [q])
+
+  // Keep the highlighted row visible in the scrollable dropdown.
   useEffect(() => {
     if (!open) return
+    listRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [open, activeIndex])
+
+  // Close when clicking anywhere outside the panel. Keyed on `expanded`, not on
+  // `open`: the panel is dismissible while it is still empty, which is exactly
+  // when a user who opened it by accident wants out.
+  useEffect(() => {
+    if (!expanded) return
     const onDown = (ev: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) setFocused(false)
+      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) close()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+  }, [expanded])
+
+  // ⌘K / Ctrl+K. Behind an icon, search loses the discoverability a permanent
+  // field had; the shortcut is the standard compensation, and the placeholder
+  // spells it out for anyone who opens the panel by mouse.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'k' || ev.key === 'K')) {
+        ev.preventDefault()
+        openPanel()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const close = () => {
     setQuery('')
-    setFocused(false)
+    setExpanded(false)
+    setActiveIndex(0)
   }
 
+  const openEntry = (entry: SearchEntry) => {
+    router.push(entry.href as Route)
+    close()
+    onNavigate?.()
+  }
+
+  // Background tab, matching the ctrl/⌘/middle-click convention OpenTabsContext
+  // already documents. With the strip switched off (Settings → General) there is
+  // nowhere to put a tab, so fall back to opening normally rather than no-op —
+  // a shortcut that silently does nothing reads as broken.
+  const openEntryAsTab = (entry: SearchEntry) => {
+    if (!tabsEnabled) return openEntry(entry)
+    openInNewTab(entry.href, entry.label)
+    close()
+  }
+
+  // The trigger — a MINI-INPUT, not a bare icon.
+  //
+  // It reads as a field (icon + placeholder + a rule under it) so it still says
+  // "you can search here", while costing a share of one row instead of a whole
+  // one — which is what freed the space the studio name now uses in the header.
+  // Clicking it opens the real input in an overlay; because the two look alike,
+  // that reads as the field growing rather than a different thing appearing.
+  //
+  // It takes the row's spare width (`flex-1`) and pushes the true icon buttons
+  // right, which is also what keeps THEM reading as secondary.
+  //
+  // Collapsed sidebar: no room for text, so it falls back to the icon alone.
+  // The trigger stays MOUNTED while the panel is open. Unmounting it collapsed
+  // the row and slid the icons beside it left — and, because the panel anchors
+  // to the trigger's measured position, an unmounted trigger also loses the ref
+  // any reposition would need.
   return (
-    <div ref={wrapRef} data-tour="nav-search" className="relative">
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        data-tour="nav-search"
+        onClick={openPanel}
+        title={`${t('navSearchPlaceholder')} (${modKeyLabel()}K)`}
+        aria-label={t('navSearchPlaceholder')}
+        className={
+          collapsed
+            ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+            : 'group/search flex h-8 min-w-0 flex-1 items-center gap-1.5 border-b border-transparent px-1 text-muted-foreground transition-colors hover:border-border hover:text-foreground'
+        }
+      >
+        <Search className="h-4 w-4 shrink-0" />
+        {/* Placeholder only — no ⌘K badge. The shortcut still works and is in
+            the tooltip; printed in the row it was visual noise on a control
+            whose whole job is to stay quiet until wanted. */}
+        {!collapsed && <span className="truncate text-xs">{t('navSearchPlaceholder')}</span>}
+      </button>
+
+      {/* PORTALLED TO document.body. `fixed` is only viewport-relative while no
+          ancestor creates a containing block, and the sidebar sits inside a
+          sticky/width-transitioning tree — on the settings page the overlay
+          rendered BEHIND the page content because of it. A portal removes the
+          whole class of bug rather than chasing z-index. */}
+      {expanded &&
+        createPortal(
+    <>
+      {/* Dim the page behind the panel — enough to actually read as a mode the
+          app is in, not a translucent box floating over live content. */}
+      <div aria-hidden className="fixed inset-0 z-40 animate-in fade-in-0 duration-150 bg-background/80" />
+      <div
+        ref={wrapRef}
+        data-tour="nav-search"
+        // Grows out of the trigger, spilling a little into the content area.
+        // Capped so it never runs off a narrow viewport.
+        style={{ left: anchor.left, top: anchor.top }}
+        // Grows out of the trigger: fades and scales up from 95%, sliding a few
+        // pixels right so it reads as the mini-input opening rather than a
+        // separate panel blinking into existence on top of it.
+        className="fixed z-50 w-[min(22rem,calc(100vw-1rem))] origin-top-left animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-150 rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-lg"
+      >
+      <div className="relative">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        // autoFocus, NOT a ref: the shared Input is a plain function component
+        // with no forwardRef, so a ref on it is silently null and the panel
+        // opened with nothing focused. The input mounts with the panel, so
+        // autoFocus is both correct and simpler.
+        autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => setFocused(true)}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls="nav-search-results"
+        aria-activedescendant={open && active ? `nav-search-opt-${active.id}` : undefined}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') close()
-          if (e.key === 'Enter' && results[0]) {
+          if (e.key === 'Escape') return close()
+          if (!open || flat.length === 0) return
+          if (e.key === 'ArrowDown') {
             e.preventDefault()
-            router.push(results[0].href as Route)
-            close()
-            onNavigate?.()
+            setActiveIndex((i) => (i + 1) % flat.length)
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActiveIndex((i) => (i - 1 + flat.length) % flat.length)
+            // Home/End are deliberately NOT bound: this is a text input the
+            // visitor is still typing in, and there they move the caret. Arrows
+            // are the list-navigation convention precisely because they are the
+            // keys a text field does not need.
+          } else if (e.key === 'Enter' && active) {
+            e.preventDefault()
+            if (e.metaKey || e.ctrlKey) openEntryAsTab(active)
+            else openEntry(active)
+          } else if ((e.key === 'p' || e.key === 'P') && e.altKey && active?.pinnable) {
+            // Alt rather than ⌘/Ctrl: ⌘P is Print in every browser.
+            e.preventDefault()
+            togglePin(active.id)
           }
         }}
         placeholder={t('navSearchPlaceholder')}
         aria-label={t('navSearchPlaceholder')}
         className="h-8 pl-8 text-sm"
       />
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-md">
+      </div>
+      {/* Before anything is typed the panel would otherwise be a bare field with
+          a void under it, which reads as broken rather than ready. One quiet row,
+          shaped like the result rows it will be replaced by. */}
+      {!showResults && (
+        <div className="mt-1.5 flex items-center gap-2 rounded-md px-2 py-3 text-sm text-muted-foreground">
+          {/* No icon — the field above already has one, and repeating it made
+              the row read as a result rather than a prompt. The shortcut IS
+              here, though: this is the moment the user is looking at the panel
+              and can learn how to reach it without the mouse next time. */}
+          <span>{t('navSearchPrompt')}</span>
+          <kbd className="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground/70">
+            {modKeyLabel()}K
+          </kbd>
+        </div>
+      )}
+      {showResults && (
+        <div
+          ref={listRef}
+          id="nav-search-results"
+          role="listbox"
+          className="mt-1.5 max-h-[60vh] overflow-y-auto"
+        >
           {results.length === 0 ? (
             <p className="px-2 py-2 text-sm text-muted-foreground">{t('navSearchNoResults')}</p>
           ) : (
-            groups.map((group) =>
-              group.results.length === 0 ? null : (
-                <div key={group.label}>
-                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
-                    {group.label}
-                  </p>
-                  <div className="space-y-0.5">
-                    {group.results.map((entry) => {
-                      const Icon = entry.icon
-                      const row = (
-                        <Link
-                          href={entry.href as Route}
-                          onClick={() => {
-                            close()
-                            onNavigate?.()
-                          }}
-                          className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
-                            entry.pinnable ? 'pr-8' : ''
-                          }`}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{entry.label}</span>
-                        </Link>
-                      )
-                      if (!entry.pinnable) return <div key={entry.id}>{row}</div>
-                      return (
-                        <div key={entry.id} className="group relative">
-                          {row}
-                          <PinButton id={entry.id} pinOnly />
-                        </div>
-                      )
-                    })}
+            <>
+              {groups.map((group) =>
+                group.results.length === 0 ? null : (
+                  <div key={group.label}>
+                    <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
+                      {group.label}
+                    </p>
+                    <div className="space-y-0.5">
+                      {group.results.map((entry) => {
+                        const Icon = entry.icon
+                        const isActive = active?.id === entry.id
+                        const row = (
+                          <Link
+                            href={entry.href as Route}
+                            id={`nav-search-opt-${entry.id}`}
+                            role="option"
+                            aria-selected={isActive}
+                            data-active={isActive}
+                            // Pointer and keyboard drive ONE selection, so hovering
+                            // moves the highlight instead of fighting it.
+                            onMouseEnter={() => setActiveIndex(flat.indexOf(entry))}
+                            onClick={(e) => {
+                              if (e.metaKey || e.ctrlKey) {
+                                e.preventDefault()
+                                openEntryAsTab(entry)
+                                return
+                              }
+                              close()
+                              onNavigate?.()
+                            }}
+                            className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground ${
+                              isActive ? 'bg-accent text-foreground' : 'text-muted-foreground'
+                            } ${entry.pinnable ? 'pr-8' : ''}`}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{entry.label}</span>
+                            {isPinned(entry.id) && (
+                              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
+                                {t('navSearchPinned')}
+                              </span>
+                            )}
+                          </Link>
+                        )
+                        if (!entry.pinnable) return <div key={entry.id}>{row}</div>
+                        return (
+                          <div key={entry.id} className="group relative">
+                            {row}
+                            <PinButton id={entry.id} pinOnly />
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )
-            )
+                )
+              )}
+              {/* Shortcuts are invisible without a hint, and an undiscoverable
+                  shortcut is the same as an absent one. */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t px-2 pb-0.5 pt-1.5 text-[10px] text-muted-foreground/70">
+                <span>
+                  <kbd className="font-sans">↑↓</kbd> {t('navSearchHintNavigate')}
+                </span>
+                <span>
+                  <kbd className="font-sans">↵</kbd> {t('navSearchHintOpen')}
+                </span>
+                {tabsEnabled && (
+                  <span>
+                    <kbd className="font-sans">{modKeyLabel()}↵</kbd> {t('navSearchHintTab')}
+                  </span>
+                )}
+                {active?.pinnable && (
+                  <span>
+                    <kbd className="font-sans">Alt+P</kbd> {t('navSearchHintPin')}
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>,
+          document.body
+        )}
+    </>
   )
 }
 
@@ -1167,6 +1459,7 @@ function SidebarContent({
   const unsectionedEntries = pluginEntries.filter(
     (e) => !(e.section && PLUGIN_SECTION_TO_LABEL_KEY[e.section])
   )
+  const locale = useLocale()
   const { open: openSection, toggle: toggleSection } = useAccordionSection()
 
   // Whether a main-nav item passes its plan/plugin/org/shop gates — shared by the
@@ -1273,7 +1566,9 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Logo + collapse toggle */}
+      {/* Logo + collapse toggle. The PRODUCT's identity, and nothing else — the
+          studio's name gets its own row below rather than sitting under the
+          Linyup mark, where the two read as one lockup. */}
       <div
         className={`flex items-center border-b h-14 shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
       >
@@ -1292,30 +1587,63 @@ function SidebarContent({
         )}
       </div>
 
-      {/* Quick search — pages now, entity providers later (hidden in icon mode) */}
-      {!collapsed && (
-        <div className="px-2 pt-2 shrink-0">
-          <NavSearch entries={searchEntries} onNavigate={onLinkClick} />
+      {/* WHICH STUDIO — its own row, with the QR beside it. The QR belongs here
+          rather than with the utility icons: it encodes THIS studio's public
+          links, so it is a property of the name it sits next to, not another
+          place to navigate to. (It used to live beside the user avatar, inside
+          the account cluster, which was the wrong grouping in a third way.)
+
+          Orientation, not a control: there is no team switcher — a user's
+          `currentTeam` is a single value on their profile. Hidden when collapsed,
+          like every other piece of text in the sidebar. */}
+      {!collapsed && team?.name && (
+        <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
+          <Link
+            href={'/dashboard' as Route}
+            onClick={onLinkClick}
+            className="min-w-0 flex-1 truncate rounded px-1 text-xs font-medium transition-colors hover:text-primary"
+          >
+            {team.name}
+          </Link>
+          <TeamQrButton />
         </div>
       )}
 
-      {/* Top toolbar — Dashboard on the left, settings + help as icon buttons on
-          the right, split by a light divider. Dashboard lives here rather than in
-          the menu below, which is why it wears the quiet toolbar active style.
-          In icon-only mode the three stack as centred icons (no divider). */}
+      {/* Utility row — search, then plugins / settings / how-to. Occasional,
+          deliberate destinations, so icons rather than rows competing with the
+          working areas below.
+
+          Search is a mini-input rather than the full-width field it used to be a
+          row above: the field cost a whole row for something used in bursts, and
+          collapsing it is what freed the space the studio name now has. It opens
+          as an overlay anchored to itself, and ⌘K/Ctrl+K opens it too — behind an
+          icon it would otherwise lose the discoverability a permanent field had.
+
+          Closed by a rule that separates it from Dashboard, the first working
+          row. In icon-only mode they stack as centred icons. */}
       <div
-        className={`px-2 pt-2 shrink-0 flex gap-1 ${
+        // No bottom rule: the row already reads as part of the header block
+        // above it, and a second line so close to the studio row's was clutter.
+        // The padding stays, so the spacing below is unchanged.
+        className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 ${
           collapsed ? 'flex-col items-center' : 'items-center'
         }`}
       >
-        <DashboardToolbarLink collapsed={collapsed} onClick={onLinkClick} />
-        {!collapsed && <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 self-center bg-border" />}
+        <NavSearch entries={searchEntries} onNavigate={onLinkClick} collapsed={collapsed} />
+        {collapsed && <TeamQrButton collapsed />}
+        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
         <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
+        {/* Dashboard — a full menu row of its own, directly under the utility
+            icons. It used to share the toolbar with them and wear their quiet
+            active style; it is a working destination people return to daily, not
+            a utility, so it now reads like every other nav row. */}
+        <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
 
@@ -1326,10 +1654,31 @@ function SidebarContent({
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
-              const items = section.items.filter(mainItemVisible)
-              const secPlugins = sectionedEntries.filter(
-                (e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey
-              )
+              // ALPHABETICAL within the section, by the TRANSLATED label — so the
+              // order is the one the reader can see, and it differs per locale on
+              // purpose. The hand-tuned declaration order stopped being worth
+              // defending once a section could hold a dozen items: nobody can
+              // recall a curated order that long, and anyone who wants their own
+              // has Shortcuts, which is drag-ordered and sits above this.
+              const byLabel = (a: string, b: string) => a.localeCompare(b, locale)
+              const items = section.items
+                .filter(mainItemVisible)
+                .slice()
+                .sort((a, b) =>
+                  byLabel(
+                    t(a.labelKey as Parameters<typeof t>[0]),
+                    t(b.labelKey as Parameters<typeof t>[0])
+                  )
+                )
+              const secPlugins = sectionedEntries
+                .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
+                .slice()
+                .sort((a, b) =>
+                  byLabel(
+                    tp(a.labelKey as Parameters<typeof tp>[0]),
+                    tp(b.labelKey as Parameters<typeof tp>[0])
+                  )
+                )
               if (items.length === 0 && secPlugins.length === 0) return null
               const SectionIcon = section.icon
               const label = t(section.labelKey as Parameters<typeof t>[0])
@@ -1422,29 +1771,11 @@ function SidebarContent({
               )
             })}
 
-            {/* Subtle discovery link to the plugin catalogue. Most features are
-                off by default (kept lightweight on purpose, even on Studio), so
-                nudge users to explore without bloating the nav. */}
-            {collapsed ? (
-              <Link
-                href={'/settings/plugins' as Route}
-                onClick={onLinkClick}
-                title={t('explorePlugins')}
-                className="flex items-center justify-center rounded-lg px-2 py-2 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Puzzle className="h-4 w-4 shrink-0" />
-              </Link>
-            ) : (
-              <Link
-                href={'/settings/plugins' as Route}
-                onClick={onLinkClick}
-                className="group/exp mt-1 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/60 transition-colors hover:text-primary"
-              >
-                <Puzzle className="h-3.5 w-3.5 shrink-0" />
-                <span>{t('explorePlugins')}</span>
-                <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover/exp:translate-x-0.5" />
-              </Link>
-            )}
+            {/* The plugin-catalogue link that used to sit here moved to the
+                utility icon row at the top (EXPLORE_PLUGINS_ITEM). At the foot of
+                the features group it was below everything already installed —
+                the least visible spot for the thing that reveals the rest of the
+                product. */}
           </div>
         </div>
 

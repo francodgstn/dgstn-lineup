@@ -15,6 +15,8 @@ import {
   COURSE_MODULES_SUBCOLLECTION,
   COURSE_LESSONS_SUBCOLLECTION,
 } from '@linyup/shared'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useSpaceAuth } from '../../SpaceAuthProvider'
 import SignInDialog from '../../SignInDialog'
 
@@ -125,6 +127,13 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  // "This course does not exist" is a strong claim, and only ONE of the three
+  // ways this load can end earns it: a lookup that SUCCEEDED and came back empty
+  // (or a course doc that is genuinely gone). A failed lookup and an unexpected
+  // read error must not be laundered into it — the contact may own this course,
+  // and telling them it does not exist is worse than telling them nothing.
+  const [loadError, setLoadError] = useState<unknown>(null)
+  const [retryKey, setRetryKey] = useState(0)
   const [gateReason, setGateReason] = useState<GateReason>(null)
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
@@ -135,6 +144,7 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
     setLoading(true)
     setGateReason(null)
     setNotFound(false)
+    setLoadError(null)
 
     async function load() {
       // Resolve courseId + public summary (client-side, always readable).
@@ -157,10 +167,18 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
           accessType = pp.accessType ?? 'registered'
           setSummary({ title: pp.title, coverImageUrl: pp.coverImageUrl, accessType })
         }
-      } catch {
-        // fall through to not-found
+      } catch (err: unknown) {
+        // The slug lookup FAILED — which tells us nothing about whether the
+        // course exists. Stop here rather than falling through to not-found.
+        if (cancelled) return
+        reportPublicLoadFailure('space/course-summary', err)
+        setLoadError(err)
+        setLoading(false)
+        return
       }
       if (cancelled) return
+      // Reached only on a SUCCESSFUL lookup that matched nothing — the one path
+      // that has actually established the course is not there.
       if (!courseId) { setNotFound(true); setLoading(false); return }
 
       // Attempt the gated reads. A permission-denied means this tier is locked
@@ -184,9 +202,15 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
       } catch (err: unknown) {
         if (cancelled) return
         if (err instanceof FirestoreError && err.code === 'permission-denied') {
+          // The ONE justified mapping: the rules refused the read, so the tier is
+          // locked for this visitor. Show the gate that matches it.
           setGateReason(accessType === 'subscription' ? 'subscription' : 'registered')
         } else {
-          setNotFound(true)
+          // Anything else (offline, unavailable, aborted) is a failure to READ a
+          // course we already resolved by slug. It exists; we just could not
+          // fetch it. Say that, and offer the retry.
+          reportPublicLoadFailure('space/course-content', err)
+          setLoadError(err)
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -195,7 +219,7 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
 
     load()
     return () => { cancelled = true }
-  }, [courseSlug, teamId, isAuthenticated])
+  }, [courseSlug, teamId, isAuthenticated, retryKey])
 
   const selectedLesson = useMemo(
     () => lessons.find((l) => l.id === selectedLessonId) ?? null,
@@ -206,6 +230,26 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  // Checked BEFORE not-found, and `notFound` is never set alongside it: a load we
+  // could not complete is a different answer from a course that is not there.
+  if (loadError != null) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-4">
+        {/* The player deliberately sits outside SpaceShell (it wants full width),
+            so it renders on the app's own surface — app tokens are correct here,
+            unlike inside the team-branded portal. */}
+        <QueryErrorState
+          onRetry={() => setRetryKey((k) => k + 1)}
+          title={t('courseLoadFailed')}
+          detail={loadFailureDetail(loadError)}
+        />
+        <Link href={backHref} className="text-sm text-primary hover:underline">
+          {t('backToCourses')}
+        </Link>
       </div>
     )
   }

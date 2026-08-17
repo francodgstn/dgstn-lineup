@@ -10,7 +10,13 @@ import type {
   SaasStatus,
   ContactUsage,
 } from '@linyup/shared'
-import { contactUsageForPlan, PLAN_PRICING } from '@linyup/shared'
+import {
+  contactUsageForPlan,
+  PLAN_PRICING,
+  readGatewayData,
+  subscriptionCancellation,
+  subscriptionIsCancelling,
+} from '@linyup/shared'
 import {
   TEAMS_COLLECTION,
   ORGANIZATIONS_COLLECTION,
@@ -40,7 +46,35 @@ export interface SubscriptionView {
   plan: SaasPlan
   status: SaasStatus
   gatewayType: string | null
-  cancelAtPeriodEnd: boolean
+  /**
+   * WHETHER the subscription is winding down — still live, not renewing.
+   *
+   * This is the field to read for "is it cancelling", and it is deliberately
+   * separate from `endsAtMs`. It replaces the raw `cancel_at_period_end` the view
+   * used to carry, but keeps that field's REACH: it is true for either of the two
+   * ways Stripe expresses a cancellation, including a billing-portal cancellation
+   * that leaves the boolean false (which is what made the console report
+   * "Cancels at period end: No" about a studio that had already left).
+   */
+  cancelling: boolean
+  /**
+   * WHEN it stops, when that is known — via the shared `subscriptionEndsAt`.
+   *
+   * Null does NOT mean "not cancelling". A saas_subscriptions doc written while
+   * the readers still looked for the period on the SUBSCRIPTION — which is every
+   * doc this codebase wrote under Dahlia, so the whole working population —
+   * stored `current_period_end: null` and no `cancel_at`, so a cancelling one
+   * from that window has the boolean and no date at all. A console that inferred
+   * cancellation from this date alone therefore showed an operator nothing for
+   * exactly the accounts worth looking at. Read `cancelling` for the question and
+   * this for the detail.
+   */
+  endsAtMs: number | null
+  /** When the studio asked to leave, and why. Churn, in the operator's hands. */
+  canceledAtMs: number | null
+  cancellationReason: string | null
+  cancellationFeedback: string | null
+  cancellationComment: string | null
   currentPeriodStartMs: number | null
   currentPeriodEndMs: number | null
   trialEndsAtMs: number | null
@@ -164,17 +198,31 @@ async function resolveEmails(uids: string[]): Promise<Map<string, string>> {
 }
 
 function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
+  // The cancellation is a RECORD, not a boolean: a studio that cancelled in the
+  // Stripe billing portal leaves `cancel_at_period_end` false and sets a
+  // `cancel_at` timestamp instead, so an operator reading only the boolean was
+  // told "No" about a studio that had already left.
+  const cancellation = subscriptionCancellation(sub)
+  const gateway = readGatewayData(sub as unknown as Record<string, unknown>)
   return {
     plan: sub.plan,
     status: sub.status,
     gatewayType: sub.gateway_type ?? null,
-    cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+    cancelling: subscriptionIsCancelling(sub),
+    endsAtMs: cancellation?.endsAt?.toMillis?.() ?? null,
+    canceledAtMs: cancellation?.requestedAt?.toMillis?.() ?? null,
+    cancellationReason: cancellation?.reason ?? null,
+    cancellationFeedback: cancellation?.feedback ?? null,
+    cancellationComment: cancellation?.comment ?? null,
     currentPeriodStartMs: sub.current_period_start?.toMillis?.() ?? null,
     currentPeriodEndMs: sub.current_period_end?.toMillis?.() ?? null,
     trialEndsAtMs: sub.trial_ends_at?.toMillis?.() ?? null,
-    customerId: sub.gateway_data?.customer_id ?? null,
-    subscriptionId: sub.gateway_data?.subscription_id ?? null,
-    lastPaymentStatus: sub.gateway_data?.last_payment_status ?? null,
+    // Through readGatewayData: docs written before the dotted-key fix keep these
+    // as literal "gateway_data.customer_id" fields, and reading only the nested
+    // map showed the operator a blank Stripe id for a live paying studio.
+    customerId: gateway.customer_id ?? null,
+    subscriptionId: gateway.subscription_id ?? null,
+    lastPaymentStatus: gateway.last_payment_status ?? null,
     baseMonthly: PLAN_PRICING[sub.plan].baseMonthly,
   }
 }

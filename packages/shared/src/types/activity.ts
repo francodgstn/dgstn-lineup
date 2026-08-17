@@ -1,5 +1,9 @@
 import type { Timestamp } from './common'
 import type { Benefit } from './benefit'
+// Type-only — form.ts imports nothing from here, so no runtime cycle. Booking
+// questions deliberately REUSE the Custom Forms field schema rather than
+// inventing a parallel one: same types, same renderer, same answer shape.
+import type { FormField } from './form'
 
 export type ActivityLevel = 'all' | 'beginners' | 'intermediate' | 'advanced'
 
@@ -175,6 +179,16 @@ export interface Activity {
    *  (see `createDropInCheckout`'s `trial` input) — a class may offer a paid
    *  trial with no drop-in configured at all. */
   trialPriceAmount?: number | null
+  /** CLASS-ONLY. When true, a full session of this activity offers a queue
+   *  instead of a dead end: a visitor joins, and the first waiter is offered the
+   *  seat automatically the moment one frees. Meaningless without
+   *  `max_participants` on the sessions — a class with no cap is never full.
+   *
+   *  This is the ONLY place the toggle lives. There is no per-session copy and
+   *  no per-session override (see `Session.waitlist_count` for why), and
+   *  appointments ignore it: nothing exists to be full until a booking creates
+   *  it. */
+  waitlistEnabled?: boolean
   /** Display-only entry requirements shown on the public booking pages (e.g.
    *  "25m front crawl with side breathing"). Not enforced anywhere. */
   prerequisites?: string
@@ -182,6 +196,32 @@ export interface Activity {
    *  overriding the team-wide `settings.bookingConfirmationInstructions`.
    *  Email-only — never mirrored to the public profile. */
   confirmationInstructions?: string
+  /** Display-only: where to show up (address, floor, landmark). Shown on the
+   *  public booking pages, never enforced. */
+  meetingPoint?: string
+  /** Display-only, free text (rendered as a bulleted list, one line per item). */
+  whatsIncluded?: string
+  /** Display-only, free text — the counterpart to `whatsIncluded`. */
+  whatsNotIncluded?: string
+  /** Display-only free-text FAQ block, rendered as prose on the public page. */
+  faq?: string
+  /** Per-activity cancellation/refund policy, shown on the public booking pages
+   *  and appended to the booking confirmation email. Overrides the team-wide
+   *  default (`settings.bookingCancellationPolicy`) the same way
+   *  `confirmationInstructions` overrides its team-wide counterpart — but unlike
+   *  that field, THIS one is also public (shown before the visitor books, not
+   *  just emailed after). */
+  cancellationPolicy?: string
+  /** Questions asked on the public book form for THIS activity ("Any injuries?",
+   *  "Shoe size", "How did you hear about us?"). Answers land on the booking
+   *  (`Booking.question_answers`, keyed by field id) and surface on the day
+   *  sheet, which is where the coach actually needs them.
+   *
+   *  Reuses `FormField` from the Custom Forms plugin — same types, same public
+   *  renderer — but is NOT gated on that plugin: asking a question at booking
+   *  time is part of booking, not a separate product. Capped by
+   *  MAX_BOOKING_QUESTIONS (a book form is not a survey). */
+  bookingQuestions?: FormField[]
   isActive?: boolean
   image_url?: string
   // Display order (lower = first), respected by the manager list, the public
@@ -228,6 +268,10 @@ export interface ActivityPublicProfile {
    *  of nothing. Mirrored only when `trialEnabled === true` and the value is a
    *  number — see `Activity.trialPriceAmount`. */
   trialPriceAmount?: number | null
+  /** CLASS-ONLY. Mirrored so the public booking flow can offer "join the
+   *  waitlist" on a full slot — present only when true. The queue itself is
+   *  never public; only this flag and the session's `waitlist_count` are. */
+  waitlistEnabled?: boolean
   /** APPOINTMENT-ONLY. The duration menu with base prices so public cards can
    *  show "from CHF 45". Mirrored verbatim from `Activity.durations` — there's
    *  no per-contact data to strip any more (the old `subscriptionPricing`
@@ -239,6 +283,82 @@ export interface ActivityPublicProfile {
   memberBenefit?: ActivityMemberBenefit | Benefit
   /** Denormalised display-only prerequisites for the public booking pages. */
   prerequisites?: string
+  /** Denormalised verbatim from the matching `Activity` fields — see there for
+   *  what each one means. All display-only. */
+  meetingPoint?: string
+  whatsIncluded?: string
+  whatsNotIncluded?: string
+  faq?: string
+  /** Denormalised verbatim from `Activity.cancellationPolicy`. Public UIs fall
+   *  back to the team-wide default when this is absent — see
+   *  `TeamPublicProfile.bookingCancellationPolicy`. */
+  cancellationPolicy?: string
+  /** Mirrored verbatim from `Activity.bookingQuestions` so the public book form
+   *  can render them. Public-safe: these are the questions, never the answers. */
+  bookingQuestions?: FormField[]
+}
+
+/** A book form is not a survey — keep it short enough that it doesn't cost the
+ *  booking. Enforced in the activity editor. */
+export const MAX_BOOKING_QUESTIONS = 6
+
+/** Longest answer we'll persist per question. Generous for a free-text note,
+ *  bounded so a book form can't be used to write arbitrary payloads. */
+const MAX_ANSWER_LENGTH = 1000
+
+/**
+ * Narrow untrusted book-form answers to the activity's OWN questions.
+ *
+ * Answers arrive from a public, unauthenticated caller, so nothing here trusts
+ * the shape: unknown field ids are dropped (the questions are the allow-list),
+ * values are coerced to the type their question declares, and strings are
+ * length-capped. Returns null when nothing survives, so callers can omit the
+ * field entirely rather than writing an empty map.
+ *
+ * Shared by `bookSession` and `createDropInCheckout` so the free and paid paths
+ * can never disagree about what got stored.
+ */
+export function sanitizeBookingAnswers(
+  questions: FormField[] | null | undefined,
+  answers: Record<string, unknown> | null | undefined
+): Record<string, unknown> | null {
+  if (!questions?.length || !answers || typeof answers !== 'object') return null
+
+  const out: Record<string, unknown> = {}
+  for (const q of questions) {
+    const raw = answers[q.id]
+    if (raw === undefined || raw === null || raw === '') continue
+
+    if (q.type === 'checkbox') {
+      out[q.id] = raw === true || raw === 'true'
+      continue
+    }
+    if (q.type === 'multiple_choice') {
+      const allowed = q.options ?? []
+      const picked = (Array.isArray(raw) ? raw : [raw])
+        .filter((v): v is string => typeof v === 'string')
+        .filter((v) => allowed.includes(v))
+      if (picked.length) out[q.id] = picked
+      continue
+    }
+    if (q.type === 'single_choice' || q.type === 'dropdown') {
+      // A choice answer that isn't one of the offered options is a spoofed
+      // payload, not a typo — drop it rather than storing free text.
+      if (typeof raw === 'string' && (q.options ?? []).includes(raw)) out[q.id] = raw
+      continue
+    }
+    if (q.type === 'number') {
+      const n = typeof raw === 'number' ? raw : Number(raw)
+      if (Number.isFinite(n)) out[q.id] = n
+      continue
+    }
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim().slice(0, MAX_ANSWER_LENGTH)
+      if (trimmed) out[q.id] = trimmed
+    }
+  }
+
+  return Object.keys(out).length ? out : null
 }
 
 /** The subscription-type ids an access rule demands, or null when the rule doesn't

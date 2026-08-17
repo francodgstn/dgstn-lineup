@@ -63,6 +63,37 @@ export function planHasHardContactCap(plan: SaasPlan | null): boolean {
   return plan === 'free'
 }
 
+// ─── Search-engine indexability of a team's PUBLIC pages ──────────────────────
+// Documents is a default feature on every tier, public pages included, so every
+// self-service signup now gets a publishing surface on a Linyup domain. That is
+// an SEO-spam and reputation vector: sign up, publish keyword pages, borrow the
+// domain's standing.
+//
+// The mitigation gates INDEXABILITY, not existence. The page works for everyone —
+// a Free studio's terms are readable and shareable by link and QR exactly as
+// before — it simply carries `noindex` until somebody is paying. Nothing has to
+// be withdrawn later, which is the property that made de-gating completely safe
+// to choose.
+//
+// A TRIAL IS NOT A PAID TIER, and this is the half that is easy to get wrong:
+// self-service signups are provisioned `plan: 'studio', plan_status: 'trial'`
+// (TRIAL_DAYS above), so keying on the plan alone would leave the vector wide
+// open for 30 days per throwaway account — and a spammer only needs the page
+// crawled once. Paying is the signal, so `plan_status` must be settled too.
+//
+// A lapsed trial reports its stored plan until the nightly cron writes
+// `plan: 'free'`; `status === 'expired'` is therefore refused explicitly rather
+// than left to the plan field.
+export function publicPagesIndexable(team: {
+  plan?: SaasPlan | null
+  plan_status?: string | null
+}): boolean {
+  const plan = team.plan ?? 'free'
+  const status = team.plan_status ?? 'trial'
+  if (plan === 'free') return false
+  return status === 'active'
+}
+
 // ─── Over-cap behaviour (NO per-contact metering) ───────────────────────────────
 // When a team exceeds includedContacts the response depends on the tier — there
 // is no per-head overage charge:

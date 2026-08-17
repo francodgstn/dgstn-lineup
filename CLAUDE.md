@@ -309,11 +309,13 @@ packs spend a credit) or pay `discountPercent` off every priced duration
 (`discount`, clamped to Stripe's 0.50 floor, never free-via-discount). Absent =
 no benefit, everyone pays base — the benefit is data, never implied, but it is
 one rule (the per-duration × per-type `subscriptionPricing` matrix is gone).
-Resolver: **`resolvePaymentOptions(snapshot, target)`** — the ONE shared
-coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`, pure,
-client-safe) that answers `covered | spend_credits | pay(amount,
-appliedBenefit)` for class bookings, drop-ins, appointments AND courses; the
-server builds its authoritative snapshot via `loadContactPaymentSnapshot`
+Resolver: **`resolvePaymentOptions(snapshot, target, context?)`** — the ONE
+shared coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`,
+pure, client-safe) that answers `covered | spend_credits | pay(amount,
+appliedBenefit)` for class bookings, drop-ins, appointments, courses AND
+products; the optional third `context` carries a typed promo code (see "Promo
+codes" below) and nothing else, so every pre-existing call site compiles and
+behaves unchanged. The server builds its authoritative snapshot via `loadContactPaymentSnapshot`
 (`packages/functions/src/booking/access.ts`), the web an optimistic one via
 `apps/web/src/lib/paymentSnapshot.ts`. Never add a parallel coverage/price
 check — extend the resolver (fixtures:
@@ -334,6 +336,291 @@ drop-in checkout (`createDropInCheckout({ trial: true })`), enforced once per
 person via `Contact.trial_used_at`. A trial is never a subscription. Kiosk
 walk-in is class-only too. Full docs: `docs/appointments.md` → "Paid
 appointments"; `docs/payment-contact-studio.md` → "Paid trial".
+
+### Waitlist — class-only, one deadline, one seat writer
+
+A queue for a seat in a full **class**; entries live at
+`sessions/{sessionId}/waitlist/{contactId}` (doc id = contactId, mirroring
+`bookings`), written only by callables — every client write is denied by the
+rules. **Class-only**: an appointment session doesn't exist until it's booked, so
+"full" has no meaning there. The flag is `Activity.waitlistEnabled` + its public
+mirror only — there is deliberately **no** `session.waitlist_enabled` (it would
+need an activity→sessions fan-out plus a backfill). When a seat frees, the
+`seatFreedEdge` trigger on the session doc offers it to the oldest waiter and
+holds it as an **ordinary booking** carrying `waitlist_claim` +
+`claim_expires_at`, so `bookingHoldsSeat` and every capacity gate already stop
+selling it. **THE SINGLE-DEADLINE RULE:** the hold's `claim_expires_at`, the
+entry's `offer_expires_at` and (for a paid claim) the booking hold's `expires_at`
+and the Stripe session's `expires_at` are ONE instant, computed once by
+`resolveClaimWindow` and copied — diverge and a seat gets sold twice. (A
+free-path hold carries no `expires_at`; only the checkout adds it, which is why
+`expirePendingBookings` reaches the paid claim hold alone.) A free claim settles
+in `claimWaitlistSeat`; a **payable one leaves it and returns through
+`createDropInCheckout({ waitlistToken })`** (no second pricing path). **ONE SEAT
+WRITER:** on a **class** session `bookings_count` is only ever an ABSOLUTE value,
+from `trackBookings`' recount or a transaction that read the `bookings`
+subcollection — **no `FieldValue.increment` on it anywhere** (an appointment
+session is created together with its one booking, so its `bookings_count: 1` is
+absolute and uncontended by construction). Releases go through
+`releaseWaitlistOffer` and always **release before re-offering** — where there is
+anything to re-offer: the Connect webhook's oversell branch and the session
+teardown deliberately do not. Full docs: `docs/waitlist.md`.
+
+### Promo codes — a Stage A MODIFIER, never a tender
+
+**A promo code changes what a purchase costs; a gift card pays for one.** That is
+the whole design, and getting it backwards is the single biggest way this area
+goes wrong:
+
+> A price **MODIFIER** belongs in Stage A (inside `resolvePaymentOptions`). A
+> **TENDER** belongs in Stage B (at the checkout callable). **Nothing is both.**
+
+So the promo is applied inside the resolver and **no callable ever computes a
+discounted amount itself** — every one reads `payOption.amount`. The dividend:
+every gift-card reservation already receives a post-promo total, so no gift-card
+call site needed a promo edit. `teams/{teamId}/promo_codes/{CODE}` (the doc
+id IS the code, `PromoCode` in `packages/shared/src/types/promoCode.ts`), written
+only by manager callables in `packages/functions/src/connect/promoCodes.ts`;
+`firestore.rules` denies every client write. Rails: drop-in, appointment, course,
+product — **not** memberships, not gift-card purchases, not the priced-trial door,
+and **not the waitlist claim** (its deadline cannot be shortened without giving
+one seat two timers, so a code there would lock a use for the whole claim window;
+the claim path is refused server-side, not merely unmounted). A code may also be
+narrowed by **audience** (`audience: 'all' | 'new_contacts'`, where "new" is
+`!joined` — the same fact the `members` access rule runs on, never a second
+definition), by entity allow-lists, or bound to one contact.
+
+**Best-one-wins, and the comparator is deliberately ASYMMETRIC.** A *benefit*
+applies whenever it does not RAISE the price (`<= base`), because `appliedBenefit`
+answers *which membership priced this booking* — provenance read downstream. A
+*promo* applies only when **strictly lower**, because `appliedPromo` answers *did
+a code change the price* — an event. When a promo beats a benefit, the beaten one
+rides on `appliedPromo.supersededBenefit` so a campaign never blanks a studio's
+subscription attribution. `appliedBenefit` and `appliedPromo` are never both
+present on one option.
+
+**ONE writer of `usage_count`** — `commitPromoRedemption`'s transaction, writing
+an **absolute** value from its own read set. No `FieldValue.increment` on
+`usage_count` or `PromoRedemption.count` anywhere, and **no restore-on-refund
+path**, which is the second writer that would otherwise appear. The manager levers
+(`clearPromoRedemption`, `releasePromoReservations`) *delete lifecycle state* and
+never adjust a counter.
+
+**A use is consumed by a completed SALE, never by an attempt.** The commit sits at
+each handler's per-kind confirm point — never before the dispatch — so every
+branch that refunds the whole charge commits nothing and the reservation simply
+lapses. A **live reservation consumes a use** (never
+over-issue), which is bounded by a deterministic reservation key (a retry is a
+refresh, not a second use), `PROMO_MAX_LIVE_RESERVATIONS` + a distinct
+`promo_busy` refusal, short checkout windows, reserved-shown-separately-from-used
+in the admin list, and the manager release lever. The per-person cap binds to a
+**hashed normalised email**, not a contact document — so it is a nudge with teeth,
+not a promise, and the admin copy says "counted per email address".
+
+**The deterministic key is paid for by a set of ownership rules**, each of which
+was a live bug before it was written down. They are enumerated ONCE, in
+`docs/promo-codes.md` → "Redemption integrity" — read them there rather than from
+a summary, because the summaries of that list have now disagreed with it (and
+with each other) in every review round of this phase. The shape they all share:
+the key says *which slot*, `instanceId` says *whose attempt holds it right now*,
+and `sessionId` says *which Checkout Session may take money for it*; every
+removal or spend compares its marker **inside** the transaction that writes.
+Never make the key unique to fix a release bug — that destroys
+retry-is-a-refresh.
+
+**A promo writes NO finance journal row, ever** — a discount is not a money event
+on a cash basis; the money event is the smaller charge. No `FinanceCategory`
+member, no reclass pair, no CSV column. The record is
+`PaymentLineItem.promoCode` on the payment row (a system stamp: never read off a
+client payload, carried forward across a manager's edit) plus the
+`redemptions/{identityKey}` ledger. Full docs: `docs/promo-codes.md`.
+
+### Waivers — a FACT about a person, never a scarce resource
+
+**A signature is a fact about a person, not a claim on a scarce resource.**
+Nothing about a waiver is reserved, held, released or restored — the promo
+phase's reserve→commit→release apparatus has no analogue here, and reaching
+for it is the single biggest way this area goes wrong. There is no price (no
+arm in `resolvePaymentOptions`, checkable by `git diff`), no journal row, no
+counter but `rounds`, and **no job, cron or sweep anywhere**.
+
+A waiver is a Document (`kind: 'waiver'`) whose published versions are
+**immutable snapshots** — `documents/{d}/versions/v0001…`, `allow write: if
+false`, minted only by `publishDocumentVersion`, which replaced the old client
+status flip **for every kind** (the rules now deny a client *transition* into
+`published`). The sanitizer runs THERE, once, and the public mirror **copies**
+the frozen `bodyHtml`: two sanitize calls with a library upgrade between them
+would break every acceptance hash. `scripts/backfill-document-versions.ts` is a
+**deploy precondition** — every already-published document needs a v1 to copy
+from.
+
+**The ledger has two halves** (`packages/functions/src/waivers/accept.ts` is
+its ONE writer): append-only EVENT rows hold the immutable facts, and one
+mutable CURRENT-STATE row per `(document, contact)` holds the answer the gate
+asks. The event id derives from the EVENT (`…:intentId`), not the relationship
+— which is what makes re-signing, renewal after expiry and re-signing after
+revocation expressible at all. The event is ALWAYS created; the signer row is
+updated **only when the event strictly improves it**
+(`waiverEventImprovesSigner`), against a row re-read **inside the same
+transaction**, with `rounds = read + 1` and no `FieldValue.increment`. Two
+traps, both learned the hard way: **never** copy `recordFinanceTransaction`'s
+`.create()`+catch-gRPC-6 idiom into a transaction (a collision fails the whole
+commit and takes the seat) — `tx.get` the acceptance ref in the read phase and
+skip; and `accepted_at` is captured **before** the transaction, because a retry
+that re-stamps it silently beats a revocation.
+
+**ONE predicate** — `waiverAcceptanceState` (`packages/shared/src/types/waiver.ts`),
+fixed order `none → revoked → superseded → expired → valid`. Supersession and
+expiry are **never stored**: a `require_resign` publish moves ONE number
+(`min_valid_version`) and writes **zero** signer rows. The validity rule is
+frozen onto each signature, so editing `validityMonths` governs future
+signatures only.
+
+**Authorization reads `teams/{t}/waiver_policy/current`** — server-written,
+patched (never rebuilt) inside the same transaction as the document write, and
+it fails **CLOSED**. `TeamPublicProfile.required_waivers` is a display mirror
+that fails open and is **never** read for a decision; the client calls
+`resolveWaiverRequirement` iff that mirror is non-empty, so a tenant with no
+waiver pays zero extra round-trips.
+
+**The gate** is `enforceWaiverGate` → `decideWaiverGate`, called once per rail.
+**The census owner is the module header of
+`packages/functions/src/waivers/gate.ts`** — never restate it, and never state a
+count of it; `gate.test.ts` re-derives the caller set from the source so a new
+rail that is never added fails the build. Two ordering rules: **refuse before
+any contact write**, and **record with the commit** (free rails: inside the seat
+transaction; paid rails: before Stripe, in their own transaction, not
+conditional on payment). **Every rail refuses** — there is no `defer` arm and no
+posture parameter, so no booking anywhere commits with a required waiver
+unsigned. **Not gated, deliberately:** staff add-participant (no server seam),
+`checkInContact` (a coach chose to admit them), event attendance (a different
+primitive), `rebookSession`, `joinWaitlist`, shop purchases.
+
+**Minors are a PROMPT, not an enforcement.** `WaiverConfig.mayIncludeMinors`
+(off by default) adds one required choice to the consent step — *I am the
+participant* vs *I am signing as a parent or guardian*, plus an optional name —
+and puts a chip on the roster and the printed manifest so the studio checks at
+the door. It is a **self-declaration**: nothing verifies it, and no copy may
+imply otherwise. The control renders **inline** in the waiver editor because its
+failure mode is silent; moving it behind "advanced" removes the only guard there
+is. The emailed-guardian link this replaced (2026-08-16) proved control of a
+mailbox, not parenthood — see `docs/waivers.md` → "Minors" for why ~2,500 lines
+of it were deleted rather than fixed.
+
+The **`notify` publish outcome is deferred to v2**: `PublishOutcome` has two
+members and the callable refuses `'notify'` by name. The `notices/{id}`
+subcollection stays declared and **writer-less** on purpose — removing it would
+make notify a migration rather than an addition.
+
+Full docs: `docs/waivers.md`, including **"What the gate does NOT cover"** and
+the sixteen recorded decisions.
+
+### Comments must not assert a COUNT of code sites
+
+A comment saying "the two X", "all three Y", "six copies" or "the only Z" is a
+claim that rots the moment somebody adds a case — silently, and against the
+reader who trusts it. Wave 3 Phase 3 shipped a false one in **every** review
+round and corrected the arithmetic every time; the numbers kept coming back.
+So, in order of preference:
+
+1. **Point at the owner.** A list of call sites (a "census") is written down
+   ONCE and referred to everywhere else. Existing owners:
+   `packages/functions/src/appointments/holdRelease.ts`'s module header (every
+   site that can release an appointment hold), `docs/promo-codes.md`
+   ("The census — every site that removes a reservation", "The ownership rules",
+   "The mounts"), and `packages/functions/src/waivers/gate.ts`'s module header
+   (every site that puts a person in a room, with its re-derivation recipe and
+   the exemptions stated as explicitly as the inclusions). Add to the owner;
+   never copy it.
+2. **Name the members and drop the number** — a claim checkable by reading the
+   names beside it fails visibly rather than silently.
+3. **Assert it in a test.** `packages/functions/src/connect/commitSites.test.ts`
+   reads the SOURCE and pins call-site tallies (it spans the functions/web
+   boundary on purpose — that boundary is where corrections stop travelling).
+   That file is where a bare number is allowed, because there it is executable.
+
+### Stripe fields move — never read one inline
+
+`apiVersion` is deliberately **unpinned**, so the wire version follows whatever
+`stripe-node` bundles (today `2026-04-22.dahlia`). Stripe moves fields between
+versions, and an `obj.field` read on an `any` that stops matching returns
+`undefined` **silently** — no exception, no failing test, just wrong data written
+confidently. Three shipped defects came from exactly that.
+
+So every read of a field Stripe has moved goes through
+**`packages/functions/src/utils/stripe/objectShape.ts`**, which is the ONE place
+that knows where each one lives: modern location first, narrow legacy fallback
+(so an older pinned deployment still works), and a report of which one answered
+so the caller can log `[stripe-shape] MISSING …` when it is neither. Add a reader
+there; never re-inline one at a call site.
+
+That module also holds what a pin was being asked to provide: compile-time
+assertions — checked against the SDK's own declarations, reachable via
+`Awaited<ReturnType<StripeInstance['x']['retrieve']>>` even though the
+`Stripe.X` namespace is not — stating where each field is and is not, plus one
+comparing the bundled wire version to the version the readers were verified
+against. **A `pnpm update stripe` that moves any of them fails
+`turbo run typecheck`**, and the upgrade then also needs `pnpm stripe:sync`
+re-run (endpoints are pinned to the SDK's version at creation). The full
+reasoning is in the header of `utils/connect/client.ts`; the fixtures are real
+captured payloads in `utils/stripe/dahlia-payloads.json`.
+
+### A cancellation is a RECORD, not a boolean
+
+"Cancels at period end" is a **third state** — still live, will not renew — and
+the billing portal expresses it as a `cancel_at` **timestamp** while leaving
+`cancel_at_period_end` false. So both subscription kinds
+(`MemberSubscription`, `SaasSubscription`) store the whole record: `cancel_at`
+(when it stops), `canceled_at` (when it was asked for — the two bracket the
+win-back window) and `cancellation_details` (`reason`, `feedback`, `comment`).
+
+**`reason` is the load-bearing one.** `payment_failed` and
+`cancellation_requested` are the same stored state and completely different
+studio actions, and a boolean could not tell them apart — which is most of why
+this was worth more than a date.
+
+`shared/utils/subscriptionLifecycle.ts` owns the predicates every surface reads
+it through. **WHETHER and WHEN are two questions**, and fusing them was its own
+bug: **`subscriptionIsCancelling()`** answers whether (gate UI on this),
+**`subscriptionEndsAt()`** answers when *if the date is known* — it returns null
+for a pre-migration doc that is plainly cancelling — and
+**`subscriptionCancellation()`** returns the whole record or null. All three gate
+on the current LIFECYCLE STATE, never on the presence of a cancellation field, so
+a stale record left by a reactivation is stale data, not a wrong screen.
+
+Two writer rules, each of which was a bug first:
+
+- **On a LIVE event (`created` / `updated`), write the record whole — every
+  field, nulls included.** A reactivation is the event that must ERASE a stored
+  end date and reason, and an omitted key on a `merge` leaves them standing.
+  **On the ENDING event the two rails differ, deliberately:** the SaaS
+  `subscription.cancelled` branch writes `canceled_at` /
+  `cancellation_details` only when the payload carries them, so a `deleted`
+  event stating no reason cannot erase the one an earlier `updated` recorded.
+  Connect routes `deleted` into the same `handleSubscription` and so writes them
+  unconditionally — that is the HAZARD, not the standard: a `deleted` payload
+  without `cancellation_details` blanks a member's churn reason at the moment it
+  is most worth having. The SaaS rule is the safe direction if it ever bites.
+  Both behaviours are pinned in `connect/dahliaReads.test.ts`; anything
+  repairing these docs reproduces ITS RAIL's rule rather than picking one.
+- **`cancellation_details` is set whole or set to null — never key-by-key.**
+  Firestore DEEP-merges a nested map, so a partial write keeps the previous
+  cancellation's `feedback` behind the new `reason`.
+
+Surfaces: the studio sees the date + the full record (contact detail, operator
+console); a studio reading its OWN subscription sees the date + the reason but
+not the survey it wrote itself (`audience` on
+`components/payments/SubscriptionCancellationNote.tsx`, whose copy lives in the
+ONE `SubscriptionCancellation` message namespace); the member's Space sees the
+date only — `Contact.active_subscriptions` mirrors only LIVE subscriptions, so a
+reason never reaches it.
+
+Docs written before the readers existed carry a null period end, and — where the
+cancellation came from the billing portal — a false `cancel_at_period_end` with
+no `cancel_at` at all. `pnpm backfill:subscription-lifecycle` repairs them from
+Stripe through the same readers — see its header for why the webhook's
+self-healing is not enough (the `updated` event that carried the cancellation has
+already been consumed, and the next one fires when the member is already gone).
 
 ### SaaS plan tiers (Phase 2)
 

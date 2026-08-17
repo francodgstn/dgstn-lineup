@@ -49,6 +49,13 @@ export interface StickyBarProps {
   position: StickyBarPosition
   showConfirm: boolean
   submitting: boolean
+  /**
+   * Greys the Confirm without hiding it — the state the consent step needs: a
+   * visitor who has not ticked yet must see the control they are working
+   * towards, and must not be able to submit a booking with nothing signed.
+   * Hiding it instead would read as "there is nothing more to do here".
+   */
+  confirmDisabled?: boolean
   confirmLabel: string
   submittingLabel: string
   onConfirm: () => void
@@ -64,6 +71,7 @@ export function StickyBar({
   position,
   showConfirm,
   submitting,
+  confirmDisabled,
   confirmLabel,
   submittingLabel,
   onConfirm,
@@ -149,7 +157,7 @@ export function StickyBar({
       {showConfirm && (
         <button
           onClick={onConfirm}
-          disabled={submitting}
+          disabled={submitting || confirmDisabled === true}
           style={accentColor ? { backgroundColor: accentColor } : undefined}
           className="shrink-0 rounded-xl bg-primary text-primary-foreground font-semibold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
         >

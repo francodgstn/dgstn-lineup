@@ -19,6 +19,16 @@
 //
 // Paid bookings are flipped to 'confirmed' by the Connect webhook (which also
 // clears payment_status: 'required'), so they're excluded from both sweeps here.
+//
+// THIS IS SITE 4 OF THE APPOINTMENT-HOLD RELEASE CENSUS
+// (appointments/holdRelease.ts — which owns the list of sites and the proof each
+// one rests on; do not restate either here). This site is DEADLINE-addressed
+// rather than token-addressed, and it does not have to be: it addresses holds by
+// `hold_expires_at <= now`, and `runAppointmentSlotTransaction` REPLACES the whole
+// session document, so whichever attempt took a hold over wrote the deadline now
+// on it. A deadline in the past is therefore proof that no live attempt holds it.
+// Anything that ever makes this query match a LIVE hold breaks that proof — read
+// the census header before changing the filter.
 
 import * as admin from 'firebase-admin'
 

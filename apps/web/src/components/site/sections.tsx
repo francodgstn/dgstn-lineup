@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { formatCurrency } from '@/lib/format'
 import {
   Instagram,
@@ -526,7 +527,10 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
         setCurrency((teamSnap.data()?.default_currency as string | undefined) ?? 'CHF')
         setSubPlans((teamSnap.data()?.aggregator_subscription_types as PlanEntry[] | undefined) ?? [])
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // A public marketing page: an empty activities block reads as "this
+        // studio teaches nothing". Keep the terminal state, lose the silence.
+        reportPublicLoadFailure('site/activities', err)
         if (alive) setActivities([])
       })
       .finally(() => {
@@ -774,7 +778,8 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
           .sort(compareActivities)
         setPpvActivities(acts)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('site/pricing', err)
         if (alive) {
           setPlans([])
           setPpvActivities([])
@@ -1042,7 +1047,8 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
           .filter((s) => !section.activityId || s.activityId === section.activityId)
         setSessions(list)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('site/schedule', err)
         if (alive) setSessions([])
       })
       .finally(() => {
@@ -1116,8 +1122,9 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
       if (alive) setAvailability(entries)
     }
 
-    load().catch(() => {
+    load().catch((err: unknown) => {
       // Availability is additive — a failure leaves the classes schedule intact.
+      reportPublicLoadFailure('site/availability', err)
       if (alive) setAvailability([])
     })
     return () => {

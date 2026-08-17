@@ -26,7 +26,19 @@ export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
 //    funnel; a purchase/lead-capture is not a funnel milestone):
 //      'shop'     → self-created by a public shop purchase (product / course / membership)
 //      'form'     → lead captured via a published Custom Form
-export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const
+//      'waitlist' → joined the queue for a full class. Off-funnel ON PURPOSE:
+//                   joining a queue is not a trial booking, and stamping
+//                   'trial_booked' on someone who may never get a seat would
+//                   corrupt the funnel. The stage is stamped when they CLAIM.
+//      'manual'   → created BY STAFF, not by the person (today: createStaffAppointment
+//                   booking an appointment for a new client). Off-funnel because
+//                   the trial funnel measures what a PROSPECT did, and a staff
+//                   member typing a name is not an act of the prospect. Listed
+//                   here because staffBooking has always written it: it was
+//                   absent from this union, so the contact detail page rendered
+//                   the raw key `Contacts.entry_manual` and the profile form's
+//                   z.enum rejected its own stored value, blocking submit.
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist', 'manual'] as const
 export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 
 // Source axis — marketing CHANNEL (attribution only), set once, never overwritten.
@@ -57,6 +69,30 @@ export interface ActiveSubscriptionSummary {
   recurrence: string | null
   amount: number // major units (CHF), per period
   status: SubscriptionRollupStatus
+  /**
+   * Epoch MILLISECONDS at which this subscription stops, when it is winding down
+   * (cancelled but still live) — otherwise absent. Computed by
+   * onMemberSubscriptionWrite via `subscriptionEndsAtMs`, the epoch-ms form of
+   * `subscriptionEndsAt`, so the member's Space and the studio's contact detail
+   * answer "when does this end" the same way.
+   *
+   * A plain number rather than a Timestamp on purpose: this is a denormalised
+   * display mirror living inside an array, and the trigger compares the whole
+   * array by JSON equality to stay idempotent.
+   */
+  cancels_at_ms?: number | null
+  /**
+   * WHETHER this subscription is winding down, asked apart from WHEN — via the
+   * shared `subscriptionIsCancelling`.
+   *
+   * `cancels_at_ms` alone could not carry the answer. A pre-migration
+   * member_subscriptions doc holds the cancellation boolean and NO dates (the
+   * period had moved onto the subscription item and the writer stored null), so
+   * its summary gets `cancels_at_ms: null` and a member's Space showed them
+   * nothing at all about a membership they had cancelled. Same population gap
+   * the operator console and the studio's contact detail both had to close.
+   */
+  cancelling?: boolean
 }
 
 export type ContactGender = 'M' | 'F' | 'other'
@@ -115,6 +151,28 @@ export interface Contact {
 
   // Emergency contacts (max 2)
   emergency_contacts?: EmergencyContact[]
+
+  /**
+   * @deprecated Superseded by the acceptance ledger
+   * (`documents/{documentId}/acceptances/*` + `signers/{contactId}`). Read
+   * NOTHING from this field.
+   *
+   * Declared here for the first time in order to mark it. It was written by
+   * `completeSignup` and existed on no type, was read by no code and rendered on
+   * no screen; the only client that filled it sent `version: ''` for every
+   * document, so it recorded that a checkbox was ticked and not what was ticked.
+   * `completeSignup` now writes real events against real immutable version
+   * snapshots (`waivers/signup.ts`) and keeps writing this blob for one release
+   * so nothing breaks mid-deploy.
+   *
+   * Two proofs of acceptance with different evidential weight and no marker
+   * saying which is which is the state to avoid — hence the marker. Removal is a
+   * follow-up once no reader remains.
+   */
+  consent?: {
+    privacyAcceptedAt?: Timestamp
+    documents?: Array<{ slug: string; kind: string | null; version: string | null }>
+  }
 
   // ─── Acquisition axis ──────────────────────────────────────────────────────
   // Sticky high-water funnel position (trial_booked → trial_attended → joined).

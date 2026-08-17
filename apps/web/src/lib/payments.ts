@@ -27,6 +27,12 @@ export interface UnifiedPaymentRow {
   comment: string | null
   /** Structured link (BYO/manual), for the assign dialog. Connect rows leave it null. */
   lineItem: PaymentLineItem | null
+  /** The promo code this sale was discounted with, or null. Read off the line
+   * item on BOTH rails — the Connect webhook stamps it from checkout metadata,
+   * and a manual row can carry one only if a manager's row already had it (it is
+   * never client-writable). This is the only place a discount is visible on the
+   * money side: a promo writes no journal row and no CSV column. */
+  promoCode: string | null
   /** Studio-configured mode for manual payments (Cash / TWINT / …); null otherwise. */
   paymentMode: string | null
   /** Derived "what was paid" label, used when comment is empty. */
@@ -128,6 +134,9 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     status: p.status,
     comment: p.comment ?? null,
     lineItem: connectLineItem(p),
+    // From the stored line item only — connectLineItem's legacy fallbacks are
+    // synthesised from kind/names and can never carry a code.
+    promoCode: p.line_item?.promoCode ?? null,
     paymentMode: null,
     defaultLabel: connectDefaultLabel(p),
     createdAt: (p.created_at as unknown as { toDate?: () => Date }) ?? null,
@@ -152,6 +161,7 @@ export function byoToUnified(events: Array<ExternalPayment & { id: string }>): U
     status: 'paid',
     comment: e.comment ?? null,
     lineItem: e.line_item ?? null,
+    promoCode: e.line_item?.promoCode ?? null,
     paymentMode: e.payment_mode ?? null,
     defaultLabel:
       e.gateway === 'payrexx'

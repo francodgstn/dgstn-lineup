@@ -195,6 +195,8 @@ const sessionSchema = z.object({
   // Optional cap; kept as text and coerced to a number on save (empty ⇒ no cap).
   maxParticipants: z.string().max(6).optional(),
   notes:           z.string().max(2000).optional(),
+  headline:        z.string().max(200).optional(),
+  headlinePublic:  z.boolean().optional(),
   allowBooking:    z.boolean().optional(),
   bookingMandatory: z.boolean().optional(),
 })
@@ -383,6 +385,8 @@ export function SessionFormDialog({
         providerName:    editing?.providerName ?? '',
         maxParticipants: editing?.max_participants != null ? String(editing.max_participants) : '',
         notes:           editing?.notes ?? '',
+        headline:        editing?.headline ?? '',
+        headlinePublic:  editing?.headlinePublic ?? false,
         allowBooking:    editing?.allowBooking ?? false,
         bookingMandatory: editing?.bookingMandatory ?? false,
       },
@@ -451,6 +455,8 @@ export function SessionFormDialog({
       providerName:   values.providerName || null,
       max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
       notes:          values.notes || null,
+      headline:       values.headline || null,
+      headlinePublic: (values.headline ?? '').trim() ? (values.headlinePublic ?? false) : false,
       allowBooking:   values.allowBooking ?? false,
       bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
       duration_minutes: values.duration,
@@ -477,6 +483,8 @@ export function SessionFormDialog({
             placeId: values.placeId || null,
             roomId: values.roomId || null,
             tags: [], notes: values.notes || '',
+            headline: values.headline || null,
+            headlinePublic: (values.headline ?? '').trim() ? (values.headlinePublic ?? false) : false,
             duration: values.duration,
             allowBooking: values.allowBooking ?? false,
             bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
@@ -862,6 +870,19 @@ export function SessionFormDialog({
                 </label>
                 <textarea {...register('notes')} rows={2}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  {t('fieldHeadline')}
+                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                </label>
+                <input type="text" {...register('headline')} placeholder={t('headlinePlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" {...register('headlinePublic')} className="rounded border-input" />
+                  {t('headlinePublicLabel')}
+                </label>
               </div>
             </section>
           </div>

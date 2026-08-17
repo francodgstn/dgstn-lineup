@@ -31,6 +31,35 @@ export function useTeamGiftCards(teamId: string | null) {
   })
 }
 
+/**
+ * Manager mint — the front desk sells a card for cash, or the studio comps one.
+ * `idempotencyKey` must be minted when the DIALOG OPENS, not per submit: it is
+ * the server's serialisation key, so a double click (or a retried request) has
+ * to carry the same one to get the same card back instead of a second one.
+ */
+export function useIssueGiftCard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (vars: {
+      teamId: string
+      /** MAJOR units (100 = CHF 100) — the card rail's unit, mirrored server-side. */
+      amountMajor: number
+      issueKind: 'paid' | 'comp'
+      paymentMode?: string
+      issueReason?: string
+      purchaserContactId?: string
+      idempotencyKey: string
+    }) => {
+      const fn = httpsCallable<typeof vars, { code: string; duplicate: boolean }>(
+        functions,
+        'issueGiftCard'
+      )
+      return (await fn(vars)).data
+    },
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['gift-cards', vars.teamId] }),
+  })
+}
+
 export function useVoidGiftCard() {
   const qc = useQueryClient()
   return useMutation({

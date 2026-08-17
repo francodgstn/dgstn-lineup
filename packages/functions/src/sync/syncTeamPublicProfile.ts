@@ -8,6 +8,12 @@ import {
   SITE_PUBLISHED_COLLECTION,
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
+  TEAM_SETTINGS_SUBCOLLECTION,
+  DOCUMENTS_SETTINGS_DOC_ID,
+  WAIVER_POLICY_SUBCOLLECTION,
+  WAIVER_POLICY_DOC_ID,
+  publicPagesIndexable,
+  resolveSignupDocumentIds,
   resolveSystemLinkTarget,
   toKioskPublicConfig,
   normalizeKioskConfig,
@@ -18,6 +24,9 @@ import type {
   DocumentKind,
   KioskConfig,
   GiftCardSettings,
+  PublicRequiredWaiver,
+  RequiredWaiverEntry,
+  SaasPlan,
 } from '@linyup/shared'
 import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
 
@@ -82,54 +91,106 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     formsActive = !publishedFormSnap.empty
   }
 
-  // documents: documents plugin active AND ≥1 published, public, non-archived
-  // document. Reached via /public/{slug}/documents (discovery signal, not a
-  // default redirect target) — same shape as the forms check above.
-  const documentsPluginSnap = await db
-    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/documents`)
+  // documents: NO PLUGIN PROBE — Documents is a default feature on every plan.
+  //
+  // The liveness test is the existence of a public_profile MIRROR, not of a
+  // published document, and the difference is the whole point. A team that
+  // trialed on Studio, published documents and was then downgraded still HAS
+  // those documents: the old teardown deleted their mirrors and nothing else. A
+  // probe over the root `documents` collection would therefore flip this surface
+  // live again on the next unrelated team write, and /public-page would advertise
+  // it — and offer it as a default landing surface — over a page that renders the
+  // empty state, because the mirror backfill is opt-in per team and may never
+  // have been run for them. Probing the mirrors makes this flag agree with what a
+  // visitor would actually see.
+  //
+  // Same shape and cost as the forms check above (one limit(1) query), over the
+  // collection that actually backs the page. No new index: the public documents
+  // index page already runs this exact teamId + type query.
+  const documentMirrorSnap = await db
+    .collectionGroup('public_profile')
+    .where('teamId', '==', teamId)
+    .where('type', '==', 'document')
+    .limit(1)
     .get()
-  const documentsPluginActive =
-    documentsPluginSnap.exists && documentsPluginSnap.data()?.status === 'active'
-  let documentsActive = false
-  if (documentsPluginActive) {
-    const publishedDocSnap = await db
-      .collection(DOCUMENTS_COLLECTION)
-      .where('teamId', '==', teamId)
-      .where('status', '==', 'published')
-      .where('isPublic', '==', true)
-      .where('archived_at', '==', null)
-      .limit(1)
-      .get()
-    documentsActive = !publishedDocSnap.empty
-  }
+  const documentsActive = !documentMirrorSnap.empty
 
   // signup_documents: the published + public documents the studio attached to the
-  // signup consent checkbox (installed_plugins/documents.config.signupDocumentIds).
-  // Denormalized here so the anonymous signup form reads consent links from one
-  // world-readable doc. Read each referenced document's public_profile summary —
-  // an id whose summary is missing (unpublished/unshared) is silently skipped.
-  let signupDocuments: Array<{ slug: string; title: string; kind: DocumentKind }> = []
-  if (documentsPluginActive) {
-    const ids = (documentsPluginSnap.data()?.config?.signupDocumentIds as unknown)
-    const idList = Array.isArray(ids) ? (ids as string[]).filter((v) => typeof v === 'string') : []
-    if (idList.length > 0) {
-      const summaries = await Promise.all(
-        idList.map((id) =>
-          db.doc(`${DOCUMENTS_COLLECTION}/${id}/public_profile/${id}`).get()
-        )
-      )
-      signupDocuments = summaries
-        .filter((s) => s.exists)
-        .map((s) => {
-          const d = s.data()!
-          return {
-            slug: d.slug as string,
-            title: (d.title as string) || '',
-            kind: (d.kind as DocumentKind) || 'other',
-          }
-        })
-    }
+  // signup consent checkbox. Denormalized here so the anonymous signup form reads
+  // consent links from one world-readable doc. Read each referenced document's
+  // public_profile summary — an id whose summary is missing (unpublished /
+  // unshared) is silently skipped, which is right for a display list of links and
+  // is exactly why the booking gate reads the waiver POLICY instead.
+  //
+  // DUAL READ, in ONE place (resolveSignupDocumentIds): the new
+  // `teams/{id}/settings/documents` home, falling back to the retired plugin
+  // config for teams the backfill has not reached. The panel that writes it reads
+  // through the same helper, so a studio's save and this recompute can never
+  // disagree about which location wins.
+  const [documentsSettingsSnap, legacyDocumentsPluginSnap] = await Promise.all([
+    db.doc(`${TEAMS_COLLECTION}/${teamId}/${TEAM_SETTINGS_SUBCOLLECTION}/${DOCUMENTS_SETTINGS_DOC_ID}`).get(),
+    db.doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/documents`).get(),
+  ])
+  const idList = resolveSignupDocumentIds({
+    settings: documentsSettingsSnap.data() as { signupDocumentIds?: string[] } | undefined,
+    legacyPluginConfig: legacyDocumentsPluginSnap.data()?.config as
+      | { signupDocumentIds?: unknown }
+      | undefined,
+  })
+  let signupDocuments: Array<{
+    documentId: string
+    slug: string
+    title: string
+    kind: DocumentKind
+    version: number | null
+  }> = []
+  if (idList.length > 0) {
+    const summaries = await Promise.all(
+      idList.map((id) => db.doc(`${DOCUMENTS_COLLECTION}/${id}/public_profile/${id}`).get())
+    )
+    signupDocuments = summaries
+      .filter((s) => s.exists)
+      .map((s) => {
+        const d = s.data()!
+        return {
+          // The id, so the signup form can echo WHICH document it showed and
+          // completeSignup can write a ledger row without trusting a
+          // client-supplied slug. The mirror doc id IS the document id.
+          documentId: s.id,
+          slug: d.slug as string,
+          title: (d.title as string) || '',
+          kind: (d.kind as DocumentKind) || 'other',
+          // The version the visitor will actually be shown. null for a document
+          // that predates versioning and has not been backfilled — the form
+          // renders it, the ledger skips it, and nothing pretends otherwise.
+          version: typeof d.version === 'number' ? (d.version as number) : null,
+        }
+      })
   }
+
+  // required_waivers: the SUMMARY of the team's required waivers, read from the
+  // server-written policy document — never from the `documents` collection, and
+  // never carrying a body. It is a RENDERING HINT: the public surface calls
+  // resolveWaiverRequirement if and only if this list is non-empty, so a tenant
+  // with no waiver pays zero extra round-trips on the acquisition path, while
+  // AUTHORIZATION always reads the policy document itself (which fails closed).
+  //
+  // A briefly-stale empty list therefore degrades to a server refusal the
+  // surface can act on, never to a compliance hole — and every policy writer
+  // touches the team document in the same transaction, so it is never stale by
+  // more than one sync.
+  const waiverPolicySnap = await db
+    .doc(`${TEAMS_COLLECTION}/${teamId}/${WAIVER_POLICY_SUBCOLLECTION}/${WAIVER_POLICY_DOC_ID}`)
+    .get()
+  const requiredWaivers: PublicRequiredWaiver[] = (
+    (waiverPolicySnap.data()?.required as RequiredWaiverEntry[] | undefined) ?? []
+  ).map((e) => ({
+    documentId: e.documentId,
+    slug: e.slug,
+    title: e.title,
+    version: e.current_version,
+    mayIncludeMinors: e.mayIncludeMinors === true,
+  }))
 
   // booking: base feature — available whenever booking settings have been configured
   // (bookingSettings lands on the public_profile via syncBookingSettings; here we
@@ -144,6 +205,11 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/products`)
     .get()
   const productsPluginActive = productsPluginSnap.exists && productsPluginSnap.data()?.status === 'active'
+  const giftCardsPluginSnap = await db
+    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/gift-cards`)
+    .get()
+  const giftCardsPluginActive =
+    giftCardsPluginSnap.exists && giftCardsPluginSnap.data()?.status === 'active'
   const onlineCoursesActive =
     onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active'
   const connectEnabled =
@@ -201,12 +267,36 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',
+    // Whether this team's public pages may be crawled. Denormalized for the same
+    // reason as showBranding — the pages that need it read public_profile alone —
+    // but it is DELIBERATELY NOT the same boolean: showBranding asks "is this the
+    // free tier", while indexability also refuses a trial, which is the tier every
+    // throwaway signup lands on. See publicPagesIndexable.
+    public_pages_indexable: publicPagesIndexable({
+      plan: data.plan as SaasPlan | undefined,
+      plan_status: data.plan_status as string | undefined,
+    }),
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
+    // Team-wide cancellation policy default (activity-level override lives on
+    // Activity.cancellationPolicy). Public because it's shown BEFORE booking,
+    // not just emailed after — see bookingConfirmationInstructions for the
+    // email-only sibling this deliberately does NOT reuse.
+    bookingCancellationPolicy:
+      (data.settings as { bookingCancellationPolicy?: string } | undefined)
+        ?.bookingCancellationPolicy || null,
     // Gift cards (E3): public-safe config only (enabled + purchasable face values —
     // never balances/codes) so the public shop can offer them without reading the
     // private team doc. Mirrors teams/{id}.settings.giftCards.
+    // Gated on the gift-cards PLUGIN as well as the setting: uninstalling must
+    // take the offer off the public shop, and the mirror is the only thing the
+    // shop reads. This recomputes on install/uninstall because
+    // onInstalledPluginStatusChange touches the team doc.
+    //
+    // SELLING only. Redeeming an already-issued card does not consult this — it
+    // is money the studio has taken, and a plugin toggle must not void it.
     giftCards: (() => {
+      if (!giftCardsPluginActive) return { enabled: false, amounts: [] }
       const raw = (data.settings as { giftCards?: GiftCardSettings } | undefined)?.giftCards
       return raw?.enabled === true && Array.isArray(raw.amounts)
         ? { enabled: true, amounts: raw.amounts }
@@ -218,6 +308,8 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     active_public_surfaces,
     // Recomputed every run (may be empty) so stale consent links never linger.
     signup_documents: signupDocuments,
+    // Recomputed every run from the waiver policy, for the same reason.
+    required_waivers: requiredWaivers,
     updated_at: event.data!.after.updateTime,
   }
 

@@ -312,3 +312,82 @@
 .driver-active [data-slot='select-positioner'] {
   z-index: 100000 !important;
 }
+
+/* ─── Print: the manifest day sheet ─────────────────────────────────────────
+   The only printable surface in the app (/manifest). The dashboard chrome —
+   sidebar, top bar, toolbars, anything tagged `.no-print` — is dropped, and
+   what remains prints as plain paper: no card shadows, no coloured fills, and
+   a session block that is never split across two pages mid-roster.
+
+   Deliberately scoped by a `@media print` block rather than Tailwind `print:`
+   utilities for the chrome removal, because the elements being hidden live in
+   the auth layout, which knows nothing about this route. */
+@media print {
+  /* App chrome + anything a page explicitly marks as screen-only. */
+  aside,
+  nav,
+  header,
+  .no-print,
+  [data-slot='toaster'] {
+    display: none !important;
+  }
+
+  /* …but a session block titles itself with a semantic <header> (time,
+     activity, coach, booked count), which the blanket rule above ate — the
+     sheet printed rosters with no indication of which session they belonged
+     to. Re-show it explicitly.
+
+     Deliberately NOT solved with `header:not(.manifest-sheet *)`: that relies
+     on a Selectors-4 complex :not(), which this build's CSS pipeline drops on
+     the floor — the compiled stylesheet came out with the plain selector and
+     the bug survived a "fix" that looked right in source. Simple selectors
+     only here. */
+  .manifest-session > header {
+    display: flex !important;
+  }
+
+  /* The layout's scroll containers cap height and clip overflow on screen;
+     on paper that would print page one and silently drop the rest. */
+  html,
+  body,
+  main,
+  main > * {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .manifest-sheet {
+    max-width: none !important;
+  }
+
+  /* Flat on paper — borders survive as the only structure, since background
+     fills are dropped by most browsers' default "no background graphics". */
+  .manifest-session {
+    border: 1px solid #ccc !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

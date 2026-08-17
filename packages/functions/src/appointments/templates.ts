@@ -1,6 +1,15 @@
 import { buildEmailTemplate } from '../utils/email'
 import { detailsBox, ctaButton, factLines } from '../utils/emailLayout'
 import { instructionsBox } from '../booking/templates'
+import { escapeHtml } from '../utils/html'
+
+// EVERY INTERPOLATED VALUE IS ESCAPED — the same rule booking/templates.ts
+// states, applied here for the same reason. `bookAppointment` is a PUBLIC
+// callable: the client's name, address, phone and notes arrive from an
+// unauthenticated caller, and the provider notification below puts them in front
+// of the coach. A value that must go out raw (a mail SUBJECT, which Brevo takes
+// as its own field and `buildEmailTemplate` escapes for the HTML header) reads
+// `params.x` explicitly.
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
 
@@ -70,7 +79,12 @@ interface ConfirmParams {
 }
 
 export function buildAppointmentConfirmationEmail(params: ConfirmParams) {
-  const { firstname, teamName, slotTitle, providerName, start, end, location, onlineUrl, cancelUrl, instructions, lang = 'en' } = params
+  const { start, end, onlineUrl, cancelUrl, instructions, lang = 'en' } = params
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const slotTitle = escapeHtml(params.slotTitle)
+  const providerName = escapeHtml(params.providerName)
+  const location = params.location ? escapeHtml(params.location) : params.location
   const dateStr = formatDateTime(start, lang)
   const endTime = formatTime(end, lang)
 
@@ -179,15 +193,24 @@ interface CoachNotifParams {
 }
 
 export function buildAppointmentProviderNotificationEmail(params: CoachNotifParams) {
-  const { coachFirstname, clientName, clientEmail, clientPhone, slotTitle, start, end, notes, lang = 'en' } = params
+  const { start, end, lang = 'en' } = params
+  // The twin of `buildTeacherNotificationEmail`, and the same reasoning: four of
+  // these come from an anonymous public booking payload and the message goes to
+  // the COACH, who has every reason to trust it.
+  const coachFirstname = escapeHtml(params.coachFirstname)
+  const clientName = escapeHtml(params.clientName)
+  const clientEmail = escapeHtml(params.clientEmail)
+  const clientPhone = params.clientPhone ? escapeHtml(params.clientPhone) : params.clientPhone
+  const slotTitle = escapeHtml(params.slotTitle)
+  const notes = params.notes ? escapeHtml(params.notes) : params.notes
   const dateStr = formatDateTime(start, lang)
   const endTime = formatTime(end, lang)
 
   const titles: Record<Lang, string> = {
-    en: `New appointment: ${clientName}`,
-    de: `Neuer Termin: ${clientName}`,
-    fr: `Nouveau rendez-vous : ${clientName}`,
-    it: `Nuovo appuntamento: ${clientName}`,
+    en: `New appointment: ${params.clientName}`,
+    de: `Neuer Termin: ${params.clientName}`,
+    fr: `Nouveau rendez-vous : ${params.clientName}`,
+    it: `Nuovo appuntamento: ${params.clientName}`,
   }
   const lines: Record<Lang, string[]> = {
     en: [
@@ -235,7 +258,10 @@ interface CancelParams {
 }
 
 export function buildAppointmentCancellationEmail(params: CancelParams) {
-  const { firstname, teamName, slotTitle, start, lang = 'en' } = params
+  const { start, lang = 'en' } = params
+  const firstname = escapeHtml(params.firstname)
+  const teamName = escapeHtml(params.teamName)
+  const slotTitle = escapeHtml(params.slotTitle)
   const dateStr = formatDateTime(start, lang)
 
   const titles: Record<Lang, string> = {

@@ -48,11 +48,29 @@ export interface SendOutcome {
   testMode?: boolean
 }
 
+/**
+ * In TEST_MODE `dispatch` replaces every recipient with `testEmail` and bypasses
+ * the policy layer below, so nothing addressed to a real person leaves a
+ * developer's machine or a lead demo.
+ *
+ * It used to be EXPORTED, because one caller — the emailed guardian link, a
+ * message whose delivery WAS the evidence — had to record the environment on the
+ * artefact it wrote rather than merely react to it. That mechanism is gone and
+ * no waiver path sends mail at all, so this is internal again.
+ */
 function isTestMode(): boolean {
   return testModeEnabled.value() === 'true'
 }
 
-function isMailEnabled(): boolean {
+/**
+ * EXPORTED for the same reason, on the other axis: the kill switch is a fact
+ * about the ENVIRONMENT and never about a recipient's address. `dispatch`
+ * short-circuits on it before any Firestore work and writes no ledger row at
+ * all, so "no row" alone cannot distinguish a disabled environment from a dead
+ * mailbox — and filing an operator's configuration beside a hard bounce would
+ * tell a studio that a parent's address is bad when nothing was ever sent.
+ */
+export function isMailEnabled(): boolean {
   return mailEnabled.value() !== 'false'
 }
 

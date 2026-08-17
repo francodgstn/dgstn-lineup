@@ -17,12 +17,17 @@ export default function SpacePortalNav() {
   const { slug, isAuthenticated } = useSpaceAuth()
   const { accent, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const pathname = usePathname()
-  const { data: paymentsData } = useSpacePayments()
+  const { data: paymentsData, isError: paymentsFailed } = useSpacePayments()
 
   if (!isAuthenticated) return null
 
+  // On FAILURE the tab stays. Hiding it would delete the only surface that can
+  // explain the failure, and the deletion itself reads as an answer: "you have no
+  // payments here". An empty RESULT hides the tab; an unknown one must not.
   const hasPayments =
-    (paymentsData?.payments.length ?? 0) > 0 || paymentsData?.billingAvailable === true
+    paymentsFailed ||
+    (paymentsData?.payments.length ?? 0) > 0 ||
+    paymentsData?.billingAvailable === true
 
   const base = `/public/${slug}/space`
   const items = [

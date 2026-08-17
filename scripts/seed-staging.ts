@@ -2063,21 +2063,16 @@ async function seedDocuments(
   teamName: string,
   uid: string,
 ) {
-  // Install the Documents plugin (minPlan 'free' — available to every plan).
+  // NO PLUGIN INSTALL — Documents is a default feature on every plan. The
+  // signup-consent selection lives in teams/{teamId}/settings/documents.
   await db
     .collection('teams')
     .doc(teamId)
-    .collection('installed_plugins')
+    .collection('settings')
     .doc('documents')
     .set({
-      pluginId: 'documents',
-      teamId,
-      installedAt: ts(daysFromNow(-30)),
-      installedBy: uid,
-      status: 'active',
-      config: {
-        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      },
+      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      updated_at: ts(daysFromNow(-30)),
     })
 
   const docSeeds = [

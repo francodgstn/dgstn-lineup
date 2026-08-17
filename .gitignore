@@ -72,3 +72,7 @@ apps/mobile/dist/
 *.mobileprovision
 *.orig.*
 web-build/
+
+# Pre-teardown consent-ledger exports (Q13). They carry names, addresses and IP
+# addresses — an archive, not source.
+/exports/

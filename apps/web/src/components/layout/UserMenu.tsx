@@ -6,10 +6,9 @@ import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import { persistLocale } from '@/i18n/persistLocale'
-import { QrCode, Sun, Moon, Monitor, Compass, LogOut, BarChart3, Settings } from 'lucide-react'
+import { Sun, Moon, Monitor, Compass, LogOut, BarChart3, Settings } from 'lucide-react'
 import { posthog } from '@/lib/posthog'
 import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
-import { QRDialog } from '@/components/layout/QRDialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +42,6 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const router = useRouter()
   const pathname = usePathname()
   const locale = useLocale()
-  const [qrOpen, setQrOpen] = useState(false)
 
   // Product analytics opt-out. Analytics runs under legitimate interest; this lets
   // a customer turn it off. PostHog persists + respects the choice across loads.
@@ -88,11 +86,11 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           >
             <UserAvatar email={user?.email ?? null} />
             {!collapsed && (
+              // Email only: the studio name is in the sidebar header now, and
+              // repeating it here just made two lines say one thing. It stays in
+              // the dropdown below, which is the identity summary.
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user?.email}</p>
-                {team?.name && (
-                  <p className="text-[11px] text-muted-foreground truncate">{team.name}</p>
-                )}
               </div>
             )}
           </DropdownMenuTrigger>
@@ -217,18 +215,10 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* QR codes shortcut */}
-        <button
-          type="button"
-          onClick={() => setQrOpen(true)}
-          title={t('qrTitle')}
-          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-        >
-          <QrCode className="h-4 w-4" />
-        </button>
+        {/* The QR shortcut moved to the utility icon row at the top of the
+            sidebar (components/layout/TeamQrButton.tsx): it is a STUDIO-level
+            action and had no business sitting inside the account cluster. */}
       </div>
-
-      <QRDialog open={qrOpen} onClose={() => setQrOpen(false)} team={team} />
     </>
   )
 }

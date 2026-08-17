@@ -1,3 +1,5 @@
+import type { SubscriptionCancellationDetails } from '@linyup/shared'
+
 export type WebhookEventType =
   | 'subscription.created'
   | 'subscription.updated'
@@ -15,7 +17,28 @@ export interface WebhookEvent {
   plan?: string
   currentPeriodStart?: Date
   currentPeriodEnd?: Date
+  /**
+   * The subscription is scheduled to end rather than renew — true for BOTH ways
+   * a gateway can express that (a boolean flag, or a scheduled end instant). The
+   * adapter normalises; nobody downstream should have to know which it was.
+   */
   cancelAtPeriodEnd?: boolean
+  /** WHEN it ends, when the gateway said so explicitly. */
+  cancelAt?: Date
+  /** WHEN the cancellation was requested — the start of the notice period. */
+  canceledAt?: Date
+  /**
+   * WHY it is ending. `null` means the gateway told us nothing; `undefined`
+   * means the event does not carry the field at all, and the two are different:
+   * `undefined` must never clear a stored record.
+   *
+   * `null` clears it only on a LIVE event (`subscription.created|updated`),
+   * where it is what a reactivation uses to erase a dead reason. On
+   * `subscription.cancelled` the handler clears nothing — a `deleted` payload
+   * that states no reason must not erase the one an earlier `updated` recorded.
+   * Both behaviours are pinned in connect/dahliaReads.test.ts.
+   */
+  cancellationDetails?: SubscriptionCancellationDetails | null
   amount?: number           // smallest currency unit (cents / rappen)
   currency?: string
   lastInvoiceId?: string

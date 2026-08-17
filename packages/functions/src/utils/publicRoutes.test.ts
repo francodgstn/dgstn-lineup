@@ -251,6 +251,20 @@ describe('emailed + printed links stay byte-identical', () => {
     )
   })
 
+  it('waitlist token links (booking/waitlist/notify.ts)', () => {
+    // ONE shape for both tokens — the page resolves which mode to render from
+    // whichever matched, so an offer mail and a join confirmation are
+    // indistinguishable by URL.
+    assert.equal(
+      publicUrl(ORIGIN, slug, 'waitlist', { token: 'offer_abc123' }),
+      `${ORIGIN}/public/${slug}/waitlist?token=offer_abc123`
+    )
+    assert.equal(
+      publicUrl(ORIGIN, slug, 'waitlist', { token: 'entry_abc123' }),
+      `${ORIGIN}/public/${slug}/waitlist?token=entry_abc123`
+    )
+  })
+
   it('appointment cancel token links (appointments/*, connect/webhook.ts)', () => {
     const token = 'tok_abc123'
     assert.equal(

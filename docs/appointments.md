@@ -122,6 +122,89 @@ both kinds**: an appointment cancel flips the session to `status: 'cancelled'`
 (unpublishing it via the sync gate) and frees the provider's time, which
 reappears in `listAvailability`.
 
+### Who the picker is booking for — one derived caller, the server's precedence
+
+`resolveAppointmentCaller` (`appointments/booking.ts`) accepts **three** proofs and
+checks them in trust order — **contact session → `authenticatedContactId` +
+`verificationCodeId` → typed `contactDetails`** — returning from the first that
+answers. A contact session therefore wins over everything in the request body, and
+this is not a subtlety the client may skip: `PublicContactAuthProvider` is mounted
+at the team root, so the session's ID token is attached by `httpsCallable` to every
+callable the picker makes, whether or not the picker knows it exists.
+
+`AppointmentPicker.tsx` mirrors that order in a `Caller` derived on every render
+(`sessionCaller ?? verified ?? GUEST`), and every screen, price and payload comes
+off it:
+
+| Caller | Screen | Body identity | Price snapshot |
+|---|---|---|---|
+| `session` (signed in anywhere under `/public/{slug}`) | member screen — name, price or "included", one CTA | **none** — the token is the proof | the contact's held type |
+| `code` (took the sign-in offer on the guest form) | member screen, or the `autobooking` spinner when covered | `authenticatedContactId` + `verificationCodeId` | `held_subscription_type_ids` from `verifyBookingCode` |
+| `guest` | guest details form + the sign-in offer | `contactDetails` | `GUEST_SNAPSHOT` |
+
+**A signed-in contact is never shown the guest form or the sign-in offer**, because
+the server would discard what they typed and would ignore a second sign-in. Until
+2026-08-16 this file read the session zero times, and all three of the consequences
+were live: a member was quoted the guest price (display only — the server charged
+the member price), a member typing a partner's details had the appointment booked
+under themselves, and — the real one — a **covered** member was routed into
+`createAppointmentCheckout`, which refuses `{ reason: 'covered' }` by design, and
+the picker rendered that as *"This slot is no longer available."* Both paid submits
+now answer a `covered` refusal by booking through the free door.
+
+Free-vs-paid routing comes from the resolved quote (`owesPayment`), never from
+"does this duration have a price" — that substitution is what sent a covered member
+to the paid door in the first place. The three terminal submits are unchanged in
+number and are the census `waivers/surfaces.test.ts` counts: `onSubmitGuest`,
+`runMemberFreeBooking` (entered from `onVerifiedAppointment`'s autobooking path and
+from the member screen's Confirm) and `onMemberPay`.
+
+#### The caller can move while the step is open
+
+Deriving the caller is half of it; the other half is that the derivation can
+CHANGE mid-flow, because the corner sign-in pill belongs to the provider that
+wraps this page. Everything the screen has already said or captured was quoted
+for whoever was there before, so one rule retires all of it:
+
+| What | How it retires | What it did before |
+|---|---|---|
+| the accepted `price_changed` figure | `useAcceptedPrice` scope (shared) | a guest's 40.00 re-sent on a member screen quoting 24.00 |
+| the server's `payment_required` figure | read through `identityKey` | — |
+| **the error sentence** | read through `identityKey` (it NAMES a figure) | "…the price without the code is CHF 40.00" rendered verbatim above a member's 24.00 button; only the OTP arm cleared it, the contact-session arm had nobody |
+| **the captured submit** (`pendingBook`) | stamped with its identity; a foreign one is dropped and the consent screen dismissed | a resume replayed `pending.caller` / `pending.values.email` from before against a price, body identity and acceptances re-derived after |
+| **the applied promo** | dropped, and said out loud | a code previewed anonymously on the guest screen was carried onto the member screen and re-priced there for an audience the server judges differently |
+
+The sentences are `AppointmentBooking.identityChanged` /
+`identityChangedPromo`. Because a carried code is now impossible, the member
+screen's `PromoCodeField` renders its INPUT for every recognised caller (it used
+to be `session`-only): whatever is on that screen was applied by that caller,
+under the same advisory-preview contract the guest screen has always had.
+
+#### The member's price is re-resolved, not read off the session
+
+The persisted contact session is a **seven-day snapshot** — it carries the one
+`subscription_type_id` the contact had at sign-in and is never refreshed. On
+other surfaces that is a label; here it is the price, and its divergence points
+the **unsafe** way: a lapsed or changed subscription still reads as held, the
+screen quotes the benefit, and `loadContactPaymentSnapshot` charges the real
+figure. `assertQuotedAmount` does not catch it either — it returns on its first
+line unless the checkout carried a promo code.
+
+So the picker re-resolves the held set on load from the contact's own document
+(`usePublicContactRecord`, the `isSelfContact` get Space already makes) through
+the shared `heldSubscriptionTypeIds` union — the same one the OTP path gets from
+`verifyBookingCode`. The frozen value survives only as the fallback for a read
+that FAILED, and the member CTA + code field wait for the answer rather than
+offering a figure derived from the stale one. On the `payment_required` race
+(client resolved free, server did not) the CTA turns from Confirm into Pay, and
+`AppointmentBooking.coverageEnded` says why.
+
+**The census of which public surfaces read the session at all** —
+and, for the ones that do not, what they use instead — is
+`packages/functions/src/auth/publicSurfaceIdentity.test.ts`. It enumerates the
+route tree rather than a hand-kept list, so a new surface that forgets the session
+fails the build.
+
 ## Paid appointments
 
 A duration can carry a price; a client whose effective price is an amount books it
@@ -156,17 +239,20 @@ memberBenefit: {                      // the ONE rule — optional
   algebra confused real coaches, and it was cut for this one rule.)
 - **Effective price for a caller** — the appointment arm of the ONE shared
   coverage/quote resolver (`resolvePaymentOptions(snapshot, { kind:
-  'appointment', duration, benefit })` in
-  `packages/shared/src/utils/paymentOptions.ts`, pure + fixture-tested), in
+  'appointment', duration, benefit }, context?)` in
+  `packages/shared/src/utils/paymentOptions.ts`, pure + fixture-tested — the arms
+  are class bookings, drop-ins, appointments, courses **and products**, and the
+  optional third `context` carries a typed promo code: `docs/promo-codes.md`), in
   order: unpriced → `covered` for anyone; priced + no held benefit type →
   `pay(base)` (guests always land here); priced + held + `included` →
   `covered` (or `spend_credits` when held via a pack); priced + held +
   `discount` → `pay(max(0.50, round(base × (100 − pct) / 100)))` — clamped to
   Stripe's **0.50 minimum-charge floor**, never "free via discount" (a
   `discountPercent` ≥ 100 clamps to 0.50; missing/≤ 0 falls back to base).
-  Server-side resolution (snapshot via `loadContactPaymentSnapshot`) is
-  authoritative — the picker runs the same resolver on an optimistic client
-  snapshot for display only.
+  A promo code competes with the benefit inside this same call, best-one-wins,
+  and can only ever lower the result. Server-side resolution (snapshot via
+  `loadContactPaymentSnapshot`) is authoritative — the picker runs the same
+  resolver on an optimistic client snapshot for display only.
 
 ### The price is the gate — there is no access gate
 
@@ -205,15 +291,16 @@ The slot-blocking predicate is centralised in `packages/shared/src/types/session
 — `appointmentSlotBlocked(s, nowMs)` / `isExpiredAppointmentHold` — and consumed by
 `listAvailability`'s busy filter, both branches of the slot transaction, and the
 admin calendar. A hold whose `hold_expires_at` has passed stops blocking the slot
-immediately (**lazy expiry** — release never waits for a cleaner). Three cleaners
+immediately (**lazy expiry** — release never waits for a cleaner). The cleaners
 converge on the same end state:
 
 1. **Lazy** — readers treat expired holds as free; when the slot transaction
    reclaims an expired/foreign hold it deletes stale `payment_status: 'required'`
    booking subdocs in the same transaction (else the next recount counts 2).
-2. **`checkout.session.expired`** — Stripe expires the Checkout at ~31 minutes;
-   the webhook promptly cancels a still-pending hold (session first, then the
-   booking delete).
+2. **`checkout.session.expired`** — Stripe expires the Checkout at ~31 minutes
+   (7 days for a staff payment link); the webhook cancels a still-pending hold
+   **that this session still owns** (session first, then the booking delete). See
+   the census below: it may not cancel on presence.
 3. **Daily sweep** — `expirePendingBookings` cancels expired held sessions before
    its existing bookings sweep, session first THEN booking delete, so the
    delete-triggered recount preserves `cancelled` instead of recomputing `open`.
@@ -223,6 +310,44 @@ Hold consumers to know about: `trackBookings` **early-returns** on
 `pending_payment` sessions (else the hold's own booking write would recompute the
 status and clobber the hold), and `syncSessionPublicProfile` excludes them —
 **holds are never published publicly**.
+
+### Who may release a hold — the census, and the ONE ownership rule
+
+The session's doc id is deterministic (`apt_{providerId}_{startMs}`) and therefore
+**shared by every attempt at that slot** — which is exactly what lets the slot
+transaction refuse a second visitor. The cost is that "cancel the session at this
+id and delete the booking under it" is an operation any attempt can perform on
+**any other attempt's live, payable hold**. *Presence is not ownership.*
+
+This was fixed once per site, from different files, and the last site was missed
+twice — so the census now lives in code, beside the rule, in
+**`packages/functions/src/appointments/holdRelease.ts`**.
+
+> **THAT HEADER OWNS THE CENSUS. This document does not repeat it**, and the
+> omission is the point: this page carried a copy of the table for two rounds,
+> and a copy of a list is a second thing to keep true. It lists every site that
+> can release, cancel or delete a hold, the proof each one rests on, and the grep
+> recipe for re-deriving it. `connect/commitSites.test.ts` asserts that no caller
+> of the shared executor exists without an entry there. **Read that header before
+> adding a release path**, and add the entry in the same commit.
+
+What you need from it to read the rest of this page: the sites that address a
+hold by its shared id while another attempt may own it go through **one call
+each** to `releaseAppointmentHold`, which proves ownership with `booking_token`
+inside the transaction that deletes. Two secondary proofs carry the callers that
+have no token to compare — a **lapsed deadline**, and a document that **still
+presents no deadline at all** (the staff payment-link rail, which writes none so
+the daily sweep leaves its 7-day link alone). A token never leaves a caller worse
+off than no token: where there is nothing to compare it against, a token-holder
+falls to exactly those two proofs, which is what stops a deadline-less staff hold
+being stranded forever. Fixtures, one block per site:
+`packages/functions/src/appointments/holdRelease.test.ts`.
+
+**Why `handleCheckoutExpired` was the urgent one.** Wave 3 Phase 3's promo
+lifecycle expires a superseded Checkout Session *at Stripe* before writing
+anything, so `checkout.session.expired` for an attempt the buyer has just retried
+now arrives **seconds** after the retry instead of ~31 minutes later. A rare race
+became a likely one — and it was the release site still cancelling on presence.
 
 ### Webhook confirmation (`kind: 'appointment'`)
 
@@ -254,11 +379,18 @@ the booking becomes real.
   (`resolveAppointmentCaller` marks it used, single-use). An abandoned checkout
   therefore needs a fresh code for the member's next attempt.
 - **30 vs 31 minutes.** The Firestore hold lives 30 minutes; the Stripe Checkout
-  `expires_at` is set to **31** because Stripe's minimum is 30 minutes from
-  creation and an exact 30 risks rejection on clock skew.
-- **Stripe-create failure after the hold** is caught: best-effort release
-  (session → `cancelled`, booking deleted); a leaked hold self-heals via lazy
-  expiry anyway.
+  `expires_at` is set to **31** because Stripe's minimum is 30 minutes from the
+  moment the create call *lands*. That extra minute used to be clock-skew slack
+  with nothing happening inside it; since Wave 3 Phase 3 it is a **work budget**
+  — the reserves and the hold transaction all run inside it — and
+  `assertCheckoutWindowPayable` refuses a checkout that overspends it. The
+  instant itself comes from `resolveCheckoutHoldWindow`
+  (`connect/checkout.ts`), never from a local constant.
+- **Stripe-create failure after the hold** is caught, and the release is
+  **ownership-checked, not best-effort-on-presence**: it goes through
+  `releaseAppointmentHold`, which cancels the session and deletes the booking
+  only when this attempt still owns the hold. A hold that has been rewritten by
+  a newer attempt is left alone; a leaked one self-heals via lazy expiry.
 - **Mobile stays free-path.** The app books via `bookAppointment` only; a caller
   whose effective price is an amount gets the `payment_required` refusal (no
   mobile checkout surface yet).

@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
+import { confirmClearedHoldFields, type SeatHold } from '@linyup/shared'
 import { to } from '../utils/async'
 import { hasTeamRole, isTeamMember } from '../utils/teams'
 
@@ -102,6 +103,25 @@ export const restoreContact = onCall(async (request) => {
 })
 
 // ─── checkInContact ───────────────────────────────────────────────────────────
+//
+// TAKES NO WAIVER, and the omission is a decision. This is the STAFF-side QR
+// scanner (a coach opens the session detail page and scans the member's code),
+// and it is the structural twin of `selfCheckIn`: it writes `participants` with
+// no booking required — the booking read below only CONFIRMS an existing one.
+// `selfCheckIn` IS gated; this is not, and the axis that separates them is WHO
+// IS ACTING, not whether a gate is technically possible.
+//
+// A member scanning at a kiosk is acting alone and unsupervised, so the gate is
+// the only thing between an unsigned person and the room. A coach scanning is a
+// team member standing at the door who has chosen to admit this person, and an
+// override a human chose is exactly what "surface, do not block" means — the
+// same reasoning that leaves `createStaffAppointment` unblocked. Refusing here
+// would stop a queue at the door over a document the coach cannot resolve from
+// that screen, and they can add the same person to `participants` by hand from
+// the same page anyway.
+//
+// The surfacing is the roster's waiver chip. The full census of attendance write
+// sites, gated and exempt, lives in `waivers/gate.ts`.
 
 export const checkInContact = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
@@ -216,9 +236,21 @@ export const checkInContact = onCall(async (request) => {
     batch.update(bookingRef, {
       status: 'confirmed',
       confirmed_at: FieldValue.serverTimestamp(),
+      // A confirmed seat is an ordinary booking from here on, so the hold
+      // markers must go with the same write. `bookingHoldsSeat` no longer
+      // expires a settled claim, so leaving the claim fields is not an oversell
+      // any more — but they would still make `sendBookingReminders` skip this
+      // person forever, and a stale flag on a confirmed booking is a lie the
+      // next reader has to untangle. A claim that was mid-payment carries the
+      // drop-in hold's `payment_status`/`expires_at` on top, and THOSE still
+      // cost the seat: `confirmClearedHoldFields` is the one patch all four
+      // confirm surfaces apply. Deleting an absent field is a no-op.
+      ...confirmClearedHoldFields(bookingDoc.data() as SeatHold, FieldValue.delete()),
     })
+    // No `bookings_count` here — a confirmed booking still holds its seat, and
+    // trackBookings' recount owns that number (same fix as the kiosk self-scan
+    // in sessions/index.ts).
     batch.update(sessionRef, {
-      bookings_count: FieldValue.increment(-1),
       conversions_count: FieldValue.increment(1),
     })
     batch.update(contactRef, { pending_bookings_count: FieldValue.increment(-1) })

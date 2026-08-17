@@ -99,7 +99,10 @@ export function OpenTabsStrip() {
   }
 
   return (
-    <div className="hidden md:block border-b bg-background">
+    // `no-print`: app chrome, not content. The strip is a plain <div> (no
+    // semantic tag), so the print stylesheet's element selectors don't catch
+    // it — it has to opt out explicitly or it lands on the day sheet.
+    <div className="no-print hidden md:block border-b bg-background">
       <div className="px-2">
         <SortableList horizontal ids={tabs.map((t) => t.tabId)} onReorder={reorderTabs}>
           <div className="flex items-stretch gap-1 overflow-x-auto no-scrollbar -mb-px">

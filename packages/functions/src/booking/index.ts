@@ -3,11 +3,11 @@ import { randomInt } from 'crypto'
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { getTeam } from '../utils/teams'
+import { getTeam, isTeamMember } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
-import { hashVerificationCode, verifyCode, generateSecureToken } from '../utils/crypto'
+import { hashVerificationCode, verifyCode, generateSecureToken, generateBookingReference } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { resolveReferralCode, createReferral } from '../utils/referrals'
@@ -17,12 +17,28 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
+import { healSessionSeatCount } from './seatCount'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
+import { isKioskDeviceForTeam } from '../utils/kioskSession'
 import { resolveSingleContact } from '../utils/contacts'
+import { matchGuestContact } from './guestContactMatch'
+import {
+  attachWaiverContact,
+  enforceWaiverGate,
+  parseWaiverSubmissions,
+  type WaiverGateOutcome,
+} from '../waivers/gate'
+import { commitWaiverLedgerWrites, planWaiverLedgerWrites } from '../waivers/accept'
 import {
   resolveActivityAccessRule,
   resolveAutoConfirm,
+  countHoldingSeats,
+  seatsFree,
   heldSubscriptionTypeIds,
+  isPastBookingCutoff,
+  parseBookingSource,
+  sanitizeBookingAnswers,
+  type FormField,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   PARTNER_VISITS_SUBCOLLECTION,
   type ActivityAccessRule,
@@ -330,6 +346,149 @@ export const verifyBookingCode = onCall(async (request) => {
 // bookSession
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The shape of a replaced booking document that `replacedBookingWasCounted`
+ *  reads — plus the two markers it deliberately does NOT read. */
+export interface ReplacedBookingShape {
+  payment_status?: string
+  waitlist_claim?: boolean
+  /** Read by `holdWriteCountDelta` and NOT by `replacedBookingWasCounted`, on
+   *  purpose: bookSession's duplicate guard admits only `status === 'pending'`
+   *  (its `already-exists` refusal, written twice — once in the authenticated
+   *  branch, once in the guest `exactMatch` branch), so every shape that reaches
+   *  THAT seam is a live pending booking and the status carries no information
+   *  there.
+   *  `createDropInCheckout`'s guard is looser — it blocks only `'confirmed'` and
+   *  a `participants` doc — so a terminal document (cancelled / no_show /
+   *  rebooked away) does reach the hold seam, and a terminal document owns no
+   *  count: whoever moved it out of `pending` already gave the count back. */
+  status?: string
+  /** Set by `rebookSession` on the document it creates. Not part of the
+   *  decision, and named here so it cannot quietly become one: a rebooked seat
+   *  is counted by `rebookSession` itself (the ledger is per document, and only
+   *  the path that creates a document knows whether the one it replaces was
+   *  holding a count), so from here it is an ordinary counted pending booking. */
+  rebooked_from?: string
+}
+
+/**
+ * Was the document a booking write REPLACES already counted in the contact's
+ * `pending_bookings_count`?
+ *
+ * `bookSession` full-replaces the caller's own booking document, so the counter
+ * must move exactly once per pending booking. Its duplicate guard lets only two
+ * kinds of live document through (everything else is refused with
+ * `already-exists`):
+ *
+ *  • a plain drop-in payment hold — `createDropInCheckout` writes it and NEVER
+ *    increments the counter, so the replacing write must. It is recognised by
+ *    `payment_status: 'required'` WITHOUT `waitlist_claim`, because a PAID
+ *    waitlist claim carries both and the promoter counted that one when it
+ *    minted the offer.
+ *  • every other live `pending` document — a waitlist claim hold, a claim that
+ *    already SETTLED free (its `waitlist_claim` deleted, which is exactly why
+ *    testing that flag was too narrow), a booking a coach reverted from
+ *    confirmed, a seat `rebookSession` moved here. All four were counted by
+ *    whoever created that state, and a second increment leaves the contact
+ *    permanently one high: the eventual cancel / no-show / check-in only ever
+ *    decrements once.
+ *
+ * The rebook shape is the one that cannot be decided from here, and that is why
+ * it is not: the document `rebookSession` writes looks the same whether it grew
+ * out of a live pending booking (whose count carried over) or out of a `no_show`
+ * / a checked-in participant (whose count had already been given back). Only
+ * `rebookSession` can see the difference, so it does its own counting — see the
+ * ledger note there.
+ *
+ * Erring the other way — skipping the increment for the drop-in hold — drives a
+ * real person's counter negative, which is the failure someone notices.
+ */
+export function replacedBookingWasCounted(
+  replaced: ReplacedBookingShape | null | undefined
+): boolean {
+  if (!replaced) return false
+  const uncountedDropInHold =
+    replaced.payment_status === 'required' && replaced.waitlist_claim !== true
+  return !uncountedDropInHold
+}
+
+/** A booking status that has already been disposed of — cancelled, marked absent
+ *  or moved to another session. Every one of those transitions hands the
+ *  contact's count back (`cancelBooking`'s own decrement, `markNoShowBookings`,
+ *  the admin bookings page, `rebookSession`'s own ledger), so the document left
+ *  behind owns no count. Unreachable at bookSession's seam, reachable at the
+ *  hold seam. */
+const DISPOSED_BOOKING_STATUSES = new Set(['cancelled', 'no_show', 'rebooked'])
+
+/**
+ * How much a PAYMENT-HOLD write (`createDropInCheckout`) must move the contact's
+ * `pending_bookings_count`.
+ *
+ * `replacedBookingWasCounted` answers "was the document I am replacing counted?"
+ * at bookSession's seam. This closes the other half of the same question at the
+ * OTHER seam: the hold write also decides what the document IS from now on, and
+ * the ledger has to agree with that — one count per counted document, no more,
+ * no less. So: **delta = (the document left behind owns a count) − (the document
+ * replaced owned one)**.
+ *
+ * Exactly two hold shapes come out of this write:
+ *
+ *  • a WAITLIST CLAIM hold (`waitlist_claim: true`) — COUNTED. The promoter
+ *    counted it when it minted the offer and `releaseWaitlistOffer` gives that
+ *    count back when the offer lapses.
+ *  • a PLAIN drop-in hold (`payment_status: 'required'`, no claim flag) —
+ *    UNCOUNTED for its whole life: nothing counts it at creation,
+ *    `expirePendingBookings` deletes it without a decrement, and the webhook
+ *    confirms it without one either.
+ *
+ * The bug this exists for: an offer holder who abandons the claim link and buys
+ * through the ordinary booking form. Their claim hold is full-`.set()` into a
+ * plain drop-in hold — `waitlist_claim` gone — while the promoter's `+1` stays
+ * on the contact. From then on the document is, to every reader, an ordinary
+ * uncounted hold: `replacedBookingWasCounted` classifies it as one (correctly —
+ * the two origins are byte-identical at that seam), so a later free `bookSession`
+ * counts it a SECOND time, and if it is simply abandoned `expirePendingBookings`
+ * deletes it and the `+1` is stranded forever. The repair belongs where the
+ * document changes kind, not at the seam that can no longer tell.
+ *
+ * The mirror case gets the `+1` for the identical reason: someone who opened an
+ * ordinary drop-in checkout and then went back to their claim link turns an
+ * uncounted hold into a counted one.
+ *
+ * NOTE the deliberate asymmetry with `replacedBookingWasCounted`: this reads
+ * `status` and that one does not. The two guards differ (see
+ * `ReplacedBookingShape.status`), so this seam — and only this seam — can be
+ * handed a disposed document, which owns no count and must not be decremented
+ * again. The complete shape table lives in `pendingBookingsCount.test.ts`.
+ */
+export function holdWriteCountDelta(
+  replaced: ReplacedBookingShape | null | undefined,
+  /** True when the document being written carries `waitlist_claim: true`. */
+  writesClaimHold: boolean
+): -1 | 0 | 1 {
+  const after = writesClaimHold ? 1 : 0
+  // Nothing there, or something already disposed of: no count to take away.
+  if (!replaced) return after as -1 | 0 | 1
+  if (replaced.status && DISPOSED_BOOKING_STATUSES.has(replaced.status)) return after as -1 | 0 | 1
+  // Unreachable — `createDropInCheckout` refuses a confirmed booking outright
+  // (its already-registered guard) — and genuinely ambiguous if it ever became
+  // reachable: 'confirmed' means "counted, booked" on an auto-confirming session
+  // and "count already released at check-in" everywhere else. Move nothing.
+  if (replaced.status === 'confirmed') return 0
+  const before = replacedBookingWasCounted(replaced) ? 1 : 0
+  return (after - before) as -1 | 0 | 1
+}
+
+/** What the booking transaction learned about the document it replaced — the two
+ *  facts that only its read set can supply, and that everything after the commit
+ *  (the contact counter, the manage-booking link in the mail) depends on. */
+interface BookingCommitResult {
+  /** The replaced document had already moved `pending_bookings_count` up. */
+  alreadyCounted: boolean
+  /** The token this seat ends up carrying: the replaced document's, if there was
+   *  one, so links already in someone's inbox keep working. */
+  bookingToken: string
+}
+
 export const bookSession = onCall(async (request) => {
   const data = request.data as {
     teamId?: string
@@ -339,6 +498,15 @@ export const bookSession = onCall(async (request) => {
     verificationCodeId?: string
     referralCode?: string
     subscription_type_id?: string
+    /** Attribution hint (see BookingSource). Untrusted — validated with
+     *  parseBookingSource before it's persisted. */
+    source?: string
+    /** Answers to the activity's bookingQuestions, keyed by field id. */
+    questionAnswers?: Record<string, unknown>
+    /** Ticks from the waiver step, each echoing the version and text hash the
+     *  visitor was actually shown. Coerced by `parseWaiverSubmissions`; anything
+     *  malformed is dropped and the gate refuses in the ordinary way. */
+    waiverAcceptances?: unknown
   }
 
   if (!data?.teamId || !data?.sessionId) {
@@ -372,9 +540,14 @@ export const bookSession = onCall(async (request) => {
       .where('joinedAt', '>', oneHourAgo)
       .get()
     if (recentIpBookings.size >= 10) {
+      // Reason codes matter here: 'resource-exhausted' is thrown by four
+      // unrelated conditions on this callable, and the public form has to tell
+      // "this class is full" (offer the waitlist) from "you are throttled"
+      // (try again later). Without them a shared NAT looks like a full class.
       throw new HttpsError(
         'resource-exhausted',
-        'Too many booking requests. Please try again later.'
+        'Too many booking requests. Please try again later.',
+        { reason: 'rate_limited_ip' }
       )
     }
   }
@@ -389,7 +562,9 @@ export const bookSession = onCall(async (request) => {
     .get()
 
   if (recentSessionBookings.size >= 50) {
-    throw new HttpsError('resource-exhausted', 'This session has reached its booking limit.')
+    throw new HttpsError('resource-exhausted', 'This session has reached its booking limit.', {
+      reason: 'rate_limited_session',
+    })
   }
 
   // ── Resolve authenticated contact ────────────────────────────────────────────
@@ -408,6 +583,11 @@ export const bookSession = onCall(async (request) => {
   //      has to type an emailed code to book something it's already authenticated for.
   // Neither present → guest booking from contactDetails, below.
   let authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null = null
+  // The address the six-digit code was actually MAILED TO, kept because it is
+  // not, in general, the contact's own — path 1 above exists precisely so a
+  // parent can verify with their address and book for their child. The waiver
+  // ledger records it as `signer_email`; see WaiverGateParams.signerEmail.
+  let verifiedSignerEmail: string | null = null
 
   if (data.authenticatedContactId) {
     // The code is MANDATORY. It is the ONLY thing that proves the caller is this
@@ -436,6 +616,7 @@ export const bookSession = onCall(async (request) => {
       throw new HttpsError('permission-denied', 'Code does not match team')
     const isValid = (codeData.matched_contact_ids || []).includes(data.authenticatedContactId)
     if (!isValid) throw new HttpsError('permission-denied', 'Contact not found in verified matches')
+    verifiedSignerEmail = ((codeData.email as string | undefined) ?? '').toLowerCase().trim() || null
     await admin
       .firestore()
       .collection('booking_verification_codes')
@@ -552,6 +733,11 @@ export const bookSession = onCall(async (request) => {
   let accessRule: ActivityAccessRule = { type: 'open' }
   // Per-activity confirmation note (overrides the team-wide setting below).
   let activityInstructions: string | null = null
+  // Per-activity cancellation policy (overrides the team-wide default below).
+  let activityCancellationPolicy: string | null = null
+  // The activity's own book-form questions — the allow-list the submitted
+  // answers get narrowed to (see sanitizeBookingAnswers).
+  let activityBookingQuestions: FormField[] = []
   let activityAutoConfirm: boolean | undefined
   let activityTypeVal: ActivityType | undefined
   // CLASS-ONLY (Activity.trialEnabled, @linyup/shared). Independent of
@@ -578,6 +764,10 @@ export const bookSession = onCall(async (request) => {
           isFreeTrial: actData.isFreeTrial as boolean | undefined,
         })
         activityInstructions = (actData.confirmationInstructions as string) || null
+        activityCancellationPolicy = (actData.cancellationPolicy as string) || null
+        activityBookingQuestions = Array.isArray(actData.bookingQuestions)
+          ? (actData.bookingQuestions as FormField[])
+          : []
         activityAutoConfirm = actData.autoConfirm as boolean | undefined
         activityTypeVal = actData.type as ActivityType | undefined
         activityTrialEnabled = actData.trialEnabled === true
@@ -605,13 +795,77 @@ export const bookSession = onCall(async (request) => {
       | undefined) || null
   const bookingInstructions = activityInstructions?.trim() || teamInstructions?.trim() || null
 
-  // Group-class booking cap (optional; enforced against the live reserved count).
+  // Cancellation policy appended to the confirmation email: activity override ??
+  // team default (mirrors the instructions pattern above; separate field
+  // because this one is ALSO shown publicly before the visitor books).
+  const teamCancellationPolicy =
+    ((team.settings as Record<string, unknown> | undefined)?.bookingCancellationPolicy as
+      | string
+      | undefined) || null
+  const cancellationPolicy =
+    activityCancellationPolicy?.trim() || teamCancellationPolicy?.trim() || null
+
+  // Group-class booking cap — FAIL-FAST ONLY. The authoritative gate lives in
+  // the write transaction below (which reads the session doc and the bookings
+  // subcollection in the same read set, so two concurrent bookers serialize);
+  // this pre-flight exists so a refusal on a genuinely full class costs no side
+  // effects — no contact created, no funnel stamp, no trial_used_at burned.
+  //
+  // The stored counter is only a cheap filter: it can be STALE-FULL, because an
+  // abandoned drop-in checkout leaves a lapsed `payment_status: 'required'`
+  // hold and trackBookings only recounts on a booking WRITE — which is exactly
+  // what we are about to refuse to do. So when it says full, re-derive the live
+  // count with the same predicate before locking a real customer out of a free
+  // seat, and PERSIST the correction (healSessionSeatCount, a transaction that
+  // reads the session doc and its bookings in one read set — the only shape
+  // `bookings_count` may be written in). Persisting is what makes the fix reach
+  // anyone but this caller: the public mirror is derived from that number, so
+  // until it is corrected the class stays advertised full and its slot row stays
+  // unclickable, with a genuinely free seat behind it, until the 02:00 sweep.
+  //
+  // WHO is booking, as far as the seat count is concerned. Resolved HERE, before
+  // the gate below, so the pre-flight can exclude the caller's own hold exactly
+  // as the write transaction does — a caller holding a waitlist claim (or an
+  // abandoned drop-in hold) on a full class would otherwise be refused the seat
+  // they already have, by a fail-fast filter its own authoritative gate would
+  // have let through. Reads only: the contact is still CREATED far below, after
+  // every refusal path, and the guest branch would run this same exact
+  // email+name match anyway.
+  //
+  // The email+name predicate itself lives in `booking/guestContactMatch.ts` —
+  // moved, not changed. `createDropInCheckout` had a byte-identical copy, and
+  // `resolveWaiverRequirement` now needs the SAME answer: a public callable that
+  // resolved a shared household mailbox differently from this rail would tell a
+  // 12-year-old there is nothing to sign and then have the gate refuse him on
+  // his mother's signature.
+  let guestMatch: admin.firestore.QueryDocumentSnapshot | null = null
+  if (!authenticatedContact) {
+    guestMatch = (await matchGuestContact(data.teamId, sanitized)).match
+  }
+  const callerContactId = authenticatedContact?.id ?? guestMatch?.id
+
   const maxGroup = sessionData.max_participants as number | undefined
-  if (maxGroup && maxGroup > 0) {
-    const reserved = (sessionData.bookings_count as number) || 0
-    if (reserved >= maxGroup) {
-      throw new HttpsError('resource-exhausted', 'This session is fully booked.')
+  if (seatsFree(maxGroup, (sessionData.bookings_count as number) || 0) <= 0) {
+    const healed = await healSessionSeatCount(data.sessionId, callerContactId)
+    if (
+      healed.exists &&
+      seatsFree(healed.maxParticipants ?? maxGroup, healed.holdingExcludingCaller) <= 0
+    ) {
+      throw new HttpsError('resource-exhausted', 'This session is fully booked.', {
+        reason: 'session_full',
+      })
     }
+  }
+
+  // Online booking cutoff (team.settings.booking.cutoffMinutes) — authoritative;
+  // the client hides/disables the same slots but never trust it alone.
+  const cutoffMinutes = (
+    (team.settings as Record<string, unknown> | undefined)?.booking as
+      | { cutoffMinutes?: number }
+      | undefined
+  )?.cutoffMinutes
+  if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
+    throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
   }
 
   // ── Access gate (paid-access axis) ─────────────────────────────────────────
@@ -679,6 +933,86 @@ export const bookSession = onCall(async (request) => {
     usageAt: (sessionData.start as Timestamp).toDate(),
   })
 
+  // ── The waiver gate ────────────────────────────────────────────────────────
+  // HERE, and not one line lower: the first CONTACT write is immediately below,
+  // so a refusal creates no contact, stamps no funnel, burns no `trial_used_at`
+  // and records no acceptance.
+  //
+  // ONE side effect does precede it and cannot be moved: the verification code
+  // was marked `used: true` at the identity check near the top of this callable,
+  // long before any gate. What that actually costs is worth stating precisely,
+  // because the obvious reading is wrong in a way that TESTS AS FINE — this
+  // callable never re-checks `used` (its entry checks are `exists`, `verified`,
+  // `team_id` and `matched_contact_ids`), so re-calling it with the same
+  // `codeId` still succeeds. The cost only materialises if the SURFACE unwinds
+  // to the email step, because `verifyBookingCode` does refuse a used code and
+  // re-requesting is capped per email+team per hour. That is why the returning-
+  // member path must present the waiver step BEFORE calling this callable rather
+  // than reacting to the refusal: the refusal is the floor, not the plan.
+  //
+  // The caller is already identified at this point — `callerContactId` above,
+  // from the guest email+name match this rail runs regardless for the seat
+  // count — so the gate's cost is one policy read plus one signer read per
+  // applicable waiver, and a team with no waivers pays exactly one document
+  // read per booking.
+  //
+  // `nowMs` is captured ONCE, here, and carried into the commit transaction.
+  // Stamping the tick inside the transaction instead would re-stamp it on a
+  // Firestore retry, and a retried acceptance that overtakes a manager's
+  // revocation silently undoes it.
+  const waiverNowMs = Date.now()
+  // THE ONE PLACE THIS RAIL ASKS WHETHER THE DEVICE IS A KIOSK. The answer feeds
+  // two `source` stamps and nothing else — the acceptance's below, and the
+  // booking document's further down — so it changes ATTRIBUTION, not
+  // authorization.
+  //
+  // The tablet used to buy a guardian DEFERRAL here — the walk-in was admitted
+  // with the waiver outstanding and a link was mailed to a parent afterwards.
+  // That mechanism is gone; the consent step is completable by the person at the
+  // desk, so the kiosk refuses like every other rail.
+  //
+  // What survives is the reason the check is a real identity rather than
+  // `data.source`: an acceptance may claim `source: 'kiosk'` only when the
+  // device PROVED it was one (the custom token `unlockKiosk` mints after a
+  // timing-safe PIN comparison), so the one value a caller might want to claim
+  // is the one value they cannot fake into the record. See utils/kioskSession.ts.
+  const isKiosk = await isKioskDeviceForTeam(request, data.teamId)
+  let waiverOutcome: WaiverGateOutcome = await enforceWaiverGate({
+    teamId: data.teamId,
+    activityId: (sessionData.activityId as string | undefined) ?? null,
+    subject: {
+      contactId: callerContactId ?? null,
+      name: `${sanitized.firstname} ${sanitized.lastname}`.trim(),
+      email: sanitized.email,
+    },
+    submissions: parseWaiverSubmissions(data.waiverAcceptances),
+    // The LEDGER's source, and it is evidence rather than a dashboard label: an
+    // acceptance claims `kiosk` only when the device proved it was one. A studio
+    // running the tablet without the PIN lock therefore files its walk-in ticks
+    // as `booking`, which is exactly what we can stand behind about them.
+    source: isKiosk ? 'kiosk' : 'booking',
+    // The three strengths this rail can honestly claim, and they are different
+    // facts: an OTP means the signer received and typed a code sent to THAT
+    // mailbox; a contact session means only that a session was open, which
+    // identifies the CONTACT and not the person at the keyboard; a guest form
+    // means the address was merely typed. The record says which.
+    signerEmailVerifiedBy: data.authenticatedContactId
+      ? 'verified_code'
+      : isAuthenticatedBooking
+        ? 'session'
+        : 'none',
+    // …and the address that strength is ABOUT. Recording `verified_code` beside
+    // the contact's own address would claim a mailbox proof for whoever the
+    // booking is for, which on this rail is routinely somebody else: the parent
+    // typed the code, the child is the subject. null on the session and guest
+    // paths, where the subject's address is the only one there is.
+    signerEmail: verifiedSignerEmail,
+    ip: bookingIp,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale: null,
+    nowMs: waiverNowMs,
+  })
+
   // Resolve or create contact
   let contactId: string
   let isNewContact = false
@@ -711,20 +1045,10 @@ export const bookSession = onCall(async (request) => {
       throw new HttpsError('already-exists', 'You are already registered for this session')
     }
   } else {
-    // Find existing contact by email + name
-    const existingSnap = await admin
-      .firestore()
-      .collection('contacts')
-      .where('teamId', '==', data.teamId)
-      .where('email', '==', sanitized.email)
-      .get()
-    const exactMatch = existingSnap.docs.find((d) => {
-      const c = d.data()
-      return (
-        c.firstname?.toLowerCase().trim() === sanitized.firstname.toLowerCase() &&
-        c.lastname?.toLowerCase().trim() === sanitized.lastname.toLowerCase()
-      )
-    })
+    // The exact email+name match was already resolved above, before the capacity
+    // gate — it is the caller's identity for the seat count as much as it is the
+    // contact to book.
+    const exactMatch = guestMatch
 
     if (exactMatch) {
       contactId = exactMatch.id
@@ -744,7 +1068,14 @@ export const bookSession = onCall(async (request) => {
           .doc(contactId)
           .get(),
       ])
-      if (existingBooking.exists || existingParticipant.exists) {
+      // Same rule as the authenticated branch above, which this used to
+      // contradict: a pending hold is not a registration. A guest who abandoned
+      // a drop-in checkout (or holds a seat awaiting confirmation) would
+      // otherwise get a bare 'already-exists' for a booking they never made.
+      if (
+        existingParticipant.exists ||
+        (existingBooking.exists && existingBooking.data()?.status !== 'pending')
+      ) {
         throw new HttpsError('already-exists', 'You are already registered for this session')
       }
       // An existing OFF-FUNNEL contact (form/shop lead — no acquisition stage)
@@ -793,12 +1124,16 @@ export const bookSession = onCall(async (request) => {
     }
   }
 
+  // The gate ran above the contact write and therefore could not know this id.
+  // Rebinding here — rather than resolving the gate a second time now that the
+  // contact exists — is what keeps ONE answer to "does this person need to
+  // sign".
+  waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
+
   // Add booking to session
   const bookingToken = generateSecureToken()
+  const bookingReference = generateBookingReference()
   const teamSlug: string | null = team.slug || null
-  const manageBookingUrl = teamSlug
-    ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: bookingToken })
-    : null
   const subscriptionTypeId =
     matchedSubscriptionTypeId ??
     (typeof data.subscription_type_id === 'string' && data.subscription_type_id
@@ -817,6 +1152,20 @@ export const bookSession = onCall(async (request) => {
     fromBioLink: true,
     is_new_contact: isNewContact,
     booking_token: bookingToken,
+    booking_reference: bookingReference,
+    // Attribution, and ONLY attribution — it decides what a dashboard says and
+    // nothing else. Client-supplied but validated against the union; an
+    // unrecognised value falls back to 'online' rather than persisting junk. A
+    // VERIFIED kiosk device overrides whatever was typed, so the one value a
+    // caller might want to claim is also the one value they cannot fake into the
+    // record. Nothing on a decision path may read this field.
+    source: isKiosk ? 'kiosk' : (parseBookingSource(data.source) ?? 'online'),
+    // Narrowed to the activity's own questions — unknown ids and off-list
+    // choices are dropped rather than persisted.
+    ...(() => {
+      const answers = sanitizeBookingAnswers(activityBookingQuestions, data.questionAnswers)
+      return answers ? { question_answers: answers } : {}
+    })(),
     booking_ip: bookingIp,
     authenticated_booking: isAuthenticatedBooking,
     subscription_type_id: subscriptionTypeId,
@@ -827,118 +1176,209 @@ export const bookSession = onCall(async (request) => {
       status: 'confirmed' as const,
       fullname: `${sanitized.firstname} ${sanitized.lastname}`,
     }),
+    // Denormalised for the day sheet and the printed manifest only. Absent when
+    // no required waiver applied, which the roster renders as nothing.
+    ...(waiverOutcome.bookingWaiverState
+      ? { waiver_state: waiverOutcome.bookingWaiverState }
+      : {}),
   }
-  const sessionCounterUpdate = {
-    has_bookings: true,
-    bookings_count: FieldValue.increment(1),
-    ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
-    last_booking_at: FieldValue.serverTimestamp(),
-  }
-  const bookingRef = admin
-    .firestore()
+  const db = admin.firestore()
+  const bookingRef = db
     .collection('sessions')
     .doc(data.sessionId)
     .collection('bookings')
     .doc(contactId)
-  const sessionRef = admin.firestore().collection('sessions').doc(data.sessionId)
+  const sessionRef = db.collection('sessions').doc(data.sessionId)
+  const bookingsRef = sessionRef.collection('bookings')
 
-  if (creditSpendTypeId) {
-    // Credit-pack booking: spend one credit atomically with the booking write.
-    // FIFO across the contact's usable grants (soonest expiry first, then oldest).
-    // The concurrent-booking race is settled here: the transaction re-reads the
-    // grants and fails when the last credit was consumed in the meantime.
-    const db = admin.firestore()
-    await db.runTransaction(async (tx) => {
-      const grantsQuery = db
-        .collection('contacts')
-        .doc(contactId)
-        .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
-        .where('teamId', '==', data.teamId)
-        .where('subscription_type_id', '==', creditSpendTypeId)
-      const grantsSnap = await tx.get(grantsQuery)
-      const nowMs = Date.now()
-      interface UsableGrant {
-        ref: FirebaseFirestore.DocumentReference
-        credits_total: number
-        credits_used: number
-        expires_at: Timestamp | null
-        created_at: Timestamp | null
-      }
-      const usable: UsableGrant[] = grantsSnap.docs
-        .map((d) => {
-          const g = d.data()
-          return {
-            ref: d.ref,
-            credits_total: (g.credits_total as number) ?? 0,
-            credits_used: (g.credits_used as number) ?? 0,
-            expires_at: (g.expires_at as Timestamp | null) ?? null,
-            created_at: (g.created_at as Timestamp | null) ?? null,
-          }
-        })
-        .filter(
-          (g) =>
-            g.credits_used < g.credits_total && (!g.expires_at || g.expires_at.toMillis() > nowMs)
-        )
-        .sort((a, b) => {
-          const ax = a.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
-          const bx = b.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
-          if (ax !== bx) return ax - bx
-          return (a.created_at?.toMillis() ?? 0) - (b.created_at?.toMillis() ?? 0)
-        })
-      const grant = usable[0]
+  // ── The booking commit — ONE transaction, whatever pays for it ──────────────
+  // The seat and the thing that buys it (a pack credit, a usage-window unit, or
+  // nothing at all) are decided together or not at all. Two things ride on that:
+  //
+  //  1. CAPACITY. The session doc is read AND written here, which is the
+  //     serialization point: two people booking the last seat of a class
+  //     conflict on that document and one of them retries against the other's
+  //     committed count. The bookings subcollection supplies the number; the
+  //     session doc is the lock. Reading `bookings_count` outside a transaction
+  //     (what this did before) let both callers see 9 of 10 and both write.
+  //  2. THE COUNTER. `bookings_count` is written as an ABSOLUTE value derived
+  //     from the read set, never `increment(1)` — the increment landed ON TOP of
+  //     trackBookings' recount of the very same booking write, leaving a filling
+  //     class one seat over until the next write healed it, i.e. refusing a real
+  //     customer.
+  //
+  // `bio_link_new_contact_bookings_count` stays an increment on purpose: it is a
+  // lifetime tally, not a capacity number, and nothing recounts it.
+  //
+  // It also reports what it found in the caller's own booking slot, because that
+  // decides two things below: whether the contact counter moves, and which
+  // booking token this seat keeps.
+  const commit = await db.runTransaction<BookingCommitResult>(async (tx) => {
+    // ── READS (all of them, before the first write) ──
+    const freshSession = await tx.get(sessionRef)
+    if (!freshSession.exists) throw new HttpsError('not-found', 'Session not found')
+    const bookingsSnap = await tx.get(bookingsRef)
+
+    // The acceptance's READ phase, inside the same read set as the seat. Two
+    // single-document gets per signed waiver, both on documents only this
+    // contact ever writes, so neither adds contention.
+    //
+    // The get of the ACCEPTANCE REF is not optional and is the trap this whole
+    // module exists to disarm: `recordFinanceTransaction`'s `.create()` +
+    // catch-gRPC-6 idiom works only OUTSIDE a transaction. Inside one, a
+    // `tx.create` collision does not throw at the call — it fails the WHOLE
+    // commit as a precondition violation and takes the seat with it. A client
+    // retrying after a network timeout, or a visitor who ticks once and books
+    // Tuesday's class and then Thursday's from the same mounted flow, both
+    // produce the identical derived id.
+    const waiverPlans = await planWaiverLedgerWrites(tx, waiverOutcome.accepts, waiverNowMs)
+
+    interface UsableGrant {
+      ref: FirebaseFirestore.DocumentReference
+      credits_used: number
+    }
+    let grant: UsableGrant | null = null
+    let windowRef: FirebaseFirestore.DocumentReference | null = null
+    let windowUsed = 0
+    const nowMs = Date.now()
+
+    if (creditSpendTypeId) {
+      // Credit-pack booking: FIFO across the contact's usable grants (soonest
+      // expiry first, then oldest). Re-read inside the transaction so the last
+      // credit cannot be spent twice.
+      const grantsSnap = await tx.get(
+        db
+          .collection('contacts')
+          .doc(contactId)
+          .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+          .where('teamId', '==', data.teamId)
+          .where('subscription_type_id', '==', creditSpendTypeId)
+      )
+      grant =
+        grantsSnap.docs
+          .map((d) => {
+            const g = d.data()
+            return {
+              ref: d.ref,
+              credits_total: (g.credits_total as number) ?? 0,
+              credits_used: (g.credits_used as number) ?? 0,
+              expires_at: (g.expires_at as Timestamp | null) ?? null,
+              created_at: (g.created_at as Timestamp | null) ?? null,
+            }
+          })
+          .filter(
+            (g) =>
+              g.credits_used < g.credits_total && (!g.expires_at || g.expires_at.toMillis() > nowMs)
+          )
+          .sort((a, b) => {
+            const ax = a.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
+            const bx = b.expires_at?.toMillis() ?? Number.MAX_SAFE_INTEGER
+            if (ax !== bx) return ax - bx
+            return (a.created_at?.toMillis() ?? 0) - (b.created_at?.toMillis() ?? 0)
+          })[0] ?? null
       if (!grant) {
         throw new HttpsError(
           'permission-denied',
           'No lesson credits remaining on your pack. Purchase a new pack to book this class.'
         )
       }
-      tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
-      tx.set(bookingRef, { ...bookingDoc, credit_grant_id: grant.ref.id, credit_spent: 1 })
-      tx.set(sessionRef, sessionCounterUpdate, { merge: true })
-    })
-  } else if (usageSpend) {
-    // Usage-limited subscription ("3 classes per week"): consume one unit of
-    // the current window atomically with the booking write. The transaction
-    // re-reads the counter, so a concurrent-booking race is settled here —
-    // exactly the credit-spend pattern above. The booking is stamped with the
-    // window doc id so cancelBooking can refund the unit.
-    const db = admin.firestore()
-    const windowRef = db
-      .collection('contacts')
-      .doc(contactId)
-      .collection('usage_windows')
-      .doc(usageSpend.docId)
-    await db.runTransaction(async (tx) => {
+    } else if (usageSpend) {
+      // Usage-limited subscription ("3 classes per week"): consume one unit of
+      // the window the CLASS falls in. Same race, settled the same way.
+      windowRef = db
+        .collection('contacts')
+        .doc(contactId)
+        .collection('usage_windows')
+        .doc(usageSpend.docId)
       const windowSnap = await tx.get(windowRef)
-      const used = (windowSnap.data()?.used as number | undefined) ?? 0
-      if (used >= usageSpend.count) {
+      windowUsed = (windowSnap.data()?.used as number | undefined) ?? 0
+      if (windowUsed >= usageSpend.count) {
         throw new HttpsError(
           'permission-denied',
           'You have used all the classes your membership includes for this period.'
         )
       }
+    }
+
+    // ── CAPACITY (authoritative) ──
+    // The caller's own document is excluded: this write REPLACES it (a returning
+    // guest whose drop-in hold is still live, a re-book over a pending booking),
+    // so counting it would refuse them a seat they already occupy.
+    const holding = countHoldingSeats(bookingsSnap.docs, nowMs, contactId)
+    if (seatsFree(freshSession.data()?.max_participants as number | undefined, holding) <= 0) {
+      throw new HttpsError('resource-exhausted', 'This session is fully booked.', {
+        reason: 'session_full',
+      })
+    }
+
+    // What is this write landing ON TOP of? Both answers below come from that
+    // one document, resolved once, inside the transaction that replaces it.
+    const replaced = bookingsSnap.docs.find((d) => d.id === contactId)?.data() as
+      | (ReplacedBookingShape & { booking_token?: string })
+      | undefined
+
+    // The write is a full `set`, so a fresh token here would silently kill the
+    // manage/cancel link in the confirmation mail the FIRST booking sent — the
+    // person clicks it and is told their booking no longer exists. The document
+    // is the same person on the same session, so it keeps the token it already
+    // had; only a brand-new seat mints one. (The duplicate confirmation email
+    // itself remains: re-booking a seat you already hold sends a second mail.
+    // Both now carry a link that works.)
+    const effectiveToken = replaced?.booking_token || bookingToken
+    const bookingDocToWrite = { ...bookingDoc, booking_token: effectiveToken }
+
+    // ── WRITES ──
+    // The acceptance and the seat commit together or not at all: a signature
+    // that could fail while the seat succeeded is an evidence hole in a
+    // compliance feature, and the alternative placement — beside the partner
+    // ledger and the contact alert after the commit — is the zone where
+    // failures are logged and swallowed.
+    commitWaiverLedgerWrites(tx, waiverPlans)
+    if (grant) {
+      tx.update(grant.ref, { credits_used: grant.credits_used + 1 })
+      tx.set(bookingRef, { ...bookingDocToWrite, credit_grant_id: grant.ref.id, credit_spent: 1 })
+    } else if (usageSpend && windowRef) {
       tx.set(
         windowRef,
         {
           teamId: data.teamId,
           subscription_type_id: usageSpend.subscriptionTypeId,
-          used: used + 1,
+          used: windowUsed + 1,
           updated_at: FieldValue.serverTimestamp(),
         },
         { merge: true }
       )
       tx.set(bookingRef, {
-        ...bookingDoc,
+        ...bookingDocToWrite,
         usage_window_doc_id: usageSpend.docId,
         usage_window_type_id: usageSpend.subscriptionTypeId,
       })
-      tx.set(sessionRef, sessionCounterUpdate, { merge: true })
-    })
-  } else {
-    // Non-credit, non-limited path — unchanged.
-    await bookingRef.set(bookingDoc)
-    await sessionRef.set(sessionCounterUpdate, { merge: true })
-  }
+    } else {
+      tx.set(bookingRef, bookingDocToWrite)
+    }
+    tx.set(
+      sessionRef,
+      {
+        has_bookings: true,
+        bookings_count: holding + 1,
+        ...(isNewContact && { bio_link_new_contact_bookings_count: FieldValue.increment(1) }),
+        last_booking_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    // Was the document this write replaces ALREADY counted in the contact's
+    // `pending_bookings_count`? That, and not "was it a waitlist claim", is the
+    // question — see `replacedBookingWasCounted` for which shapes can be
+    // standing here and which one of them was never counted.
+    return {
+      alreadyCounted: replacedBookingWasCounted(replaced),
+      bookingToken: effectiveToken,
+    }
+  })
+  const manageBookingUrl = teamSlug
+    ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: commit.bookingToken })
+    : null
 
   // Partner (aggregator) visit ledger — a booking covered via a
   // source:'aggregator' subscription type (FitPass/SportPass/USC…) earns the
@@ -981,7 +1421,10 @@ export const bookSession = onCall(async (request) => {
     }
   }
 
-  if (!isNewContact) {
+  // A brand-new contact is created carrying `pending_bookings_count: 1`, and a
+  // replaced document that was already counted must not be counted twice — see
+  // the transaction's return value. Everything else gets the increment here.
+  if (!isNewContact && !commit.alreadyCounted) {
     await admin
       .firestore()
       .collection('contacts')
@@ -1050,6 +1493,8 @@ export const bookSession = onCall(async (request) => {
       locationName: sessionData.location || null,
       manageBookingUrl,
       instructions: bookingInstructions,
+      cancellationPolicy,
+      reference: bookingReference,
       lang,
     })
     const subjects: Record<Lang, string> = {
@@ -1110,6 +1555,7 @@ export const bookSession = onCall(async (request) => {
     sessionId: data.sessionId,
     isNewContact,
     isAuthenticatedBooking,
+    bookingReference,
     sessionDetails: {
       activityName,
       start: sessionStart.toISOString(),
@@ -1224,7 +1670,33 @@ export const cancelBooking = onCall(async (request) => {
   // Transaction (not a batch) so a spent lesson credit is refunded atomically
   // with the cancellation. Refund floors at 0 and applies even if the grant has
   // expired meanwhile — the swimmer paid for a lesson they now didn't take.
+  //
+  // It reads the session document AND its bookings, and writes the session
+  // document. The freed seat is written as an ABSOLUTE count from that same read
+  // set (no `increment(-1)`), and the session doc being genuinely IN the read set
+  // is what makes a cancel and a concurrent booking conflict on it and
+  // serialize — the identical lock bookSession takes (see its transaction: "the
+  // bookings subcollection supplies the number; the session doc is the lock").
+  //
+  // The session read is not optional bookkeeping. This paragraph used to assert
+  // the serialization while the transaction only ever read the bookings
+  // subcollection: a document that is written but never read carries no version
+  // precondition, so the claim was simply false. One read is a small price for a
+  // lock that is real rather than asserted.
+  const sessionRef = db.collection('sessions').doc(sessionId)
   await db.runTransaction(async (tx) => {
+    const freshSession = await tx.get(sessionRef)
+    if (!freshSession.exists) throw new HttpsError('not-found', 'Session no longer exists.')
+    const freshSessionData = freshSession.data()!
+    const bookingsSnap = await tx.get(sessionRef.collection('bookings'))
+    // The document being cancelled still counts as holding a seat in this read
+    // set — exclude it, since the very next write releases it. Only when it IS
+    // a booking: a `participants` hit (checked-in attendee) leaves the bookings
+    // subcollection untouched, so the honest post-state is the plain recount.
+    const cancelledBookingId =
+      bookingDoc.ref.parent.id === 'bookings' ? bookingDoc.id : undefined
+    const remaining = countHoldingSeats(bookingsSnap.docs, Date.now(), cancelledBookingId)
+
     let grantRefund: { ref: FirebaseFirestore.DocumentReference; used: number } | null = null
     if (contactId && booking.credit_grant_id && booking.credit_spent) {
       const grantRef = db
@@ -1256,15 +1728,20 @@ export const cancelBooking = onCall(async (request) => {
       status: 'cancelled',
       cancelled_at: FieldValue.serverTimestamp(),
     })
-    tx.update(db.collection('sessions').doc(sessionId), {
-      bookings_count: FieldValue.increment(-1),
+    tx.update(sessionRef, {
+      bookings_count: remaining,
       // Release the appointment slot. A window-created session only existed for this
       // booking, so cancel it (unpublishes via the sync gate) — its time returns
       // to the coach's open window. A fixed slot reopens for the next client.
+      //
+      // Decided from the IN-TRANSACTION snapshot, not the pre-read `session`:
+      // `status` is exactly the field a concurrent writer moves, and reopening a
+      // slot from a copy taken before the lock was held is how a cancelled
+      // session gets flipped back to 'open'.
       ...(isAppointment && {
-        ...(session.origin === 'window'
+        ...(freshSessionData.origin === 'window'
           ? { status: 'cancelled', allowBooking: false }
-          : session.status === 'full'
+          : freshSessionData.status === 'full'
             ? { status: 'open' }
             : {}),
       }),
@@ -1394,6 +1871,17 @@ export const getBookingDetails = onCall(async (request) => {
     teamSlug = (team.slug as string) || null
     teamLanguage = (team.language as string) || 'en'
   }
+  // This list IS the public rebook picker (manage-booking page). `rebookSession`
+  // refuses a move past the online booking cutoff for a token holder, so a slot
+  // offered here that the callable will reject is a dead end with an error
+  // message at the end of it. Filtered where the list is built rather than in
+  // the page, because the cutoff is a server-side setting the public page never
+  // reads.
+  const rebookCutoffMinutes = (
+    (teamDoc?.data()?.settings as Record<string, unknown> | undefined)?.booking as
+      | { cutoffMinutes?: number }
+      | undefined
+  )?.cutoffMinutes
 
   const now = Timestamp.now()
   const futureLimit = new Date()
@@ -1423,6 +1911,7 @@ export const getBookingDetails = onCall(async (request) => {
         .filter((d) => {
           const data = d.data()
           if (data.isException && data.exceptionType === 'cancelled') return false
+          if (isPastBookingCutoff(data.start as Timestamp, rebookCutoffMinutes)) return false
           return d.id !== sessionId
         })
         .map((d) => {
@@ -1471,6 +1960,15 @@ export const getBookingDetails = onCall(async (request) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // rebookSession — public, token-based (unauthenticated)
+//
+// TAKES NO WAIVER, deliberately. It MOVES an existing seat and creates no new
+// attendance relationship, and a publish never retroactively invalidates a
+// booking that already committed. Its two callers — the studio's bookings list
+// and the public manage-booking link — have no waiver step to send anyone to,
+// so a refusal here would be a dead end on one and would break a coach's daily
+// workflow on the other, while that same coach can add the same person to the
+// same session directly. Gating it would be stricter on the reversible
+// operation than on the irreversible one. See the census in waivers/gate.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const rebookSession = onCall(async (request) => {
@@ -1546,44 +2044,10 @@ export const rebookSession = onCall(async (request) => {
     throw new HttpsError('already-exists', 'You already have a booking for this session.')
   }
 
-  const newBookingToken = generateSecureToken()
-  const newBookingRef = db
-    .collection('sessions')
-    .doc(newSessionId)
-    .collection('bookings')
-    .doc(contactId)
-  const batch = db.batch()
-
-  batch.update(bookingDoc.ref, {
-    status: 'rebooked',
-    rebooked_to: newSessionId,
-    rebooked_at: FieldValue.serverTimestamp(),
-  })
-  batch.update(db.collection('sessions').doc(oldSessionId), {
-    bookings_count: FieldValue.increment(-1),
-  })
-  batch.set(newBookingRef, {
-    firstname: booking.firstname,
-    lastname: booking.lastname,
-    email: booking.email,
-    phone: (booking.phone as string) || null,
-    contact: contactId,
-    session: newSessionId,
-    teamId,
-    joinedAt: FieldValue.serverTimestamp(),
-    fromBioLink: true,
-    status: 'pending',
-    booking_token: newBookingToken,
-    rebooked_from: oldSessionId,
-    rebooked_at: FieldValue.serverTimestamp(),
-  })
-  batch.update(db.collection('sessions').doc(newSessionId), {
-    has_bookings: true,
-    bookings_count: FieldValue.increment(1),
-    last_booking_at: FieldValue.serverTimestamp(),
-  })
-  await batch.commit()
-
+  // The team is read BEFORE the move because the booking cutoff is a team
+  // setting and this callable never enforced it — a token holder could move
+  // themselves into a class minutes before it starts, which every other booking
+  // surface refuses (bookSession, createDropInCheckout).
   let teamName = ''
   let teamSlug: string | null = null
   const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
@@ -1591,6 +2055,116 @@ export const rebookSession = onCall(async (request) => {
     teamName = (teamDoc.data()!.name as string) || ''
     teamSlug = (teamDoc.data()!.slug as string) || null
   }
+  const rebookCutoffMinutes = (
+    (teamDoc?.data()?.settings as Record<string, unknown> | undefined)?.booking as
+      | { cutoffMinutes?: number }
+      | undefined
+  )?.cutoffMinutes
+  // …but ONLY against the public, self-service door. The cutoff is an ONLINE
+  // booking rule — that is what the setting is called, what its help text says,
+  // and what the refusal below says — and this one callable serves two doors:
+  // the token link in a member's own email (unauthenticated, the rule binds) and
+  // the studio's Bookings page, where a coach on the phone at 18:30 moves
+  // someone into the 19:00 class. Refusing the coach turns a desk workflow that
+  // worked yesterday into "Online booking has closed", which is not even a true
+  // statement about what they are doing.
+  //
+  // Team MEMBERSHIP is the test, not a capability: every staff role works the
+  // desk, and `request.auth` is populated only for the admin page's call — the
+  // public page calls the same function with no auth at all, so the rule still
+  // binds exactly where it is meant to.
+  const staffCaller = request.auth?.uid ? await isTeamMember(request.auth.uid, teamId) : false
+  if (!staffCaller && isPastBookingCutoff(newSession.start as Timestamp, rebookCutoffMinutes)) {
+    throw new HttpsError('failed-precondition', 'Online booking has closed for this session.', {
+      reason: 'booking_closed',
+    })
+  }
+
+  const newBookingToken = generateSecureToken()
+  const newSessionRef = db.collection('sessions').doc(newSessionId)
+  const newBookingRef = newSessionRef.collection('bookings').doc(contactId)
+
+  // The contact's `pending_bookings_count` is a per-DOCUMENT ledger: whoever
+  // creates a pending booking counts it, whoever takes it out of that state
+  // gives it back. A rebook does both at once and used to do neither, which
+  // cancelled out only when the old document was itself a live pending booking.
+  // It is not, whenever the token came from a `no_show` (rebookable, and its
+  // count was already released when it was marked) or from a `participants`
+  // document (a checked-in attendee — released at check-in). Then the new
+  // pending booking existed with nothing counting it, and the first cancel or
+  // no-show on it drove a real person's counter negative.
+  //
+  // `replacedBookingWasCounted` cannot repair this from bookSession's side: the
+  // rebook-created document looks identical whichever origin it came from, so
+  // counting it there would double-count the ordinary pending→pending move. The
+  // count belongs where the document is created.
+  const oldHeldPendingCount =
+    bookingDoc.ref.parent.id === 'bookings' && (!booking.status || booking.status === 'pending')
+  const pendingCountDelta = oldHeldPendingCount ? 0 : 1
+  const rebookContactRef = contactId ? db.collection('contacts').doc(contactId) : null
+
+  // A transaction, not a batch: this callable had NO capacity check at all, so a
+  // token holder could rebook into a class that was already full and oversell
+  // it. The new session's doc is in the read AND write set, so the move
+  // serializes against bookSession/createDropInCheckout on that class.
+  //
+  // The old session's counter is deliberately NOT written here: flipping the
+  // booking to 'rebooked' fires trackBookings ('rebooked' is in STATUS_EVENT),
+  // whose recount owns that number — a blind `increment(-1)` from this batch
+  // could only fight it.
+  await db.runTransaction(async (tx) => {
+    const freshNewSession = await tx.get(newSessionRef)
+    if (!freshNewSession.exists) throw new HttpsError('not-found', 'New session not found.')
+    const newBookingsSnap = await tx.get(newSessionRef.collection('bookings'))
+    // Read rather than blind-update: a contact document can be gone (a purged
+    // provisional contact), and `tx.update` on a missing document throws — which
+    // would fail the whole rebook over a counter.
+    const contactSnap = rebookContactRef ? await tx.get(rebookContactRef) : null
+    const holding = countHoldingSeats(newBookingsSnap.docs, Date.now(), contactId)
+    if (seatsFree(freshNewSession.data()?.max_participants as number | undefined, holding) <= 0) {
+      throw new HttpsError('resource-exhausted', 'This session is fully booked.', {
+        reason: 'session_full',
+      })
+    }
+
+    tx.update(bookingDoc.ref, {
+      status: 'rebooked',
+      rebooked_to: newSessionId,
+      rebooked_at: FieldValue.serverTimestamp(),
+    })
+    tx.set(newBookingRef, {
+      firstname: booking.firstname,
+      lastname: booking.lastname,
+      email: booking.email,
+      phone: (booking.phone as string) || null,
+      contact: contactId,
+      session: newSessionId,
+      teamId,
+      joinedAt: FieldValue.serverTimestamp(),
+      fromBioLink: true,
+      status: 'pending',
+      booking_token: newBookingToken,
+      rebooked_from: oldSessionId,
+      rebooked_at: FieldValue.serverTimestamp(),
+    })
+    tx.set(
+      newSessionRef,
+      {
+        has_bookings: true,
+        bookings_count: holding + 1,
+        last_booking_at: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+    // Zero for the ordinary pending→pending move (the old document's count
+    // carries over to the new one), +1 when the old document was not holding a
+    // count at all.
+    if (pendingCountDelta !== 0 && rebookContactRef && contactSnap?.exists) {
+      tx.update(rebookContactRef, {
+        pending_bookings_count: FieldValue.increment(pendingCountDelta),
+      })
+    }
+  })
 
   let activityName = 'Session'
   if (newSession.activityId) {

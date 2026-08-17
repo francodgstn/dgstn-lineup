@@ -5,7 +5,6 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   unpublishSiteForTeam,
   deleteAllCoursePublicProfiles,
-  deleteAllDocumentPublicProfiles,
   touchTeamForSurfaceRecompute,
 } from '../utils/plugins'
 import { rebuildLedgerForTeam } from '../accounting/rebuild'
@@ -60,10 +59,14 @@ export const onInstalledPluginStatusChange = onDocumentWritten(
     } else if (pluginId === 'online-courses') {
       // Batch-delete all course/public_profile summaries for this team.
       await deleteAllCoursePublicProfiles(teamId)
-    } else if (pluginId === 'documents') {
-      // Batch-delete all document/public_profile summaries for this team.
-      await deleteAllDocumentPublicProfiles(teamId)
     }
+    // NOTE: 'documents' has NO teardown any more, because Documents is no longer
+    // a plugin — there is no install to deactivate. The arm that used to delete
+    // every document mirror is gone together with deleteAllDocumentPublicProfiles
+    // itself, which also settles a live asymmetry: downgradeTeamToFree tore down
+    // `website` and `online-courses` synchronously but left documents to this
+    // trigger. A waiver's text is somebody's evidence and its public copy is
+    // linked from a booking form; a plan change must not delete it.
     // NOTE: 'finance' intentionally has NO teardown — accounting/journal data
     // are financial records and persist across deactivation (a coach add-on
     // cancel deletes the install doc but never the data); reinstall re-seeds

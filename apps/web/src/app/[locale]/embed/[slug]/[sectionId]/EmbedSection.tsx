@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocale } from 'next-intl'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { EMBED_WIDGETS_COLLECTION, SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
 import type {
   EmbedWidgetSet,
@@ -74,8 +75,8 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
             return
           }
         }
-      } catch {
-        /* fall through to site sections */
+      } catch (err: unknown) {
+        reportPublicLoadFailure('embed/widget-set', err) // falls through to site sections
       }
 
       // 2) Fall back to a published site section.
@@ -98,8 +99,8 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
             })
           }
         }
-      } catch {
-        /* leave unresolved → unavailable */
+      } catch (err: unknown) {
+        reportPublicLoadFailure('embed/site-section', err) // leaves it unresolved → unavailable
       }
       if (!cancelled) setLoading(false)
     }

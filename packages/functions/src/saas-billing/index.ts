@@ -8,6 +8,7 @@ import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
 import { unpublishSiteForTeam, deleteAllCoursePublicProfiles } from '../utils/plugins'
 import { StripeAdapter } from '../utils/gateway/stripe'
+import { readGatewayData, legacyGatewayDataFields } from '@linyup/shared'
 import type { SaasPlan } from '@linyup/shared'
 import {
   PLUGIN_ADDONS,
@@ -202,10 +203,13 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
   const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
 
   try {
-    // Idempotency check
+    // Idempotency check — through readGatewayData, because a doc written before
+    // the dotted-key fix keeps `last_event_id` as a literal field. Reading only
+    // the nested map returned undefined for every such doc, so this check never
+    // matched and a Stripe retry was processed a second time.
     const existing = await subRef.get()
     if (existing.exists) {
-      const lastEventId = existing.data()?.gateway_data?.last_event_id
+      const lastEventId = readGatewayData(existing.data()).last_event_id
       if (lastEventId === event.eventId) {
         console.log(`Webhook event ${event.eventId} already processed — skipping`)
         res.status(200).send('ok')
@@ -223,29 +227,40 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
       }))
       .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
 
-    // Map event to saas_subscriptions fields
+    // Map event to saas_subscriptions fields.
+    //
+    // `gateway_data` is built as a NESTED object and never as dotted keys: this
+    // handler persists with `set(…, { merge: true })`, and `set()` takes a
+    // dotted key literally — only `update()` reads it as a field path. Written
+    // the old way, every one of these became a top-level field *named*
+    // "gateway_data.subscription_id" and the map the readers want was never
+    // created. `set` with merge still deep-merges a nested map, so writing only
+    // the keys this event carries leaves the rest of gateway_data standing.
+    const gatewayData: Record<string, unknown> = { last_event_id: event.eventId }
     const update: Record<string, unknown> = {
       entity_type: entityType,
       entity_id: entityId,
       teamId: entityId, // kept for backwards compatibility
       updated_at: now,
-      'gateway_data.last_event_id': event.eventId,
       gateway_type: 'stripe',
     }
 
     switch (event.type) {
       case 'subscription.created':
         update.status = 'active'
-        update['gateway_data.subscription_id'] = event.subscriptionId
-        update['gateway_data.customer_id'] = event.customerId
+        gatewayData.subscription_id = event.subscriptionId
+        gatewayData.customer_id = event.customerId
         if (event.plan) update.plan = event.plan
         if (event.currentPeriodStart)
           update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
         if (event.currentPeriodEnd)
           update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
         update.cancel_at_period_end = false
+        update.cancel_at = null
+        update.canceled_at = null
+        update.cancellation_details = null
         update.trial_ends_at = null
-        update['gateway_data.activeAddOns'] = addonActive
+        gatewayData.activeAddOns = addonActive
         if (!existing.exists) {
           update.created_at = now
         }
@@ -257,30 +272,61 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
           update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
         if (event.currentPeriodEnd)
           update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-        if (event.cancelAtPeriodEnd !== undefined)
+        if (event.cancelAtPeriodEnd !== undefined) {
           update.cancel_at_period_end = event.cancelAtPeriodEnd
-        if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
-        if (event.customerId) update['gateway_data.customer_id'] = event.customerId
-        update['gateway_data.activeAddOns'] = addonActive
+          // The WHOLE record, written on every subscription.updated with nulls
+          // included: a reactivation is exactly the event that must ERASE a
+          // previous end date and reason, and an omitted key on a merge would
+          // leave them standing. `cancellation_details` is set whole or nulled —
+          // Firestore deep-merges a nested map, so a partial write would keep
+          // the old cancellation's feedback behind the new reason.
+          update.cancel_at = event.cancelAt ? Timestamp.fromDate(event.cancelAt) : null
+          update.canceled_at = event.canceledAt ? Timestamp.fromDate(event.canceledAt) : null
+          update.cancellation_details = event.cancellationDetails ?? null
+        }
+        if (event.subscriptionId) gatewayData.subscription_id = event.subscriptionId
+        if (event.customerId) gatewayData.customer_id = event.customerId
+        gatewayData.activeAddOns = addonActive
         break
 
       case 'subscription.cancelled':
         update.status = 'cancelled'
+        // It has ENDED — there is no longer a future end to announce.
         update.cancel_at_period_end = false
+        update.cancel_at = null
+        // …but WHEN and WHY it was cancelled are KEPT, and this is the event that
+        // carries them most reliably. Only overwritten when the payload actually
+        // says something: a `deleted` event with no cancellation_details must not
+        // erase the reason an earlier `updated` already recorded.
+        if (event.canceledAt) update.canceled_at = Timestamp.fromDate(event.canceledAt)
+        if (event.cancellationDetails) update.cancellation_details = event.cancellationDetails
         break
 
       case 'payment.succeeded':
         update.status = 'active'
-        update['gateway_data.last_invoice_id'] = event.lastInvoiceId
-        update['gateway_data.last_payment_status'] = 'succeeded'
+        gatewayData.last_invoice_id = event.lastInvoiceId
+        gatewayData.last_payment_status = 'succeeded'
         break
 
       case 'payment.failed':
         update.status = 'past_due'
-        update['gateway_data.last_invoice_id'] = event.lastInvoiceId
-        update['gateway_data.last_payment_status'] = 'failed'
+        gatewayData.last_invoice_id = event.lastInvoiceId
+        gatewayData.last_payment_status = 'failed'
         break
     }
+
+    // Heal a doc still carrying the legacy dotted-literal fields: copy anything
+    // this event is NOT itself writing into the nested map, then delete the
+    // literal. The carry-over is not belt-and-braces — a `payment.succeeded`
+    // event knows no subscription id, so deleting that literal without copying
+    // it first would destroy the only copy on the document. Doing it here means
+    // a doc converges on its next event whether or not the backfill has run.
+    for (const field of legacyGatewayDataFields(existing.data())) {
+      const key = field.slice('gateway_data.'.length)
+      if (!(key in gatewayData)) gatewayData[key] = existing.data()![field]
+      update[field] = FieldValue.delete()
+    }
+    update.gateway_data = gatewayData
 
     await subRef.set(update, { merge: true })
 
@@ -384,7 +430,7 @@ export const cancelSaasSubscription = onCall(async (request) => {
   if (!subDoc.exists) throw new HttpsError('not-found', 'No active subscription found')
 
   const subData = subDoc.data()!
-  const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
+  const subscriptionId = readGatewayData(subData).subscription_id
   if (!subscriptionId)
     throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
 
@@ -423,7 +469,7 @@ export const reactivateSaasSubscription = onCall(async (request) => {
   if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
 
   const subData = subDoc.data()!
-  const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
+  const subscriptionId = readGatewayData(subData).subscription_id
   if (!subscriptionId)
     throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
 
@@ -438,6 +484,13 @@ export const reactivateSaasSubscription = onCall(async (request) => {
 
   await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
     cancel_at_period_end: false,
+    // Clear the whole record, not just the boolean. Reactivating after a
+    // BILLING-PORTAL cancel is the case where the DATE, not the boolean, was
+    // carrying the state — and a reason left behind would outlive the
+    // cancellation it describes.
+    cancel_at: null,
+    canceled_at: null,
+    cancellation_details: null,
     updated_at: FieldValue.serverTimestamp(),
   })
 
@@ -459,7 +512,7 @@ export const getBillingPortalUrl = onCall(async (request) => {
   const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
   if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
 
-  const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
+  const customerId = readGatewayData(subDoc.data()).customer_id
   if (!customerId)
     throw new HttpsError('failed-precondition', 'No Stripe customer found — contact support')
 
@@ -497,7 +550,7 @@ export const getSaasInvoices = onCall(async (request) => {
   const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
   if (!subDoc.exists) return { invoices: [] }
 
-  const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
+  const customerId = readGatewayData(subDoc.data()).customer_id
   if (!customerId) return { invoices: [] }
 
   const adapter = await getPlatformStripeAdapter()
@@ -550,7 +603,7 @@ export const activatePluginAddon = onCall(async (request) => {
 
   const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
   const sub = subSnap.exists ? subSnap.data()! : null
-  const subscriptionId = sub?.gateway_data?.subscription_id as string | undefined
+  const subscriptionId = readGatewayData(sub).subscription_id
   const status = sub?.status as string | undefined
   const isPaid = !!subscriptionId && (status === 'active' || status === 'past_due')
 
@@ -568,7 +621,7 @@ export const activatePluginAddon = onCall(async (request) => {
       throw new HttpsError('internal', 'Failed to add the add-on to your subscription')
     }
     const current = (
-      (sub?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>
+      readGatewayData(sub).activeAddOns ?? []
     ).filter((a) => a.pluginId !== pluginId)
     await admin
       .firestore()
@@ -646,7 +699,7 @@ export const deactivatePluginAddon = onCall(async (request) => {
     }
     const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
     const current = (
-      (subSnap.data()?.gateway_data?.activeAddOns ?? []) as Array<{
+      (readGatewayData(subSnap.data()).activeAddOns ?? []) as Array<{
         pluginId: string
         itemId: string
       }>

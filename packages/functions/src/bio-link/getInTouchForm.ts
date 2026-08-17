@@ -9,6 +9,7 @@ import { sendEmail } from '../utils/email'
 import { getTeamBySlug } from '../utils/teams'
 import { detailsBox } from '../utils/emailLayout'
 import { wrapInLayout } from '../utils/emailLayout'
+import { escapeHtml } from '../utils/html'
 
 const RATE_LIMIT_MAX = 5
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000 // 1 hour
@@ -89,15 +90,23 @@ async function resolveTeam(slug: string): Promise<{
   }
 }
 
+// ESCAPED AT RENDER, not at storage. `sanitizeText` above strips tags with a
+// blacklist regex — which is a mitigation and not an escape: `<img src=x
+// onerror=alert(1)` with no closing bracket survives it, and so does anything
+// that reassembles once one pass has removed the inner brackets. Every value in
+// this table is typed by an anonymous submitter on a public form and the message
+// is delivered to the STUDIO OWNER, so the escape belongs here, where the target
+// syntax is known. Escaping in `sanitizeText` instead would put `&amp;` into the
+// stored submission and into the API response.
 function buildNotificationEmail(fields: Record<string, string>, teamName: string): string {
   const rows = Object.entries(fields)
     .map(
       ([key, val]) =>
-        `<tr><td style="padding:8px 12px;font-weight:600;color:#555;white-space:nowrap;vertical-align:top;">${key}</td><td style="padding:8px 12px;color:#333;">${val.replace(/\n/g, '<br>')}</td></tr>`
+        `<tr><td style="padding:8px 12px;font-weight:600;color:#555;white-space:nowrap;vertical-align:top;">${escapeHtml(key)}</td><td style="padding:8px 12px;color:#333;">${escapeHtml(val).replace(/\n/g, '<br>')}</td></tr>`
     )
     .join('')
   const table = `<table style="width:100%;border-collapse:collapse;">${rows}</table>`
-  const source = teamName ? `<strong>${teamName}</strong>` : 'your website'
+  const source = teamName ? `<strong>${escapeHtml(teamName)}</strong>` : 'your website'
   const content = `
     <p>A new "get in touch" submission has been received from ${source}.</p>
     ${detailsBox({ title: 'Submission Details', content: table })}

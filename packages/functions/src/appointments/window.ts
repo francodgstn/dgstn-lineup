@@ -19,6 +19,7 @@ import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { loadContactPaymentSnapshot } from '../booking/access'
+import { attachWaiverContact, enforceWaiverGate, parseWaiverSubmissions } from '../waivers/gate'
 import {
   AVAILABILITY_COLLECTION,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
@@ -332,6 +333,8 @@ export const bookAppointment = onCall(async (request) => {
     contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
     authenticatedContactId?: string
     verificationCodeId?: string
+    /** Ticks from the waiver step — see waivers/gate.ts. */
+    waiverAcceptances?: unknown
   }
   if (
     !data?.teamId ||
@@ -382,6 +385,44 @@ export const bookAppointment = onCall(async (request) => {
         ? priceOption.via.subscriptionTypeId
         : null
 
+  // ── The waiver gate — after the caller is identified, before the contact is
+  // created. Everything above is a read; `resolveOrCreateAppointmentContact`
+  // below is the first write, so a refusal here costs nothing.
+  //
+  // The one cost that IS real on this rail is upstream and unavoidable:
+  // `resolveAppointmentCaller` marks the OTP code used at its own entry, so a
+  // refusal that sends the caller back to the email step costs them one
+  // re-verification against a three-per-hour budget. That is why the picker
+  // presents the step BEFORE calling this callable rather than reacting to the
+  // refusal — the refusal is the floor, not the plan. ──
+  const waiverNowMs = Date.now()
+  let waiverOutcome = await enforceWaiverGate({
+    teamId,
+    activityId,
+    subject: {
+      contactId: caller.authenticatedContact?.id ?? null,
+      name: `${caller.sanitized.firstname} ${caller.sanitized.lastname}`.trim(),
+      email: caller.sanitized.email,
+    },
+    submissions: parseWaiverSubmissions(data.waiverAcceptances),
+    source: 'appointment',
+    // See the same three-way distinction in bookSession: an OTP proves control
+    // of that mailbox, a contact session identifies only the contact.
+    signerEmailVerifiedBy: data.authenticatedContactId
+      ? 'verified_code'
+      : caller.authenticatedContact
+        ? 'session'
+        : 'none',
+    // The address that strength is ABOUT — the mailbox the code went to, which
+    // on this rail is routinely a parent's rather than the subject's. null on
+    // the session and guest paths.
+    signerEmail: caller.verifiedEmail,
+    ip: request.rawRequest?.ip ?? null,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale: null,
+    nowMs: waiverNowMs,
+  })
+
   // ── Resolve/create the contact — guests are always allowed now (no access gate). ──
   const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
     teamId,
@@ -389,6 +430,7 @@ export const bookAppointment = onCall(async (request) => {
     sanitized: caller.sanitized,
     authenticatedContact: caller.authenticatedContact,
   })
+  waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
 
   // ── Overlap-safe create (transaction) ──
   const bookingToken = generateSecureToken()
@@ -448,6 +490,9 @@ export const bookAppointment = onCall(async (request) => {
       status: 'confirmed' as const,
       fullname: `${caller.sanitized.firstname} ${caller.sanitized.lastname}`,
     }),
+    ...(waiverOutcome.bookingWaiverState
+      ? { waiver_state: waiverOutcome.bookingWaiverState }
+      : {}),
   }
 
   await runAppointmentSlotTransaction({
@@ -461,6 +506,9 @@ export const bookAppointment = onCall(async (request) => {
     endMs: ctx.end.getTime(),
     bufferMs: ctx.bufferMs,
     creditSpend: creditSpendTypeId ? { contactId, subscriptionTypeId: creditSpendTypeId } : undefined,
+    // The acceptance rides INSIDE the slot transaction — the free path's seat
+    // and its signature commit together or not at all.
+    waiverLedger: { accepts: waiverOutcome.accepts, nowMs: waiverNowMs },
   })
 
   if (!isNewContact) {

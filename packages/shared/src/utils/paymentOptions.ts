@@ -20,6 +20,11 @@
 import type { ActivityAccessRule, ActivityDuration, ActivityMemberBenefit } from '../types/activity'
 import type { CourseAccessRule } from '../types/course'
 import { normalizeBenefit, type Benefit, type BenefitEffect } from '../types/benefit'
+// The promo's own vocabulary is declared beside the promo type, exactly as
+// `Benefit` is declared in types/benefit.ts. Type-only: nothing from
+// types/promoCode.ts runs here, so this file stays a pure function of its
+// arguments.
+import type { PromoEffect, PromoModifier } from '../types/promoCode'
 import { MIN_CHARGE_MAJOR, round2Major } from './money'
 
 /** Either benefit shape — every read normalizes via `normalizeBenefit`. */
@@ -99,7 +104,27 @@ export interface CourseTarget {
   benefit?: AnyBenefit | null
 }
 
-export type PaymentTarget = ClassBookingTarget | DropInTarget | AppointmentTarget | CourseTarget
+export interface ProductTarget {
+  /** createProductCheckout's view of one merchandise line. Until Wave 3 Phase 3
+   *  this rail priced itself (resolveProductPrice → requireChargeableAmountFromMajor)
+   *  and never entered the resolver at all — the one genuine one-resolver gap,
+   *  and the reason a promo on merchandise could not exist. */
+  kind: 'product'
+  /** The effective price for the chosen product + variant — resolveProductPrice's
+   *  output (types/product.ts). Major units, team currency. */
+  priceAmount: number
+  /** Threaded for uniformity; ALWAYS null today — `Product` carries no benefit
+   *  field. Kept so the arm needs no reshaping if one is ever added, and so the
+   *  product rail goes through the SAME comparator as every other rail. */
+  benefit?: AnyBenefit | null
+}
+
+export type PaymentTarget =
+  | ClassBookingTarget
+  | DropInTarget
+  | AppointmentTarget
+  | CourseTarget
+  | ProductTarget
 
 // ─── Result ─────────────────────────────────────────────────────────────────────
 
@@ -126,11 +151,31 @@ export type PaymentOption =
       type: 'pay'
       /** MAJOR units (config currency) — convert at the money core only. */
       amount: number
-      source: 'base' | 'drop_in' | 'trial' | 'course_price'
+      source: 'base' | 'drop_in' | 'trial' | 'course_price' | 'product'
+      /** WHICH MEMBERSHIP priced this. Read downstream — createAppointmentCheckout
+       *  stamps `subscription_type_id` from it and /offer/pricing renders the
+       *  member badge from it — which is why a benefit set exactly AT base still
+       *  stamps this (it did price the booking). Never present together with
+       *  `appliedPromo`: at most one modifier ever prices the option. */
       appliedBenefit?: {
         subscriptionTypeId: string
         effect: Extract<BenefitEffect, 'percent_off' | 'fixed_price'>
         baseAmount: number
+      } | null
+      /** DID A CODE CHANGE THE PRICE — an event, not provenance, which is why a
+       *  promo only stamps this when it is STRICTLY lower than the incumbent.
+       *  Omitted when absent (the same convention `appliedBenefit` follows). */
+      appliedPromo?: {
+        code: string
+        effect: PromoEffect
+        /** The list price the discount was taken from. */
+        baseAmount: number
+        /** The benefit that WOULD have priced this had the code not beaten it.
+         *  Without it, every running campaign would blank the studio's own
+         *  subscription attribution for exactly the members who used the code:
+         *  `subscription_type_id` falls back to
+         *  `appliedBenefit?.subscriptionTypeId ?? appliedPromo?.supersededBenefit?.subscriptionTypeId ?? null`. */
+        supersededBenefit?: { subscriptionTypeId: string; effect: BenefitEffect } | null
       } | null
     }
 
@@ -144,10 +189,58 @@ export type PaymentDenial =
   | 'sign_in_required'
   | 'trial_used'
 
+/**
+ * What happened to the code the visitor typed. This is the ONLY channel that can
+ * say *why a valid code did nothing*, which is why it exists alongside
+ * `pay.appliedPromo`: that field rides the option to the checkout and the price
+ * display, this one carries the explanation.
+ *
+ * `status === 'applied'` ⟺ exactly one option carries `appliedPromo` — the two
+ * are written from ONE decision inside the resolver, never re-derived.
+ */
+export type PromoOutcome =
+  | { code: string; status: 'applied' }
+  /** A member benefit — or the plain list price — was as good or better. `by`
+   *  says WHICH, because "your member price is already lower than this code"
+   *  and "this code does not lower this price" are different sentences and the
+   *  client must not have to guess from two numbers. */
+  | { code: string; status: 'superseded'; by: 'benefit' | 'base' }
+  /** The caller pays nothing anyway (covered / spend_credits). PREVIEW-ONLY in
+   *  practice: every checkout callable refuses a covered caller before the pay
+   *  option is read, so a checkout never sees this. */
+  | { code: string; status: 'not_needed' }
+  /** This arm takes no promo (class_booking, the trial door), or there is no pay
+   *  option at all (a denial), or the modifier is malformed. The purchase is
+   *  never blocked by this — a code that does not apply is REPORTED, and the
+   *  purchase completes at list price. */
+  | { code: string; status: 'not_applicable' }
+
+/**
+ * Runtime inputs that are neither a property of the CALLER (the snapshot) nor
+ * configuration authored on the TARGET — today just the promo code the visitor
+ * typed.
+ *
+ * Deliberately a third parameter rather than a snapshot or target field: a
+ * snapshot is built once and reused across many targets (resolveAppointmentCells
+ * calls the resolver once per duration with one snapshot), so a promo there
+ * would silently apply to every cell; and `benefit` lives on the target because
+ * it is authored on that entity, which a typed code is not.
+ */
+export interface PaymentContext {
+  /** ALREADY QUALIFIED by the impure loader: it exists, is active, is inside its
+   *  window, is in scope for this target, is this caller's, and (fixed_price)
+   *  matches the charge currency. The resolver decides exactly one thing about
+   *  it — whether it beats the member benefit and the list price. */
+  promo?: PromoModifier | null
+}
+
 export interface PaymentOptionsResult {
   /** Preference order: covered > spend_credits > pay. Empty ⇒ denial is set. */
   options: PaymentOption[]
   denial: PaymentDenial | null
+  /** Present IFF `context.promo` was supplied — which is what keeps every
+   *  promo-free fixture byte-identical under `assert.deepEqual`. */
+  promo?: PromoOutcome
 }
 
 // ─── Internals ──────────────────────────────────────────────────────────────────
@@ -230,40 +323,90 @@ function resolveClassCoverage(
   return { options: [], denial: attached ? 'no_credits' : 'no_subscription' }
 }
 
+/** The price sources a MODIFIER can reach. 'trial' is absent on purpose: the
+ *  trial door is already an acquisition price and takes neither a benefit nor a
+ *  promo (one predicate, one place). */
+type PriceSource = 'base' | 'drop_in' | 'course_price' | 'product'
+
+/** The `BenefitEffect` members that MODIFY a price, which is the subset a promo
+ *  and a member benefit have in common. Narrowed from `BenefitEffect` rather
+ *  than typed out, so widening that union (an `amount_off`, say) surfaces here
+ *  as a compile error in `priceAfterModifier`'s exhaustive handling instead of
+ *  silently going unpriced. The coverage members (`included`, `spend_credits`)
+ *  are excluded because they answer a different question than "what does it
+ *  cost". The effect's PARAMETERS are not part of this type — `percent` and
+ *  `amount` are separate arguments to `priceAfterModifier`, because the two
+ *  callers hold them on differently-shaped documents. */
+type PriceEffect = Extract<BenefitEffect, 'percent_off' | 'fixed_price'>
+
 /**
- * Apply a (normalized) benefit to a priced unit. `allowed` scopes which effects
- * the context supports — unsupported effects fall back to base price, benefit
- * not applied. Shared by the appointment, drop-in and course arms.
+ * Apply ONE price-modifying effect to a base price. THE clamp-and-round site:
+ * every modifier in the system goes through here, so the 0.50 floor and the
+ * two-decimal rounding policy exist exactly once (utils/money.ts states the
+ * rule — authored prices THROW, arithmetic-derived prices CLAMP UP).
+ *
+ * Returns `null` for a MALFORMED effect — a missing / non-positive / non-finite
+ * percent, or a non-finite amount. Malformed means NOT APPLIED, never "applied
+ * as zero": a typo must cost the studio nothing.
  */
-function applyBenefitToPrice(
+function priceAfterModifier(
+  base: number,
+  effect: PriceEffect,
+  percent?: number,
+  amount?: number
+): number | null {
+  if (effect === 'percent_off') {
+    if (typeof percent !== 'number' || !Number.isFinite(percent) || percent <= 0) return null
+    // >= 100 clamps to the floor rather than going free. A promo can never
+    // author this (percent is capped at 99 at creation); it survives as the
+    // backstop for legacy and hand-written benefit data.
+    if (percent >= 100) return MIN_CHARGE_MAJOR
+    return Math.max(MIN_CHARGE_MAJOR, round2Major((base * (100 - percent)) / 100))
+  }
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
+  return Math.max(MIN_CHARGE_MAJOR, amount)
+}
+
+/** What a benefit resolves to BEFORE any price comparison: a coverage answer
+ *  (which short-circuits — there is no price to compare), a price candidate
+ *  already known not to raise the price, or nothing at all. */
+type BenefitResolution =
+  | { kind: 'coverage'; result: PaymentOptionsResult }
+  | { kind: 'price'; via: string; effect: PriceEffect; price: number }
+  | null
+
+/**
+ * Resolve the (normalized) benefit against the caller. `allowed` scopes which
+ * effects the context supports — unsupported effects, unheld types and
+ * malformed values all resolve to "no candidate", and the base price stands.
+ */
+function resolveBenefitCandidate(
   snapshot: ContactPaymentSnapshot,
   rawBenefit: AnyBenefit | null | undefined,
   base: number,
-  source: 'base' | 'drop_in' | 'course_price',
   allowed: ReadonlySet<BenefitEffect>
-): PaymentOptionsResult {
-  const payBase: PaymentOptionsResult = {
-    options: [{ type: 'pay', amount: base, source }],
-    denial: null,
-  }
+): BenefitResolution {
   const benefit = normalizeBenefit(rawBenefit)
-  if (!benefit || !allowed.has(benefit.effect)) return payBase
+  if (!benefit || !allowed.has(benefit.effect)) return null
 
   // Held (in benefit-config order): unmetered subscription OR usable credits.
   const via =
     benefit.subscriptionTypeIds.find(
       (id) => snapshot.heldUnmeteredTypeIds.includes(id) || creditRemaining(snapshot, id) > 0
     ) ?? null
-  if (!via) return payBase
+  if (!via) return null
 
   switch (benefit.effect) {
     case 'included': {
       if (snapshot.heldUnmeteredTypeIds.includes(via)) {
         return {
-          options: [
-            { type: 'covered', via: { reason: 'benefit_included', subscriptionTypeId: via } },
-          ],
-          denial: null,
+          kind: 'coverage',
+          result: {
+            options: [
+              { type: 'covered', via: { reason: 'benefit_included', subscriptionTypeId: via } },
+            ],
+            denial: null,
+          },
         }
       }
       // Held only via a credit pack — included means "spend one credit"…
@@ -271,66 +414,149 @@ function applyBenefitToPrice(
       // Courses have no credit-spend story, so a pack-held 'included' benefit
       // falls back to the base price there instead of emitting an
       // unfulfillable spend_credits option.
-      if (!allowed.has('spend_credits')) return payBase
+      if (!allowed.has('spend_credits')) return null
       return {
-        options: [
-          {
-            type: 'spend_credits',
-            via: { subscriptionTypeId: via },
-            remaining: creditRemaining(snapshot, via),
-          },
-        ],
-        denial: null,
+        kind: 'coverage',
+        result: {
+          options: [
+            {
+              type: 'spend_credits',
+              via: { subscriptionTypeId: via },
+              remaining: creditRemaining(snapshot, via),
+            },
+          ],
+          denial: null,
+        },
       }
     }
     case 'spend_credits': {
       // Explicit credit spend: only a listed pack WITH balance applies.
       const creditVia = benefit.subscriptionTypeIds.find((id) => creditRemaining(snapshot, id) > 0)
-      if (!creditVia) return payBase
+      if (!creditVia) return null
       return {
-        options: [
-          {
-            type: 'spend_credits',
-            via: { subscriptionTypeId: creditVia },
-            remaining: creditRemaining(snapshot, creditVia),
-          },
-        ],
-        denial: null,
+        kind: 'coverage',
+        result: {
+          options: [
+            {
+              type: 'spend_credits',
+              via: { subscriptionTypeId: creditVia },
+              remaining: creditRemaining(snapshot, creditVia),
+            },
+          ],
+          denial: null,
+        },
       }
     }
-    case 'percent_off': {
-      const pct = benefit.percent
-      if (typeof pct !== 'number' || pct <= 0) return payBase // malformed → not applied
-      const amount =
-        pct >= 100
-          ? MIN_CHARGE_MAJOR
-          : Math.max(MIN_CHARGE_MAJOR, round2Major((base * (100 - pct)) / 100))
-      return {
-        options: [
-          {
-            type: 'pay',
-            amount,
-            source,
-            appliedBenefit: { subscriptionTypeId: via, effect: 'percent_off', baseAmount: base },
-          },
-        ],
-        denial: null,
-      }
-    }
+    case 'percent_off':
     case 'fixed_price': {
-      if (typeof benefit.amount !== 'number' || !Number.isFinite(benefit.amount)) return payBase
-      return {
-        options: [
-          {
-            type: 'pay',
-            amount: Math.max(MIN_CHARGE_MAJOR, benefit.amount),
-            source,
-            appliedBenefit: { subscriptionTypeId: via, effect: 'fixed_price', baseAmount: base },
-          },
-        ],
-        denial: null,
-      }
+      const price = priceAfterModifier(base, benefit.effect, benefit.percent, benefit.amount)
+      if (price === null) return null // malformed → not applied
+      // A MODIFIER NEVER RAISES A PRICE. A `fixed_price` benefit above base used
+      // to charge the MEMBER more than the guest pays and stamp appliedBenefit
+      // on it, rendering the list price struck through above a HIGHER figure —
+      // authorable today, since the benefit editor validates only `>= 0.50` and
+      // never cross-checks the target's price.
+      //
+      // The comparison is `<=`, not `<`, and that is deliberate: a benefit set
+      // exactly AT base (a live, ordinary placeholder configuration) still
+      // priced the booking, and dropping its stamp would silently blank the
+      // member badge and `subscription_type_id` on existing data.
+      if (price > base) return null
+      return { kind: 'price', via, effect: benefit.effect, price }
     }
+  }
+}
+
+/**
+ * BEST-ONE-WINS — the ONE comparator, evaluated base → benefit → promo against
+ * a single base price. Never stacked: at most one of `appliedBenefit` /
+ * `appliedPromo` ever prices the option.
+ *
+ * THE COMPARISON IS DELIBERATELY ASYMMETRIC, and the reason is what each field
+ * answers:
+ *  • a BENEFIT applies (and stamps `appliedBenefit`) whenever it does not RAISE
+ *    the price — `benefitPrice <= base` — because `appliedBenefit` answers
+ *    "which membership priced this booking", and one set at base did price it;
+ *  • a PROMO applies (and stamps `appliedPromo`) only when STRICTLY LOWER than
+ *    the incumbent — because `appliedPromo` answers "did a code change the
+ *    price", and a code that changed nothing did not.
+ *
+ * Consequences, so nobody has to rediscover them: a promo exactly equal to the
+ * member price loses, and the member is never told their membership stopped
+ * mattering; a `fixed_price` promo at or above list never applies, so no
+ * struck-through price is ever identical to the charged one.
+ *
+ * When a promo beats an applicable benefit, that benefit rides out on
+ * `appliedPromo.supersededBenefit` so provenance survives the campaign.
+ */
+function applyModifiers(
+  snapshot: ContactPaymentSnapshot,
+  rawBenefit: AnyBenefit | null | undefined,
+  base: number,
+  source: PriceSource,
+  allowed: ReadonlySet<BenefitEffect>,
+  promo: PromoModifier | null
+): PaymentOptionsResult {
+  const resolved = resolveBenefitCandidate(snapshot, rawBenefit, base, allowed)
+  // Coverage beats every promo — there is no price to discount. The caller
+  // reports `not_needed` from the option shape rather than re-deciding here.
+  if (resolved?.kind === 'coverage') return resolved.result
+
+  // The incumbent starts at the LIST price and is only ever lowered, which is
+  // what makes "a resolved price never exceeds base" true by construction.
+  let amount = base
+  let appliedBenefit: Extract<PaymentOption, { type: 'pay' }>['appliedBenefit'] = null
+  if (resolved) {
+    amount = resolved.price
+    appliedBenefit = { subscriptionTypeId: resolved.via, effect: resolved.effect, baseAmount: base }
+  }
+
+  let outcome: PromoOutcome | null = null
+  let appliedPromo: Extract<PaymentOption, { type: 'pay' }>['appliedPromo'] = null
+  if (promo) {
+    // The effect set is a runtime guard on data the loader read from Firestore;
+    // the compile-time type already excludes the coverage effects.
+    const promoPrice = PROMO_EFFECTS.has(promo.effect)
+      ? priceAfterModifier(base, promo.effect, promo.percent, promo.amount)
+      : null
+    if (promoPrice === null) {
+      outcome = { code: promo.code, status: 'not_applicable' }
+    } else if (promoPrice < amount) {
+      appliedPromo = {
+        code: promo.code,
+        effect: promo.effect,
+        baseAmount: base,
+        ...(appliedBenefit
+          ? {
+              supersededBenefit: {
+                subscriptionTypeId: appliedBenefit.subscriptionTypeId,
+                effect: appliedBenefit.effect,
+              },
+            }
+          : {}),
+      }
+      amount = promoPrice
+      appliedBenefit = null
+      outcome = { code: promo.code, status: 'applied' }
+    } else {
+      outcome = { code: promo.code, status: 'superseded', by: appliedBenefit ? 'benefit' : 'base' }
+    }
+  }
+
+  return {
+    options: [
+      {
+        type: 'pay',
+        amount,
+        source,
+        // Omitted when absent — the convention that keeps every fixture
+        // byte-identical under assert.deepEqual.
+        ...(appliedBenefit ? { appliedBenefit } : {}),
+        ...(appliedPromo ? { appliedPromo } : {}),
+      },
+    ],
+    denial: null,
+    ...(outcome ? { promo: outcome } : {}),
   }
 }
 
@@ -349,12 +575,61 @@ const COURSE_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
   'percent_off',
   'fixed_price',
 ])
+// Products: merchandise is never covered and never denied — excluding the two
+// coverage effects is what makes that structural rather than a rule to
+// remember. `Product` carries no benefit today, so this set is forward-looking.
+const PRODUCT_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
+// A promo reuses the price-modifying HALF of the Benefit vocabulary and adds no
+// effect of its own: a promo that made a purchase free would need a
+// payment-less confirm path on every rail and would bypass the 0.50 floor.
+const PROMO_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
+// Arms that can produce a `pay` option a promo could modify. `class_booking` is
+// absent, which is load-bearing beyond tidiness: it guarantees a promo can never
+// reach the arm whose denial is cast unchecked to BookingAccessDenialReason in
+// functions/booking/access.ts.
+const PROMO_TARGETS: ReadonlySet<PaymentTarget['kind']> = new Set([
+  'drop_in',
+  'appointment',
+  'course',
+  'product',
+])
 
 // ─── The resolver ───────────────────────────────────────────────────────────────
 
+/**
+ * The ONE coverage/quote resolver.
+ *
+ * `context` is optional, which is the whole reason this signature change touched
+ * no existing call site: every caller that does not pass a promo gets a result
+ * with no `promo` key at all.
+ */
 export function resolvePaymentOptions(
   snapshot: ContactPaymentSnapshot,
-  target: PaymentTarget
+  target: PaymentTarget,
+  context?: PaymentContext
+): PaymentOptionsResult {
+  const promo = context?.promo ?? null
+  if (!promo) return resolveTarget(snapshot, target, null)
+
+  const takesPromo = PROMO_TARGETS.has(target.kind)
+  const result = resolveTarget(snapshot, target, takesPromo ? promo : null)
+  // The arm decided (it reached the comparator) — one decision, two projections.
+  if (result.promo) return result
+
+  // It did not, so there was no price to modify: either the caller pays nothing
+  // (coverage — nothing to discount) or there is no pay option this code could
+  // ever have touched (a denial, the trial door, class_booking).
+  const free = takesPromo && result.options.some((o) => o.type === 'covered' || o.type === 'spend_credits')
+  const outcome: PromoOutcome = free
+    ? { code: promo.code, status: 'not_needed' }
+    : { code: promo.code, status: 'not_applicable' }
+  return { ...result, promo: outcome }
+}
+
+function resolveTarget(
+  snapshot: ContactPaymentSnapshot,
+  target: PaymentTarget,
+  promo: PromoModifier | null
 ): PaymentOptionsResult {
   switch (target.kind) {
     case 'class_booking':
@@ -373,6 +648,13 @@ export function resolvePaymentOptions(
         if (snapshot.trialUsed) return { options: [], denial: 'trial_used' }
         const trialPrice = target.trial?.priceAmount
         if (target.trial?.enabled && typeof trialPrice === 'number') {
+          // No modifier of ANY kind reaches the trial door — this branch returns
+          // its pay option directly and never enters `applyModifiers`, so
+          // neither a benefit nor a promo is ever compared against it. A paid
+          // trial is already an acquisition
+          // price, enforced once per person via trial_used_at; stacking a code
+          // on it double-discounts the cheapest thing in the product. The promo
+          // is reported `not_applicable` by the caller.
           return {
             options: [{ type: 'pay', amount: trialPrice, source: 'trial' }],
             denial: null,
@@ -383,12 +665,13 @@ export function resolvePaymentOptions(
 
       if (target.dropIn?.enabled && typeof target.dropIn.priceAmount === 'number') {
         // Member rate: a held benefit type discounts the drop-in price.
-        return applyBenefitToPrice(
+        return applyModifiers(
           snapshot,
           target.benefit,
           target.dropIn.priceAmount,
           'drop_in',
-          DROP_IN_EFFECTS
+          DROP_IN_EFFECTS,
+          promo
         )
       }
       // No pay path configured — surface the underlying coverage denial.
@@ -398,12 +681,12 @@ export function resolvePaymentOptions(
     case 'appointment': {
       // THE PRICE IS THE GATE — guests always get an answer, never a denial.
       // Exact port of the old resolveEffectiveAppointmentPrice rules (see the
-      // appointment parity fixtures), generalized through applyBenefitToPrice.
+      // appointment parity fixtures), generalized through `applyModifiers`.
       const base = target.duration.priceAmount
       if (typeof base !== 'number') {
         return { options: [{ type: 'covered', via: { reason: 'unpriced' } }], denial: null }
       }
-      return applyBenefitToPrice(snapshot, target.benefit, base, 'base', APPOINTMENT_EFFECTS)
+      return applyModifiers(snapshot, target.benefit, base, 'base', APPOINTMENT_EFFECTS, promo)
     }
 
     case 'course': {
@@ -456,12 +739,13 @@ export function resolvePaymentOptions(
         }
       }
       if (typeof rule.priceAmount === 'number') {
-        return applyBenefitToPrice(
+        return applyModifiers(
           snapshot,
           benefit,
           rule.priceAmount,
           'course_price',
-          COURSE_EFFECTS
+          COURSE_EFFECTS,
+          promo
         )
       }
       // Purchase tier without a price — misconfig; nothing to offer.
@@ -469,6 +753,25 @@ export function resolvePaymentOptions(
         options: [],
         denial: snapshot.authenticated ? 'no_subscription' : 'sign_in_required',
       }
+    }
+
+    case 'product': {
+      // NEVER COVERS AND NEVER DENIES: there is no free product tier and no
+      // product access gate, and PRODUCT_EFFECTS excludes the two coverage
+      // effects, so this arm is structurally incapable of returning anything
+      // but exactly one `pay` option. It is also snapshot-INVARIANT today
+      // (`Product` carries no benefit), which is why createProductCheckout can
+      // resolve without loading contact facts — if `Product` ever gains a
+      // benefit, that call site must start passing a real snapshot, and the
+      // "ignores the snapshot" fixture is what will fail first.
+      return applyModifiers(
+        snapshot,
+        target.benefit,
+        target.priceAmount,
+        'product',
+        PRODUCT_EFFECTS,
+        promo
+      )
     }
   }
 }

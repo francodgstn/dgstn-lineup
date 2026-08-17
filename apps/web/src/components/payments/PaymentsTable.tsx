@@ -84,6 +84,15 @@ export function PaymentsTable({
                   {paymentNote(row) && (
                     <div className="truncate text-xs text-muted-foreground">{paymentNote(row)}</div>
                   )}
+                  {/* The discount's only trace on the money side — a promo writes
+                      no journal row, so this chip and the redemptions ledger are
+                      the whole answer to "who used this code and what did they
+                      pay". See docs/promo-codes.md → "Reporting". */}
+                  {row.promoCode && (
+                    <Badge variant="outline" className="mt-0.5 font-normal text-muted-foreground">
+                      {t('promoCode', { code: row.promoCode })}
+                    </Badge>
+                  )}
                   {row.source === 'connect' && row.feeAmount > 0 && (
                     <div className="text-xs text-muted-foreground">
                       {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}

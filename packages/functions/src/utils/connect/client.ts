@@ -9,9 +9,42 @@
 //
 // Built on the Accounts v2 API (`stripe.v2.core.accounts` / `accountLinks`) with
 // controller-property style responsibilities — NOT the legacy Standard/Express/
-// Custom account types. The runtime Stripe SDK (stripe@22, OpenAPI v2252) pins an
-// API version that already supports Accounts v2; we deliberately do NOT override
-// `apiVersion` (a drifting string would diverge from the bundled types).
+// Custom account types.
+//
+// ─── apiVersion: still UNPINNED, and now guarded (decided 2026-08-16) ──────────
+// An unpinned version is what let three fields move underneath working code with
+// zero test failures (see utils/stripe/objectShape.ts), so the decision was re-taken from
+// scratch rather than inherited. It stands, for one reason:
+//
+//   Pinning would DECOUPLE the wire from the types. The SDK's `.d.ts` describes
+//   exactly the version it bundles (today 2026-04-22.dahlia). Leave it unpinned
+//   and a `pnpm update stripe` moves BOTH together, so the declarations keep
+//   telling the truth. Pin it, and the next SDK bump moves the types while the
+//   wire stays put — the same silent divergence as this defect, pointing the
+//   other way, and with no version string left to blame.
+//
+// What was actually missing was never the pin. It was that nothing checked. So
+// the pin is replaced by two guards, both in utils/stripe/objectShape.ts:
+//
+//   • COMPILE TIME — assertions stating, against the SDK's own declarations,
+//     where each migrated field is and is not, plus one comparing the bundled
+//     wire version to the version those readers were verified against. A `pnpm
+//     update stripe` that moves any of them turns `turbo run typecheck` red
+//     BEFORE deploy. That is the loud failure a pin was being asked to provide.
+//   • RUNTIME — every migrated read reports where it found its value, and logs
+//     `[stripe-shape] MISSING …` at error level when it is in neither the modern
+//     nor the legacy location.
+//
+// The one place a version IS pinned is the webhook ENDPOINT (scripts/stripe-sync.ts
+// sets `api_version` at creation, from this same SDK constant) — so deliveries
+// match the SDK the functions are deployed with, instead of following an account
+// default that drifts on its own schedule. Re-running `pnpm stripe:sync` is
+// therefore part of upgrading the SDK.
+//
+// The rich `Stripe.X` type NAMESPACE is genuinely not reachable from the default
+// import in this build — but the resource interfaces are, through the return type
+// of the method that fetches them. objectShape.ts shows how, and that is what
+// makes the compile-time guards above possible at all.
 
 import Stripe from 'stripe'
 import {
@@ -275,6 +308,66 @@ export async function createOneOffCheckoutSession(params: {
   )
   if (!session.url) throw new Error('Connect checkout session URL missing')
   return { url: session.url, sessionId: session.id }
+}
+
+/**
+ * What became of a Checkout Session we asked Stripe to close.
+ *
+ *  • `closed` — it can no longer take money (we expired it, or it was already
+ *    expired/cancelled). SAFE to hand whatever it was guarding to somebody else.
+ *  • `paid`   — it is `complete`: the money already moved on that session, and a
+ *    caller that treats this as `closed` double-charges or double-issues.
+ *  • `failed` — Stripe could not tell us. NOT the same as `closed`, and the
+ *    difference is the whole point of the three-valued return: a caller must be
+ *    able to refuse rather than assume.
+ */
+export type CheckoutSessionCloseOutcome = 'closed' | 'paid' | 'failed'
+
+/**
+ * Close a Checkout Session on a connected account so it can never take money
+ * again — the ONE Stripe-side half of "a finite thing is backed by at most one
+ * payable session at a time".
+ *
+ * `expire` only accepts a session in status `open`, so its failure is ambiguous
+ * on its own: an already-expired session (nothing to do) and an already-PAID one
+ * (everything to do) both throw. A `retrieve` is what tells them apart, and
+ * guessing in the paid direction is a double charge — so the error path costs a
+ * second call rather than an assumption.
+ */
+export async function closeCheckoutSession(params: {
+  sessionId: string
+  accountId: string
+}): Promise<CheckoutSessionCloseOutcome> {
+  const stripe = await getConnectStripe()
+  const opts = { stripeAccount: params.accountId }
+  try {
+    const session = await stripe.checkout.sessions.expire(params.sessionId, {}, opts)
+    // A race: `expire` can succeed on a session that Stripe has meanwhile
+    // completed. Read the status back rather than assuming what we asked for.
+    return classifyCheckoutSession(session)
+  } catch {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(params.sessionId, {}, opts)
+      const outcome = classifyCheckoutSession(session)
+      // `open` here means expire failed for some other reason and the session is
+      // STILL payable — the one case a caller must not be told "closed".
+      return outcome
+    } catch {
+      return 'failed'
+    }
+  }
+}
+
+function classifyCheckoutSession(session: {
+  status?: string | null
+  payment_status?: string | null
+}): CheckoutSessionCloseOutcome {
+  if (session.status === 'complete') return 'paid'
+  // Belt and braces: a session that has taken money is `paid`/`no_payment_required`
+  // here well before `status` settles to `complete`.
+  if (session.payment_status && session.payment_status !== 'unpaid') return 'paid'
+  if (session.status === 'expired') return 'closed'
+  return 'failed'
 }
 
 /** Recurring membership as a subscription on the connected account. Fee → platform
