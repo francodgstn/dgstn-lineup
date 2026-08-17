@@ -2867,37 +2867,6 @@
       "prev": "Zurück",
       "done": "Verstanden"
     },
-    "intro": {
-      "open": "Über diesen Bereich",
-      "termsLabel": "Wichtige Begriffe",
-      "dashboard": {
-        "title": "Dashboard",
-        "body": "Dein Überblick auf einen Blick: heutige Agenda, wöchentliche Highlights und eine Übersicht deiner Mitglieder.",
-        "terms": [
-          "Agenda – heutige und kommende Sessions",
-          "Aktiv – diese Woche aktive Mitglieder",
-          "Mitgliederbasis – deine aktiven Mitglieder"
-        ]
-      },
-      "contacts": {
-        "title": "Kontakte",
-        "body": "Alle Personen rund um dein Team – Mitglieder, Interessenten und Probetrainierende – mit Status und Verlauf.",
-        "terms": [
-          "Affiliationsstatus – aktiv, fast bereit, abgelaufen …",
-          "Abo – der Tarif eines Kontakts",
-          "Probe – ein Interessent, der eine Stunde testet"
-        ]
-      },
-      "calendar": {
-        "title": "Kalender & Sessions",
-        "body": "Plane Gruppenkurse und Coaching-Slots und wechsle zwischen Listen- und Kalenderansicht.",
-        "terms": [
-          "Session – ein einzelner Kurs oder Coaching-Slot",
-          "Buchung – ein Kontakt reserviert einen Platz",
-          "Event – Camps, Prüfungen und Seminare"
-        ]
-      }
-    },
     "setup": {
       "title": "Einrichtung",
       "subtitle": "Ein paar Schritte, bis dein Betrieb läuft.",

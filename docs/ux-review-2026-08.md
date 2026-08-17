@@ -147,6 +147,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
 | 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ▶ Open |
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
+| 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
+| 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -216,6 +218,14 @@ and **displayed on no screen in the product**, from either direction. And there 
 automations cannot target the unsigned — and `packages/functions/src/waivers/` ships create,
 update, publish, setRequirement, archive, resolve, revoke, signInSpace and export, but **no
 callable that asks anyone to accept anything**.
+
+> **Correction, 2026-08-17, from building part A.** "Displayed on no screen" is true of the
+> *list* and overstated about the data. `exportContactConsentHistory` was already union-shaped —
+> it queries acceptances by `contactId` with no kind filter — so signup acceptances were always
+> in the downloaded artefact; and `revokeWaiverAcceptance` has no `not_a_waiver` check, so
+> revoking a signup-terms signature already worked. Both were simply unreachable, behind the
+> same `return null` as the list. The data layer needed nothing here; only the reader was
+> narrow — which makes part B cheaper than this finding implies.
 
 **Cost.** She did the compliance work; the product will not tell her it didn't take. She finds
 out at a dispute, or never. This is the one finding where the product looks *complete* — the
@@ -1003,6 +1013,100 @@ copy, and the health check. **Owner:** functions-agent (resolver + health), then
 **Verify:** Create an appointment offered only via a 10-pack. As a guest, the picker says what
 to buy and links to it — it does not offer a free booking and does not offer a per-session
 price. As a pack holder, booking spends a credit.
+
+### UX-71 — A page never points at the one other page that would confirm it worked
+`slows` · weekly · traced · M5×M7×M1 · *added 2026-08-17, from manual exploration*
+
+**Now.** A manager finishes configuring a subscription and has no way to know whether the
+result is what she meant. The product *has* the answer — Offer → Pricing recomputes every
+class, appointment, course and product through the same resolver a real checkout uses, and the
+persona called it *"the single best thing in the app"* and used it to verify two goals in
+seconds. Nothing anywhere points at it from the place the doubt arises. The same is true of
+several pairs this review already found independently: the documents panel and where consent is
+actually asked (UX-1), an automation rule and the template it will send (UX-M9-4), an activity
+and the pricing-health check that would tell her nobody can get in (UX-11).
+
+**Cost.** She configures, then either takes it on trust or navigates on a hunch. Nielsen 1 —
+the system knows how to show her the outcome and doesn't offer to.
+
+**Fix.** A short line of **lateral task prompts** under the page heading — two or three, comma
+or dot separated, each a sentence about *what she is about to check*, not a noun ("See how this
+prices for a member" rather than "Pricing"). Four constraints, and the first two are what stop
+this becoming the thing it is trying to fix:
+
+1. **Declared data, not per-page markup.** One curated map of `page → prompts`, consumed by the
+   shared header — the same mechanism as `lib/settings-nav.ts`'s `SETTINGS_ITEMS`, which this
+   review praises (What's good #8) precisely because one catalogue feeding two surfaces is what
+   stops nav drift. Twenty-five pages each hand-writing their own link row is the accretion this
+   report exists to name.
+2. **It must answer `PageHeader`'s standing objection.** That component's header says
+   navigation is *deliberately* excluded — *"the sidebar is the single, consistent way back… so
+   detail pages don't sprout their own inconsistent up-links."* That decision is about
+   **up-links**, and these are **lateral prompts to verify a result**; if that distinction
+   cannot be stated in one line in the UI, the objection wins and this should not ship. Update
+   the component comment either way, so the next reader sees one decision rather than a
+   contradiction.
+3. **A prompt may never be the only path to anything.** Then hiding them on a phone — which is
+   reasonable, since verification is a desktop-shaped, low-frequency task — costs a shortcut and
+   not a capability. Hide the prose before the link if a compromise is needed.
+4. **Curate by known dependency, not by page.** Only where the product can name a real
+   cross-page relationship. The review already supplies the first four: subscriptions →
+   pricing, documents → where consent is asked, automation rule → template preview, activity →
+   pricing health.
+
+**Blocked on UX-22.** There is no consistent page heading to put this under: `PageHeader` is
+used by **6** files while **67** hand-roll their own `<h1>` across four treatments. Shipping
+this first would mean hand-rolling it 67 times. Adopt the header, then add one slot to it.
+
+**Do not add a third thing under the heading.** `components/onboarding/SectionIntro.tsx`
+already occupies that space on 3 pages, with the dual-source state M2 flagged (a `localStorage`
+glow key beside a `profile.onboarding.seenIntros` seen-flag). Fold it into the same slot or
+leave it alone deliberately — do not stack a new row above it.
+
+**Surface:** +1 prompt map, +1 `PageHeader` slot, ±0 routes. **Build:** M for the mechanism,
+S per prompt after. **Owner:** web-agent.
+**Verify:** Finish creating a subscription. Without using the sidebar, reach the screen that
+shows what a member will actually pay — and on a phone, confirm nothing has become unreachable.
+
+### UX-72 — Delete the per-page help popovers; the How-to page replaced them
+`confuses` · at-setup · traced · M2×M1 · *added 2026-08-17, Franco's call* · **removal**
+
+**Now.** `components/onboarding/SectionIntro.tsx` renders a `HelpCircle` popover beside the
+heading on exactly three pages — dashboard, contacts, schedule — with a glow until first
+opened. It never reached the other ~22, and the studio-facing help it offers is now done better,
+and in one place, by the How-to page (concept map, "I want to…" recipes, a live price
+simulator, a checklist read from real data — this review's What's good #12).
+
+It also carries the dual-source state M2 flagged: a per-browser `linyup_intro_opened_{section}`
+key drives the glow while `profile.onboarding.seenIntros` records the seen-flag on the user doc
+— two answers to one question, and the localStorage half is three of the nine device-local
+preferences UX-23 counts.
+
+**Fix — delete it.** The surface is cleanly bounded:
+- `components/onboarding/SectionIntro.tsx` (the whole file) and its three mounts in
+  `(auth)/{dashboard,contacts,schedule}/page.tsx`.
+- `markIntroSeen` (`lib/onboarding.ts:33-36`) — **`SectionIntro` is its only caller**, so the
+  helper goes with it, along with the stale "Phase 4 (section intro panels)" note at `:11`.
+- The `Onboarding.intro.{open,termsLabel,dashboard,contacts,calendar}` keys × 4 locales.
+- `profile.onboarding.seenIntros` simply stops being written. Pre-launch, so no cleanup.
+
+**Surface:** −1 component, −3 mounts, −1 helper, −1 user-doc field, −3 device-local preferences,
+−20 message strings. **Build:** S. **Owner:** web-agent.
+
+**Two things this changes elsewhere.**
+1. **It frees the slot UX-71 needs.** That finding's "do not add a third thing under the
+   heading" constraint is satisfied by removing the second one.
+2. **The same argument applies to the product tour, and should be faced.** UX-47 records that
+   the tour never runs below 768px and that not one of its six steps touches activities,
+   sessions, bookings, contacts or money — step 4 introduces an empty Shortcuts box, and step 5
+   pitches a search that only resolves nav destinations. If per-page help goes because the
+   How-to page does it better, the tour is the same claim with a weaker case. Decide both
+   together rather than deleting one and leaving the other.
+
+**Noted for later, not filed:** Franco's view is that the How-to page itself wants a review. It
+is currently the survivor of this consolidation, so it inherits the job both deleted surfaces
+were doing — and this review already found its one real hole (UX-M3-8: no scheduling or
+recurrence topic, the most basic weekly job).
 
 ---
 

@@ -2867,37 +2867,6 @@
       "prev": "Retour",
       "done": "Compris"
     },
-    "intro": {
-      "open": "À propos de cette section",
-      "termsLabel": "Termes clés",
-      "dashboard": {
-        "title": "Tableau de bord",
-        "body": "Votre vue d'ensemble : l'agenda du jour, les points forts de la semaine et un aperçu de vos membres.",
-        "terms": [
-          "Agenda — séances du jour et à venir",
-          "Actifs — membres actifs cette semaine",
-          "Effectif — votre base de membres actifs"
-        ]
-      },
-      "contacts": {
-        "title": "Contacts",
-        "body": "Toutes les personnes liées à votre équipe — membres, prospects et essais — avec leur statut et leur historique.",
-        "terms": [
-          "Statut d'adhésion — actif, presque prêt, expiré…",
-          "Abonnement — la formule d'un contact",
-          "Essai — un prospect qui teste un cours"
-        ]
-      },
-      "calendar": {
-        "title": "Calendrier et séances",
-        "body": "Planifiez des cours collectifs et des créneaux de coaching, et basculez entre liste et calendrier.",
-        "terms": [
-          "Séance — un cours ou un créneau de coaching",
-          "Réservation — un contact qui réserve une place",
-          "Événement — stages, examens et séminaires"
-        ]
-      }
-    },
     "setup": {
       "title": "Configuration",
       "subtitle": "Quelques étapes pour lancer votre activité.",

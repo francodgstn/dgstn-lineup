@@ -2867,37 +2867,6 @@
       "prev": "Indietro",
       "done": "Capito"
     },
-    "intro": {
-      "open": "Informazioni su questa sezione",
-      "termsLabel": "Termini chiave",
-      "dashboard": {
-        "title": "Dashboard",
-        "body": "La tua panoramica immediata: l'agenda di oggi, i momenti salienti della settimana e un riepilogo dei membri.",
-        "terms": [
-          "Agenda — sessioni di oggi e future",
-          "Attivi — membri attivi questa settimana",
-          "Base membri — i tuoi membri attivi"
-        ]
-      },
-      "contacts": {
-        "title": "Contatti",
-        "body": "Tutte le persone collegate al tuo team — membri, potenziali clienti e prove — con stato e cronologia.",
-        "terms": [
-          "Stato iscrizione — attivo, quasi pronto, scaduto…",
-          "Abbonamento — il piano di un contatto",
-          "Prova — un potenziale cliente che prova una lezione"
-        ]
-      },
-      "calendar": {
-        "title": "Calendario e sessioni",
-        "body": "Pianifica lezioni di gruppo e slot di coaching e passa dalla vista elenco a quella calendario.",
-        "terms": [
-          "Sessione — una singola lezione o slot di coaching",
-          "Prenotazione — un contatto che riserva un posto",
-          "Evento — camp, esami e seminari"
-        ]
-      }
-    },
     "setup": {
       "title": "Configurazione",
       "subtitle": "Pochi passaggi per avviare la tua attività.",

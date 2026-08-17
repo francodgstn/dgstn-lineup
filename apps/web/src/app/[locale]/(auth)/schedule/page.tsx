@@ -78,7 +78,6 @@ import {
   Zap,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 import { AppointmentAvailabilityDialog, AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
@@ -957,7 +956,6 @@ export default function CalendarPage() {
         <div>
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-            <SectionIntro sectionKey="calendar" />
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             {t('subtitle', { count: upcomingCount })}
