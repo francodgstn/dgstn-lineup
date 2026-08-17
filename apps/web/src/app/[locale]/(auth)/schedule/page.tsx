@@ -657,7 +657,15 @@ function ListItemRow({
                 <Badge variant="secondary" className="text-xs shrink-0">
                   {tS(`type_${s.activityType ?? 'class'}` as Parameters<typeof tS>[0])}
                 </Badge>
-                {s.seriesId && <Repeat2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                {/* Labelled, not bare — the pattern and end date live one click
+                    away in the peek sheet, but the glyph must at least say what
+                    it means. */}
+                {s.seriesId && (
+                  <Repeat2
+                    className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+                    aria-label={tS('partOfSeries')}
+                  />
+                )}
                 {s.bookingMandatory && (
                   <Badge variant="outline" className="text-xs shrink-0">
                     {tS('bookingRequiredChip')}

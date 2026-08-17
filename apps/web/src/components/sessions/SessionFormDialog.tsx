@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
+import { addMonths } from 'date-fns'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -18,6 +19,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
+import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { SESSIONS_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
 import { Loader2, Repeat2 } from 'lucide-react'
@@ -139,9 +141,21 @@ interface RecurrencePattern {
   maxOccurrences: number
 }
 
-const DEFAULT_RECURRENCE: RecurrencePattern = {
-  frequency: 'weekly', interval: 1, daysOfWeek: [],
-  endCondition: 'never', endDate: null, maxOccurrences: 10,
+// How far ahead the backend actually materialises a series — SERIES_HORIZON_MONTHS
+// in packages/functions/src/sessions/series.ts. The daily `rollSessionSeries`
+// task keeps an open-ended series topped up to this horizon, so "never" is now a
+// truthful option; it is nonetheless not the DEFAULT, because a timetable that
+// runs for ever is a decision, and the form should not make it silently on a
+// studio's behalf. Defaulting to a visible date six months out states the
+// horizon the product has and leaves "never" one click away.
+const RECURRENCE_HORIZON_MONTHS = 6
+
+function defaultRecurrence(from: Date = new Date()): RecurrencePattern {
+  return {
+    frequency: 'weekly', interval: 1, daysOfWeek: [],
+    endCondition: 'date', endDate: addMonths(from, RECURRENCE_HORIZON_MONTHS),
+    maxOccurrences: 10,
+  }
 }
 
 function getPreviewDates(pattern: RecurrencePattern, startDate: Date, count = 5): Date[] {
@@ -364,7 +378,7 @@ export function SessionFormDialog({
   const isSeries = !!editing?.seriesId
 
   const [isRecurring, setIsRecurring] = useState(false)
-  const [recurrence, setRecurrence] = useState<RecurrencePattern>({ ...DEFAULT_RECURRENCE })
+  const [recurrence, setRecurrence] = useState<RecurrencePattern>(() => defaultRecurrence())
   const [busyMsg, setBusyMsg] = useState<string | null>(null)
   // Edit-scope chooser shown when saving a session that belongs to a series.
   const [scopeStep, setScopeStep] = useState(false)
@@ -423,9 +437,17 @@ export function SessionFormDialog({
 
   function handleRecurringToggle(on: boolean) {
     setIsRecurring(on)
-    if (on && recurrence.daysOfWeek.length === 0 && watchedStart) {
-      setRecurrence(p => ({ ...p, daysOfWeek: [watchedStart.getDay()] }))
-    }
+    if (!on) return
+    setRecurrence(p => ({
+      ...p,
+      daysOfWeek: p.daysOfWeek.length === 0 && watchedStart ? [watchedStart.getDay()] : p.daysOfWeek,
+      // Anchor the default end date on the session's own start rather than on
+      // whenever the dialog happened to open.
+      endDate:
+        p.endCondition === 'date' && watchedStart
+          ? (p.endDate ?? addMonths(watchedStart, RECURRENCE_HORIZON_MONTHS))
+          : p.endDate,
+    }))
   }
 
   function close() {
@@ -652,9 +674,13 @@ export function SessionFormDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
             {isSeries && (
-              <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
                 <Repeat2 className="h-3.5 w-3.5 shrink-0" />
-                {t('partOfSeries')}
+                <span>{t('partOfSeries')}</span>
+                {/* When it stops. Recurrence itself is still create-only, but a
+                    manager editing an occurrence can at least SEE the pattern
+                    and its end date instead of guessing. */}
+                <SeriesSummary seriesId={editing!.seriesId!} className="text-primary/80" />
               </div>
             )}
 

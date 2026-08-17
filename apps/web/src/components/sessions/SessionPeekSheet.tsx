@@ -14,6 +14,7 @@ import {
   ExternalLink, Pencil, Trash2, Repeat2, UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { SESSIONS_COLLECTION, PARTICIPANTS_SUBCOLLECTION } from '@linyup/shared'
 import type { Session, Activity, Booking } from '@linyup/shared'
 import type { Route } from 'next'
@@ -60,6 +61,7 @@ interface SessionPeekSheetProps {
 
 export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDelete }: SessionPeekSheetProps) {
   const t = useTranslations('Calendar')
+  const tS = useTranslations('Sessions')
   const open = !!sessionId
 
   // Same query keys as the session detail page → shared cache, instant full-page navigation
@@ -124,7 +126,12 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
                   <SheetTitle className="truncate">
                     {session.activityName ?? t('noActivity')}
                   </SheetTitle>
-                  {session.seriesId && <Repeat2 className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  {session.seriesId && (
+                    <Repeat2
+                      className="h-4 w-4 text-muted-foreground shrink-0"
+                      aria-label={tS('partOfSeries')}
+                    />
+                  )}
                   {session.status && session.status !== 'open' && (
                     <Badge
                       variant="outline"
@@ -175,6 +182,16 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
                   <div className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{session.providerName}</span>
+                  </div>
+                )}
+                {/* The repeating fact, spelled out: which pattern, and when it
+                    stops. The loop glyph above says only "this repeats". */}
+                {session.seriesId && (
+                  <div className="flex items-center gap-2">
+                    <Repeat2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      <SeriesSummary seriesId={session.seriesId} fallback={tS('partOfSeries')} />
+                    </span>
                   </div>
                 )}
               </div>
