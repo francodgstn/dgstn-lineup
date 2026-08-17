@@ -9,6 +9,7 @@ import { timingSafeEqualStr } from '../utils/secureCompare'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { assertVerifiableCode } from './verificationCode'
 import { recordSignupConsent } from '../waivers/signup'
+import { resolveSignupJoinPromotion, type SignupJoinPromotion } from './signupJoin'
 import { to } from '../utils/async'
 import {
   CONTACTS_COLLECTION,
@@ -237,6 +238,22 @@ export const completeSignup = onCall(async (request) => {
     consent,
   }
 
+  // Completing signup is the act of JOINING, so a contact that carries no
+  // acquisition_stage at all is promoted here — the case the birth-fact rule
+  // never covered. See signupJoin.ts for the whole decision (what "absent"
+  // means, and what entry/converted_at say for a purchase-first contact).
+  const logJoinPromotion = (p: SignupJoinPromotion, id: string): void => {
+    if (p.reason === 'promoted') {
+      console.log(
+        `[completeSignup] contact ${id} carried no acquisition_stage — promoted to 'joined' (entry=${String(p.patch.entry ?? 'kept')})`,
+      )
+    } else if (p.reason === 'holds_unrecognised_stage') {
+      console.warn(
+        `[completeSignup] contact ${id} holds an unrecognised acquisition_stage — left untouched, so paid access still refuses it`,
+      )
+    }
+  }
+
   let contactRef: admin.firestore.DocumentReference
   if (sessionContactId) {
     // Session path: finalize EXACTLY the signed-in contact (never an email guess).
@@ -250,9 +267,14 @@ export const completeSignup = onCall(async (request) => {
       throw new HttpsError('permission-denied', 'This account is no longer active')
     }
     const { email: _keepExistingEmail, ...profileWithoutEmail } = profile
+    const promotion = resolveSignupJoinPromotion(sc, () => FieldValue.serverTimestamp())
+    logJoinPromotion(promotion, sessionContactId)
     await contactRef.set(
       {
         ...profileWithoutEmail,
+        // Fills the birth facts only when the contact holds none (a shop
+        // registration signs in with a session and carries no stage).
+        ...promotion.patch,
         // Completing the full signup MATERIALIZES a provisional lead — it now
         // counts toward the contact cap (see Contact.provisional).
         provisional: FieldValue.delete(),
@@ -265,9 +287,10 @@ export const completeSignup = onCall(async (request) => {
     contactRef = db.collection(CONTACTS_COLLECTION).doc()
     await contactRef.set({
       ...profile,
-      // Birth facts set on CREATE only; a finalize of an existing contact preserves
-      // whatever stage/entry it already carries. The approval pipeline (requested →
-      // active) lives on the affiliation axis, not here.
+      // Birth facts, stamped whole: nothing exists to preserve. A finalize of an
+      // EXISTING contact keeps every one of these it already holds and fills only
+      // the ones it does not (resolveSignupJoinPromotion). The approval pipeline
+      // (requested → active) lives on the affiliation axis, not here.
       acquisition_stage: 'joined',
       acquisition_stage_updated_at: FieldValue.serverTimestamp(),
       converted_at: FieldValue.serverTimestamp(),
@@ -279,7 +302,9 @@ export const completeSignup = onCall(async (request) => {
     })
   } else {
     // Finalize the existing contact. >1 active match (shared family email) → newest;
-    // never overwrite the birth facts (acquisition_stage/entry/converted_at) it holds.
+    // never overwrite the birth facts (acquisition_stage/entry/converted_at) it HOLDS
+    // — but do fill the ones it holds NOT (a shop buyer carries no stage at all, and
+    // without one the paid-access gate refuses them from every gated class).
     if (activeMatches.length > 1) {
       activeMatches.sort(
         (a, b) => (b.data().created_at?.toMillis?.() ?? 0) - (a.data().created_at?.toMillis?.() ?? 0),
@@ -289,9 +314,15 @@ export const completeSignup = onCall(async (request) => {
       )
     }
     contactRef = activeMatches[0].ref
+    const promotion = resolveSignupJoinPromotion(
+      activeMatches[0].data(),
+      () => FieldValue.serverTimestamp(),
+    )
+    logJoinPromotion(promotion, contactRef.id)
     await contactRef.set(
       {
         ...profile,
+        ...promotion.patch,
         // Full signup materializes a provisional lead (counts toward the cap).
         provisional: FieldValue.delete(),
         provisional_expires_at: FieldValue.delete(),
