@@ -92,7 +92,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 13 | costs-money | weekly | Automations can email the whole list with no preview, and "Run Now" re-sends | M9 | web | ✅ Fixed |
 | 14 | costs-money | every-session | A visitor commits without seeing cancellation terms or the no-show fee | C2 | web + functions | ▶ Open |
 | 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ▶ Open |
-| 16 | costs-money | once | Plugin removal is one unconfirmed click, including paid add-ons | M8 | web | ▶ Open |
+| 16 | costs-money | once | Plugin removal is one unconfirmed click, including paid add-ons | M8 | web | ✅ Fixed |
 | 17 | costs-money | at-setup | Two things called Stripe on one screen; the record-only one says "Enabled" | M6 | web | ▶ Open |
 | 18 | slows | every-session | Confirming a booking writes different data depending on which page you used | M3×M4×M1 | web/functions | ▶ Open |
 | 19 | slows | every-session | Booking a known person into a class has exactly one door — the one that corrupts the counts | M3×M4 | web | ▶ Open |
@@ -103,7 +103,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 24 | slows | weekly | Saving an offer change tells you nothing — the real cause of reported F2 | M5 | web | ✅ Fixed |
 | 25 | blocks | at-setup | A discount cannot be applied to a membership — the highest-value thing in the shop | M5 | functions + web | ▶ Open |
 | 26 | confuses | every-session | Public copy leaks back-office vocabulary: 8 `activity` + 4 `drop-in` hits | C1–C4 | web | ▶ Open |
-| 27 | blocks | at-setup | The checklist's "subscriptions" step lands on a page that cannot create one | M2×M5 | web | ▶ Open |
+| 27 | blocks | at-setup | The checklist's "subscriptions" step lands on a page that cannot create one | M2×M5 | web | ✅ Fixed |
 | 28 | slows | weekly | Nine public surfaces managed from six route prefixes across three partial maps | M11×M7×M5×M8 | web | ▶ Open |
 | 29 | slows | every-session | Find "Schedule" only after scanning past five less-used items — a regression from `6d94638` | M1 | web | ▶ Open |
 | 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ▶ Open |
@@ -158,6 +158,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 80 | costs-money | weekly | Everything sold at the desk still confirms nothing | M6×C4 | functions | ▶ Open |
 | 81 | confuses | every-session | Every email's plain-text half runs its headings into the following sentence | C2×M9 | functions | ✅ Fixed |
 | 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
+| 82 | blocks | weekly | A member can buy a plan and still be locked out, with no self-serve way back | M5×M8 | functions | ✅ Fixed |
+| 83 | blocks | every-session | A trial lead who signs up is still refused, and the card promises otherwise | M5×M8 | needs a decision | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1195,6 +1197,41 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-83 — A trial lead who signs up is still refused, and the card we just wrote promises otherwise
+`blocks` · every-session · traced · M5×M8 · *found 2026-08-17 while fixing UX-82* · **needs a product decision**
+
+**Now.** Booking a trial or a drop-in creates the contact at
+`acquisition_stage: 'trial_booked'` — four writers: `appointments/booking.ts:343`,
+`booking/dropIn.ts:474` and `:588`, `booking/index.ts:1109`. UX-82 promotes a contact who holds
+**no** stage; one who holds `trial_booked` is deliberately left alone, because advancing it is a
+change to funnel semantics rather than a gap-fill.
+
+The consequence is that **the most ordinary path in the product is broken**: try a class, decide
+to join, complete the signup form — and stay `trial_booked`, refused by every members-tier class
+forever, until a staff member edits the stage by hand. This is far more common than UX-82's
+shop-buyer case.
+
+And it now **contradicts copy we shipped**. UX-11 put *"Members only — signing up is free"* on
+the public card, pointing at the signup form. For a trial lead that sentence is false: they sign
+up, free, and are still refused. We replaced a wrong price with a wrong promise.
+
+**Fix — three options, and this is a product decision, not a code one:**
+
+1. **Signup always promotes to `joined`.** The signup form IS the declaration of joining; the
+   trial stages exist to track leads who have *not* signed up. This also makes the funnel more
+   accurate rather than less: `trial_booked → joined` is precisely a trial conversion, and
+   `analytics/index.ts:307` counts a stage change with both sides present — so these would start
+   being **counted as conversions**, which is what they are. Recommended.
+2. **Change the gate**: `members` asks "is this a contact of this studio who completed signup"
+   rather than "did they reach the joined milestone". Weakens a paid gate — needs care.
+3. **Change the copy** to stop promising what signup delivers. Cheapest, and the worst of the
+   three: it makes the product honest about a dead end instead of removing the dead end.
+
+**Verify:** book a free trial as a new person, then complete the signup form with the same
+email, then open a members-only class.
 
 ---
 
