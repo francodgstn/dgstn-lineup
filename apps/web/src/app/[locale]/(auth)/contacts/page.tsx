@@ -39,9 +39,11 @@ import {
   filterContacts, flattenGroupTree, isDynamicGroup, toGroupRule, ruleWouldDropGroups,
 } from '@linyup/shared'
 import type {
-  ContactFilter, InactivityPreset, RankFilter,
-  AgeFilter, CustomFieldCondition, CustomFieldOp,
+  ContactFilter, ConsentFilter, InactivityPreset, RankFilter,
+  AgeFilter, CustomFieldCondition, CustomFieldOp, WaiverAcceptanceState,
 } from '@linyup/shared'
+import { useAskedDocuments, type AskedDocument } from '@/hooks/useContactDocuments'
+import { AskToSignDialog } from '@/components/contacts/AskToSignDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import {
   useContactGroups, useInvalidateContactGroups, createGroupFromFilter, useContactFilterContext,
@@ -1016,6 +1018,90 @@ function CustomFieldsFilterContent({ defs, value, onChange }: {
   )
 }
 
+/**
+ * The consent dimension's popover: ONE document × the states its signature may
+ * be in.
+ *
+ * The states are `waiverAcceptanceState`'s five and are listed in its fixed
+ * order, so the picker cannot suggest a state machine the gate does not have.
+ * Choosing a document with no state selected preselects "Not signed" — the
+ * question a studio comes here to ask.
+ */
+function ConsentFilterContent({ documents, value, onChange }: {
+  documents: AskedDocument[]
+  value: ConsentFilter | null
+  onChange: (v: ConsentFilter | null) => void
+}) {
+  const t = useTranslations('Contacts')
+  // The five state names are owned by the Waivers namespace, which is where the
+  // chip, the signers table and the contact tab read them. One vocabulary: a
+  // filter that called `superseded` something else would describe a different
+  // product from the tab beside it.
+  const tWaivers = useTranslations('Waivers')
+  const documentId = value?.documentId || documents[0]?.documentId || ''
+  const states = value?.states ?? []
+  const selected = documents.find((d) => d.documentId === documentId)
+
+  const setDocument = (id: string) =>
+    onChange({ documentId: id, states: states.length ? states : ['none'] })
+  const toggleState = (s: WaiverAcceptanceState) =>
+    onChange({
+      documentId,
+      states: states.includes(s) ? states.filter((x) => x !== s) : [...states, s],
+    })
+
+  return (
+    <div className="min-w-[260px] p-1 space-y-1.5">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">
+        {t('filterConsentDocument')}
+      </p>
+      <Select value={documentId} onValueChange={(v) => setDocument(v ?? '')}>
+        <SelectTrigger className="h-7 w-full text-xs">
+          <span className="flex flex-1 text-left text-xs truncate">
+            {selected?.title ?? t('filterConsentDocument')}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          {documents.map((d) => (
+            <SelectItem key={d.documentId} value={d.documentId} className="text-xs">
+              {d.title}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="border-t my-1.5 mx-1" />
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 py-0.5">
+        {t('filterConsentState')}
+      </p>
+      {CONSENT_STATES.map((s) => (
+        <CheckOption
+          key={s}
+          label={tWaivers(`state_${s}` as 'state_none')}
+          checked={states.includes(s)}
+          onToggle={() => toggleState(s)}
+        />
+      ))}
+      {/* A signup-only document records a tick and refuses nobody. Saying so
+          here keeps the filter honest about what "not signed" costs that
+          person: nothing, until the studio also requires it before booking. */}
+      {selected && !selected.requiredBeforeBooking && (
+        <p className="px-2 pt-1.5 text-[11px] leading-snug text-muted-foreground">
+          {t('filterConsentSignupOnly')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** `waiverAcceptanceState`'s five, in its fixed order. */
+const CONSENT_STATES: WaiverAcceptanceState[] = [
+  'none',
+  'revoked',
+  'superseded',
+  'expired',
+  'valid',
+]
+
 // ─── filter bar ───────────────────────────────────────────────────────────────
 // Every dimension is declared once here, then rendered only when it carries a
 // value or the user explicitly added it. With 13 dimensions an always-on chip
@@ -1050,7 +1136,7 @@ interface FilterDimension {
 
 function FilterChips({
   filters, onChange, subscriptionTypes, teamId, rankingSystems, contactGroups,
-  allTags, customFieldDefs, onSaveAsGroup,
+  allTags, customFieldDefs, consentDocuments, onSaveAsGroup,
 }: {
   filters: Filters; onChange: (f: Filters) => void
   subscriptionTypes: SubscriptionType[]; teamId: string | null
@@ -1058,9 +1144,15 @@ function FilterChips({
   contactGroups: ContactGroup[] | null  // null = plugin not installed
   allTags: string[]
   customFieldDefs: CustomFieldDefinition[]
+  /** Everything this studio asks anybody to accept — both surfaces. Empty = the
+   *  dimension is not offered, because there is nothing to ask about. */
+  consentDocuments: AskedDocument[]
   onSaveAsGroup?: () => void
 }) {
   const t = useTranslations('Contacts')
+  // See ConsentFilterContent: the five acceptance-state names live once, in the
+  // Waivers namespace.
+  const tWaivers = useTranslations('Waivers')
   const { saved, save, remove, togglePin, pinnedPresets, togglePresetPin } = useSavedQueries(teamId)
   const pinnedQueries = [
     ...FILTER_PRESETS.filter((q) => pinnedPresets.includes(q.id)),
@@ -1299,6 +1391,35 @@ function FilterChips({
       render: (f, set) => (
         <CustomFieldsFilterContent defs={customFieldDefs} value={f.customFields}
           onChange={(customFields) => set({ ...f, customFields })} />
+      ),
+    },
+    {
+      // CONSENT — "who has, and who has not, accepted this document". The whole
+      // point of putting it here rather than on a screen of its own: it is one
+      // dimension of the ONE predicate, so it is simultaneously a chip, a saved
+      // preset, a dynamic group and an automation condition.
+      key: 'consent',
+      label: t('filterConsent'),
+      available: consentDocuments.length > 0,
+      icon: ShieldCheck,
+      isActive: (f) => !!f.consent?.documentId && f.consent.states.length > 0,
+      clear: (f) => ({ ...f, consent: null }),
+      activeLabel: (f) => {
+        if (!f.consent?.documentId || !f.consent.states.length) return ''
+        const title =
+          consentDocuments.find((d) => d.documentId === f.consent!.documentId)?.title ?? ''
+        const states =
+          f.consent.states.length === 1
+            ? tWaivers(`state_${f.consent.states[0]}` as 'state_none')
+            : `${f.consent.states.length} ${t('filterConsentStatesNoun')}`
+        return title ? `${title}: ${states}` : states
+      },
+      render: (f, set) => (
+        <ConsentFilterContent
+          documents={consentDocuments}
+          value={f.consent}
+          onChange={(consent) => set({ ...f, consent })}
+        />
       ),
     },
     {
@@ -2181,6 +2302,7 @@ export default function ContactsPage() {
   )
   const [saveAsGroupOpen, setSaveAsGroupOpen] = useState(false)
   const [bulkOutreachOpen, setBulkOutreachOpen] = useState(false)
+  const [askToSignOpen, setAskToSignOpen] = useState(false)
   const invalidateGroups = useInvalidateContactGroups(currentTeamId)
 
   // "Edit in contacts" on a dynamic group hands its rule over here, because this
@@ -2253,7 +2375,18 @@ export default function ContactsPage() {
   // subgroups, and a DYNAMIC group resolves its rule) and the engagement
   // thresholds. Search is part of the filter object, so saved presets carry it.
 
-  const filterContext = useContactFilterContext(contactGroups)
+  // The consent dimension reads a ledger the contacts list does not hold — one
+  // query per DOCUMENT (never per contact), loaded by the context hook from the
+  // documents this filter and the team's dynamic groups actually name.
+  const { documents: askedDocuments } = useAskedDocuments(currentTeamId)
+  const filterContext = useContactFilterContext(contactGroups, [filters])
+  // Until the named ledger has arrived the dimension matches nobody (it fails
+  // closed, deliberately), so the list must say "loading" rather than "nothing
+  // matched" — an empty result a manager reads as an answer.
+  const consentLedgerPending =
+    !!filters.consent?.documentId &&
+    filters.consent.states.length > 0 &&
+    !filterContext.consent?.[filters.consent.documentId]
 
   const filteredActive   = useMemo(() => filterContacts(active,   filters, filterContext), [active,   filters, filterContext])
   const filteredLeads    = useMemo(() => filterContacts(leads,    filters, filterContext), [leads,    filters, filterContext])
@@ -2276,9 +2409,9 @@ export default function ContactsPage() {
     : tab === 'archived' ? archived
     : deleted
   const isLoading =
-    tab === 'active' || tab === 'leads' ? loadingActive
+    (tab === 'active' || tab === 'leads' ? loadingActive
     : tab === 'archived' ? loadingArchived
-    : loadingDeleted
+    : loadingDeleted) || consentLedgerPending
 
   // ── bulk handlers ─────────────────────────────────────────────────────────
 
@@ -2551,6 +2684,7 @@ export default function ContactsPage() {
           contactGroups={groupsEnabled ? contactGroups : null}
           allTags={allTags}
           customFieldDefs={customFieldDefs}
+          consentDocuments={askedDocuments}
           onSaveAsGroup={groupsEnabled ? () => setSaveAsGroupOpen(true) : undefined}
         />
       )}
@@ -2684,6 +2818,12 @@ export default function ContactsPage() {
                 ? setBulkOutreachOpen(true)
                 : openUpgradeModal({ minPlan: 'studio' }),
             },
+            // Only where there IS a required document to ask about: a studio with
+            // none would open a dialog with an empty picker. Not plan-gated —
+            // operating a live requirement is not creating one.
+            ...(askedDocuments.some((d) => d.requiredBeforeBooking)
+              ? [{ label: t('bulkAskToSign'), icon: ShieldCheck, onClick: () => setAskToSignOpen(true) }]
+              : []),
           ] : []}
         />
       )}
@@ -2761,6 +2901,19 @@ export default function ContactsPage() {
           onConfirm={(groupId) => bulkGroupUpdate(groupId, bulkEditMode === 'group-remove' ? 'remove' : 'add')}
         />
       )}
+
+      <AskToSignDialog
+        open={askToSignOpen}
+        onOpenChange={setAskToSignOpen}
+        teamId={currentTeamId}
+        documents={askedDocuments}
+        contactIds={selectedList}
+        // The request writes NO consent state, so no contact changed. The
+        // ledgers are refreshed anyway, because the dialog reports who was
+        // already signed and a stale map is what would have produced that
+        // selection in the first place.
+        onSent={() => qc.invalidateQueries({ queryKey: ['consent-ledgers'] })}
+      />
 
       <BulkOutreachDialog
         open={bulkOutreachOpen}

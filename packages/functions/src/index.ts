@@ -280,6 +280,17 @@ export { signWaiverInSpace } from './waivers/space'
 // status. Ungated by plan — retiring is not creating, and a team must always be
 // able to withdraw a signature it holds.
 export { revokeWaiverAcceptance } from './waivers/revoke'
+// Asking somebody to sign. The half this folder was missing: a studio that makes
+// a document mandatory has, until it, no remedy for the people already on its
+// books — the requirement binds at their next booking, where they meet it as a
+// refusal. It sends the EXISTING Space sign link, writes no state of any kind,
+// and is safe to call twice (one mail per document version per contact per day).
+export { requestWaiverAcceptance } from './waivers/request'
+// The acceptance ledger seen from the person's side: one trigger on the
+// append-only `acceptances` subcollection writes the `waiver_accepted` /
+// `waiver_revoked` activity events for EVERY rail, rather than a logActivity call
+// bolted onto each one (and forgotten by the next).
+export { trackWaiverAcceptances } from './waivers/trackAcceptances'
 // No-show policy fees (E5) — manager resend-link + waive. The strike counter
 // itself (processNoShowStrike) is wired into automation/onBookingWrite, not a
 // callable.

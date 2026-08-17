@@ -10,8 +10,11 @@ import {
   membersOfGroup,
   wouldCreateCycle,
   type ContactFilter,
+  type ContactFilterContext,
   type ContactFilterSubject,
   type ContactGroup,
+  type WaiverAcceptanceState,
+  type WaiverSignerFacts,
 } from '@linyup/shared'
 import { evaluateContactConditions } from '../utils/automationEngine'
 
@@ -24,6 +27,17 @@ const NOW = Date.UTC(2026, 7, 16) // 2026-08-16, the reference "today"
 
 function ts(iso: string) {
   return { seconds: Math.floor(new Date(iso).getTime() / 1000), nanoseconds: 0 }
+}
+
+/** A stored Timestamp, as `waiverAcceptanceState` reads one. */
+function stamp(iso: string) {
+  const ms = new Date(iso).getTime()
+  return {
+    toDate: () => new Date(ms),
+    toMillis: () => ms,
+    seconds: Math.floor(ms / 1000),
+    nanoseconds: 0,
+  }
 }
 
 function contact(overrides: Partial<ContactFilterSubject> = {}): ContactFilterSubject {
@@ -206,6 +220,106 @@ describe('matchesFilter — search', () => {
   it('counts as an active dimension, so presets capture it', () => {
     assert.equal(countActiveFilters(filter({ search: 'love' })), 1)
     assert.equal(countActiveFilters(filter({ search: '   ' })), 0)
+  })
+})
+
+describe('matchesFilter — consent', () => {
+  // The five states are `waiverAcceptanceState`'s, and this dimension computes
+  // them THROUGH it. These fixtures therefore assert the wiring (the ledger, the
+  // floor, the missing-context arm) rather than restating the state machine —
+  // `waivers/waiverState.test.ts` owns that.
+  const DOC = 'house-rules'
+
+  function signer(overrides: Partial<WaiverSignerFacts> = {}): WaiverSignerFacts {
+    return {
+      accepted_version: 2,
+      accepted_at: stamp('2026-01-10T09:00:00Z'),
+      valid_until: null,
+      status: 'active',
+      ...overrides,
+    }
+  }
+
+  function ledger(
+    signers: Record<string, WaiverSignerFacts>,
+    minValidVersion = 1,
+  ): ContactFilterContext {
+    return { nowMs: NOW, consent: { [DOC]: { minValidVersion, signers } } }
+  }
+
+  const signed = contact({ id: 'c1' })
+  const never = contact({ id: 'c2' })
+
+  it('finds the people who have never signed — the reason the dimension exists', () => {
+    const ctx = ledger({ c1: signer() })
+    const f = filter({ consent: { documentId: DOC, states: ['none'] } })
+    assert.equal(matchesFilter(never, f, ctx), true)
+    assert.equal(matchesFilter(signed, f, ctx), false)
+  })
+
+  it('reads the state through waiverAcceptanceState, floor included', () => {
+    const f = (states: WaiverAcceptanceState[]) => filter({ consent: { documentId: DOC, states } })
+    // valid
+    assert.equal(matchesFilter(signed, f(['valid']), ledger({ c1: signer() })), true)
+    // superseded — a require_resign publish moved the floor above the signature,
+    // and NO signer row was written for it.
+    assert.equal(matchesFilter(signed, f(['superseded']), ledger({ c1: signer() }, 3)), true)
+    assert.equal(matchesFilter(signed, f(['valid']), ledger({ c1: signer() }, 3)), false)
+    // expired — lazily, against the instant frozen on the signature.
+    const lapsed = signer({ valid_until: stamp('2026-06-01T00:00:00Z') })
+    assert.equal(matchesFilter(signed, f(['expired']), ledger({ c1: lapsed })), true)
+    // revoked outranks both.
+    const withdrawn = signer({ status: 'revoked', valid_until: stamp('2026-06-01T00:00:00Z') })
+    assert.equal(matchesFilter(signed, f(['revoked']), ledger({ c1: withdrawn })), true)
+  })
+
+  it('ORs the selected states, like every other dimension', () => {
+    const f = filter({ consent: { documentId: DOC, states: ['none', 'expired'] } })
+    const ctx = ledger({ c1: signer({ valid_until: stamp('2026-06-01T00:00:00Z') }) })
+    assert.equal(matchesFilter(signed, f, ctx), true)
+    assert.equal(matchesFilter(never, f, ctx), true)
+    assert.equal(matchesFilter(contact({ id: 'c3' }), filter({
+      consent: { documentId: DOC, states: ['valid'] },
+    }), ctx), false)
+  })
+
+  it('matches NOBODY when the ledger was not loaded — never everybody', () => {
+    // A partial context must not widen a result set. An empty list is visible;
+    // a full one silently emails people who already signed.
+    const f = filter({ consent: { documentId: DOC, states: ['none'] } })
+    assert.equal(matchesFilter(never, f, { nowMs: NOW }), false)
+    assert.equal(matchesFilter(never, f, { nowMs: NOW, consent: {} }), false)
+  })
+
+  it('matches nobody when the subject carries no id', () => {
+    // A signer row is keyed on contactId. An unidentifiable subject is excluded
+    // rather than defaulted into "never signed".
+    const f = filter({ consent: { documentId: DOC, states: ['none'] } })
+    assert.equal(matchesFilter(contact(), f, ledger({})), false)
+  })
+
+  it('is off unless BOTH a document and a state are chosen', () => {
+    const ctx = ledger({ c1: signer() })
+    assert.equal(matchesFilter(signed, filter({ consent: { documentId: DOC, states: [] } }), ctx), true)
+    assert.equal(matchesFilter(signed, filter({ consent: { documentId: '', states: ['none'] } }), ctx), true)
+    assert.equal(countActiveFilters(filter({ consent: { documentId: DOC, states: [] } })), 0)
+    assert.equal(countActiveFilters(filter({ consent: { documentId: DOC, states: ['none'] } })), 1)
+  })
+
+  it('survives into a dynamic group rule, and drives a group', () => {
+    // The whole leverage of the dimension: one addition, and a group/automation
+    // can target the unsigned. Only `groups` is stripped from a rule.
+    const unsigned = group({
+      id: 'unsigned',
+      rule: filter({ consent: { documentId: DOC, states: ['none'] } }),
+    })
+    const ctx = ledger({ c1: signer() })
+    assert.equal(contactMatchesGroup(never, unsigned, ctx), true)
+    assert.equal(contactMatchesGroup(signed, unsigned, ctx), false)
+    assert.deepEqual(
+      membersOfGroup([signed, never], unsigned, ctx).map((c) => c.id),
+      ['c2'],
+    )
   })
 })
 

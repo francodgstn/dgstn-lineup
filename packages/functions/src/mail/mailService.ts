@@ -55,8 +55,10 @@ export interface SendOutcome {
  *
  * It used to be EXPORTED, because one caller — the emailed guardian link, a
  * message whose delivery WAS the evidence — had to record the environment on the
- * artefact it wrote rather than merely react to it. That mechanism is gone and
- * no waiver path sends mail at all, so this is internal again.
+ * artefact it wrote rather than merely react to it. That mechanism is gone, so
+ * this is internal again. `requestWaiverAcceptance` does send mail, but it
+ * records nothing about delivery — it asks somebody to sign and reports the
+ * ordinary `SendOutcome` back to the manager, which needs no environment stamp.
  */
 function isTestMode(): boolean {
   return testModeEnabled.value() === 'true'

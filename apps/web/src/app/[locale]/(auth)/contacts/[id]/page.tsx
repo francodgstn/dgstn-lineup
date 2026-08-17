@@ -161,6 +161,7 @@ import {
   Info,
   Pencil,
   ShieldCheck,
+  ShieldOff,
   MoreVertical,
   User,
   Check,
@@ -3113,7 +3114,7 @@ const ACTIVITY_PERIODS = [
 ] as const
 type ActivityPeriodKey = (typeof ACTIVITY_PERIODS)[number]['key']
 
-type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach'
+type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach' | 'consent'
 
 const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
   sessions: ['session_participant_add', 'session_participant_delete'],
@@ -3138,6 +3139,10 @@ const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventTyp
     'contact_anonymized',
   ],
   outreach: ['outreach_email_sent'],
+  // Consent gets its own chip rather than joining `profile`: "when did they
+  // accept this, and did anybody withdraw it" is the question a dispute starts
+  // with, and it is not a profile edit.
+  consent: ['waiver_accepted', 'waiver_revoked'],
 }
 
 type EventMeta = { Icon: React.ElementType; bg: string; fg: string }
@@ -3162,6 +3167,8 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   contact_login: { Icon: Activity, bg: 'bg-green-500/10', fg: 'text-green-600' },
   outreach_email_sent: { Icon: Mail, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   contact_anonymized: { Icon: Trash2, bg: 'bg-muted', fg: 'text-muted-foreground' },
+  waiver_accepted: { Icon: ShieldCheck, bg: 'bg-emerald-500/10', fg: 'text-emerald-600' },
+  waiver_revoked: { Icon: ShieldOff, bg: 'bg-red-500/10', fg: 'text-red-600' },
 }
 
 function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): string {
@@ -3349,6 +3356,7 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
     { key: 'bookings', label: t('activityFilterBookings') },
     { key: 'profile', label: t('activityFilterProfile') },
     { key: 'outreach', label: t('activityFilterOutreach') },
+    { key: 'consent', label: t('activityFilterConsent') },
   ]
 
   return (

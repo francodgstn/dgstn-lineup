@@ -63,6 +63,40 @@ export function ConsentHistoryPanel({
   const [revokeReason, setRevokeReason] = useState('')
   const [revokeBusy, setRevokeBusy] = useState(false)
   const [revokeError, setRevokeError] = useState<string | null>(null)
+  // Which document is being asked for, and what came back for THIS person.
+  // Per row rather than per panel: the answer ("no email address", "already
+  // signed") belongs beside the document it is about.
+  const [asking, setAsking] = useState<string | null>(null)
+  const [askOutcome, setAskOutcome] = useState<Record<string, string>>({})
+
+  const ask = async (documentId: string) => {
+    if (!teamId) return
+    setAsking(documentId)
+    try {
+      const fn = httpsCallable<
+        { teamId: string; documentId: string; contactIds: string[] },
+        { counts: Record<string, number> }
+      >(functions, 'requestWaiverAcceptance')
+      const res = await fn({ teamId: teamId!, documentId, contactIds: [contactId] })
+      const counts = res.data.counts
+      // One recipient, so exactly one count is 1 — reported as the sentence for
+      // that outcome rather than as "sent" regardless, which is what a bulk send
+      // that only totals would have said.
+      const outcome =
+        (['sent', 'already_signed', 'no_email', 'not_delivered', 'skipped'] as const).find(
+          (k) => (counts[k] ?? 0) > 0
+        ) ?? 'not_delivered'
+      setAskOutcome((prev) => ({ ...prev, [documentId]: `ask_${outcome}` }))
+    } catch (err) {
+      const reason = (err as { details?: { reason?: string } }).details?.reason
+      setAskOutcome((prev) => ({
+        ...prev,
+        [documentId]: reason === 'document_not_required' ? 'ask_not_required' : 'ask_error',
+      }))
+    } finally {
+      setAsking(null)
+    }
+  }
 
   const revoke = async (documentId: string) => {
     setRevokeBusy(true)
@@ -169,22 +203,44 @@ export function ConsentHistoryPanel({
                   )}
                 </div>
               </div>
-              {/* Offered only where there IS something to withdraw. A revoked row
-                  keeps its history and is never revoked twice. */}
-              {signer && signer.status !== 'revoked' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRevoking(docId)
-                    setRevokeReason('')
-                    setRevokeError(null)
-                  }}
-                  className="shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
-                >
-                  {t('revokeAction')}
-                </button>
-              )}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {/* ASK. Offered where the signature does not currently count and
+                    the document is one Space can actually present — a document
+                    merely shown at signup has no page to send anybody to, so the
+                    control is absent rather than an error waiting to happen. */}
+                {state !== 'valid' && requiredBeforeBooking && (
+                  <button
+                    type="button"
+                    onClick={() => void ask(docId)}
+                    disabled={asking === docId || !teamId}
+                    className="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    {asking === docId ? t('askSending') : t('askAction')}
+                  </button>
+                )}
+                {/* Offered only where there IS something to withdraw. A revoked row
+                    keeps its history and is never revoked twice. */}
+                {signer && signer.status !== 'revoked' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevoking(docId)
+                      setRevokeReason('')
+                      setRevokeError(null)
+                    }}
+                    className="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                  >
+                    {t('revokeAction')}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {askOutcome[docId] && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t(askOutcome[docId] as 'ask_sent')}
+              </p>
+            )}
 
             {revoking === docId && (
               <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
