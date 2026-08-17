@@ -15,6 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -610,14 +611,16 @@ function ActivityDialog({
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
       {/* Field-rich form (name/description/prereqs/instructions/type/durations/
-          access/drop-in/media) — give it room on bigger screens, and scroll
-          rather than overflow the viewport on short ones. */}
-      <DialogContent className="sm:max-w-lg lg:max-w-2xl max-h-[90vh] overflow-y-auto">
+          access/drop-in/media) — give it room on bigger screens. The fields
+          scroll inside DialogBody so Save stays pinned; see THE SCROLL RULE in
+          components/ui/dialog.tsx. */}
+      <DialogContent className="sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{editing ? t('editActivity') : t('newActivity')}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label htmlFor="act-name">{t('fieldName')}</Label>
             <Input id="act-name" {...register('name')} autoFocus />
@@ -1190,6 +1193,7 @@ function ActivityDialog({
               )}
             />
           </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting}>

@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -354,11 +355,11 @@ export default function ProductsPage() {
           if (!v) closeDialog()
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? t('editProduct') : t('newProduct')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <DialogBody className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="p-name">{t('fieldName')}</Label>
               <Input
@@ -514,7 +515,7 @@ export default function ProductsPage() {
                 onCheckedChange={(v) => setDraft((d) => ({ ...d, active: v }))}
               />
             </div>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>
               {t('cancel')}

@@ -20,7 +20,7 @@ import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { ContactPicker } from '@/components/payments/ContactPicker'
 import { DateTimePicker } from '@/components/ui/date-picker'
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -276,11 +276,12 @@ export function AppointmentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) close() }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
 
+        <DialogBody>
         {appointmentActivities.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">{t('noAppointmentActivities')}</p>
         ) : (
@@ -473,6 +474,7 @@ export function AppointmentFormDialog({
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
         )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={close} disabled={submitting}>{t('cancel')}</Button>

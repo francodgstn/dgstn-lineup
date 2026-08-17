@@ -23,6 +23,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -1464,12 +1465,13 @@ function RuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[680px] lg:max-w-[1100px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[680px] lg:max-w-[1100px]">
         <DialogHeader>
           <DialogTitle>{editing ? t('dialogs.rule.editTitle') : t('common.newAutomation')}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-5">
+          <DialogBody className="space-y-5">
           {/* Name + active */}
           <div className="flex gap-3 items-end">
             <div className="flex-1">
@@ -1656,6 +1658,7 @@ function RuleDialog({
           </div>
 
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+          </DialogBody>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RichTextContent } from '@/components/RichTextEditor'
@@ -72,17 +72,19 @@ export function VersionHistory({ documentId }: { documentId: string }) {
       )}
 
       <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
-        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {viewing ? t('versionN', { version: viewing.version }) : ''} — {viewing?.title}
             </DialogTitle>
           </DialogHeader>
-          {viewing?.externalUrl ? (
-            <p className="text-sm break-all text-muted-foreground">{viewing.externalUrl}</p>
-          ) : (
-            <RichTextContent html={viewing?.bodyHtml ?? ''} className="prose-relaxed max-w-none" />
-          )}
+          <DialogBody>
+            {viewing?.externalUrl ? (
+              <p className="text-sm break-all text-muted-foreground">{viewing.externalUrl}</p>
+            ) : (
+              <RichTextContent html={viewing?.bodyHtml ?? ''} className="prose-relaxed max-w-none" />
+            )}
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </div>

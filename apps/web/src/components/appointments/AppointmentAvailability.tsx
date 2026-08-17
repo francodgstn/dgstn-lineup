@@ -37,7 +37,7 @@ import { Label } from '@/components/ui/label'
 import { DatePicker, TimePicker, DateTimePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/ui/query-error'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
@@ -450,11 +450,12 @@ function TemplateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Width matches SessionFormDialog (sm:max-w-3xl) — the two schedule
           creation dialogs should feel like siblings. */}
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{editing ? t('editTemplate') : t('newTemplate')}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="space-y-4 pt-2">
 
           <div className="space-y-1.5">
             <Label htmlFor="title">{t('fieldTitle')}</Label>
@@ -691,10 +692,14 @@ function TemplateDialog({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-1">
+          </DialogBody>
+
+          {/* Was a hand-rolled action row; it is the standard footer so that it
+              pins above the scrolling body like every other dialog's. */}
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t('cancel')}</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? t('saving') : t('save')}</Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

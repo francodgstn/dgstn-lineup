@@ -1,5 +1,19 @@
 "use client"
 
+/**
+ * AlertDialog — a confirm, not a form.
+ *
+ * DELIBERATELY NOT given the scroll region that `./dialog.tsx` has (THE SCROLL
+ * RULE there). An alert dialog is a title, a sentence and two buttons: no call
+ * site in this app has ever needed a `max-h`/`overflow` on
+ * `AlertDialogContent`, so there is no footer to pin and a scroll region would
+ * only be dead machinery to keep in step with the other primitive.
+ *
+ * If a confirm ever grows long enough to scroll, that is the signal it is no
+ * longer a confirm — build it as a `Dialog` with a `DialogBody` rather than
+ * teaching this component to scroll.
+ */
+
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
 

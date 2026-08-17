@@ -43,6 +43,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -890,11 +891,11 @@ function RankSystemDialog({
   return (
     <>
       <Dialog open={open && !presetOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{isEdit ? t('editRankingSystem') : t('addRankingSystem')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-1">
+          <DialogBody className="space-y-4 py-1">
             {/* Preset picker button */}
             {!isEdit && (
               <button
@@ -978,7 +979,7 @@ function RankSystemDialog({
                 ))}
               </div>
             </div>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

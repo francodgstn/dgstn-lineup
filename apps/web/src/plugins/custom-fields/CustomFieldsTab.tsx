@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -87,11 +88,11 @@ function CustomFieldDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? t('editCustomField') : t('addCustomField')}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-1">
+        <DialogBody className="space-y-4 py-1">
           <div className="space-y-1">
             <Label>{t('customFieldLabel')}</Label>
             <Input
@@ -173,7 +174,7 @@ function CustomFieldDialog({
               onCheckedChange={(v) => setForm((f) => ({ ...f, required: v }))}
             />
           </label>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

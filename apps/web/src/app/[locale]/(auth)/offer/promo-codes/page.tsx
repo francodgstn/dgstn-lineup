@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/select'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -457,12 +458,12 @@ export default function PromoCodesPage() {
 
       {/* ── Create / edit ─────────────────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? t('edit') : t('create')}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <DialogBody className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="promo-code">{t('codeLabel')}</Label>
               <Input
@@ -715,7 +716,7 @@ export default function PromoCodesPage() {
             </div>
 
             {formError && <p className="text-sm text-destructive">{formError}</p>}
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>

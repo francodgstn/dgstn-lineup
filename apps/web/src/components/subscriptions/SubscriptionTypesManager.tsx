@@ -29,6 +29,7 @@ import {
 import type { SubscriptionType, SubscriptionPrice, Activity } from '@linyup/shared'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -454,13 +455,14 @@ function SubTypeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {editing ? t('editSubscriptionType') : t('addSubscriptionType')}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="space-y-4 py-2">
           <div className="space-y-1">
             <Label>{t('fieldSubTypeName')}</Label>
             <Input {...register('name')} placeholder="e.g. Monthly pass, Fitpass" />
@@ -872,6 +874,7 @@ function SubTypeDialog({
 
           {/* Automations referencing this subscription + a quick create shortcut */}
           {editing && <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />}
+          </DialogBody>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
