@@ -152,7 +152,9 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ✅ Fixed |
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ▶ Open |
 | 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
-| 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ▶ Open |
+| 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ✅ Fixed |
+| 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ▶ Open |
+| 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1011,6 +1013,65 @@ category by the same argument.
 **Build:** M. **Owner:** functions-agent, then web-agent for the result page.
 **Verify:** Buy a drop-in as a brand-new visitor. An email arrives naming the class, its time
 and how to cancel, with a working way into the Space; signing in there shows the booking.
+
+### UX-77 — Three more paid rails confirm nothing, and a fourth confirms behind a switch
+`costs-money` · weekly · **counted** · C2×C3×M6 · *from the sibling-rail audit UX-76 asked for*
+
+**Now.** UX-76 asked whoever fixed the drop-in to audit the other paid rails rather than fix one
+branch and leave a set. The audit:
+
+| Rail | Confirms itself? | Gate |
+|---|---|---|
+| Drop-in, Stripe · gift-card cover · paid waitlist claim | yes, as of UX-76 | none — always on |
+| Gift card purchase | yes | none — always on |
+| Free booking · free waitlist claim · free appointment | yes | `booking_confirmation`, correctly |
+| **Priced appointment** | yes — but behind `booking_confirmation` | **wrong gate** |
+| **Course purchase** | **no** | — |
+| **Product purchase** | **no** | — |
+| **Membership / credit pack** | **no** | — |
+| Policy fee | no, defensibly | — the fee was itself requested by email, and paying it grants nothing |
+
+**Cost, in order of how much money is involved.** The **credit pack** is the worst: someone buys
+ten classes and is never told they hold ten, or how to spend them — the balance exists only
+inside a portal they were not told about. A **course** buyer is not told where to watch it. A
+**product** buyer gets no fulfilment or pickup information, because none exists anywhere. And the
+**priced appointment** does send, but a studio can switch that receipt off — the exact defect
+UX-76 refused to introduce, already present one rail over.
+
+**Fix.** The same rule: a receipt for money is not a preference. But **each needs its own
+template**, which is why this is a separate build and not a rider on UX-76 — a course has no
+time or location, a product may need pickup terms, a credit pack needs the resulting balance.
+Reuse `booking/paidConfirmation.ts`'s posture and its `mail_sends` keying, not its body.
+
+**The priced appointment is the cheapest and should go first**: it already sends, so it only
+needs its gate split by tender. Note the cost that stopped it shipping with UX-76 —
+`sendAppointmentBookingEmails` has to learn whether the booking was paid, a signature change
+across three call sites. `bookingWasPaidFor` (`packages/shared/src/types/session.ts:188`) is
+the predicate to use; do not add a second one.
+**Build:** M for the appointment gate, M per template after. **Owner:** functions-agent.
+**Verify:** Buy a 10-credit pack as a new visitor — the mail says how many credits you hold and
+where to use them. Then switch every system-email toggle off and buy a priced appointment: it
+still confirms.
+
+### UX-78 — A contact's pending-booking counter moves only if a mail is switched on
+`confuses` · every-session · traced · M4×M3 · *found while fixing UX-76*
+
+**Now.** In `cancelSingleSession`, `Contact.pending_bookings_count` is decremented **inside the
+notification loop** — so a studio with `session_cancellation` switched off cancelled sessions
+without anybody's counter moving. UX-76 made paid bookings notify regardless, so paid ones now
+decrement and free ones still do not, which is an improvement and also an inconsistency.
+
+**Cost.** `pending_bookings_count` is the number the contacts list uses to say "this person
+needs chasing" (see UX-18, which found the same counter corrupted from the other direction). A
+studio that turned off a courtesy email silently acquired a permanently wrong roster.
+
+**Fix.** Decouple them: the counter is a fact about the booking, the mail is a message about it,
+and a data write has no business living inside a delivery loop. Move the decrement out, next to
+the cancellation write. **This touches contact counters, so it wants its own change** rather than
+riding on a mail fix — which is exactly why it was left.
+**Build:** S–M. **Owner:** functions-agent.
+**Verify:** With `session_cancellation` off, cancel a session holding one free and one paid
+pending booking. Both contacts' pending counts drop.
 
 ### UX-74 — In 13 dialogs the Save button scrolls away with the form
 `slows` · every-session · counted · M5×M7×M9 · *added 2026-08-17, Franco's observation* · **one fix, in the primitive**
