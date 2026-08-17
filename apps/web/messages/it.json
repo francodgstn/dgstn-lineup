@@ -1376,6 +1376,8 @@
     "saving": "Salvataggio…",
     "saved": "Salvato!",
     "saveError": "Salvataggio non riuscito. Riprova.",
+    "ownerOnly": "Solo il proprietario del team può modificarlo.",
+    "paymentsHiddenOwnerOnly": "I gateway di pagamento sono visibili solo al proprietario del team.",
     "bookingLink": "Link prenotazione",
     "membershipLink": "Link abbonamento",
     "customLinks": "Link personalizzati",

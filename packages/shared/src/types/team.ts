@@ -414,6 +414,18 @@ export interface TeamMember {
   is_coach?: boolean
 }
 
+/**
+ * How the studio's booking flow behaves. Stored in exactly ONE place:
+ * `teams/{teamId}/public_profile/{teamId}.bookingSettings` — world-readable (the
+ * public booking page and the mobile app need it) and team-member writable (the
+ * admin Settings → Booking form). The booking callables read it there too.
+ *
+ * There used to be a second copy on the team doc (`settings.booking`). It is
+ * gone: the team doc is owner-only, so a manager's mirror write was denied while
+ * her public write succeeded, and the cutoff she had just set was enforced on the
+ * public page and nowhere else (UX-6). See
+ * packages/functions/src/booking/bookingSettings.ts.
+ */
 export interface BookingSettings {
   flowType: 'activity-first' | 'date-first'
   windowMonths: number

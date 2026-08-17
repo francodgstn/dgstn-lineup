@@ -23,6 +23,7 @@ import {
   type PaymentOptionsResult,
 } from '@linyup/shared'
 import { buildDropInTarget, resolveDropInForContact } from './dropInPricing'
+import { loadBookingSettings } from './bookingSettings'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
   assertQuotedAmount,
@@ -186,11 +187,7 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // Online booking cutoff — same guard as the free path (bookSession); a
   // member paying instead of using the free door must not be able to route
   // around it.
-  const cutoffMinutes = (
-    (team.data?.settings as Record<string, unknown> | undefined)?.booking as
-      | { cutoffMinutes?: number }
-      | undefined
-  )?.cutoffMinutes
+  const { cutoffMinutes } = await loadBookingSettings(teamId)
   if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
     throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
   }

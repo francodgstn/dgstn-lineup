@@ -22,7 +22,6 @@ import {
   ACTIVITIES_COLLECTION,
   CONTACTS_COLLECTION,
   SESSIONS_COLLECTION,
-  TEAMS_COLLECTION,
   WAITLIST_SUBCOLLECTION,
   bookingHoldsSeat,
   countHoldingSeats,
@@ -32,6 +31,7 @@ import {
   type BookingSource,
   type SeatHold,
 } from '@linyup/shared'
+import { bookingSettingsFrom, teamPublicProfileRef } from '../bookingSettings'
 import { generateBookingReference, generateSecureToken } from '../../utils/crypto'
 import { nextSmsWindowOpen } from '../../utils/sms'
 import {
@@ -157,9 +157,10 @@ export async function offerWaitlistSeats(
       return stop('waitlist_disabled', 'This class has no waitlist')
     }
 
-    const teamSnap = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId))
-    const bookingSettings = ((teamSnap.data()?.settings as Record<string, unknown> | undefined)
-      ?.booking ?? {}) as { cutoffMinutes?: number; waitlistClaimMinutes?: number }
+    // THE booking-settings store — the team's public_profile doc, read inside the
+    // transaction like every other input to the offer (bookingSettings.ts).
+    const settingsSnap = await tx.get(teamPublicProfileRef(teamId))
+    const bookingSettings = bookingSettingsFrom(settingsSnap.data())
     // Offering past the cutoff would hand someone a claim their own booking
     // callables then refuse — the claim page's worst possible failure.
     if (isPastBookingCutoff(start, bookingSettings.cutoffMinutes, nowMs)) {

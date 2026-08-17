@@ -31,6 +31,7 @@ import {
   type FormField,
   type SeatHold,
 } from '@linyup/shared'
+import { loadBookingSettings } from '../bookingSettings'
 import { healSessionSeatCount } from '../seatCount'
 import { checkoutRateLimit } from '../../connect/checkout'
 import { optionalContactSessionFromRequest } from '../../utils/contactSession'
@@ -101,13 +102,11 @@ export const joinWaitlist = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'This class has no seat limit')
   }
 
-  const team = await getTeam(teamId)
-  if (!team) throw new HttpsError('not-found', 'Team not found')
-  const cutoffMinutes = (
-    (team.settings as Record<string, unknown> | undefined)?.booking as
-      | { cutoffMinutes?: number }
-      | undefined
-  )?.cutoffMinutes
+  // The team must exist (the queue is team-scoped), but its booking settings are
+  // no longer on the team doc — they live in the ONE store, the world-readable
+  // public_profile (see bookingSettings.ts).
+  if (!(await getTeam(teamId))) throw new HttpsError('not-found', 'Team not found')
+  const { cutoffMinutes } = await loadBookingSettings(teamId)
   // Past the cutoff nothing can be offered from this queue (the promoter clamps
   // the claim window to it), so joining would be a promise we cannot keep.
   if (isPastBookingCutoff(start, cutoffMinutes)) {

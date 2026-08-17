@@ -1376,6 +1376,8 @@
     "saving": "Enregistrement…",
     "saved": "Enregistré !",
     "saveError": "Impossible d'enregistrer. Veuillez réessayer.",
+    "ownerOnly": "Seul le propriétaire de l'équipe peut modifier ceci.",
+    "paymentsHiddenOwnerOnly": "Les passerelles de paiement ne sont visibles que par le propriétaire de l'équipe.",
     "bookingLink": "Lien de réservation",
     "membershipLink": "Lien d'abonnement",
     "customLinks": "Liens personnalisés",

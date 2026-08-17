@@ -1376,6 +1376,8 @@
     "saving": "Wird gespeichert…",
     "saved": "Gespeichert!",
     "saveError": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+    "ownerOnly": "Nur der Team-Inhaber kann dies ändern.",
+    "paymentsHiddenOwnerOnly": "Zahlungs-Gateways sind nur für den Team-Inhaber sichtbar.",
     "bookingLink": "Buchungslink",
     "membershipLink": "Abo-Link",
     "customLinks": "Eigene Links",

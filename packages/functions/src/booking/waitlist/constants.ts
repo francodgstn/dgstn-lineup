@@ -46,7 +46,7 @@ export const WAITLIST_MIN_WINDOW_MINUTES = 35
  *  up the remainder. */
 export const WAITLIST_MAX_OFFERS_PER_RUN = 10
 
-/** Default `team.settings.booking.waitlistClaimMinutes` — two hours is long
+/** Default `bookingSettings.waitlistClaimMinutes` (public_profile) — two hours is long
  *  enough for someone to see the mail over a lunch break and short enough that a
  *  seat freed the evening before a class still rolls on to the next person. */
 export const WAITLIST_DEFAULT_CLAIM_MINUTES = 120

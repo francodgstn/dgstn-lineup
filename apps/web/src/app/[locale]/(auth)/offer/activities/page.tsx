@@ -36,6 +36,7 @@ const WAITLIST_MIN_PLAN: SaasPlan = 'coach'
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
+import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
 import { resolveActivityTerms } from '@/lib/activityTerms'
@@ -282,7 +283,6 @@ function ActivityDialog({
   // below the tier even if the flag were set some other way.
   const { isAtLeast } = usePlan()
   const planName = usePlanName()
-  const { team } = useAuth()
   const waitlistAllowed = isAtLeast(WAITLIST_MIN_PLAN)
   // TWO different questions, deliberately not fused. `waitlistAllowed` is "may
   // this studio have queues at all" (plan). `waitlistOffered` is "does this
@@ -293,9 +293,12 @@ function ActivityDialog({
   // It hides the CONTROL, not the feature: an activity keeps whatever flag it
   // already had, and anyone already in a queue keeps their place. Same shape as
   // the plan carry-through below.
-  const waitlistOffered =
-    (team?.settings as { booking?: { waitlistEnabled?: boolean } } | undefined)?.booking
-      ?.waitlistEnabled === true
+  //
+  // Read from THE booking-settings store (teams/{id}/public_profile —
+  // useBookingSettings), never the team doc: the mirror that used to hold it was
+  // owner-only, so a manager's save never reached it (UX-6).
+  const { data: bookingSettings } = useBookingSettings(teamId)
+  const waitlistOffered = bookingSettings?.waitlistEnabled === true
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)

@@ -1525,9 +1525,10 @@ async function seedDemoTeam(profile: SectorProfile) {
   // courses, website), so the bio-link surfaces all of them.
   const portalLinks = buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
-  // Booking settings — seeded to BOTH the public_profile (read by the public
-  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
-  // admin Settings → Booking form).
+  // Booking settings — ONE store, the team's public_profile: the public booking
+  // flow, the mobile app, the booking callables and the admin Settings → Booking
+  // form all read it there. (There used to be a team-doc mirror at
+  // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
   const bookingSettings = {
     flowType: 'activity-first',
     windowMonths: 2,
@@ -1557,7 +1558,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       // Standalone Studio demo teams enable the affiliation axis (team-local 'club').
       affiliations_enabled: true,
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
-      settings: { gamification: gamificationSettings, teamEmail: email, booking: bookingSettings },
+      settings: { gamification: gamificationSettings, teamEmail: email },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground,

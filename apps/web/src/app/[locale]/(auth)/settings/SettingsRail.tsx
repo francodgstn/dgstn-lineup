@@ -12,10 +12,9 @@ import { Link, usePathname } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { Pin, Search } from 'lucide-react'
-import { planSupportsAffiliations } from '@linyup/shared'
 import { SETTINGS_ITEMS, SETTINGS_GROUPS } from '@/lib/settings-nav'
 import { useNavPins } from '@/contexts/NavPinsContext'
-import { usePlan } from '@/hooks/usePlan'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { Input } from '@/components/ui/input'
 
@@ -24,7 +23,10 @@ export function SettingsRail() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const currentTab = searchParams.get('tab')
-  const { plan } = usePlan()
+  const { can } = useCapabilities()
+  // Same derivation the team-settings page makes — the owner-only surfaces are
+  // the ones this capability names.
+  const canEdit = can('team.settings')
   const { isInstalled } = useInstalledPlugins()
   const { isPinned, togglePin } = useNavPins()
   const [query, setQuery] = useState('')
@@ -33,9 +35,9 @@ export function SettingsRail() {
   const labelOf = (key: string) => t(key as Parameters<typeof t>[0])
   const matches = (key: string) => !q || labelOf(key).toLowerCase().includes(q)
 
-  // Hide plan/plugin-gated items when their condition doesn't hold.
+  // Hide plugin/role-gated items when their condition doesn't hold.
   const gateOk = (item: (typeof SETTINGS_ITEMS)[number]) => {
-    if (item.gate === 'affiliations') return planSupportsAffiliations(plan)
+    if (item.gate === 'ownerOnly') return canEdit
     if (item.gate === 'customFields') return isInstalled('custom-fields')
     return true
   }

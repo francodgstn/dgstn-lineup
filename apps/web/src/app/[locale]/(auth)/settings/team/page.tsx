@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { CustomFieldsTab } from '@/plugins/custom-fields/CustomFieldsTab'
 import { useForm, Controller } from 'react-hook-form'
@@ -86,6 +87,7 @@ import {
   XCircle,
   Lock,
 } from 'lucide-react'
+import { QueryErrorState } from '@/components/ui/query-error'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { PaymentModesCard } from '@/components/payments/PaymentModesCard'
 import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
@@ -163,6 +165,22 @@ const gatewaySchema = z.object({
 })
 type GatewayFormData = z.infer<typeof gatewaySchema>
 
+// ─── owner-only note ──────────────────────────────────────────────────────────
+// Everything on this page writes the team doc or one of its owner-only
+// subcollections (alert_presets, integrations — firestore.rules), so a
+// manager-role member can read it all and change none of it. `canEdit` is
+// derived ONCE on the page (useCapabilities().can('team.settings'), the
+// capability that is owner-only by definition) and threaded into each form,
+// which disables its inputs and its Save and renders this line — the same
+// one-line treatment CancellationPolicyCard and SystemEmailsCard already use.
+// The rail also hides the sections a non-owner can only look at; see
+// lib/settings-nav.ts.
+
+function OwnerOnlyNote() {
+  const t = useTranslations('TeamSettings')
+  return <p className="text-xs text-muted-foreground">{t('ownerOnly')}</p>
+}
+
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
 async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
@@ -197,10 +215,15 @@ function useAlertPresets(teamId: string | null) {
   })
 }
 
-function useGatewayIntegrations(teamId: string | null) {
+// teams/{id}/integrations is owner-only for READ as well as write
+// (firestore.rules), so for a manager this query REJECTS. Its consumer must
+// therefore branch on the capability before it branches on emptiness — "no
+// gateway configured" and "you are not allowed to see this" are different
+// facts, and only one of them is ever true for a non-owner.
+function useGatewayIntegrations(teamId: string | null, enabled: boolean) {
   return useQuery<TeamIntegration[]>({
     queryKey: ['gateway-integrations', teamId],
-    enabled: !!teamId,
+    enabled: !!teamId && enabled,
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(
@@ -218,7 +241,15 @@ function useGatewayIntegrations(teamId: string | null) {
 // Day windows that drive the read-only engagement band shown on each contact.
 // The band itself is derived on render (never stored).
 
-function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string }) {
+function EngagementThresholdsForm({
+  team,
+  teamId,
+  canEdit,
+}: {
+  team: Team
+  teamId: string
+  canEdit: boolean
+}) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const current = team.engagement_thresholds ?? DEFAULT_ENGAGEMENT_THRESHOLDS
@@ -234,7 +265,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
   const valid = [a, l, r].every((n) => Number.isInteger(n) && n > 0) && a < l && l < r
 
   async function onSave() {
-    if (!valid) return
+    if (!valid || !canEdit) return
     setSaving(true)
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
@@ -265,6 +296,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
       <div>
         <p className="text-sm font-medium">{t('engagementTitle')}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{t('engagementHelp')}</p>
+        {!canEdit && <OwnerOnlyNote />}
       </div>
       <div className="grid grid-cols-3 gap-3">
         {fields.map((f) => (
@@ -277,6 +309,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
               type="number"
               min={1}
               value={f.value}
+              disabled={!canEdit}
               onChange={(e) => f.set(e.target.value)}
             />
           </div>
@@ -285,7 +318,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
       <p className="text-xs text-muted-foreground">{t('engagementDaysHint')}</p>
       {!valid && <p className="text-xs text-destructive">{t('engagementInvalid')}</p>}
       <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onSave} disabled={saving || !valid}>
+        <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !valid}>
           {saving ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
@@ -315,7 +348,15 @@ function TabBarPreference() {
 
 // ─── general form ─────────────────────────────────────────────────────────────
 
-function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
+function GeneralForm({
+  team,
+  teamId,
+  canEdit,
+}: {
+  team: Team
+  teamId: string
+  canEdit: boolean
+}) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const [slugError, setSlugError] = useState<string | null>(null)
@@ -347,7 +388,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   }
 
   async function onSubmit(data: GeneralData) {
-    if (slugError) return
+    if (slugError || !canEdit) return
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
         name: data.name,
@@ -365,9 +406,11 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {!canEdit && <OwnerOnlyNote />}
+
       <div className="space-y-1.5">
         <Label htmlFor="name">{t('teamName')}</Label>
-        <Input id="name" {...register('name')} />
+        <Input id="name" {...register('name')} disabled={!canEdit} />
         {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
       </div>
 
@@ -377,8 +420,9 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           id="description"
           {...register('description')}
           rows={3}
+          disabled={!canEdit}
           placeholder={t('descriptionPlaceholder')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none disabled:opacity-60"
         />
         {errors.description && (
           <p className="text-destructive text-xs">{errors.description.message}</p>
@@ -393,6 +437,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           render={({ field }) => (
             <Select
               value={field.value || '__none__'}
+              disabled={!canEdit}
               onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
             >
               <SelectTrigger className="w-full">
@@ -420,6 +465,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           <Input
             id="slug"
             {...register('slug')}
+            disabled={!canEdit}
             onBlur={(e) => onSlugBlur(e.target.value)}
             placeholder="my-club"
             className="font-mono"
@@ -434,7 +480,10 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       </div>
 
       <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" disabled={isSubmitting || !isDirty || !!slugError || slugChecking}>
+        <Button
+          type="submit"
+          disabled={!canEdit || isSubmitting || !isDirty || !!slugError || slugChecking}
+        >
           {isSubmitting ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
@@ -599,7 +648,7 @@ function PresetDialog({
   )
 }
 
-function AlertPresetsTab({ teamId }: { teamId: string }) {
+function AlertPresetsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const { data: presets = [], isLoading } = useAlertPresets(teamId)
@@ -619,6 +668,7 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
   }
 
   const handleDelete = async (id: string) => {
+    if (!canEdit) return
     try {
       await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, id))
       invalidate()
@@ -641,9 +691,10 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('presetsInfo')}</p>
+      {!canEdit && <OwnerOnlyNote />}
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={openAdd}>
+        <Button size="sm" onClick={openAdd} disabled={!canEdit}>
           <Plus className="h-4 w-4 mr-1.5" />
           {t('addAlertPreset')}
         </Button>
@@ -675,18 +726,22 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{p.message}</p>
               </div>
-              <button
-                onClick={() => openEdit(p)}
-                className="p-1.5 rounded hover:bg-muted transition-colors"
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => setDeleting(p.id)}
-                className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {canEdit && (
+                <>
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="p-1.5 rounded hover:bg-muted transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                  <button
+                    onClick={() => setDeleting(p.id)}
+                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -981,7 +1036,15 @@ function RankSystemDialog({
   )
 }
 
-function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
+function RankingTab({
+  teamId,
+  team,
+  canEdit,
+}: {
+  teamId: string
+  team: Team
+  canEdit: boolean
+}) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -998,6 +1061,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
   const systems: RankingSystem[] = managedByOrg ? effectiveSystems : (team.ranking_systems ?? [])
 
   const saveToFirestore = async (next: RankingSystem[]) => {
+    if (!canEdit) return
     setSaving(true)
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { ranking_systems: next })
@@ -1053,6 +1117,11 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
     setDialogOpen(true)
   }
 
+  // Two independent reasons this list is read-only: the organization owns the
+  // systems, or the member is not the studio owner (the systems live on the team
+  // doc, which firestore.rules keeps owner-only). Each says so in its own words.
+  const canManage = !managedByOrg && canEdit
+
   return (
     <div className="space-y-4">
       {managedByOrg && orgId && (
@@ -1066,9 +1135,10 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
           </span>
         </div>
       )}
+      {!managedByOrg && !canEdit && <OwnerOnlyNote />}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{t('rankingSystems')}</p>
-        {!managedByOrg && (
+        {canManage && (
           <Button size="sm" onClick={openAdd} disabled={saving || rankLoading}>
             <Plus className="h-4 w-4 mr-1.5" />
             {t('addRankingSystem')}
@@ -1105,7 +1175,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                     {t('rankingSystemLevels', { count: s.levels.length })}
                   </p>
                 </div>
-                {!managedByOrg &&
+                {canManage &&
                   (s.is_primary ? (
                     <button
                       onClick={handleClearPrimary}
@@ -1123,7 +1193,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                       {t('rankingSystemSetPrimary')}
                     </button>
                   ))}
-                {!managedByOrg && (
+                {canManage && (
                   <button
                     onClick={() => openEdit(s)}
                     className="p-1.5 rounded hover:bg-muted transition-colors"
@@ -1131,7 +1201,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                 )}
-                {!managedByOrg && (
+                {canManage && (
                   <button
                     onClick={() => setDeleting(s.id)}
                     className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
@@ -1202,11 +1272,17 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
 
 // ─── payments tab ─────────────────────────────────────────────────────────────
 
-function PaymentsTab({ teamId }: { teamId: string }) {
+function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
-  const { user, team, teamRole } = useAuth()
-  const { data: integrations = [], isLoading } = useGatewayIntegrations(teamId)
+  const { user, team } = useAuth()
+  const {
+    data: integrations = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGatewayIntegrations(teamId, canEdit)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const { data: gatewayCurrency } = useGatewayCurrency(teamId)
 
@@ -1250,6 +1326,7 @@ function PaymentsTab({ teamId }: { teamId: string }) {
   }
 
   async function onSubmit(values: GatewayFormData) {
+    if (!canEdit) return
     setSaving(true)
     try {
       const config =
@@ -1302,15 +1379,20 @@ function PaymentsTab({ teamId }: { teamId: string }) {
   }
 
   async function handleToggleEnabled(item: TeamIntegration) {
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', item.id), {
-      enabled: !item.enabled,
-      updated_at: serverTimestamp(),
-    })
-    await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    if (!canEdit) return
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', item.id), {
+        enabled: !item.enabled,
+        updated_at: serverTimestamp(),
+      })
+      await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    } catch {
+      toast.error(t('saveError'))
+    }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || !canEdit) return
     try {
       await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', deleteTarget))
       await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
@@ -1339,14 +1421,35 @@ function PaymentsTab({ teamId }: { teamId: string }) {
         <div>
           <p className="text-sm font-medium">{t('paymentsGateway')}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsGatewayDescription')}</p>
+          {/* No owner-only note here: the body below says the stronger thing —
+              a non-owner cannot even SEE this list — and saying both would be
+              two lines of the same sentence. */}
         </div>
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1" />
-          {t('paymentsAddGateway')}
-        </Button>
+        {canEdit && (
+          <Button size="sm" onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1" />
+            {t('paymentsAddGateway')}
+          </Button>
+        )}
       </div>
 
-      {integrations.length === 0 ? (
+      {/* ABSENT-BECAUSE-FORBIDDEN is not absent-because-none. A manager cannot
+          read teams/{id}/integrations at all, so she used to be told "No payment
+          gateway configured" about a studio that may well have one — a false
+          statement, and one that invites her to go and configure a second
+          (UX-6). She is told what is actually true instead: the list is the
+          owner's to see. An owner whose read genuinely FAILS gets the error
+          block with a retry, for the same reason. */}
+      {!canEdit ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">
+          {t('paymentsHiddenOwnerOnly')}
+        </p>
+      ) : isError ? (
+        <QueryErrorState
+          onRetry={() => void refetch()}
+          detail={error instanceof Error ? error.message : null}
+        />
+      ) : integrations.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoGateway')}</p>
       ) : (
         <div className="divide-y border rounded-lg">
@@ -1392,13 +1495,9 @@ function PaymentsTab({ teamId }: { teamId: string }) {
           teamId={teamId}
           current={team?.default_currency}
           gatewayCurrency={gatewayCurrency}
-          canEdit={teamRole === 'owner'}
+          canEdit={canEdit}
         />
-        <PaymentModesCard
-          teamId={teamId}
-          current={team?.payment_modes}
-          canEdit={teamRole === 'owner'}
-        />
+        <PaymentModesCard teamId={teamId} current={team?.payment_modes} canEdit={canEdit} />
       </div>
 
       {/* Add/edit dialog */}
@@ -2020,6 +2119,11 @@ export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
   const { isInstalled } = useInstalledPlugins()
+  // ONE derivation for the whole page — every section below writes the team doc
+  // or an owner-only subcollection of it, and `team.settings` is the capability
+  // that is owner-only by construction (OWNER_ONLY in shared/types/capabilities).
+  const { can } = useCapabilities()
+  const canEdit = can('team.settings')
   const t = useTranslations('TeamSettings')
   // The active section is driven entirely by ?tab= — the settings rail is the tab
   // bar now (each team sub-section is its own rail item). Deep-links like the contact
@@ -2069,7 +2173,7 @@ export default function TeamSettingsPage() {
 
       {/* Payments + Outreach manage their own stacked cards; the rest share one wrapper. */}
       {tab === 'payments' ? (
-        <PaymentsTab teamId={currentTeamId} />
+        <PaymentsTab teamId={currentTeamId} canEdit={canEdit} />
       ) : tab === 'outreach' ? (
         <OutreachTab teamId={currentTeamId} team={team} />
       ) : (
@@ -2077,13 +2181,15 @@ export default function TeamSettingsPage() {
           <CardContent className="pt-6">
             {tab === 'general' && (
               <>
-                <GeneralForm team={team} teamId={currentTeamId} />
-                <EngagementThresholdsForm team={team} teamId={currentTeamId} />
+                <GeneralForm team={team} teamId={currentTeamId} canEdit={canEdit} />
+                <EngagementThresholdsForm team={team} teamId={currentTeamId} canEdit={canEdit} />
                 <TabBarPreference />
               </>
             )}
-            {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
-            {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
+            {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} canEdit={canEdit} />}
+            {tab === 'ranking' && (
+              <RankingTab teamId={currentTeamId} team={team} canEdit={canEdit} />
+            )}
             {tab === 'custom-fields' && isInstalled('custom-fields') && (
               <CustomFieldsTab teamId={currentTeamId} team={team} />
             )}

@@ -1376,6 +1376,8 @@
     "saving": "Saving…",
     "saved": "Saved!",
     "saveError": "Couldn't save. Please try again.",
+    "ownerOnly": "Only the team owner can change this.",
+    "paymentsHiddenOwnerOnly": "Payment gateways are visible to the team owner only.",
     "bookingLink": "Booking link",
     "membershipLink": "Subscription link",
     "customLinks": "Custom links",
