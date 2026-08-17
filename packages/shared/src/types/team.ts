@@ -428,6 +428,21 @@ export interface BookingSettings {
    *  authoritatively by the booking callables — see `isPastBookingCutoff`
    *  (types/session.ts); this setting only configures the threshold. */
   cutoffMinutes?: number
+  /**
+   * Whether the studio uses waitlists at all — a VISIBILITY switch, not an
+   * enforcement one.
+   *
+   * Off (and absent, the default) hides the per-activity waitlist toggle, so a
+   * new studio never meets the concept while setting up its first class. Most
+   * will never want a queue, and the ones who do go looking for it.
+   *
+   * It deliberately does NOT close queues that already exist: an activity keeps
+   * its stored `waitlistEnabled`, and people already waiting keep their place
+   * and their offers. Turning this off declutters the authoring surface; it does
+   * not strand somebody who is third in line. Same shape as the plan gate on the
+   * same control, and as the plugin gates in connect/pluginGate.test.ts.
+   */
+  waitlistEnabled?: boolean
   /** How long a waitlist offer stays claimable, in minutes. Absent = 120.
    *  It is a MAXIMUM, not a guarantee: the claim window is also clamped by the
    *  booking cutoff and the session start, and an offer is simply not made when

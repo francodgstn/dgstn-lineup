@@ -193,6 +193,29 @@ export default function DocumentDetailPage() {
     [linkOptions, documentId, t],
   )
 
+  // Ordinary web links — separate from document links: this one stores the URL
+  // the author typed, which is right for an external address and wrong for
+  // another Linyup document (whose URL is rebuilt from a reference at render).
+  const webLinks = useMemo(
+    () => ({
+      labels: {
+        toolbar: t('webLinkToolbar'),
+        slashTitle: t('webLinkSlashTitle'),
+        title: t('webLinkTitle'),
+        description: t('webLinkDescription'),
+        urlLabel: t('webLinkUrlLabel'),
+        urlPlaceholder: t('webLinkUrlPlaceholder'),
+        textLabel: t('webLinkTextLabel'),
+        textPlaceholder: t('webLinkTextPlaceholder'),
+        invalidUrl: t('webLinkInvalidUrl'),
+        cancel: t('cancel'),
+        submit: t('webLinkSubmit'),
+        remove: t('webLinkRemove'),
+      },
+    }),
+    [t],
+  )
+
   if (isLoading || !draft) {
     return (
       <div className="max-w-3xl space-y-6">
@@ -395,6 +418,7 @@ export default function DocumentDetailPage() {
               placeholder={t('contentPlaceholder')}
               onUploadImage={uploadBodyImage}
               documentLinks={documentLinks}
+              webLinks={webLinks}
             />
           </div>
         ) : (

@@ -1227,18 +1227,18 @@
     "emptyAction": "Créer votre première activité",
     "accessLabel": "Qui peut réserver",
     "access_open": "Ouvert à tous",
-    "access_open_desc": "Tout le monde peut réserver — un nouveau venu devient un contact d'essai.",
+    "access_open_desc": "Tout le monde peut réserver gratuitement — sans abonnement ni paiement. Un nouveau venu devient un contact d’essai.",
     "access_members": "Membres uniquement",
-    "access_members_desc": "Seuls les membres inscrits peuvent réserver (pas de comptes d'essai).",
+    "access_members_desc": "Les membres réservent avec leur abonnement. Un nouveau venu peut tout de même réserver un cours si « Essai gratuit pour les nouveaux » est activé ci-dessous.",
     "access_subscription": "Abonnements spécifiques",
-    "access_subscription_desc": "Seuls les membres possédant l'un des abonnements sélectionnés peuvent réserver.",
+    "access_subscription_desc": "Seuls les membres possédant l’un des abonnements sélectionnés peuvent réserver. Un nouveau venu peut tout de même réserver un cours si « Essai gratuit pour les nouveaux » est activé ci-dessous.",
     "accessNoSubs": "Aucun type d’abonnement — créez-les sous Abonnements et affiliations.",
     "accessBadgeSubscription": "Abonnement",
     "dropInLabel": "Proposer le drop-in (paiement à la séance)",
     "dropInPricePlaceholder": "p. ex. 25",
     "dropInHelp": "Les contacts non couverts peuvent payer ce montant pour réserver une séance. Facturé via votre compte de paiement ; aucun abonnement n'est créé.",
     "fieldTrialEnabled": "Essai gratuit pour les nouveaux venus",
-    "trialEnabledHint": "Un nouveau venu peut réserver l'un de ces cours à l'essai, même s'il est réservé aux membres.",
+    "trialEnabledHint": "Une personne qui vient pour la première fois peut réserver l’un de ces cours à l’essai, même s’il est réservé aux membres ou à certains abonnements.",
     "trialPriceLabel": "Prix de l'essai",
     "trialPriceHint": "Laissez vide pour un essai gratuit, ou fixez un tarif réduit pour le premier cours d'un nouveau venu.",
     "trialPricePlaceholder": "p. ex. 15",
@@ -1298,7 +1298,8 @@
     "waitlistEnabledLabel": "Liste d'attente",
     "waitlistEnabledHint": "Quand une séance est complète, les visiteurs rejoignent une file au lieu d’aboutir à une impasse. Dès qu’une place se libère, elle est proposée automatiquement à la première personne.",
     "waitlistRequiresCapacity": "N’a d’effet que sur les séances avec une limite de participants — une séance sans limite n’est jamais complète.",
-    "waitlistRequiresPlan": "Disponible à partir de la formule {plan}."
+    "waitlistRequiresPlan": "Disponible à partir de la formule {plan}.",
+    "level_none": "Non précisé"
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -2506,7 +2507,9 @@
     "tip_pinNav_body": "Survolez un élément du menu et cliquez sur l'épingle — la page apparaît dans les Raccourcis. Les pages récemment ouvertes s'y affichent aussi.",
     "tabOnboarding": "Configuration",
     "dismiss": "Masquer",
-    "optional": "facultatif"
+    "optional": "facultatif",
+    "tip_waitlist_title": "Saviez-vous que vous pouvez gérer une liste d’attente ?",
+    "tip_waitlist_body": "Quand un cours est complet, les clients peuvent faire la queue au lieu de se heurter à une impasse — et la première personne se voit proposer la place automatiquement en cas d’annulation. Activez les listes d’attente dans Réglages → Réservation."
   },
   "Website": {
     "sectionPlaces": "Lieux",
@@ -3771,7 +3774,18 @@
     "linkRepin": "cliquer pour suivre la dernière version",
     "linkInsert": "Insérer le lien",
     "viewingVersion": "Vous lisez la version {version} de ce document, pas la version actuelle.",
-    "viewLatestVersion": "Lire la version actuelle"
+    "viewLatestVersion": "Lire la version actuelle",
+    "webLinkToolbar": "Insérer un lien",
+    "webLinkSlashTitle": "Lien",
+    "webLinkTitle": "Insérer un lien",
+    "webLinkDescription": "Créez un lien vers n’importe quelle adresse web.",
+    "webLinkUrlLabel": "Adresse",
+    "webLinkUrlPlaceholder": "https://exemple.ch",
+    "webLinkTextLabel": "Texte du lien",
+    "webLinkTextPlaceholder": "Ce que le lecteur voit",
+    "webLinkInvalidUrl": "Saisissez une adresse web commençant par http:// ou https://",
+    "webLinkSubmit": "Insérer",
+    "webLinkRemove": "Supprimer le lien"
   },
   "OfferAffiliations": {
     "title": "Affiliations",
@@ -4181,7 +4195,9 @@
     "noShowThresholdHint": "Des frais sont créés dès qu'un contact atteint ce nombre de non-présentations ; son compteur est ensuite réinitialisé.",
     "waitlistClaimMinutesLabel": "Délai pour accepter une place",
     "waitlistClaimMinutesHint": "Combien de temps une personne a pour accepter une place proposée avant qu’elle ne passe à la suivante. Toujours raccourci par la clôture des réservations et le début de la séance — une place libérée trop tard reste libre au lieu d’être proposée.",
-    "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 heure} =1440 {1 jour} other {# minutes}}"
+    "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 heure} =1440 {1 jour} other {# minutes}}",
+    "toggleWaitlistEnabledLabel": "Listes d’attente",
+    "toggleWaitlistEnabledDesc": "Permettez aux clients de faire la queue pour un cours complet et de se voir proposer une place dès qu’elle se libère. Activez pour afficher l’option sur chaque activité."
   },
   "SettingsPlaces": {
     "pageTitle": "Lieux",

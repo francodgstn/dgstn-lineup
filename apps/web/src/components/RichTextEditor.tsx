@@ -12,12 +12,13 @@ import { DragHandle } from '@tiptap/extension-drag-handle-react'
 import {
   Bold, Italic, Strikethrough, Type, Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks, Quote, Code, Minus, ImageIcon, GripVertical,
-  Table as TableIcon, Trash2, Link2, Pin, PinOff, Unlink,
+  Table as TableIcon, Trash2, Link2, Link as LinkIcon, Pin, PinOff, Unlink,
 } from 'lucide-react'
 import { SlashCommand } from './editor/SlashCommand'
 import { SlashCommandList, type SlashItem, type SlashCommandListRef } from './editor/SlashCommandList'
 import { ResizableImage } from './editor/ResizableImage'
 import { DocumentLink } from './editor/DocumentLink'
+import { LinkDialog, type LinkDialogLabels } from './editor/LinkDialog'
 import {
   DocumentLinkPicker,
   type DocumentLinkLabels,
@@ -72,12 +73,16 @@ function Toolbar({
   editor,
   onImage,
   onDocumentLink,
+  onWebLink,
   documentLinks,
+  webLinks,
 }: {
   editor: Editor | null
   onImage?: () => void
   onDocumentLink?: () => void
+  onWebLink?: () => void
   documentLinks?: DocumentLinksConfig
+  webLinks?: { labels: LinkDialogLabels & { toolbar: string; slashTitle: string } }
 }) {
   if (!editor) return null
   // Start a fresh chain on every click — a cached chain captures a stale state
@@ -138,6 +143,15 @@ function Toolbar({
       {onImage && (
         <ToolbarButton title="Image" onClick={onImage}>
           <ImageIcon className="h-3.5 w-3.5" />
+        </ToolbarButton>
+      )}
+      {onWebLink && (
+        <ToolbarButton
+          title={webLinks?.labels.toolbar ?? 'Link'}
+          active={editor.isActive('link')}
+          onClick={onWebLink}
+        >
+          <LinkIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
       )}
       {onDocumentLink && (
@@ -237,6 +251,8 @@ function buildSlashItems(opts: {
   requestImage?: () => void
   requestDocumentLink?: () => void
   documentLinkTitle?: string
+  requestWebLink?: () => void
+  webLinkTitle?: string
 }): SlashItem[] {
   const items: SlashItem[] = [
     { title: 'Text', icon: Type, command: ({ editor, range }) => (editor as Editor).chain().focus().deleteRange(range as Range).setNode('paragraph').run() },
@@ -258,6 +274,16 @@ function buildSlashItems(opts: {
       command: ({ editor, range }) => {
         (editor as Editor).chain().focus().deleteRange(range as Range).run()
         opts.requestImage!()
+      },
+    })
+  }
+  if (opts.requestWebLink) {
+    items.push({
+      title: opts.webLinkTitle ?? 'Link',
+      icon: LinkIcon,
+      command: ({ editor, range }) => {
+        (editor as Editor).chain().focus().deleteRange(range as Range).run()
+        opts.requestWebLink!()
       },
     })
   }
@@ -324,6 +350,7 @@ export const RichTextEditor = memo(function RichTextEditor({
   minHeight = 220,
   onUploadImage,
   documentLinks,
+  webLinks,
 }: {
   /** Initial HTML. Editor is uncontrolled after mount — remount via `key` to reset. */
   value: string
@@ -334,15 +361,19 @@ export const RichTextEditor = memo(function RichTextEditor({
   onUploadImage?: (file: File) => Promise<string>
   /** When provided, enables linking to another document (slash + toolbar + pin). */
   documentLinks?: DocumentLinksConfig
+  /** When provided, enables ordinary web links (slash + toolbar). */
+  webLinks?: { labels: LinkDialogLabels & { toolbar: string; slashTitle: string } }
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
   // DragHandle touches the DOM/floating-ui — only mount it client-side.
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const requestImage = onUploadImage ? () => fileRef.current?.click() : undefined
   const requestDocumentLink = documentLinks ? () => setPickerOpen(true) : undefined
+  const requestWebLink = webLinks ? () => setLinkOpen(true) : undefined
 
   const editor = useEditor({
     extensions: [
@@ -365,6 +396,8 @@ export const RichTextEditor = memo(function RichTextEditor({
               requestImage,
               requestDocumentLink,
               documentLinkTitle: documentLinks?.labels.slashTitle,
+              requestWebLink,
+              webLinkTitle: webLinks?.labels.slashTitle,
             }).filter((i) => i.title.toLowerCase().includes(query.toLowerCase())),
           render: makeSlashRenderer,
         },
@@ -415,7 +448,9 @@ export const RichTextEditor = memo(function RichTextEditor({
         editor={editor}
         onImage={requestImage}
         onDocumentLink={requestDocumentLink}
+        onWebLink={requestWebLink}
         documentLinks={documentLinks}
+        webLinks={webLinks}
       />
       <div className="relative">
         {mounted && editor && (
@@ -429,6 +464,35 @@ export const RichTextEditor = memo(function RichTextEditor({
       </div>
       {onUploadImage && (
         <input ref={fileRef} type="file" accept="image/*" onChange={handleImageFile} className="hidden" />
+      )}
+      {webLinks && editor && (
+        <LinkDialog
+          open={linkOpen}
+          onOpenChange={setLinkOpen}
+          labels={webLinks.labels}
+          editing={editor.isActive('link')}
+          initialUrl={(editor.getAttributes('link').href as string | undefined) ?? ''}
+          // Seed with the selected words when there are any, so "select text →
+          // link it" works the way it does everywhere else.
+          initialText={editor.state.doc.textBetween(
+            editor.state.selection.from,
+            editor.state.selection.to
+          )}
+          onRemove={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()}
+          onSubmit={(url, text) => {
+            const chain = editor.chain().focus()
+            // An existing link: replace its whole extent, so editing the text of
+            // a link does not leave half of the old words behind.
+            if (editor.isActive('link')) chain.extendMarkRange('link')
+            chain
+              .insertContent({
+                type: 'text',
+                text,
+                marks: [{ type: 'link', attrs: { href: url, target: '_blank', rel: 'noopener noreferrer nofollow' } }],
+              })
+              .run()
+          }}
+        />
       )}
       {documentLinks && (
         <DocumentLinkPicker

@@ -1227,18 +1227,18 @@
     "emptyAction": "Erste Aktivität erstellen",
     "accessLabel": "Wer kann buchen",
     "access_open": "Für alle offen",
-    "access_open_desc": "Jeder kann buchen — Neulinge werden zu Probe-Kontakten.",
+    "access_open_desc": "Alle können gratis buchen — keine Mitgliedschaft, keine Zahlung. Neue Personen werden zu Trial-Kontakten.",
     "access_members": "Nur Mitglieder",
-    "access_members_desc": "Nur registrierte Mitglieder können buchen (keine Probe-Konten).",
+    "access_members_desc": "Mitglieder buchen mit ihrer Mitgliedschaft. Neue Personen können trotzdem eine Klasse buchen, wenn unten „Gratis-Trial für Neue“ aktiv ist.",
     "access_subscription": "Bestimmte Abos",
-    "access_subscription_desc": "Nur Mitglieder mit einem der ausgewählten Abos können buchen.",
+    "access_subscription_desc": "Nur Mitglieder mit einem der ausgewählten Abos können buchen. Neue Personen können trotzdem eine Klasse buchen, wenn unten „Gratis-Trial für Neue“ aktiv ist.",
     "accessNoSubs": "Noch keine Abo-Typen — erstelle sie unter Abos & Affiliationen.",
     "accessBadgeSubscription": "Abonnement",
     "dropInLabel": "Drop-in anbieten (pro Kurs zahlen)",
     "dropInPricePlaceholder": "z. B. 25",
     "dropInHelp": "Kontakte ohne Berechtigung können dies für die Buchung eines einzelnen Kurses zahlen. Abrechnung über dein Zahlungskonto; es wird keine Mitgliedschaft erstellt.",
     "fieldTrialEnabled": "Schnupperstunde für Neulinge",
-    "trialEnabledHint": "Ein Neuling kann einen dieser Kurse zur Probe buchen, auch wenn er nur für Mitglieder ist.",
+    "trialEnabledHint": "Wer zum ersten Mal kommt, kann eine dieser Klassen als Trial buchen — auch wenn sie auf Mitglieder oder bestimmte Abos beschränkt ist.",
     "trialPriceLabel": "Preis der Schnupperstunde",
     "trialPriceHint": "Leer lassen für eine kostenlose Schnupperstunde, oder einen reduzierten Preis für die erste Kursteilnahme eines Neulings festlegen.",
     "trialPricePlaceholder": "z. B. 15",
@@ -1298,7 +1298,8 @@
     "waitlistEnabledLabel": "Warteliste",
     "waitlistEnabledHint": "Ist eine Einheit ausgebucht, landen Besucher auf einer Warteliste statt in einer Sackgasse. Wird ein Platz frei, wird er automatisch der ersten Person angeboten.",
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
-    "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}."
+    "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
+    "level_none": "Nicht angegeben"
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -2506,7 +2507,9 @@
     "tip_pinNav_body": "Fahre über einen Menüpunkt und klicke auf die Stecknadel — die Seite landet unter Verknüpfungen. Zuletzt geöffnete Seiten erscheinen dort ebenfalls.",
     "tabOnboarding": "Einrichtung",
     "dismiss": "Ausblenden",
-    "optional": "optional"
+    "optional": "optional",
+    "tip_waitlist_title": "Wusstest du, dass du Wartelisten führen kannst?",
+    "tip_waitlist_body": "Wenn eine Klasse voll ist, können sich Kundinnen und Kunden anstellen, statt vor verschlossener Tür zu stehen — und wer zuerst wartet, erhält den Platz automatisch, sobald jemand absagt. Aktiviere Wartelisten unter Einstellungen → Buchung."
   },
   "Website": {
     "sectionPlaces": "Orte",
@@ -3771,7 +3774,18 @@
     "linkRepin": "klicken, um stattdessen der neuesten Version zu folgen",
     "linkInsert": "Link einfügen",
     "viewingVersion": "Du liest Version {version} dieses Dokuments, nicht die aktuelle.",
-    "viewLatestVersion": "Aktuelle Version lesen"
+    "viewLatestVersion": "Aktuelle Version lesen",
+    "webLinkToolbar": "Link einfügen",
+    "webLinkSlashTitle": "Link",
+    "webLinkTitle": "Link einfügen",
+    "webLinkDescription": "Verlinke eine beliebige Webadresse.",
+    "webLinkUrlLabel": "Adresse",
+    "webLinkUrlPlaceholder": "https://beispiel.ch",
+    "webLinkTextLabel": "Linktext",
+    "webLinkTextPlaceholder": "Was die Leserin sieht",
+    "webLinkInvalidUrl": "Gib eine Webadresse ein, die mit http:// oder https:// beginnt",
+    "webLinkSubmit": "Einfügen",
+    "webLinkRemove": "Link entfernen"
   },
   "OfferAffiliations": {
     "title": "Affiliationen",
@@ -4181,7 +4195,9 @@
     "noShowThresholdHint": "Sobald ein Kontakt diese Anzahl an No-Shows erreicht, wird eine Gebühr erstellt und der Zähler zurückgesetzt.",
     "waitlistClaimMinutesLabel": "Frist für Wartelisten-Angebote",
     "waitlistClaimMinutesHint": "Wie lange jemand Zeit hat, einen angebotenen Platz anzunehmen, bevor er an die nächste Person geht. Wird immer durch Buchungsschluss und Beginn der Einheit verkürzt — ein Platz, der zu kurz vor Beginn frei wird, bleibt frei statt angeboten zu werden.",
-    "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 Stunde} =1440 {1 Tag} other {# Minuten}}"
+    "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 Stunde} =1440 {1 Tag} other {# Minuten}}",
+    "toggleWaitlistEnabledLabel": "Wartelisten",
+    "toggleWaitlistEnabledDesc": "Lass Kundinnen und Kunden sich für eine volle Klasse anstellen und einen Platz erhalten, sobald einer frei wird. Aktivieren, um die Wartelisten-Option bei jeder Aktivität zu zeigen."
   },
   "SettingsPlaces": {
     "pageTitle": "Standorte",

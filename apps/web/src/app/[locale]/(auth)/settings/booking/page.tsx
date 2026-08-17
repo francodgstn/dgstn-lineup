@@ -44,6 +44,7 @@ function createBookingSchema(t: ReturnType<typeof useTranslations>) {
     ctaUrl: createSafeUrlSchema(t),
     ctaLabel: z.string().optional(),
     appointmentsEnabled: z.boolean().optional(),
+    waitlistEnabled: z.boolean().optional(),
     cutoffMinutes: z.number().int().min(0).max(10080),
     // A MAXIMUM, not a guarantee: the claim window is also clamped by the
     // cutoff above and by the session start, and an offer is simply not made
@@ -97,6 +98,7 @@ function getDefaults(team: Team | null): FormData {
       ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
       appointmentsEnabled: rawBooking.appointmentsEnabled === true,
+      waitlistEnabled: rawBooking.waitlistEnabled === true,
       cutoffMinutes,
       waitlistClaimMinutes,
     },
@@ -327,6 +329,11 @@ function BookingForm({
             label: t('toggleAppointmentsEnabledLabel'),
             desc: t('toggleAppointmentsEnabledDesc'),
           },
+          {
+            name: 'booking.waitlistEnabled' as const,
+            label: t('toggleWaitlistEnabledLabel'),
+            desc: t('toggleWaitlistEnabledDesc'),
+          },
         ] as const
       ).map(({ name, label, desc }) => (
         <div key={name} className="flex items-center justify-between rounded-lg border p-3">
@@ -427,6 +434,7 @@ export default function BookingSettingsPage() {
       ctaUrl: data.booking.ctaUrl || null,
       ctaLabel: data.booking.ctaLabel || null,
       appointmentsEnabled: data.booking.appointmentsEnabled ?? false,
+      waitlistEnabled: data.booking.waitlistEnabled ?? false,
       cutoffMinutes: data.booking.cutoffMinutes,
       waitlistClaimMinutes: data.booking.waitlistClaimMinutes,
     }

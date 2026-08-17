@@ -72,6 +72,33 @@ See `packages/shared/src/utils/documentLink.ts`.
 - Earlier in the session: Stripe Dahlia field moves, a Space "my courses" 403,
   and the appointment picker ignoring the signed-in contact session.
 
+### Authoring and defaults
+
+- **Ordinary web links in the document editor.** StarterKit already carried the
+  `link` mark, so pasted URLs became links — there was just no way to write one
+  with your own words. `http(s)` only.
+- **Activity `level` is optional.** It was mandatory only because the legacy
+  import always had a value; the type and the list badge already treated it as
+  absent-able. Forcing a choice made studios pick "All levels" to mean "not
+  applicable" — two statements collapsed into one.
+- **New-activity defaults changed** to `accessTier: 'members'` and
+  `autoConfirm: true`. `resolveAutoConfirm` was deliberately NOT touched: it
+  answers what a STORED doc means, and flipping its fallback would silently
+  reinterpret every existing class that never set the field.
+- **Access-tier copy corrected.** "Open to everyone" now says it means free
+  (`resolvePaymentOptions` short-circuits `open` to `covered`), and both gated
+  tiers now say a newcomer can still take a trial — the old copy claimed
+  members-only meant "no trial accounts", which the trial toggle contradicts.
+
+### Waitlists are now opt-in per studio
+
+`BookingSettings.waitlistEnabled` (Settings → Booking, off by default) controls
+whether the per-activity waitlist toggle is shown at all. It is a VISIBILITY
+switch: turning it off never closes an existing queue or strips an activity's
+stored flag, exactly like the plan gate on the same control. A dashboard tip is
+the main way anyone discovers the feature, since the control is hidden until
+asked for.
+
 ### Sidebar
 
 Top of the sidebar is now: Linyup → the studio's name with its QR → search plus

@@ -135,6 +135,9 @@ function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[]
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const LEVELS = ['all', 'beginners', 'intermediate', 'advanced'] as const
+// Radix Select cannot carry an empty string as a value, so "not specified" needs
+// a sentinel. It is never stored: the submit maps it back to null.
+const LEVEL_NONE = '__none__'
 const ACTIVITY_TYPES: ActivityType[] = ['class', 'appointment']
 // APPOINTMENT-ONLY: the bookable session lengths an appointment activity offers.
 const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
@@ -163,7 +166,12 @@ function createActivitySchema(
     // save rather than blocking it.
     bookingQuestions: z.array(z.any()),
     type: z.enum(['class', 'appointment'] as const).default('class'),
-    level: z.enum(LEVELS),
+    // OPTIONAL. It was mandatory only because the legacy import always had a
+    // value; `Activity.level` has always been optional in the type, and the list
+    // badge already renders nothing when it is absent. Small studios mostly do
+    // not grade their classes, and forcing a choice made them pick "All levels"
+    // to mean "not applicable" — two different statements collapsed into one.
+    level: z.enum(LEVELS).optional(),
     color: z.string().optional(),
     // CLASS-ONLY paid-access gate (supersedes the legacy isFreeTrial toggle;
     // 'open' === free trial). Appointments dropped this entirely — the price is
@@ -273,7 +281,20 @@ function ActivityDialog({
   // below the tier even if the flag were set some other way.
   const { isAtLeast } = usePlan()
   const planName = usePlanName()
+  const { team } = useAuth()
   const waitlistAllowed = isAtLeast(WAITLIST_MIN_PLAN)
+  // TWO different questions, deliberately not fused. `waitlistAllowed` is "may
+  // this studio have queues at all" (plan). `waitlistOffered` is "does this
+  // studio use them" — a team-level switch in Settings → Booking, off by
+  // default, so a new studio never meets the concept while setting up its first
+  // class. Most will never want a queue; the ones who do go looking.
+  //
+  // It hides the CONTROL, not the feature: an activity keeps whatever flag it
+  // already had, and anyone already in a queue keeps their place. Same shape as
+  // the plan carry-through below.
+  const waitlistOffered =
+    (team?.settings as { booking?: { waitlistEnabled?: boolean } } | undefined)?.booking
+      ?.waitlistEnabled === true
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
@@ -307,7 +328,7 @@ function ActivityDialog({
           cancellationPolicy: editing.cancellationPolicy ?? '',
           bookingQuestions: editing.bookingQuestions ?? [],
           type: (editing.type ?? 'class') as ActivityType,
-          level: editing.level ?? 'all',
+          level: editing.level ?? undefined,
           color: editing.color ?? '',
           accessTier: initialRule.type,
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
@@ -324,13 +345,23 @@ function ActivityDialog({
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
           meetingPoint: '', whatsIncluded: '', whatsNotIncluded: '', faq: '', cancellationPolicy: '',
           bookingQuestions: [],
-          type: 'class' as ActivityType, level: 'all',
-          color: DEFAULT_ACCENT, accessTier: 'open', subscriptionTypeIds: [],
+          type: 'class' as ActivityType, level: undefined,
+          // Defaults for a NEW activity. 'members' rather than 'open': a studio
+          // sells memberships, so a class its members can book is the ordinary
+          // case, and 'open' means free for anyone (resolvePaymentOptions
+          // short-circuits it to `covered`) — the wrong thing to land on by
+          // accident. A newcomer can still be let in via "Free trial for
+          // newcomers" below, which is what makes 'members' safe as a default.
+          color: DEFAULT_ACCENT, accessTier: 'members', subscriptionTypeIds: [],
           dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
           waitlistEnabled: false,
           durations: [],
           memberBenefit: defaultBenefitFormValue(),
-          autoConfirm: resolveAutoConfirm({ type: 'class' }),
+          // TRUE for a new activity of either kind. `resolveAutoConfirm` is left
+          // alone on purpose: it answers what a STORED doc means, and flipping
+          // its fallback would silently reinterpret every existing class that
+          // never set the field. This is only the form's starting point.
+          autoConfirm: true,
         },
   })
   const type = watch('type')
@@ -365,8 +396,11 @@ function ActivityDialog({
   useEffect(() => {
     if (prevTypeRef.current === type) return
     prevTypeRef.current = type
-    if (!autoConfirmTouched) setValue('autoConfirm', resolveAutoConfirm({ type }))
-  }, [type, autoConfirmTouched, setValue])
+    // A NEW activity keeps the true default across a type flip; an existing one
+    // re-derives from what its kind means, which is the stored-doc question.
+    if (!autoConfirmTouched)
+      setValue('autoConfirm', editing ? resolveAutoConfirm({ type }) : true)
+  }, [type, autoConfirmTouched, setValue, editing])
 
   // Inline quick-create: "create or link a subscription to this activity" without
   // leaving the form. Writes a minimal type (pricing is configured later in the
@@ -440,7 +474,7 @@ function ActivityDialog({
         .filter((q: FormField) => q?.label?.trim())
         .map((q: FormField, i: number) => ({ ...q, label: q.label.trim(), order: i })),
       type: data.type,
-      level: data.level,
+      level: data.level ?? null,
       color: data.color ?? '',
       autoConfirm: data.autoConfirm,
     }
@@ -483,7 +517,13 @@ function ActivityDialog({
       // Below the tier the stored value is carried through untouched rather than
       // read off a locked control: the gate stops a queue being OPENED, it does
       // not quietly strip one an activity already had (see WAITLIST_MIN_PLAN).
-      waitlistEnabled: waitlistAllowed ? data.waitlistEnabled : (editing?.waitlistEnabled ?? false),
+      // Carried through untouched whenever the control was not rendered — below
+      // the plan tier, or with the studio-level switch off. Neither gate strips
+      // a queue an activity already had; they stop one being OPENED.
+      waitlistEnabled:
+        waitlistAllowed && (waitlistOffered || editing?.waitlistEnabled === true)
+          ? data.waitlistEnabled
+          : (editing?.waitlistEnabled ?? false),
       durations: null,
       memberBenefit: data.dropInEnabled ? toBenefitPayload(data.memberBenefit) : null,
     }
@@ -654,15 +694,21 @@ function ActivityDialog({
                 name="level"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value ?? LEVEL_NONE}
+                    onValueChange={(v) => field.onChange(v === LEVEL_NONE ? undefined : v)}
+                  >
                     <SelectTrigger className="w-44">
                       <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value
-                          ? t(`level_${field.value}` as const)
-                          : <span className="text-muted-foreground">—</span>}
+                        {field.value ? (
+                          t(`level_${field.value}` as const)
+                        ) : (
+                          <span className="text-muted-foreground">{t('level_none')}</span>
+                        )}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={LEVEL_NONE}>{t('level_none')}</SelectItem>
                       {LEVELS.map((l) => (
                         <SelectItem key={l} value={l}>{t(`level_${l}` as const)}</SelectItem>
                       ))}
@@ -738,7 +784,7 @@ function ActivityDialog({
                 open one all fill up the same way. Appointments have none: an
                 appointment session does not exist until it is booked, so
                 "this one is full" has no meaning there. */}
-            {type === 'class' && (
+            {type === 'class' && (waitlistOffered || editing?.waitlistEnabled === true) && (
               <div className="p-3 space-y-2">
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0 pr-4">

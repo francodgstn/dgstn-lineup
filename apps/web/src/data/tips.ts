@@ -14,4 +14,8 @@ export const TIPS: DiscoverTip[] = [
   { id: 'recurring', icon: 'CalendarClock', href: '/schedule' },
   // No href — the tip is about the sidebar itself (pin from any menu row).
   { id: 'pinNav', icon: 'Pin' },
+  // Waitlists are off by default and their per-activity toggle is hidden until
+  // the studio switches them on, so this tip is the main way anyone finds out
+  // the feature exists. It deep-links to the switch that reveals it.
+  { id: 'waitlist', icon: 'ListOrdered', href: '/settings/booking' },
 ]

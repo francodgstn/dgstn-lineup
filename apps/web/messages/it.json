@@ -1227,18 +1227,18 @@
     "emptyAction": "Crea la tua prima attività",
     "accessLabel": "Chi può prenotare",
     "access_open": "Aperto a tutti",
-    "access_open_desc": "Chiunque può prenotare — un nuovo arrivato diventa un contatto di prova.",
+    "access_open_desc": "Chiunque può prenotare gratuitamente — nessun abbonamento e nessun pagamento. Chi è nuovo diventa un contatto di prova.",
     "access_members": "Solo membri",
-    "access_members_desc": "Solo i membri registrati possono prenotare (nessun account di prova).",
+    "access_members_desc": "I membri prenotano con il loro abbonamento. Chi è nuovo può comunque prenotare una lezione se qui sotto è attivo “Prova gratuita per i nuovi”.",
     "access_subscription": "Abbonamenti specifici",
-    "access_subscription_desc": "Solo i membri con uno degli abbonamenti selezionati possono prenotare.",
+    "access_subscription_desc": "Possono prenotare solo i membri con uno degli abbonamenti selezionati. Chi è nuovo può comunque prenotare una lezione se qui sotto è attivo “Prova gratuita per i nuovi”.",
     "accessNoSubs": "Nessun tipo di abbonamento — creali in Abbonamenti e affiliazioni.",
     "accessBadgeSubscription": "Abbonamento",
     "dropInLabel": "Offri drop-in (paga a lezione)",
     "dropInPricePlaceholder": "es. 25",
     "dropInHelp": "I contatti non coperti possono pagare questo importo per prenotare una singola lezione. Addebitato tramite il tuo account di pagamento; nessun abbonamento viene creato.",
     "fieldTrialEnabled": "Prova gratuita per i nuovi arrivati",
-    "trialEnabledHint": "Un nuovo arrivato può prenotare una di queste lezioni come prova, anche se è riservata ai membri.",
+    "trialEnabledHint": "Chi viene per la prima volta può prenotare una di queste lezioni come prova, anche quando è riservata ai membri o ad abbonamenti specifici.",
     "trialPriceLabel": "Prezzo della prova",
     "trialPriceHint": "Lascia vuoto per una prova gratuita, oppure imposta un prezzo ridotto per la prima lezione di un nuovo arrivato.",
     "trialPricePlaceholder": "es. 15",
@@ -1298,7 +1298,8 @@
     "waitlistEnabledLabel": "Lista d'attesa",
     "waitlistEnabledHint": "Quando una sessione è al completo, i visitatori entrano in coda invece di trovare un vicolo cieco. Appena si libera un posto viene offerto automaticamente alla prima persona in lista.",
     "waitlistRequiresCapacity": "Ha effetto solo sulle sessioni con un limite di partecipanti — una sessione senza limite non è mai al completo.",
-    "waitlistRequiresPlan": "Disponibile dal piano {plan}."
+    "waitlistRequiresPlan": "Disponibile dal piano {plan}.",
+    "level_none": "Non specificato"
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -2506,7 +2507,9 @@
     "tip_pinNav_body": "Passa il mouse su una voce del menu e clicca sulla puntina — la pagina apparirà tra le Scorciatoie. Anche le pagine aperte di recente compaiono lì.",
     "tabOnboarding": "Configurazione",
     "dismiss": "Nascondi",
-    "optional": "facoltativo"
+    "optional": "facoltativo",
+    "tip_waitlist_title": "Lo sapevi che puoi gestire una lista d’attesa?",
+    "tip_waitlist_body": "Quando una lezione è piena, i clienti possono mettersi in coda invece di trovare la porta chiusa — e chi è primo riceve il posto automaticamente se qualcuno disdice. Attiva le liste d’attesa in Impostazioni → Prenotazioni."
   },
   "Website": {
     "sectionPlaces": "Sedi",
@@ -3771,7 +3774,18 @@
     "linkRepin": "clicca per seguire invece l’ultima versione",
     "linkInsert": "Inserisci collegamento",
     "viewingVersion": "Stai leggendo la versione {version} di questo documento, non quella attuale.",
-    "viewLatestVersion": "Leggi la versione attuale"
+    "viewLatestVersion": "Leggi la versione attuale",
+    "webLinkToolbar": "Inserisci collegamento",
+    "webLinkSlashTitle": "Collegamento",
+    "webLinkTitle": "Inserisci un collegamento",
+    "webLinkDescription": "Collega qualsiasi indirizzo web.",
+    "webLinkUrlLabel": "Indirizzo",
+    "webLinkUrlPlaceholder": "https://esempio.ch",
+    "webLinkTextLabel": "Testo del collegamento",
+    "webLinkTextPlaceholder": "Ciò che vede chi legge",
+    "webLinkInvalidUrl": "Inserisci un indirizzo web che inizi con http:// o https://",
+    "webLinkSubmit": "Inserisci",
+    "webLinkRemove": "Rimuovi collegamento"
   },
   "OfferAffiliations": {
     "title": "Affiliazioni",
@@ -4181,7 +4195,9 @@
     "noShowThresholdHint": "Una penale viene creata quando un contatto raggiunge questo numero di mancate presentazioni; il contatore viene poi azzerato.",
     "waitlistClaimMinutesLabel": "Tempo per accettare un posto",
     "waitlistClaimMinutesHint": "Quanto tempo ha una persona per accettare un posto offerto prima che passi alla successiva. Viene sempre accorciato dalla chiusura delle prenotazioni e dall’inizio della sessione: un posto che si libera troppo a ridosso resta libero invece di essere offerto.",
-    "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 ora} =1440 {1 giorno} other {# minuti}}"
+    "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 ora} =1440 {1 giorno} other {# minuti}}",
+    "toggleWaitlistEnabledLabel": "Liste d’attesa",
+    "toggleWaitlistEnabledDesc": "Consenti ai clienti di mettersi in coda per una lezione piena e ricevere un posto quando si libera. Attiva per mostrare l’opzione su ogni attività."
   },
   "SettingsPlaces": {
     "pageTitle": "Sedi",
