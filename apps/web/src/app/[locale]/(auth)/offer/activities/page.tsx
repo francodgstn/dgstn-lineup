@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import {
   collection, addDoc, updateDoc, doc, serverTimestamp, writeBatch,
 } from 'firebase/firestore'
@@ -531,19 +532,43 @@ function ActivityDialog({
 
   async function onSubmit(data: ActivityFormData) {
     if (editing) {
-      const updates: Record<string, unknown> = {
-        ...sharedPayload(data),
-        ...kindSpecificPayload(data),
+      // EDIT: the image upload (when there's a new file) runs BEFORE the
+      // write, so a throw anywhere in this block means updateDoc never ran —
+      // nothing was persisted. One generic message is correct here, and
+      // leaving the dialog open with the data intact is the right move: a
+      // retry re-attempts the same, still-unsaved, edit.
+      try {
+        const updates: Record<string, unknown> = {
+          ...sharedPayload(data),
+          ...kindSpecificPayload(data),
+        }
+        if (imageFile) {
+          const url = await uploadImage(editing.id)
+          if (url) updates.image_url = url
+        } else if (imagePreview === null && editing.image_url) {
+          updates.image_url = null
+        }
+        await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), updates)
+        await qc.invalidateQueries({ queryKey: ['activities'] })
+        toast.success(t('savedToast'))
+        onClose()
+      } catch {
+        toast.error(t('saveErrorToast'))
       }
-      if (imageFile) {
-        const url = await uploadImage(editing.id)
-        if (url) updates.image_url = url
-      } else if (imagePreview === null && editing.image_url) {
-        updates.image_url = null
-      }
-      await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), updates)
-    } else {
-      const newRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
+      return
+    }
+
+    // CREATE: addDoc runs BEFORE the image upload, so a failed upload leaves
+    // a REAL activity behind with no cover image — a partial success, not a
+    // failure. A generic "couldn't save" here would be actively wrong: the
+    // manager retries, and the retry creates a second, duplicate activity
+    // (this reproduced on a fresh account — Storage denied the upload while
+    // the Firestore write went through). So the doc write and the image step
+    // get their own try/catch, and each failure gets the message that
+    // matches what's actually true on the server.
+    let newRef: Awaited<ReturnType<typeof addDoc>> | null = null
+    try {
+      newRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
         ...sharedPayload(data),
         ...kindSpecificPayload(data),
         slug: slugify(data.name),
@@ -553,12 +578,29 @@ function ActivityDialog({
         order: nextOrder,
         created_at: serverTimestamp(),
       })
-      if (imageFile) {
+    } catch {
+      // Nothing exists yet — keep the dialog open with the data, retry is correct.
+      toast.error(t('saveErrorToast'))
+      return
+    }
+
+    // The activity document exists from here on. Never leave the dialog open
+    // in a way that resubmits this same form — that is what creates the
+    // duplicate.
+    if (imageFile) {
+      try {
         const url = await uploadImage(newRef.id)
         if (url) await updateDoc(newRef, { image_url: url })
+      } catch {
+        await qc.invalidateQueries({ queryKey: ['activities'] })
+        toast.error(t('createdImageErrorToast'))
+        onClose()
+        return
       }
     }
+
     await qc.invalidateQueries({ queryKey: ['activities'] })
+    toast.success(t('createdToast'))
     onClose()
   }
 

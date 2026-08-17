@@ -223,14 +223,33 @@ function SubscriptionCard({
   // Free teams have no subscription doc (or a cancelled one) — current-plan
   // detection for Free must come from the team doc, not the sub.
   const onFreePlan = team?.plan === 'free' && (!sub || status === 'cancelled')
+  // UX-7 interim: self-service signup provisions `teams/{id}.plan` +
+  // `.plan_status: 'trial'` directly and never creates a saas_subscriptions
+  // doc for it (lib/provisioning.ts) — until the trial converts (or the daily
+  // downgrade sweep drops it to Free), `sub` is null here even though the
+  // team is genuinely on a paid-tier trial. Fall back to the team doc so this
+  // card states the real plan instead of "No subscription", and so the plan
+  // grid below marks the right tile current.
+  const teamTrialFallback =
+    !sub && !!team?.plan && team.plan !== 'free' && team.plan_status === 'trial'
+  const teamTrialEndMs = teamTrialFallback ? toTs(team?.trial_ends_at) : null
+  const teamTrialEndDate = teamTrialEndMs ? new Date(teamTrialEndMs) : null
   const currentPlanRank =
     sub && status !== 'cancelled' && sub.plan
       ? planRank(sub.plan)
-      : onFreePlan
-        ? planRank('free')
-        : -1
+      : teamTrialFallback && team?.plan
+        ? planRank(team.plan)
+        : onFreePlan
+          ? planRank('free')
+          : -1
   const currentPlanId: SaasPlan | null =
-    sub && status !== 'cancelled' && sub.plan ? sub.plan : onFreePlan ? 'free' : null
+    sub && status !== 'cancelled' && sub.plan
+      ? sub.plan
+      : teamTrialFallback && team?.plan
+        ? team.plan
+        : onFreePlan
+          ? 'free'
+          : null
 
   async function handleUpgrade(plan: string) {
     setCheckoutLoading(plan)
@@ -454,6 +473,22 @@ function SubscriptionCard({
                 )}
               </div>
             </div>
+          ) : teamTrialFallback && team?.plan ? (
+            // UX-7 interim: no saas_subscriptions doc yet, but the team doc says
+            // this is a genuine paid-tier trial — say so instead of "No
+            // subscription" (see the derivation above for why sub can be null here).
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <StatusIcon status="trial" />
+                <span className="font-semibold">{planName(team.plan)} plan</span>
+                <Badge variant={statusVariant('trial')}>{t('trialStatusBadge')}</Badge>
+              </div>
+              {teamTrialEndDate && (
+                <p className="text-sm text-muted-foreground">
+                  {t('trialEnds', { date: teamTrialEndDate.toLocaleDateString() })}
+                </p>
+              )}
+            </div>
           ) : onFreePlan ? (
             <div className="flex items-center gap-3 flex-wrap">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -475,7 +510,11 @@ function SubscriptionCard({
           <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
               const isCurrent =
-                plan === 'free' ? onFreePlan : sub?.plan === plan && status !== 'cancelled'
+                plan === 'free'
+                  ? onFreePlan
+                  : teamTrialFallback
+                    ? team?.plan === plan
+                    : sub?.plan === plan && status !== 'cancelled'
               const isDowngrade = !isCurrent && currentPlanRank > planRank(plan)
               // Free is never "selected" via checkout — you land on it by
               // cancelling (or letting the trial lapse).

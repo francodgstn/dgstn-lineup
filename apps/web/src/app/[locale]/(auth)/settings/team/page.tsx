@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import {
   doc,
   getDoc,
@@ -246,6 +247,8 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
       await qc.invalidateQueries({ queryKey: ['team', teamId] })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
+    } catch {
+      toast.error(t('saveError'))
     } finally {
       setSaving(false)
     }
@@ -345,15 +348,19 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
 
   async function onSubmit(data: GeneralData) {
     if (slugError) return
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
-      name: data.name,
-      description: data.description ?? '',
-      sport_type: data.sport_type ?? '',
-      slug: data.slug,
-    })
-    await qc.invalidateQueries({ queryKey: ['team', teamId] })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
+        name: data.name,
+        description: data.description ?? '',
+        sport_type: data.sport_type ?? '',
+        slug: data.slug,
+      })
+      await qc.invalidateQueries({ queryKey: ['team', teamId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      toast.error(t('saveError'))
+    }
   }
 
   return (
@@ -483,20 +490,24 @@ function PresetDialog({
       message: data.message,
       show_in_app: data.show_in_app ?? false,
     }
-    if (editing) {
-      await updateDoc(
-        doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, editing.id),
-        payload
-      )
-    } else {
-      await addDoc(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION), {
-        ...payload,
-        created_at: serverTimestamp(),
-      })
+    try {
+      if (editing) {
+        await updateDoc(
+          doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, editing.id),
+          payload
+        )
+      } else {
+        await addDoc(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION), {
+          ...payload,
+          created_at: serverTimestamp(),
+        })
+      }
+      onSaved()
+      reset()
+      onOpenChange(false)
+    } catch {
+      toast.error(t('saveError'))
     }
-    onSaved()
-    reset()
-    onOpenChange(false)
   }
 
   return (
@@ -608,9 +619,14 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, id))
-    setDeleting(null)
-    invalidate()
+    try {
+      await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, id))
+      invalidate()
+    } catch {
+      toast.error(t('saveError'))
+    } finally {
+      setDeleting(null)
+    }
   }
 
   if (isLoading)
@@ -986,6 +1002,8 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { ranking_systems: next })
       qc.invalidateQueries({ queryKey: ['team', teamId] })
+    } catch {
+      toast.error(t('saveError'))
     } finally {
       setSaving(false)
     }
@@ -1276,6 +1294,8 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       }
       await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
       setShowDialog(false)
+    } catch {
+      toast.error(t('saveError'))
     } finally {
       setSaving(false)
     }
@@ -1291,9 +1311,14 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
   async function handleDelete() {
     if (!deleteTarget) return
-    await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', deleteTarget))
-    await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
-    setDeleteTarget(null)
+    try {
+      await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', deleteTarget))
+      await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    } catch {
+      toast.error(t('saveError'))
+    } finally {
+      setDeleteTarget(null)
+    }
   }
 
   if (isLoading)

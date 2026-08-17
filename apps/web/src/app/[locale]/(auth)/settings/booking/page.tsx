@@ -446,11 +446,14 @@ export default function BookingSettingsPage() {
         { type: 'team', slug: team?.slug ?? '', name: team?.name ?? '', bookingSettings },
         { merge: true }
       )
-      // ② Mirror onto the team doc (owner-only; re-hydrates this form). Non-fatal.
-      updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
+      // ② Mirror onto the team doc (owner-only; re-hydrates this form). FATAL: the
+      // server reads this mirror as authoritative for the booking cutoff
+      // (booking/index.ts, dropIn.ts), so a write that can't reach it (e.g. a
+      // manager-role user blocked by firestore.rules) must not report success —
+      // that used to be swallowed into a console.warn while a green toast fired,
+      // so the cutoff silently never applied (UX-6).
+      await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
         'settings.booking': bookingSettings,
-      }).catch((err) => {
-        console.warn('[booking save] team doc update failed (non-fatal):', err)
       })
       await qc.invalidateQueries({ queryKey: ['team', currentTeamId] })
       toast.success(t('toastSaved'))

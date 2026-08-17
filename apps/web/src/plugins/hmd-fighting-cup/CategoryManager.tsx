@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
@@ -139,6 +140,7 @@ function CategoryFormDialog({
 }
 
 export function CategoryManager({ eventId }: { eventId: string }) {
+  const t = useTranslations('Plugins')
   const qc = useQueryClient()
   const { data: categories = [], isLoading } = useFightingCupCategories(eventId)
   const [formOpen, setFormOpen] = useState(false)
@@ -163,7 +165,7 @@ export function CategoryManager({ eventId }: { eventId: string }) {
   }
 
   async function handleDelete(cat: EventCategory) {
-    if (!window.confirm(`Delete category "${cat.name}"?`)) return
+    if (!window.confirm(t('hmdFightingCupDeleteCategoryConfirm', { name: cat.name }))) return
     await deleteDoc(doc(db, EVENTS_COLLECTION, eventId, EVENT_CATEGORIES_SUBCOLLECTION, cat.id))
     invalidate()
   }

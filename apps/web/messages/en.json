@@ -271,6 +271,7 @@
     "sportTypeSelect": "Select…",
     "createTeam": "Create my team",
     "creatingTeam": "Setting up…",
+    "trialNotice": "You're starting a {days}-day trial of the {plan} plan. No card needed.",
     "errorEmailInUse": "An account with this email already exists.",
     "errorAccountGeneric": "Could not create account. Please try again.",
     "errorTeamGeneric": "Could not create your team. Please try again."
@@ -988,7 +989,8 @@
     "availability": "Availability",
     "manageAvailability": "Manage availability",
     "freeTimeToggle": "Free time",
-    "newAvailability": "Appointment availability"
+    "newAvailability": "Appointment availability",
+    "deleteEventConfirm": "Delete event \"{title}\"? This cannot be undone."
   },
   "Events": {
     "title": "Events",
@@ -1203,6 +1205,10 @@
     "createActivity": "Create activity",
     "saveChanges": "Save changes",
     "saving": "Saving…",
+    "savedToast": "Activity saved.",
+    "createdToast": "Activity created.",
+    "saveErrorToast": "Couldn't save this activity. Please try again.",
+    "createdImageErrorToast": "Activity created, but the cover image couldn't be uploaded. Edit the activity to add it later.",
     "fieldName": "Name",
     "fieldDescription": "Description",
     "fieldLevel": "Level",
@@ -1336,6 +1342,7 @@
     "save": "Save changes",
     "saving": "Saving…",
     "saved": "Saved!",
+    "saveError": "Couldn't save. Please try again.",
     "bookingLink": "Booking link",
     "membershipLink": "Subscription link",
     "customLinks": "Custom links",
@@ -1974,6 +1981,7 @@
     "talkToUs": "Talk to us",
     "title": "Billing",
     "trialEnds": "Trial ends on {date}",
+    "trialStatusBadge": "Trial",
     "updatePayment": "Update payment method",
     "updatingPayment": "Opening…"
   },
@@ -2076,6 +2084,7 @@
     "hmdFightingCupDescription": "Full HMD Fighting Cup event management: weight categories, competitor line-up, and PDF export.",
     "hmdFightingCupNavLabel": "HMD Fighting Cup",
     "hmdFightingCupEventTypeName": "HMD Fighting Cup",
+    "hmdFightingCupDeleteCategoryConfirm": "Delete category \"{name}\"?",
     "referralsName": "Referral Program",
     "referralsDescription": "Let members earn rewards by referring friends. Track every referral from first booking through to reward delivery.",
     "referralsNavLabel": "Referrals",
@@ -2886,6 +2895,7 @@
       "progress": "{done} of {total} done",
       "dismiss": "Dismiss",
       "optional": "optional",
+      "sessionsNotBookableWarning": "This class isn't bookable yet — turn on Allow online booking.",
       "steps": {
         "activities": {
           "label": "Add your activities",
@@ -3293,6 +3303,12 @@
     "policyFeeStatus_waived": "Waived",
     "policyFeeWaiveConfirmTitle": "Waive this fee?",
     "policyFeeWaiveConfirmBody": "The contact will no longer owe this no-show fee."
+  },
+  "PaymentErrors": {
+    "setupIncomplete": "Payment account setup isn't finished yet, so this couldn't go through. Finish setup in Settings → Payments.",
+    "noAccount": "No payment account is connected yet, so this couldn't go through. Set one up in Settings → Payments.",
+    "generic": "Something went wrong — please try again.",
+    "goToSettings": "Go to Settings → Payments"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Subscription signup",

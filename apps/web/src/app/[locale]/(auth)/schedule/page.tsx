@@ -851,7 +851,7 @@ export default function CalendarPage() {
     : ''
 
   const handleDeleteEvent = async (e: Event) => {
-    if (!window.confirm(`Delete event "${e.title}"? This cannot be undone.`)) return
+    if (!window.confirm(t('deleteEventConfirm', { title: e.title }))) return
     await updateDoc(doc(db, EVENTS_COLLECTION, e.id), { deleted_at: serverTimestamp() })
     invalidateEvents()
   }

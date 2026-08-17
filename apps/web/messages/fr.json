@@ -271,6 +271,7 @@
     "sportTypeSelect": "Sélectionner…",
     "createTeam": "Créer mon équipe",
     "creatingTeam": "Configuration…",
+    "trialNotice": "Vous démarrez un essai de {days} jours du plan {plan}. Aucune carte requise.",
     "errorEmailInUse": "Un compte avec cet e-mail existe déjà.",
     "errorAccountGeneric": "Impossible de créer le compte. Veuillez réessayer.",
     "errorTeamGeneric": "Impossible de créer votre équipe. Veuillez réessayer."
@@ -988,7 +989,8 @@
     "availability": "Disponibilités",
     "manageAvailability": "Gérer les disponibilités",
     "freeTimeToggle": "Temps libre",
-    "newAvailability": "Disponibilité de rendez-vous"
+    "newAvailability": "Disponibilité de rendez-vous",
+    "deleteEventConfirm": "Supprimer l'événement « {title} » ? Cette action est irréversible."
   },
   "Events": {
     "title": "Événements",
@@ -1203,6 +1205,10 @@
     "createActivity": "Créer l'activité",
     "saveChanges": "Enregistrer les modifications",
     "saving": "Enregistrement…",
+    "savedToast": "Activité enregistrée.",
+    "createdToast": "Activité créée.",
+    "saveErrorToast": "Impossible d'enregistrer cette activité. Veuillez réessayer.",
+    "createdImageErrorToast": "Activité créée, mais l'image de couverture n'a pas pu être chargée. Modifiez l'activité pour l'ajouter plus tard.",
     "fieldName": "Nom",
     "fieldDescription": "Description",
     "fieldLevel": "Niveau",
@@ -1336,6 +1342,7 @@
     "save": "Enregistrer les modifications",
     "saving": "Enregistrement…",
     "saved": "Enregistré !",
+    "saveError": "Impossible d'enregistrer. Veuillez réessayer.",
     "bookingLink": "Lien de réservation",
     "membershipLink": "Lien d'abonnement",
     "customLinks": "Liens personnalisés",
@@ -1974,6 +1981,7 @@
     "talkToUs": "Contactez-nous",
     "title": "Facturation",
     "trialEnds": "Période d'essai se termine le {date}",
+    "trialStatusBadge": "Essai",
     "updatePayment": "Mettre à jour le moyen de paiement",
     "updatingPayment": "Ouverture…"
   },
@@ -2076,6 +2084,7 @@
     "hmdFightingCupDescription": "Gestion complète des événements HMD Fighting Cup : catégories de poids, liste des compétiteurs et export PDF.",
     "hmdFightingCupNavLabel": "HMD Fighting Cup",
     "hmdFightingCupEventTypeName": "HMD Fighting Cup",
+    "hmdFightingCupDeleteCategoryConfirm": "Supprimer la catégorie « {name} » ?",
     "referralsName": "Programme de parrainage",
     "referralsDescription": "Permettez aux membres de gagner des récompenses en parrainant des amis. Suivez chaque parrainage de la première réservation jusqu'à la remise de la récompense.",
     "referralsNavLabel": "Parrainages",
@@ -2886,6 +2895,7 @@
       "progress": "{done} sur {total} terminé",
       "dismiss": "Masquer",
       "optional": "facultatif",
+      "sessionsNotBookableWarning": "Ce cours n'est pas encore réservable — activez « Autoriser la réservation en ligne ».",
       "steps": {
         "activities": {
           "label": "Ajouter vos activités",
@@ -3293,6 +3303,12 @@
     "policyFeeStatus_waived": "Annulé",
     "policyFeeWaiveConfirmTitle": "Annuler ces frais ?",
     "policyFeeWaiveConfirmBody": "Le contact ne devra plus ces frais de non-présentation."
+  },
+  "PaymentErrors": {
+    "setupIncomplete": "La configuration du compte de paiement n'est pas terminée, l'action n'a donc pas pu aboutir. Terminer la configuration dans Paramètres → Paiements.",
+    "noAccount": "Aucun compte de paiement n'est encore connecté, l'action n'a donc pas pu aboutir. Configurer un compte dans Paramètres → Paiements.",
+    "generic": "Une erreur s'est produite — veuillez réessayer.",
+    "goToSettings": "Aller à Paramètres → Paiements"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Inscription à l'abonnement",

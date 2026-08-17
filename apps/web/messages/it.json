@@ -271,6 +271,7 @@
     "sportTypeSelect": "Seleziona…",
     "createTeam": "Crea il mio team",
     "creatingTeam": "Configurazione…",
+    "trialNotice": "Stai iniziando una prova di {days} giorni del piano {plan}. Nessuna carta richiesta.",
     "errorEmailInUse": "Esiste già un account con questa email.",
     "errorAccountGeneric": "Impossibile creare l'account. Riprova.",
     "errorTeamGeneric": "Impossibile creare il tuo team. Riprova."
@@ -988,7 +989,8 @@
     "availability": "Disponibilità",
     "manageAvailability": "Gestisci la disponibilità",
     "freeTimeToggle": "Tempo libero",
-    "newAvailability": "Disponibilità appuntamenti"
+    "newAvailability": "Disponibilità appuntamenti",
+    "deleteEventConfirm": "Eliminare l'evento \"{title}\"? L'operazione non può essere annullata."
   },
   "Events": {
     "title": "Eventi",
@@ -1203,6 +1205,10 @@
     "createActivity": "Crea attività",
     "saveChanges": "Salva modifiche",
     "saving": "Salvataggio…",
+    "savedToast": "Attività salvata.",
+    "createdToast": "Attività creata.",
+    "saveErrorToast": "Impossibile salvare questa attività. Riprova.",
+    "createdImageErrorToast": "Attività creata, ma non è stato possibile caricare l'immagine di copertina. Modifica l'attività per aggiungerla in seguito.",
     "fieldName": "Nome",
     "fieldDescription": "Descrizione",
     "fieldLevel": "Livello",
@@ -1336,6 +1342,7 @@
     "save": "Salva modifiche",
     "saving": "Salvataggio…",
     "saved": "Salvato!",
+    "saveError": "Salvataggio non riuscito. Riprova.",
     "bookingLink": "Link prenotazione",
     "membershipLink": "Link abbonamento",
     "customLinks": "Link personalizzati",
@@ -1974,6 +1981,7 @@
     "talkToUs": "Contattaci",
     "title": "Fatturazione",
     "trialEnds": "Il periodo di prova termina il {date}",
+    "trialStatusBadge": "Prova",
     "updatePayment": "Aggiorna metodo di pagamento",
     "updatingPayment": "Apertura…"
   },
@@ -2076,6 +2084,7 @@
     "hmdFightingCupDescription": "Gestione completa degli eventi HMD Fighting Cup: categorie di peso, lista dei competitori ed esportazione PDF.",
     "hmdFightingCupNavLabel": "HMD Fighting Cup",
     "hmdFightingCupEventTypeName": "HMD Fighting Cup",
+    "hmdFightingCupDeleteCategoryConfirm": "Eliminare la categoria \"{name}\"?",
     "referralsName": "Programma di referral",
     "referralsDescription": "Consenti ai membri di guadagnare premi segnalando amici. Segui ogni referral dalla prima prenotazione fino alla consegna del premio.",
     "referralsNavLabel": "Referral",
@@ -2886,6 +2895,7 @@
       "progress": "{done} di {total} completati",
       "dismiss": "Nascondi",
       "optional": "facoltativo",
+      "sessionsNotBookableWarning": "Questa classe non è ancora prenotabile — attiva \"Consenti prenotazione online\".",
       "steps": {
         "activities": {
           "label": "Aggiungi le attività",
@@ -3293,6 +3303,12 @@
     "policyFeeStatus_waived": "Condonata",
     "policyFeeWaiveConfirmTitle": "Condonare questa penale?",
     "policyFeeWaiveConfirmBody": "Il contatto non dovrà più questa penale per mancata presentazione."
+  },
+  "PaymentErrors": {
+    "setupIncomplete": "La configurazione del conto di pagamento non è ancora completata, quindi l'operazione non è riuscita. Completare la configurazione in Impostazioni → Pagamenti.",
+    "noAccount": "Non è ancora collegato alcun conto di pagamento, quindi l'operazione non è riuscita. Configurarne uno in Impostazioni → Pagamenti.",
+    "generic": "Si è verificato un errore — riprova.",
+    "goToSettings": "Vai a Impostazioni → Pagamenti"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Iscrizione abbonamento",

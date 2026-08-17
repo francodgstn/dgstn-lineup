@@ -271,6 +271,7 @@
     "sportTypeSelect": "Auswählen…",
     "createTeam": "Mein Team erstellen",
     "creatingTeam": "Einrichten…",
+    "trialNotice": "Du startest eine {days}-tägige Testphase des {plan}-Plans. Keine Kreditkarte nötig.",
     "errorEmailInUse": "Ein Konto mit dieser E-Mail-Adresse existiert bereits.",
     "errorAccountGeneric": "Konto konnte nicht erstellt werden. Bitte erneut versuchen.",
     "errorTeamGeneric": "Team konnte nicht erstellt werden. Bitte erneut versuchen."
@@ -988,7 +989,8 @@
     "availability": "Verfügbarkeit",
     "manageAvailability": "Verfügbarkeit verwalten",
     "freeTimeToggle": "Freie Zeit",
-    "newAvailability": "Termin-Verfügbarkeit"
+    "newAvailability": "Termin-Verfügbarkeit",
+    "deleteEventConfirm": "Event \"{title}\" löschen? Dies kann nicht rückgängig gemacht werden."
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -1203,6 +1205,10 @@
     "createActivity": "Aktivität erstellen",
     "saveChanges": "Änderungen speichern",
     "saving": "Wird gespeichert…",
+    "savedToast": "Aktivität gespeichert.",
+    "createdToast": "Aktivität erstellt.",
+    "saveErrorToast": "Diese Aktivität konnte nicht gespeichert werden. Bitte erneut versuchen.",
+    "createdImageErrorToast": "Aktivität erstellt, aber das Titelbild konnte nicht hochgeladen werden. Bearbeite die Aktivität, um es später hinzuzufügen.",
     "fieldName": "Name",
     "fieldDescription": "Beschreibung",
     "fieldLevel": "Niveau",
@@ -1336,6 +1342,7 @@
     "save": "Änderungen speichern",
     "saving": "Wird gespeichert…",
     "saved": "Gespeichert!",
+    "saveError": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
     "bookingLink": "Buchungslink",
     "membershipLink": "Abo-Link",
     "customLinks": "Eigene Links",
@@ -1974,6 +1981,7 @@
     "talkToUs": "Sprich mit uns",
     "title": "Abrechnung",
     "trialEnds": "Testphase endet am {date}",
+    "trialStatusBadge": "Testphase",
     "updatePayment": "Zahlungsmethode aktualisieren",
     "updatingPayment": "Wird geöffnet…"
   },
@@ -2076,6 +2084,7 @@
     "hmdFightingCupDescription": "Vollständiges HMD Fighting Cup Event-Management: Gewichtskategorien, Wettkämpferliste und PDF-Export.",
     "hmdFightingCupNavLabel": "HMD Fighting Cup",
     "hmdFightingCupEventTypeName": "HMD Fighting Cup",
+    "hmdFightingCupDeleteCategoryConfirm": "Kategorie \"{name}\" löschen?",
     "referralsName": "Empfehlungsprogramm",
     "referralsDescription": "Mitglieder können Freunde empfehlen und Belohnungen verdienen. Verfolgen Sie jede Empfehlung von der ersten Buchung bis zur Belohnung.",
     "referralsNavLabel": "Empfehlungen",
@@ -2886,6 +2895,7 @@
       "progress": "{done} von {total} erledigt",
       "dismiss": "Ausblenden",
       "optional": "optional",
+      "sessionsNotBookableWarning": "Diese Klasse ist noch nicht buchbar — aktiviere „Online-Buchung erlauben“.",
       "steps": {
         "activities": {
           "label": "Aktivitäten hinzufügen",
@@ -3293,6 +3303,12 @@
     "policyFeeStatus_waived": "Erlassen",
     "policyFeeWaiveConfirmTitle": "Diese Gebühr erlassen?",
     "policyFeeWaiveConfirmBody": "Der Kontakt schuldet diese No-Show-Gebühr nicht mehr."
+  },
+  "PaymentErrors": {
+    "setupIncomplete": "Die Einrichtung des Zahlungskontos ist noch nicht abgeschlossen, daher konnte dies nicht durchgeführt werden. Einrichtung unter Einstellungen → Zahlungen abschliessen.",
+    "noAccount": "Es ist noch kein Zahlungskonto verbunden, daher konnte dies nicht durchgeführt werden. Unter Einstellungen → Zahlungen einrichten.",
+    "generic": "Etwas ist schiefgelaufen — bitte erneut versuchen.",
+    "goToSettings": "Zu Einstellungen → Zahlungen"
   },
   "PaymentComment": {
     "preset_subscription_signup": "Abo-Anmeldung",

@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
+import { usePaymentMutationErrorToast } from './usePaymentErrorToast'
 import {
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
@@ -54,6 +55,7 @@ export function useConnectStatus(teamId: string | null, enabled: boolean) {
 }
 
 export function useStartConnectOnboarding() {
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -66,10 +68,12 @@ export function useStartConnectOnboarding() {
       >(functions, 'startConnectOnboarding')
       return (await fn({ ...vars, origin: clientOrigin() })).data
     },
+    onError,
   })
 }
 
 export function useCreateMembershipPayment() {
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -85,6 +89,7 @@ export function useCreateMembershipPayment() {
       >(functions, 'createMembershipPayment')
       return (await fn({ ...vars, origin: clientOrigin() })).data
     },
+    onError,
   })
 }
 
@@ -217,6 +222,7 @@ export function useContactPayments(teamId: string | null, contactId: string | nu
  * Connect or BYO payment. */
 export function useUpdatePaymentRecord() {
   const qc = useQueryClient()
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -238,6 +244,7 @@ export function useUpdatePaymentRecord() {
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })
     },
+    onError,
   })
 }
 
@@ -268,6 +275,7 @@ export function usePartnerVisits(teamId: string | null) {
 /** Record a manual cash / bank-transfer payment into the unified ledger. */
 export function useRecordManualPayment() {
   const qc = useQueryClient()
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -290,5 +298,6 @@ export function useRecordManualPayment() {
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })
     },
+    onError,
   })
 }
