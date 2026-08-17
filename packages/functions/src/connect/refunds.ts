@@ -103,12 +103,10 @@ async function resolveDivisible(
       const used = (g.credits_used as number | undefined) ?? 0
       const revoked = (g.credits_revoked as number | undefined) ?? 0
       return {
-        // The ORIGINAL pack size — the pricing denominator. An earlier partial
-        // refund lowered credits_total; using that as the denominator would
-        // price the survivors above what they were sold for.
+        // The pack as SOLD. An earlier reversal lowered credits_total; reading
+        // that alone would tell the member she used "3 of the 3".
         unitsGranted: total + revoked,
         unitsConsumed: used,
-        unitsRemaining: Math.max(0, total - used),
       }
     }
   }
@@ -123,7 +121,7 @@ async function resolveDivisible(
     (p) => p.id === lineItem.priceId
   )
   if (!price?.credits || price.credits <= 0) return null
-  return { unitsGranted: price.credits, unitsConsumed: 0, unitsRemaining: price.credits }
+  return { unitsGranted: price.credits, unitsConsumed: 0 }
 }
 
 export const refundMemberPayment = onCall(async (request) => {
@@ -188,8 +186,6 @@ export const refundMemberPayment = onCall(async (request) => {
     lineItem,
     divisible,
     refundAmountMinor: data.amount,
-    paymentAmountMinor: (payment.amount as number | undefined) ?? 0,
-    alreadyRefundedMinor: (payment.amount_refunded as number | undefined) ?? 0,
   })
   if (reversalPlan.refuse === 'partial_refund_on_indivisible') {
     throw new HttpsError(
@@ -199,9 +195,6 @@ export const refundMemberPayment = onCall(async (request) => {
     )
   }
   if (reversalPlan.refuse === 'partial_refund_on_pack') {
-    // INTERIM — see reversalPlanFor. Refusing is the safe answer while "is a
-    // class pack refundable at all" is open; the alternative on the table was
-    // revoking the whole remainder for any amount, which is worse than a no.
     throw new HttpsError(
       'failed-precondition',
       'A class pack can only be refunded in full',
@@ -209,13 +202,13 @@ export const refundMemberPayment = onCall(async (request) => {
     )
   }
   if (reversalPlan.refuse === 'full_refund_on_consumed_pack') {
-    // The details carry the numbers that make the refusal concrete on screen
-    // ("3 of 10 used"). They no longer carry an OFFER: with partial pack refunds
-    // refused above, a pro-rata button would only earn a second refusal.
+    // The details carry the two numbers that make the RULE concrete on screen
+    // ("3 of 10 used"), and no amount. A used pack is not refundable here — see
+    // reversalPlanFor; a figure would imply an action that does not exist.
     throw new HttpsError(
       'failed-precondition',
-      'Some of this pack has already been used',
-      { reason: 'full_refund_on_consumed_pack', ...reversalPlan.suggestion }
+      'A class pack that has been used cannot be refunded',
+      { reason: 'full_refund_on_consumed_pack', ...reversalPlan.facts }
     )
   }
   const reversalActions: ReversalActions = reversalPlan

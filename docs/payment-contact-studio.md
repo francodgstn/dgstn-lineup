@@ -260,6 +260,33 @@ writes `member_payments/{pi}` with `kind: 'appointment'` + `sessionId`;
 hold promptly. Full architecture — pricing model, the price-is-the-gate rule, the hold
 state machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
 
+## Refunds take back what the payment bought — and a used pack is a commitment
+
+**A full refund takes back what that payment granted. A class pack that has been used
+is not refundable in the app.**
+
+Refunding a member payment also reverses its *effects* (`payments/reversal.ts`, called
+from `refundMemberPayment`): the membership snapshot is cleared, the course entitlement
+deleted, an untouched credit pack revoked — each only if **that payment** is the one
+that granted it (`subscription_source_ref` / `purchases.payment_ref`), so a later
+purchase or a manual grant is never stripped by a refund of an older charge. Partial
+refunds are refused on anything that granted something (membership, course, pack) and
+allowed where nothing was granted (products, drop-ins, appointments, gift cards).
+
+The pack rule is the one that surprises people, so: a pack's per-class price is a
+**discount against the drop-in price**, and that discount is exactly what the member
+committed to in exchange. Once a class has been taken the commitment has been partly
+performed on both sides, and any split of it the app could compute would be a policy
+decision wearing arithmetic. So the app declines to guess — it refuses, and the dialog
+says *"{Member} has used 3 of the 10 classes on this pack"* plus the rule. Deliberately
+**no pro-rata figure exists anywhere in the codebase**; reintroducing one reopens this
+decision rather than filling a gap.
+
+**The escape hatch:** a studio that wants to be generous refunds the charge **in Stripe
+directly**. Linyup records the refund but revokes nothing (there was no manager intent
+here to act on), and the external-refund flag then lets a manager revoke the access
+deliberately, as a separate decision.
+
 ## Functions
 
 | Function | Type | Who | What |

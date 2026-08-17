@@ -7,7 +7,6 @@
 
 import assert from 'node:assert/strict'
 import type { firestore } from 'firebase-admin'
-import { proRataMinor } from '@linyup/shared'
 import {
   lineItemForReversal,
   reversalPlanFor,
@@ -64,36 +63,6 @@ const PACK = { kind: 'subscription' as const, subscriptionTypeId: 'st1', priceId
 const PLAIN_SUB = { kind: 'subscription' as const, subscriptionTypeId: 'st1' }
 const COURSE = { kind: 'course' as const, courseId: 'c1' }
 
-// ─── proRataMinor ────────────────────────────────────────────────────────────
-
-describe('proRataMinor', () => {
-  it('splits the payment by unconsumed units', () => {
-    assert.equal(proRataMinor(18000, 7, 10), 12600)
-    assert.equal(proRataMinor(18000, 10, 10), 18000)
-  })
-
-  it('floors — rounding never favours the refund over the studio', () => {
-    // 10000 × 1/3 = 3333.33…
-    assert.equal(proRataMinor(10000, 1, 3), 3333)
-  })
-
-  it('does NOT apply the Stripe charge floor (MIN_CHARGE_MINOR is a CHARGE floor)', () => {
-    // 1/100 of CHF 1.00 is 1 Rappen. A charge could not be that small; a refund can.
-    assert.equal(proRataMinor(100, 1, 100), 1)
-  })
-
-  it('is 0 for degenerate inputs rather than throwing', () => {
-    assert.equal(proRataMinor(18000, 0, 10), 0)
-    assert.equal(proRataMinor(18000, 5, 0), 0)
-    assert.equal(proRataMinor(0, 5, 10), 0)
-    assert.equal(proRataMinor(18000, -1, 10), 0)
-  })
-
-  it('clamps remaining to granted', () => {
-    assert.equal(proRataMinor(18000, 99, 10), 18000)
-  })
-})
-
 // ─── lineItemForReversal ─────────────────────────────────────────────────────
 
 describe('lineItemForReversal', () => {
@@ -128,12 +97,13 @@ describe('lineItemForReversal', () => {
 
 // ─── reversalPlanFor ─────────────────────────────────────────────────────────
 
-describe('reversalPlanFor — divisible (a credit pack)', () => {
+// A PACK IS A COMMITMENT (Franco, 2026-08). Refundable in full while untouched;
+// refused the moment a class has been taken, and refused in part always.
+describe('reversalPlanFor — a credit pack', () => {
   it('full refund of an UNTOUCHED pack clears the plan and revokes everything', () => {
     const plan = reversalPlanFor({
       lineItem: PACK,
-      divisible: { unitsGranted: 10, unitsConsumed: 0, unitsRemaining: 10 },
-      paymentAmountMinor: 18000,
+      divisible: { unitsGranted: 10, unitsConsumed: 0 },
     })
     assert.deepEqual(actions(plan), {
       subscription: 'clear_if_owned',
@@ -142,56 +112,48 @@ describe('reversalPlanFor — divisible (a credit pack)', () => {
     })
   })
 
-  it('full refund of a PARTLY consumed pack is refused, with the pro-rata answer', () => {
+  it('full refund of a PARTLY consumed pack is refused, with the facts and NO amount', () => {
     const plan = reversalPlanFor({
       lineItem: PACK,
-      divisible: { unitsGranted: 10, unitsConsumed: 3, unitsRemaining: 7 },
-      paymentAmountMinor: 18000,
+      divisible: { unitsGranted: 10, unitsConsumed: 3 },
     })
     assert.equal(plan.refuse, 'full_refund_on_consumed_pack')
-    assert.deepEqual((plan as { suggestion: unknown }).suggestion, {
+    // Exactly two numbers. A suggested amount here would be a "what now" beat
+    // with nothing behind it — see reversalPlanFor.
+    assert.deepEqual((plan as { facts: unknown }).facts, {
       unitsGranted: 10,
       unitsConsumed: 3,
-      unitsRemaining: 7,
-      proRataMinor: 12600,
-      maxRefundableMinor: 18000,
     })
   })
 
-  it('full refund of a FULLY consumed pack is refused, suggesting nothing', () => {
+  it('one class taken is enough — the rule is consumption, not proportion', () => {
     const plan = reversalPlanFor({
       lineItem: PACK,
-      divisible: { unitsGranted: 10, unitsConsumed: 10, unitsRemaining: 0 },
-      paymentAmountMinor: 18000,
+      divisible: { unitsGranted: 10, unitsConsumed: 1 },
     })
     assert.equal(plan.refuse, 'full_refund_on_consumed_pack')
-    const s = (plan as { suggestion: { unitsRemaining: number; proRataMinor: number } }).suggestion
-    assert.equal(s.unitsRemaining, 0)
-    assert.equal(s.proRataMinor, 0)
   })
 
-  it('the suggestion is bounded by what is still refundable', () => {
+  it('full refund of a FULLY consumed pack is refused', () => {
     const plan = reversalPlanFor({
       lineItem: PACK,
-      divisible: { unitsGranted: 10, unitsConsumed: 1, unitsRemaining: 9 },
-      paymentAmountMinor: 18000,
-      alreadyRefundedMinor: 15000,
+      divisible: { unitsGranted: 10, unitsConsumed: 10 },
     })
-    const s = (plan as { suggestion: { proRataMinor: number; maxRefundableMinor: number } })
-      .suggestion
-    assert.equal(s.maxRefundableMinor, 3000)
-    // 9/10 of 18000 is 16200, but only 3000 is left to give back.
-    assert.equal(s.proRataMinor, 3000)
+    assert.equal(plan.refuse, 'full_refund_on_consumed_pack')
   })
 
-  // THE REGRESSION THIS PINS: the partial branch used to ignore
-  // `refundAmountMinor` entirely and revoke the whole remainder, so a CHF 10
-  // goodwill gesture on a CHF 180 ten-class pack took all ten credits back and
-  // reported a clean success. Scaling revocation with the money returned is a
-  // real rule that is not built yet (and may never be — "a pack is a
-  // commitment"), so the interim answer is a refusal. If a future change makes
-  // this test fail by ALLOWING a partial again, that change owes an amount-aware
-  // revocation rule and the goodwill case below.
+  // THE REGRESSION THIS PINS: the partial branch once ignored `refundAmountMinor`
+  // entirely and revoked the whole remainder, so a CHF 10 goodwill gesture on a
+  // CHF 180 ten-class pack took all ten credits back and reported a clean
+  // success. The settled answer is that a pack is not refundable in part at all.
+  //
+  // IF A FUTURE CHANGE MAKES THESE FAIL BY ALLOWING A PARTIAL AGAIN, it owes an
+  // amount-aware revocation rule — and that rule is the INVERSE OF A PRO-RATA
+  // SUGGESTION (the largest n whose pro-rata price does not exceed the money
+  // returned), NOT `floor(refund / unitPrice)`. The division form looks right and
+  // leaves a credit behind: a CHF 100.00 / 3-class pack with 2 left is worth
+  // `floor(10000 × 2/3) = 6666`, and `6666 / 3333.33 = 1.9998 → 1`, so accepting
+  // the studio's own figure would revoke one of the two.
   for (const [name, refundAmountMinor] of [
     ['a token goodwill amount', 1000],
     ['a pro-rata-looking amount', 12600],
@@ -200,9 +162,8 @@ describe('reversalPlanFor — divisible (a credit pack)', () => {
     it(`PARTIAL refund is refused — ${name}`, () => {
       const plan = reversalPlanFor({
         lineItem: PACK,
-        divisible: { unitsGranted: 10, unitsConsumed: 3, unitsRemaining: 7 },
+        divisible: { unitsGranted: 10, unitsConsumed: 3 },
         refundAmountMinor,
-        paymentAmountMinor: 18000,
       })
       assert.equal(plan.refuse, 'partial_refund_on_pack')
     })
@@ -211,22 +172,23 @@ describe('reversalPlanFor — divisible (a credit pack)', () => {
   it('PARTIAL refund of an UNTOUCHED pack is refused too — the rule is the pack, not the usage', () => {
     const plan = reversalPlanFor({
       lineItem: PACK,
-      divisible: { unitsGranted: 10, unitsConsumed: 0, unitsRemaining: 10 },
+      divisible: { unitsGranted: 10, unitsConsumed: 0 },
       refundAmountMinor: 9000,
-      paymentAmountMinor: 18000,
     })
     assert.equal(plan.refuse, 'partial_refund_on_pack')
   })
 
-  it('a refused partial produces NO actions at all — nothing can be revoked by accident', () => {
-    const plan = reversalPlanFor({
-      lineItem: PACK,
-      divisible: { unitsGranted: 10, unitsConsumed: 0, unitsRemaining: 10 },
-      refundAmountMinor: 1000,
-      paymentAmountMinor: 18000,
-    })
-    assert.equal((plan as { credits?: unknown }).credits, undefined)
-    assert.equal((plan as { subscription?: unknown }).subscription, undefined)
+  it('a refused plan produces NO actions at all — nothing can be revoked by accident', () => {
+    for (const input of [
+      { lineItem: PACK, divisible: { unitsGranted: 10, unitsConsumed: 0 }, refundAmountMinor: 1000 },
+      { lineItem: PACK, divisible: { unitsGranted: 10, unitsConsumed: 3 } },
+    ]) {
+      const plan = reversalPlanFor(input)
+      assert.ok(plan.refuse)
+      assert.equal((plan as { credits?: unknown }).credits, undefined)
+      assert.equal((plan as { subscription?: unknown }).subscription, undefined)
+      assert.equal((plan as { course?: unknown }).course, undefined)
+    }
   })
 })
 
@@ -235,7 +197,6 @@ describe('reversalPlanFor — indivisible', () => {
     const plan = reversalPlanFor({
       lineItem: PLAIN_SUB,
       divisible: null,
-      paymentAmountMinor: 5000,
     })
     assert.deepEqual(actions(plan), {
       subscription: 'clear_if_owned',
@@ -249,7 +210,6 @@ describe('reversalPlanFor — indivisible', () => {
       lineItem: PLAIN_SUB,
       divisible: null,
       refundAmountMinor: 2500,
-      paymentAmountMinor: 5000,
     })
     assert.equal(plan.refuse, 'partial_refund_on_indivisible')
   })
@@ -257,16 +217,15 @@ describe('reversalPlanFor — indivisible', () => {
   it('a pack whose grant reports zero units is treated as a plain membership', () => {
     const plan = reversalPlanFor({
       lineItem: PACK,
-      divisible: { unitsGranted: 0, unitsConsumed: 0, unitsRemaining: 0 },
+      divisible: { unitsGranted: 0, unitsConsumed: 0 },
       refundAmountMinor: 2500,
-      paymentAmountMinor: 5000,
     })
     assert.equal(plan.refuse, 'partial_refund_on_indivisible')
   })
 
   it('full refund of a course deletes it if owned; partial is refused', () => {
     assert.deepEqual(
-      actions(reversalPlanFor({ lineItem: COURSE, divisible: null, paymentAmountMinor: 9900 })),
+      actions(reversalPlanFor({ lineItem: COURSE, divisible: null })),
       { subscription: 'leave', credits: { op: 'leave' }, course: 'delete_if_owned' }
     )
     assert.equal(
@@ -274,7 +233,6 @@ describe('reversalPlanFor — indivisible', () => {
         lineItem: COURSE,
         divisible: null,
         refundAmountMinor: 5000,
-        paymentAmountMinor: 9900,
       }).refuse,
       'partial_refund_on_indivisible'
     )
@@ -290,7 +248,7 @@ describe('reversalPlanFor — nothing to reverse', () => {
         course: 'leave',
       }
       assert.deepEqual(
-        actions(reversalPlanFor({ lineItem: { kind }, divisible: null, paymentAmountMinor: 2500 })),
+        actions(reversalPlanFor({ lineItem: { kind }, divisible: null })),
         nothing
       )
       assert.deepEqual(
@@ -299,7 +257,6 @@ describe('reversalPlanFor — nothing to reverse', () => {
             lineItem: { kind },
             divisible: null,
             refundAmountMinor: 1000,
-            paymentAmountMinor: 2500,
           })
         ),
         nothing
@@ -309,7 +266,7 @@ describe('reversalPlanFor — nothing to reverse', () => {
 
   it('an unlinked payment (no line item) touches nothing', () => {
     assert.equal(
-      actions(reversalPlanFor({ lineItem: null, divisible: null, paymentAmountMinor: 2500 }))
+      actions(reversalPlanFor({ lineItem: null, divisible: null }))
         .subscription,
       'leave'
     )

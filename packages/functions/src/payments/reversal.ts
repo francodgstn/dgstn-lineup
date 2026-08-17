@@ -40,10 +40,11 @@
 // `credit_summary` rollup that `buildCreditSummary` computes the same way, so
 // the revoked units drop out of all of them on the trigger's next pass.
 //
-// A PARTIAL REFUND OF A PACK CURRENTLY REFUSES rather than guessing how much of
-// it the money bought back — see `reversalPlanFor`. Taking the whole remainder
-// back for a token goodwill refund would be exactly the over-revoke this file
-// forbids, reported as a clean success.
+// The only pack this ever reduces is an UNTOUCHED one, refunded in full — every
+// other pack refund is refused outright (see `reversalPlanFor`). So the target
+// is always 0 and the clamps do the real work: taking a remainder back for a
+// token goodwill refund would be exactly the over-revoke this file forbids,
+// reported as a clean success.
 //
 // NAMED CONSEQUENCE, CHOSEN NOT MISSED: pack of 10 with 3 used is reduced to
 // total = 3. If the member then cancels one of those three classes,
@@ -72,7 +73,6 @@ import {
   COURSES_COLLECTION,
   COURSE_PURCHASES_SUBCOLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
-  proRataMinor,
   type PaymentLineItem,
   type ReversalTargetOutcome,
 } from '@linyup/shared'
@@ -119,22 +119,23 @@ export function lineItemForReversal(
 
 export type ReversalRefusalReason =
   | 'partial_refund_on_indivisible'
-  /** INTERIM — see `reversalPlanFor`. Goes away in one direction or the other
-   *  once "is a pack refundable at all" is decided. */
   | 'partial_refund_on_pack'
   | 'full_refund_on_consumed_pack'
 
-/** Everything the dialog needs to offer a defensible alternative, all in the
- *  refusal's `details` — same shape as the two gift-card refusals already
- *  mapped in the payments page, so the UI's reason-switch extends. */
-export interface ConsumedPackSuggestion {
+/**
+ * What the dialog needs to STATE THE RULE concretely — "Ana has used 3 of the
+ * 10 classes on this pack" — carried in the refusal's `details`, the same shape
+ * as the two gift-card refusals already mapped in the payments page, so the
+ * UI's reason-switch extends.
+ *
+ * Two numbers, and no money. There is deliberately no suggested amount here:
+ * the answer to a used pack is not a smaller refund, it is that the pack is not
+ * refundable in the app. A figure in this payload would be a "what now" beat
+ * with nothing behind it.
+ */
+export interface ConsumedPackFacts {
   unitsGranted: number
   unitsConsumed: number
-  unitsRemaining: number
-  /** The suggested refund (Rappen), already clamped to maxRefundableMinor. */
-  proRataMinor: number
-  /** Ceiling: gross minus what has already been refunded (Rappen). */
-  maxRefundableMinor: number
 }
 
 export interface ReversalActions {
@@ -154,7 +155,7 @@ export interface ReversalActions {
 export type ReversalPlan =
   | { refuse: 'partial_refund_on_indivisible' }
   | { refuse: 'partial_refund_on_pack' }
-  | { refuse: 'full_refund_on_consumed_pack'; suggestion: ConsumedPackSuggestion }
+  | { refuse: 'full_refund_on_consumed_pack'; facts: ConsumedPackFacts }
   | ({ refuse?: undefined } & ReversalActions)
 
 const NOTHING_TO_REVERSE: ReversalPlan = {
@@ -164,78 +165,69 @@ const NOTHING_TO_REVERSE: ReversalPlan = {
 }
 
 /**
- * The consumable a payment granted, when it granted one — today only a
- * lesson-credit pack. Three numbers, all read straight off the grant doc.
+ * The lesson-credit pack a payment granted, when it granted one. Two numbers,
+ * both read straight off the grant doc — `credits_used` is what tells an
+ * UNTOUCHED pack (refundable in full) from a used one (not refundable here), so
+ * the grant read stays even though no money is computed from it any more.
  */
 export interface DivisibleGrant {
-  /** The ORIGINAL pack size (`credits_total + credits_revoked`) — the
-   *  denominator the pro-rata suggestion prices against. It must not shrink when
-   *  an earlier reversal reduced the grant, or a later refund would price each
-   *  survivor above what it was sold for. */
+  /** The pack as SOLD (`credits_total + credits_revoked`), so the copy still
+   *  reads "3 of the 10" after an earlier reversal reduced the live total. */
   unitsGranted: number
   /** `credits_used` — units the member has actually taken. Never revoked. */
   unitsConsumed: number
-  /** Units still live (`credits_total - credits_used`). */
-  unitsRemaining: number
 }
 
 export interface ReversalPlanInput {
   /** What was bought. Null (or an unrecognised kind) ⇒ nothing to reverse. */
   lineItem: PaymentLineItem | null
   /**
-   * Null means "indivisible or nothing", which is the difference between a
-   * refund that may be partial and one that may not.
+   * Null means "not a pack", which is the difference between a full refund that
+   * may be refused for consumption and one that may not.
    */
   divisible: DivisibleGrant | null
   /** Rappen. `undefined` = a FULL refund (everything still refundable). */
   refundAmountMinor?: number
-  /** Gross payment amount in Rappen — the base for all pro-rata arithmetic. */
-  paymentAmountMinor: number
-  /** Already refunded on this charge (Rappen), BEFORE this refund. */
-  alreadyRefundedMinor?: number
 }
 
 /**
  * Pure. No Firestore, no clock, no money movement — decide what a refund of
  * this payment should take back, or refuse it.
  *
- * DIVISIBILITY, NOT FULLNESS, decides what reverses:
+ * TWO SENTENCES: a full refund takes back what that payment granted; a pack that
+ * has been used is not refundable here.
  *
  *   line item                              | full refund          | partial
- *   ---------------------------------------|----------------------|-------------------
- *   subscription, credits (a pack)         | only if 0 consumed   | allowed, reverses
+ *   ---------------------------------------|----------------------|----------
+ *   subscription, credits — untouched      | revokes the pack     | REFUSED
+ *   subscription, credits — any consumption| REFUSED              | REFUSED
  *   subscription, no credits               | clears if owned      | REFUSED
  *   course                                 | deletes if owned     | REFUSED
- *   product/drop_in/appointment/gift_card  | nothing to reverse   | nothing to reverse
+ *   product/drop_in/appointment/gift_card  | nothing to reverse   | allowed
  *
- * A partial refund NEVER clears the subscription fields — only a full one does.
- * Holding a plan is indivisible; a member with 3 consumed credits still holds
- * the pack, and taking the plan away because seven classes were refunded is the
- * over-revoke this whole module exists to avoid.
+ * A PACK IS A COMMITMENT. Its per-class price is a discount against the drop-in
+ * price, and that discount is what the member committed to in exchange. Once a
+ * class has been taken the commitment has been partly performed on both sides,
+ * and there is no split of it the app can compute that is not really a policy
+ * decision wearing arithmetic. So the app declines to guess: it refuses, and it
+ * says why. A studio that wants to be generous refunds in Stripe directly — see
+ * docs/payment-contact-studio.md.
  *
- * A CREDIT PACK IS REFUNDABLE IN FULL, AND ONLY WHILE UNTOUCHED. Both other
- * cases refuse:
+ * That decision is why NO PRO-RATA FIGURE EXISTS anywhere in this codebase. An
+ * earlier draft refused a full refund and offered a computed part-refund as the
+ * remedy — then a second rule refused the remedy too, and the dialog held a
+ * button that could not work. If you are about to reintroduce a suggested
+ * amount, you are reopening the product question, not fixing a gap.
  *
- *   • PARTIAL, any pack (`partial_refund_on_pack`) — INTERIM. How much of a pack
- *     a partial refund takes back has to be a function of the MONEY RETURNED,
- *     and that rule is not built: whether packs stay refundable at all is a live
- *     product question ("a pack is a commitment"). Refusing is correct under
- *     both answers — it is the end state if pack refunds go away, and a safe
- *     placeholder if they stay. What it replaced was not: the branch ignored
- *     `refundAmountMinor` entirely, so a CHF 10 goodwill gesture on a CHF 180
- *     ten-class pack revoked all ten credits and reported a clean success —
- *     exactly the over-revoke this module's header forbids.
- *   • FULL, partly consumed (`full_refund_on_consumed_pack`) — a full refund
- *     would take back classes already delivered.
- *
- * Deleting the partial arm is a small edit; un-shipping a wrong revocation is
- * not. When the product question is answered, ONE of these two refusals goes.
+ * PARTIAL REFUNDS ARE REFUSED ON EVERYTHING THAT GRANTED SOMETHING, for the same
+ * reason in three shapes: half a membership, half a course and part of a pack
+ * are all things the app would have to invent a rule for. Where nothing was
+ * granted (products, drop-ins, appointments, gift cards) a partial is just money
+ * and is allowed.
  */
 export function reversalPlanFor(input: ReversalPlanInput): ReversalPlan {
   const kind = input.lineItem?.kind ?? null
   const isFullRefund = input.refundAmountMinor === undefined
-  const alreadyRefundedMinor = input.alreadyRefundedMinor ?? 0
-  const maxRefundableMinor = Math.max(0, input.paymentAmountMinor - alreadyRefundedMinor)
 
   if (kind === 'subscription') {
     const d = input.divisible
@@ -246,23 +238,17 @@ export function reversalPlanFor(input: ReversalPlanInput): ReversalPlan {
     }
     if (!isFullRefund) return { refuse: 'partial_refund_on_pack' }
     if (d.unitsConsumed > 0) {
+      // The facts, so the dialog can state the rule concretely. No amount: the
+      // answer to a used pack is not a smaller refund.
       return {
         refuse: 'full_refund_on_consumed_pack',
-        suggestion: {
-          unitsGranted: d.unitsGranted,
-          unitsConsumed: d.unitsConsumed,
-          unitsRemaining: d.unitsRemaining,
-          proRataMinor: Math.min(
-            proRataMinor(input.paymentAmountMinor, d.unitsRemaining, d.unitsGranted),
-            maxRefundableMinor
-          ),
-          maxRefundableMinor,
-        },
+        facts: { unitsGranted: d.unitsGranted, unitsConsumed: d.unitsConsumed },
       }
     }
     // Untouched pack, refunded in full: give the money back, take the whole pack
     // back, and the plan snapshot it wrote with it. Target 0 — the executor
-    // clamps it up to whatever `credits_used` has become in the meantime.
+    // clamps it up to whatever `credits_used` has become in the meantime, which
+    // is the one path by which a class booked mid-refund survives.
     return {
       subscription: 'clear_if_owned',
       credits: { op: 'reduce_to', total: 0 },

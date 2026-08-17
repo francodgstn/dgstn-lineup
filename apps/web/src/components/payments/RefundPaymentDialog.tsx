@@ -18,13 +18,13 @@
 // Suppress what is provable, explain the rest. Do not add a client-side rule
 // that guesses at the rest — that is how the two sides drift.
 //
-// `full_refund_on_consumed_pack` gets three beats — what is true ("Ana has used
-// 3 of the 10 classes on this pack"), why not, and what now. Its "what now" is
-// currently EMPTY, deliberately: a partly used pack cannot be refunded here
-// while partial pack refunds are refused server-side (whether a pack is
-// refundable at all is an open product question). A pro-rata button would only
-// earn a second refusal, so it is not shown. When that question is answered
-// this beat gets a real action or the refusal goes away.
+// `full_refund_on_consumed_pack` IS A POLICY, NOT A FAILURE, and it reads like
+// one: what is true ("Ana has used 3 of the 10 classes on this pack") and the
+// rule ("A pack that has been used cannot be refunded here"). It has NO "what
+// now" beat and no primary button — a used pack is not refundable in the app,
+// and that is the decision rather than a gap. A disabled Refund button was worse
+// than none: it asks the reader to work out what would enable it, and nothing
+// would.
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -45,28 +45,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-/** `details` of the `full_refund_on_consumed_pack` refusal. `proRataMinor` is
- *  parsed (it discriminates a real refusal payload from a malformed one) but
- *  deliberately NOT rendered: partial pack refunds are refused server-side, so
- *  offering that figure as an action would only earn a second refusal. */
-interface ConsumedPackSuggestion {
+/** `details` of the `full_refund_on_consumed_pack` refusal — two numbers and no
+ *  money, because the refusal states a rule rather than proposing an amount. */
+interface ConsumedPackFacts {
   unitsGranted: number
   unitsConsumed: number
-  unitsRemaining: number
-  proRataMinor: number
-  maxRefundableMinor: number
 }
 
-function suggestionFrom(details: unknown): ConsumedPackSuggestion | null {
-  const d = details as Partial<ConsumedPackSuggestion> | undefined
-  if (!d || typeof d.unitsGranted !== 'number' || typeof d.proRataMinor !== 'number') return null
-  return {
-    unitsGranted: d.unitsGranted,
-    unitsConsumed: d.unitsConsumed ?? 0,
-    unitsRemaining: d.unitsRemaining ?? 0,
-    proRataMinor: d.proRataMinor,
-    maxRefundableMinor: d.maxRefundableMinor ?? 0,
-  }
+function factsFrom(details: unknown): ConsumedPackFacts | null {
+  const d = details as Partial<ConsumedPackFacts> | undefined
+  if (!d || typeof d.unitsGranted !== 'number' || typeof d.unitsConsumed !== 'number') return null
+  return { unitsGranted: d.unitsGranted, unitsConsumed: d.unitsConsumed }
 }
 
 function minorFromMajorInput(text: string): number | null {
@@ -90,7 +79,7 @@ export function RefundPaymentDialog({
   const t = useTranslations('PaymentsDashboard')
   const refund = useRefundMemberPayment()
 
-  const [suggestion, setSuggestion] = useState<ConsumedPackSuggestion | null>(null)
+  const [packFacts, setPackFacts] = useState<ConsumedPackFacts | null>(null)
   const [editing, setEditing] = useState(false)
   const [amountText, setAmountText] = useState('')
   const [inlineError, setInlineError] = useState<string | null>(null)
@@ -101,7 +90,7 @@ export function RefundPaymentDialog({
 
   // Every open starts clean — a refusal from the previous row must not carry over.
   useEffect(() => {
-    setSuggestion(null)
+    setPackFacts(null)
     setEditing(false)
     setAmountText('')
     setInlineError(null)
@@ -115,8 +104,7 @@ export function RefundPaymentDialog({
   // back, because a `partially_refunded` row is refundable again. Every amount
   // this dialog prints comes from here: showing the gross next to a Refund
   // button is a wrong money figure at the exact moment a manager commits.
-  const maxRefundableMinor =
-    suggestion?.maxRefundableMinor ?? Math.max(0, target.amount - target.amountRefunded)
+  const maxRefundableMinor = Math.max(0, target.amount - target.amountRefunded)
   const who = memberName?.trim() || t('unassigned')
 
   const editedMinor = editing ? minorFromMajorInput(amountText) : null
@@ -132,15 +120,16 @@ export function RefundPaymentDialog({
       })
     : t('refundAmountAction', { amount: formatMoneyMinor(maxRefundableMinor, currency) })
 
-  // The consumed-pack refusal has no action behind it right now (see the module
-  // header): a full refund is what was just refused, and a partial is refused
-  // too. Leave the button visible but dead rather than swapping in one that
-  // cannot work.
-  const primaryDisabled = refund.isPending || amountInvalid || !!suggestion
+  // A USED PACK IS A DEAD END, and it looks like one: no primary button at all.
+  // Nothing the manager can type here would work, so offering a control — even a
+  // disabled one — would only invite the question of what unlocks it.
+  const isPolicyStatement = !!packFacts
+  const primaryDisabled = refund.isPending || amountInvalid
 
   // Offered unless the client can PROVE it is pointless: a course is
   // indivisible by kind, and a pack has said so already.
-  const partialOffered = target.lineItem?.kind !== 'course' && !partialRefused && !suggestion
+  const partialOffered =
+    target.lineItem?.kind !== 'course' && !partialRefused && !isPolicyStatement
 
   function openEditor(prefillMinor: number) {
     setEditing(true)
@@ -169,9 +158,9 @@ export function RefundPaymentDialog({
       const e = err as { details?: Record<string, unknown> }
       const reason = e?.details?.reason as string | undefined
       if (reason === 'full_refund_on_consumed_pack') {
-        const s = suggestionFrom(e.details)
-        if (s) {
-          setSuggestion(s)
+        const f = factsFrom(e.details)
+        if (f) {
+          setPackFacts(f)
           setEditing(false)
           setInlineError(null)
           return
@@ -215,15 +204,15 @@ export function RefundPaymentDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {suggestion ? t('refundConsumedTitle') : t('refundConfirmTitle')}
+            {packFacts ? t('refundConsumedTitle') : t('refundConfirmTitle')}
           </AlertDialogTitle>
           {/* what is true */}
           <AlertDialogDescription>
-            {suggestion
+            {packFacts
               ? t('refundConsumedWhat', {
                   name: who,
-                  used: suggestion.unitsConsumed,
-                  granted: suggestion.unitsGranted,
+                  used: packFacts.unitsConsumed,
+                  granted: packFacts.unitsGranted,
                 })
               : t('refundConfirmBody', {
                   amount: formatMoneyMinor(maxRefundableMinor, currency),
@@ -231,14 +220,14 @@ export function RefundPaymentDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        {/* why not (refusal) / what else this takes back (confirm) */}
-        {(suggestion || consequence) && (
+        {/* the rule (policy statement) / what else this takes back (confirm) */}
+        {(packFacts || consequence) && (
           <p className="-mt-4 text-sm text-muted-foreground">
-            {suggestion ? t('refundConsumedWhy') : consequence}
+            {packFacts ? t('refundConsumedRule') : consequence}
           </p>
         )}
 
-        {/* what now */}
+        {/* what now — nothing at all in the policy-statement state */}
         <div className="space-y-2">
           {editing ? (
             <div className="space-y-1.5">
@@ -260,7 +249,7 @@ export function RefundPaymentDialog({
               </p>
               {/* The way back. Without it, a manager who tries a partial refund
                   on an indivisible sale and is refused has no route but Cancel. */}
-              {!suggestion && (
+              {!isPolicyStatement && (
                 <button
                   type="button"
                   className="text-sm underline text-muted-foreground hover:text-foreground"
@@ -288,13 +277,18 @@ export function RefundPaymentDialog({
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+          {/* "Close", not "Cancel", once the dialog has stopped asking anything. */}
+          <AlertDialogCancel>
+            {isPolicyStatement ? t('close') : t('cancel')}
+          </AlertDialogCancel>
           {/* Deliberately NOT an AlertDialogPrimitive.Close: a refusal has to be
-              able to keep the dialog open and re-render it into its three beats. */}
-          <AlertDialogAction onClick={() => void submit()} disabled={primaryDisabled}>
-            {refund.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {primaryLabel}
-          </AlertDialogAction>
+              able to keep the dialog open and re-render it as the rule. */}
+          {!isPolicyStatement && (
+            <AlertDialogAction onClick={() => void submit()} disabled={primaryDisabled}>
+              {refund.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {primaryLabel}
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

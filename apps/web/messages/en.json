@@ -3316,11 +3316,12 @@
     "refundReversesCourse": "This also removes the course from {name}’s Space.",
     "refundConsumedTitle": "Some of this pack has already been used",
     "refundConsumedWhat": "{name} has used {used} of the {granted} classes on this pack.",
-    "refundConsumedWhy": "A full refund would take back classes that have already been taken, and a partly used pack can’t be refunded here.",
     "refundIndivisible": "This payment can only be refunded in full — a membership or a course cannot be half returned. Use the full amount instead.",
     "refundReversalFailed": "The money was refunded, but the access it paid for could not be taken back. Check {name}’s profile.",
     "refundFullAmountInstead": "Refund the full amount instead",
-    "refundPackPartial": "A class pack can only be refunded in full. Use the full amount instead."
+    "refundPackPartial": "A class pack can only be refunded in full. Use the full amount instead.",
+    "close": "Close",
+    "refundConsumedRule": "A pack that has been used cannot be refunded here. To refund it anyway, do it in Stripe."
   },
   "PaymentErrors": {
     "setupIncomplete": "Payment account setup isn't finished yet, so this couldn't go through. Finish setup in Settings → Payments.",
