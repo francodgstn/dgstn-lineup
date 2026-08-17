@@ -44,6 +44,13 @@ import { releaseWaitlistOffer } from '../booking/waitlist/release'
 // The paid CLASS booking's receipt — always on, deliberately outside the
 // `booking_confirmation` toggle. See that module's header.
 import { sendPaidBookingConfirmation } from '../booking/paidConfirmation'
+// The SHOP purchase receipts — credit pack/membership, course, product. Same
+// posture, one module over. See that module's header.
+import {
+  sendCoursePurchaseReceipt,
+  sendMembershipPurchaseReceipt,
+  sendProductPurchaseReceipt,
+} from './purchaseReceipts'
 import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
 import { generateBookingReference, generateSecureToken } from '../utils/crypto'
@@ -1275,6 +1282,7 @@ async function handleCheckoutCompleted(
   }
 
   const amountRappen = (session.amount_total as number | undefined) ?? 0
+  const sessionCurrency = ((session.currency as string | undefined) ?? 'CHF').toUpperCase()
   let membershipExpiration: Timestamp | null = null
   // THE SESSION's OWN PaymentIntent. Stripe's semantics do the case split for
   // us: it is present on a one-off ('payment' mode) checkout and ALWAYS null on
@@ -1452,6 +1460,45 @@ async function handleCheckoutCompleted(
     // One expression covers both, because Stripe's own semantics make the split.
     paymentIntentId: sessionPaymentIntentId,
   })
+
+  // THE RECEIPT (UX-77) — ALWAYS ON, and see connect/purchaseReceipts.ts for
+  // why it consults no `SystemEmailKey`. A credit pack is the reason it exists:
+  // someone buys ten classes and, until now, the number ten lived only inside a
+  // member area they were never told about.
+  //
+  // WHERE IT SITS. Unlike `handleDropInCheckout`, this handler has no
+  // short-circuiting redelivery guard — every step above is a merge, an
+  // absolute write or a keyed `create()` (applyCreditGrant swallows
+  // ALREADY_EXISTS and returns, it does not stop the handler), so a redelivery
+  // re-runs all of it and reaches here. Nothing can strand the receipt by
+  // throwing earlier, which is why this can sit at the end and describe the
+  // FINAL state rather than having to go first.
+  //
+  // Both `return`s above skip it correctly: no contact means nobody to write to,
+  // and a duplicate same-type subscription has just been cancelled and refunded
+  // — announcing that one would be a receipt for money that has gone back.
+  await sendMembershipPurchaseReceipt({
+    teamId: team.teamId,
+    contactId,
+    // A 'subscription' mode session carries no PaymentIntent of its own (the
+    // first charge is on the invoice), so the Checkout Session id is the tender
+    // for keying purposes there.
+    tenderRef: sessionPaymentIntentId ?? `cs:${session?.id ?? 'unknown'}`,
+    // The grant `applyCreditGrant` just wrote, under the id it used. Null on the
+    // recurring rail, where a credit pack cannot exist (credits ride a one_time
+    // price only) — the receipt then takes its membership shape.
+    creditGrantId: session.mode === 'subscription' ? null : sessionPaymentIntentId,
+    planName: md.subscriptionTypeName ?? 'Membership',
+    recurring: session.mode === 'subscription',
+    // Only the ONE-OFF rail: there `membershipExpiration` is the run of months
+    // the payment included. On the recurring rail the same variable holds the
+    // period end, which is a renewal date, not an "included until" — labelling
+    // one as the other is exactly the confusion this receipt should not add.
+    validUntil:
+      session.mode === 'subscription' ? null : (membershipExpiration?.toDate() ?? null),
+    paid: amountRappen > 0 ? { amount: amountRappen / 100, currency: sessionCurrency } : null,
+    fallbackEmail: email || null,
+  })
 }
 
 /**
@@ -1511,6 +1558,31 @@ async function handleProductCheckout(
   }
 
   const label = md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? 'Product')
+
+  // THE RECEIPT (UX-77) — ALWAYS ON; see connect/purchaseReceipts.ts. It names
+  // what was bought and says what happens next, which for a product is "the
+  // studio arranges handover" — the truth, because nothing in the product model
+  // carries fulfilment or collection terms and the checkout collects no address.
+  //
+  // WHERE IT SITS: after the payment stamps and before the activity-log tail.
+  // This handler has no short-circuiting redelivery guard (its two early
+  // `return`s are "nobody to link the sale to", both above), so a throw below
+  // re-runs everything and the ledger key is what stops a second mail.
+  await sendProductPurchaseReceipt({
+    teamId: team.teamId,
+    contactId,
+    itemLabel: label,
+    tenderRef: piId ?? `cs:${session?.id ?? 'unknown'}`,
+    paid:
+      typeof session.amount_total === 'number' && session.amount_total > 0
+        ? {
+            amount: (session.amount_total as number) / 100,
+            currency: (session.currency as string | undefined) ?? 'CHF',
+          }
+        : null,
+    fallbackEmail: (session.customer_details?.email as string | undefined) ?? null,
+  })
+
   await admin
     .firestore()
     .collection(CONTACTS_COLLECTION)
@@ -1589,6 +1661,31 @@ async function handleCourseCheckout(
     source: 'stripe_connect',
     paymentRef: piId ?? null,
     paymentIntentId: piId ?? null,
+  })
+
+  // THE RECEIPT (UX-77) — ALWAYS ON; see connect/purchaseReceipts.ts. It tells
+  // the buyer WHERE TO WATCH the thing they bought, which is the Space, and that
+  // the entitlement is lifetime. Stripe's own receipt names a charge.
+  //
+  // WHERE IT SITS: immediately after the grant it announces (never promise
+  // access that was not written) and before the remaining effects. This handler
+  // has no short-circuiting redelivery guard — the grant is doc-id idempotent
+  // and the promo commit is keyed — so a throw in the tail below re-runs the
+  // whole handler; the ledger key stops that mailing twice.
+  await sendCoursePurchaseReceipt({
+    teamId: team.teamId,
+    contactId,
+    courseId: md.courseId,
+    courseTitle: md.courseTitle ?? null,
+    tenderRef: piId ?? `cs:${session?.id ?? 'unknown'}`,
+    paid:
+      typeof session.amount_total === 'number' && session.amount_total > 0
+        ? {
+            amount: (session.amount_total as number) / 100,
+            currency: (session.currency as string | undefined) ?? 'CHF',
+          }
+        : null,
+    fallbackEmail: (session.customer_details?.email as string | undefined) ?? null,
   })
 
   await admin

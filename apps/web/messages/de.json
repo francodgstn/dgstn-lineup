@@ -4789,6 +4789,8 @@
       "otpDesc": "Einmal-Codes für Mitglieder-Anmeldung und Checkout. Aus Sicherheitsgründen erforderlich.",
       "paidBookingReceipt": "Belege für bezahlte Buchungen",
       "paidBookingReceiptDesc": "Bestätigung für eine bezahlte Klasse oder einen bezahlten Termin — was, wann, Ihre Stornobedingungen, ein Kalendereintrag und der Link zum Verwalten oder Stornieren. Nur so erhält die Käuferin diesen Link, deshalb lässt sie sich nicht abschalten.",
+      "purchaseReceipt": "Belege für Shop-Käufe",
+      "purchaseReceiptDesc": "Bestätigung für einen Kauf in Ihrem Shop — ein Guthabenpaket (wie viele Guthaben und wofür), eine Mitgliedschaft, ein Kurs (und wo man ihn ansieht) oder ein Produkt (und wie es weitergeht). Nur so erfährt die Käuferin überhaupt etwas, deshalb lässt sich das nicht abschalten.",
       "formReceipt": "Formular-Eingangsbestätigungen",
       "formReceiptDesc": "Bestätigung an den Absender — pro Formular in dessen Einstellungen aktivierbar."
     },

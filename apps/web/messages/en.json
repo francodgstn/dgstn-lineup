@@ -4789,6 +4789,8 @@
       "otpDesc": "One-time verification codes for member sign-in and checkout. Required for security.",
       "paidBookingReceipt": "Paid booking receipts",
       "paidBookingReceiptDesc": "Confirmation for a class or appointment someone paid for — what it is, the time, your cancellation terms, a calendar invite and the link to manage or cancel. It is the only way the buyer gets that link, so it cannot be switched off.",
+      "purchaseReceipt": "Shop purchase receipts",
+      "purchaseReceiptDesc": "Confirmation for something bought in your shop — a credit pack (how many credits and what they are for), a membership, a course (and where to watch it) or a product (and what happens next). It is the only word the buyer gets, so it cannot be switched off.",
       "formReceipt": "Form submission receipts",
       "formReceiptDesc": "Confirmation to the submitter — switched on per form, in each form's settings."
     },

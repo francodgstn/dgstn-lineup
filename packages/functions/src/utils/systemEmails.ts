@@ -22,6 +22,13 @@
 //    `booking_confirmation`, free still obeys it. The tender is answered by the
 //    caller that settled the booking (Connect webhook, staff cash rail), because
 //    an offline settlement leaves no marker on the booking document to read.
+//  • the SHOP purchase receipts (connect/purchaseReceipts.ts) — the same rule on
+//    the rails that sell rather than book: a credit pack (the mail IS the
+//    balance, and the number lives nowhere else the buyer can reach), a
+//    membership, a course (the only thing that says where to watch it) and a
+//    product (the only thing that says what happens next). Each has its OWN
+//    template, because a course has no time or place and a pack's whole payload
+//    is a number — reuse the posture and the mail_sends keying, not the body.
 //  • a session cancellation for a booking that was PAID for (sessions/index.ts)
 //    — the `session_cancellation` toggle below still governs everybody else
 //  • booking reminders — pre-existing toggle settings.bookingRemindersEnabled

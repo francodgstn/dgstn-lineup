@@ -52,6 +52,11 @@ import {
   giftCardCurrency,
 } from './giftCards'
 import { loadCoursePricing } from './coursePricing'
+// The shop purchase receipts — ALWAYS ON. Needed HERE, not only in the webhook:
+// a gift card that covers the whole price creates no Stripe session, so the
+// full-cover branches below are the only place those sales can confirm
+// themselves. See connect/purchaseReceipts.ts.
+import { sendCoursePurchaseReceipt, sendProductPurchaseReceipt } from './purchaseReceipts'
 import {
   NO_PROMO_ATTEMPT,
   bindPromoCheckoutSession,
@@ -788,6 +793,23 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
           console.error('[promo] full-cover product commit failed:', err)
         })
       }
+      // THE SAME RECEIPT THE STRIPE-PAID ORDER GETS (UX-77). Stored value is
+      // money, and this branch creates NO Stripe session — so `handleProductCheckout`
+      // never runs for it and it is the only place the buyer can be told
+      // anything at all. Exactly the hole UX-76 found on the drop-in rail.
+      // `holdKey` is the tender ref, minted once per attempt, so a client retry
+      // cannot mail twice.
+      await sendProductPurchaseReceipt({
+        teamId,
+        contactId: session.contactId,
+        itemLabel: productName,
+        tenderRef: `gc:${holdKey}`,
+        paid: {
+          amount: plan.drawdown,
+          currency: giftCardCurrency(team.data?.default_currency as string | undefined),
+          giftCard: true,
+        },
+      })
       return {
         url: null,
         sessionId: null,
@@ -1175,6 +1197,22 @@ export const createCourseCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
           console.error('[promo] full-cover course commit failed:', err)
         })
       }
+      // THE SAME RECEIPT THE STRIPE-PAID COURSE GETS (UX-77) — and for the same
+      // reason as the product branch above: no Stripe session means no webhook,
+      // so without this a buyer who spent stored value on a course would be
+      // granted lifetime access and never told where to watch it.
+      await sendCoursePurchaseReceipt({
+        teamId,
+        contactId: session.contactId,
+        courseId,
+        courseTitle: course.title,
+        tenderRef: `gc:${holdKey}`,
+        paid: {
+          amount: plan.drawdown,
+          currency: giftCardCurrency(team.data?.default_currency as string | undefined),
+          giftCard: true,
+        },
+      })
       return {
         url: null,
         sessionId: null,

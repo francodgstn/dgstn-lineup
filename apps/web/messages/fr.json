@@ -4789,6 +4789,8 @@
       "otpDesc": "Codes à usage unique pour la connexion des membres et le paiement. Requis pour la sécurité.",
       "paidBookingReceipt": "Reçus de réservation payée",
       "paidBookingReceiptDesc": "Confirmation d'un cours ou d'un rendez-vous payé — ce que c'est, l'horaire, vos conditions d'annulation, une invitation d'agenda et le lien pour gérer ou annuler. C'est le seul moyen pour l'acheteur d'obtenir ce lien, elle ne peut donc pas être désactivée.",
+      "purchaseReceipt": "Reçus d'achat en boutique",
+      "purchaseReceiptDesc": "Confirmation d'un achat dans votre boutique — un pack de crédits (combien de crédits et pour quoi), un abonnement, un cours (et où le regarder) ou un produit (et la suite). C'est la seule information que reçoit l'acheteur, elle ne peut donc pas être désactivée.",
       "formReceipt": "Accusés de réception de formulaire",
       "formReceiptDesc": "Confirmation à l'expéditeur — activée par formulaire, dans ses paramètres."
     },

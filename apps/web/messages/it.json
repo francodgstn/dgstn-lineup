@@ -4789,6 +4789,8 @@
       "otpDesc": "Codici monouso per l'accesso dei membri e il checkout. Richiesti per sicurezza.",
       "paidBookingReceipt": "Ricevute per prenotazioni pagate",
       "paidBookingReceiptDesc": "Conferma per una lezione o un appuntamento pagato — che cos'è, l'orario, le tue condizioni di annullamento, un invito nel calendario e il link per gestire o annullare. È l'unico modo in cui l'acquirente riceve quel link, quindi non può essere disattivata.",
+      "purchaseReceipt": "Ricevute di acquisto nello shop",
+      "purchaseReceiptDesc": "Conferma di un acquisto nel tuo shop — un pacchetto di crediti (quanti crediti e per cosa), un abbonamento, un corso (e dove guardarlo) o un prodotto (e cosa succede ora). È l'unica comunicazione che riceve l'acquirente, quindi non può essere disattivata.",
       "formReceipt": "Ricevute di invio modulo",
       "formReceiptDesc": "Conferma al mittente — attivabile per modulo, nelle impostazioni del modulo."
     },

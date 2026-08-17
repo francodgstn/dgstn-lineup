@@ -288,6 +288,22 @@ export function SystemEmailsCard() {
             {t('systemEmails.alwaysOn')}
           </Badge>
         </div>
+        {/* The same rule, on the rails that SELL rather than book: a credit
+            pack's receipt is the only place the buyer can read how many credits
+            they hold, a course's is the only thing that says where to watch it,
+            and a product's is the only thing that says what happens next.
+            Enforcement: packages/functions/src/connect/purchaseReceipts.ts. */}
+        <div className="flex items-center justify-between gap-4 py-2.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t('systemEmails.purchaseReceipt')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('systemEmails.purchaseReceiptDesc')}
+            </p>
+          </div>
+          <Badge variant="outline" className="shrink-0 text-xs">
+            {t('systemEmails.alwaysOn')}
+          </Badge>
+        </div>
         <div className="flex items-center justify-between gap-4 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium">{t('systemEmails.formReceipt')}</p>
