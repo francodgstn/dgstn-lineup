@@ -77,10 +77,10 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 
 | # | Sev | Freq | Finding | Area | Owner | Status |
 |---|-----|------|---------|------|-------|--------|
-| 1 | blocks | every-session | Consent is configured in the one place that does not gate attendance | C2×C3×M4 | web + functions | ▶ Open |
+| 1 | blocks | every-session | Consent is configured in the one place that does not gate attendance | C2×C3×M4 | web + functions | ✅ Fixed ✓verified |
 | 2 | blocks | at-setup | A studio can complete the setup checklist and have a class nobody can book | M2×M3×M5 | web | ◐ Interim shipped |
 | 3 | blocks | weekly | Availability management is an unlabelled caret welded to a filter chip | M3 | web | ▶ Open |
-| 4 | blocks | at-setup | Recurring timetables are create-only and silently expire after six months | M3 | web + functions | ▶ Open |
+| 4 | blocks | at-setup | Recurring timetables are create-only and silently expire after six months | M3 | web + functions | ◐ Cliff closed; series surface deferred |
 | 5 | blocks | weekly | 13 of 16 money actions fail invisibly | M6 | web | ◐ Partial — 4 billing callables still silent |
 | 6 | blocks | at-setup | A non-owner manager's settings saves fail silently — and the booking cutoff never applies | M7×M3 | web + functions | ◐ Interim shipped |
 | 7 | costs-money | at-setup | Nobody is told they are on a 30-day trial, and Billing says "No subscription" | M2×M6 | web + functions | ◐ Interim shipped ✓verified |
@@ -148,7 +148,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ▶ Open |
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
 | 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
-| 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ▶ Open |
+| 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
