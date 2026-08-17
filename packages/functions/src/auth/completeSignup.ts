@@ -238,18 +238,25 @@ export const completeSignup = onCall(async (request) => {
     consent,
   }
 
-  // Completing signup is the act of JOINING, so a contact that carries no
-  // acquisition_stage at all is promoted here — the case the birth-fact rule
-  // never covered. See signupJoin.ts for the whole decision (what "absent"
-  // means, and what entry/converted_at say for a purchase-first contact).
+  // Completing signup IS the act of joining, so the contact is moved to
+  // 'joined' here — from no stage at all (a shop buyer, UX-82) and from a trial
+  // stage (a trial lead who decided to join, UX-83). Only a contact already at
+  // 'joined' is left alone; the funnel never runs backwards. See signupJoin.ts
+  // for the whole decision (what "absent" means, why entry/converted_at still
+  // fill-gaps-overwrite-nothing, and why only the trial→joined case is counted
+  // as a conversion).
   const logJoinPromotion = (p: SignupJoinPromotion, id: string): void => {
-    if (p.reason === 'promoted') {
+    if (p.reason === 'promoted_from_stage') {
+      console.log(
+        `[completeSignup] contact ${id} moved ${String(p.from)} → 'joined' by completing signup (a trial conversion; entry=${String(p.patch.entry ?? 'kept')})`,
+      )
+    } else if (p.reason === 'promoted_from_none') {
       console.log(
         `[completeSignup] contact ${id} carried no acquisition_stage — promoted to 'joined' (entry=${String(p.patch.entry ?? 'kept')})`,
       )
     } else if (p.reason === 'holds_unrecognised_stage') {
       console.warn(
-        `[completeSignup] contact ${id} holds an unrecognised acquisition_stage — left untouched, so paid access still refuses it`,
+        `[completeSignup] contact ${id} holds an unrecognised acquisition_stage (${String(p.from)}) — left untouched, so paid access still refuses it`,
       )
     }
   }
@@ -272,8 +279,10 @@ export const completeSignup = onCall(async (request) => {
     await contactRef.set(
       {
         ...profileWithoutEmail,
-        // Fills the birth facts only when the contact holds none (a shop
-        // registration signs in with a session and carries no stage).
+        // Advances the stage to 'joined' (unless it is already there) and fills
+        // entry/converted_at only where the contact holds none — a shop
+        // registration signs in with a session and carries no stage; a trial
+        // lead signs in with one and carries 'trial_booked'.
         ...promotion.patch,
         // Completing the full signup MATERIALIZES a provisional lead — it now
         // counts toward the contact cap (see Contact.provisional).
@@ -288,8 +297,9 @@ export const completeSignup = onCall(async (request) => {
     await contactRef.set({
       ...profile,
       // Birth facts, stamped whole: nothing exists to preserve. A finalize of an
-      // EXISTING contact keeps every one of these it already holds and fills only
-      // the ones it does not (resolveSignupJoinPromotion). The approval pipeline
+      // EXISTING contact reaches the same 'joined' by a different route — it
+      // ADVANCES the stage (never backwards) and keeps every entry/converted_at
+      // it already holds (resolveSignupJoinPromotion). The approval pipeline
       // (requested → active) lives on the affiliation axis, not here.
       acquisition_stage: 'joined',
       acquisition_stage_updated_at: FieldValue.serverTimestamp(),
@@ -302,9 +312,10 @@ export const completeSignup = onCall(async (request) => {
     })
   } else {
     // Finalize the existing contact. >1 active match (shared family email) → newest;
-    // never overwrite the birth facts (acquisition_stage/entry/converted_at) it HOLDS
-    // — but do fill the ones it holds NOT (a shop buyer carries no stage at all, and
-    // without one the paid-access gate refuses them from every gated class).
+    // never overwrite the birth facts (entry/converted_at) it HOLDS — but do fill the
+    // ones it holds NOT, and do advance the acquisition stage to 'joined', because
+    // completing this form is the join. Without that, a shop buyer (no stage) and a
+    // trial lead ('trial_booked') are both refused by every gated class forever.
     if (activeMatches.length > 1) {
       activeMatches.sort(
         (a, b) => (b.data().created_at?.toMillis?.() ?? 0) - (a.data().created_at?.toMillis?.() ?? 0),
