@@ -85,7 +85,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 6 | blocks | at-setup | A non-owner manager's settings saves fail silently — and the booking cutoff never applies | M7×M3 | web + functions | ✅ Fixed |
 | 7 | costs-money | at-setup | Nobody is told they are on a 30-day trial, and Billing says "No subscription" | M2×M6 | web + functions | ◐ Interim shipped ✓verified |
 | 8 | costs-money | weekly | Refunding returns the money and leaves the member holding the goods | M6 | functions + web | ✅ Fixed |
-| 9 | blocks | every-session | The assistant launcher sits on top of the page's primary button and eats the tap | M1 | web | ◐ Interim shipped |
+| 9 | blocks | every-session | The assistant launcher sits on top of the page's primary button and eats the tap | M1 | web | ✅ Fixed ✓verified |
 | 10 | blocks | every-session | The member portal reports "no bookings" while holding a paid appointment | C4 | functions + web | ▶ Open |
 | 11 | costs-money | every-session | The default access tier can never name a plan, and the health check is blind to it | M5×C1×C2 | web | ▶ Open |
 | 12 | costs-money | weekly | Payment corrections make the data worse than the mistake did | M6 | functions + web | ✅ Fixed |
@@ -139,18 +139,19 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 60 | confuses | weekly | A BYO studio's doubled revenue rows are indistinguishable from two real payments | M6 | web | ▶ Open |
 | 61 | slows | weekly | Public pages is the only settings section that isn't a settings panel | M7×M11 | web | ▶ Open |
 | 62 | slows | weekly | Contacts cannot be filtered by coach, or by "in no group" | M4 | functions + web | ▶ Open |
-| 63 | slows | every-session | A booking row hides its own contact and session behind an action menu | M3×M4 | web | ▶ Open |
+| 63 | slows | every-session | A booking row hides its own contact and session behind an action menu | M3×M4 | web | ✅ Fixed |
 | 64 | slows | weekly | The schedule cannot show a season, only a three-month window | M3 | web | ▶ Open |
 | 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ▶ Open |
 | 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ▶ Open |
 | 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ▶ Open |
 | 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
-| 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ▶ Open |
+| 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ✅ Fixed |
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
 | 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
 | 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
-| 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ▶ Open |
+| 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ✅ Fixed |
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ▶ Open |
+| 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -875,6 +876,44 @@ reason that file exists rather than four local handlers.
 **Surface:** −1 hand-rolled banner, −4 inline callables. **Build:** S. **Owner:** web-agent.
 **Verify:** In German, cancel an org subscription whose Stripe id is missing — the message is
 German and the badge is correct without a reload.
+
+### UX-75 — An org admin cannot cancel, reactivate or pay for her own organisation
+`blocks` · weekly · traced · M10×M6 · *found 2026-08-17 while fixing UX-73* · **functions, not web**
+
+**Now.** `cancelSaasSubscription`, `reactivateSaasSubscription` and `getBillingPortalUrl` all
+guard with `assertOwner(uid, teamId)` (`packages/functions/src/saas-billing/index.ts:427`,
+`:466`, `:510`), which is `hasTeamRole(uid, teamId, 'owner')` — a read of
+`teams/{teamId}/team_members/{uid}` (`:44-47`).
+
+**An org id is not a team id, and an org's members are not team members.** They live at
+`organizations/{orgId}/org_members/{uid}` (`ORG_MEMBERS_SUBCOLLECTION`,
+`packages/shared/src/paths.ts:49`). So an org admin calling any of the three is refused
+`permission-denied` — she cannot cancel her organisation's subscription, reactivate it, or open
+its billing portal to change a card.
+
+**Why nobody noticed.** Before UX-73 the org billing page rendered every outcome through one
+hand-rolled banner styled green, so a refusal reading *"Owner access required"* appeared as a
+**success**. UX-73 made it an honest red, translated refusal — which is what surfaced the real
+gap underneath. The copy was never the bug; it was hiding one.
+
+**Cost.** An organisation on a paid plan cannot stop paying, cannot restart after cancelling,
+and cannot fix an expiring card, from inside the product. That is `blocks`, and the money
+direction is the wrong one: the studio keeps being charged.
+
+**Fix.** A decision, not a patch — say which and write it down:
+1. **Widen the guard** — an `assertOrgAdminOrTeamOwner` that accepts an org admin when the id
+   is an organisation. Cheapest, but it makes one callable serve two authorization models, and
+   the three call sites take `data.teamId` while meaning "the thing being billed".
+2. **Give orgs their own three callables**, beside the `createOrgCheckoutSession` that already
+   exists — which is itself the evidence that org billing was always going to need its own
+   surface. More code, one model each.
+
+Recommend (2), because `createOrgCheckoutSession` already exists for exactly this reason and
+the asymmetry is the smell. Whichever ships, the parameter should stop being called `teamId`
+where it may hold an org id.
+**Surface:** +3 callables, or +1 shared guard. **Build:** M. **Owner:** functions-agent.
+**Verify:** As an org admin who owns no team, cancel the organisation's subscription. It
+cancels, and the badge says so.
 
 ### UX-74 — In 13 dialogs the Save button scrolls away with the form
 `slows` · every-session · counted · M5×M7×M9 · *added 2026-08-17, Franco's observation* · **one fix, in the primitive**
