@@ -129,10 +129,16 @@ describe('the documents teardown is gone', () => {
     // fallback sentence with no link to the studio's Terms, and since it echoes
     // back only what it displayed, recordSignupConsent wrote ZERO acceptance
     // rows. Silent, unbounded, and the missed rows are not recoverable.
+    // Normalise line endings before slicing. This test isolates the function
+    // body by looking for a closing brace at column 0, and `core.autocrlf` gives
+    // every Windows checkout CRLF — so the LF-only needle missed, the slice
+    // collapsed to an empty string, and the assertion below failed against
+    // nothing while the source was correct all along. A source-reading test has
+    // to read the source the way it is on disk, not the way CI happens to store it.
     const hooks = readFileSync(
       join(root, '../../../apps/web/src/plugins/documents/hooks.ts'),
       'utf8'
-    )
+    ).replace(/\r\n/g, '\n')
     const save = hooks.slice(hooks.indexOf('export async function saveSignupDocumentIds'))
     const body = save.slice(0, save.indexOf('\n}\n') + 1)
     assert.ok(
