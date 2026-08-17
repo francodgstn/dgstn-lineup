@@ -2341,6 +2341,15 @@ async function handleAppointmentCheckout(
         onlineUrl: (sd.onlineUrl as string | undefined) ?? null,
         cancelUrl,
         bookingId: `${sessionId}-${contactId}`,
+        // PAID, by construction: this handler runs only on a completed Stripe
+        // checkout, and both branches that reach here stamp the booking
+        // `payment_status: 'paid'` (what `bookingWasPaidFor` reads). So the
+        // confirmation is a receipt and ignores the `booking_confirmation`
+        // toggle — the class rail's rule (booking/paidConfirmation.ts), applied
+        // to the appointment that used to sit behind the switch. Redelivery is
+        // already handled upstream: an already-confirmed booking short-circuits at
+        // case 1, so Stripe's retries cannot mail this twice.
+        wasPaidFor: true,
         client: {
           firstname: (contact.firstname as string) ?? '',
           lastname: (contact.lastname as string) ?? '',

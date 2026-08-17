@@ -537,6 +537,16 @@ export const createStaffAppointment = onCall(async (request) => {
       onlineUrl: null,
       cancelUrl,
       bookingId: `${sessionRef.id}-${contactId}`,
+      // The one staff rail on which money has ALREADY changed hands: `paid_offline`
+      // takes it over the counter and `writeManualPaymentEvent` records it above.
+      // The booking document carries no marker for that settlement —
+      // `bookingWasPaidFor` would answer false for every rail here, since the only
+      // `payment_status` this callable ever writes is `'required'` — so the plan,
+      // which IS this callable's tender decision, answers instead. The other two
+      // priced rails are debts, not receipts: `pending_offline` is owed at the
+      // door and `payment_link` is unpaid until the webhook confirms it (and the
+      // link mail below is the message that actually matters for it).
+      wasPaidFor: plan_.recordPaymentNow,
       client,
     })
     if (paymentUrl) {

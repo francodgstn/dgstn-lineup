@@ -80,6 +80,48 @@ describe('every rail that takes money for a CLASS sends it', () => {
   })
 })
 
+describe('the PAID appointment confirms too, and ignores the same toggle', () => {
+  // The appointment rail states the identical rule in a different shape: ONE
+  // sender serves both tenders, so the split is an argument (`wasPaidFor`) rather
+  // than a module. Pinned because the shape makes it easy to "simplify" back into
+  // a single unconditional toggle read — which is what UX-77 found.
+  const emails = read('appointments/emails.ts')
+
+  it('the gate short-circuits on the paid arm', () => {
+    assert.ok(
+      /p\.wasPaidFor \|\|\s*\(await systemEmailEnabledFor\(p\.teamId, 'booking_confirmation'\)\)/.test(
+        code(emails)
+      ),
+      'appointments/emails.ts must let a PAID appointment past booking_confirmation'
+    )
+  })
+
+  it('says WHY in its header, and points at the class-rail precedent', () => {
+    assert.ok(emails.includes('ALWAYS ON'), 'the posture must be stated')
+    assert.ok(
+      emails.includes('booking/paidConfirmation.ts'),
+      'the header must point at the rule it inherits'
+    )
+  })
+
+  it('every caller answers the tender question explicitly', () => {
+    // Named, not counted — the three settlement rails an appointment can arrive
+    // on. A new one that forgets the argument fails to compile; one that passes a
+    // wrong constant is caught by reading this list beside the code.
+    const CALLERS: Record<string, string> = {
+      'appointments/window.ts': 'wasPaidFor: false', // bookAppointment refuses payable callers
+      'appointments/staffBooking.ts': 'wasPaidFor: plan_.recordPaymentNow', // cash over the counter
+      'connect/webhook.ts': 'wasPaidFor: true', // Stripe has already been paid
+    }
+    for (const [file, expected] of Object.entries(CALLERS)) {
+      assert.ok(
+        code(read(file)).includes(expected),
+        `${file} must pass ${expected} to sendAppointmentBookingEmails`
+      )
+    }
+  })
+})
+
 describe('the FREE path keeps its toggle — the asymmetry is the design', () => {
   it('bookSession still honours booking_confirmation', () => {
     const src = read('booking/index.ts')

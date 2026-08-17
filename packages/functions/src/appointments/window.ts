@@ -538,6 +538,13 @@ export const bookAppointment = onCall(async (request) => {
     onlineUrl: ctx.tpl.onlineUrl ?? null,
     cancelUrl,
     bookingId: `${sessionRef.id}-${contactId}`,
+    // FREE BY CONSTRUCTION. This callable refuses a payable caller outright
+    // (`payment_required` above) — the money rail is createAppointmentCheckout →
+    // the Connect webhook, which sends its own confirmation as a receipt. A
+    // credit-pack spend also lands here and is NOT counted as paid, exactly as
+    // the class free path treats one: `bookingWasPaidFor` reads money and gift
+    // cards, and widening it is a decision for the predicate, not for a mailer.
+    wasPaidFor: false,
     client: caller.sanitized,
   })
 

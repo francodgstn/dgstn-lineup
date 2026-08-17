@@ -9,6 +9,11 @@ import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
 import { closeSessionWaitlist } from '../booking/waitlist/teardown'
+import {
+  DISPOSED_BOOKING_STATUSES,
+  replacedBookingWasCounted,
+  type ReplacedBookingShape,
+} from '../booking'
 import { enforceWaiverGate } from '../waivers/gate'
 import {
   bookingWasPaidFor,
@@ -180,7 +185,61 @@ async function cancelSingleSession(
   const offerHolders = await closeSessionWaitlist(sessionRef)
 
   const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
-  let bookingsToNotify = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
+  const bookings = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
+
+  // ── THE COUNTER IS A FACT ABOUT THE BOOKING; THE MAIL IS A MESSAGE ABOUT IT ──
+  // `pending_bookings_count` used to be decremented INSIDE the notification loop
+  // below, so a studio that switched `session_cancellation` off cancelled classes
+  // without anybody's counter moving — and the contacts list went on saying those
+  // people needed chasing for a session that no longer exists. (UX-76 then made
+  // paid bookings notify regardless, which left free and paid decrementing
+  // differently: an improvement and an inconsistency.) It is settled here, once
+  // per booking, before a single mail is built: no toggle, no delivery outcome
+  // and no missing email address can reach it.
+  //
+  // WHICH documents own a count — decided by the ledger's existing seams, never a
+  // fresh expression of the question (booking/index.ts, shape table in
+  // docs/waitlist.md, fixtures in booking/pendingBookingsCount.test.ts):
+  //  • a DISPOSED booking (cancelled / no_show / rebooked) owns none — whoever
+  //    disposed of it already gave the count back, and these documents are still
+  //    sitting in the subcollection this read just returned.
+  //  • a PLAIN drop-in payment hold (`payment_status: 'required'` without
+  //    `waitlist_claim`) is uncounted for its whole life — `replacedBookingWasCounted`
+  //    is the one predicate that knows that, and decrementing it here drove a real
+  //    person's counter negative, which is the failure somebody notices.
+  // A CLAIM hold that was still unclaimed never reaches this read at all:
+  // `closeSessionWaitlist` above deleted it and gave its count back, which is
+  // exactly why that call has to come first.
+  //
+  // `increment(-1)`, deliberately, and against the standing preference for an
+  // absolute value: this counter is per CONTACT and spans every session they hold
+  // a seat in, so this function's read set (one session's bookings) cannot
+  // produce the true total, and nothing recounts it. Every writer of the field
+  // moves it the same way — see the ledger note in booking/index.ts, which owns
+  // that rule (`bookings_count`, which IS recountable, is the one that must be
+  // written absolute, and this function does not touch it). Best-effort per
+  // contact rather than batched: a purged provisional contact makes `update`
+  // throw, and one missing document must not stop the rest of the roster moving.
+  for (const bookingDoc of bookings) {
+    const booking = bookingDoc.data()
+    if (!booking.contact) continue
+    if (booking.status && DISPOSED_BOOKING_STATUSES.has(booking.status as string)) continue
+    if (!replacedBookingWasCounted(booking as ReplacedBookingShape)) continue
+    const [countErr] = await to(
+      db
+        .collection('contacts')
+        .doc(booking.contact as string)
+        .update({ pending_bookings_count: FieldValue.increment(-1) })
+    )
+    if (countErr) {
+      console.error( // eslint-disable-line no-console
+        `cancelSingleSession: pending_bookings_count decrement failed for contact ${booking.contact}:`,
+        countErr
+      )
+    }
+  }
+
+  let bookingsToNotify = bookings
 
   // Member cancellation notices are per-team toggleable (Automations → System
   // emails) — EXCEPT for someone who paid.
@@ -245,16 +304,8 @@ async function cancelSingleSession(
           html: email.html,
           text: email.text,
         })
-        if (booking.contact) {
-          await to(
-            db
-              .collection('contacts')
-              .doc(booking.contact as string)
-              .update({
-                pending_bookings_count: FieldValue.increment(-1),
-              })
-          )
-        }
+        // No counter write here — it was settled above, for every booking this
+        // cancellation resolves, whether or not this mail goes out or lands.
         sent++
       } catch (err) {
         console.error(`Error sending cancellation to ${booking.email}:`, err)

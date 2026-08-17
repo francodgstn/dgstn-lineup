@@ -16,6 +16,12 @@
 //    confirmation below stays switchable: that one is a courtesy a studio may
 //    run itself. Free-is-switchable / paid-is-not is the design, not an
 //    oversight — see that module's header before merging the two.
+//  • a PAID appointment's confirmation (appointments/emails.ts) — the same rule
+//    on the appointment rail, where one function serves both tenders and so
+//    splits on its `wasPaidFor` argument rather than by module: paid ignores
+//    `booking_confirmation`, free still obeys it. The tender is answered by the
+//    caller that settled the booking (Connect webhook, staff cash rail), because
+//    an offline settlement leaves no marker on the booking document to read.
 //  • a session cancellation for a booking that was PAID for (sessions/index.ts)
 //    — the `session_cancellation` toggle below still governs everybody else
 //  • booking reminders — pre-existing toggle settings.bookingRemindersEnabled

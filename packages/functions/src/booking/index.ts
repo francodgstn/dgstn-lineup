@@ -418,8 +418,9 @@ export function replacedBookingWasCounted(
  *  contact's count back (`cancelBooking`'s own decrement, `markNoShowBookings`,
  *  the admin bookings page, `rebookSession`'s own ledger), so the document left
  *  behind owns no count. Unreachable at bookSession's seam, reachable at the
- *  hold seam. */
-const DISPOSED_BOOKING_STATUSES = new Set(['cancelled', 'no_show', 'rebooked'])
+ *  hold seam — and at `cancelSingleSession`, which reads a whole bookings
+ *  subcollection including the documents somebody already cancelled. */
+export const DISPOSED_BOOKING_STATUSES = new Set(['cancelled', 'no_show', 'rebooked'])
 
 /**
  * How much a PAYMENT-HOLD write (`createDropInCheckout`) must move the contact's
