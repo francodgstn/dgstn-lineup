@@ -21,7 +21,6 @@ import {
   useMemberSubscriptions,
   usePartnerVisits,
   usePaymentEvents,
-  useRefundMemberPayment,
   useCreateMembershipPayment,
 } from '@/hooks/useConnect'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
@@ -41,6 +40,7 @@ import {
 } from '@/components/payments/AssignPaymentDialog'
 import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvButton'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
+import { RefundPaymentDialog } from '@/components/payments/RefundPaymentDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { GiftCardsSection } from '@/components/payments/GiftCardsSection'
@@ -66,16 +66,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 
 // ─── awaiting-payment appointments ───────────────────────────────────────────
 // Manually booked appointments (AppointmentFormDialog → createStaffAppointment)
@@ -145,7 +135,6 @@ export default function PaymentsDashboardPage() {
   const { data: pendingAppointments = [] } = usePendingStaffAppointments(teamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const { data: partnerVisits = [] } = usePartnerVisits(teamId)
-  const refund = useRefundMemberPayment()
   const { isInstalled } = useInstalledPlugins()
 
   // "Partner visits" card only makes sense once the team has at least one
@@ -200,26 +189,6 @@ export default function PaymentsDashboardPage() {
   // A full page from either rail hints there may be more to fetch.
   const hasMore = payments.length >= pageSize || events.length >= pageSize
   const fetchingMore = fetchingPayments || fetchingEvents
-
-  async function confirmRefund() {
-    if (!refundTarget || !teamId) return
-    try {
-      await refund.mutateAsync({ teamId, paymentIntentId: refundTarget.paymentId })
-      setRefundTarget(null)
-    } catch (err) {
-      // A refund can be REFUSED, not just fail: refunding a gift-card purchase
-      // whose value is already partly spent would hand back cash the studio
-      // cannot recover. Without this the dialog just sat there.
-      const reason = (err as { details?: { reason?: string } })?.details?.reason
-      toast.error(
-        reason === 'gift_card_partially_redeemed'
-          ? t('giftCardRefundPartlyRedeemed')
-          : reason === 'gift_card_partial_refund_unsupported'
-            ? t('giftCardRefundPartialUnsupported')
-            : t('refundError')
-      )
-    }
-  }
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -517,26 +486,14 @@ export default function PaymentsDashboardPage() {
         />
       )}
 
-      <AlertDialog open={!!refundTarget} onOpenChange={(o) => !o && setRefundTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('refundConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {refundTarget &&
-                t('refundConfirmBody', {
-                  amount: formatMoneyMinor(refundTarget.amount, refundTarget.currency),
-                })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmRefund} disabled={refund.isPending}>
-              {refund.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              {t('refund')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {teamId && (
+        <RefundPaymentDialog
+          teamId={teamId}
+          target={refundTarget}
+          memberName={refundTarget?.contactId ? contactName.get(refundTarget.contactId) : null}
+          onClose={() => setRefundTarget(null)}
+        />
+      )}
     </div>
   )
 }

@@ -19,18 +19,120 @@
 // and booking/dropIn.ts), so it cannot be refunded here — the manager path is to
 // void or adjust the card and cancel the booking/entitlement. That is a Phase-2
 // callable (restoreGiftCardValue), not a silent gap: this one answers not-found.
+//
+// ACCESS. Giving the money back also gives back what the money bought — the
+// membership snapshot, the unused credits, the course entitlement. That is
+// `reversePaymentEffects` (payments/reversal.ts), which owns the rules; this
+// file owns only the ORDERING, and the ordering is the part that can lose money:
+//
+//   1. Both reversal REFUSALS are decided FIRST — before the gift-card void and
+//      before Stripe. A refusal after the void would leave a card dead with no
+//      compensating un-void (only the Stripe call is wrapped in that recovery).
+//   2. The gift-card void, then the Stripe refund (unchanged).
+//   3. The reversal, AFTER the money has moved — and therefore inside a catch
+//      that never rethrows. Throwing here would tell the manager the refund
+//      failed when it did not, and invite her to do it again.
 
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
+  CONTACTS_COLLECTION,
+  CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   mapCategory,
   type GiftCardStatus,
+  type MemberPaymentEffectsReversal,
+  type PaymentLineItem,
+  type SubscriptionType,
 } from '@linyup/shared'
 import * as admin from 'firebase-admin'
+import { Timestamp } from 'firebase-admin/firestore'
 import { refundDirectCharge } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import { reverseGiftCardDrawdown, unvoidGiftCard, voidUntouchedGiftCard } from './giftCards'
+import { reversalPlanFor, reversePaymentEffects, type ReversalActions } from '../payments/reversal'
+
+/**
+ * What was bought, for the reversal. The stored `line_item` when the webhook
+ * stamped one; otherwise derived from `kind` — legacy Connect rows carry no
+ * line item, and treating them as "nothing was bought" would silently skip the
+ * reversal on exactly the oldest sales. `kind: 'membership'` maps to line-item
+ * kind 'subscription' (the two rails spell it differently; see the unified row
+ * builder on the web).
+ */
+function lineItemForReversal(
+  payment: FirebaseFirestore.DocumentData
+): PaymentLineItem | null {
+  const stored = payment.line_item as PaymentLineItem | undefined | null
+  if (stored?.kind) return stored
+  switch (payment.kind as string | undefined) {
+    case 'membership':
+      // No subscriptionTypeId to recover — and none is needed: the reversal
+      // proves ownership from `subscription_source_ref`, not from the type.
+      return { kind: 'subscription' }
+    case 'course':
+      return { kind: 'course', courseId: (payment.courseId as string | undefined) ?? undefined }
+    case 'product':
+    case 'drop_in':
+    case 'appointment':
+    case 'gift_card':
+      return { kind: payment.kind as PaymentLineItem['kind'] }
+    default:
+      return null
+  }
+}
+
+/**
+ * Is the thing this payment granted DIVISIBLE — i.e. is it a lesson-credit pack,
+ * and how much of it has been taken?
+ *
+ * The grant document is the source of truth, and it is reached BY DOC ID
+ * (contacts/{contactId}/credit_grants/{paymentRef}) — never by a field query,
+ * because the provenance field name differed by rail. `credits_used` /
+ * `credits_total` on that doc is what both spenders re-read inside their own
+ * transactions; `Contact.credit_summary` is a rollup the booking gate reads
+ * optimistically and must NOT be read here.
+ *
+ * The fallback — the subscription price's `credits` — matters only when the
+ * grant is missing (an unresolved contact at purchase time). It errs toward
+ * ALLOWING the refund: without it, a genuine credit-pack payment would look
+ * indivisible and a legitimate partial refund would be refused.
+ */
+async function resolveDivisible(
+  teamId: string,
+  contactId: string,
+  paymentRef: string,
+  lineItem: PaymentLineItem | null
+): Promise<{ unitsGranted: number; unitsConsumed: number } | null> {
+  if (lineItem?.kind !== 'subscription') return null
+  const db = admin.firestore()
+  const grantSnap = await db
+    .collection(CONTACTS_COLLECTION)
+    .doc(contactId)
+    .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+    .doc(paymentRef)
+    .get()
+  if (grantSnap.exists) {
+    const g = grantSnap.data()!
+    return {
+      unitsGranted: (g.credits_total as number | undefined) ?? 0,
+      unitsConsumed: (g.credits_used as number | undefined) ?? 0,
+    }
+  }
+  if (!lineItem.subscriptionTypeId || !lineItem.priceId) return null
+  const typeSnap = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
+    .doc(lineItem.subscriptionTypeId)
+    .get()
+  const price = ((typeSnap.data() as SubscriptionType | undefined)?.prices ?? []).find(
+    (p) => p.id === lineItem.priceId
+  )
+  if (!price?.credits || price.credits <= 0) return null
+  return { unitsGranted: price.credits, unitsConsumed: 0 }
+}
 
 export const refundMemberPayment = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
@@ -50,8 +152,9 @@ export const refundMemberPayment = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'amount must be a positive integer in Rappen')
   }
   const fullRefund = data.amount === undefined
+  const uid = request.auth.uid
 
-  await assertManager(request.auth.uid, teamId)
+  await assertManager(uid, teamId)
   const team = await loadEnabledTeam(teamId)
   const { accountId } = requireChargeableAccount(team)
 
@@ -77,6 +180,42 @@ export const refundMemberPayment = onCall(async (request) => {
       throw new HttpsError('invalid-argument', 'Refund exceeds the remaining refundable amount')
     }
   }
+
+  // ── What this refund should take back ──────────────────────────────────────
+  // Decided BEFORE the gift-card void and before Stripe, because it can REFUSE.
+  // A refusal raised after the void would leave the card dead with no
+  // compensating un-void; a refusal raised after the charge would be a refusal
+  // of something that already happened.
+  const contactId = (payment.contactId as string | undefined) ?? null
+  const lineItem = contactId ? lineItemForReversal(payment) : null
+  const divisible = contactId
+    ? await resolveDivisible(teamId, contactId, paymentIntentId, lineItem)
+    : null
+  const reversalPlan = reversalPlanFor({
+    lineItem,
+    divisible,
+    refundAmountMinor: data.amount,
+    paymentAmountMinor: (payment.amount as number | undefined) ?? 0,
+    alreadyRefundedMinor: (payment.amount_refunded as number | undefined) ?? 0,
+  })
+  if (reversalPlan.refuse === 'partial_refund_on_indivisible') {
+    throw new HttpsError(
+      'failed-precondition',
+      'This payment can only be refunded in full',
+      { reason: 'partial_refund_on_indivisible' }
+    )
+  }
+  if (reversalPlan.refuse === 'full_refund_on_consumed_pack') {
+    // Not "no". "Not this amount, and here is the one that works" — the details
+    // carry everything the dialog needs to offer the pro-rata refund and let the
+    // manager edit it.
+    throw new HttpsError(
+      'failed-precondition',
+      'Some of this pack has already been used',
+      { reason: 'full_refund_on_consumed_pack', ...reversalPlan.suggestion }
+    )
+  }
+  const reversalActions: ReversalActions = reversalPlan
 
   // ── This payment BOUGHT a gift card ────────────────────────────────────────
   const soldCode = (payment.giftCardCode as string | undefined) ?? null
@@ -143,8 +282,58 @@ export const refundMemberPayment = onCall(async (request) => {
       }
     }
 
+    // ── Take back what the money bought ──────────────────────────────────────
+    // THE MONEY IS ALREADY GONE. Everything below catches and reports; nothing
+    // below throws. A failure here is a manager who has to remove the access by
+    // hand — bad, and visible on the row. Throwing instead would tell her the
+    // refund itself failed, and the natural response to that is to refund again.
+    let reversal: MemberPaymentEffectsReversal | null = null
+    const touchesSomething =
+      reversalActions.subscription === 'clear_if_owned' ||
+      reversalActions.credits.op === 'reduce_to' ||
+      reversalActions.course === 'delete_if_owned'
+    if (contactId && touchesSomething) {
+      try {
+        const outcome = await reversePaymentEffects(admin.firestore(), {
+          teamId,
+          contactId,
+          paymentRef: paymentIntentId,
+          lineItem,
+          plan: reversalActions,
+        })
+        reversal = {
+          state: 'done',
+          at: Timestamp.now(),
+          by: uid,
+          refund_amount: data.amount ?? null,
+          subscription: outcome.subscription,
+          credits: outcome.credits,
+          credits_revoked: outcome.creditsRevoked,
+          course: outcome.course,
+        }
+      } catch (err) {
+        console.error(
+          `[connect] effects reversal failed after refund (pi=${paymentIntentId}):`,
+          err
+        )
+        reversal = {
+          state: 'failed',
+          at: Timestamp.now(),
+          by: uid,
+          refund_amount: data.amount ?? null,
+          error: err instanceof Error ? err.message : String(err),
+        }
+      }
+      // The stamp is REPORTING, deliberately outside the reversal transaction:
+      // the transaction is the correctness boundary, and making its commit
+      // depend on a write to a different collection would only widen it.
+      await paymentSnap.ref.set({ effects_reversal: reversal }, { merge: true }).catch((e) =>
+        console.error(`[connect] effects_reversal stamp failed (pi=${paymentIntentId}):`, e)
+      )
+    }
+
     // The charge.refunded webhook reconciles amount_refunded / status / refunds[].
-    return { refundId: refund.id, status: refund.status }
+    return { refundId: refund.id, status: refund.status, reversal }
   } catch (err) {
     // The card was voided in anticipation of a refund that never happened —
     // put it back, or the buyer loses the value AND keeps paying for it.

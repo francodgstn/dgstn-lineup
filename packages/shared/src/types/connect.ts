@@ -234,8 +234,45 @@ export interface MemberPayment {
   dispute_amount?: number | null
   /** Idempotency: last processed payment_intent/charge event id for this doc. */
   last_event_id?: string
+  /**
+   * What happened to the ACCESS this payment bought when it was refunded.
+   * Reporting, not correctness: the reversal itself is one transaction and does
+   * not read this back. It exists so a manager can see, on the row, that the
+   * money went back but the entitlement did not — the one failure mode a refund
+   * has that is otherwise completely silent.
+   */
+  effects_reversal?: MemberPaymentEffectsReversal | null
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+/** Per-target result of one reversal attempt. `skipped_not_owner` means the
+ *  thing is still there and SHOULD be: a later payment, a manual grant or a
+ *  gift-card purchase owns it. `absent` means there was nothing there. */
+export type ReversalTargetOutcome =
+  | 'left' // the plan said not to touch it
+  | 'absent'
+  | 'skipped_not_owner'
+  | 'cleared' // subscription fields
+  | 'reduced' // credit grant
+  | 'deleted' // course entitlement
+
+export interface MemberPaymentEffectsReversal {
+  /** 'done' — the transaction committed. 'failed' — the MONEY moved and this
+   *  did not; the studio has to take the access back by hand. */
+  state: 'done' | 'failed'
+  at: Timestamp
+  /** uid of the manager who asked for the refund. */
+  by?: string | null
+  /** Whether the refund that triggered it was full or partial (Rappen). */
+  refund_amount?: number | null
+  subscription?: ReversalTargetOutcome
+  credits?: ReversalTargetOutcome
+  /** Credits taken back by this reversal (0 when none were). */
+  credits_revoked?: number
+  course?: ReversalTargetOutcome
+  /** Present only when state === 'failed'. */
+  error?: string | null
 }
 
 // ─── Recurring memberships (subscription on the connected account) ────────────────

@@ -19,6 +19,7 @@ import {
   type ConnectOnboardingModel,
   type ExternalPayment,
   type MemberPayment,
+  type MemberPaymentEffectsReversal,
   type MemberSubscription,
   type PartnerVisit,
   type PaymentLineItem,
@@ -155,10 +156,17 @@ export function useRefundMemberPayment() {
       amount?: number
       reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
     }) => {
-      const fn = httpsCallable<typeof vars, { refundId: string; status: string | null }>(
-        functions,
-        'refundMemberPayment'
-      )
+      const fn = httpsCallable<
+        typeof vars,
+        {
+          refundId: string
+          status: string | null
+          /** What happened to the ACCESS the payment bought. `state: 'failed'`
+           *  means the money went back and the entitlement did not — the caller
+           *  must surface it, because nothing else will. */
+          reversal: MemberPaymentEffectsReversal | null
+        }
+      >(functions, 'refundMemberPayment')
       return (await fn(vars)).data
     },
     onSuccess: (_data, vars) =>

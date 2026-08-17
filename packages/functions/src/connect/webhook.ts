@@ -22,8 +22,6 @@ import {
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
   CONTACTS_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
-  COURSES_COLLECTION,
-  COURSE_PURCHASES_SUBCOLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
@@ -56,7 +54,7 @@ import {
 } from '../utils/connect/client'
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
-import { writeContactSubscriptionFields } from '../payments/effects'
+import { grantCourseEntitlement, writeContactSubscriptionFields } from '../payments/effects'
 import {
   commitGiftCardDrawdown,
   giftCardCurrency,
@@ -227,6 +225,13 @@ async function applyCreditGrant(
         expires_at: months > 0 ? addMonths(months) : null,
         source: 'stripe',
         payment_intent_id: paymentIntentId,
+        // Same value as payment_intent_id on this rail, under the name the
+        // shared grantPaymentCredits uses. Provenance has to read the same on
+        // every rail: a reversal that looked for `payment_ref` alone would
+        // silently miss every Connect credit pack. (The reversal keys off the
+        // DOC ID, not either field — but a field that disagrees between rails
+        // is an invitation to key off the field.)
+        payment_ref: paymentIntentId,
         created_at: FieldValue.serverTimestamp(),
       })
     console.log(
@@ -246,7 +251,13 @@ async function writeContactMembership(
   teamId: string,
   contactId: string,
   md: Record<string, string>,
-  opts: { amountRappen: number; membershipExpiration: Timestamp | null }
+  opts: {
+    amountRappen: number
+    membershipExpiration: Timestamp | null
+    /** The one-off charge these fields were written for, or null on a RECURRING
+     *  renewal (handleSubscription), where no single payment owns them. */
+    paymentIntentId?: string | null
+  }
 ): Promise<void> {
   const db = admin.firestore()
   // Subscription-axis fields via the shared writer (single source of the field list).
@@ -258,6 +269,10 @@ async function writeContactMembership(
     priceId: md.priceId ?? null,
     recurrence: md.recurrence ?? null,
     amountMajor: Math.round(opts.amountRappen) / 100, // contact stores major units
+    // NULL on a renewal is load-bearing, not a gap: it OVERWRITES the ref of any
+    // earlier one-off purchase, so refunding that old charge can no longer clear
+    // a membership this renewal is paying for.
+    sourcePaymentRef: opts.paymentIntentId ?? null,
   })
   await db
     .collection(CONTACTS_COLLECTION)
@@ -267,6 +282,9 @@ async function writeContactMembership(
       type: 'payment_received',
       source: 'stripe_connect',
       message: `Membership payment received${md.subscriptionTypeName ? ` · ${md.subscriptionTypeName}` : ''}`,
+      // Every applyPaymentEffects entry carries this; this one used to omit it,
+      // so the contact timeline could not link back to the exact payment.
+      ...(opts.paymentIntentId ? { payment_id: opts.paymentIntentId } : {}),
       timestamp: FieldValue.serverTimestamp(),
     })
 }
@@ -1524,24 +1542,20 @@ async function handleCourseCheckout(
   }
 
   // Grant the lifetime entitlement. Doc id = contactId → idempotent on redelivery.
-  await admin
-    .firestore()
-    .collection(COURSES_COLLECTION)
-    .doc(md.courseId)
-    .collection(COURSE_PURCHASES_SUBCOLLECTION)
-    .doc(contactId)
-    .set(
-      {
-        courseId: md.courseId,
-        teamId: team.teamId,
-        contactId,
-        paymentIntentId: piId ?? null,
-        amount: (session.amount_total as number | undefined) ?? null,
-        currency: (session.currency as string | undefined) ?? null,
-        purchasedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+  // Through the SHARED writer, not hand-rolled: this is the rail that actually
+  // sells courses, and while it wrote its own version it stamped only
+  // `paymentIntentId` — so the entitlement a reversal is most likely to meet was
+  // the one carrying no `payment_ref` to check ownership against.
+  await grantCourseEntitlement(admin.firestore(), {
+    teamId: team.teamId,
+    courseId: md.courseId,
+    contactId,
+    amount: (session.amount_total as number | undefined) ?? null,
+    currency: (session.currency as string | undefined) ?? null,
+    source: 'stripe_connect',
+    paymentRef: piId ?? null,
+    paymentIntentId: piId ?? null,
+  })
 
   await admin
     .firestore()

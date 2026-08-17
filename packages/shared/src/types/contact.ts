@@ -246,6 +246,14 @@ export interface Contact {
   subscription_price_id?: string // set only when the chosen type has prices
   subscription_amount?: number // amount snapshot at assignment time
   subscription_type_updated_at?: Timestamp
+  // PROVENANCE: the payment doc id that wrote the fields above, or null when no
+  // single payment owns them (a recurring Stripe renewal). Written on EVERY
+  // subscription-field write by writeContactSubscriptionFields — null included,
+  // never omitted — and read by exactly one thing: reversePaymentEffects, which
+  // clears the fields only when this matches the payment being reversed.
+  // Matching on subscription_type_id instead would strip a renewal of the same
+  // plan when an older payment for it is refunded.
+  subscription_source_ref?: string | null
   // Contact-level rollup of member_subscriptions Stripe status (webhook-maintained).
   // 'none' when the contact holds no live subscription. See SubscriptionRollupStatus.
   subscription_status?: SubscriptionRollupStatus
@@ -425,13 +433,27 @@ export interface CreditGrant {
   subscription_type_id: string
   subscription_type_name?: string | null
   price_id?: string | null
+  // A reversal REDUCES credits_total to credits_used (absolute, never a
+  // decrement, never a delete) — so "no credits left" is expressed in the two
+  // numbers every reader already subtracts, and no reader needs a new filter.
   credits_total: number
   credits_used: number // 0..credits_total; only ever changed by Cloud Functions
   expires_at?: Timestamp | null // null = no expiry
   source: CreditGrantSource
   payment_intent_id?: string | null
+  // The payment doc id that produced this grant. Same value as the DOC ID —
+  // which is what a reversal keys off, because the field name differed by rail
+  // until Step 0 of the reversal work made every writer stamp both.
+  payment_ref?: string | null
   created_at?: Timestamp
   created_by?: string | null
+  // ─── reversal audit (written by reversePaymentEffects) ────────────────────
+  // Descriptive only. NOTHING reads these for a decision — remaining credits are
+  // credits_total - credits_used and nothing else.
+  reversed_at?: Timestamp | null
+  reversed_by_payment_ref?: string | null
+  /** Cumulative credits taken back by reversals of this grant. */
+  credits_revoked?: number
 }
 
 // Denormalised per-type balance on the contact doc (what lists, the access gate

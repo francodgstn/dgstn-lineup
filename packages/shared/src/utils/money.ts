@@ -34,3 +34,31 @@ export function isChargeableMinorAmount(amount: unknown): amount is number {
 export function round2Major(major: number): number {
   return Math.round(major * 100) / 100
 }
+
+/**
+ * The share of a payment that covers the units NOT yet consumed — the suggested
+ * refund for a partly-used credit pack (10 classes for CHF 180, 3 taken →
+ * 180 × 7/10 = CHF 126.00). Floors, so rounding never favours the refund over
+ * the studio.
+ *
+ * TWO THINGS THIS DELIBERATELY DOES NOT DO, both of which look like omissions:
+ *
+ *  • MIN_CHARGE_MINOR IS NOT APPLIED. That is a *charge* floor — Stripe's
+ *    minimum for taking money. A refund has no such floor; Stripe refunds any
+ *    positive integer, and the refund callable already validates the amount.
+ *    Clamping here would silently hand back more than the arithmetic says.
+ *  • It is a SUGGESTION, not a validation. The studio may refund less (a
+ *    cancellation fee) or more (goodwill); both are its call. The only ceiling
+ *    is what is left refundable on the charge, which the caller checks.
+ */
+export function proRataMinor(
+  totalMinor: number,
+  remainingUnits: number,
+  grantedUnits: number
+): number {
+  if (!Number.isFinite(totalMinor) || totalMinor <= 0) return 0
+  if (!Number.isFinite(grantedUnits) || grantedUnits <= 0) return 0
+  if (!Number.isFinite(remainingUnits) || remainingUnits <= 0) return 0
+  const remaining = Math.min(remainingUnits, grantedUnits)
+  return Math.floor((totalMinor * remaining) / grantedUnits)
+}

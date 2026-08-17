@@ -3306,7 +3306,21 @@
     "policyFeeStatus_paid": "Pagata",
     "policyFeeStatus_waived": "Condonata",
     "policyFeeWaiveConfirmTitle": "Condonare questa penale?",
-    "policyFeeWaiveConfirmBody": "Il contatto non dovrà più questa penale per mancata presentazione."
+    "policyFeeWaiveConfirmBody": "Il contatto non dovrà più questa penale per mancata presentazione.",
+    "refundSuccess": "Rimborsato.",
+    "refundAmountAction": "Rimborsa {amount}",
+    "refundProRataAction": "Rimborsa pro rata — {amount}",
+    "refundDifferentAmount": "Rimborsa un importo diverso",
+    "refundAmountLabel": "Importo del rimborso",
+    "refundAmountMax": "Al massimo {amount}",
+    "refundReversesSubscription": "Questo riprende anche ciò che il pagamento aveva dato: l’abbonamento che ha attivato e le lezioni non utilizzate. Ciò che ha pagato un pagamento più recente resta intatto.",
+    "refundReversesCourse": "Questo rimuove anche il corso dallo spazio di {name}.",
+    "refundConsumedTitle": "Una parte di questo pacchetto è già stata usata",
+    "refundConsumedWhat": "{name} ha usato {used} delle {granted} lezioni di questo pacchetto.",
+    "refundConsumedWhy": "Un rimborso totale riprenderebbe lezioni già seguite. Rimborsa invece la parte non utilizzata, oppure imposta un importo tuo.",
+    "refundIndivisible": "Questo pagamento può essere rimborsato solo per intero — un abbonamento o un corso non si restituisce a metà.",
+    "refundReversalFailed": "Il denaro è stato rimborsato, ma l’accesso che aveva pagato non è stato revocato. Controlla il profilo di {name}.",
+    "refundFullAmountInstead": "Rimborsa invece l’intero importo"
   },
   "PaymentErrors": {
     "setupIncomplete": "La configurazione del conto di pagamento non è ancora completata, quindi l'operazione non è riuscita. Completare la configurazione in Impostazioni → Pagamenti.",
