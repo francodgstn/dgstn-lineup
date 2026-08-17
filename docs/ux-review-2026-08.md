@@ -159,7 +159,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 81 | confuses | every-session | Every email's plain-text half runs its headings into the following sentence | C2×M9 | functions | ✅ Fixed |
 | 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
 | 82 | blocks | weekly | A member can buy a plan and still be locked out, with no self-serve way back | M5×M8 | functions | ✅ Fixed |
-| 83 | blocks | every-session | A trial lead who signs up is still refused, and the card promises otherwise | M5×M8 | needs a decision | ▶ Open |
+| 83 | blocks | every-session | A trial lead who signs up is still refused, and the card promises otherwise | M5×M8 | functions | ✅ Fixed |
+| 84 | blocks | weekly | "When someone joins" cannot be built: the trigger exists but is unreachable | M9 | web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1197,6 +1198,75 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-84 — "When someone joins" cannot be built: the trigger exists but is unreachable
+`blocks` · weekly · traced · M9 · *found 2026-08-17 while fixing UX-83*
+
+**Now.** `acquisition_stage_changed` is a real trigger — `automationEngine.ts:39` declares it,
+`onContactWrite.ts:72` fires it — but it is **absent from `TRIGGER_OPTIONS`**
+(`apps/web/src/app/[locale]/(auth)/automations/page.tsx:184`), has no message key, and no system
+or library rule ships with it. A studio cannot select it. This is the same class as UX-13's
+`previewAutomationRule`: **built, never wired.**
+
+So "welcome someone the moment they join" is expressible only two ways, and one of them is
+broken:
+
+- **`contact_created` + condition `acquisition_stage = joined`** — does **not** fire for a trial
+  lead and cannot: `contact_created` fired at trial-booking time, when the stage was
+  `trial_booked`, and it never re-evaluates. UX-83 did not change this and could not.
+- **`schedule_daily` + condition `acquisition_stage = joined`** — the shape all seven system
+  rules use. Works, one day late.
+
+**Cost.** The welcome mail is the highest-intent message a studio ever sends, and the only
+trigger that fires at the right instant is the one nobody can pick. Studios reach for
+`contact_created`, which silently skips exactly the people who converted from a trial — the
+population the welcome is most for.
+
+**Fix.** Mount the trigger: add it to `TRIGGER_OPTIONS` with copy in four locales. Consider a
+library rule ("welcome a new member") so the common case needs no assembly. **Build:** S.
+**Owner:** web-agent. **Verify:** book a trial as a new person, complete signup, confirm a rule
+on the mounted trigger fires once.
+
+---
+
+### UX-25 — A discount cannot be applied to a membership
+`blocks` · at-setup · traced · M5 · **decided 2026-08-17: intro offer on the plan, first N periods**
+
+**The exclusion was not an oversight.** CLAUDE.md states the promo rails deliberately omit
+memberships, and the reason holds up: a promo is *"a Stage A MODIFIER inside
+`resolvePaymentOptions`"*, and that resolver **returns one number**. A recurring discount is not
+a number — it is a **schedule** (an amount *and* how many periods it survives). The single-amount
+contract cannot express "CHF 1 now, CHF 79 from March". So there was never a missing branch.
+
+**The trap.** `createMembershipCheckout` → `createSubscriptionCheckoutSession` builds the price
+inline (`price_data.unit_amount` + `recurring`), with no `discounts` and no coupon — there is
+**zero Stripe coupon usage anywhere in the codebase**. So lowering `unit_amount` "works" first
+try and is wrong: that becomes the **recurring** price, the member pays the discount forever, and
+nothing records why they are on a different price from the plan.
+
+**Decided shape: an intro offer owned by the PLAN, not by a code.** A field on
+`SubscriptionType` — first *N* periods at a reduced (or zero) price, then full price. Reasons:
+
+1. It is the standard acquisition lever for this market, and most of its value is being on the
+   **public pricing card**. A promo code is invisible until checkout.
+2. It stays clear of the promo redemption machinery, whose central rule is *"a use is consumed by
+   a completed **sale**"*. On a recurring rail, which renewal is the sale? Reservations,
+   per-person caps and the ownership rules all become ambiguous where they are currently precise.
+3. **It must NOT be added to `resolvePaymentOptions`** — that would break the single-amount
+   contract, which is the whole reason this is a separate feature rather than a fifth promo rail.
+
+**Deferred, deliberately:** promo codes on memberships. Revisit only once the intro-offer
+schedule concept exists and can be reused.
+
+**Known Stripe constraint to design around:** a coupon's `duration: 'once'` applies to the first
+invoice at any interval, but `duration: 'repeating'` is expressed in **`duration_in_months`** —
+which cannot express "first N periods" for a weekly plan. Establish what Stripe actually supports
+and constrain the editor accordingly; do not write a value Stripe will reject or silently
+misapply. **Build:** M. **Owner:** functions-agent + web.
+**Verify:** set a 3-month intro on a monthly plan, buy it in the shop, confirm the first invoice
+is discounted, the fourth is full price, and the pricing card says so before purchase.
 
 ---
 
