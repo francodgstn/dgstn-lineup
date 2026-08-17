@@ -11,8 +11,21 @@
 // error, `console.error`d it and returned. The button un-spun, the page did not
 // change, and **a cancel that failed looked exactly like a cancel that
 // succeeded** until the next reload. They live here now so the error handling
-// sits on the mutation DEFINITION — one place, inherited by any future caller
-// (the org billing page at (auth)/org/[orgId]/billing still hand-rolls its own).
+// sits on the mutation DEFINITION — one place, inherited by any future caller.
+//
+// UX-73 (2026-08-17). The org billing page at (auth)/org/[orgId]/billing was the
+// second caller, and it needed two things this file did not have, both added
+// rather than forked:
+//  • `invalidateKeys` — an org's SaasSubscription doc (the same
+//    saas_subscriptions/{id} document) is cached by OrgProvider under
+//    ['org-subscription', orgId], not ['saas-subscription', teamId]. Without it
+//    a successful cancel toasted and left the badge saying "active".
+//  • `scope` — the two messages that NAME the payer ("Only the team owner…",
+//    "…for this team") are wrong one floor up, where the payer is an
+//    organisation and its admin.
+// The org's own checkout is a different callable with different arguments
+// (`createOrgCheckoutSession`), so it gets its own mutation below — sharing the
+// error mapper, which is the part that was worth sharing.
 //
 // Reasons are matched on the callable's CODE, not on its message substring:
 // packages/functions/src/saas-billing/index.ts distinguishes its refusals by
@@ -21,7 +34,7 @@
 // doc, `failed-precondition` for a doc with no Stripe id), and the messages are
 // English server strings we would only have to re-translate.
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { httpsCallable } from 'firebase/functions'
@@ -33,6 +46,23 @@ import type { SaasPlan } from '@linyup/shared'
 const SUPPORT_MAILTO = 'mailto:hello@linyup.com?subject=Billing%20help'
 
 type SaasBillingAction = 'checkout' | 'cancel' | 'reactivate' | 'portal'
+
+/** Who is paying — a team (Settings → Billing) or an organisation
+ *  (org/{orgId}/billing). Only the copy that NAMES the payer differs. */
+export type SaasBillingScope = 'team' | 'org'
+
+/** Options every id-taking mutation here accepts. */
+export interface SaasBillingOptions {
+  scope?: SaasBillingScope
+  /** Query keys to invalidate on success, derived from the id the mutation was
+   *  called with. Defaults to the team rail's ['saas-subscription', id]; the org
+   *  page passes ['org-subscription', id] (OrgProvider's key for the same doc). */
+  invalidateKeys?: (id: string) => QueryKey[]
+}
+
+function defaultInvalidateKeys(id: string): QueryKey[] {
+  return [['saas-subscription', id]]
+}
 
 /** Per-action fallback: names what did NOT happen, so "it failed" and "it worked"
  *  can never look the same again. */
@@ -57,7 +87,10 @@ function callableCode(err: unknown): string {
  * whose *Linyup* subscription failed to cancel into their *members'* payment
  * settings. Same shape, different rail, different next step.
  */
-export function useSaasBillingErrorToast(action: SaasBillingAction) {
+export function useSaasBillingErrorToast(
+  action: SaasBillingAction,
+  scope: SaasBillingScope = 'team'
+) {
   const t = useTranslations('SaasBilling')
 
   return (err: unknown) => {
@@ -78,15 +111,22 @@ export function useSaasBillingErrorToast(action: SaasBillingAction) {
       return
     }
 
+    // The two refusals that name the PAYER read differently one floor up: an org
+    // admin is not a team owner, and the missing doc belongs to an organisation.
+    const org = scope === 'org'
     const key =
       code === 'permission-denied'
-        ? 'errorOwnerOnly'
+        ? org
+          ? 'errorOrgAdminOnly'
+          : 'errorOwnerOnly'
         : code === 'unauthenticated'
           ? 'errorSignedOut'
           : code === 'resource-exhausted'
             ? 'errorRateLimited'
             : code === 'not-found'
-              ? 'errorNoSubscription'
+              ? org
+                ? 'errorNoOrgSubscription'
+                : 'errorNoSubscription'
               : FAILED_KEY[action]
 
     toast.error(t(key))
@@ -125,10 +165,11 @@ export function useCreateSaasCheckoutSession() {
   })
 }
 
-export function useCancelSaasSubscription() {
-  const onError = useSaasBillingErrorToast('cancel')
+export function useCancelSaasSubscription(options: SaasBillingOptions = {}) {
+  const onError = useSaasBillingErrorToast('cancel', options.scope)
   const t = useTranslations('SaasBilling')
   const queryClient = useQueryClient()
+  const invalidateKeys = options.invalidateKeys ?? defaultInvalidateKeys
 
   return useMutation({
     mutationFn: async (teamId: string) => {
@@ -137,16 +178,19 @@ export function useCancelSaasSubscription() {
     },
     onSuccess: async (_data, teamId) => {
       toast.success(t('cancelSuccess'))
-      await queryClient.invalidateQueries({ queryKey: ['saas-subscription', teamId] })
+      await Promise.all(
+        invalidateKeys(teamId).map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+      )
     },
     onError,
   })
 }
 
-export function useReactivateSaasSubscription() {
-  const onError = useSaasBillingErrorToast('reactivate')
+export function useReactivateSaasSubscription(options: SaasBillingOptions = {}) {
+  const onError = useSaasBillingErrorToast('reactivate', options.scope)
   const t = useTranslations('SaasBilling')
   const queryClient = useQueryClient()
+  const invalidateKeys = options.invalidateKeys ?? defaultInvalidateKeys
 
   return useMutation({
     mutationFn: async (teamId: string) => {
@@ -155,15 +199,48 @@ export function useReactivateSaasSubscription() {
     },
     onSuccess: async (_data, teamId) => {
       toast.success(t('reactivateSuccess'))
-      await queryClient.invalidateQueries({ queryKey: ['saas-subscription', teamId] })
+      await Promise.all(
+        invalidateKeys(teamId).map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+      )
+    },
+    onError,
+  })
+}
+
+/**
+ * Organisation plan checkout — a DIFFERENT callable from
+ * `useCreateSaasCheckoutSession` (no plan: an org has exactly one; `orgId`, not
+ * `teamId`; and it takes the caller's `origin` so a local dev checkout returns to
+ * localhost). Shares the error mapper and the not-Stripe URL guard, which is the
+ * part that was worth sharing.
+ */
+export function useCreateOrgCheckoutSession() {
+  const onError = useSaasBillingErrorToast('checkout', 'org')
+  const locale = useLocale()
+
+  return useMutation({
+    mutationFn: async (orgId: string) => {
+      const fn = httpsCallable<
+        { orgId: string; locale: string; origin?: string },
+        { url: string }
+      >(functions, 'createOrgCheckoutSession')
+      const url = (await fn({ orgId, locale, origin: window.location.origin })).data.url
+      if (
+        !url.startsWith('https://checkout.stripe.com/') &&
+        !url.startsWith('https://billing.stripe.com/')
+      ) {
+        throw new Error('Unexpected checkout URL')
+      }
+      window.location.href = url
+      return url
     },
     onError,
   })
 }
 
 /** Stripe billing portal (update payment method). Navigates on success. */
-export function useOpenBillingPortal() {
-  const onError = useSaasBillingErrorToast('portal')
+export function useOpenBillingPortal(options: SaasBillingOptions = {}) {
+  const onError = useSaasBillingErrorToast('portal', options.scope)
 
   return useMutation({
     mutationFn: async ({ teamId, returnUrl }: { teamId: string; returnUrl: string }) => {

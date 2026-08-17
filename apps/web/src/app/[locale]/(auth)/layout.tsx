@@ -75,6 +75,7 @@ import { ProductTour } from '@/components/onboarding/ProductTour'
 import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
 import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
+import { FloatingDock } from '@/components/layout/FloatingDock'
 
 // Icons referenced by string name in plugin manifest navContributions
 const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
@@ -1858,6 +1859,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <UpgradeModalProvider>
         <OpenTabsProvider>
         <ProductTour />
+        {/* Owns every floating control's position — page FABs and shell overlays
+            declare a lane instead of hardcoding a corner (see FloatingDock). */}
+        <FloatingDock>
         <div className="flex bg-background">
           {/* Desktop sidebar — fixed to viewport height, nav scrolls internally */}
           <aside
@@ -1901,6 +1905,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* In-app feedback — self-gates on the ops-controlled global flag. */}
           <FeedbackLauncher />
         </div>
+        </FloatingDock>
         </OpenTabsProvider>
       </UpgradeModalProvider>
     </NavPinsProvider>

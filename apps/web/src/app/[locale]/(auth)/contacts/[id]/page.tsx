@@ -32,6 +32,7 @@ import { ConsentHistoryPanel } from '@/components/contacts/ConsentHistoryPanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -1659,6 +1660,9 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
 
 // ─── profile tab ──────────────────────────────────────────────────────────────
 
+/** Lets the floating Save submit this form from inside its FloatingSlot portal. */
+const PROFILE_FORM_ID = 'contact-profile-form'
+
 function ProfileTab({
   contact,
   teamId,
@@ -1768,7 +1772,7 @@ function ProfileTab({
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12 lg:shrink-0">
+    <form id={PROFILE_FORM_ID} onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12 lg:shrink-0">
       {/* Single-column section blocks; fields flow into rows within each block on wider screens */}
       <div className="space-y-6">
         {/* Personal information */}
@@ -2189,17 +2193,21 @@ function ProfileTab({
         </FormBlock>
       </div>
 
-      {/* Floating save */}
+      {/* Floating save — the page's primary action, so it owns the 'page-primary'
+          lane and nothing the shell mounts can be painted over it. Portalled out
+          of this <form>, hence `form={PROFILE_FORM_ID}` rather than a bare
+          type="submit". */}
       {isDirty && (
-        <div className="fixed bottom-6 right-6 z-40">
+        <FloatingSlot lane="page-primary">
           <button
             type="submit"
+            form={PROFILE_FORM_ID}
             disabled={isSubmitting}
             className="flex items-center gap-2 px-5 py-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {isSubmitting ? tCommon('loading') : t('saveChanges')}
           </button>
-        </div>
+        </FloatingSlot>
       )}
     </form>
 

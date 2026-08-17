@@ -24,6 +24,7 @@ import {
   ACTIVITIES_COLLECTION,
   resolveActivityAccessRule,
   resolveUsageLimit,
+  normalizeBenefit,
 } from '@linyup/shared'
 import type { SubscriptionType, SubscriptionPrice, Activity } from '@linyup/shared'
 import {
@@ -51,6 +52,14 @@ import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } fro
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
+import {
+  BENEFIT_CONTEXT_EFFECTS,
+  benefitAmountInvalid,
+  benefitPercentInvalid,
+  toBenefitFormValue,
+  toBenefitPayload,
+  type BenefitFormValue,
+} from '@/components/pricing/BenefitEditor'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { formatCurrency } from '@/lib/format'
@@ -133,6 +142,49 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
   }
 }
 
+// ── Linking an activity to a subscription: TWO STORES, one per KIND ──────────
+// A CLASS is gated, so the link lives in `accessRule.subscriptionTypeIds` and
+// ticking it promotes the class to the 'subscription' tier.
+// An APPOINTMENT has no access gate at all — THE PRICE IS THE GATE — so the same
+// link is expressed as `Activity.memberBenefit` ({subscriptionTypeIds, effect}):
+// holders book free, or cheaper. `accessRule` is CLASS-ONLY (see
+// ActivityMemberBenefit in @linyup/shared), and writing it on an appointment is
+// exactly what UX-69 found: nothing read it, so the pack looked linked in admin,
+// said nothing on the public appointment card, and a holder who booked anyway
+// was quoted and charged the full base price.
+
+/** The appointment half of a link — `memberBenefit` is ONE rule per activity, so
+ *  this is the rule's effect, not this subscription's own. */
+type BenefitChoice = Pick<BenefitFormValue, 'effect' | 'percent' | 'amount'>
+
+/** Same set the activity's own editor offers for an appointment. A shorter list
+ *  here would silently rewrite an effect saved there — see
+ *  BENEFIT_CONTEXT_EFFECTS. */
+const APPOINTMENT_EFFECTS = BENEFIT_CONTEXT_EFFECTS.appointment
+
+function isAppointment(a: { type?: string }): boolean {
+  return a.type === 'appointment'
+}
+
+/** Which subscription types the activity's link store lists today: `accessRule`
+ *  for a class, `memberBenefit` for an appointment. Reading only `accessRule`
+ *  (as this editor did until UX-69) made every appointment benefit look
+ *  unlinked — and an unlinked-looking tick gets wiped on the next save. */
+function linkedSubscriptionIds(
+  a: Pick<Activity, 'type' | 'accessRule' | 'isFreeTrial' | 'memberBenefit'>
+): string[] {
+  if (isAppointment(a)) return normalizeBenefit(a.memberBenefit)?.subscriptionTypeIds ?? []
+  const rule = resolveActivityAccessRule(a)
+  return rule.type === 'subscription' ? (rule.subscriptionTypeIds ?? []) : []
+}
+
+/** The effect an appointment's existing rule carries, or the default for a fresh
+ *  one: 'included' — right for a credit pack, where a booking spends a credit. */
+function benefitChoiceOf(a: Pick<Activity, 'memberBenefit'>): BenefitChoice {
+  const { effect, percent, amount } = toBenefitFormValue(a.memberBenefit)
+  return { effect, percent, amount }
+}
+
 function SubTypeDialog({
   open,
   onOpenChange,
@@ -153,6 +205,10 @@ function SubTypeDialog({
 }) {
   const t = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
+  // The benefit effect names + validation copy live in ONE namespace, shared with
+  // the activity editor's BenefitEditor — two words for one effect would be two
+  // concepts to the studio.
+  const tb = useTranslations('Benefit')
 
   const {
     register,
@@ -169,19 +225,18 @@ function SubTypeDialog({
 
   const { fields, append, remove, move } = useFieldArray({ control, name: 'prices' })
 
-  // ── Linked activities (inverse view of Activity.accessRule) ──────────────────
-  // The persisted link lives on the activity docs (accessRule.subscriptionTypeIds);
-  // this section just edits it from the subscription side. On create, the links
-  // are written right after addDoc returns the new type's id.
+  // ── Linked activities (inverse view of the activity's link store) ───────────
+  // The persisted link lives on the activity docs — `accessRule` on a class,
+  // `memberBenefit` on an appointment (see the two-stores note above); this
+  // section just edits it from the subscription side. On create, the links are
+  // written right after addDoc returns the new type's id.
   const qcActivities = useQueryClient()
   const { data: activities = [] } = useActivities(teamId)
+  const { data: subTypes = [] } = useSubscriptionTypes(teamId)
   const linkedInitially = useMemo(() => {
     if (!editing) return []
     return activities
-      .filter((a) => {
-        const rule = resolveActivityAccessRule(a)
-        return rule.type === 'subscription' && (rule.subscriptionTypeIds ?? []).includes(editing.id)
-      })
+      .filter((a) => linkedSubscriptionIds(a).includes(editing.id))
       .map((a) => a.id)
   }, [activities, editing])
   // null = untouched (mirror the docs); an array = the user's pending selection.
@@ -193,24 +248,79 @@ function SubTypeDialog({
         ? linkedIds.filter((id) => id !== activityId)
         : [...linkedIds, activityId],
     )
+  // Per-appointment benefit choice, keyed by activity id. Absent = whatever the
+  // doc already says (benefitChoiceOf), so ticking an appointment that already
+  // has a rule never changes that rule's effect behind the studio's back.
+  const [benefitDrafts, setBenefitDrafts] = useState<Record<string, BenefitChoice>>({})
+  const benefitChoice = (a: Activity): BenefitChoice => benefitDrafts[a.id] ?? benefitChoiceOf(a)
+  const setBenefitChoice = (activityId: string, next: BenefitChoice) =>
+    setBenefitDrafts((prev) => ({ ...prev, [activityId]: next }))
+  /** Did the studio change the RULE (not the tick) on an already-linked
+   *  appointment? Without this, changing "Included" to "20% off" on a row that is
+   *  already ticked would be another silent no-op. */
+  const benefitChoiceEdited = (a: Activity) => {
+    const draft = benefitDrafts[a.id]
+    if (!draft) return false
+    const saved = benefitChoiceOf(a)
+    return (
+      draft.effect !== saved.effect ||
+      draft.percent !== saved.percent ||
+      draft.amount !== saved.amount
+    )
+  }
+  // Shown only after a submit attempt: a percent/amount is typed, and flagging it
+  // the instant '% off' is picked would shout before she has typed anything.
+  const [showBenefitErrors, setShowBenefitErrors] = useState(false)
+
+  /** The one validation rule, borrowed from the activity editor rather than
+   *  restated: 1–99 for a percentage, ≥ 0.50 for a fixed price. Those helpers
+   *  no-op on an empty rule, so we probe with a placeholder holder — the row IS
+   *  ticked, and on create this subscription has no id yet. */
+  const benefitErrors = useMemo(() => {
+    const out: Record<string, 'percent' | 'amount'> = {}
+    for (const a of activities) {
+      if (!isAppointment(a) || !linkedIds.includes(a.id)) continue
+      const probe: BenefitFormValue = {
+        subscriptionTypeIds: ['*'],
+        ...(benefitDrafts[a.id] ?? benefitChoiceOf(a)),
+      }
+      if (benefitPercentInvalid(probe)) out[a.id] = 'percent'
+      else if (benefitAmountInvalid(probe)) out[a.id] = 'amount'
+    }
+    return out
+  }, [activities, linkedIds, benefitDrafts])
 
   useEffect(() => {
     if (open) {
       reset(emptyDefaults(editing))
       setLinkedDraft(null)
+      setBenefitDrafts({})
+      setShowBenefitErrors(false)
     }
   }, [open, editing, reset])
 
-  /** Diff the drafted selection against the docs and write accessRule changes.
-   *  Linking promotes an open/members activity to the subscription tier; unlinking
-   *  the LAST subscription reverts it to members (never a locked empty allow-list).
-   *  Runs in a transaction with fresh reads so a concurrent accessRule edit (e.g.
-   *  from the activity dialog) isn't clobbered by our cached snapshot. */
+  /** Diff the drafted selection against the docs and write the link — to
+   *  `accessRule` on a class, to `memberBenefit` on an appointment.
+   *
+   *  CLASS: linking promotes an open/members activity to the subscription tier;
+   *  unlinking the LAST subscription reverts it to members (never a locked empty
+   *  allow-list).
+   *  APPOINTMENT: linking appends to the ONE benefit rule and stamps the effect
+   *  the studio just confirmed in the row; unlinking the last subscription clears
+   *  the rule (`null`, matching the activity editor's own clear). No `accessRule`
+   *  and no `isFreeTrial` — both are class-only.
+   *
+   *  Runs in a transaction with fresh reads, so the id LIST always comes from the
+   *  live doc and a concurrent edit (e.g. from the activity dialog) isn't
+   *  clobbered by our cached snapshot. */
   async function persistLinkedActivities(subTypeId: string) {
-    if (!linkedDraft) return
+    if (!linkedDraft && Object.keys(benefitDrafts).length === 0) return
     const before = new Set(linkedInitially)
-    const after = new Set(linkedDraft)
-    const changed = activities.filter((a) => after.has(a.id) !== before.has(a.id))
+    const after = new Set(linkedIds)
+    const changed = activities.filter((a) => {
+      if (after.has(a.id) !== before.has(a.id)) return true
+      return isAppointment(a) && after.has(a.id) && benefitChoiceEdited(a)
+    })
     if (!changed.length) return
     await runTransaction(db, async (tx) => {
       const snaps = await Promise.all(
@@ -219,7 +329,28 @@ function SubTypeDialog({
       snaps.forEach((snap, i) => {
         if (!snap.exists()) return
         const a = changed[i]
-        const rule = resolveActivityAccessRule(snap.data() as Activity)
+        const fresh = snap.data() as Activity
+        if (isAppointment(fresh)) {
+          const ids = linkedSubscriptionIds(fresh)
+          const nextIds = after.has(a.id)
+            ? ids.includes(subTypeId)
+              ? ids
+              : [...ids, subTypeId]
+            : ids.filter((id) => id !== subTypeId)
+          // The ids come from the fresh doc; the effect is the one the row was
+          // SHOWING when she saved. On an UNLINK the row's controls were hidden,
+          // so a draft she left behind must not be written onto whoever stays on
+          // the rule — take the saved effect instead. Empty ids →
+          // toBenefitPayload returns null, clearing the rule.
+          tx.update(snap.ref, {
+            memberBenefit: toBenefitPayload({
+              subscriptionTypeIds: nextIds,
+              ...(after.has(a.id) ? benefitChoice(a) : benefitChoiceOf(fresh)),
+            }),
+          })
+          return
+        }
+        const rule = resolveActivityAccessRule(fresh)
         const has = (rule.subscriptionTypeIds ?? []).includes(subTypeId)
         if (after.has(a.id) && !has) {
           tx.update(snap.ref, {
@@ -251,6 +382,13 @@ function SubTypeDialog({
   const limitPer = watch('limitPer') ?? 'week'
 
   async function onSubmit(data: SubTypeData) {
+    // A malformed appointment benefit would be written as a rule the resolver
+    // falls back on (base price, no benefit) — the exact silent mispricing UX-69
+    // is about. Refuse the whole save and name the row instead.
+    if (Object.keys(benefitErrors).length > 0) {
+      setShowBenefitErrors(true)
+      return
+    }
     const prices = (data.prices ?? []).map((p) => {
       const entry: SubscriptionPrice = {
         id: p.id,
@@ -598,8 +736,10 @@ function SubTypeDialog({
           </div>
 
           {/* Activities this subscription unlocks — inverse editor over the
-              activities' accessRule (saved together with the type; on create,
-              the links are written once the new type's id exists) */}
+              activity's link store: `accessRule` for a class, `memberBenefit`
+              for an appointment (see the two-stores note at the top of this
+              file). Saved together with the type; on create, the links are
+              written once the new type's id exists. */}
           <div className="space-y-2 rounded-lg border border-dashed p-3">
             <div className="space-y-0.5">
               <Label>{t('subTypeActivitiesLabel')}</Label>
@@ -609,24 +749,125 @@ function SubTypeDialog({
               <p className="text-xs text-muted-foreground">{t('subTypeActivitiesEmpty')}</p>
             ) : (
               <div className="space-y-1.5">
-                {activities.map((a: Activity) => (
-                  <label key={a.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      className="accent-primary"
-                      checked={linkedIds.includes(a.id)}
-                      onChange={() => toggleLinked(a.id)}
-                    />
-                    <span
-                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                      style={{ background: a.color || DEFAULT_ACCENT }}
-                    />
-                    {a.name}
-                  </label>
-                ))}
+                {activities.map((a: Activity) => {
+                  const checked = linkedIds.includes(a.id)
+                  const appointment = isAppointment(a)
+                  const choice = benefitChoice(a)
+                  // Everyone ELSE on this appointment's one rule — named, because
+                  // the effect she picks here applies to them too.
+                  const sharedWith = appointment
+                    ? linkedSubscriptionIds(a)
+                        .filter((id) => id !== editing?.id)
+                        .map((id) => subTypes.find((s) => s.id === id)?.name)
+                        .filter((n): n is string => !!n)
+                    : []
+                  const rowError = showBenefitErrors ? benefitErrors[a.id] : undefined
+                  return (
+                    <div
+                      key={a.id}
+                      className={
+                        appointment && checked ? 'rounded-md border bg-card p-2.5 space-y-2' : ''
+                      }
+                    >
+                      <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-primary"
+                          checked={checked}
+                          onChange={() => toggleLinked(a.id)}
+                        />
+                        <span
+                          className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                          style={{ background: a.color || DEFAULT_ACCENT }}
+                        />
+                        {a.name}
+                        {appointment && (
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            {t('subTypeActivitiesAppointmentBadge')}
+                          </Badge>
+                        )}
+                      </label>
+
+                      {/* An appointment has no gate to open, so a bare tick can't
+                          say what it means — the ONE benefit rule needs its
+                          effect. */}
+                      {appointment && checked && (
+                        <div className="space-y-1.5 pl-6">
+                          <p className="text-xs text-muted-foreground">
+                            {t('subTypeActivitiesBenefitLabel')}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {APPOINTMENT_EFFECTS.map((effect) => (
+                              <button
+                                key={effect}
+                                type="button"
+                                aria-pressed={choice.effect === effect}
+                                onClick={() => setBenefitChoice(a.id, { ...choice, effect })}
+                                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                                  choice.effect === effect
+                                    ? 'border-primary bg-primary/5 text-foreground'
+                                    : 'text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                                }`}
+                              >
+                                {tb(`effect_${effect}` as const)}
+                              </button>
+                            ))}
+                          </div>
+                          {choice.effect === 'percent_off' && (
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={99}
+                                value={choice.percent}
+                                onChange={(e) =>
+                                  setBenefitChoice(a.id, { ...choice, percent: e.target.value })
+                                }
+                                placeholder="20"
+                                className="h-8 w-20 text-sm"
+                                aria-label={tb('percentLabel')}
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                          )}
+                          {choice.effect === 'fixed_price' && (
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                type="number"
+                                min={0.5}
+                                step="0.01"
+                                value={choice.amount}
+                                onChange={(e) =>
+                                  setBenefitChoice(a.id, { ...choice, amount: e.target.value })
+                                }
+                                placeholder="0.00"
+                                className="h-8 w-24 text-sm"
+                                aria-label={tb('amountLabel')}
+                              />
+                              <span className="text-xs text-muted-foreground">{currency}</span>
+                            </div>
+                          )}
+                          {rowError && (
+                            <p className="text-destructive text-xs">
+                              {tb(rowError === 'percent' ? 'percentValidation' : 'amountValidation')}
+                            </p>
+                          )}
+                          {sharedWith.length > 0 && (
+                            <p className="text-xs text-amber-600">
+                              {t('subTypeActivitiesSharedRule', { names: sharedWith.join(', ') })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
             <p className="text-xs text-muted-foreground">{t('subTypeActivitiesHint')}</p>
+            {showBenefitErrors && Object.keys(benefitErrors).length > 0 && (
+              <p className="text-destructive text-xs">{t('subTypeActivitiesBenefitFix')}</p>
+            )}
           </div>
 
           {/* Automations referencing this subscription + a quick create shortcut */}

@@ -22,9 +22,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CreditCard, CheckCircle2, AlertTriangle, FileText, ExternalLink } from 'lucide-react'
-import { useLocale } from 'next-intl'
 import { subscriptionEndsAt, subscriptionIsCancelling } from '@linyup/shared'
 import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
+import {
+  useCancelSaasSubscription,
+  useCreateOrgCheckoutSession,
+  useOpenBillingPortal,
+  useReactivateSaasSubscription,
+} from '@/hooks/useSaasBilling'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -130,82 +135,35 @@ function InvoicesSection({ orgId, hasGateway }: { orgId: string; hasGateway: boo
 export default function OrgBillingPage() {
   const { orgId } = useParams<{ orgId: string }>()
   const t = useTranslations('OrgBilling')
-  const locale = useLocale()
   const searchParams = useSearchParams()
   const checkoutResult = searchParams.get('checkout')
 
   const { subscription, loading, isAdmin } = useOrg()
   const [cancelOpen, setCancelOpen] = useState(false)
-  const [actionLoading, setActionLoading] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3500)
-  }
+  // UX-73: the four billing callables were inline `httpsCallable` calls reporting
+  // through a hand-rolled green banner that printed the RAW ENGLISH server
+  // message to a French, German or Italian owner — and invalidated nothing, so a
+  // successful cancel left the badge saying "active" until a reload. They are the
+  // shared hook's mutations now (hooks/useSaasBilling.ts): code-matched reasons,
+  // translated copy, a success toast, and invalidation of the key OrgProvider
+  // actually caches this org's subscription under.
+  const invalidateKeys = (id: string) => [['org-subscription', id]]
+  const checkout = useCreateOrgCheckoutSession()
+  const cancel = useCancelSaasSubscription({ scope: 'org', invalidateKeys })
+  const reactivate = useReactivateSaasSubscription({ scope: 'org', invalidateKeys })
+  const billingPortal = useOpenBillingPortal({ scope: 'org' })
+  // One flag per action instead of one shared `actionLoading`: a failed cancel
+  // used to leave every other button disabled for the length of its own request.
+  const actionPending =
+    checkout.isPending || cancel.isPending || reactivate.isPending || billingPortal.isPending
 
-  async function handleSubscribe() {
-    setActionLoading(true)
-    try {
-      const fn = httpsCallable<
-        { orgId: string; locale: string; origin?: string },
-        { url: string }
-      >(functions, 'createOrgCheckoutSession')
-      const result = await fn({
-        orgId: orgId,
-        locale,
-        origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-      })
-      const url = result.data.url
-      if (!url.startsWith('https://checkout.stripe.com')) {
-        throw new Error('Unexpected redirect URL')
-      }
-      window.location.href = url
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Error')
-      setActionLoading(false)
-    }
-  }
-
-  async function handleCancel() {
-    setActionLoading(true)
-    try {
-      const fn = httpsCallable(functions, 'cancelSaasSubscription')
-      await fn({ teamId: orgId })
-      showToast(t('cancelSuccess'))
-      setCancelOpen(false)
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Error')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  async function handleReactivate() {
-    setActionLoading(true)
-    try {
-      const fn = httpsCallable(functions, 'reactivateSaasSubscription')
-      await fn({ teamId: orgId })
-      showToast(t('reactivateSuccess'))
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Error')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  async function handleUpdatePayment() {
-    setActionLoading(true)
-    try {
-      const fn = httpsCallable<{ teamId: string; returnUrl: string }, { url: string }>(functions, 'getBillingPortalUrl')
-      const result = await fn({ teamId: orgId, returnUrl: window.location.href })
-      const url = result.data.url
-      if (!url.startsWith('https://billing.stripe.com/')) throw new Error('Unexpected URL')
-      window.location.href = url
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Error')
-      setActionLoading(false)
-    }
+  function handleCancel() {
+    // `AlertDialogAction` is a plain Button here (components/ui/alert-dialog.tsx),
+    // so the dialog closes only where we close it: on SUCCESS. A failed cancel
+    // keeps the confirmation standing behind its toast instead of dismissing as
+    // though it had worked. Same rule as settings/billing.
+    cancel.mutate(orgId, { onSuccess: () => setCancelOpen(false) })
   }
 
   const status = subscription?.status ?? 'trial'
@@ -304,17 +262,28 @@ export default function OrgBillingPage() {
               {isAdmin && (
                 <div className="flex flex-wrap gap-2 pt-2">
                   {!hasActiveSubscription && !isCancelling && (
-                    <Button onClick={handleSubscribe} disabled={actionLoading}>
-                      {actionLoading ? '…' : t('upgradeButton')}
+                    <Button onClick={() => checkout.mutate(orgId)} disabled={actionPending}>
+                      {checkout.isPending ? '…' : t('upgradeButton')}
                     </Button>
                   )}
                   {isCancelling && (
-                    <Button variant="outline" onClick={handleReactivate} disabled={actionLoading}>
-                      {actionLoading ? '…' : t('reactivate')}
+                    <Button
+                      variant="outline"
+                      onClick={() => reactivate.mutate(orgId)}
+                      disabled={actionPending}
+                    >
+                      {reactivate.isPending ? '…' : t('reactivate')}
                     </Button>
                   )}
                   {hasActiveSubscription && hasGateway && (
-                    <Button variant="ghost" size="sm" onClick={handleUpdatePayment} disabled={actionLoading}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        billingPortal.mutate({ teamId: orgId, returnUrl: window.location.href })
+                      }
+                      disabled={actionPending}
+                    >
                       <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                       {t('updatePayment')}
                     </Button>
@@ -323,7 +292,7 @@ export default function OrgBillingPage() {
                     <Button
                       variant="outline"
                       onClick={() => setCancelOpen(true)}
-                      disabled={actionLoading}
+                      disabled={actionPending}
                     >
                       {t('cancelButton')}
                     </Button>
@@ -344,19 +313,13 @@ export default function OrgBillingPage() {
             <AlertDialogDescription>{t('cancelConfirmMessage')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionLoading}>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel} disabled={actionLoading}>
-              {actionLoading ? '…' : t('cancelConfirmAction')}
+            <AlertDialogCancel disabled={cancel.isPending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancel} disabled={cancel.isPending}>
+              {cancel.isPending ? '…' : t('cancelConfirmAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {toast && (
-        <div className="fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white bg-green-600 z-50">
-          {toast}
-        </div>
-      )}
     </div>
   )
 }

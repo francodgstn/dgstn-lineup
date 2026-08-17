@@ -13,6 +13,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRouter as useI18nRouter } from '@/i18n/navigation'
@@ -1147,13 +1148,15 @@ export default function SessionDetailPage() {
       </div>
 
       {/* Mobile FAB — add participant */}
-      <button
-        onClick={() => setAddOpen(true)}
-        className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
-        aria-label={t('addContact')}
-      >
-        <UserPlus className="h-6 w-6" />
-      </button>
+      <FloatingSlot lane="page-primary" className="sm:hidden">
+        <button
+          onClick={() => setAddOpen(true)}
+          className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+          aria-label={t('addContact')}
+        >
+          <UserPlus className="h-6 w-6" />
+        </button>
+      </FloatingSlot>
 
       {/* Dialogs */}
       {currentTeamId && (

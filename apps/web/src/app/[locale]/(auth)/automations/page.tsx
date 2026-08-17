@@ -32,6 +32,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -1965,15 +1966,17 @@ export default function AutomationsPage() {
         )}
 
         {/* Mobile FAB */}
-        <button
-          className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-          onClick={() => {
-            setEditingRule(null)
-            setRuleDialogOpen(true)
-          }}
-        >
-          <Plus className="h-6 w-6" />
-        </button>
+        <FloatingSlot lane="page-primary" className="md:hidden">
+          <button
+            className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            onClick={() => {
+              setEditingRule(null)
+              setRuleDialogOpen(true)
+            }}
+          >
+            <Plus className="h-6 w-6" />
+          </button>
+        </FloatingSlot>
       </div>
 
       {currentTeamId && (

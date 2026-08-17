@@ -44,6 +44,7 @@ import type {
 } from '@linyup/shared'
 import { useAskedDocuments, type AskedDocument } from '@/hooks/useContactDocuments'
 import { AskToSignDialog } from '@/components/contacts/AskToSignDialog'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import {
   useContactGroups, useInvalidateContactGroups, createGroupFromFilter, useContactFilterContext,
@@ -2162,7 +2163,8 @@ function BulkBar({
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-card border rounded-full shadow-lg px-4 py-2">
+    <FloatingSlot lane="page-bar">
+    <div className="flex items-center gap-2 bg-card border rounded-full shadow-lg px-4 py-2">
       <span className="text-sm font-medium mr-2">{t('bulkSelected', { count })}</span>
 
       {editActions.length > 0 && (
@@ -2253,6 +2255,7 @@ function BulkBar({
         <X className="h-4 w-4" />
       </button>
     </div>
+    </FloatingSlot>
   )
 }
 
@@ -2778,13 +2781,15 @@ export default function ContactsPage() {
 
       {/* Mobile FAB */}
       {selected.size === 0 && (
-        <button
-          onClick={openCreateDialog}
-          className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-40"
-          aria-label={t('addContact')}
-        >
-          <UserPlus className="h-6 w-6" />
-        </button>
+        <FloatingSlot lane="page-primary" className="sm:hidden">
+          <button
+            onClick={openCreateDialog}
+            className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+            aria-label={t('addContact')}
+          >
+            <UserPlus className="h-6 w-6" />
+          </button>
+        </FloatingSlot>
       )}
 
       {/* Bulk action bar */}

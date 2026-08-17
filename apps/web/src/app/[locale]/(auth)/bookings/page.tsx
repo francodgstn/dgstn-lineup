@@ -59,7 +59,7 @@ import {
   ExternalLink,
   User,
 } from 'lucide-react'
-import { useRouter } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -520,10 +520,23 @@ function BookingRow({
       </div>
 
       <div className="flex-1 min-w-0">
+        {/* The two entities a booking row is ABOUT are its contact and its
+            session, and both used to be reachable only through the row's action
+            menu — so the most common thing to do with a row cost a menu open.
+            They are links now; the menu keeps the actions. */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="font-medium text-sm truncate">
-            {booking.firstname} {booking.lastname}
-          </p>
+          {booking.contact ? (
+            <Link
+              href={`/contacts/${booking.contact}` as Route}
+              className="font-medium text-sm truncate hover:underline"
+            >
+              {booking.firstname} {booking.lastname}
+            </Link>
+          ) : (
+            <p className="font-medium text-sm truncate">
+              {booking.firstname} {booking.lastname}
+            </p>
+          )}
           {booking.is_new_contact && (
             <Badge variant="outline" className="text-xs shrink-0">
               {t('trialBadge')}
@@ -531,18 +544,31 @@ function BookingRow({
           )}
         </div>
         <p className="text-xs text-muted-foreground truncate">{booking.email ?? '—'}</p>
-        {(activityName || sessionDate) && (
-          <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">
-            {activityName && <span>{activityName}</span>}
-            {activityName && sessionDate && (
-              <span className="text-muted-foreground font-normal"> · </span>
-            )}
-            {sessionDate && <span>{sessionDate}</span>}
-            {sessionTime && (
-              <span className="text-muted-foreground font-normal"> {sessionTime}</span>
-            )}
-          </p>
-        )}
+        {(activityName || sessionDate) &&
+          (() => {
+            const sessionLine = (
+              <>
+                {activityName && <span>{activityName}</span>}
+                {activityName && sessionDate && (
+                  <span className="text-muted-foreground font-normal"> · </span>
+                )}
+                {sessionDate && <span>{sessionDate}</span>}
+                {sessionTime && (
+                  <span className="text-muted-foreground font-normal"> {sessionTime}</span>
+                )}
+              </>
+            )
+            return booking.session ? (
+              <Link
+                href={`/sessions/${booking.session}` as Route}
+                className="block text-sm text-foreground/80 truncate mt-0.5 font-medium hover:underline"
+              >
+                {sessionLine}
+              </Link>
+            ) : (
+              <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">{sessionLine}</p>
+            )
+          })()}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

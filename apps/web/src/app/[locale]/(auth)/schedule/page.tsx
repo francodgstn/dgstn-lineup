@@ -38,6 +38,7 @@ import type { Route } from 'next'
 import { cn } from '@/lib/utils'
 import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1239,7 +1240,7 @@ export default function CalendarPage() {
 
       {/* Mobile FAB */}
       {currentTeamId && user && (
-        <div className="sm:hidden fixed bottom-6 right-6 z-40">
+        <FloatingSlot lane="page-primary" className="sm:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors">
               <Plus className="h-6 w-6" />
@@ -1263,7 +1264,7 @@ export default function CalendarPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
+        </FloatingSlot>
       )}
 
       {/* Dialogs */}
