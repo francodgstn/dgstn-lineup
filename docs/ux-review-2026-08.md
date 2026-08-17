@@ -955,6 +955,9 @@ work: a newcomer's first paid contact with the business.
    Note UX-C2-5 while you are there: class bookings attach no `.ics` at all (the only
    `text/calendar` in the whole functions package is `appointments/templates.ts:178`), so
    adding it here fixes the paid path and the free one together.
+
+   **But it must NOT inherit the `booking_confirmation` toggle** — see below. Reusing the
+   template is right; reusing the gate is the bug.
 2. **That email carries the Space link**, so the buyer learns the portal exists at the one
    moment they have a reason to use it. This is the cheapest possible fix for the review's
    standing complaint that Space has no discoverable entrance.
@@ -964,10 +967,45 @@ work: a newcomer's first paid contact with the business.
    written to be idempotent — the mail must join that, via the `mail_sends` ledger, or a
    redelivery mails the buyer twice.
 
+**A receipt for money is not a preference — make it always-on.** *(Franco's call, 2026-08-17,
+and the codebase already argues it.)*
+
+`booking_confirmation` is a **switch**: `settings.system_emails.booking_confirmation`, enforced
+by `systemEmailEnabledFor` at six call sites (`utils/systemEmails.ts`). So simply routing the
+paid drop-in through the existing send would let a studio turn off the receipt for something a
+visitor **paid for** — which is worse than today's silence, because it would look deliberate.
+
+The codebase already has the category this belongs in, and the test to qualify for it.
+`booking/waitlist/notify.ts:118-130` puts two sends outside the toggle on purpose:
+
+> *"always on, because switching it off does not quieten the feature, it breaks it"* … *"a
+> studio that switched the toggle off would be trapping people rather than quietening a mail."*
+
+A paid drop-in receipt passes that test exactly. Without it there is no email, therefore no
+manage-booking link and no Space invitation — the buyer is not spared a courtesy, they are
+stranded. So:
+
+- **Add a new always-on system email for a paid booking's confirmation/receipt.** Not behind
+  `SystemEmailKey`, with the reasoning in the header, in the same voice as the waitlist ones.
+- **List it in Settings → Emails with the `alwaysOn` badge**, beside the sign-in codes and form
+  receipts (`SystemEmailsCard.tsx:262-280`). That panel's virtue, per this review's What's good,
+  is that it shows the mail a studio *cannot* switch off rather than hiding it — a receipt they
+  cannot disable should be visible for the same reason.
+- **Keep the free-path `booking_confirmation` toggle as it is.** A studio may legitimately run
+  its own confirmation from the automations engine for free bookings; that is a courtesy. The
+  asymmetry — free is switchable, paid is not — **is the design**, and it should say so in the
+  code so nobody later "tidies" the two into one flag.
+
+**One more candidate, worth deciding not assuming:** `session_cancellation` is also switchable.
+For a *paid* booking it arguably fails the same test — switching it off leaves someone who paid
+turning up to a class that is not happening. Apply the waitlist test to it and say which way it
+falls, rather than leaving it inconsistent with whatever you decide here.
+
 **Check the sibling rails while you are in there.** If the drop-in branch never sent mail, the
 other paid branches deserve the same question — course purchase, product, priced appointment,
 waitlist claim. Report which of them confirm themselves and which do not, rather than fixing
-one and leaving a set.
+one and leaving a set. Any of them that take money and confirm nothing belong in the always-on
+category by the same argument.
 
 **Surface:** +1 send in the webhook (reusing an existing template), +1 link, ±0 routes.
 **Build:** M. **Owner:** functions-agent, then web-agent for the result page.
