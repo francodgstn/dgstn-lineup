@@ -88,7 +88,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 9 | blocks | every-session | The assistant launcher sits on top of the page's primary button and eats the tap | M1 | web | ◐ Interim shipped |
 | 10 | blocks | every-session | The member portal reports "no bookings" while holding a paid appointment | C4 | functions + web | ▶ Open |
 | 11 | costs-money | every-session | The default access tier can never name a plan, and the health check is blind to it | M5×C1×C2 | web | ▶ Open |
-| 12 | costs-money | weekly | Payment corrections make the data worse than the mistake did | M6 | functions + web | ▶ Open |
+| 12 | costs-money | weekly | Payment corrections make the data worse than the mistake did | M6 | functions + web | ✅ Fixed |
 | 13 | costs-money | weekly | Automations can email the whole list with no preview, and "Run Now" re-sends | M9 | web | ▶ Open |
 | 14 | costs-money | every-session | A visitor commits without seeing cancellation terms or the no-show fee | C2 | web + functions | ▶ Open |
 | 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ▶ Open |
