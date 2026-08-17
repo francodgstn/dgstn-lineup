@@ -59,7 +59,6 @@ import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@lin
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
-import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
@@ -815,7 +814,6 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
           <div className="flex items-start gap-1.5 min-w-0">
             <DashboardHero profile={profile} team={team} />
-            <SectionIntro sectionKey="dashboard" />
           </div>
           <DailyQuote />
         </div>

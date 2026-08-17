@@ -124,14 +124,14 @@ learn what a waitlist is.
 | `Activity` | `waitlistEnabled?: boolean` | class-only; mirrored to `activities/{id}/public_profile/{id}` by `syncActivityPublicProfile` under the same conditional spread as `trialEnabled` |
 | `Session` | `waitlist_count?: number` | how many are **waiting**; written absolutely, only from a transaction that read the queue |
 | `SessionPublicProfile` | `waitlist_count` | **class branch only** (`syncSessionPublicProfile`). An aggregate, never an identity — the queue is never public |
-| `team.settings.booking` | `waitlistClaimMinutes` | default 120, read next to `cutoffMinutes` |
+| `bookingSettings` (on `teams/{id}/public_profile/{id}`) | `waitlistClaimMinutes` | default 120, read next to `cutoffMinutes`; THE booking-settings store — see `packages/functions/src/booking/bookingSettings.ts` |
 
 **There is deliberately NO `waitlist_enabled` on the session, and nothing may add
 one.** A session-level copy would need an activity→sessions fan-out (only
 `sync/onActivityTypeChange.ts` does that, and only for `type`) plus a backfill
 for every session that already exists, and it would drift the moment either
-failed. The promoter already reads the team document for `cutoffMinutes`, so one
-more activity read on a path that runs only when a seat frees costs nothing. The
+failed. The promoter already reads the booking settings for `cutoffMinutes`, so
+one more activity read on a path that runs only when a seat frees costs nothing. The
 doc comment on `Session.waitlist_count` says this too, so nobody re-adds it.
 
 ### A guest with no account
@@ -443,8 +443,9 @@ seventh, and one of them (the hand delete) has no callable to hook.
 
 The transaction reads, in cheapest-first order: the session, the queue
 (`status == 'waiting'`, `joined_at ASC`, limit `WAITLIST_QUEUE_SCAN_LIMIT`), the
-activity (for `waitlistEnabled`), the team (for `cutoffMinutes` /
-`waitlistClaimMinutes`), the bookings, and the candidates' contact documents. It
+activity (for `waitlistEnabled`), the team's `public_profile` (for
+`cutoffMinutes` / `waitlistClaimMinutes` — the booking-settings store), the
+bookings, and the candidates' contact documents. It
 re-verifies **everything from storage** — the event payload is used for nothing
 but "wake up".
 

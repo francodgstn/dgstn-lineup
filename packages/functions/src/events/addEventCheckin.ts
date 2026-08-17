@@ -1,10 +1,11 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import { isCheckinCompleted } from '@linyup/shared'
 
-setGlobalOptions({ region: 'europe-west6' })
+// Region comes from the single setGlobalOptions call in index.ts — see the note
+// there. A second call warns "Calling setGlobalOptions twice leads to undefined
+// behavior".
 
 const CHECKINS_COLLECTION = 'checkins'
 const EVENTS_COLLECTION = 'events'

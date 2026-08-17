@@ -7,7 +7,7 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Route } from 'next'
-import { Check, ChevronRight, X, Rocket } from 'lucide-react'
+import { Check, ChevronRight, X, Rocket, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSetupChecklist, type SetupStepKey } from '@/hooks/useSetupChecklist'
@@ -24,17 +24,26 @@ export function SetupChecklist() {
   const router = useRouter()
   const { currentTeamId, team } = useAuth()
   const { can } = useCapabilities()
-  const { steps, requiredDone, requiredTotal, allRequiredDone, loading } = useSetupChecklist(
-    currentTeamId,
-    team
-  )
+  const {
+    steps,
+    requiredDone,
+    requiredTotal,
+    allRequiredDone,
+    loading,
+    sessionsNotActuallyBookable,
+    nextUnbookableSessionId,
+  } = useSetupChecklist(currentTeamId, team)
   // Local dismissal for non-owners (who can't write the team doc) and instant feedback.
   const [localDismissed, setLocalDismissed] = useState(false)
 
   const dismissed = team?.setup_dismissed === true || localDismissed
 
-  // Hide until loaded, once everything required is done, or when dismissed.
-  if (loading || allRequiredDone || dismissed) return null
+  // Hide until loaded, once everything required is done, or when dismissed —
+  // UNLESS the "done" sessions step is lying (UX-2 interim): existence-only
+  // completion can report every required step done for a class nobody can
+  // book, and that is exactly the case this warning exists to surface, so the
+  // card must not disappear out from under it.
+  if (loading || (allRequiredDone && !sessionsNotActuallyBookable) || dismissed) return null
 
   async function handleDismiss() {
     setLocalDismissed(true)
@@ -121,6 +130,26 @@ export function SetupChecklist() {
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 group-hover:text-foreground transition-colors" />
                 )}
               </button>
+              {/* UX-2 interim: the sessions step above can report "done" for a
+                  class nobody on earth can book (existence-only completion +
+                  allowBooking defaulting off). Say so, deep-linked to the
+                  session so fixing it is one click. */}
+              {step.key === 'sessions' && sessionsNotActuallyBookable && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      (nextUnbookableSessionId
+                        ? `/sessions/${nextUnbookableSessionId}`
+                        : step.href) as Route
+                    )
+                  }
+                  className="mt-0.5 flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{t('setup.sessionsNotBookableWarning')}</span>
+                </button>
+              )}
             </li>
           ))}
         </ul>

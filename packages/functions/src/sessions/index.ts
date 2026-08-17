@@ -11,9 +11,14 @@ import { getHostingUrl } from '../utils/env'
 import { closeSessionWaitlist } from '../booking/waitlist/teardown'
 import { enforceWaiverGate } from '../waivers/gate'
 import { confirmClearedHoldFields, publicUrl, type SeatHold } from '@linyup/shared'
+import {
+  SESSION_SERIES_COLLECTION,
+  SESSIONS_COLLECTION,
+  SERIES_HORIZON_MONTHS,
+  materializeOccurrences,
+  seriesHorizonUpdate,
+} from './series'
 
-const SESSION_SERIES_COLLECTION = 'session_series'
-const SESSIONS_COLLECTION = 'sessions'
 const TEAMS_COLLECTION = 'teams'
 const ACTIVITIES_COLLECTION = 'activities'
 
@@ -38,7 +43,6 @@ export const generateRecurringSessions = onCall(async (request) => {
     throw new HttpsError('not-found', `Recurrence series ${seriesId} not found`)
 
   const seriesData = seriesDoc.data()!
-  const teamId = (seriesData.teamId || seriesData.teacher) as string
 
   if (seriesData.teacher !== request.auth.uid) {
     throw new HttpsError(
@@ -57,68 +61,16 @@ export const generateRecurringSessions = onCall(async (request) => {
 
   const now = new Date()
   const generationStart = fromDate ? new Date(fromDate) : now
-  const generationEnd = toDate ? new Date(toDate) : addMonths(now, 6)
+  const generationEnd = toDate ? new Date(toDate) : addMonths(now, SERIES_HORIZON_MONTHS)
 
   const occurrences = calculateOccurrences(seriesData.recurrence, generationStart, generationEnd)
   console.log(`Calculated ${occurrences.length} occurrences for series ${seriesId}`)
 
-  let generatedCount = 0
-  const BATCH_SIZE = 500
+  // Shape + dedupe both live in ./series — the same code the daily roller runs,
+  // so creating a series and extending it can never drift apart again.
+  const generatedCount = await materializeOccurrences(db, seriesId, seriesData, occurrences)
 
-  for (let i = 0; i < occurrences.length; i += BATCH_SIZE) {
-    const batchOccurrences = occurrences.slice(i, i + BATCH_SIZE)
-    const batch = db.batch()
-
-    for (const occurrence of batchOccurrences) {
-      const [existErr, existSnap] = await to(
-        db
-          .collection(SESSIONS_COLLECTION)
-          .where('seriesId', '==', seriesId)
-          .where('instanceDate', '==', Timestamp.fromDate(occurrence.start))
-          .limit(1)
-          .get()
-      )
-      if (!existErr && existSnap && !existSnap.empty) continue
-
-      const sessionRef = db.collection(SESSIONS_COLLECTION).doc()
-      batch.set(sessionRef, {
-        seriesId,
-        instanceDate: Timestamp.fromDate(occurrence.start),
-        start: Timestamp.fromDate(occurrence.start),
-        end: Timestamp.fromDate(occurrence.end),
-        activityId: seriesData.template?.activityId ?? null,
-        activityName: seriesData.template?.activityName ?? null,
-        activityType: seriesData.template?.activityType ?? null,
-        location: seriesData.template?.location ?? null,
-        tags: seriesData.template?.tags ?? [],
-        notes: seriesData.template?.notes ?? '',
-        headline: seriesData.template?.headline ?? null,
-        headlinePublic: seriesData.template?.headlinePublic ?? false,
-        allowBooking: seriesData.template?.allowBooking ?? false,
-        providerName: seriesData.template?.providerName ?? null,
-        providerId: seriesData.template?.providerId ?? null,
-        max_participants: seriesData.template?.max_participants ?? null,
-        bookingMandatory: seriesData.template?.bookingMandatory ?? false,
-        teamId,
-        teacher: seriesData.teacher,
-        createdBy: seriesData.createdBy || seriesData.teacher,
-        participants_count: 0,
-        isException: false,
-        exceptionType: null,
-      })
-      generatedCount++
-    }
-
-    if (generatedCount > 0) await batch.commit()
-  }
-
-  await to(
-    seriesRef.update({
-      lastGeneratedUntil: Timestamp.fromDate(generationEnd),
-      totalOccurrences: FieldValue.increment(generatedCount),
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-  )
+  await to(seriesRef.update(seriesHorizonUpdate(generationEnd, generatedCount)))
 
   return {
     success: true,
@@ -452,7 +404,6 @@ export const updateRecurringSession = onCall(async (request) => {
     throw new HttpsError('not-found', 'Session not found')
 
   const session = sessionDoc.data()!
-  const teamId = (session.teamId || session.teacher) as string
 
   if (session.teacher !== request.auth.uid) {
     throw new HttpsError('permission-denied', 'You do not have permission to update this session')
@@ -587,10 +538,17 @@ export const updateRecurringSession = onCall(async (request) => {
     batch.update(doc.ref, perDoc)
   }
 
-  const generationEnd = addMonths(new Date(), 6)
+  const generationEnd = addMonths(new Date(), SERIES_HORIZON_MONTHS)
+  // NO `lastGeneratedUntil` HERE. This used to bump the stored horizon to
+  // now + 6 months on every "this and following" edit while generating nothing,
+  // so the field claimed sessions that did not exist. That is not a cosmetic
+  // lie: `rollSessionSeries` reads it to decide whether a series still has
+  // runway, so a false horizon parks the roller for three months on precisely
+  // the series a manager just touched. The field is now written only where
+  // sessions were actually materialised to that instant — the regeneration
+  // branch at the end of this function, and nowhere else in here.
   const seriesUpdates: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
-    lastGeneratedUntil: Timestamp.fromDate(generationEnd),
   }
   if (updates.activityId !== undefined) seriesUpdates['template.activityId'] = updates.activityId
   if (updates.activityName !== undefined)
@@ -722,7 +680,12 @@ export const updateRecurringSession = onCall(async (request) => {
     )
     if (toCreate.length > 0) {
       const seriesData = seriesDoc.data()!
+      // The template as it stands AFTER this edit. Fields this callable cannot
+      // change (placeId, roomId, autoConfirm) are carried through untouched so
+      // the regenerated sessions keep the shape `buildSeriesSessionDoc` writes
+      // everywhere else.
       const tpl = {
+        ...(seriesData.template ?? {}),
         activityId:
           ((seriesUpdates['template.activityId'] ?? seriesData.template?.activityId) as
             | string
@@ -766,26 +729,19 @@ export const updateRecurringSession = onCall(async (request) => {
           ((seriesUpdates['template.bookingMandatory'] ??
             seriesData.template?.bookingMandatory) as boolean) ?? false,
       }
-      const createBatch = db.batch()
-      for (const occ of toCreate) {
-        const ref = db.collection(SESSIONS_COLLECTION).doc()
-        createBatch.set(ref, {
-          seriesId: session.seriesId,
-          instanceDate: Timestamp.fromDate(occ.start),
-          start: Timestamp.fromDate(occ.start),
-          end: Timestamp.fromDate(occ.end),
-          ...tpl,
-          teamId,
-          teacher: seriesData.teacher,
-          createdBy: seriesData.createdBy || seriesData.teacher,
-          participants_count: 0,
-          isException: false,
-          exceptionType: null,
-        })
-      }
-      await createBatch.commit()
-      generatedCount = toCreate.length
+      generatedCount = await materializeOccurrences(
+        db,
+        session.seriesId as string,
+        { ...seriesData, template: tpl },
+        toCreate
+      )
     }
+
+    // Written HERE and only here: these sessions now exist up to generationEnd,
+    // so the horizon is a fact rather than a claim. (`buildSeriesSessionDoc` is
+    // referenced through materializeOccurrences — same shape as the callable and
+    // the daily roller.)
+    await to(seriesRef.update(seriesHorizonUpdate(generationEnd, generatedCount)))
   }
 
   return {

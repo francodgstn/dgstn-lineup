@@ -80,9 +80,18 @@ export interface CoursePurchase {
   courseId: string
   teamId: string
   contactId: string
-  paymentIntentId?: string
-  amount?: number // charged amount in Rappen (minor units), as on member_payments
-  currency?: string
+  paymentIntentId?: string | null
+  // PROVENANCE. The doc id is the CONTACT, so it proves nothing about WHICH
+  // payment granted access — this does. Stamped by the one writer,
+  // grantCourseEntitlement, on every rail; a reversal deletes the entitlement
+  // only when it matches the payment being reversed, and reports
+  // `skipped_not_owner` otherwise (a later purchase, a manual grant, or a
+  // gift-card-funded one must survive a refund of some other charge).
+  payment_ref?: string | null
+  /** Rail label: 'manual' | 'stripe_connect' | 'gift_card' | … */
+  source?: string
+  amount?: number | null // charged amount in Rappen (minor units), as on member_payments
+  currency?: string | null
   purchasedAt: Timestamp
 }
 

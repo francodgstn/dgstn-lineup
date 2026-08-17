@@ -365,9 +365,9 @@ export interface Session {
    *  mirror, exactly like `trialEnabled`. A session-level copy would need an
    *  activity→sessions fan-out (only `onActivityTypeChange` does that, and only
    *  for `type`) plus a backfill for every session that already exists, and it
-   *  would drift the moment either failed. The promoter already reads the team
-   *  for `cutoffMinutes`, so one more activity read on a path that runs only
-   *  when a seat frees costs nothing. */
+   *  would drift the moment either failed. The promoter already reads the
+   *  booking settings for `cutoffMinutes`, so one more activity read on a path
+   *  that runs only when a seat frees costs nothing. */
   waitlist_count?: number
   /** Capacity state, derived from bookings_count vs max_participants (plus
    *  explicit cancellation). Treat an ABSENT value as 'open' — a session that

@@ -23,10 +23,18 @@ import type { LucideIcon } from 'lucide-react'
 
 export type SettingsGroupKey = 'scheduling' | 'studio' | 'account'
 
-// Runtime visibility gate for items that only apply on certain plans/plugins. The
-// rail resolves these (plan via usePlan, plugin via useInstalledPlugins) and hides
-// items whose gate fails.
-export type SettingsGate = 'affiliations' | 'customFields'
+// Runtime visibility gate for items that only apply on certain plans/plugins/roles.
+// The rail resolves these (plugin via useInstalledPlugins, role via
+// useCapabilities) and hides items whose gate fails.
+//
+// `ownerOnly` — the destination is entirely read-only below the owner role:
+// firestore.rules makes the team doc, alert_presets, integrations and billing
+// owner-write (integrations owner-READ as well), so a manager who follows one of
+// these rows arrives at a screen with nothing she can do. A rail item you can
+// only look at is not worth a row. The controls behind them are still disabled +
+// annotated for an owner-less arrival by deep link — hiding the row is
+// navigation, never enforcement.
+export type SettingsGate = 'ownerOnly' | 'customFields'
 
 export interface SettingsNavItem {
   id: string // stable id used in the pin set + as React key
@@ -52,11 +60,11 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // plan/plugin-gated. The plugins marketplace lives here too (renders in the detail
   // pane; its per-plugin editor sub-routes open full-screen at /plugins/*).
   { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true },
-  { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio' },
+  { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio', gate: 'ownerOnly' },
   { id: 'teamOutreach', href: '/settings/team?tab=outreach', labelKey: 'teamOutreach', icon: Send, group: 'studio' },
   { id: 'teamEmails', href: '/settings/emails', labelKey: 'teamEmails', icon: Mail, group: 'studio' },
-  { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio' },
-  { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio' },
+  { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio', gate: 'ownerOnly' },
+  { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },
   // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
   { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
   // The public-surface overview hub — the map of everything the world can see
@@ -69,7 +77,7 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // Account — workspace admin.
   { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },
   { id: 'roles', href: '/settings/roles', labelKey: 'roles', icon: ShieldCheck, group: 'account' },
-  { id: 'billing', href: '/settings/billing', labelKey: 'billing', icon: CreditCard, group: 'account' },
+  { id: 'billing', href: '/settings/billing', labelKey: 'billing', icon: CreditCard, group: 'account', gate: 'ownerOnly' },
 ]
 
 // Group order + their `Nav` namespace label keys (rendered in the rail). Account on

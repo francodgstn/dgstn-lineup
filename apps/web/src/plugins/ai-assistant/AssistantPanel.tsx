@@ -63,13 +63,19 @@ function AssistantPanel() {
 
   return (
     <>
-      {/* Floating launcher */}
+      {/* Floating launcher. Offset up from the bottom-right corner (bottom-24,
+          not bottom-5/6) on purpose — that corner is the page-FAB convention
+          ("New contact" on /contacts, the dirty-profile Save on /contacts/[id]),
+          and this launcher mounts after <main> at the same z-40, so sitting on
+          the same pixel intercepts taps meant for the page's primary action
+          (UX-9). Do not move this back to bottom-5/6 without giving it its own
+          lane. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t('launcherLabel')}
         title={t('launcherLabel')}
-        className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+        className="fixed bottom-24 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
       >
         <Sparkles className="h-5 w-5" />
       </button>

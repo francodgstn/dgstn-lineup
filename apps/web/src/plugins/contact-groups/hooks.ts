@@ -24,9 +24,10 @@ import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   TEAMS_COLLECTION, CONTACT_GROUPS_SUBCOLLECTION, CONTACTS_COLLECTION,
-  contactMatchesGroup, membersOfGroup, isDynamicGroup,
+  consentDocumentIds, contactMatchesGroup, membersOfGroup, isDynamicGroup,
   expandGroupSelection, wouldCreateCycle,
 } from '@linyup/shared'
+import { useConsentLedgers } from '@/hooks/useContactDocuments'
 import type {
   ContactGroup, ContactFilter, ContactFilterContext, ContactFilterSubject,
 } from '@linyup/shared'
@@ -65,13 +66,29 @@ export function useInvalidateContactGroups(teamId: string | null) {
  * engagement, which is derived from the TEAM's thresholds — so a page that built
  * its own context without them would silently count a group differently from the
  * contacts list. One hook, one answer.
+ *
+ * It also loads the CONSENT LEDGERS every rule here asks about, plus any the
+ * caller names (`extraFilters` — the contacts page's own filter). One query per
+ * referenced document, never one per contact; a rule that names no document
+ * costs nothing. Without this a consent-based dynamic group would count zero
+ * members everywhere but the page that happened to load the ledger itself — the
+ * dimension fails CLOSED, so the symptom is a silent empty set.
  */
-export function useContactFilterContext(groups: ContactGroup[]): ContactFilterContext {
-  const { team } = useAuth()
+export function useContactFilterContext(
+  groups: ContactGroup[],
+  extraFilters: (Partial<ContactFilter> | null | undefined)[] = [],
+): ContactFilterContext {
+  const { team, currentTeamId } = useAuth()
   const thresholds = team?.engagement_thresholds
+  const documentIds = useMemo(
+    () => consentDocumentIds([...groups.map((g) => g.rule), ...extraFilters]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groups, JSON.stringify(extraFilters.map((f) => f?.consent ?? null))],
+  )
+  const { ledgers } = useConsentLedgers(currentTeamId, documentIds)
   return useMemo(
-    () => ({ groups, engagementThresholds: thresholds }),
-    [groups, thresholds],
+    () => ({ groups, engagementThresholds: thresholds, consent: ledgers }),
+    [groups, thresholds, ledgers],
   )
 }
 

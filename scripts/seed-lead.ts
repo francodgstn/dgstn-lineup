@@ -716,9 +716,10 @@ async function seedLeadTenant(profile: LeadProfile) {
     `teams/${teamId}/portal/hero`
   )
 
-  // Booking settings — seeded to BOTH the public_profile (read by the public
-  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
-  // admin Settings → Booking form).
+  // Booking settings — ONE store, the team's public_profile: the public booking
+  // flow, the mobile app, the booking callables and the admin Settings → Booking
+  // form all read it there. (There used to be a team-doc mirror at
+  // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
   const bookingSettings = {
     flowType: 'activity-first',
     // Cover the materialized future window so the booking page shows it all.
@@ -763,7 +764,6 @@ async function seedLeadTenant(profile: LeadProfile) {
       settings: {
         gamification: profile.gamification,
         teamEmail: profile.contactEmail,
-        booking: bookingSettings,
         giftCards: giftCardSettings,
         noShowPolicy: noShowPolicySettings,
         ...(profile.bookingConfirmationInstructions

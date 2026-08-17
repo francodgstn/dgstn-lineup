@@ -13,11 +13,15 @@ import { sendEmail } from './email'
 import { logActivity } from './users'
 import { substituteVariables, renderBody, buildOutreachEmail } from './outreachEmail'
 import { pluginActionHandlers } from '../plugins/index'
-import type { PluginActionId, PluginTriggerId, ContactGroup, EngagementThresholds } from '@linyup/shared'
+import type {
+  PluginActionId, PluginTriggerId, ContactGroup, ConsentLedger, EngagementThresholds,
+} from '@linyup/shared'
 import {
+  consentDocumentIds,
   matchesFilter,
   TEAMS_COLLECTION, CONTACT_GROUPS_SUBCOLLECTION,
 } from '@linyup/shared'
+import { loadConsentLedgers } from '../waivers/consentLedger'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -319,6 +323,12 @@ function resolveTimestampMs(ts: unknown): number | null {
 export interface ConditionContext {
   groups?: ContactGroup[]
   engagementThresholds?: EngagementThresholds
+  /**
+   * documentId → that document's signature ledger, for every group rule that
+   * filters on consent. Loaded ONCE per rule run (one query per document), never
+   * per contact — see waivers/consentLedger.ts.
+   */
+  consent?: Record<string, ConsentLedger>
 }
 
 export function evaluateContactConditions(
@@ -344,6 +354,7 @@ export function evaluateContactConditions(
           {
             groups: ctx.groups ?? [],
             engagementThresholds: ctx.engagementThresholds,
+            consent: ctx.consent,
             nowMs: now.getTime(),
           },
         )
@@ -1322,9 +1333,18 @@ export async function loadConditionContext(
     console.error(`[automationEngine] rule=${rule.id}: failed to load contact groups`, err)
     return {}
   }
+  const groups = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactGroup)
+  // A group whose rule asks about consent needs that document's ledger, or the
+  // dimension fails closed and the rule silently matches nobody. One query per
+  // referenced document, once per run — the same "loaded once per team per run"
+  // shape as the groups above, and zero reads for the ordinary rule that names
+  // no document.
+  const documentIds = consentDocumentIds(groups.map((g) => g.rule))
+  const consent = documentIds.length ? await loadConsentLedgers(teamId, documentIds) : undefined
   return {
-    groups: snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactGroup),
+    groups,
     engagementThresholds: teamData.engagement_thresholds as EngagementThresholds | undefined,
+    consent,
   }
 }
 

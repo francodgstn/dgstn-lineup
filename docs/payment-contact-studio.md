@@ -260,6 +260,33 @@ writes `member_payments/{pi}` with `kind: 'appointment'` + `sessionId`;
 hold promptly. Full architecture — pricing model, the price-is-the-gate rule, the hold
 state machine, race cases: **`docs/appointments.md` → "Paid appointments"**.
 
+## Refunds take back what the payment bought — and a used pack is a commitment
+
+**A full refund takes back what that payment granted. A class pack that has been used
+is not refundable in the app.**
+
+Refunding a member payment also reverses its *effects* (`payments/reversal.ts`, called
+from `refundMemberPayment`): the membership snapshot is cleared, the course entitlement
+deleted, an untouched credit pack revoked — each only if **that payment** is the one
+that granted it (`subscription_source_ref` / `purchases.payment_ref`), so a later
+purchase or a manual grant is never stripped by a refund of an older charge. Partial
+refunds are refused on anything that granted something (membership, course, pack) and
+allowed where nothing was granted (products, drop-ins, appointments, gift cards).
+
+The pack rule is the one that surprises people, so: a pack's per-class price is a
+**discount against the drop-in price**, and that discount is exactly what the member
+committed to in exchange. Once a class has been taken the commitment has been partly
+performed on both sides, and any split of it the app could compute would be a policy
+decision wearing arithmetic. So the app declines to guess — it refuses, and the dialog
+says *"{Member} has used 3 of the 10 classes on this pack"* plus the rule. Deliberately
+**no pro-rata figure exists anywhere in the codebase**; reintroducing one reopens this
+decision rather than filling a gap.
+
+**The escape hatch:** a studio that wants to be generous refunds the charge **in Stripe
+directly**. Linyup records the refund but revokes nothing (there was no manager intent
+here to act on), and the external-refund flag then lets a manager revoke the access
+deliberately, as a separate decision.
+
 ## Functions
 
 | Function | Type | Who | What |
@@ -796,7 +823,54 @@ tab, and reuses the assign/link/edit path like every other external payment.
 - **Idempotency:** the doc id is `manual:{id}`; pass an `idempotencyKey` to make a retry
   a no-op.
 - **Not a gateway:** no webhook, no signing secret, no Stripe/Payrexx config. It is
-  purely bookkeeping + entitlements. Refunds are out of scope (adjust in your own books).
+  purely bookkeeping + entitlements. Refunds are out of scope (adjust in your own books) —
+  what the app *does* offer is a **void**, which is a different thing entirely.
+
+### Void — "this record is wrong", not "the money came back"
+
+`voidManualPayment` (manager, `packages/functions/src/payments/voidManualPayment.ts`)
+un-records a manual payment. It **moves no money**: a manager who typed CHF 1'800 for
+CHF 180 has no money to give back, she has a wrong row. So the row survives, stamped
+`voided_at` / `voided_by` / `void_reason`, struck through in the payments list, counted
+in no total, and inert — `updatePaymentRecord` refuses to edit a voided row, because
+re-assigning one would re-apply the effects the void just took back. **The redo is a
+fresh `recordManualPayment`**, which mints its own row (the Record dialog sends no
+idempotency key, so the corrected re-record is never mistaken for a duplicate).
+
+- **Manual rows only, enforced server-side.** `payment_events` also holds `payrexx` and
+  BYO-`stripe` rows; voiding one of those would make our books contradict a gateway we
+  neither run nor can correct.
+- **It reverses the effects**, through the same `reversePaymentEffects` the refund path
+  uses, with the same ownership checks — so a membership a *later* payment set up is
+  never stripped.
+- **A used pack IS voidable**, and this is the one place the void and the refund
+  deliberately differ on rules rather than money. A refund of a used pack is refused
+  because refunding money for delivered classes is a policy question (see *"Refunds take
+  back what the payment bought"*). A void asks no such question — no money is moving —
+  so it proceeds and reduces `credits_total` to `credits_used`: **the classes she
+  actually took stand; the remainder she never paid for is withdrawn.** Same principle
+  as the refund path (*delivered value is owed*), opposite outcome, because the question
+  is different.
+- **The books:** the row's journal entry is set to `status: 'corrected'` — one field, no
+  compensating `adjustment` row (a void has no "right amount" needing a home). The
+  monthly report already drops corrected rows and the accounting trigger already posts
+  the reversing double entry.
+- **Order:** reverse first, stamp second. A failed reversal voids nothing and is safe to
+  retry; the other order would show a voided row beside a member who still holds what it
+  gave.
+
+### Re-assigning a payment is a MOVE, not a copy
+
+`updatePaymentRecord` reverses the effects off the **previous** contact before applying
+them to the new one, and writes the contact field **last**, once the apply has succeeded
+— so a mis-typed assignment can never leave two people holding one purchase, and a
+failure leaves the row pointing at the previous holder rather than at someone who was
+given nothing. Unassigning (`contactId: ''`) reverses too. A **partly consumed pack
+cannot be moved** — the classes were taken by *that* person, so handing the remainder to
+somebody else would rewrite who attended; the answer is a void plus a fresh record. A
+comment-only edit neither applies nor reverses, and the promo stamp on the row survives
+every one of these paths (a reversal never releases or decrements a redemption — see
+`docs/promo-codes.md`).
 
 > The credit-pack counterpart for cash sales, `grantCredits`
 > (`packages/functions/src/contacts/`), still exists for granting lesson credits

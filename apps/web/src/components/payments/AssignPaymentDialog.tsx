@@ -5,13 +5,21 @@
 // (line-item → drives entitlements), assign the contact, and edit a free-text note
 // (with PAYMENT_COMMENT_PRESETS quick-picks). Both rails (Connect + BYO) flow
 // through the one updatePaymentRecord callable.
+//
+// RE-ASSIGNING IS A MOVE, NOT A COPY, and the dialog says so before the manager
+// commits: the callable takes the membership off the previous contact and gives
+// it to the new one. Naming both people is the point — "This moves the
+// membership from Ana to Ben" is checkable at a glance in a way that "Assign to
+// Ben" is not, and picking the wrong Ben is the mistake this whole area exists
+// to make recoverable.
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Loader2 } from 'lucide-react'
 import { PAYMENT_COMMENT_PRESETS, type PaymentLineItem } from '@linyup/shared'
 import { useUpdatePaymentRecord } from '@/hooks/useConnect'
-import { ContactPicker } from '@/components/payments/ContactPicker'
+import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { ContactPicker, contactDisplayName } from '@/components/payments/ContactPicker'
 import { PaymentLineItemPicker } from '@/components/payments/PaymentLineItemPicker'
 import {
   Dialog,
@@ -45,6 +53,9 @@ export function AssignPaymentDialog({
   const t = useTranslations('PaymentsDashboard')
   const tp = useTranslations('PaymentComment')
   const update = useUpdatePaymentRecord()
+  // Same cached query the ContactPicker below already runs — resolving the two
+  // names costs nothing extra.
+  const { data: contacts = [] } = useActiveContacts(teamId)
 
   const [contactId, setContactId] = useState<string>(target?.contactId ?? '')
   const [comment, setComment] = useState<string>(target?.comment ?? '')
@@ -80,9 +91,33 @@ export function AssignPaymentDialog({
       onClose()
       return
     }
-    await update.mutateAsync(vars)
+    try {
+      await update.mutateAsync(vars)
+    } catch {
+      // The mutation's onError has already said what went wrong (a used pack, a
+      // voided row, a half-finished move). Stay open on the manager's own input
+      // so she can change the target rather than retype everything.
+      return
+    }
     onClose()
   }
+
+  // "This moves the membership from Ana to Ben." Shown only when the payment is
+  // actually leaving somebody — and for an unassign, the shorter half of the
+  // same sentence, because that reversal is just as invisible otherwise.
+  const nameOf = (id: string) => {
+    const c = contacts.find((x) => x.id === id)
+    return c ? contactDisplayName(c) : null
+  }
+  const previousId = target?.contactId ?? ''
+  const previousName = previousId ? nameOf(previousId) : null
+  const nextName = contactId ? nameOf(contactId) : null
+  const moving = !!target && !!previousId && contactId !== previousId
+  const moveNote = !moving
+    ? null
+    : contactId
+      ? t('reassignMoves', { from: previousName ?? t('unassigned'), to: nextName ?? t('unassigned') })
+      : t('reassignRemoves', { from: previousName ?? t('unassigned') })
 
   return (
     <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
@@ -99,6 +134,9 @@ export function AssignPaymentDialog({
           <div className="space-y-1.5">
             <Label>{t('assignContactLabel')}</Label>
             <ContactPicker teamId={teamId} value={contactId} onChange={setContactId} />
+            {/* Only when it MOVES: a first assignment takes nothing off anybody,
+                and saying so there would be noise. */}
+            {moveNote && <p className="text-xs text-muted-foreground">{moveNote}</p>}
           </div>
 
           {/* Free-text note with preset quick-picks */}

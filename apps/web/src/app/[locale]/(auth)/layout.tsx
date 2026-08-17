@@ -56,8 +56,9 @@ import {
 import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
-import { planSupportsAffiliations, type SaasPlan } from '@linyup/shared'
+import { type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
 import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
@@ -1430,7 +1431,9 @@ function SidebarContent({
   const pathname = usePathname()
   const { team, currentTeamId } = useAuth()
   const { isInstalled } = useInstalledPlugins()
-  const { isAtLeast, plan } = usePlan()
+  const { isAtLeast } = usePlan()
+  // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
+  const canEditTeamSettings = useCapabilities().can('team.settings')
   const { pinnedIds, recentIds, recordVisit } = useNavPins()
   // Raw message tree — used to read the per-locale `Nav.searchKeywords` synonym
   // map without a t() call per id (ids without keywords are simply label-only).
@@ -1471,8 +1474,10 @@ function SidebarContent({
     (!item.requiresPlugin || isInstalled(item.requiresPlugin)) &&
     (!item.requiresPlan || isAtLeast(item.requiresPlan))
 
+  // Mirrors SettingsRail's gateOk — the sidebar's pinnable catalogue and the rail
+  // must never disagree about what exists.
   const settingsItemVisible = (item: SettingsNavItem) => {
-    if (item.gate === 'affiliations') return planSupportsAffiliations(plan)
+    if (item.gate === 'ownerOnly') return canEditTeamSettings
     if (item.gate === 'customFields') return isInstalled('custom-fields')
     return true
   }

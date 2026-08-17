@@ -8,6 +8,7 @@ import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
+import { rollSessionSeries } from './rollSessionSeries'
 import { sweepWaitlistOffers } from '../booking/waitlist/sweep'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
 
@@ -59,6 +60,10 @@ export const dailyTasks = onSchedule(
       { name: 'expireAffiliations', handler: expireAffiliations },
       { name: 'expirePendingBookings', handler: expirePendingBookings },
       { name: 'purgeProvisionalContacts', handler: purgeProvisionalContacts },
+      // The rolling 6-month horizon for recurring classes. Without it a series
+      // simply stops at whatever was materialised the day it was created, and
+      // every public booking link for it goes with it.
+      { name: 'rollSessionSeries', handler: rollSessionSeries },
       // Recurring accounting entry templates (finance plugin) — e.g. monthly rent.
       { name: 'materializeRecurringEntries', handler: materializeRecurringEntries },
     ]

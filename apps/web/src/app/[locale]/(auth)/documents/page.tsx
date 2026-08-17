@@ -19,14 +19,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { FileText, Plus, Link2, Globe, Settings2, Lock, ShieldCheck } from 'lucide-react'
+import { FileText, Plus, Link2, Globe, Lock, ShieldCheck } from 'lucide-react'
 import { WAIVER_MIN_PLAN } from '@linyup/shared'
 import type { StudioDocument, DocumentKind, DocumentSource, DocumentStatus } from '@linyup/shared'
 import {
   useDocuments, createDocument, createWaiver, countDocuments, waiverCallableError,
 } from '@/plugins/documents/hooks'
 import { getDocumentsLimits } from '@/plugins/documents/limits'
-import { ConfigPanel } from '@/plugins/documents/ConfigPanel'
+import { DocumentSurfaces } from '@/plugins/documents/DocumentSurfaces'
 import { usePlan } from '@/hooks/usePlan'
 import { UpgradeModal } from '@/components/plan/UpgradeModal'
 
@@ -106,7 +106,6 @@ export default function DocumentsPage() {
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
-  const [configOpen, setConfigOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<DocumentKind>('terms')
   const [source, setSource] = useState<DocumentSource>('rich_text')
@@ -165,16 +164,18 @@ export default function DocumentsPage() {
           <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" onClick={() => setConfigOpen(true)}>
-            <Settings2 className="mr-1.5 h-4 w-4" />
-            {t('signupConsent')}
-          </Button>
           <Button onClick={() => setCreateOpen(true)} disabled={atDocumentCap}>
             <Plus className="mr-1.5 h-4 w-4" />
             {t('newDocument')}
           </Button>
         </div>
       </div>
+
+      {/* Where documents are asked for — a PANEL on the page, not a dialog
+          behind a button. Both surfaces side by side is the whole point: the
+          signup column records, the booking column refuses, and until they were
+          in one place nothing in the product said so. */}
+      <DocumentSurfaces />
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">
@@ -308,19 +309,6 @@ export default function DocumentsPage() {
         onClose={() => setUpgradeOpen(false)}
         minPlan={WAIVER_MIN_PLAN}
       />
-
-      {/* Signup consent config */}
-      <Dialog open={configOpen} onOpenChange={setConfigOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('signupConsent')}</DialogTitle>
-          </DialogHeader>
-          <ConfigPanel />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfigOpen(false)}>{t('close')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

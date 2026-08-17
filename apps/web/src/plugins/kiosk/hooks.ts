@@ -32,8 +32,8 @@ export function useKioskConfig(teamId: string | null) {
 
 // ─── mutations ────────────────────────────────────────────────────────────────
 
-/** Persist the full config (overwrite — the config field IS the complete document,
- *  matching the documents ConfigPanel merge-into-installed_plugins pattern). */
+/** Persist the full config (overwrite — the config field IS the complete
+ *  document, merged into installed_plugins/kiosk). */
 export async function saveKioskConfig(teamId: string, userId: string, config: KioskConfig): Promise<void> {
   const ref = doc(db, TEAMS_COLLECTION, teamId, INSTALLED_PLUGINS_SUBCOLLECTION, 'kiosk')
   await setDoc(

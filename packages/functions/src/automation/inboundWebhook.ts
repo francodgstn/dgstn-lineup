@@ -18,13 +18,14 @@
 //   { ok: false, reason: string }       — skipped; reason explains why
 
 import { onRequest } from 'firebase-functions/v2/https'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
 import { fireEventRules, type ContactData } from '../utils/automationEngine'
 
-setGlobalOptions({ region: 'europe-west6' })
+// Region comes from the single setGlobalOptions call in index.ts. Calling it here
+// too made the SDK warn "Calling setGlobalOptions twice leads to undefined
+// behavior" on every emulator boot and every deploy.
 
 export const inboundWebhook = onRequest(
   { invoker: 'public' },

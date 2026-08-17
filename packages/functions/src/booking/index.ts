@@ -17,6 +17,7 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
+import { loadBookingSettings } from './bookingSettings'
 import { healSessionSeatCount } from './seatCount'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { isKioskDeviceForTeam } from '../utils/kioskSession'
@@ -857,13 +858,12 @@ export const bookSession = onCall(async (request) => {
     }
   }
 
-  // Online booking cutoff (team.settings.booking.cutoffMinutes) — authoritative;
-  // the client hides/disables the same slots but never trust it alone.
-  const cutoffMinutes = (
-    (team.settings as Record<string, unknown> | undefined)?.booking as
-      | { cutoffMinutes?: number }
-      | undefined
-  )?.cutoffMinutes
+  // Online booking cutoff — authoritative; the client hides/disables the same
+  // slots but never trust it alone. Read from THE booking-settings store
+  // (teams/{id}/public_profile/{id}.bookingSettings — see bookingSettings.ts),
+  // which is the same document the public booking page reads, so the page and
+  // this refusal can no longer disagree.
+  const { cutoffMinutes } = await loadBookingSettings(data.teamId)
   if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
     throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
   }
@@ -1875,13 +1875,9 @@ export const getBookingDetails = onCall(async (request) => {
   // refuses a move past the online booking cutoff for a token holder, so a slot
   // offered here that the callable will reject is a dead end with an error
   // message at the end of it. Filtered where the list is built rather than in
-  // the page, because the cutoff is a server-side setting the public page never
-  // reads.
-  const rebookCutoffMinutes = (
-    (teamDoc?.data()?.settings as Record<string, unknown> | undefined)?.booking as
-      | { cutoffMinutes?: number }
-      | undefined
-  )?.cutoffMinutes
+  // the page, so the picker and the callable that accepts its choice apply one
+  // rule read from one store (bookingSettings.ts).
+  const { cutoffMinutes: rebookCutoffMinutes } = await loadBookingSettings(teamId)
 
   const now = Timestamp.now()
   const futureLimit = new Date()
@@ -2044,10 +2040,10 @@ export const rebookSession = onCall(async (request) => {
     throw new HttpsError('already-exists', 'You already have a booking for this session.')
   }
 
-  // The team is read BEFORE the move because the booking cutoff is a team
-  // setting and this callable never enforced it — a token holder could move
-  // themselves into a class minutes before it starts, which every other booking
-  // surface refuses (bookSession, createDropInCheckout).
+  // The team + its booking settings are read BEFORE the move because the cutoff
+  // is a studio-wide setting and this callable never enforced it — a token
+  // holder could move themselves into a class minutes before it starts, which
+  // every other booking surface refuses (bookSession, createDropInCheckout).
   let teamName = ''
   let teamSlug: string | null = null
   const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
@@ -2055,11 +2051,7 @@ export const rebookSession = onCall(async (request) => {
     teamName = (teamDoc.data()!.name as string) || ''
     teamSlug = (teamDoc.data()!.slug as string) || null
   }
-  const rebookCutoffMinutes = (
-    (teamDoc?.data()?.settings as Record<string, unknown> | undefined)?.booking as
-      | { cutoffMinutes?: number }
-      | undefined
-  )?.cutoffMinutes
+  const { cutoffMinutes: rebookCutoffMinutes } = await loadBookingSettings(teamId)
   // …but ONLY against the public, self-service door. The cutoff is an ONLINE
   // booking rule — that is what the setting is called, what its help text says,
   // and what the refusal below says — and this one callable serves two doors:

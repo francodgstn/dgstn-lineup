@@ -37,6 +37,12 @@ import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -475,17 +481,24 @@ export default function PromoCodesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="promo-effect">{t('effectLabel')}</Label>
-                <select
-                  id="promo-effect"
+                <Select
                   value={draft.effect}
-                  onChange={(e) =>
-                    setDraft({ ...draft, effect: e.target.value as Draft['effect'] })
+                  onValueChange={(v) =>
+                    setDraft({ ...draft, effect: v as Draft['effect'] })
                   }
-                  className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
                 >
-                  <option value="percent_off">{t('effectPercent')}</option>
-                  <option value="fixed_price">{t('effectFixed')}</option>
-                </select>
+                  <SelectTrigger id="promo-effect" className="h-9 w-full">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {draft.effect === 'percent_off'
+                        ? t('effectPercent')
+                        : t('effectFixed')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent_off">{t('effectPercent')}</SelectItem>
+                    <SelectItem value="fixed_price">{t('effectFixed')}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {draft.effect === 'percent_off' ? (
                 <div className="space-y-1.5">
@@ -588,17 +601,24 @@ export default function PromoCodesPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="promo-audience">{t('audienceLabel')}</Label>
-              <select
-                id="promo-audience"
+              <Select
                 value={draft.audience}
-                onChange={(e) =>
-                  setDraft({ ...draft, audience: e.target.value as PromoAudience })
+                onValueChange={(v) =>
+                  setDraft({ ...draft, audience: v as PromoAudience })
                 }
-                className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
               >
-                <option value="all">{t('audienceAll')}</option>
-                <option value="new_contacts">{t('audienceNewContacts')}</option>
-              </select>
+                <SelectTrigger id="promo-audience" className="h-9 w-full">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {draft.audience === 'all'
+                      ? t('audienceAll')
+                      : t('audienceNewContacts')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('audienceAll')}</SelectItem>
+                  <SelectItem value="new_contacts">{t('audienceNewContacts')}</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">{t('audienceHint')}</p>
             </div>
 

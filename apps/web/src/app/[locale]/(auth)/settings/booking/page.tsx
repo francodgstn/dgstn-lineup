@@ -1,15 +1,22 @@
 'use client'
 
 // Booking page settings — how the public /public/{slug}/booking flow behaves.
-// Extracted out of the bio-link editor into its own "Configure" page. Saves the
-// BookingSettings to public_profile.bookingSettings (source of truth, team-member
-// writable) + mirrors to team.settings.booking (owner-only; re-hydrates this form).
+// Extracted out of the bio-link editor into its own "Configure" page.
+//
+// ONE store: `teams/{id}/public_profile/{id}.bookingSettings`. This form writes
+// it, this form re-hydrates from it, the public booking page reads it, the
+// mobile app reads it and every booking callable reads it
+// (packages/functions/src/booking/bookingSettings.ts). The team-doc mirror
+// (`settings.booking`) is gone — it was owner-only, so a manager's mirror write
+// was denied and the cutoff she had just set applied on the public page and
+// nowhere else, while the form showed her the old value (UX-6).
 
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -73,9 +80,8 @@ function useTeam(teamId: string | null) {
   })
 }
 
-function getDefaults(team: Team | null): FormData {
-  const rawBooking = ((team?.settings as Record<string, unknown> | undefined)?.booking ??
-    {}) as Record<string, unknown>
+function getDefaults(stored: Partial<BookingSettings> | undefined): FormData {
+  const rawBooking = (stored ?? {}) as Record<string, unknown>
   const rawMonths = Number(rawBooking.windowMonths)
   const windowMonths =
     Number.isInteger(rawMonths) && rawMonths >= 1 && rawMonths <= 6 ? rawMonths : 2
@@ -399,7 +405,12 @@ function BookingForm({
 
 export default function BookingSettingsPage() {
   const { currentTeamId } = useAuth()
-  const { data: team, isLoading } = useTeam(currentTeamId)
+  // The team doc is still read for the slug + name copied onto the public
+  // profile below; the booking settings themselves come from that same public
+  // profile — the one store this form both reads and writes.
+  const { data: team, isLoading: teamLoading } = useTeam(currentTeamId)
+  const { data: stored, isLoading: settingsLoading } = useBookingSettings(currentTeamId)
+  const isLoading = teamLoading || settingsLoading
   const qc = useQueryClient()
   const t = useTranslations('SettingsBooking')
   const schema = useMemo(() => createSchema(t), [t])
@@ -412,12 +423,15 @@ export default function BookingSettingsPage() {
     formState: { isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: getDefaults(team ?? null),
+    defaultValues: getDefaults(stored),
   })
 
+  // Re-hydrate from the store whenever it (re)loads or the team changes —
+  // unless the studio has edits in flight, which a background refetch must
+  // never throw away.
   useEffect(() => {
-    if (team) reset(getDefaults(team))
-  }, [team?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (stored && !isDirty) reset(getDefaults(stored))
+  }, [currentTeamId, stored]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useSaveShortcut(() => {
     if (isDirty && !isSubmitting) handleSubmit(onSubmit)()
@@ -439,20 +453,19 @@ export default function BookingSettingsPage() {
       waitlistClaimMinutes: data.booking.waitlistClaimMinutes,
     }
     try {
-      // ① public_profile is the source of truth (team-member writable). Must succeed.
+      // ONE write, to the one store — team-member writable, world-readable, and
+      // what the booking callables read. There is no second write to fail
+      // silently behind it.
       const profileRef = doc(db, TEAMS_COLLECTION, currentTeamId, 'public_profile', currentTeamId)
       await setDoc(
         profileRef,
         { type: 'team', slug: team?.slug ?? '', name: team?.name ?? '', bookingSettings },
         { merge: true }
       )
-      // ② Mirror onto the team doc (owner-only; re-hydrates this form). Non-fatal.
-      updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
-        'settings.booking': bookingSettings,
-      }).catch((err) => {
-        console.warn('[booking save] team doc update failed (non-fatal):', err)
-      })
-      await qc.invalidateQueries({ queryKey: ['team', currentTeamId] })
+      // Saved state, from what was actually written — the form is clean again
+      // and the next background refetch has nothing to disagree with.
+      reset(getDefaults(bookingSettings))
+      await qc.invalidateQueries({ queryKey: ['booking-settings', currentTeamId] })
       toast.success(t('toastSaved'))
     } catch (err) {
       console.error('[booking save] failed:', err)

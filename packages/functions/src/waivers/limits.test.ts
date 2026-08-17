@@ -216,11 +216,11 @@ describe('THE MODEL IS STATED ONCE, AND THE CALLABLE REACHES IT THROUGH ONE DOOR
     assert.equal(count(c, 'checkoutRateLimit('), 0)
   })
 
-  it('NO WAIVER PATH SENDS MAIL, so no waiver path carries a mail budget', () => {
-    // The mint was a public mail-sending primitive that sent AS the studio, and
-    // three of this file's counters existed for it alone. They left with it —
-    // and the checkable form of "they are not coming back by accident" is that
-    // nothing under waivers/ sends anything at all.
+  it('NO PUBLIC WAIVER PATH SENDS MAIL, so no waiver path carries a mail budget', () => {
+    // The mint was a PUBLIC mail-sending primitive that sent AS the studio, and
+    // three of this file's counters existed for it alone. They left with it, and
+    // the checkable form of "they are not coming back by accident" is that no
+    // path a visitor can reach sends anything.
     const model = src('limits.ts')
     for (const name of [
       'emailHash',
@@ -234,6 +234,23 @@ describe('THE MODEL IS STATED ONCE, AND THE CALLABLE REACHES IT THROUGH ONE DOOR
     }
     for (const f of ['requirement.ts', 'gate.ts', 'accept.ts', 'space.ts', 'publish.ts']) {
       assert.equal(code(src(f)).includes('sendEmail('), false, `${f} must send no mail`)
+    }
+  })
+
+  it('the ONE sender is manager-gated and bounded by a list, not by a counter', () => {
+    // `requestWaiverAcceptance` does send mail — a manager asking somebody to
+    // sign. It is not the mint returning: there is no public entry point to
+    // ration, so it takes no rate-limit bucket at all. What bounds it is the
+    // caller (a manager of the team) and the size of one call.
+    const c = code(src('request.ts'))
+    assert.ok(c.includes('sendEmail('), 'the ask must actually send')
+    assert.match(c, /await assertManager\(request\.auth\.uid, teamId\)/)
+    assert.equal(count(c, 'spendRateLimit('), 0)
+    assert.equal(count(c, 'checkoutRateLimit('), 0)
+    assert.ok(c.includes('MAX_WAIVER_REQUEST_RECIPIENTS'), 'one call must be bounded')
+    // And it writes NO ledger row: a request is not a signature.
+    for (const writer of ['recordWaiverEvent', 'planWaiverLedgerWrite', 'commitWaiverLedgerWrite']) {
+      assert.equal(c.includes(writer), false, `a request must not write the ledger (${writer})`)
     }
   })
 

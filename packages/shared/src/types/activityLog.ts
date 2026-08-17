@@ -25,6 +25,14 @@ export type ActivityEventType =
   | 'contact_login'
   | 'outreach_email_sent'
   | 'contact_anonymized'
+  // Consent. Written by `trackWaiverAcceptances`, the trigger on the append-only
+  // acceptance ledger — ONE writer for every rail (booking, drop-in, appointment,
+  // waitlist claim, signup, Space) plus the manager's revocation, because every
+  // one of them lands a row in that collection and none of them writes here.
+  // A signature and its withdrawal are facts about a PERSON, which is what this
+  // feed is; the evidence itself stays in the ledger.
+  | 'waiver_accepted'
+  | 'waiver_revoked'
 
 export interface ActivityLogEntry {
   id: string

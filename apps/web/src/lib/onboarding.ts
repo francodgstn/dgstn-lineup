@@ -1,4 +1,4 @@
-import { doc, setDoc, serverTimestamp, arrayUnion } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from './firebase'
 
 /**
@@ -7,8 +7,11 @@ import { db } from './firebase'
  * use these to mutate it. All writes are merge-writes so they never clobber the
  * rest of the profile.
  *
- * Phase 3 (product tour) calls markTourDone / resetTour.
- * Phase 4 (section intro panels) calls markIntroSeen with a section key.
+ * The product tour calls markTourDone / resetTour.
+ *
+ * The per-page section-intro popovers were removed in 2026-08 — the How-to page
+ * does that job in one place and reaches every page, where the popovers reached
+ * three and carried two competing "seen" flags between them.
  */
 
 /** Mark the guided product tour as completed or skipped. */
@@ -25,15 +28,6 @@ export async function resetTour(uid: string): Promise<void> {
   await setDoc(
     doc(db, 'users', uid),
     { onboarding: { tourDone: false, tourDoneAt: null } },
-    { merge: true }
-  )
-}
-
-/** Record that the user has seen a given section's intro panel. */
-export async function markIntroSeen(uid: string, sectionKey: string): Promise<void> {
-  await setDoc(
-    doc(db, 'users', uid),
-    { onboarding: { seenIntros: arrayUnion(sectionKey) } },
     { merge: true }
   )
 }

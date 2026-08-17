@@ -94,11 +94,16 @@ describe('applyPaymentEffects', () => {
     assert.equal(contactSet!.data.subscription_type_name, 'Monthly')
     assert.equal(contactSet!.data.subscription_price_id, 'p1')
     assert.equal(contactSet!.data.subscription_amount, 50)
+    // PROVENANCE — what a reversal checks before clearing any of the above.
+    assert.equal(contactSet!.data.subscription_source_ref, 'manual:x')
 
     const grant = ops.creates.find((c) => c.path === 'contacts/ct1/credit_grants/manual:x')
     assert.ok(grant, 'credit grant created')
     assert.equal(grant!.data.credits_total, 8)
+    assert.equal(grant!.data.credits_used, 0)
     assert.equal(grant!.data.source, 'manual')
+    // Doc id IS the payment ref — that is what a reversal keys off.
+    assert.equal(grant!.data.payment_ref, 'manual:x')
 
     const activity = ops.adds.find((a) => a.path === 'contacts/ct1/activity_log')
     assert.ok(activity, 'activity logged')
@@ -140,6 +145,9 @@ describe('applyPaymentEffects', () => {
     assert.ok(purchase, 'entitlement granted')
     assert.equal(purchase!.data.courseId, 'c1')
     assert.equal(purchase!.data.contactId, 'ct1')
+    // The doc id is the CONTACT, so this is the only thing that says which
+    // payment bought it — and the only thing a reversal may act on.
+    assert.equal(purchase!.data.payment_ref, 'manual:y')
     const activity = ops.adds.find((a) => a.path === 'contacts/ct1/activity_log')
     assert.equal(activity?.data.type, 'course_purchased')
   })

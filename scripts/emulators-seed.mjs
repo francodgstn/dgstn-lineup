@@ -65,6 +65,30 @@ process.on('exit', cleanup)
 process.on('SIGINT', () => process.exit(0))
 process.on('SIGTERM', () => process.exit(0))
 
+// Say WHY when the emulator dies. Without this the keep-alive at the bottom of
+// this file is the only thing holding the event loop open, so the moment the
+// child exits Node unwinds with code 13 and the words "unsettled top-level
+// await" — which describes this script's plumbing and not the actual cause.
+// A half-dead emulator then looks identical to a crashed script.
+//
+// The causes seen in practice, all of which the child reports and this used to
+// swallow: a port still held by a previous run mid-teardown (the CLI aborts with
+// "port taken" even for the hub on 4400 or the UI on 4000, not just the four we
+// wait on), a stale emulator JVM, or an orphaned firebase-tools process holding
+// sockets that `netstat -ano | grep LISTENING` does not show.
+emulators.on('exit', (code, signal) => {
+  if (signal === 'SIGTERM' || signal === 'SIGINT') return // our own cleanup
+  console.error(
+    `\n❌ The Firebase emulators exited (${signal ? `signal ${signal}` : `code ${code}`}).` +
+      '\n   Scroll up — the CLI printed the reason. If it mentions a port being taken,' +
+      '\n   a previous run is still shutting down or has left a process behind:' +
+      '\n     pnpm exec firebase emulators:exec --only auth,firestore true   # or, bluntly:' +
+      '\n     taskkill /F /IM java.exe                                       # stale emulator JVMs' +
+      '\n   then run this again.\n'
+  )
+  process.exit(code ?? 1)
+})
+
 console.log('==> Waiting for Firestore emulator on :8080')
 await waitForPort(8080)
 console.log('==> Waiting for Auth emulator on :9099')

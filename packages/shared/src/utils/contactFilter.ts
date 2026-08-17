@@ -23,6 +23,7 @@
 import type { Contact, ContactGroup } from '../types/contact'
 import type { EngagementBand, EngagementThresholds } from '../types/engagement'
 import { computeEngagementBand } from '../types/engagement'
+import { waiverAcceptanceState, type WaiverAcceptanceState, type WaiverSignerFacts } from '../types/waiver'
 import { expandGroupSelection } from './contactGroups'
 
 // ─── filter shape ─────────────────────────────────────────────────────────────
@@ -72,6 +73,29 @@ export interface CustomFieldCondition {
   value?: string | number | boolean
 }
 
+/**
+ * "Has this person accepted document X, and if not, what happened?"
+ *
+ * ONE document × the states it may be in. The states are `waiverAcceptanceState`'s
+ * five, evaluated by that function and never re-derived here: supersession and
+ * expiry are DERIVED facts (a `require_resign` publish moves one number and writes
+ * zero signer rows), so a second state machine in a filter would disagree with the
+ * gate the day a studio republished.
+ *
+ * It covers BOTH consent surfaces, because both write the same ledger: a document
+ * shown at signup and a document required before booking each produce a signer
+ * row, and this dimension asks about the row.
+ *
+ * `states: []` (or no documentId) = the dimension is off. The usual selection is
+ * `['none']` — "everyone I have never got a signature from" — which is the whole
+ * reason the dimension exists: a studio that makes a document mandatory needs to
+ * find the people already on its books.
+ */
+export interface ConsentFilter {
+  documentId: string
+  states: WaiverAcceptanceState[]
+}
+
 export interface ContactFilter {
   /** Free-text over name + email. Part of the filter so saved presets capture it. */
   search: string
@@ -90,6 +114,7 @@ export interface ContactFilter {
   rankFilter: RankFilter | null
   age: AgeFilter | null
   customFields: CustomFieldCondition[]
+  consent: ConsentFilter | null
 }
 
 export const EMPTY_CONTACT_FILTER: ContactFilter = {
@@ -99,6 +124,7 @@ export const EMPTY_CONTACT_FILTER: ContactFilter = {
   hasAlerts: false, pendingSignup: false,
   sessionsMin: null, sessionsMax: null,
   inactivity: null, rankFilter: null, age: null, customFields: [],
+  consent: null,
 }
 
 /**
@@ -128,6 +154,7 @@ export function normalizeContactFilter(filter: Partial<ContactFilter> | null | u
     rankFilter: f.rankFilter ? { ...f.rankFilter } : null,
     age: f.age ? { ...f.age } : null,
     customFields: (f.customFields ?? []).map((c) => ({ ...c })),
+    consent: f.consent ? { ...f.consent, states: [...(f.consent.states ?? [])] } : null,
   }
 }
 
@@ -155,11 +182,33 @@ export function activeFilterKeys(filter: Partial<ContactFilter> | null | undefin
   if (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0)) keys.push('rankFilter')
   if (f.age && (f.age.min != null || f.age.max != null)) keys.push('age')
   if (f.customFields.length) keys.push('customFields')
+  if (f.consent?.documentId && f.consent.states.length) keys.push('consent')
   return keys
 }
 
 export function countActiveFilters(filter: Partial<ContactFilter> | null | undefined): number {
   return activeFilterKeys(filter).length
+}
+
+/**
+ * Every document id a set of filters asks about — the shopping list a caller
+ * loads ledgers for before it evaluates anything.
+ *
+ * ONE derivation, shared by the contacts page (its own filter), the group
+ * surfaces (every dynamic group's rule) and the automation engine (the same
+ * rules, server-side). A caller that computed this itself would eventually load a
+ * different set from the one the predicate reads, and the consent dimension fails
+ * CLOSED — so the symptom would be a filter that silently matches nobody.
+ */
+export function consentDocumentIds(
+  filters: (Partial<ContactFilter> | null | undefined)[]
+): string[] {
+  const ids = new Set<string>()
+  for (const f of filters) {
+    const consent = f?.consent
+    if (consent?.documentId && (consent.states?.length ?? 0) > 0) ids.add(consent.documentId)
+  }
+  return [...ids].sort()
 }
 
 export function isEmptyContactFilter(filter: Partial<ContactFilter> | null | undefined): boolean {
@@ -205,6 +254,13 @@ export function resolveTimestampMs(value: TimestampLike): number | null {
  * it without conversion.
  */
 export interface ContactFilterSubject {
+  /**
+   * The contact's document id. Optional like everything else here — but the
+   * `consent` dimension is the one that NEEDS it: a signer row is keyed on
+   * contactId, so a subject with no id cannot be answered and is excluded rather
+   * than defaulted into the "never signed" bucket.
+   */
+  id?: string
   firstname?: string
   lastname?: string
   email?: string
@@ -229,8 +285,41 @@ export interface ContactFilterContext {
   /** All groups of the team — needed to expand parents and resolve dynamic rules. */
   groups?: ContactGroup[]
   engagementThresholds?: EngagementThresholds
+  /**
+   * documentId → that document's whole signature ledger, for every document the
+   * `consent` dimension (or a dynamic group's consent rule) names.
+   *
+   * THIS IS HOW THE DIMENSION AVOIDS A PER-CONTACT FAN-OUT. `matchesFilter` is
+   * pure and reads what the caller already holds, and "has this contact signed
+   * document X" is not on the contact document — it is a row under
+   * `documents/{X}/signers/{contactId}`. Asking per contact would be one read per
+   * row of the list. So the CALLER loads the ledger ONCE PER DOCUMENT (a single
+   * subcollection query, bounded by how many people ever signed that document —
+   * never by how many contacts are being filtered) and hands the map in here.
+   * The same map answers every contact in the list, every dynamic-group count and
+   * every automation scan.
+   *
+   * A documentId with NO entry cannot be answered, and the predicate then matches
+   * NOBODY — the same direction the group fallback takes: a partial context must
+   * never silently widen a result set. A caller that forgets to load the ledger
+   * therefore shows an empty list (visible) rather than everybody (wrong).
+   */
+  consent?: Record<string, ConsentLedger>
   /** Injectable clock — pass in tests; defaults to Date.now(). */
   nowMs?: number
+}
+
+/** One document's signature ledger, as the filter reads it. */
+export interface ConsentLedger {
+  /**
+   * The floor a signature must meet: the policy entry's `min_valid_version` where
+   * the document is a required waiver, else the document's own. Moved by a
+   * `require_resign` publish, which is what makes a signature `superseded`.
+   */
+  minValidVersion: number
+  /** contactId → the four facts `waiverAcceptanceState` reads. ABSENT means never
+   *  signed, which is `none` — the common case, and the one a studio filters for. */
+  signers: Record<string, WaiverSignerFacts>
 }
 
 // ─── age ──────────────────────────────────────────────────────────────────────
@@ -460,6 +549,22 @@ export function matchesFilter(
   for (const cond of f.customFields) {
     if (!cond.fieldId) continue
     if (!matchesCustomField(subject, cond)) return false
+  }
+
+  // Consent — "has this person accepted document X". The STATE comes from
+  // `waiverAcceptanceState` and from nowhere else, so the filter and the booking
+  // gate can never disagree about what a signature is worth.
+  if (f.consent?.documentId && f.consent.states.length > 0) {
+    const ledger = ctx.consent?.[f.consent.documentId]
+    // No ledger, or a subject with no id: unanswerable. Excluded rather than
+    // guessed — see ContactFilterContext.consent.
+    if (!ledger || !subject.id) return false
+    const state = waiverAcceptanceState(
+      { min_valid_version: ledger.minValidVersion },
+      ledger.signers[subject.id] ?? null,
+      nowMs,
+    )
+    if (!f.consent.states.includes(state)) return false
   }
 
   const sq = f.search.trim().toLowerCase()

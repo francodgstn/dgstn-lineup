@@ -444,6 +444,58 @@ write is built from, so it is made there too, before the policy is loaded: a
 cross-tenant row in a compliance ledger is not a display bug, it is a false
 record.
 
+## Asking somebody to sign, and finding out who has not
+
+Making a document mandatory does nothing for the people already on the books: the
+requirement binds at their next booking, where they meet it as a refusal, on the
+acquisition path, with no warning. Two additions close that, and both are
+deliberately small.
+
+**`requestWaiverAcceptance` (`packages/functions/src/waivers/request.ts`)** — a
+manager-only callable that emails people the **existing Space link**. It is a
+REQUEST, not a gate change: no acceptance row, no signer row, no `waiver_policy`
+edit, no counter, so it is in neither census (it puts nobody in a room and it
+writes no ledger row). Single and bulk are one shape (`contactIds: string[]`,
+capped at `MAX_WAIVER_REQUEST_RECIPIENTS`), the mail goes out **as the studio**
+(`sendEmail({ teamId })`, so suppressions, messaging policy and the mail ledger
+all apply), and each recipient comes back with one of five outcomes —
+`sent`, `already_signed`, `no_email`, `not_delivered`, `skipped`. A contact with
+no address is REPORTED rather than dropped: it is the one case the studio has to
+handle itself, at the door.
+
+Two properties are worth keeping:
+
+- **It covers required waivers only, and refuses the rest by name.** Space
+  presents the waiver policy, so a document that is merely *shown at signup* has
+  no page to send anybody to; `document_not_required` says so and the surfaces
+  point at the one switch that changes it. Inventing a second signing surface
+  would mean a second answer to "does this tick count".
+- **Safe to call twice, still able to remind.** The `mail_sends` key carries the
+  document, the **version**, the contact and the **calendar day**: a double-click
+  or an overlapping bulk selection sends one mail, and next week's genuine
+  reminder is not swallowed. Keying it on the relationship alone is the waitlist
+  notifier's recorded bug; keying it on nothing makes the button a way to mail a
+  member forty times. Anyone whose signature is `valid` at send time is skipped.
+
+**The `consent` dimension on `ContactFilter`** — `documentId` × the five states,
+computed by `waiverAcceptanceState` and never by a second state machine. Because
+it is a dimension of the ONE contact predicate
+(`packages/shared/src/utils/contactFilter.ts`), it is simultaneously a filter
+chip, a saved preset, a dynamic group and an automation condition.
+
+`matchesFilter` is pure and reads what the caller already holds, and a signature
+is not on the contact document — so the ledger is loaded **once per document**
+(`ContactFilterContext.consent`, a single subcollection query bounded by how many
+people signed that document) and the same map answers every contact, every group
+count and every automation scan. There is no per-contact fan-out anywhere. A
+document whose ledger was not loaded matches **nobody**: the dimension fails
+CLOSED, so a caller that forgets shows an empty list rather than everybody.
+
+**`waiver_accepted` / `waiver_revoked`** land on the contact's activity feed under
+a `consent` chip. Their one writer is `trackWaiverAcceptances`, a trigger on the
+append-only `acceptances` subcollection — every rail writes there, so no rail
+needed a `logActivity` call bolted on, and the next one will not either.
+
 ## Minors, and the one thing the product can honestly do about them
 
 **`WaiverConfig.mayIncludeMinors` — "participants may be minors". OFF by
@@ -898,8 +950,11 @@ arm in `resolvePaymentOptions` (a waiver has no price — `git diff` on
 lifecycle; any sweep for expiry or supersession; drawn or typed signatures,
 second factors and ID checks; any age check, date-of-birth question or
 verification of a declared relationship; a PDF renderer for the export; a mobile
-consent step; and **any mail, SMS or push on any waiver event whatsoever** — no
-"your waiver expired" notification exists, and no waiver path sends anything.
+consent step; and **any mail, SMS or push fired by a waiver EVENT** — no "your
+waiver expired" notification exists, nothing is sent when a publish supersedes a
+signature, and the `notify` publish outcome is still deferred (D1). The one mail
+this feature sends is `requestWaiverAcceptance`, which a **manager** triggers by
+hand; nothing in the system mails anybody on its own.
 
 One accepted consequence worth knowing before somebody discovers it: a visitor who
 signs and then abandons a paid checkout leaves an acceptance attached to a

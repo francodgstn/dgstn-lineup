@@ -24,12 +24,19 @@ import {
   subscriptionIsCancelling,
 } from '@linyup/shared'
 import { useContactPayments } from '@/hooks/useConnect'
-import { connectToUnified, byoToUnified, mergePaymentRows, formatMoneyMinor } from '@/lib/payments'
+import {
+  connectToUnified,
+  byoToUnified,
+  mergePaymentRows,
+  formatMoneyMinor,
+  type UnifiedPaymentRow,
+} from '@/lib/payments'
 import {
   AssignPaymentDialog,
   type AssignPaymentTarget,
 } from '@/components/payments/AssignPaymentDialog'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
+import { VoidPaymentDialog } from '@/components/payments/VoidPaymentDialog'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 import { Badge } from '@/components/ui/badge'
@@ -303,6 +310,7 @@ export function PaymentsTab({
   const tid = teamId ?? null
   const { data, isLoading } = useContactPayments(tid, contact.id)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
+  const [voidTarget, setVoidTarget] = useState<UnifiedPaymentRow | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
 
   // Determine whether Connect is in play: show subscriptions section only
@@ -362,7 +370,12 @@ export function PaymentsTab({
       ) : (
         // Same table as the general /payments page, minus the (redundant) contact
         // column — one shared component so the two views never drift.
-        <PaymentsTable rows={rows} showContact={false} onAssign={setAssignTarget} />
+        <PaymentsTable
+          rows={rows}
+          showContact={false}
+          onAssign={setAssignTarget}
+          onVoid={setVoidTarget}
+        />
       )}
 
       {tid && (
@@ -370,6 +383,15 @@ export function PaymentsTab({
           teamId={tid}
           target={assignTarget}
           onClose={() => setAssignTarget(null)}
+        />
+      )}
+
+      {tid && (
+        <VoidPaymentDialog
+          teamId={tid}
+          target={voidTarget}
+          memberName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() || contact.email}
+          onClose={() => setVoidTarget(null)}
         />
       )}
 

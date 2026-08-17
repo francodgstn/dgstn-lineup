@@ -111,6 +111,20 @@ export interface ExternalPayment {
   /** Set when a manager (re)assigns the contact via updatePaymentRecord. */
   assigned_by?: string | null
   assigned_at?: Timestamp | null
+  /**
+   * VOIDED — a manager un-recorded this payment (`voidManualPayment`, manual
+   * rows only). The row survives as the audit record of the mistake, and its
+   * effects have been taken back.
+   *
+   * This is the one status the record-only rail has. A gateway refund on a BYO
+   * row happens in the studio's own gateway and never reaches us, so `amount`
+   * remains the whole story there — but a void says the money never arrived at
+   * all, so EVERY money reader must skip these rows (byoToUnified,
+   * useMonthlyRevenue) and `updatePaymentRecord` refuses to edit one.
+   */
+  voided_at?: Timestamp | null
+  voided_by?: string | null
+  void_reason?: string | null
 }
 
 // ─── Comment presets ─────────────────────────────────────────────────────────

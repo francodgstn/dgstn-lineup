@@ -44,6 +44,7 @@ import {
   type SeatHold,
 } from '@linyup/shared'
 import { denialMessage, loadContactPaymentContext } from '../access'
+import { loadBookingSettings } from '../bookingSettings'
 import { buildBookingConfirmationEmail } from '../templates'
 import { enforceWaiverGate, parseWaiverSubmissions } from '../../waivers/gate'
 import { commitWaiverLedgerWrites, planWaiverLedgerWrites } from '../../waivers/accept'
@@ -132,13 +133,14 @@ export const claimWaitlistSeat = onCall(async (request) => {
   const start = session.start as Timestamp
   const team = await getTeam(teamId)
   if (!team) throw new HttpsError('not-found', 'Team not found')
-  const bookingSettings = (team.settings as Record<string, unknown> | undefined)?.booking as
-    | { cutoffMinutes?: number }
-    | undefined
+  // The cutoff comes from THE booking-settings store (public_profile), never the
+  // team doc — see bookingSettings.ts. The team doc is still read above for the
+  // studio's name/slug/language and its confirmation-email defaults.
+  const bookingSettings = await loadBookingSettings(teamId)
   // Checked HERE rather than left to bookSession/createDropInCheckout, which
   // would refuse anyway: the claim page's whole job is to explain what happened,
   // and "booking closed" and "your offer expired" are different stories.
-  if (start.toMillis() <= Date.now() || isPastBookingCutoff(start, bookingSettings?.cutoffMinutes)) {
+  if (start.toMillis() <= Date.now() || isPastBookingCutoff(start, bookingSettings.cutoffMinutes)) {
     throw new HttpsError('failed-precondition', 'Online booking has closed for this class.', {
       reason: 'booking_closed',
     })
