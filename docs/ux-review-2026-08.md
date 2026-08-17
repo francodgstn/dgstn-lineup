@@ -62,6 +62,15 @@ below is deliberately compressed rather than complete. Accessibility (contrast, 
 readers, `aria` state) was **out of scope throughout** and is deferred to
 `design:accessibility-review`; four findings flag "needs an a11y pass" where they touched it.
 
+**Pre-launch — ignore every migration caveat in this report.** The product has no real
+customer data; every tenant is seed data. So wherever a finding says a fix "needs a migration",
+"a one-off backfill", or "repairing existing docs" — UX-M7-3's ranks plugin, UX-M4-4's saved
+filters, UX-69's stray access rules, and others — **that half is moot. Reseed instead.** Take
+the clean shape now and skip the compatibility layer; it is the cheapest this work will ever
+be, and every one of those caveats becomes real the day the first paying studio signs up. The
+same licence does **not** extend to stored enum values that are already documented as stable
+machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md governs separately.
+
 ---
 
 ## Findings
@@ -136,6 +145,8 @@ readers, `aria` state) was **out of scope throughout** and is deferred to
 | 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ▶ Open |
 | 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ▶ Open |
 | 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
+| 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ▶ Open |
+| 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -880,6 +891,118 @@ copy rules must be explicit per entity), S for each one after.
 change only the name and the level, save. The copy carries the pricing and none of the
 original's sessions or bookings — and if its access rule leaves no way in, you are told before
 it saves.
+
+### UX-69 — Linking a subscription to an appointment writes a field appointments never read
+`costs-money` · weekly · traced · M5 · *added 2026-08-17, from manual exploration*
+
+**Now.** The subscription editor has an "Activities this subscription unlocks" picker
+(`components/subscriptions/SubscriptionTypesManager.tsx:600-627`) — the inverse editor over the
+activities' access rule, added so a studio can link from the subscription side. It renders
+`activities.map((a: Activity) => …)` with **no filter on `a.type`**, so appointment activities
+appear in the list alongside classes. Ticking one runs `persistLinkedActivities` (`:206-244`),
+which writes:
+
+```ts
+accessRule: { type: 'subscription', subscriptionTypeIds: [...] }, isFreeTrial: false
+```
+
+**`Activity.accessRule` is CLASS-ONLY.** CLAUDE.md states it outright — appointment forms don't
+show it, appointment paths don't read it, appointment session docs and mirrors don't carry it —
+because an appointment has no access gate at all: *the price is the gate*. Coverage for an
+appointment is expressed by `Activity.memberBenefit` (`{subscriptionTypeIds, kind:
+'included' | 'discount'}`), which this control never touches.
+
+So the tick does two wrong things at once:
+
+1. **It is a silent no-op where it matters.** Nothing reads `accessRule` on an appointment, so
+   `resolveActivityPricingDisplay` never emits an "Included with…" row and the public
+   appointment card says nothing about the pack — the symptom that surfaced this.
+2. **It writes class-only data onto an appointment.** An `accessRule` on an appointment doc is
+   state that by design should not exist, and `isFreeTrial: false` rides along with it.
+
+**Cost.** A studio sells a 10-pack believing it unlocks its appointments. The public surface
+never says so, so the pack under-sells — and because appointment coverage comes from
+`memberBenefit`, a holder who books anyway is quoted and **charged the full base price**. The
+studio's own admin UI told them the link was saved. This is the same shape as the report's
+Theme 1 (two stores for one fact), except here the second store is not merely divergent: the
+write lands somewhere nothing reads.
+
+**Fix.** The picker must stop offering a control that cannot work. Two honest options, and I'd
+take the second:
+- **Exclude appointments from the picker** and say why in one line. Correct immediately, and
+  leaves the studio to set the benefit on the activity — but it makes the subscription side a
+  half-answer.
+- **Support appointments properly**: when the ticked activity is an appointment, write
+  `memberBenefit` instead of `accessRule`. This cannot be a bare checkbox, because
+  `memberBenefit` carries a `kind` — for a credit pack `'included'` is right (a booking spends
+  a credit), for a discount plan it is `'discount'` with a percentage. So the row needs that
+  one extra choice for appointments.
+
+**One constraint not to paper over.** `memberBenefit` is **one rule per activity**, so linking
+a second subscription appends to that rule's `subscriptionTypeIds` — and if two subscriptions
+want *different* kinds for the same appointment (one includes it, one discounts it), the model
+cannot express it. Say so in the UI rather than silently overwriting. (Repairing appointments
+already carrying a stray `accessRule` is **not** required — see "Pre-launch" below.)
+
+**Surface:** ±0 routes; +1 branch in one editor, −1 class-only write on appointment docs, +1
+cleanup pass. **Build:** M. **Owner:** web-agent (editor + repair), with a shared-types check
+that nothing else writes `accessRule` on an appointment.
+**Verify:** Create a 10-credit pack, tick an appointment activity, save. The public appointment
+card names the pack, and a holder booking it spends a credit instead of being charged. Then
+open that activity's own editor — it shows the benefit, and no access rule.
+
+### UX-70 — An appointment can be free or priced, but not "only with a pack"
+`costs-money` · at-setup · traced · M5×C2 · *added 2026-08-17, from manual exploration*
+
+**Now.** An appointment's price lives per duration (`Activity.durations: [{minutes,
+priceAmount?}]`), and the resolver treats an absent price as free **to everyone**:
+
+```ts
+// packages/shared/src/utils/paymentOptions.ts:685-687
+const base = target.duration.priceAmount
+if (base === undefined) return { options: [{ type: 'covered', via: { reason: 'unpriced' } }], denial: null }
+```
+
+`activity.ts:90-92` states the design outright: appointments dropped `ActivityAccessRule`
+entirely, and *"the price is the only gate now — unpriced = anyone books free, priced = anyone
+pays, benefit holders less."*
+
+That leaves a coach who sells **only packs** with no expressible option:
+- Leave the duration unpriced → a stranger off the bio-link books a **free one-to-one**.
+- Give it a price → pack holders spend a credit, but **anyone can also just buy a single
+  session** — which is exactly the thing this coach does not sell.
+
+**The root cause is a conflation, not a missing gate.** `priceAmount: undefined` currently
+means two different things at once: *"this is free for everyone"* and *"this is not sold by the
+session"*. That is the same mistake the codebase already identified and fixed elsewhere — see
+`offer/activities/page.tsx:169-175` on why `Activity.level` was made optional: *"forcing a
+choice made them pick 'All levels' to mean 'not applicable' — two different statements
+collapsed into one."* This is that, one field over.
+
+**Fix — keep "the price is the gate" true by making the price able to close the door.** Make a
+duration's price a **tri-state** rather than an optional number: *free* · *priced* · **not sold
+individually** (bookable only through a covering subscription). Do **not** re-introduce
+`accessRule` on appointments: that would restore the second gate axis the model deliberately
+removed, and every appointment path would have to learn it.
+
+Three things follow, and none is optional:
+1. **A denial, not silence.** `resolvePaymentOptions` already has a `denial` channel — a
+   non-holder on a pack-only duration must be refused there, with a reason the picker can turn
+   into "This is available with the {pack name}" plus a link to buy it, rather than a dead end.
+2. **The public card must name the way in.** This is UX-11's machinery (`includedWith`) and
+   UX-69's `memberBenefit` link. All three converge on one sentence a visitor needs: *what do I
+   buy to book this?*
+3. **A pack-only duration with no `memberBenefit` is unbookable by anyone.** That is precisely
+   the "no way in" state `computePricingHealth` already detects for classes
+   (`gated_no_newcomer_path`) and, per UX-11, currently skips. Extend it to appointments —
+   otherwise this fix ships a brand-new way to build an invisible offering.
+
+**Surface:** ±0 routes, ±0 settings — one field becomes expressive instead of a new gate.
+**Build:** M — shared resolver + fixtures, the activity editor, the appointment picker's refusal
+copy, and the health check. **Owner:** functions-agent (resolver + health), then web-agent.
+**Verify:** Create an appointment offered only via a 10-pack. As a guest, the picker says what
+to buy and links to it — it does not offer a free booking and does not offer a per-session
+price. As a pack holder, booking spends a credit.
 
 ---
 
