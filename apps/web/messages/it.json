@@ -3309,7 +3309,6 @@
     "policyFeeWaiveConfirmBody": "Il contatto non dovrà più questa penale per mancata presentazione.",
     "refundSuccess": "Rimborsato.",
     "refundAmountAction": "Rimborsa {amount}",
-    "refundProRataAction": "Rimborsa pro rata — {amount}",
     "refundDifferentAmount": "Rimborsa un importo diverso",
     "refundAmountLabel": "Importo del rimborso",
     "refundAmountMax": "Al massimo {amount}",
@@ -3317,10 +3316,11 @@
     "refundReversesCourse": "Questo rimuove anche il corso dallo spazio di {name}.",
     "refundConsumedTitle": "Una parte di questo pacchetto è già stata usata",
     "refundConsumedWhat": "{name} ha usato {used} delle {granted} lezioni di questo pacchetto.",
-    "refundConsumedWhy": "Un rimborso totale riprenderebbe lezioni già seguite. Rimborsa invece la parte non utilizzata, oppure imposta un importo tuo.",
-    "refundIndivisible": "Questo pagamento può essere rimborsato solo per intero — un abbonamento o un corso non si restituisce a metà.",
+    "refundConsumedWhy": "Un rimborso totale riprenderebbe lezioni già seguite, e un pacchetto parzialmente usato non può essere rimborsato qui.",
+    "refundIndivisible": "Questo pagamento può essere rimborsato solo per intero — un abbonamento o un corso non si restituisce a metà. Usa invece l’intero importo.",
     "refundReversalFailed": "Il denaro è stato rimborsato, ma l’accesso che aveva pagato non è stato revocato. Controlla il profilo di {name}.",
-    "refundFullAmountInstead": "Rimborsa invece l’intero importo"
+    "refundFullAmountInstead": "Rimborsa invece l’intero importo",
+    "refundPackPartial": "Un pacchetto di lezioni può essere rimborsato solo per intero. Usa invece l’intero importo."
   },
   "PaymentErrors": {
     "setupIncomplete": "La configurazione del conto di pagamento non è ancora completata, quindi l'operazione non è riuscita. Completare la configurazione in Impostazioni → Pagamenti.",

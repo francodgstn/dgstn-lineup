@@ -31,14 +31,19 @@
 // Doc id only. Do not reintroduce a query here.
 //
 // ── Reduce, never delete ─────────────────────────────────────────────────────
-// A revoked pack is written as `credits_total = credits_used` — ABSOLUTE, taken
-// from the transaction's own read set. Never a decrement (`FieldValue.increment`
-// on this field is the same second-writer bug CLAUDE.md bans on `usage_count`
-// and `bookings_count`), and never a delete (the grant is the audit record).
-// This needs ZERO new filters anywhere: every reader already derives remaining
-// as `credits_total - credits_used`, or reads the `credit_summary` rollup that
-// `buildCreditSummary` computes the same way, so remaining becomes 0 and the
-// grant drops out of all of them on the trigger's next pass.
+// A revoked pack is written by lowering `credits_total` to a TARGET — ABSOLUTE,
+// clamped against numbers taken from the transaction's own read set. Never a
+// decrement (`FieldValue.increment` on this field is the same second-writer bug
+// CLAUDE.md bans on `usage_count` and `bookings_count`), and never a delete (the
+// grant is the audit record). This needs ZERO new filters anywhere: every reader
+// already derives remaining as `credits_total - credits_used`, or reads the
+// `credit_summary` rollup that `buildCreditSummary` computes the same way, so
+// the revoked units drop out of all of them on the trigger's next pass.
+//
+// A PARTIAL REFUND OF A PACK CURRENTLY REFUSES rather than guessing how much of
+// it the money bought back — see `reversalPlanFor`. Taking the whole remainder
+// back for a token goodwill refund would be exactly the over-revoke this file
+// forbids, reported as a clean success.
 //
 // NAMED CONSEQUENCE, CHOSEN NOT MISSED: pack of 10 with 3 used is reduced to
 // total = 3. If the member then cancels one of those three classes,
@@ -54,10 +59,12 @@
 // `.create()` + catch-code-6 idiom into a transaction, where a collision fails
 // the WHOLE commit. The answer here is that the question does not arise: this
 // reversal contains NO `create()` calls at all. Idempotency is structural,
-// keyed by (paymentRef, contactId) — the credit write is absolute (a second run
-// is a no-op), the course delete is ownership-checked (a second run finds it
-// absent), and the subscription clear is ownership-checked (a second run finds
-// the ref gone and reports skipped_not_owner). Nothing needs a lock.
+// keyed by (paymentRef, contactId) — the credit write is an absolute TARGET
+// (re-running with the same inputs writes the same number, and the `min` clamp
+// stops a re-run raising it), the course delete is ownership-checked (a second
+// run finds it absent), and the subscription clear is ownership-checked (a
+// second run finds the ref gone and reports skipped_not_owner). Nothing needs a
+// lock.
 
 import { FieldValue } from 'firebase-admin/firestore'
 import {
@@ -73,10 +80,48 @@ import type { firestore } from 'firebase-admin'
 
 type Db = firestore.Firestore
 
+// ─── what was bought ─────────────────────────────────────────────────────────
+
+/**
+ * The stored `line_item` when the webhook stamped one; otherwise derived from
+ * `kind` — legacy Connect rows carry no line item, and treating them as
+ * "nothing was bought" would silently skip the reversal on exactly the oldest
+ * sales. `kind: 'membership'` maps to line-item kind 'subscription' (the two
+ * rails spell it differently; see the unified row builder on the web).
+ *
+ * Pure, and resolved for EVERY refund — including an unassigned one. Whether a
+ * refund may be partial is a property of what was sold, and must not depend on
+ * whether a manager has assigned the row yet.
+ */
+export function lineItemForReversal(
+  payment: Record<string, unknown>
+): PaymentLineItem | null {
+  const stored = payment.line_item as PaymentLineItem | undefined | null
+  if (stored?.kind) return stored
+  switch (payment.kind as string | undefined) {
+    case 'membership':
+      // No subscriptionTypeId to recover — and none is needed: the reversal
+      // proves ownership from `subscription_source_ref`, not from the type.
+      return { kind: 'subscription' }
+    case 'course':
+      return { kind: 'course', courseId: (payment.courseId as string | undefined) ?? undefined }
+    case 'product':
+    case 'drop_in':
+    case 'appointment':
+    case 'gift_card':
+      return { kind: payment.kind as PaymentLineItem['kind'] }
+    default:
+      return null
+  }
+}
+
 // ─── the plan ────────────────────────────────────────────────────────────────
 
 export type ReversalRefusalReason =
   | 'partial_refund_on_indivisible'
+  /** INTERIM — see `reversalPlanFor`. Goes away in one direction or the other
+   *  once "is a pack refundable at all" is decided. */
+  | 'partial_refund_on_pack'
   | 'full_refund_on_consumed_pack'
 
 /** Everything the dialog needs to offer a defensible alternative, all in the
@@ -95,10 +140,12 @@ export interface ConsumedPackSuggestion {
 export interface ReversalActions {
   subscription: 'clear_if_owned' | 'leave'
   /**
-   * `reduce_to.total` is the PRE-FLIGHT expectation, for display and logging
-   * only. The executor deliberately IGNORES it and writes the `credits_used` it
-   * reads inside its own transaction — a credit spent between the pre-flight
-   * read and the commit must not be taken away.
+   * `reduce_to.total` is a TARGET `credits_total`, never a delta — which is what
+   * keeps a re-run a no-op instead of a second revocation. The executor clamps
+   * it against numbers it reads inside its own transaction: never below
+   * `credits_used` (a credit spent between the pre-flight read and the commit is
+   * a class already booked, and stays), and never above the current
+   * `credits_total` (a re-run may not hand revoked credits back).
    */
   credits: { op: 'reduce_to'; total: number } | { op: 'leave' }
   course: 'delete_if_owned' | 'leave'
@@ -106,6 +153,7 @@ export interface ReversalActions {
 
 export type ReversalPlan =
   | { refuse: 'partial_refund_on_indivisible' }
+  | { refuse: 'partial_refund_on_pack' }
   | { refuse: 'full_refund_on_consumed_pack'; suggestion: ConsumedPackSuggestion }
   | ({ refuse?: undefined } & ReversalActions)
 
@@ -115,20 +163,35 @@ const NOTHING_TO_REVERSE: ReversalPlan = {
   course: 'leave',
 }
 
+/**
+ * The consumable a payment granted, when it granted one — today only a
+ * lesson-credit pack. Three numbers, all read straight off the grant doc.
+ */
+export interface DivisibleGrant {
+  /** The ORIGINAL pack size (`credits_total + credits_revoked`) — the
+   *  denominator the pro-rata suggestion prices against. It must not shrink when
+   *  an earlier reversal reduced the grant, or a later refund would price each
+   *  survivor above what it was sold for. */
+  unitsGranted: number
+  /** `credits_used` — units the member has actually taken. Never revoked. */
+  unitsConsumed: number
+  /** Units still live (`credits_total - credits_used`). */
+  unitsRemaining: number
+}
+
 export interface ReversalPlanInput {
   /** What was bought. Null (or an unrecognised kind) ⇒ nothing to reverse. */
   lineItem: PaymentLineItem | null
   /**
-   * The consumable this payment granted, when it granted one — today only a
-   * lesson-credit pack. Null means "indivisible or nothing", which is the
-   * difference between a refund that may be partial and one that may not.
+   * Null means "indivisible or nothing", which is the difference between a
+   * refund that may be partial and one that may not.
    */
-  divisible: { unitsGranted: number; unitsConsumed: number } | null
-  /** Rappen. `undefined` = a FULL refund. */
+  divisible: DivisibleGrant | null
+  /** Rappen. `undefined` = a FULL refund (everything still refundable). */
   refundAmountMinor?: number
-  /** Gross payment amount in Rappen — the base for the pro-rata suggestion. */
+  /** Gross payment amount in Rappen — the base for all pro-rata arithmetic. */
   paymentAmountMinor: number
-  /** Already refunded on this charge (Rappen). Bounds the suggestion. */
+  /** Already refunded on this charge (Rappen), BEFORE this refund. */
   alreadyRefundedMinor?: number
 }
 
@@ -149,10 +212,30 @@ export interface ReversalPlanInput {
  * Holding a plan is indivisible; a member with 3 consumed credits still holds
  * the pack, and taking the plan away because seven classes were refunded is the
  * over-revoke this whole module exists to avoid.
+ *
+ * A CREDIT PACK IS REFUNDABLE IN FULL, AND ONLY WHILE UNTOUCHED. Both other
+ * cases refuse:
+ *
+ *   • PARTIAL, any pack (`partial_refund_on_pack`) — INTERIM. How much of a pack
+ *     a partial refund takes back has to be a function of the MONEY RETURNED,
+ *     and that rule is not built: whether packs stay refundable at all is a live
+ *     product question ("a pack is a commitment"). Refusing is correct under
+ *     both answers — it is the end state if pack refunds go away, and a safe
+ *     placeholder if they stay. What it replaced was not: the branch ignored
+ *     `refundAmountMinor` entirely, so a CHF 10 goodwill gesture on a CHF 180
+ *     ten-class pack revoked all ten credits and reported a clean success —
+ *     exactly the over-revoke this module's header forbids.
+ *   • FULL, partly consumed (`full_refund_on_consumed_pack`) — a full refund
+ *     would take back classes already delivered.
+ *
+ * Deleting the partial arm is a small edit; un-shipping a wrong revocation is
+ * not. When the product question is answered, ONE of these two refusals goes.
  */
 export function reversalPlanFor(input: ReversalPlanInput): ReversalPlan {
   const kind = input.lineItem?.kind ?? null
   const isFullRefund = input.refundAmountMinor === undefined
+  const alreadyRefundedMinor = input.alreadyRefundedMinor ?? 0
+  const maxRefundableMinor = Math.max(0, input.paymentAmountMinor - alreadyRefundedMinor)
 
   if (kind === 'subscription') {
     const d = input.divisible
@@ -161,39 +244,28 @@ export function reversalPlanFor(input: ReversalPlanInput): ReversalPlan {
       if (!isFullRefund) return { refuse: 'partial_refund_on_indivisible' }
       return { subscription: 'clear_if_owned', credits: { op: 'leave' }, course: 'leave' }
     }
-    if (isFullRefund) {
-      if (d.unitsConsumed > 0) {
-        const maxRefundableMinor = Math.max(
-          0,
-          input.paymentAmountMinor - (input.alreadyRefundedMinor ?? 0)
-        )
-        const unitsRemaining = Math.max(0, d.unitsGranted - d.unitsConsumed)
-        return {
-          refuse: 'full_refund_on_consumed_pack',
-          suggestion: {
-            unitsGranted: d.unitsGranted,
-            unitsConsumed: d.unitsConsumed,
-            unitsRemaining,
-            proRataMinor: Math.min(
-              proRataMinor(input.paymentAmountMinor, unitsRemaining, d.unitsGranted),
-              maxRefundableMinor
-            ),
-            maxRefundableMinor,
-          },
-        }
-      }
-      // Untouched pack: give the money back, take the whole pack back, and the
-      // plan snapshot it wrote with it.
+    if (!isFullRefund) return { refuse: 'partial_refund_on_pack' }
+    if (d.unitsConsumed > 0) {
       return {
-        subscription: 'clear_if_owned',
-        credits: { op: 'reduce_to', total: 0 },
-        course: 'leave',
+        refuse: 'full_refund_on_consumed_pack',
+        suggestion: {
+          unitsGranted: d.unitsGranted,
+          unitsConsumed: d.unitsConsumed,
+          unitsRemaining: d.unitsRemaining,
+          proRataMinor: Math.min(
+            proRataMinor(input.paymentAmountMinor, d.unitsRemaining, d.unitsGranted),
+            maxRefundableMinor
+          ),
+          maxRefundableMinor,
+        },
       }
     }
-    // Partial refund of a pack: revoke the REMAINDER, keep the plan.
+    // Untouched pack, refunded in full: give the money back, take the whole pack
+    // back, and the plan snapshot it wrote with it. Target 0 — the executor
+    // clamps it up to whatever `credits_used` has become in the meantime.
     return {
-      subscription: 'leave',
-      credits: { op: 'reduce_to', total: d.unitsConsumed },
+      subscription: 'clear_if_owned',
+      credits: { op: 'reduce_to', total: 0 },
       course: 'leave',
     }
   }
@@ -256,6 +328,8 @@ export async function reversePaymentEffects(
   const grantRef = contactRef
     .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
     .doc(paymentRef)
+  /** The plan's target `credits_total`, or null when the plan leaves credits alone. */
+  const creditsTarget = plan.credits.op === 'reduce_to' ? plan.credits.total : null
   const courseId = input.lineItem?.kind === 'course' ? (input.lineItem.courseId ?? null) : null
   const purchaseRef =
     plan.course === 'delete_if_owned' && courseId
@@ -276,7 +350,7 @@ export async function reversePaymentEffects(
 
     // ── read phase (≤3, all by doc id) ───────────────────────────────────────
     const contactSnap = plan.subscription === 'clear_if_owned' ? await tx.get(contactRef) : null
-    const grantSnap = plan.credits.op === 'reduce_to' ? await tx.get(grantRef) : null
+    const grantSnap = creditsTarget !== null ? await tx.get(grantRef) : null
     const purchaseSnap = purchaseRef ? await tx.get(purchaseRef) : null
 
     // ── write phase (≤3) ─────────────────────────────────────────────────────
@@ -310,26 +384,34 @@ export async function reversePaymentEffects(
       }
     }
 
-    if (grantSnap) {
+    if (grantSnap && creditsTarget !== null) {
       const grant = grantSnap.data()
       if (!grantSnap.exists || !grant) {
         outcome.credits = 'absent'
       } else {
-        const total = (grant.credits_total as number | undefined) ?? 0
-        // THE AUTHORITATIVE NUMBER, and the only reason this is a transaction:
+        // THE AUTHORITATIVE NUMBERS, and the only reason this is a transaction:
         // read HERE, inside it — not from the plan, which was computed before
-        // the money moved. A credit spent in between is a class the member has
-        // booked, and it stays theirs.
+        // the money moved.
+        const total = (grant.credits_total as number | undefined) ?? 0
         const used = (grant.credits_used as number | undefined) ?? 0
-        const revoked = Math.max(0, total - used)
+        // The plan's TARGET, clamped by both of them:
+        //   • never below `used` — a credit spent between the pre-flight read
+        //     and this commit is a class already booked, and it stays hers;
+        //   • never above the current `total` — a re-run computing a larger
+        //     target may not hand revoked credits back.
+        // Both clamps err the same way as everything else here: under-revoking.
+        const target = Math.max(used, Math.min(total, creditsTarget))
+        const revoked = Math.max(0, total - target)
         if (revoked === 0) {
-          // Already exhausted, or already reversed. Idempotent no-op.
+          // Already at (or past) the target: the pack is exhausted, this refund
+          // did not pay for a whole unit, or this reversal already ran.
+          // Idempotent no-op — no write at all.
           outcome.credits = 'reduced'
           outcome.creditsRevoked = 0
         } else {
           tx.update(grantRef, {
             // ABSOLUTE, from this transaction's read set. Never an increment.
-            credits_total: used,
+            credits_total: target,
             // Audit only — nothing reads these for a decision.
             reversed_at: FieldValue.serverTimestamp(),
             reversed_by_payment_ref: paymentRef,

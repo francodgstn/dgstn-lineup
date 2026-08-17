@@ -3309,7 +3309,6 @@
     "policyFeeWaiveConfirmBody": "Le contact ne devra plus ces frais de non-présentation.",
     "refundSuccess": "Remboursé.",
     "refundAmountAction": "Rembourser {amount}",
-    "refundProRataAction": "Rembourser au prorata — {amount}",
     "refundDifferentAmount": "Rembourser un autre montant",
     "refundAmountLabel": "Montant du remboursement",
     "refundAmountMax": "Au maximum {amount}",
@@ -3317,10 +3316,11 @@
     "refundReversesCourse": "Cela retire aussi le cours de l’espace de {name}.",
     "refundConsumedTitle": "Une partie de ce pack a déjà été utilisée",
     "refundConsumedWhat": "{name} a utilisé {used} des {granted} cours de ce pack.",
-    "refundConsumedWhy": "Un remboursement intégral reprendrait des cours déjà suivis. Remboursez plutôt la partie non utilisée, ou fixez votre propre montant.",
-    "refundIndivisible": "Ce paiement ne peut être remboursé qu’en totalité — un abonnement ou un cours ne se rend pas à moitié.",
+    "refundConsumedWhy": "Un remboursement intégral reprendrait des cours déjà suivis, et un pack partiellement utilisé ne peut pas être remboursé ici.",
+    "refundIndivisible": "Ce paiement ne peut être remboursé qu’en totalité — un abonnement ou un cours ne se rend pas à moitié. Utilisez plutôt la totalité.",
     "refundReversalFailed": "L’argent a été remboursé, mais l’accès qu’il payait n’a pas pu être repris. Vérifiez le profil de {name}.",
-    "refundFullAmountInstead": "Rembourser plutôt la totalité"
+    "refundFullAmountInstead": "Rembourser plutôt la totalité",
+    "refundPackPartial": "Un pack de cours ne peut être remboursé qu’en totalité. Utilisez plutôt la totalité."
   },
   "PaymentErrors": {
     "setupIncomplete": "La configuration du compte de paiement n'est pas terminée, l'action n'a donc pas pu aboutir. Terminer la configuration dans Paramètres → Paiements.",

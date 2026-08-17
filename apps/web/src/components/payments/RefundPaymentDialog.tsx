@@ -2,27 +2,29 @@
 
 // Refund a Connect payment — and, with it, the access the payment bought.
 //
-// The dialog exists in this shape because of ONE server refusal. Refunding a
-// credit pack in full when the member has already taken three of the ten
-// classes is not a thing the studio can simply be allowed to do (it would take
-// back classes that were delivered) nor a thing it should simply be told "no"
-// about. So `refundMemberPayment` answers `full_refund_on_consumed_pack` with
-// the numbers, and the dialog turns them into three beats:
+// The dialog offers an EDITABLE AMOUNT, which is the whole point of it: making
+// a manager retype a money figure under pressure is the fat-finger failure this
+// area is about, and a "cancellation fee" is nothing more than a smaller number
+// typed here. It is only ever a suggestion on the wire — the callable checks it
+// against what is still refundable and refuses what it cannot honour.
 //
-//   what is true  — "Ana has used 3 of the 10 classes on this pack"
-//   why not       — "A full refund would take back classes she has taken"
-//   what now      — "Refund pro-rata — CHF 126.00", or a different amount
+// WHERE THE CLIENT AND THE SERVER MUST AGREE. Two refusals remove partial
+// refunds entirely:
+//   • a COURSE is indivisible, and the client can prove that from the line item
+//     alone — so it does not offer the option at all;
+//   • a SUBSCRIPTION may be a divisible class pack or a plain plan, and the
+//     client cannot tell — so it offers the option and renders the server's
+//     refusal inline, next to the way out ("Refund the full amount instead").
+// Suppress what is provable, explain the rest. Do not add a client-side rule
+// that guesses at the rest — that is how the two sides drift.
 //
-// COMPUTED FOR HER, AND EDITABLE. Making a manager divide 180 by 10 and
-// multiply by 7 under pressure is exactly the fat-finger failure this whole
-// area is about. But locking the number is wrong the moment a cancellation fee
-// or a goodwill gesture enters — and a "cancellation fee" IS just a smaller
-// number typed here, which is why there is no separate feature for it. The
-// default carries the arithmetic; the edit carries the judgement.
-//
-// The amount is only ever a SUGGESTION on the wire: the callable re-derives it
-// and checks the manager's number against what is still refundable, never
-// against the pro-rata figure.
+// `full_refund_on_consumed_pack` gets three beats — what is true ("Ana has used
+// 3 of the 10 classes on this pack"), why not, and what now. Its "what now" is
+// currently EMPTY, deliberately: a partly used pack cannot be refunded here
+// while partial pack refunds are refused server-side (whether a pack is
+// refundable at all is an open product question). A pro-rata button would only
+// earn a second refusal, so it is not shown. When that question is answered
+// this beat gets a real action or the refusal goes away.
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -43,7 +45,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-/** `details` of the `full_refund_on_consumed_pack` refusal. */
+/** `details` of the `full_refund_on_consumed_pack` refusal. `proRataMinor` is
+ *  parsed (it discriminates a real refusal payload from a malformed one) but
+ *  deliberately NOT rendered: partial pack refunds are refused server-side, so
+ *  offering that figure as an action would only earn a second refusal. */
 interface ConsumedPackSuggestion {
   unitsGranted: number
   unitsConsumed: number
@@ -89,6 +94,10 @@ export function RefundPaymentDialog({
   const [editing, setEditing] = useState(false)
   const [amountText, setAmountText] = useState('')
   const [inlineError, setInlineError] = useState<string | null>(null)
+  /** Set once the server has told us this row is a class pack. Only then can the
+   *  client know a partial is pointless — before that it cannot tell a pack from
+   *  a plain plan, so it must keep offering the option. */
+  const [partialRefused, setPartialRefused] = useState(false)
 
   // Every open starts clean — a refusal from the previous row must not carry over.
   useEffect(() => {
@@ -96,11 +105,16 @@ export function RefundPaymentDialog({
     setEditing(false)
     setAmountText('')
     setInlineError(null)
+    setPartialRefused(false)
   }, [target?.key])
 
   if (!target) return null
 
   const currency = target.currency
+  // WHAT A FULL REFUND ACTUALLY RETURNS — the gross MINUS what has already gone
+  // back, because a `partially_refunded` row is refundable again. Every amount
+  // this dialog prints comes from here: showing the gross next to a Refund
+  // button is a wrong money figure at the exact moment a manager commits.
   const maxRefundableMinor =
     suggestion?.maxRefundableMinor ?? Math.max(0, target.amount - target.amountRefunded)
   const who = memberName?.trim() || t('unassigned')
@@ -110,27 +124,23 @@ export function RefundPaymentDialog({
     editing && (editedMinor === null || editedMinor > maxRefundableMinor)
 
   /** What the primary button will send: undefined = a full refund. */
-  const submitMinor: number | undefined = editing
-    ? (editedMinor ?? undefined)
-    : suggestion
-      ? suggestion.proRataMinor
-      : undefined
+  const submitMinor: number | undefined = editing ? (editedMinor ?? undefined) : undefined
 
   const primaryLabel = editing
     ? t('refundAmountAction', {
         amount: formatMoneyMinor(editedMinor ?? 0, currency),
       })
-    : suggestion
-      ? t('refundProRataAction', {
-          amount: formatMoneyMinor(suggestion.proRataMinor, currency),
-        })
-      : t('refundAmountAction', { amount: formatMoneyMinor(target.amount, currency) })
+    : t('refundAmountAction', { amount: formatMoneyMinor(maxRefundableMinor, currency) })
 
-  // A fully consumed pack has nothing to suggest — refunding CHF 0 is not an
-  // offer, so the only route on is the editable amount.
-  const proRataUnavailable = !!suggestion && suggestion.proRataMinor <= 0
-  const primaryDisabled =
-    refund.isPending || amountInvalid || (!editing && proRataUnavailable)
+  // The consumed-pack refusal has no action behind it right now (see the module
+  // header): a full refund is what was just refused, and a partial is refused
+  // too. Leave the button visible but dead rather than swapping in one that
+  // cannot work.
+  const primaryDisabled = refund.isPending || amountInvalid || !!suggestion
+
+  // Offered unless the client can PROVE it is pointless: a course is
+  // indivisible by kind, and a pack has said so already.
+  const partialOffered = target.lineItem?.kind !== 'course' && !partialRefused && !suggestion
 
   function openEditor(prefillMinor: number) {
     setEditing(true)
@@ -163,8 +173,16 @@ export function RefundPaymentDialog({
         if (s) {
           setSuggestion(s)
           setEditing(false)
+          setInlineError(null)
           return
         }
+      }
+      if (reason === 'partial_refund_on_pack') {
+        // Now we know it is a pack: stop offering an amount that cannot be taken.
+        setPartialRefused(true)
+        setEditing(false)
+        setInlineError(t('refundPackPartial'))
+        return
       }
       if (reason === 'partial_refund_on_indivisible') {
         setInlineError(t('refundIndivisible'))
@@ -208,7 +226,7 @@ export function RefundPaymentDialog({
                   granted: suggestion.unitsGranted,
                 })
               : t('refundConfirmBody', {
-                  amount: formatMoneyMinor(target.amount, currency),
+                  amount: formatMoneyMinor(maxRefundableMinor, currency),
                 })}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -256,13 +274,15 @@ export function RefundPaymentDialog({
               )}
             </div>
           ) : (
-            <button
-              type="button"
-              className="text-sm underline text-muted-foreground hover:text-foreground"
-              onClick={() => openEditor(suggestion?.proRataMinor || maxRefundableMinor)}
-            >
-              {t('refundDifferentAmount')}
-            </button>
+            partialOffered && (
+              <button
+                type="button"
+                className="text-sm underline text-muted-foreground hover:text-foreground"
+                onClick={() => openEditor(maxRefundableMinor)}
+              >
+                {t('refundDifferentAmount')}
+              </button>
+            )
           )}
           {inlineError && <p className="text-sm text-destructive">{inlineError}</p>}
         </div>

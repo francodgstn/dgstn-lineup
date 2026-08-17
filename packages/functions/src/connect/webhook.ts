@@ -1273,6 +1273,17 @@ async function handleCheckoutCompleted(
 
   const amountRappen = (session.amount_total as number | undefined) ?? 0
   let membershipExpiration: Timestamp | null = null
+  // THE SESSION's OWN PaymentIntent. Stripe's semantics do the case split for
+  // us: it is present on a one-off ('payment' mode) checkout and ALWAYS null on
+  // a 'subscription' mode session, which puts the first charge on the invoice
+  // instead. Hoisted out of the one-off branch below because the
+  // writeContactMembership call at the end of this function needs it — see the
+  // comment there for why passing the wrong one of these two is a real bug in
+  // both directions.
+  const sessionPaymentIntentId: string | null =
+    (typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : (session.payment_intent?.id as string | undefined)) ?? null
 
   if (session.mode === 'subscription' && session.subscription) {
     const subId =
@@ -1404,10 +1415,7 @@ async function handleCheckoutCompleted(
   } else {
     const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
     membershipExpiration = months > 0 ? addMonths(months) : null
-    const piId =
-      typeof session.payment_intent === 'string'
-        ? session.payment_intent
-        : session.payment_intent?.id
+    const piId = sessionPaymentIntentId
     if (piId) {
       await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
       await stampFinanceContact(team.teamId, piId, contactId)
@@ -1417,7 +1425,30 @@ async function handleCheckoutCompleted(
     }
   }
 
-  await writeContactMembership(team.teamId, contactId, md, { amountRappen, membershipExpiration })
+  await writeContactMembership(team.teamId, contactId, md, {
+    amountRappen,
+    membershipExpiration,
+    // TWO CASES, and confusing them breaks the OPPOSITE one — state which is
+    // which, or the next reader "fixes" one by reintroducing the other:
+    //
+    //  • ONE-OFF ('payment' mode) — a PaymentIntent EXISTS, and this charge is
+    //    what set the membership up, so it owns the fields and refunding it may
+    //    clear them. This call used to pass nothing here, because `piId` was
+    //    scoped to the branch above; that wrote `subscription_source_ref: null`
+    //    and raced handlePaymentIntent, overwriting the correct ref. Every
+    //    refund of a one-off membership or credit pack then answered
+    //    `skipped_not_owner` and revoked nothing — on the main rail.
+    //
+    //  • RECURRING ('subscription' mode) — `session.payment_intent` is ALWAYS
+    //    null (the first charge sits on the invoice, governed by handleInvoice /
+    //    handleSubscription, which write null on every renewal). Null is the
+    //    truthful answer here, and it is load-bearing: it overwrites the ref of
+    //    any earlier one-off purchase, so refunding that old charge cannot clear
+    //    a membership this subscription is paying for.
+    //
+    // One expression covers both, because Stripe's own semantics make the split.
+    paymentIntentId: sessionPaymentIntentId,
+  })
 }
 
 /**

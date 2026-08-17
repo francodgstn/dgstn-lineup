@@ -51,73 +51,65 @@ import { Timestamp } from 'firebase-admin/firestore'
 import { refundDirectCharge } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import { reverseGiftCardDrawdown, unvoidGiftCard, voidUntouchedGiftCard } from './giftCards'
-import { reversalPlanFor, reversePaymentEffects, type ReversalActions } from '../payments/reversal'
-
-/**
- * What was bought, for the reversal. The stored `line_item` when the webhook
- * stamped one; otherwise derived from `kind` — legacy Connect rows carry no
- * line item, and treating them as "nothing was bought" would silently skip the
- * reversal on exactly the oldest sales. `kind: 'membership'` maps to line-item
- * kind 'subscription' (the two rails spell it differently; see the unified row
- * builder on the web).
- */
-function lineItemForReversal(
-  payment: FirebaseFirestore.DocumentData
-): PaymentLineItem | null {
-  const stored = payment.line_item as PaymentLineItem | undefined | null
-  if (stored?.kind) return stored
-  switch (payment.kind as string | undefined) {
-    case 'membership':
-      // No subscriptionTypeId to recover — and none is needed: the reversal
-      // proves ownership from `subscription_source_ref`, not from the type.
-      return { kind: 'subscription' }
-    case 'course':
-      return { kind: 'course', courseId: (payment.courseId as string | undefined) ?? undefined }
-    case 'product':
-    case 'drop_in':
-    case 'appointment':
-    case 'gift_card':
-      return { kind: payment.kind as PaymentLineItem['kind'] }
-    default:
-      return null
-  }
-}
+import {
+  lineItemForReversal,
+  reversalPlanFor,
+  reversePaymentEffects,
+  type DivisibleGrant,
+  type ReversalActions,
+} from '../payments/reversal'
 
 /**
  * Is the thing this payment granted DIVISIBLE — i.e. is it a lesson-credit pack,
  * and how much of it has been taken?
  *
- * The grant document is the source of truth, and it is reached BY DOC ID
- * (contacts/{contactId}/credit_grants/{paymentRef}) — never by a field query,
- * because the provenance field name differed by rail. `credits_used` /
- * `credits_total` on that doc is what both spenders re-read inside their own
- * transactions; `Contact.credit_summary` is a rollup the booking gate reads
- * optimistically and must NOT be read here.
+ * DELIBERATELY NOT GATED ON `contactId`. Whether a refund may be partial is a
+ * property of WHAT WAS SOLD, not of whether a manager has got round to assigning
+ * the row: making legality hinge on assignment means the same course sale is
+ * half-refundable on Tuesday and not on Wednesday. So the price lookup runs
+ * whether or not there is a contact, and it is the REVERSAL that no-ops when
+ * there is nobody to revoke from.
  *
- * The fallback — the subscription price's `credits` — matters only when the
- * grant is missing (an unresolved contact at purchase time). It errs toward
- * ALLOWING the refund: without it, a genuine credit-pack payment would look
- * indivisible and a legitimate partial refund would be refused.
+ * The grant document is the source of truth when a contact is known, and it is
+ * reached BY DOC ID (contacts/{contactId}/credit_grants/{paymentRef}) — never by
+ * a field query, because the provenance field name differed by rail.
+ * `credits_used` / `credits_total` on that doc is what both spenders re-read
+ * inside their own transactions; `Contact.credit_summary` is a rollup the
+ * booking gate reads optimistically and must NOT be read here.
+ *
+ * The fallback — the subscription price's `credits` — covers an unassigned row
+ * and a contact resolved after purchase. It errs toward ALLOWING the refund:
+ * without it a genuine credit-pack payment would look indivisible and a
+ * legitimate partial refund would be refused.
  */
 async function resolveDivisible(
   teamId: string,
-  contactId: string,
+  contactId: string | null,
   paymentRef: string,
   lineItem: PaymentLineItem | null
-): Promise<{ unitsGranted: number; unitsConsumed: number } | null> {
+): Promise<DivisibleGrant | null> {
   if (lineItem?.kind !== 'subscription') return null
   const db = admin.firestore()
-  const grantSnap = await db
-    .collection(CONTACTS_COLLECTION)
-    .doc(contactId)
-    .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
-    .doc(paymentRef)
-    .get()
-  if (grantSnap.exists) {
-    const g = grantSnap.data()!
-    return {
-      unitsGranted: (g.credits_total as number | undefined) ?? 0,
-      unitsConsumed: (g.credits_used as number | undefined) ?? 0,
+  if (contactId) {
+    const grantSnap = await db
+      .collection(CONTACTS_COLLECTION)
+      .doc(contactId)
+      .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
+      .doc(paymentRef)
+      .get()
+    if (grantSnap.exists) {
+      const g = grantSnap.data()!
+      const total = (g.credits_total as number | undefined) ?? 0
+      const used = (g.credits_used as number | undefined) ?? 0
+      const revoked = (g.credits_revoked as number | undefined) ?? 0
+      return {
+        // The ORIGINAL pack size — the pricing denominator. An earlier partial
+        // refund lowered credits_total; using that as the denominator would
+        // price the survivors above what they were sold for.
+        unitsGranted: total + revoked,
+        unitsConsumed: used,
+        unitsRemaining: Math.max(0, total - used),
+      }
     }
   }
   if (!lineItem.subscriptionTypeId || !lineItem.priceId) return null
@@ -131,7 +123,7 @@ async function resolveDivisible(
     (p) => p.id === lineItem.priceId
   )
   if (!price?.credits || price.credits <= 0) return null
-  return { unitsGranted: price.credits, unitsConsumed: 0 }
+  return { unitsGranted: price.credits, unitsConsumed: 0, unitsRemaining: price.credits }
 }
 
 export const refundMemberPayment = onCall(async (request) => {
@@ -186,11 +178,12 @@ export const refundMemberPayment = onCall(async (request) => {
   // A refusal raised after the void would leave the card dead with no
   // compensating un-void; a refusal raised after the charge would be a refusal
   // of something that already happened.
+  // WHAT WAS SOLD decides whether this refund is legal — not whether the row has
+  // been assigned to a contact yet. Both are resolved unconditionally; only the
+  // reversal below is skipped when there is nobody to revoke from.
   const contactId = (payment.contactId as string | undefined) ?? null
-  const lineItem = contactId ? lineItemForReversal(payment) : null
-  const divisible = contactId
-    ? await resolveDivisible(teamId, contactId, paymentIntentId, lineItem)
-    : null
+  const lineItem = lineItemForReversal(payment)
+  const divisible = await resolveDivisible(teamId, contactId, paymentIntentId, lineItem)
   const reversalPlan = reversalPlanFor({
     lineItem,
     divisible,
@@ -205,10 +198,20 @@ export const refundMemberPayment = onCall(async (request) => {
       { reason: 'partial_refund_on_indivisible' }
     )
   }
+  if (reversalPlan.refuse === 'partial_refund_on_pack') {
+    // INTERIM — see reversalPlanFor. Refusing is the safe answer while "is a
+    // class pack refundable at all" is open; the alternative on the table was
+    // revoking the whole remainder for any amount, which is worse than a no.
+    throw new HttpsError(
+      'failed-precondition',
+      'A class pack can only be refunded in full',
+      { reason: 'partial_refund_on_pack' }
+    )
+  }
   if (reversalPlan.refuse === 'full_refund_on_consumed_pack') {
-    // Not "no". "Not this amount, and here is the one that works" — the details
-    // carry everything the dialog needs to offer the pro-rata refund and let the
-    // manager edit it.
+    // The details carry the numbers that make the refusal concrete on screen
+    // ("3 of 10 used"). They no longer carry an OFFER: with partial pack refunds
+    // refused above, a pro-rata button would only earn a second refusal.
     throw new HttpsError(
       'failed-precondition',
       'Some of this pack has already been used',

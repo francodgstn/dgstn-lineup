@@ -3309,7 +3309,6 @@
     "policyFeeWaiveConfirmBody": "Der Kontakt schuldet diese No-Show-Gebühr nicht mehr.",
     "refundSuccess": "Erstattet.",
     "refundAmountAction": "{amount} erstatten",
-    "refundProRataAction": "Anteilig erstatten — {amount}",
     "refundDifferentAmount": "Anderen Betrag erstatten",
     "refundAmountLabel": "Erstattungsbetrag",
     "refundAmountMax": "Höchstens {amount}",
@@ -3317,10 +3316,11 @@
     "refundReversesCourse": "Damit wird der Kurs auch aus dem Bereich von {name} entfernt.",
     "refundConsumedTitle": "Ein Teil dieses Pakets wurde bereits genutzt",
     "refundConsumedWhat": "{name} hat {used} von {granted} Lektionen dieses Pakets genutzt.",
-    "refundConsumedWhy": "Eine vollständige Erstattung würde bereits besuchte Lektionen zurücknehmen. Erstatte stattdessen den ungenutzten Teil oder lege selbst einen Betrag fest.",
-    "refundIndivisible": "Diese Zahlung kann nur vollständig erstattet werden — ein Abo oder ein Kurs lässt sich nicht halb zurückgeben.",
+    "refundConsumedWhy": "Eine vollständige Erstattung würde bereits besuchte Lektionen zurücknehmen, und ein teilweise genutztes Paket kann hier nicht erstattet werden.",
+    "refundIndivisible": "Diese Zahlung kann nur vollständig erstattet werden — ein Abo oder ein Kurs lässt sich nicht halb zurückgeben. Nimm stattdessen den vollen Betrag.",
     "refundReversalFailed": "Das Geld wurde erstattet, der damit bezahlte Zugang konnte aber nicht zurückgenommen werden. Bitte das Profil von {name} prüfen.",
-    "refundFullAmountInstead": "Stattdessen den vollen Betrag erstatten"
+    "refundFullAmountInstead": "Stattdessen den vollen Betrag erstatten",
+    "refundPackPartial": "Ein Lektionenpaket kann nur vollständig erstattet werden. Nimm stattdessen den vollen Betrag."
   },
   "PaymentErrors": {
     "setupIncomplete": "Die Einrichtung des Zahlungskontos ist noch nicht abgeschlossen, daher konnte dies nicht durchgeführt werden. Einrichtung unter Einstellungen → Zahlungen abschliessen.",
