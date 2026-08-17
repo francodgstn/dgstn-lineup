@@ -350,6 +350,15 @@ async function backfillExternal(teamId: string): Promise<void> {
       stats.skipped += 1
       continue
     }
+    // A VOIDED manual row is not a money event — the manager said the record was
+    // wrong. Its journal row (if any) is already 'corrected'; writing one here
+    // would create it as 'recorded' and quietly resurrect money that never
+    // arrived. create() protects the corrected row, but not the case where the
+    // original journal write had failed (it is best-effort by design).
+    if (p.voided_at) {
+      stats.skipped += 1
+      continue
+    }
     await writeTxn(
       buildExternalPaymentTxn({
         teamId,

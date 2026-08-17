@@ -35,7 +35,18 @@
 //   • payout_id / contact_id — linkage metadata, not money
 //   • fee upgrade — fee fields + fee_source only, and only while
 //     fee_source !== 'balance_transaction' (backfill improving a degraded row)
-//   • status → 'corrected' + a compensating 'adjustment' row (`corrects`)
+//   • status → 'corrected'. TWO SHAPES, and mixing them invents money:
+//       – the AMOUNT was wrong → 'corrected' + a compensating 'adjustment' row
+//         (`corrects`) carrying the right figure, because the right figure needs
+//         somewhere to live;
+//       – the EVENT DID NOT HAPPEN (a manual payment a manager voided) →
+//         'corrected' ALONE, no second row. There is no right amount — the redo
+//         is a fresh payment, which writes its own row — so an adjustment here
+//         would be a phantom entry for money that never moved.
+//     Either way the status flip is the whole mechanism: computeMonthlyFinanceReport
+//     drops corrected rows (below), and onFinanceTransactionWrite posts the
+//     compensating double-entry reversal on the recorded → corrected edge.
+//     markFinanceTxnCorrected (functions/src/finance/journal.ts) is the writer.
 // Errors are fixed by new rows, never edits — this is what makes the journal
 // replayable into double-entry postings.
 //

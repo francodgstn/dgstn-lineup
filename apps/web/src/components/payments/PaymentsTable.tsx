@@ -5,7 +5,12 @@
 // views never drift. Columns: date, "what was paid" (line item / comment), an
 // optional contact column (hidden on contact-scoped views), source gateway
 // (+ manual payment mode), status, amount, and per-row actions (assign/edit +
-// an optional refund for Connect rows).
+// an optional refund for Connect rows, an optional void for manual ones).
+//
+// A VOIDED ROW IS INERT: struck through, counted nowhere, and offering no
+// actions at all. Not hidden — it is the audit record of the mistake — and not
+// editable either: `updatePaymentRecord` refuses a voided row server-side, so
+// leaving the Edit button up would only produce a refusal.
 
 import { useTranslations } from 'next-intl'
 import { Pencil, UserPlus } from 'lucide-react'
@@ -36,6 +41,7 @@ const PAYMENT_STATUS_STYLES: Record<string, string> = {
   paid: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   partially_refunded: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   refunded: 'bg-muted text-muted-foreground',
+  voided: 'bg-muted text-muted-foreground',
   failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   pending: 'bg-muted text-muted-foreground',
 }
@@ -46,6 +52,7 @@ export function PaymentsTable({
   contactName,
   onAssign,
   onRefund,
+  onVoid,
 }: {
   rows: UnifiedPaymentRow[]
   /** Hide the contact column on contact-scoped views (it's redundant there). */
@@ -55,6 +62,8 @@ export function PaymentsTable({
   onAssign: (target: AssignPaymentTarget) => void
   /** When provided, refundable Connect rows get a Refund action. */
   onRefund?: (row: UnifiedPaymentRow) => void
+  /** When provided, live MANUAL rows get a Void action ("this record is wrong"). */
+  onVoid?: (row: UnifiedPaymentRow) => void
 }) {
   const t = useTranslations('PaymentsDashboard')
 
@@ -75,12 +84,14 @@ export function PaymentsTable({
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.key}>
+              <TableRow key={row.key} className={row.voided ? 'text-muted-foreground' : undefined}>
                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                   {formatPaymentDate(row.createdAt)}
                 </TableCell>
                 <TableCell className="max-w-[220px]">
-                  <div className="truncate font-medium">{paymentLabel(row)}</div>
+                  <div className={`truncate font-medium ${row.voided ? 'line-through' : ''}`}>
+                    {paymentLabel(row)}
+                  </div>
                   {paymentNote(row) && (
                     <div className="truncate text-xs text-muted-foreground">{paymentNote(row)}</div>
                   )}
@@ -143,12 +154,14 @@ export function PaymentsTable({
                       variant="secondary"
                       className={PAYMENT_STATUS_STYLES[row.status] ?? 'bg-muted'}
                     >
-                      {row.source === 'byo' ? t('status_paid') : t(`status_${row.status}` as never)}
+                      {t(`status_${row.status}` as never)}
                     </Badge>
                   </div>
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">
-                  <div className="font-medium">{formatMoneyMinor(row.amount, row.currency)}</div>
+                  <div className={`font-medium ${row.voided ? 'line-through' : ''}`}>
+                    {formatMoneyMinor(row.amount, row.currency)}
+                  </div>
                   {row.amountRefunded > 0 && (
                     <div className="text-xs text-muted-foreground">
                       -{formatMoneyMinor(row.amountRefunded, row.currency)}
@@ -156,35 +169,42 @@ export function PaymentsTable({
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        onAssign({
-                          source: row.source,
-                          paymentId: row.paymentId,
-                          contactId: row.contactId,
-                          comment: row.comment,
-                          lineItem: row.lineItem,
-                        })
-                      }
-                    >
-                      {row.assigned ? (
-                        <Pencil className="h-3.5 w-3.5" />
-                      ) : (
-                        <>
-                          <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          {t('assign')}
-                        </>
-                      )}
-                    </Button>
-                    {onRefund && row.refundable && (
-                      <Button size="sm" variant="outline" onClick={() => onRefund(row)}>
-                        {t('refund')}
+                  {!row.voided && (
+                    <div className="flex justify-end gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          onAssign({
+                            source: row.source,
+                            paymentId: row.paymentId,
+                            contactId: row.contactId,
+                            comment: row.comment,
+                            lineItem: row.lineItem,
+                          })
+                        }
+                      >
+                        {row.assigned ? (
+                          <Pencil className="h-3.5 w-3.5" />
+                        ) : (
+                          <>
+                            <UserPlus className="h-3.5 w-3.5 mr-1" />
+                            {t('assign')}
+                          </>
+                        )}
                       </Button>
-                    )}
-                  </div>
+                      {onRefund && row.refundable && (
+                        <Button size="sm" variant="outline" onClick={() => onRefund(row)}>
+                          {t('refund')}
+                        </Button>
+                      )}
+                      {onVoid && row.voidable && (
+                        <Button size="sm" variant="outline" onClick={() => onVoid(row)}>
+                          {t('void')}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

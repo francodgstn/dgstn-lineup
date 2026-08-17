@@ -21,8 +21,15 @@ export interface UnifiedPaymentRow {
   email: string | null
   amount: number // minor units (Rappen/cents)
   currency: string
-  /** Raw status; Connect = MemberPaymentStatus, BYO = 'paid'. */
+  /** Raw status; Connect = MemberPaymentStatus, BYO = 'paid' | 'voided'. */
   status: string
+  /** The record was un-recorded (manual rows only). The row is inert: it counts
+   *  toward no total, offers no action, and renders struck through. */
+  voided: boolean
+  /** Can a manager void this row? Manual rows only, and only once — the BYO
+   *  gateway rails carry money we do not control, so their ledger row may not be
+   *  contradicted here (enforced server-side by voidManualPayment). */
+  voidable: boolean
   /** Explicit free-text comment, if set. */
   comment: string | null
   /** Structured link (BYO/manual), for the assign dialog. Connect rows leave it null. */
@@ -132,6 +139,10 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     amount: p.amount ?? 0,
     currency: p.currency ?? 'chf',
     status: p.status,
+    // A Connect charge is never voided — its correction is a refund, which moves
+    // real money and has its own row status.
+    voided: false,
+    voidable: false,
     comment: p.comment ?? null,
     lineItem: connectLineItem(p),
     // From the stored line item only — connectLineItem's legacy fallbacks are
@@ -148,33 +159,41 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
 }
 
 export function byoToUnified(events: Array<ExternalPayment & { id: string }>): UnifiedPaymentRow[] {
-  return events.map((e) => ({
-    key: `byo:${e.id}`,
-    source: 'byo' as const,
-    paymentId: e.id,
-    gateway: e.gateway, // 'payrexx' | 'stripe'
-    contactId: e.contact_id ?? null,
-    assigned: (e.assignment_status ?? (e.contact_id ? 'assigned' : 'unassigned')) === 'assigned',
-    email: e.email ?? null,
-    amount: e.amount ?? 0,
-    currency: e.currency ?? 'CHF',
-    status: 'paid',
-    comment: e.comment ?? null,
-    lineItem: e.line_item ?? null,
-    promoCode: e.line_item?.promoCode ?? null,
-    paymentMode: e.payment_mode ?? null,
-    defaultLabel:
-      e.gateway === 'payrexx'
-        ? 'Payrexx payment'
-        : e.gateway === 'manual'
-          ? 'Manual payment'
-          : 'Stripe payment',
-    createdAt: (e.processed_at as unknown as { toDate?: () => Date }) ?? null,
-    feeAmount: 0, // BYO has no platform fee — money never touches Linyup
-    refundable: false, // BYO is record-only — refunds happen in the studio's own gateway
-    disputed: false,
-    amountRefunded: 0,
-  }))
+  return events.map((e) => {
+    // The rail's ONE status. It used to be hardcoded 'paid' because a BYO row
+    // exists only because money arrived — true of the gateway rails still, and
+    // no longer true of a manual row a manager has voided.
+    const voided = !!e.voided_at
+    return {
+      key: `byo:${e.id}`,
+      source: 'byo' as const,
+      paymentId: e.id,
+      gateway: e.gateway, // 'payrexx' | 'stripe' | 'manual'
+      contactId: e.contact_id ?? null,
+      assigned: (e.assignment_status ?? (e.contact_id ? 'assigned' : 'unassigned')) === 'assigned',
+      email: e.email ?? null,
+      amount: e.amount ?? 0,
+      currency: e.currency ?? 'CHF',
+      status: voided ? 'voided' : 'paid',
+      voided,
+      voidable: e.gateway === 'manual' && !voided,
+      comment: e.comment ?? null,
+      lineItem: e.line_item ?? null,
+      promoCode: e.line_item?.promoCode ?? null,
+      paymentMode: e.payment_mode ?? null,
+      defaultLabel:
+        e.gateway === 'payrexx'
+          ? 'Payrexx payment'
+          : e.gateway === 'manual'
+            ? 'Manual payment'
+            : 'Stripe payment',
+      createdAt: (e.processed_at as unknown as { toDate?: () => Date }) ?? null,
+      feeAmount: 0, // BYO has no platform fee — money never touches Linyup
+      refundable: false, // BYO is record-only — refunds happen in the studio's own gateway
+      disputed: false,
+      amountRefunded: 0,
+    }
+  })
 }
 
 /** Merge + sort newest-first across both rails. */

@@ -297,8 +297,10 @@ export { trackWaiverAcceptances } from './waivers/trackAcceptances'
 export { resendPolicyFeeLink, waivePolicyFee } from './booking/policyFees'
 // Cross-rail payment editing (assign contact + edit comment + line-item) for Connect + BYO.
 export { updatePaymentRecord } from './connect/updatePayment'
-// Manual cash / bank-transfer payments — recorded into the unified payment_events ledger.
+// Manual cash / bank-transfer payments — recorded into the unified payment_events ledger,
+// and un-recorded (void) when the manager entered one by mistake.
 export { recordManualPayment } from './payments/recordManualPayment'
+export { voidManualPayment } from './payments/voidManualPayment'
 
 // Finance — monthly rollups of the finance journal (always-on core infra) and
 // the plugin-gated monthly CSV export.

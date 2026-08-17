@@ -81,8 +81,15 @@ import {
  * and a contact resolved after purchase. It errs toward ALLOWING the refund:
  * without it a genuine credit-pack payment would look indivisible and a
  * legitimate partial refund would be refused.
+ *
+ * EXPORTED because two more manager actions ask the same question of the same
+ * numbers, and a second copy of this lookup is a second answer waiting to
+ * disagree: `voidManualPayment` (payments/voidManualPayment.ts) and the
+ * re-assign half of `updatePaymentRecord` (connect/updatePayment.ts). What each
+ * caller DOES with a consumed pack differs — refuse, proceed, refuse — but they
+ * all have to see the same pack.
  */
-async function resolveDivisible(
+export async function resolveDivisible(
   teamId: string,
   contactId: string | null,
   paymentRef: string,

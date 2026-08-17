@@ -41,6 +41,7 @@ import {
 import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvButton'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { RefundPaymentDialog } from '@/components/payments/RefundPaymentDialog'
+import { VoidPaymentDialog } from '@/components/payments/VoidPaymentDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { GiftCardsSection } from '@/components/payments/GiftCardsSection'
@@ -143,6 +144,7 @@ export default function PaymentsDashboardPage() {
   const currency = team?.default_currency ?? 'CHF'
 
   const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
+  const [voidTarget, setVoidTarget] = useState<UnifiedPaymentRow | null>(null)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
   const [markPaidTarget, setMarkPaidTarget] = useState<PendingAppointment | null>(null)
@@ -347,6 +349,7 @@ export default function PaymentsDashboardPage() {
                   contactName={(id) => contactName.get(id)}
                   onAssign={setAssignTarget}
                   onRefund={setRefundTarget}
+                  onVoid={setVoidTarget}
                 />
 
                 {hasMore && (
@@ -492,6 +495,15 @@ export default function PaymentsDashboardPage() {
           target={refundTarget}
           memberName={refundTarget?.contactId ? contactName.get(refundTarget.contactId) : null}
           onClose={() => setRefundTarget(null)}
+        />
+      )}
+
+      {teamId && (
+        <VoidPaymentDialog
+          teamId={teamId}
+          target={voidTarget}
+          memberName={voidTarget?.contactId ? contactName.get(voidTarget.contactId) : null}
+          onClose={() => setVoidTarget(null)}
         />
       )}
     </div>

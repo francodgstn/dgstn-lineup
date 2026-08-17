@@ -5,6 +5,8 @@
 // from Firestore (function-written, rules allow manager/owner reads).
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
@@ -226,11 +228,23 @@ export function useContactPayments(teamId: string | null, contactId: string | nu
   })
 }
 
+/** Reasons `updatePaymentRecord` refuses that the CALLER is expected to render —
+ *  a rule the manager can act on, not a failure. The generic money-error toast
+ *  would bury each of them under "Something went wrong". */
+const REASSIGN_REFUSALS: Record<string, 'reassignConsumedPack' | 'reassignVoided' | 'reassignFailed'> =
+  {
+    consumed_pack_reassign: 'reassignConsumedPack',
+    payment_voided: 'reassignVoided',
+    reassign_reversal_failed: 'reassignFailed',
+    reassign_apply_failed: 'reassignFailed',
+  }
+
 /** (Re)assign the contact, edit the comment, and/or set the line-item on a
  * Connect or BYO payment. */
 export function useUpdatePaymentRecord() {
   const qc = useQueryClient()
-  const onError = usePaymentMutationErrorToast()
+  const t = useTranslations('PaymentsDashboard')
+  const onPaymentError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -252,7 +266,46 @@ export function useUpdatePaymentRecord() {
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })
     },
-    onError,
+    onError: (err: unknown) => {
+      const details = (err as { details?: { reason?: string; unitsConsumed?: number } }).details
+      const key = details?.reason ? REASSIGN_REFUSALS[details.reason] : undefined
+      if (key) {
+        toast.error(t(key, { used: details?.unitsConsumed ?? 0 }))
+        return
+      }
+      onPaymentError(err)
+    },
+  })
+}
+
+/** Void a manual payment record ("this was recorded by mistake"). Takes back
+ *  what the record gave; moves no money. Manual rows only — enforced server-side
+ *  because the gateway rails' rows describe money we do not control. */
+export function useVoidManualPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (vars: { teamId: string; paymentId: string; reason?: string | null }) => {
+      const fn = httpsCallable<
+        typeof vars,
+        {
+          ok: boolean
+          /** What was taken back, or null when the row was unassigned. */
+          reversal: {
+            subscription: string
+            credits: string
+            creditsRevoked: number
+            course: string
+          } | null
+        }
+      >(functions, 'voidManualPayment')
+      return (await fn(vars)).data
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['payment-events', vars.teamId] })
+      qc.invalidateQueries({ queryKey: ['contact-payments'] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-monthly-revenue', vars.teamId] })
+    },
   })
 }
 
