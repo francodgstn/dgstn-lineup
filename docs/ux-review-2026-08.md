@@ -101,7 +101,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 22 | confuses | every-session | Refresh, share or reopen a detail page and lose the tab you were on | M4×M3×M5×M8 | web | ▶ Open |
 | 23 | confuses | every-session | Three parallel "remembered destination" mechanisms; "pin" means two things | M1 | web | ▶ Open |
 | 24 | slows | weekly | Saving an offer change tells you nothing — the real cause of reported F2 | M5 | web | ✅ Fixed |
-| 25 | blocks | at-setup | A discount cannot be applied to a membership — the highest-value thing in the shop | M5 | functions + web | ▶ Open |
+| 25 | blocks | at-setup | A discount cannot be applied to a membership — the highest-value thing in the shop | M5 | functions + web | ✅ Fixed |
 | 26 | confuses | every-session | Public copy leaks back-office vocabulary: 8 `activity` + 4 `drop-in` hits | C1–C4 | web | ▶ Open |
 | 27 | blocks | at-setup | The checklist's "subscriptions" step lands on a page that cannot create one | M2×M5 | web | ✅ Fixed |
 | 28 | slows | weekly | Nine public surfaces managed from six route prefixes across three partial maps | M11×M7×M5×M8 | web | ▶ Open |
