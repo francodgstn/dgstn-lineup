@@ -306,3 +306,34 @@ now contains the reads that are known to have moved, with compile-time assertion
 but the handler signatures themselves are still `any`, so the next moved field
 fails the same silent way. Retyping them is the durable fix; the blast radius is
 why it has not been done.
+
+### A new owner cannot upload an activity cover image, and the activity is created anyway
+
+Found by manual exploration on **2026-08-17**, on a freshly created account.
+Creating an activity **with a cover image** fails the Storage upload with
+`FirebaseError: Firebase Storage: User does not have permission to access …`,
+while the activity document **is created regardless**. The dialog then stays open
+with the data still in it and reports nothing — so the obvious next move is to
+press Save again, which creates a duplicate activity.
+
+Two separate faults, and they need separate fixes:
+
+**1. The Storage rule (this entry).** Activity images fall through to the broad
+`match /teams/{teamId}/{allPaths=**}` block in `storage.rules`, whose
+`isTeamMemberStorage(teamId)` does a `firestore.exists` on
+`teams/{teamId}/team_members/{uid}`. On a brand-new account that document is
+written by the client during signup self-provisioning (see CLAUDE.md, "Team member
+self-provision"), so the upload is denied whenever it runs before that write has
+landed or if the write did not happen at all. **Not yet reproduced against a
+second account, and the exact ordering has not been traced** — do that before
+changing a rule, because the wrong fix here loosens tenant isolation on the
+broadest storage match in the file. Note that the narrower `products/` and
+`documents/` blocks use the same helper, so if this is a provisioning race it is
+not confined to activities.
+
+**2. The silent partial failure** is a UX finding, not a rule bug — it is UX-24 in
+`docs/ux-review-2026-08.md`, and this reproduction is what upgraded it from
+`traced` to `observed`. It is being fixed there, including the branch that
+distinguishes "activity saved, image failed" from "nothing saved", so a retry
+cannot mint a duplicate. Fixing the rule does **not** close UX-24: any other
+upload failure (offline, size, content-type) reaches the same silent path.
