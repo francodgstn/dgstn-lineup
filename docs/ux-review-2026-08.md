@@ -153,7 +153,10 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ✅ Fixed ✓verified |
 | 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
 | 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ✅ Fixed |
-| 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ◐ Appointment gate fixed; course · product · pack open |
+| 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ✅ Fixed |
+| 79 | slows | weekly | A studio sells a product and the product knows nothing about handing it over | C3×M5 | shared + web | ▶ Open |
+| 80 | costs-money | weekly | Everything sold at the desk still confirms nothing | M6×C4 | functions | ▶ Open |
+| 81 | confuses | every-session | Every email's plain-text half runs its headings into the following sentence | C2×M9 | functions | ▶ Open |
 | 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
@@ -1052,6 +1055,71 @@ the predicate to use; do not add a second one.
 **Verify:** Buy a 10-credit pack as a new visitor — the mail says how many credits you hold and
 where to use them. Then switch every system-email toggle off and buy a priced appointment: it
 still confirms.
+
+### UX-79 — A studio sells a product and the product knows nothing about handing it over
+`slows` · weekly · traced · C3×M5 · *found while writing UX-77's product receipt*
+
+**Now.** `Product` (`packages/shared/src/types/product.ts`) carries **no delivery, pickup or
+collection field** — "the studio fulfils manually" is a comment in the type, not a value anyone
+can read — and `startOneOffCheckout` collects no shipping address. So no receipt can say when or
+where, and the one UX-77 shipped says only what is true: the studio arranges handover directly,
+here is their address to ask.
+
+**Cost.** Someone pays for a thing and the product cannot tell them how to get it. The studio
+then fields the same question by email every time, which is the work they bought software to
+stop doing.
+
+**Fix.** A free-text **collection terms** block — per product, falling back to a team default —
+rendered into the receipt and onto the shop card before purchase, so it sets the expectation
+rather than answering it afterwards. Free text rather than structured fulfilment: a studio
+handing over a gi at the front desk and one posting a water bottle need the same field to say
+different things, and a shipping model nobody asked for is the heavier mistake.
+**Surface:** +1 optional field, +1 team default, ±0 routes. **Build:** S–M. **Owner:** web-agent.
+**Verify:** Buy a product; the confirmation says how to collect it, and the shop card said so
+before you paid.
+
+### UX-80 — Everything sold at the desk still confirms nothing
+`costs-money` · weekly · **counted** · M6×C4 · *from UX-77's closing audit*
+
+**Now.** UX-76 and UX-77 made every **online** paid rail confirm itself. Every **manual and
+offline** rail still sends nothing: `recordManualPayment` (a cash membership, credit pack or
+course recorded at the desk), `updatePayment`'s assign and relink, the BYO gateway webhooks,
+and the `grantCredits` callable. Each runs `applyPaymentEffects`; none contains a `sendEmail`.
+
+So a desk-sold 10-pack tells the buyer nothing — the same silence UX-77 just closed for the web
+purchase of the identical thing.
+
+**Why it was left out of UX-77, and why it needs its own decision.** Two reasons, both real.
+The money changed hands **in front of a person**, so the studio has already said something —
+that is a different silence from a web checkout, and it may warrant different copy rather than
+the same receipt. And `applyPaymentEffects` is deliberately re-run on **every manager edit**, so
+a send placed inside it would mail the member again on each re-save. The send therefore belongs
+at the **callables**, one decision per rail, not in the shared effects function.
+
+**Fix.** Decide per rail whether the studio wants the platform to confirm what it just sold by
+hand — a "send the buyer a receipt" checkbox on `RecordPaymentDialog`, defaulting on for a rail
+that grants something (a pack, a course) and off for a bare payment record, is the shape I would
+start from. Then reuse `connect/purchaseReceipts.ts` rather than writing a fifth template.
+**Build:** M. **Owner:** functions-agent + web-agent.
+**Verify:** Record a cash 10-pack against a contact; they learn they hold ten credits.
+
+### UX-81 — Every email's plain-text half runs its headings into the following sentence
+`confuses` · every-session · traced · C2×M9 · *found while writing UX-77's templates*
+
+**Now.** `buildEmailTemplate`'s plain-text arm strips tags without inserting separators, so a
+titled block renders as `Cosa succede oraStudio organizza…` — the heading welded to the sentence
+after it. Every existing template with a titled box has it: the "Important" blocks, the
+cancellation-policy box, and now the purchase receipts.
+
+**Cost.** Small per message and universal: it is every email the platform sends, as seen by any
+client that shows the text part — which includes most notification previews. It reads as
+sloppiness in the one artefact a studio's members judge them by, and the studio cannot fix it.
+
+**Fix.** Insert a newline at block boundaries when flattening to text. One change in shared
+layout code, which is why UX-77 deliberately did not make it mid-feature — it touches every
+mail the platform sends and wants its own verification, not a rider on a receipt.
+**Build:** S. **Owner:** functions-agent.
+**Verify:** Send any mail with a titled box and read the `text/plain` part.
 
 ### UX-78 — A contact's pending-booking counter moves only if a mail is switched on
 `confuses` · every-session · traced · M4×M3 · *found while fixing UX-76*
