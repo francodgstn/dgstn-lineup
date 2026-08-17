@@ -366,8 +366,21 @@ and they read different fields on purpose (`booking/index.ts`, fixtures in
 
 | Hold shape | Counted while it lives? | Who counts it | Who gives it back |
 |---|---|---|---|
-| **waitlist claim hold** (`waitlist_claim: true`) | **yes** | `offerWaitlistSeats`, when it mints the offer | `releaseWaitlistOffer` (lapse, leave, remove, cancel) |
+| **waitlist claim hold** (`waitlist_claim: true`) | **yes** | `offerWaitlistSeats`, when it mints the offer | `releaseWaitlistOffer` (lapse, leave, remove, cancel), or `cancelSingleSession` when the whole session goes |
 | **plain drop-in hold** (`payment_status: 'required'`, no claim flag) | **no**, for its whole life | nobody | nobody — `expirePendingBookings` deletes it without a decrement, the webhook confirms it without one |
+
+**`cancelSingleSession` is a release site too** (`sessions/index.ts:188-238`), and
+until 2026-08-17 it was a broken one in both directions. The decrement lived
+*inside the cancellation-notice loop*, so a studio with `session_cancellation`
+switched off cancelled sessions and nobody's counter moved — while with the
+notice on, the loop decremented the two shapes this table says own no count
+(disposed documents, whose disposer already gave it back, and plain drop-in
+holds), driving real contacts negative. It now runs with the bookings read,
+before any mail is built, and composes the facts above rather than restating
+them: `replacedBookingWasCounted` for the live shapes and the exported
+`DISPOSED_BOOKING_STATUSES` for the dead ones. A `confirmed` booking still
+decrements, preserving the ambiguity `holdWriteCountDelta` documents and declines
+to decide — skipping it would strand a count on every auto-confirming class.
 
 - `replacedBookingWasCounted(replaced)` — **`bookSession`'s seam.** "Was the
   document I am replacing already counted?" Its duplicate guard admits only

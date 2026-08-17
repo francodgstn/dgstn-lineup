@@ -153,8 +153,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ✅ Fixed ✓verified |
 | 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ▶ Open |
 | 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ✅ Fixed |
-| 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ▶ Open |
-| 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ▶ Open |
+| 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ◐ Appointment gate fixed; course · product · pack open |
+| 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
