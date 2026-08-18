@@ -165,14 +165,19 @@ export function ProgramItemDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {days.map((d, index) => {
-                        const label = `${d.title || t('dayN', { n: index + 1 })} · ${d.date}`
-                        return (
-                          <SelectItem key={d.id} value={d.id} label={label}>
-                            {label}
-                          </SelectItem>
-                        )
-                      })}
+                      {days.map((d, index) => (
+                        // `label` (not children) carries the text: select.tsx can
+                        // only derive a label from a plain STRING child, and this
+                        // one is composed — without it the trigger falls back to
+                        // printing the raw day id. Passing children as well would
+                        // repeat the text as a muted second line, which is what
+                        // that prop pair means here.
+                        <SelectItem
+                          key={d.id}
+                          value={d.id}
+                          label={`${d.title || t('dayN', { n: index + 1 })} · ${d.date}`}
+                        />
+                      ))}
                     </SelectContent>
                   </Select>
                 )}

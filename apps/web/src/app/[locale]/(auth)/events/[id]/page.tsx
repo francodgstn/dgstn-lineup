@@ -296,9 +296,13 @@ function EditEventDialog({
                     <SelectContent>
                       <SelectItem value="__none">{t('placeNone')}</SelectItem>
                       {places.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}{p.scope === 'org' ? ' · org' : ''}
-                        </SelectItem>
+                        <SelectItem
+                          key={p.id}
+                          value={p.id}
+                          // Composed text must ride on `label`, or the trigger prints the raw
+                          // place id (select.tsx only derives a label from a plain string child).
+                          label={`${p.name}${p.scope === 'org' ? ' · org' : ''}`}
+                        />
                       ))}
                     </SelectContent>
                   </Select>
