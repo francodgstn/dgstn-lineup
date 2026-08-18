@@ -161,6 +161,9 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 82 | blocks | weekly | A member can buy a plan and still be locked out, with no self-serve way back | M5×M8 | functions | ✅ Fixed |
 | 83 | blocks | every-session | A trial lead who signs up is still refused, and the card promises otherwise | M5×M8 | functions | ✅ Fixed |
 | 84 | blocks | weekly | "When someone joins" cannot be built: the trigger exists but is unreachable | M9 | web | ▶ Open |
+| 85 | costs-money | weekly | Ten automation triggers offer a delay that is silently ignored | M9 | web + functions | ▶ Open |
+| 86 | costs-money | once | A library automation gated to a paid plan installs on any plan | M9×M8 | web | ▶ Open |
+| 87 | confuses | at-setup | Declared triggers that can never fire, and mounted ones that never do | M9 | functions + web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1198,6 +1201,81 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-85 — Ten automation triggers offer a delay that is silently ignored
+`costs-money` · weekly · traced · M9 · *found 2026-08-18 while fixing UX-84*
+
+**Now.** `TRIGGER_OPTIONS` marks eleven triggers `supportsDelay: true`, so the editor renders a
+delay field and stores `trigger.delayMinutes`. **Exactly one of them honours it.**
+`enqueueDelayedRule` (`utils/automationEngine.ts:1542`) has ONE caller — `onSessionWrite.ts:78`,
+the `session_ended` path — and `fireEventRules` never reads `delayMinutes` at all; it runs the
+rule inline. The ten that store a delay nothing reads:
+
+`contact_created`, `booking_confirmed`, `booking_no_show`, `booking_cancelled`,
+`subscription_added`, `subscription_removed`, `subscription_changed`, `affiliation_added`,
+`affiliation_removed`, `affiliation_changed`.
+
+**Cost.** A studio composes "three days after the booking, ask how it went" and the mail leaves
+**immediately** — while the member is still in the room, or before the class has happened. The
+rule looks correct in the editor forever, because the number it typed is stored faithfully. This
+is the exact shape of UX-13 and UX-84 (built, never wired) but worse: those were capabilities
+nobody could reach, this one is reachable, configured, and wrong.
+
+**Fix — two options, and they are not equivalent.** Either route event rules through the Cloud
+Tasks path `session_ended` already uses (real feature, needs a queue handler per trigger and a
+decision about what a delayed rule does if the contact changes meanwhile), or set
+`supportsDelay: false` on the ten and hide the field (honest, immediate, and needs a data
+question answered first: **existing rules already carry a `delayMinutes` a studio believes in**).
+Note `acquisition_stage_changed` was mounted with `supportsDelay: false` for exactly this
+reason, so the honest option has a precedent in the file. **Build:** S (honest) / L (real).
+**Owner:** web + functions. **PARKED — needs a product decision.**
+**Verify:** create a rule on `booking_confirmed` with a 3-day delay, book, watch the mail arrive.
+
+---
+
+### UX-86 — A library automation gated to a paid plan installs on any plan
+`costs-money` · once · traced · M9×M8 · *found 2026-08-18 while fixing UX-84*
+
+**Now.** `LibraryItem.requires_plan` is declared on every library item and **read by nothing** —
+`LibraryDialog` filters on category and free-text search only. So a Free or Coach team can open
+the library and install an item marked `requires_plan: 'studio'`.
+
+**Cost.** Plan gating that is declared and unenforced is worse than no gating: the field reads as
+a guarantee to everyone maintaining the catalogue, so items get marked and nobody checks. Same
+class as UX-13/UX-84/UX-85 — built, never wired — and this one gives away paid features.
+
+**Fix.** Read the field: filter or lock library items above the team's plan, with the upgrade
+path the app already uses elsewhere. **Build:** S. **Owner:** web-agent.
+**Verify:** as a Free team, open the automation library and try to install a studio-tier item.
+
+---
+
+### UX-87 — Declared triggers that can never fire, and mounted ones that never do
+`confuses` · at-setup · traced · M9 · *found 2026-08-18 while fixing UX-84*
+
+**Now.** Two directions of the same rot, both verified against the `fireEventRules` call-site
+census (`inboundWebhook.ts:139`, `onBookingWrite.ts:82`, `onContactWrite.ts:136`,
+`onSessionWrite.ts:113`, `onAffiliationWrite.ts:124/129/135`, plus `runScheduledRules` and
+`triggerAutomationRule`):
+
+- **`contact_updated`** is declared in the trigger union (`automationEngine.ts:35`) and **fired by
+  nothing**. It is correctly *not* mounted — mounting it would ship a trigger that never runs —
+  so the dead union member is the thing to delete.
+- **`plugin:referrals:referral_created` and `plugin:referrals:referral_rewarded`** are mounted
+  dynamically from the installed manifest and **never fired**: `utils/referrals.ts` creates
+  referrals without firing anything, and the plugin is `status: 'available'`, so a studio can
+  install it, build a rule on it, and wait forever.
+- **`plugin:whatsapp:message_received`** — same, but that plugin is `coming_soon`, so it is a
+  smaller trap.
+
+**Cost.** A rule that never fires is indistinguishable from a rule that has not matched yet.
+There is no error, no log, nothing to notice. The referrals pair is the live one.
+
+**Fix.** Fire the referral events from `utils/referrals.ts`, or unmount them until the plugin
+fires them. Delete `contact_updated` from the union. **Build:** S. **Owner:** functions + web.
+**Verify:** install referrals, build a rule on `referral_created`, create a referral.
 
 ---
 
