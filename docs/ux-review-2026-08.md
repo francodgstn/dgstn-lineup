@@ -167,13 +167,15 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 88 | blocks | every-session | After paying, the buyer lands on a page that asks them to sign in again | C2 | web + functions | ▶ Open |
 | 89 | confuses | every-session | A confirmed newcomer booking is not tracked - contact still shows 0 attended | M4xM3 | functions | ▶ Open |
 | 90 | slows | every-session | Sidebar search finds pages, not contacts, subscriptions or activities | M1 | web | ▶ Open |
-| 91 | slows | every-session | Session detail: secondary-looking primary action, unlinked names, heavy share control | M3 | web | ▶ Open |
-| 92 | slows | every-session | Schedule: oversized bookable-hours control, and no way to reach "new activity" | M3xM5 | web | ▶ Open |
+| 91 | slows | every-session | Session detail: secondary-looking primary action, unlinked names, heavy share control | M3 | web | ✅ Fixed |
+| 92 | slows | every-session | Schedule: oversized bookable-hours control, and no way to reach "new activity" | M3xM5 | web | ✅ Fixed |
 | 93 | slows | weekly | Documents are listed twice, and the publish controls scroll away from a long body | M11 | web | ▶ Open |
 | 94 | slows | weekly | The website's activity cards cannot control how pricing is shown | M7 | web | ▶ Open |
 | 95 | slows | weekly | The website has no pricing TABLE - activities as rows, plans as columns | M7 | web | ▶ Open |
 | 96 | slows | weekly | Contact notes cannot be colour-tagged | M2 | web | ▶ Open |
 | 97 | confuses | weekly | Nine emailed links still drop the locale, so the page answers in English | C2xM9 | functions | ▶ Open |
+| 98 | slows | every-session | A person's name is a dead end on four more lists | M2xM3 | web | ▶ Open |
+| 99 | slows | at-setup | Three more "create one first" dead ends, all naming a destination they don't link | M5 | web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1211,6 +1213,66 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-98 — A person's name is a dead end on four more lists
+`slows` · every-session · traced · M2×M3 · *found 2026-08-18 while fixing UX-91*
+
+**Now.** UX-63 linked contact names on `/bookings`; UX-91 did the session rosters and the
+calendar peek. The same rows elsewhere still render a name as plain text while holding the
+contact id. **Trivially the same fix, ids already in hand:**
+
+- `affiliations/page.tsx` — both tables (the status-editing roster and the summary). The row
+  cannot be wrapped in a link because it contains an inline status `Select`, so linking the
+  **name** is precisely the right shape here.
+- `events/[id]/page.tsx` — Attendees and Invitations.
+- `plugins/referrals/page.tsx` — referrer and referred, both ids present.
+- `gamification/page.tsx` — the leaderboard. Caveat: trial contacts are deliberately rendered as
+  initials, so only named rows may link.
+
+**Has a reason NOT to link, recorded so nobody "fixes" it:**
+
+- `org/[orgId]/events/[id]/page.tsx` and `org/[orgId]/affiliations/page.tsx` — the person belongs
+  to a MEMBER TEAM, not the org tenant, and `/contacts/{id}` resolves in the current team
+  context. Linking would send an org admin to a record they cannot read. Needs a team-scoped
+  route first.
+- `components/events/CheckinPanel.tsx` — same cross-tenant hazard; the code already branches on
+  `checkin.teamId !== currentTeamId`, and the row is a button that opens the check-in editor.
+- `components/payments/OutstandingFeesCard.tsx` — **cannot** link: the fee row carries
+  `contactName` and no id. A data gap, not a judgement call.
+- Selection controls (the contact-groups add dialog, CheckinPanel's picker) where clicking
+  selects, and the public Space/booking surfaces, which render the member's own name.
+
+**Half-linked, worth finishing:** `plugins/contact-groups/page.tsx` reaches `/contacts/{id}` via
+`router.push` on a `<button>` — no href, so no middle-click, no open-in-new-tab, no hover preview.
+
+**Fix.** Link the four; leave the rest with the reasons above. **Build:** S. **Owner:** web-agent.
+
+---
+
+### UX-99 — Three more "create one first" dead ends
+`slows` · at-setup · traced · M5 · *found 2026-08-18 while fixing UX-92*
+
+**Now.** UX-92 fixed the session and appointment pickers. The same shape survives in three more
+places — prose names the destination and nothing goes there:
+
+- `offer/activities/page.tsx` — access tier "Subscription" with no subscription types:
+  *"No subscription types yet — create them under Plans & Affiliations."*
+- `components/pricing/BenefitEditor.tsx` — the same sentence (`Benefit.noSubs`), and this one is
+  reached **from** the appointment activity form, so a studio can hit it two steps inside the
+  flow UX-92 just repaired.
+- `components/subscriptions/SubscriptionTypesManager.tsx` — *"No activities yet — create them
+  under Offer → Activities."* The exact mirror, pointing the other way.
+
+**No gap:** "New event" — event types always include built-ins, so its picker is never empty.
+
+**Adjacent, same file family:** `team/bio-link/page.tsx` uses a raw `<a href="../settings">` for
+its "Go to Settings" escape — a relative href that bypasses `@/i18n/navigation` and resolves
+wrongly under a locale prefix.
+
+**Fix.** Link each destination. **Build:** S. **Owner:** web-agent.
+**Verify:** as a studio with no subscription types, set an activity to the Subscription tier.
 
 ---
 
