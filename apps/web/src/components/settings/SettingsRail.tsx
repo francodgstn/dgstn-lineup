@@ -12,7 +12,7 @@ import { useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
-import { Search, Bookmark } from 'lucide-react'
+import { Search, Pin } from 'lucide-react'
 import { SETTINGS_ITEMS, SETTINGS_GROUPS } from '@/lib/settings-nav'
 import { useNavPins } from '@/contexts/NavPinsContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
@@ -108,9 +108,9 @@ export function SettingsRail() {
                           : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
                       }`}
                     >
-                      {/* Bookmark, not a star — the star means "recommended by Linyup" in the
+                      {/* A pin, not a star — the star means "recommended by Linyup" in the
                           plugin catalogue, and one glyph cannot carry both meanings. */}
-                      <Bookmark className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+                      <Pin className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
                     </button>
                   </div>
                 )

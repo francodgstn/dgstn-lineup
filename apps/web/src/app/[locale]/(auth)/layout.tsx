@@ -46,7 +46,7 @@ import {
   DoorOpen,
   UserCog,
   Star,
-  Bookmark,
+  Pin,
   Activity,
   Tag,
   TrendingUp,
@@ -339,11 +339,14 @@ function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
     >
       {/* Filled while ON — an icon that only changes opacity reads as "hovered",
           not as "this is switched on", which is the state that matters here.
-          BOOKMARK, not a star: the star in this same file (the plugin suggestion
-          row below) means "recommended by Linyup", and two meanings on one glyph
-          is the confusion UX-23 renamed this control to remove. A bookmark says
-          "I chose to keep this", which is exactly what a shortcut is. */}
-      <Bookmark className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+          A PIN, deliberately, and NOT the star used a few hundred lines below for
+          "recommended by Linyup": one glyph cannot carry an endorsement and a
+          personal choice. UX-23 moved away from "pin" when the word meant THREE
+          things — shortcuts, open tabs, and a saved filter "pinned to the filter
+          bar". That third is now "show in filter bar", so what remains is one
+          mental model (keep this within reach) over two different objects on two
+          different surfaces, which is what a pin means everywhere else. */}
+      <Pin className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
     </button>
   )
 }
