@@ -46,6 +46,7 @@ import {
   DoorOpen,
   UserCog,
   Star,
+  Bookmark,
   Activity,
   Tag,
   TrendingUp,
@@ -336,9 +337,13 @@ function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
           : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
       }`}
     >
-      {/* Filled while ON — a star that only changes opacity reads as "hovered",
-          not as "this is switched on", which is the state that matters here. */}
-      <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+      {/* Filled while ON — an icon that only changes opacity reads as "hovered",
+          not as "this is switched on", which is the state that matters here.
+          BOOKMARK, not a star: the star in this same file (the plugin suggestion
+          row below) means "recommended by Linyup", and two meanings on one glyph
+          is the confusion UX-23 renamed this control to remove. A bookmark says
+          "I chose to keep this", which is exactly what a shortcut is. */}
+      <Bookmark className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
     </button>
   )
 }
