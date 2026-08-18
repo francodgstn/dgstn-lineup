@@ -115,9 +115,9 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 36 | slows | every-session | The mobile hamburger scrolls away with the page | M1 | web | ▶ Open |
 | 37 | confuses | every-session | The member portal greets a signed-in member by telling her she is a stranger | C4 | web | ▶ Open |
 | 38 | slows | every-session | Space Home never answers "what's next", and duplicates four blocks that live elsewhere | C4 | web | ▶ Open |
-| 39 | confuses | at-setup | Ranks taxes every studio that does not award them | M7×M4×M2 | web | ▶ Open |
-| 40 | slows | at-setup | Adding one class means meeting 23 fields, one of them required | M2×M5 | web | ▶ Open |
-| 41 | slows | at-setup | Turning on public booking asks 11 questions, at least 3 with a right answer | M7×C2 | web | ▶ Open |
+| 39 | confuses | at-setup | Ranks taxes every studio that does not award them | M7×M4×M2 | web | ✅ Fixed |
+| 40 | slows | at-setup | Adding one class means meeting 23 fields, one of them required | M2×M5 | web | ✅ Fixed |
+| 41 | slows | at-setup | Turning on public booking asks 11 questions, at least 3 with a right answer | M7×C2 | web | ✅ Fixed |
 | 42 | confuses | at-setup | Above-tier settings behave three inconsistent ways; only one reads as "upgrade" | M7 | web | ▶ Open |
 | 43 | slows | at-setup | Discount campaigns are findable only by browsing the plugin catalogue | M8×M5 | web | ✅ Fixed |
 | 44 | slows | every-session | Contacts sorts by surname and cannot answer "who needs me today" | M4 | functions + web | ▶ Open |
