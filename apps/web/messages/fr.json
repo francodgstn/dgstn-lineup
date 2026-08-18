@@ -6503,6 +6503,14 @@
     "trendsCompareLastYear": "vs année dernière",
     "trendsNoHistoryTitle": "Pas encore assez d'historique",
     "trendsNoHistoryBody": "Les tendances apparaissent après quelques semaines de séances.",
-    "trendsUpsell": "Tendances hebdomadaires — contacts, réservations, activités et heures de pointe."
+    "trendsUpsell": "Tendances hebdomadaires — contacts, réservations, activités et heures de pointe.",
+    "snapshotTitle": "Aperçu",
+    "snapshotSubscribed": "Abonnés",
+    "snapshotSubscribedSub": "sur l'une de vos formules",
+    "snapshotAffiliationSub": "affiliation actuellement active",
+    "snapshotOverlap": "Comment ils se recoupent",
+    "snapshotLegendBoth": "les deux",
+    "snapshotLegendPlanOnly": "formule seule",
+    "snapshotLegendAffiliationOnly": "{term} seule"
   }
 }

@@ -6503,6 +6503,14 @@
     "trendsCompareLastYear": "vs anno scorso",
     "trendsNoHistoryTitle": "Storico ancora insufficiente",
     "trendsNoHistoryBody": "Gli andamenti compaiono dopo qualche settimana di sessioni.",
-    "trendsUpsell": "Andamento settimanale — contatti, prenotazioni, attività e orari di punta."
+    "trendsUpsell": "Andamento settimanale — contatti, prenotazioni, attività e orari di punta.",
+    "snapshotTitle": "Panoramica",
+    "snapshotSubscribed": "Abbonati",
+    "snapshotSubscribedSub": "con uno dei tuoi piani",
+    "snapshotAffiliationSub": "affiliazione attualmente attiva",
+    "snapshotOverlap": "Come si sovrappongono",
+    "snapshotLegendBoth": "entrambi",
+    "snapshotLegendPlanOnly": "solo piano",
+    "snapshotLegendAffiliationOnly": "solo {term}"
   }
 }

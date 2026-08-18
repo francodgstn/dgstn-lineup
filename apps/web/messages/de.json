@@ -6503,6 +6503,14 @@
     "trendsCompareLastYear": "ggü. Vorjahr",
     "trendsNoHistoryTitle": "Noch zu wenig Verlauf",
     "trendsNoHistoryBody": "Trends erscheinen, sobald du einige Wochen lang Einheiten durchgeführt hast.",
-    "trendsUpsell": "Wöchentliche Trends — Kontakte, Buchungen, Aktivitäten und die stärksten Zeiten."
+    "trendsUpsell": "Wöchentliche Trends — Kontakte, Buchungen, Aktivitäten und die stärksten Zeiten.",
+    "snapshotTitle": "Überblick",
+    "snapshotSubscribed": "Abonniert",
+    "snapshotSubscribedSub": "auf einem deiner Angebote",
+    "snapshotAffiliationSub": "Affiliation aktuell aktiv",
+    "snapshotOverlap": "Wie sie sich überschneiden",
+    "snapshotLegendBoth": "beides",
+    "snapshotLegendPlanOnly": "nur Angebot",
+    "snapshotLegendAffiliationOnly": "nur {term}"
   }
 }

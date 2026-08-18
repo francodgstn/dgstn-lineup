@@ -6503,6 +6503,14 @@
     "trendsCompareLastYear": "vs last year",
     "trendsNoHistoryTitle": "Not enough history yet",
     "trendsNoHistoryBody": "Trends appear once you have been running sessions for a few weeks.",
-    "trendsUpsell": "Weekly trends — contacts, bookings, activities and your busiest hours."
+    "trendsUpsell": "Weekly trends — contacts, bookings, activities and your busiest hours.",
+    "snapshotTitle": "Snapshot",
+    "snapshotSubscribed": "Subscribed",
+    "snapshotSubscribedSub": "on one of your plans",
+    "snapshotAffiliationSub": "affiliation currently active",
+    "snapshotOverlap": "How they overlap",
+    "snapshotLegendBoth": "both",
+    "snapshotLegendPlanOnly": "plan only",
+    "snapshotLegendAffiliationOnly": "{term} only"
   }
 }

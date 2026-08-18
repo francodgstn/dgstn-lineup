@@ -1,28 +1,69 @@
 'use client'
 
 /**
- * THE PREVIEW DASHBOARD — a second answer, built from the question rather than
- * from the incumbent.
+ * THE PREVIEW DASHBOARD — built from the question rather than from the
+ * incumbent.
  *
  * The question: **what should a studio see when it opens this app in the
- * morning?** Three things, in this order:
+ * morning?** Three things:
  *
  *   1. The hours it is about to run, and whether they are filling.
  *   2. The people waiting on a human — because people go cold.
- *   3. Whether the business is alright — which is a WEEKLY question, not a
- *      daily one, and therefore not the top of the page.
+ *   3. Whether the business is alright — a slower question, answered in one
+ *      glance rather than studied.
  *
  * Everything else a studio might want to know has a page of its own that owns
- * it properly, and putting a lesser copy of it here costs the first screen and
- * teaches nobody where the real one lives. So this page is FOUR blocks:
+ * it properly; putting a lesser copy of it here costs the first screen and
+ * teaches nobody where the real one lives.
  *
- *   header · [ THE DAY | THE QUEUE ] · the pulse · this quarter's trends
+ * ── THE COMPOSITION: TWO COLUMNS, AND THE MATERIALS FOLLOW THEM ──────────────
  *
- * WHAT IT DROPS, and why (each of these is on the incumbent):
+ *      ┌──────────────────────────┐   Snapshot
+ *      │  TODAY        (accent)   │   (figures, unframed)
+ *      └──────────────────────────┘   revenue · attendance
+ *      ┌──────────────────────────┐   subscriptions · affiliation
+ *      │  WAITING ON YOU (accent) │   overlap bar
+ *      └──────────────────────────┘   “ the quote
+ *
+ *      ───────────────  Trends (cards)  ───────────────
+ *
+ * The LEFT column is the work: two bounded lists, both wearing the accent
+ * frame. The RIGHT rail is reference: bare figures and an aside, nothing
+ * framed. Material and column agree, so the page says what kind of thing each
+ * side is before a word of it is read.
+ *
+ * The rail does NOT acquire a frame for sitting in the top-right slot. The
+ * frame marks work, not position.
+ *
+ * HIERARCHY COMES FROM SIZE. The day is the widest and tallest thing on the
+ * page; the queue is the same width and shorter; the rail is a third of the
+ * width. Nothing is ranked by decoration, and a future block must not be given
+ * a new border treatment to rank it — make it bigger or smaller.
+ *
+ * ── THE COST OF THE 2026-08-18 SWAP, stated rather than buried ───────────────
+ *
+ * The snapshot took the top-right slot and the queue moved beneath the day.
+ * This page's original argument was ACTION BEFORE ORIENTATION — the eye lands
+ * on the day, then on the people waiting — and putting four numbers in the
+ * second-most-prominent slot inverts it.
+ *
+ * The read after building it: RELOCATED, NOT DEMOTED. The queue is still fully
+ * above the fold, it is now the full-width block directly under the primary
+ * one, and it gained the width its rows always needed (a one-line row, and a
+ * cap of eight instead of five). Four numbers cost one saccade on the way past.
+ *
+ * The thing that would change that verdict: the rail growing. A snapshot of
+ * four facts is a glance; a snapshot of eight becomes a wall between the day
+ * and the people, and at that point the queue really is demoted. Add to the
+ * rail only by replacing.
+ *
+ * ── WHAT IT DROPS, and why (each of these is on the incumbent) ───────────────
  *
  *   - **Roster + demographics cards.** Composition analysis, and the contacts
- *     page owns it. Nobody asks "what is my age distribution" before opening
- *     the doors.
+ *     page owns it. Nobody asks about their age distribution before opening the
+ *     doors. (The rail's overlap bar is not a re-entry: it decomposes two
+ *     figures already in the band rather than opening a new subject — see
+ *     `SnapshotColumn`.)
  *   - **Recent payments.** A five-row copy of the /payments list. The one thing
  *     about payments that is a MORNING task — money with nobody attached to it
  *     — is in the queue instead, as a task rather than a statistic.
@@ -32,13 +73,12 @@
  *     `isFirstRun` below — it SUBSTITUTES rather than stacking). After day one
  *     it is one row in the queue, because that is what it is: work waiting on a
  *     human.
- *   - **Four of the six stat figures.** Three is what one glance holds.
+ *   - **The "active members" figure.** It counted the same field as the
+ *     affiliation figure under a friendlier name.
  *
- * WHAT IT KEEPS: the trend cards, by instruction, and the incumbent's
- * two-material rule (a bordered surface for a bounded thing, a bare number on
- * the background), with one rule added — **hierarchy comes from size, never
- * from decoration**. Exactly one block on this page is primary and it is
- * primary because it is bigger.
+ * WHAT IT KEEPS: the trend cards, by instruction; the incumbent's two-material
+ * rule; and the daily quote, which stopped being a footer nobody scrolls to and
+ * became the foot of the rail.
  */
 
 import { useTranslations, useLocale } from 'next-intl'
@@ -52,10 +92,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { FirstRunCard } from '@/components/dashboard/FirstRunCard'
 import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotificationsBanner'
-import { getDailyQuote } from '@/data/quotes'
 import { TodayPanel } from '@/components/dashboard-preview/TodayPanel'
 import { QueuePanel } from '@/components/dashboard-preview/QueuePanel'
-import { PulseRail } from '@/components/dashboard-preview/PulseRail'
+import { SnapshotColumn } from '@/components/dashboard-preview/SnapshotColumn'
 import { WeekSection } from '@/components/dashboard-preview/WeekSection'
 import { usePreviewContacts } from '@/components/dashboard-preview/preview-data'
 
@@ -63,8 +102,8 @@ import { usePreviewContacts } from '@/components/dashboard-preview/preview-data'
  * ONE LINE, and it is the whole header.
  *
  * A greeting, the date, the team, and the two actions a studio actually starts
- * from. It is 46px because everything it says is context — the first thing with
- * an answer in it should be the first thing below it.
+ * from. It is ~41px because everything it says is context — the first thing
+ * with an answer in it should be the first thing below it.
  */
 function Header({ children }: { children: React.ReactNode }) {
   const t = useTranslations('NewDashboard')
@@ -95,15 +134,6 @@ function Header({ children }: { children: React.ReactNode }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
-  )
-}
-
-function DailyQuote() {
-  const quote = getDailyQuote()
-  return (
-    <p className="pt-1 text-center text-xs italic text-muted-foreground/60">
-      &ldquo;{quote.text}&rdquo; — {quote.author}
-    </p>
   )
 }
 
@@ -153,39 +183,54 @@ export default function DashboardPreviewPage() {
         <HeaderAction href={'/contacts' as Route} icon={UserPlus} label={t('actionNewContact')} />
       </Header>
 
-      {resolving && <Skeleton className="h-[336px] w-full rounded-xl" />}
+      {resolving && <Skeleton className="h-[320px] w-full rounded-xl" />}
 
       {/* DAY ONE SUBSTITUTES, it does not stack. A studio with no contacts and
-          no sessions has nothing for the day, the queue, the pulse or the
+          no sessions has nothing for the day, the queue, the snapshot or the
           trends to say, and stacking a checklist on top of four empty blocks
           teaches a new studio that this page is mostly empty. */}
       {!resolving && isFirstRun && <FirstRunCard steps={setupSteps} />}
 
       {!resolving && !isFirstRun && (
         <>
-          {/* ── THE WORKING ROW ──
-              3:2, and the asymmetry is the point. Two equal halves give the eye
-              no landing place; the incumbent's every band is a 50/50 split of
-              equals, eight deep. Here the day is ~600px wide and the queue
-              ~400px, both 292px tall, and the row owns the height so a busy
-              Tuesday and a quiet queue still start and end on the same lines. */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-5 lg:[&>*]:h-[334px]">
-            <div className="lg:col-span-3">
-              <TodayPanel teamId={currentTeamId} />
+          {/* ── THE FIRST SCREEN ──
+              8:4 of twelve — ~683px of work against a ~332px rail.
+
+              THE TWO COLUMNS OWN THEIR OWN HEIGHTS, and that is the mechanism
+              that makes the rail's blank space composition rather than luck.
+              Grid items stretch, so both columns are as tall as the taller one;
+              the work column pins the day at 320px and lets the QUEUE absorb
+              the remainder (`flex-1`), while the rail spreads its content with
+              `justify-between` so the quote lands on the queue's bottom edge.
+              A long quote or a busy queue therefore lengthens the band without
+              either column growing a ragged tail. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            {/* THE WORK — both blocks framed, biggest first. */}
+            <div className="flex flex-col gap-5 lg:col-span-8">
+              <div className="h-[320px] shrink-0">
+                <TodayPanel teamId={currentTeamId} />
+              </div>
+              <div className="min-h-[280px] lg:flex-1">
+                <QueuePanel
+                  teamId={currentTeamId}
+                  contacts={contacts}
+                  contactsLoading={contactsLoading}
+                  engagementThresholds={team?.engagement_thresholds}
+                  setupSteps={setupSteps}
+                  setupLoading={setupLoading}
+                />
+              </div>
             </div>
-            <div className="lg:col-span-2">
-              <QueuePanel
+
+            {/* THE RAIL — reference, unframed, and deliberately airy. */}
+            <div className="lg:col-span-4">
+              <SnapshotColumn
                 teamId={currentTeamId}
                 contacts={contacts}
-                contactsLoading={contactsLoading}
-                engagementThresholds={team?.engagement_thresholds}
-                setupSteps={setupSteps}
-                setupLoading={setupLoading}
+                loading={contactsLoading}
               />
             </div>
           </div>
-
-          <PulseRail teamId={currentTeamId} contacts={contacts} loading={contactsLoading} />
 
           {/* Trends are Studio+. The gate is read directly rather than through
               `PlanGate` so the tier's answer can be WAITED FOR: `usePlan`
@@ -204,10 +249,6 @@ export default function DashboardPreviewPage() {
           )}
         </>
       )}
-
-      {/* The sign-off. Kept from the incumbent deliberately: it is Franco's, it
-          is the last thing on the page, and it costs the first screen nothing. */}
-      <DailyQuote />
     </div>
   )
 }
