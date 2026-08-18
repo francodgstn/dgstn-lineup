@@ -6533,6 +6533,18 @@
     "rosterViewEngagement": "Coinvolgimento",
     "rosterViewAcquisition": "Fase del funnel",
     "rosterTotal": "contatti",
-    "rosterEmpty": "Ancora nessun contatto."
+    "rosterEmpty": "Ancora nessun contatto.",
+    "rosterGroupRoster": "Iscrizione",
+    "rosterGroupPeople": "Persone",
+    "rosterViewAffiliation": "Affiliazione",
+    "rosterViewSubscription": "Abbonamento",
+    "rosterViewAge": "Età",
+    "rosterViewGender": "Genere",
+    "rosterViewLevel": "Grado",
+    "demoAgeKids": "Bambini (5–9)",
+    "demoAgeYouth": "Giovani (10–14)",
+    "demoAgeTeens": "Teenager (15–17)",
+    "demoAgeAdults": "Adulti (18–39)",
+    "demoAgeMasters": "Masters (40+)"
   }
 }

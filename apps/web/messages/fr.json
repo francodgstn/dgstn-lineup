@@ -6533,6 +6533,18 @@
     "rosterViewEngagement": "Engagement",
     "rosterViewAcquisition": "Étape du tunnel",
     "rosterTotal": "contacts",
-    "rosterEmpty": "Aucun contact pour l'instant."
+    "rosterEmpty": "Aucun contact pour l'instant.",
+    "rosterGroupRoster": "Adhésion",
+    "rosterGroupPeople": "Personnes",
+    "rosterViewAffiliation": "Affiliation",
+    "rosterViewSubscription": "Abonnement",
+    "rosterViewAge": "Âge",
+    "rosterViewGender": "Genre",
+    "rosterViewLevel": "Niveau",
+    "demoAgeKids": "Enfants (5–9)",
+    "demoAgeYouth": "Jeunes (10–14)",
+    "demoAgeTeens": "Ados (15–17)",
+    "demoAgeAdults": "Adultes (18–39)",
+    "demoAgeMasters": "Masters (40+)"
   }
 }

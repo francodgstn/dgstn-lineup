@@ -6533,6 +6533,18 @@
     "rosterViewEngagement": "Engagement",
     "rosterViewAcquisition": "Funnel stage",
     "rosterTotal": "contacts",
-    "rosterEmpty": "No contacts yet."
+    "rosterEmpty": "No contacts yet.",
+    "rosterGroupRoster": "Membership",
+    "rosterGroupPeople": "People",
+    "rosterViewAffiliation": "Affiliation",
+    "rosterViewSubscription": "Subscription",
+    "rosterViewAge": "Age",
+    "rosterViewGender": "Gender",
+    "rosterViewLevel": "Level",
+    "demoAgeKids": "Kids (5–9)",
+    "demoAgeYouth": "Youth (10–14)",
+    "demoAgeTeens": "Teens (15–17)",
+    "demoAgeAdults": "Adults (18–39)",
+    "demoAgeMasters": "Masters (40+)"
   }
 }

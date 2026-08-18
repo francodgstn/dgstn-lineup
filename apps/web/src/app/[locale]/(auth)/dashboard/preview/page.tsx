@@ -239,6 +239,7 @@ export default function DashboardPreviewPage() {
                 <RosterDonut
                   contacts={contacts}
                   thresholds={team?.engagement_thresholds}
+                  rankingSystems={team?.ranking_systems}
                   loading={contactsLoading}
                 />
               </div>

@@ -6533,6 +6533,18 @@
     "rosterViewEngagement": "Aktivität",
     "rosterViewAcquisition": "Trichterphase",
     "rosterTotal": "Kontakte",
-    "rosterEmpty": "Noch keine Kontakte."
+    "rosterEmpty": "Noch keine Kontakte.",
+    "rosterGroupRoster": "Mitgliedschaft",
+    "rosterGroupPeople": "Personen",
+    "rosterViewAffiliation": "Zugehörigkeit",
+    "rosterViewSubscription": "Abonnement",
+    "rosterViewAge": "Alter",
+    "rosterViewGender": "Geschlecht",
+    "rosterViewLevel": "Stufe",
+    "demoAgeKids": "Kinder (5–9)",
+    "demoAgeYouth": "Jugend (10–14)",
+    "demoAgeTeens": "Teens (15–17)",
+    "demoAgeAdults": "Erwachsene (18–39)",
+    "demoAgeMasters": "Masters (40+)"
   }
 }
