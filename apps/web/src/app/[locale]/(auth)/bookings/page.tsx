@@ -476,9 +476,8 @@ function RebookDialog({
                       : '')
                   : s.id
                 return (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="font-medium">{s.activityName ?? '—'}</span>
-                    <span className="text-muted-foreground ml-2 text-xs">{label}</span>
+                  <SelectItem key={s.id} value={s.id} label={s.activityName ?? '—'}>
+                    {label}
                   </SelectItem>
                 )
               })}

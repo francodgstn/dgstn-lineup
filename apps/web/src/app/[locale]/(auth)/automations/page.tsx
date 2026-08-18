@@ -855,7 +855,15 @@ function ConditionEditor({
                           {/* Dynamic groups belong here: READING a derived group
                               is the whole point of in_group. Only WRITES exclude them. */}
                           {flattenGroupTree(contactGroups).map(({ group, depth }) => (
-                            <SelectItem key={group.id} value={group.id} className="text-xs">
+                            <SelectItem
+                              key={group.id}
+                              value={group.id}
+                              className="text-xs"
+                              // The indent IS the hierarchy, so it must stay
+                              // inline — `textValue` registers the trigger's text
+                              // without moving it to a second line.
+                              textValue={`${group.name}${isDynamicGroup(group) ? ' ⚡' : ''}`}
+                            >
                               <span style={{ paddingLeft: `${depth * 12}px` }}>
                                 {group.name}{isDynamicGroup(group) ? ' ⚡' : ''}
                               </span>
@@ -1394,7 +1402,12 @@ function ActionEditor({
                       // Indented like every other group picker — the old flat list
                       // hid the hierarchy the rest of the app shows.
                       writable.map(({ group, depth }) => (
-                        <SelectItem key={group.id} value={group.id} className="text-xs">
+                        <SelectItem
+                          key={group.id}
+                          value={group.id}
+                          className="text-xs"
+                          textValue={group.name}
+                        >
                           <span style={{ paddingLeft: `${depth * 12}px` }}>{group.name}</span>
                         </SelectItem>
                       ))

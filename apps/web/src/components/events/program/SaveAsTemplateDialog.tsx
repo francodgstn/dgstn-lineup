@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { MAX_PROGRAM_TEMPLATES, extractTemplate } from '@linyup/shared'
+import { MAX_PROGRAM_TEMPLATES, extractTemplate, sortedDays } from '@linyup/shared'
 import type { EventProgramConfig, EventProgramItem } from '@linyup/shared'
+import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 import {
   useProgramTemplates,
   useSaveProgramTemplate,
@@ -58,13 +59,12 @@ export function SaveAsTemplateDialog({
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open) return
+  useResetOnOpen(open, () => {
     setTarget(NEW)
     setName(defaultName ?? '')
     setDescription('')
     setError(null)
-  }, [open, defaultName])
+  })
 
   // Overwriting pre-fills from the chosen template so the name is not lost.
   useEffect(() => {
@@ -133,7 +133,7 @@ export function SaveAsTemplateDialog({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            {t('templateSummary', { days: config.days.length, items: items.length })}
+            {t('templateSummary', { days: sortedDays(config).length, items: items.length })}
             {scope === 'org' && ` · ${t('templateSavedToOrg')}`}
           </p>
 

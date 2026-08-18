@@ -61,8 +61,15 @@ real dated days counted from a chosen start; `extractTemplate` is the inverse.
 Track ids are **regenerated on every apply**, so two events never share track ids.
 
 Applying a template **replaces** the programme rather than merging — merging two
-multi-track schedules has no sane automatic answer. It runs as one batch, so the
-agenda is never left half-replaced.
+multi-track schedules has no sane automatic answer.
+
+It is **not atomic**, and cannot be: replacing a programme costs
+`deletes + writes + 1` operations, which at the 300-item cap reaches 601 against
+Firestore's 500-per-batch limit — a single batch does not merely lose elegance,
+it fails outright. The writes are chunked instead, ordered so the old items go
+first and the config last: an interruption leaves a programme that is visibly
+*missing* rows (fix it by applying again) rather than one showing two templates'
+items merged, which would look correct and not be.
 
 Templates are edited by **apply → adjust on a real event → save back**. There is
 deliberately no standalone template editor; the event page already is one.

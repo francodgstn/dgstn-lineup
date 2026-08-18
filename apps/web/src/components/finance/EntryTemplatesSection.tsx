@@ -383,9 +383,7 @@ export function EntryTemplatesSection({ teamId, isOwner }: { teamId: string; isO
                     </SelectTrigger>
                     <SelectContent>
                       {activeAccounts.map((a) => (
-                        <SelectItem key={a.code} value={a.code}>
-                          {a.code} · {a.name}
-                        </SelectItem>
+                        <SelectItem key={a.code} value={a.code} label={`${a.code} · ${a.name}`} />
                       ))}
                     </SelectContent>
                   </Select>
@@ -401,9 +399,7 @@ export function EntryTemplatesSection({ teamId, isOwner }: { teamId: string; isO
                     </SelectTrigger>
                     <SelectContent>
                       {activeAccounts.map((a) => (
-                        <SelectItem key={a.code} value={a.code}>
-                          {a.code} · {a.name}
-                        </SelectItem>
+                        <SelectItem key={a.code} value={a.code} label={`${a.code} · ${a.name}`} />
                       ))}
                     </SelectContent>
                   </Select>

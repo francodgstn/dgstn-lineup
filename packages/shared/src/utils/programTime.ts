@@ -121,6 +121,21 @@ export function isPlenary(item: { trackId?: string | null }): boolean {
   return (item.trackId ?? null) === null
 }
 
+/** Next free `order` within a day.
+ *
+ *  MAX + 1, deliberately NOT the item count: `order` only has to be unique and
+ *  increasing (it is the tie-break between items sharing a start time), and
+ *  counting reuses a value that is still in use as soon as anything has been
+ *  deleted from the middle of the day. */
+export function nextItemOrder(
+  items: Array<{ dayId: string; order?: number }>,
+  dayId: string,
+): number {
+  return items
+    .filter((i) => i.dayId === dayId)
+    .reduce((max, i) => Math.max(max, i.order ?? 0), -1) + 1
+}
+
 /** Day-by-day grouping in display order, including days with no items. */
 export function groupItemsByDay<T extends SortableItem & { dayId: string }>(
   config: DaysAndTracks | undefined,
@@ -166,6 +181,22 @@ export function toISODate(d: Date): string {
     String(d.getUTCMonth() + 1).padStart(2, '0'),
     String(d.getUTCDate()).padStart(2, '0'),
   ].join('-')
+}
+
+/** The calendar date AT A GIVEN TIMEZONE, as 'YYYY-MM-DD'.
+ *
+ *  Reading `getFullYear()/getMonth()/getDate()` off a Date gives the *runtime's*
+ *  calendar, which on Cloud Functions is UTC — so an event starting 00:30 in
+ *  Zurich reads as the PREVIOUS day, and anything derived from it (a programme
+ *  day shift, for one) lands twenty-four hours out. `en-CA` formats as
+ *  YYYY-MM-DD, which is exactly the shape stored on a ProgramDay. */
+export function isoDateInTimezone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
 }
 
 /** Whole days from `from` to `to` (negative when `to` is earlier). */

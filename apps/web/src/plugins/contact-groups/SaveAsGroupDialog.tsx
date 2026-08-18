@@ -161,7 +161,7 @@ export function SaveAsGroupDialog({
                 <SelectContent>
                   <SelectItem value={NO_PARENT}>{t('noParent')}</SelectItem>
                   {flattenGroupTree(groups).map(({ group, depth }) => (
-                    <SelectItem key={group.id} value={group.id}>
+                    <SelectItem key={group.id} value={group.id} textValue={group.name}>
                       <span style={{ paddingLeft: `${depth * 12}px` }}>{group.name}</span>
                     </SelectItem>
                   ))}

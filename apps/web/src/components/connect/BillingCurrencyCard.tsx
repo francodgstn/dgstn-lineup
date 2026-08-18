@@ -91,9 +91,8 @@ export function BillingCurrencyCard({
           </SelectTrigger>
           <SelectContent>
             {options.map((c) => (
-              <SelectItem key={c.code} value={c.code}>
-                <span className="font-medium">{c.code}</span>
-                <span className="text-muted-foreground"> — {c.name}</span>
+              <SelectItem key={c.code} value={c.code} label={c.code}>
+                {c.name}
               </SelectItem>
             ))}
           </SelectContent>

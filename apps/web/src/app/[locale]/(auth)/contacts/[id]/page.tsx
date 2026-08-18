@@ -2149,7 +2149,7 @@ function ProfileTab({
                             <SelectContent>
                               <SelectItem value="">—</SelectItem>
                               {system.levels.map((level) => (
-                                <SelectItem key={level.value} value={String(level.value)}>
+                                <SelectItem key={level.value} value={String(level.value)} textValue={level.label}>
                                   <span className="flex items-center gap-2">
                                     {level.color && (
                                       <span

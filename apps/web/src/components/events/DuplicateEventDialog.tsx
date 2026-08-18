@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toISODate } from '@linyup/shared'
+import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 import type { Event } from '@linyup/shared'
 
 // Duplicating copies the event's SETUP — settings, categories, the whole
@@ -41,13 +42,12 @@ export function DuplicateEventDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open) return
+  useResetOnOpen(open, () => {
     setTitle(t('duplicateSuffix', { title: event.title }))
     setStartDate(isoDateOf(event.start))
     setError(null)
     setBusy(false)
-  }, [open, event.title, event.start, t])
+  })
 
   async function submit() {
     setBusy(true)

@@ -8,10 +8,11 @@ import {
   EVENT_PROGRAM_ITEMS_SUBCOLLECTION,
   MAX_PROGRAM_ITEMS,
   daysBetweenISO,
+  isoDateInTimezone,
   shiftProgramDays,
-  toISODate,
 } from '@linyup/shared'
 import type { EventProgramConfig } from '@linyup/shared'
+import { DEFAULT_TIMEZONE } from '../utils/dateFormatting'
 
 setGlobalOptions({ region: 'europe-west6' })
 
@@ -65,10 +66,14 @@ export function carriedFields(source: Record<string, unknown>): Record<string, u
   return carried
 }
 
+/** The event's calendar date as the STUDIO sees it, not as the server does.
+ *  Cloud Functions run in UTC, so reading the date off the Date directly puts an
+ *  event starting 00:30 in Zurich on the previous day — and the programme day
+ *  shift derived from it then lands a full day out. */
 function isoDateOfTimestamp(ts: unknown): string | null {
   const d = (ts as Timestamp | undefined)?.toDate?.()
   if (!d || Number.isNaN(d.getTime())) return null
-  return toISODate(new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())))
+  return isoDateInTimezone(d, DEFAULT_TIMEZONE)
 }
 
 export const duplicateEvent = onCall(async (request) => {
@@ -137,11 +142,9 @@ export const duplicateEvent = onCall(async (request) => {
   let nextProgram = sourceProgram
   if (sourceProgram?.days?.length) {
     const fromDate = isoDateOfTimestamp(source.start)
-    const toDate = nextStart
-      ? toISODate(new Date(Date.UTC(
-          nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate(),
-        )))
-      : null
+    // Both endpoints read through the SAME timezone, or the delta between them
+    // is meaningless.
+    const toDate = nextStart ? isoDateInTimezone(nextStart, DEFAULT_TIMEZONE) : null
     const dayShift = fromDate && toDate ? daysBetweenISO(fromDate, toDate) : 0
     nextProgram = shiftProgramDays(sourceProgram, dayShift)
   }

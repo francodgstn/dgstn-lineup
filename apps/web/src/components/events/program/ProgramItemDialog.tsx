@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useMemo } from 'react'
 import { useTranslations } from 'next-intl'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Trash2 } from 'lucide-react'
+import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -18,7 +19,7 @@ import { TimePicker } from '@/components/ui/date-picker'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { PROGRAM_ITEM_KINDS } from '@linyup/shared'
+import { PROGRAM_ITEM_KINDS, sortedDays, sortedTracks } from '@linyup/shared'
 import type {
   EventProgramConfig, EventProgramItem, ProgramItemKind,
 } from '@linyup/shared'
@@ -58,7 +59,10 @@ export interface ProgramItemDialogProps {
   /** Present when editing an existing item. */
   item?: EventProgramItem | null
   /** Order to assign to a newly created item (append at the end of its day). */
-  nextOrder: number
+  /** Next free `order` for a given day. A FUNCTION, not a number: the Day picker
+   *  lets the user file the item under a different day than the one on screen,
+   *  and the answer must come from the day actually chosen. */
+  nextOrderFor: (dayId: string) => number
   onSubmit: (draft: ProgramItemDraft) => Promise<void> | void
   onDelete?: () => Promise<void> | void
   saving?: boolean
@@ -70,12 +74,18 @@ export function ProgramItemDialog({
   config,
   defaultDayId,
   item,
-  nextOrder,
+  nextOrderFor,
   onSubmit,
   onDelete,
   saving,
 }: ProgramItemDialogProps) {
   const t = useTranslations('EventProgram')
+
+  // Sorted to match the agenda, and memoised so the reset effect below does not
+  // see a fresh array identity on every render of the parent.
+  const days = useMemo(() => sortedDays(config), [config])
+  const tracks = useMemo(() => sortedTracks(config), [config])
+  const firstDayId = days[0]?.id ?? ''
 
   const {
     register, handleSubmit, control, reset, watch,
@@ -89,10 +99,9 @@ export function ProgramItemDialog({
     },
   })
 
-  useEffect(() => {
-    if (!open) return
+  useResetOnOpen(open, () => {
     reset({
-      dayId: item?.dayId ?? defaultDayId ?? config.days[0]?.id ?? '',
+      dayId: item?.dayId ?? defaultDayId ?? firstDayId,
       trackId: item?.trackId ?? PLENARY,
       allDay: item?.allDay ?? false,
       startTime: item?.startTime ?? '09:00',
@@ -106,7 +115,7 @@ export function ProgramItemDialog({
       internalNote: item?.internalNote ?? '',
       isHighlight: item?.isHighlight ?? false,
     })
-  }, [open, item, defaultDayId, config.days, reset])
+  })
 
   const allDay = watch('allDay')
 
@@ -118,7 +127,11 @@ export function ProgramItemDialog({
       trackId: values.trackId === PLENARY ? null : values.trackId,
       startTime: values.allDay ? '00:00' : values.startTime || '09:00',
       title: values.title.trim(),
-      order: item?.order ?? nextOrder,
+      // A new item, or an existing one MOVED to another day, needs a fresh order
+      // in its destination — keeping the old one can collide with an item already
+      // there and make two items at the same time swap places unpredictably.
+      order:
+        item && item.dayId === values.dayId ? item.order : nextOrderFor(values.dayId),
       ...(values.allDay ? { allDay: true } : {}),
       ...(!values.allDay && values.endTime ? { endTime: values.endTime } : {}),
       ...(values.subtitle.trim() ? { subtitle: values.subtitle.trim() } : {}),
@@ -152,10 +165,18 @@ export function ProgramItemDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {config.days.map((d, index) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.title || t('dayN', { n: index + 1 })} · {d.date}
-                        </SelectItem>
+                      {days.map((d, index) => (
+                        // `label` (not children) carries the text: select.tsx can
+                        // only derive a label from a plain STRING child, and this
+                        // one is composed — without it the trigger falls back to
+                        // printing the raw day id. Passing children as well would
+                        // repeat the text as a muted second line, which is what
+                        // that prop pair means here.
+                        <SelectItem
+                          key={d.id}
+                          value={d.id}
+                          label={`${d.title || t('dayN', { n: index + 1 })} · ${d.date}`}
+                        />
                       ))}
                     </SelectContent>
                   </Select>
@@ -175,7 +196,7 @@ export function ProgramItemDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={PLENARY}>{t('trackPlenary')}</SelectItem>
-                      {config.tracks.map((tr) => (
+                      {tracks.map((tr) => (
                         <SelectItem key={tr.id} value={tr.id}>{tr.name}</SelectItem>
                       ))}
                     </SelectContent>
