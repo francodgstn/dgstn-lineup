@@ -279,6 +279,50 @@ export const SYSTEM_LINK_ROUTE: Record<
   documents: { route: 'documents' },
 }
 
+/**
+ * Which `ActivePublicSurfaces` flag decides whether a bio-link "page link" has
+ * anywhere to land. The three `shop-*` deep links all ride on the shop surface —
+ * a tab of a page that is not live is not a destination either.
+ */
+export const SYSTEM_LINK_SURFACE: Record<SystemLinkTarget, PublicSurface> = {
+  booking: 'booking',
+  signup: 'signup',
+  shop: 'shop',
+  'shop-subscriptions': 'shop',
+  'shop-products': 'shop',
+  'shop-courses': 'shop',
+  space: 'space',
+  site: 'site',
+  documents: 'documents',
+}
+
+/**
+ * Is a bio-link page link's destination actually live?
+ *
+ * THE SAME RULE THE WEBSITE HEADER ALREADY FOLLOWS (`resolveSiteSurfaceLinks`,
+ * types/website.ts): a link to a surface that is not live is not offered. The
+ * bio-link kept offering one, so unpublishing the website — or losing the
+ * website plugin, or a Connect account that stops being chargeable — left the
+ * studio's own front page linking into a dead end (UX-49).
+ *
+ * FAILS OPEN, deliberately, and in two ways:
+ *   • an absent `active` map (the admin's live preview builds its team object
+ *     from the FORM, which carries no surface flags) hides nothing;
+ *   • an absent KEY means "not computed", not "off" — only an explicit `false`
+ *     hides a link.
+ * The flags are a denormalized mirror recomputed on every team write, so the
+ * cost of being wrong is asymmetric: a briefly-stale mirror must never blank a
+ * studio's links, while a surface that is genuinely down is stated as `false`
+ * by `syncTeamPublicProfile` on the very write that took it down.
+ */
+export function systemLinkIsLive(
+  target: SystemLinkTarget,
+  active: Partial<Record<PublicSurface, boolean>> | undefined
+): boolean {
+  if (!active) return true
+  return active[SYSTEM_LINK_SURFACE[target]] !== false
+}
+
 /** The set `?from=` accepts. Anything else is ignored rather than rejected. */
 const PUBLIC_FROM_VALUES: readonly PublicFrom[] = [
   'bio-link',

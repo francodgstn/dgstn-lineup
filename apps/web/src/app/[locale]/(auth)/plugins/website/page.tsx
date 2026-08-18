@@ -276,6 +276,13 @@ export default function WebsiteBuilderPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  // Unpublishing is "take it off the internet" — it sat one unconfirmed click
+  // from Publish (UX-50). It is however fully REVERSIBLE and loses nothing
+  // (unpublishSiteForTeam deletes site_published/{teamId} and merges
+  // `enabled: false` onto the draft — the draft's pages, wording and images are
+  // untouched), so the copy says so. An overstated warning trains people to
+  // click through the next one.
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
 
   // Initialise the working draft once data has settled.
   useEffect(() => {
@@ -449,7 +456,7 @@ export default function WebsiteBuilderPage() {
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={handleUnpublish}
+              onClick={() => setConfirmUnpublish(true)}
               disabled={publishing}
             >
               {t('unpublish')}
@@ -679,6 +686,33 @@ export default function WebsiteBuilderPage() {
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unpublish confirmation. States the consequence in the visitor's terms —
+          the site goes offline now, and any bio-link entry pointing at it stops
+          being offered (BioLinkHome filters page links through
+          `systemLinkIsLive`, UX-49) — and then states, equally plainly, that
+          nothing is lost and it can be published again. NOT styled destructive:
+          this deletes no work. */}
+      <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unpublishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unpublishConfirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={publishing}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={publishing}
+              onClick={() => {
+                setConfirmUnpublish(false)
+                void handleUnpublish()
+              }}
+            >
+              {t('unpublishConfirmAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

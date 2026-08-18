@@ -1598,7 +1598,8 @@
     "paymentsRecordingOff": "En pause",
     "paymentsRecordingStalled": "N'enregistre pas encore",
     "paymentsPublishableKeyHelp": "Une simple étiquette — Linyup ne débite rien avec. L'enregistrement démarre dès que vous ajoutez la clé de signature du webhook ci-dessous.",
-    "subTypeActivitiesEmptyAction": "Créer une activité"
+    "subTypeActivitiesEmptyAction": "Créer une activité",
+    "paymentsWebhookEventsHelp": "Abonnez le point de terminaison à <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code>. N'ajoutez pas en plus <code>invoice.payment_succeeded</code> : Stripe ne relie plus une facture à son paiement, les paiements récurrents seraient donc enregistrés deux fois."
   },
   "Bookings": {
     "title": "Réservations",
@@ -2709,7 +2710,10 @@
     "sectionSchedule": "Programme",
     "sectionScheduleDesc": "Prochaines séances, en direct.",
     "sectionContact": "Contact",
-    "sectionContactDesc": "Adresse, horaires, carte et réseaux sociaux."
+    "sectionContactDesc": "Adresse, horaires, carte et réseaux sociaux.",
+    "unpublishConfirmTitle": "Mettre votre site hors ligne ?",
+    "unpublishConfirmBody": "Votre site publié passe hors ligne immédiatement : les visiteurs ne voient plus rien, et toute entrée du bio-link qui y renvoie cesse d'être affichée. Rien n'est perdu — votre brouillon, ses pages, ses textes et ses images sont conservés tels quels, vous pouvez republier quand vous le souhaitez.",
+    "unpublishConfirmAction": "Mettre hors ligne"
   },
   "Kiosk": {
     "title": "Kiosque",
@@ -3441,7 +3445,13 @@
     "sendReceiptLabel": "Envoyer un reçu à l'acheteur",
     "sendReceiptHint_subscription": "Un e-mail confirmant ce qu'elle possède désormais — crédits, validité et où les consulter.",
     "sendReceiptHint_course": "Un e-mail confirmant le cours et où le regarder.",
-    "sendReceiptHint_product": "Un e-mail confirmant l'article et vos conditions de remise."
+    "sendReceiptHint_product": "Un e-mail confirmant l'article et vos conditions de remise.",
+    "trialCharge": "Essai payant",
+    "mayDuplicate": "Peut-être en double",
+    "mayDuplicateHelp": "Cette ligne est rattachée à la facture, pas au paiement. Si votre webhook Stripe envoie aussi des événements de paiement, le même montant peut apparaître deux fois dans cette liste.",
+    "markPaidClosesLink": "Le lien de paiement envoyé à ce client sera annulé afin qu'il ne puisse pas être payé deux fois.",
+    "markPaidAlreadyOnline": "Ce client avait déjà payé en ligne — rien n'a été enregistré ici.",
+    "markPaidLinkStillOpen": "Paiement enregistré, mais le lien de paiement n'a pas pu être annulé — annulez-le dans Stripe. S'il est tout de même payé, le montant est remboursé automatiquement."
   },
   "PaymentErrors": {
     "setupIncomplete": "La configuration du compte de paiement n'est pas terminée, l'action n'a donc pas pu aboutir. Terminer la configuration dans Paramètres → Paiements.",
@@ -4015,7 +4025,15 @@
     "healthBenefitBadPercent": "La réduction membre de {name} a un pourcentage invalide.",
     "healthGatedNoNewcomerPath": "{name} n'offre aucune entrée pour un nouveau venu — ni tarif à la séance, ni essai.",
     "healthCreditsUnusable": "{name} vend des packs de crédits, mais aucune activité ne les accepte.",
-    "fixLink": "Corriger"
+    "fixLink": "Corriger",
+    "sectionDiscountsTitle": "Réductions",
+    "sectionDiscountsSubtitle": "Codes promo qu'un visiteur saisit au paiement pour modifier ce qu'il paie.",
+    "discountsNotInstalled": "Lancez une campagne de réduction : un code avec une date de fin, un plafond d'utilisation et les offres auxquelles il s'applique.",
+    "discountsSetUpLink": "Configurer",
+    "discountsNoneRunning": "Aucune réduction n'est active pour le moment.",
+    "discountsManageLink": "Gérer les codes promo",
+    "discountPercentOff": "{percent} % de réduction",
+    "discountFixedPrice": "{price} avec ce code"
   },
   "PublicBooking": {
     "titleBookSession": "Réserver une séance",
@@ -5148,6 +5166,21 @@
         "saveChanges": "Enregistrer les modifications",
         "createTemplate": "Créer un modèle"
       }
+    },
+    "history": {
+      "title": "Historique des exécutions",
+      "subtitle": "Chaque exécution de vos automatisations, la plus récente en premier.",
+      "subtitleForRule": "Chaque exécution de {name}, la plus récente en premier.",
+      "pageButton": "Historique",
+      "ruleAction": "Historique des exécutions",
+      "empty": "Rien ne s'est encore exécuté.",
+      "counts": "{matched} correspondances · {executed} envoyés",
+      "failedCount": "· {count} en échec",
+      "recipientsNote": "Une exécution enregistre combien de personnes ont été touchées, pas lesquelles. Utilisez l'aperçu pour voir qui correspond à une règle en ce moment.",
+      "tier_event": "Sur événement",
+      "tier_delayed": "Différée",
+      "tier_scheduled": "Planifiée",
+      "tier_manual": "Manuelle"
     }
   },
   "SettingsEmails": {

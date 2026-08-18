@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/select'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import {
   DropdownMenu,
@@ -84,6 +85,7 @@ import {
   Tag,
   Users,
   Webhook,
+  History,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES, CONTACT_SOURCES } from '@linyup/shared'
@@ -94,6 +96,7 @@ import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
 import { PreviewRunDialog } from './PreviewRunDialog'
+import { RunHistoryDialog } from './RunHistoryDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, flattenGroupTree, isDynamicGroup } from '@/plugins/contact-groups/hooks'
 import type { ContactGroup } from '@linyup/shared'
@@ -501,6 +504,13 @@ function RuleCard({
   // a PAUSED rule too (the moment before arming it is exactly when "who does
   // this hit?" matters); 'run' is the confirmation that used to not exist.
   const [previewMode, setPreviewMode] = useState<'preview' | 'run' | null>(null)
+  // The other half of the same question. Preview answers "who does this hit if it
+  // ran now"; history answers "did it run, when, and how many did it reach" —
+  // which for a DELAYED rule (fired from a Cloud Task hours or days later) is
+  // otherwise unanswerable from this page. See RunHistoryDialog (UX-48).
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Same rules-shaped gate as the page-level button — see AutomationsPage.
+  const canSeeHistory = useCapabilities().can('outreach.manage')
   const subName = (id: string) => subscriptionTypes.find((s) => s.id === id)?.name ?? id
 
   const trigger = rule.trigger ?? { type: 'schedule_daily' }
@@ -559,6 +569,12 @@ function RuleCard({
                 <Play className="h-3.5 w-3.5 mr-2" />
                 {t('ruleCard.runNow')}
               </DropdownMenuItem>
+              {canSeeHistory && (
+                <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
+                  <History className="h-3.5 w-3.5 mr-2" />
+                  {t('history.ruleAction')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={onDelete}
                 className="text-destructive focus:text-destructive"
@@ -644,6 +660,15 @@ function RuleCard({
         actionLabels={actionLabels}
         onRun={onRunNow}
       />
+      {canSeeHistory && (
+        <RunHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          teamId={teamId}
+          ruleId={rule.id}
+          ruleName={rule.name || t('ruleCard.unnamed')}
+        />
+      )}
     </div>
   )
 }
@@ -1734,6 +1759,11 @@ export default function AutomationsPage() {
   const planName = usePlanName()
   const { currentTeamId, user } = useAuth()
   const { isAtLeast } = usePlan()
+  // `automation_logs` is manager/owner-read in firestore.rules, so the history
+  // entry points are offered only to someone the rules would actually serve —
+  // an ungated button here would hand a coach a permission error instead of a
+  // dialog.
+  const canSeeHistory = useCapabilities().can('outreach.manage')
   // Automations are available on every tier; Studio/Org get the full suite while
   // Free/Coach are limited to the triggers/actions of their active modules and
   // installed add-ons (the builder only offers those). Show a note below Studio.
@@ -1800,6 +1830,8 @@ export default function AutomationsPage() {
   >(undefined)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [webhooksOpen, setWebhooksOpen] = useState(false)
+  // Team-wide run history (UX-48) — the per-rule entry lives in each card's menu.
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
 
   // Deep-link entry: ?editRule=<id> opens that rule; ?newTrigger=<type>&subType=<id>
@@ -1920,6 +1952,12 @@ export default function AutomationsPage() {
               <Mail className="h-4 w-4 mr-1.5" />
               {t('page.templatesButton')}
             </Link>
+            {canSeeHistory && (
+              <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+                <History className="h-4 w-4 mr-1.5" />
+                {t('history.pageButton')}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
               <BookOpen className="h-4 w-4 mr-1.5" />
               {t('page.libraryButton')}
@@ -2084,6 +2122,13 @@ export default function AutomationsPage() {
             onOpenChange={setWebhooksOpen}
             teamId={currentTeamId}
           />
+          {canSeeHistory && (
+            <RunHistoryDialog
+              open={historyOpen}
+              onOpenChange={setHistoryOpen}
+              teamId={currentTeamId}
+            />
+          )}
         </>
       )}
     </>

@@ -1598,7 +1598,8 @@
     "paymentsRecordingOff": "Pausiert",
     "paymentsRecordingStalled": "Erfasst noch nichts",
     "paymentsPublishableKeyHelp": "Nur eine Bezeichnung — Linyup belastet damit nichts. Die Erfassung startet, sobald du unten den Webhook-Signaturschlüssel hinterlegst.",
-    "subTypeActivitiesEmptyAction": "Aktivität erstellen"
+    "subTypeActivitiesEmptyAction": "Aktivität erstellen",
+    "paymentsWebhookEventsHelp": "Abonnieren Sie für den Endpunkt <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code>. Fügen Sie nicht zusätzlich <code>invoice.payment_succeeded</code> hinzu: Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung, wiederkehrende Zahlungen würden also doppelt erfasst."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -2709,7 +2710,10 @@
     "sectionSchedule": "Stundenplan",
     "sectionScheduleDesc": "Kommende Sessions, live geladen.",
     "sectionContact": "Kontakt",
-    "sectionContactDesc": "Adresse, Öffnungszeiten, Karte und Social Media."
+    "sectionContactDesc": "Adresse, Öffnungszeiten, Karte und Social Media.",
+    "unpublishConfirmTitle": "Website offline nehmen?",
+    "unpublishConfirmBody": "Ihre veröffentlichte Website geht sofort offline: Besucher sehen nichts mehr, und ein Bio-Link-Eintrag, der darauf verweist, wird nicht mehr angezeigt. Es geht nichts verloren — Ihr Entwurf mit Seiten, Texten und Bildern bleibt unverändert erhalten, Sie können jederzeit wieder veröffentlichen.",
+    "unpublishConfirmAction": "Offline nehmen"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -3441,7 +3445,13 @@
     "sendReceiptLabel": "Beleg an die Käuferin senden",
     "sendReceiptHint_subscription": "Eine E-Mail mit dem, was jetzt vorhanden ist — Guthaben, Gültigkeit und wo es zu sehen ist.",
     "sendReceiptHint_course": "Eine E-Mail mit dem Kurs und dem Link zum Ansehen.",
-    "sendReceiptHint_product": "Eine E-Mail mit dem Artikel und Ihren Angaben zur Übergabe."
+    "sendReceiptHint_product": "Eine E-Mail mit dem Artikel und Ihren Angaben zur Übergabe.",
+    "trialCharge": "Bezahltes Probetraining",
+    "mayDuplicate": "Möglicherweise doppelt",
+    "mayDuplicateHelp": "Diese Zeile ist der Rechnung zugeordnet, nicht der Zahlung. Wenn Ihr Stripe-Webhook auch Zahlungsereignisse sendet, kann derselbe Betrag hier zweimal erscheinen.",
+    "markPaidClosesLink": "Der an diese Kundin oder diesen Kunden gesendete Zahlungslink wird storniert, damit nicht zweimal bezahlt werden kann.",
+    "markPaidAlreadyOnline": "Diese Person hat bereits online bezahlt — hier wurde nichts erfasst.",
+    "markPaidLinkStillOpen": "Zahlung erfasst, aber der Zahlungslink konnte nicht storniert werden — stornieren Sie ihn in Stripe. Wird er trotzdem bezahlt, wird die Belastung automatisch zurückerstattet."
   },
   "PaymentErrors": {
     "setupIncomplete": "Die Einrichtung des Zahlungskontos ist noch nicht abgeschlossen, daher konnte dies nicht durchgeführt werden. Einrichtung unter Einstellungen → Zahlungen abschliessen.",
@@ -4015,7 +4025,15 @@
     "healthBenefitBadPercent": "Der Mitgliederrabatt von {name} hat einen ungültigen Prozentsatz.",
     "healthGatedNoNewcomerPath": "{name} hat keinen Einstieg für Neulinge — weder Einzeleintritt noch Probetraining.",
     "healthCreditsUnusable": "{name} verkauft Credit-Pakete, aber keine Aktivität akzeptiert sie.",
-    "fixLink": "Beheben"
+    "fixLink": "Beheben",
+    "sectionDiscountsTitle": "Rabatte",
+    "sectionDiscountsSubtitle": "Aktionscodes, die Besucher beim Bezahlen eingeben, um den Preis zu ändern.",
+    "discountsNotInstalled": "Starten Sie eine Rabattaktion: ein Code mit Enddatum, Nutzungslimit und den Angeboten, für die er gilt.",
+    "discountsSetUpLink": "Einrichten",
+    "discountsNoneRunning": "Zurzeit läuft kein Rabatt.",
+    "discountsManageLink": "Aktionscodes verwalten",
+    "discountPercentOff": "{percent}% Rabatt",
+    "discountFixedPrice": "{price} mit diesem Code"
   },
   "PublicBooking": {
     "titleBookSession": "Eine Einheit buchen",
@@ -5148,6 +5166,21 @@
         "saveChanges": "Änderungen speichern",
         "createTemplate": "Vorlage erstellen"
       }
+    },
+    "history": {
+      "title": "Ausführungsverlauf",
+      "subtitle": "Jede Ausführung Ihrer Automatisierungen, die neueste zuerst.",
+      "subtitleForRule": "Jede Ausführung von {name}, die neueste zuerst.",
+      "pageButton": "Verlauf",
+      "ruleAction": "Ausführungsverlauf",
+      "empty": "Bisher wurde nichts ausgeführt.",
+      "counts": "{matched} passend · {executed} gesendet",
+      "failedCount": "· {count} fehlgeschlagen",
+      "recipientsNote": "Eine Ausführung hält fest, wie viele Personen erreicht wurden, nicht welche. Mit der Vorschau sehen Sie, auf wen eine Regel gerade zutrifft.",
+      "tier_event": "Bei Ereignis",
+      "tier_delayed": "Verzögert",
+      "tier_scheduled": "Geplant",
+      "tier_manual": "Manuell"
     }
   },
   "SettingsEmails": {

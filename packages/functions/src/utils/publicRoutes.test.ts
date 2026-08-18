@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   SYSTEM_LINK_META,
   SYSTEM_LINK_ROUTE,
+  SYSTEM_LINK_SURFACE,
   SYSTEM_LINK_TARGETS,
   parseDateKey,
   parseDocId,
@@ -16,6 +17,7 @@ import {
   localizedPublicUrl,
   localizedPublicSubUrl,
   publicLocalePrefix,
+  systemLinkIsLive,
 } from '@linyup/shared'
 
 // Unit tests for the shared public-route builder (@linyup/shared/publicRoutes).
@@ -362,5 +364,49 @@ describe('localizedPublicUrl / localizedPublicSubUrl', () => {
       localizedPublicSubUrl(EMAIL_ORIGIN, 'en', slug, 'space', 'payments'),
       `${EMAIL_ORIGIN}/public/${slug}/space/payments`
     )
+  })
+})
+
+// ─── systemLinkIsLive ─────────────────────────────────────────────────────────
+//
+// The bio-link's half of "a link to a surface that is no longer live is not
+// offered" (UX-49). The website header has followed that rule since
+// `resolveSiteSurfaceLinks`; the bio-link kept offering page links to surfaces
+// its own `active_public_surfaces` said were down.
+
+describe('systemLinkIsLive', () => {
+  it('drops a page link whose surface is explicitly off', () => {
+    const active = { site: false, space: true, booking: true }
+    assert.equal(systemLinkIsLive('site', active), false)
+    assert.equal(systemLinkIsLive('space', active), true)
+  })
+
+  it('takes every shop deep link down with the shop itself', () => {
+    // A tab of a page that is not live is not a destination either — the three
+    // shop-* targets are the shop surface, not surfaces of their own.
+    const active = { site: true, space: true, booking: true, shop: false }
+    for (const t of ['shop', 'shop-subscriptions', 'shop-products', 'shop-courses'] as const) {
+      assert.equal(systemLinkIsLive(t, active), false, t)
+    }
+  })
+
+  it('fails open on an absent map — the admin preview builds its team from the form', () => {
+    for (const t of SYSTEM_LINK_TARGETS) {
+      assert.equal(systemLinkIsLive(t, undefined), true, t)
+    }
+  })
+
+  it('fails open on an absent KEY — "not computed" is not "off"', () => {
+    // `shop`, `documents`, `signup` and `kiosk` are optional on
+    // ActivePublicSurfaces, so a mirror written before one existed omits it. A
+    // stale mirror must never blank a studio's links; only an explicit false does.
+    assert.equal(systemLinkIsLive('shop', { site: true, space: true, booking: true }), true)
+    assert.equal(systemLinkIsLive('documents', { site: true, space: true, booking: true }), true)
+  })
+
+  it('maps every target to a surface — no target can be forgotten', () => {
+    for (const t of SYSTEM_LINK_TARGETS) {
+      assert.ok(SYSTEM_LINK_SURFACE[t], t)
+    }
   })
 })

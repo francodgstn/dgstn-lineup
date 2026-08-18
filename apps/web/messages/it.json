@@ -1598,7 +1598,8 @@
     "paymentsRecordingOff": "In pausa",
     "paymentsRecordingStalled": "Non registra ancora",
     "paymentsPublishableKeyHelp": "Solo un'etichetta — Linyup non addebita nulla con questa. La registrazione inizia quando aggiungi qui sotto la chiave di firma del webhook.",
-    "subTypeActivitiesEmptyAction": "Crea un’attività"
+    "subTypeActivitiesEmptyAction": "Crea un’attività",
+    "paymentsWebhookEventsHelp": "Iscrivi l'endpoint a <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> e <code>checkout.session.completed</code>. Non aggiungere anche <code>invoice.payment_succeeded</code>: Stripe non collega più una fattura al suo pagamento, quindi i pagamenti ricorrenti verrebbero registrati due volte."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -2709,7 +2710,10 @@
     "sectionSchedule": "Programma",
     "sectionScheduleDesc": "Prossime sessioni, in tempo reale.",
     "sectionContact": "Contatti",
-    "sectionContactDesc": "Indirizzo, orari, mappa e social."
+    "sectionContactDesc": "Indirizzo, orari, mappa e social.",
+    "unpublishConfirmTitle": "Mettere il sito offline?",
+    "unpublishConfirmBody": "Il tuo sito pubblicato va offline immediatamente: i visitatori non vedono più nulla e ogni voce del bio-link che vi rimanda smette di essere mostrata. Non si perde niente — la bozza con pagine, testi e immagini resta esattamente com'è, puoi ripubblicare quando vuoi.",
+    "unpublishConfirmAction": "Metti offline"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -3441,7 +3445,13 @@
     "sendReceiptLabel": "Invia una ricevuta all'acquirente",
     "sendReceiptHint_subscription": "Un'email che conferma cosa possiede ora — crediti, scadenza e dove vederli.",
     "sendReceiptHint_course": "Un'email che conferma il corso e dove guardarlo.",
-    "sendReceiptHint_product": "Un'email che conferma l'articolo e le tue condizioni di ritiro."
+    "sendReceiptHint_product": "Un'email che conferma l'articolo e le tue condizioni di ritiro.",
+    "trialCharge": "Prova a pagamento",
+    "mayDuplicate": "Possibile duplicato",
+    "mayDuplicateHelp": "Questa riga è collegata alla fattura, non al pagamento. Se il tuo webhook Stripe invia anche eventi di pagamento, lo stesso importo può comparire due volte in questo elenco.",
+    "markPaidClosesLink": "Il link di pagamento inviato a questo cliente verrà annullato, così non potrà essere pagato due volte.",
+    "markPaidAlreadyOnline": "Questo cliente aveva già pagato online — qui non è stato registrato nulla.",
+    "markPaidLinkStillOpen": "Pagamento registrato, ma non è stato possibile annullare il link di pagamento — annullalo in Stripe. Se viene comunque pagato, l'addebito viene rimborsato automaticamente."
   },
   "PaymentErrors": {
     "setupIncomplete": "La configurazione del conto di pagamento non è ancora completata, quindi l'operazione non è riuscita. Completare la configurazione in Impostazioni → Pagamenti.",
@@ -4015,7 +4025,15 @@
     "healthBenefitBadPercent": "Lo sconto membri di {name} ha una percentuale non valida.",
     "healthGatedNoNewcomerPath": "{name} non ha un accesso per i nuovi arrivati — né ingresso singolo né prova.",
     "healthCreditsUnusable": "{name} vende pacchetti di crediti, ma nessuna attività li accetta.",
-    "fixLink": "Correggi"
+    "fixLink": "Correggi",
+    "sectionDiscountsTitle": "Sconti",
+    "sectionDiscountsSubtitle": "Codici promozionali che il visitatore inserisce al pagamento per cambiare quanto paga.",
+    "discountsNotInstalled": "Lancia una campagna di sconti: un codice con data di fine, limite di utilizzi e le offerte a cui si applica.",
+    "discountsSetUpLink": "Configura",
+    "discountsNoneRunning": "Al momento non è attivo nessuno sconto.",
+    "discountsManageLink": "Gestisci i codici promozionali",
+    "discountPercentOff": "{percent}% di sconto",
+    "discountFixedPrice": "{price} con questo codice"
   },
   "PublicBooking": {
     "titleBookSession": "Prenota una sessione",
@@ -5148,6 +5166,21 @@
         "saveChanges": "Salva modifiche",
         "createTemplate": "Crea modello"
       }
+    },
+    "history": {
+      "title": "Cronologia delle esecuzioni",
+      "subtitle": "Ogni esecuzione delle tue automazioni, dalla più recente.",
+      "subtitleForRule": "Ogni esecuzione di {name}, dalla più recente.",
+      "pageButton": "Cronologia",
+      "ruleAction": "Cronologia delle esecuzioni",
+      "empty": "Non è ancora stata eseguita.",
+      "counts": "{matched} corrispondenze · {executed} inviati",
+      "failedCount": "· {count} non riusciti",
+      "recipientsNote": "Un'esecuzione registra quante persone ha raggiunto, non chi. Usa l'anteprima per vedere chi corrisponde a una regola in questo momento.",
+      "tier_event": "All'evento",
+      "tier_delayed": "Ritardata",
+      "tier_scheduled": "Pianificata",
+      "tier_manual": "Manuale"
     }
   },
   "SettingsEmails": {

@@ -22,14 +22,23 @@ import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useProducts } from '@/plugins/products/hooks'
 import { useCourses } from '@/plugins/online-courses/hooks'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { useTeamPromoCodes } from '@/hooks/usePromoCodes'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CheckCircle2, AlertTriangle, AlertCircle, Info } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, AlertCircle, BadgePercent, Info } from 'lucide-react'
 import { formatCurrency } from '@/lib/format'
-import type { Activity, Course, Product, SubscriptionPrice, SubscriptionType } from '@linyup/shared'
-import { isSellableCourse, resolveUsageLimit } from '@linyup/shared'
+import type {
+  Activity,
+  Course,
+  Product,
+  PromoCode,
+  SubscriptionPrice,
+  SubscriptionType,
+} from '@linyup/shared'
+import { isSellableCourse, promoWindowOpen, resolveUsageLimit } from '@linyup/shared'
 import {
   buildPersonas,
   personaSnapshot,
@@ -591,6 +600,109 @@ function HealthSection({ warnings }: { warnings: PricingWarning[] }) {
   )
 }
 
+// ─── Discounts section ───────────────────────────────────────────────────────────
+//
+// WHERE A STUDIO ACTUALLY LOOKS FOR A DISCOUNT (UX-43). Promo codes are a
+// plugin, and a plugin's feature is invisible until it is installed — so the only
+// route to "run a discount campaign" was to already know it existed and go
+// browsing the marketplace. That is a fine shape for a curiosity and the wrong
+// one for a money feature.
+//
+// This is the same placement pattern gift cards use on the Payments page (a
+// section of the surface that owns the subject, not a page of its own) with the
+// discovery half the pattern was missing: when the plugin is NOT installed the
+// section still renders, one line, deep-linking to the plugin's own marketplace
+// card (`/settings/plugins?plugin=…` — the exact link the sidebar's plugin
+// suggestions use). It never repeats the marketplace's job of explaining plan
+// access or price; the card does that, once.
+//
+// Deliberately READ-ONLY, like the rest of this page: no editing here, the
+// manage link routes to the surface that owns the data.
+
+function promoSummary(
+  p: PromoCode,
+  currency: string,
+  t: ReturnType<typeof useTranslations<'OfferPricing'>>
+): string {
+  if (p.effect === 'percent_off') return t('discountPercentOff', { percent: p.percent ?? 0 })
+  return t('discountFixedPrice', { price: formatCurrency(p.amount ?? 0, currency) })
+}
+
+function DiscountsSection({ teamId, currency }: { teamId: string | null; currency: string }) {
+  const t = useTranslations('OfferPricing')
+  const { isInstalled } = useInstalledPlugins()
+  const installed = isInstalled('promo-codes')
+  // Only fetched once installed — an uninstalled studio has no codes and the
+  // read would be pure waste on every visit to this page.
+  const { data: codes = [], isLoading } = useTeamPromoCodes(installed ? teamId : null)
+
+  const nowMs = Date.now()
+  // "Running right now" is the only count worth stating: a disabled or expired
+  // code is not a campaign, and a studio reading "4 discounts" over three dead
+  // ones learns the opposite of the truth.
+  const live = codes.filter((c) => c.status === 'active' && promoWindowOpen(c, nowMs))
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('sectionDiscountsTitle')}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t('sectionDiscountsSubtitle')}</p>
+      </CardHeader>
+      <CardContent>
+        {!installed ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
+            <BadgePercent className="h-4 w-4 shrink-0" />
+            <span className="flex-1 min-w-[12rem]">{t('discountsNotInstalled')}</span>
+            <Link
+              href={'/settings/plugins?plugin=promo-codes' as Route}
+              className="text-xs font-medium text-primary hover:underline shrink-0"
+            >
+              {t('discountsSetUpLink')}
+            </Link>
+          </div>
+        ) : isLoading ? (
+          <Skeleton className="h-16 rounded-lg" />
+        ) : (
+          <div className="space-y-3">
+            {live.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('discountsNoneRunning')}</p>
+            ) : (
+              <div className="divide-y rounded-lg border">
+                {live.slice(0, 5).map((c) => (
+                  <div key={c.code} className="flex items-center gap-2.5 px-3 py-2.5">
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">
+                      {c.code}
+                    </code>
+                    <span className="flex-1 truncate text-sm text-muted-foreground">
+                      {c.label || promoSummary(c, currency, t)}
+                    </span>
+                    <Badge variant="secondary" className="shrink-0 text-[11px]">
+                      {promoSummary(c, currency, t)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              {live.length > 5 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('moreCount', { count: live.length - 5 })}
+                </p>
+              )}
+              <Link
+                href={'/offer/promo-codes' as Route}
+                className="ml-auto text-xs font-medium text-primary hover:underline"
+              >
+                {t('discountsManageLink')}
+              </Link>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── page ────────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
@@ -652,6 +764,9 @@ export default function PricingPage() {
             sellableCoursesCount={sellableCoursesCount}
             currency={currency}
           />
+          {/* Between what you sell and whether it hangs together: a discount is
+              a modifier of the prices above it, so it reads in that order. */}
+          <DiscountsSection teamId={currentTeamId} currency={currency} />
           <HealthSection warnings={warnings} />
         </>
       )}

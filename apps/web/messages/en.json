@@ -1598,7 +1598,8 @@
     "paymentsRecordingOff": "Paused",
     "paymentsRecordingStalled": "Not recording yet",
     "paymentsPublishableKeyHelp": "A label only — Linyup never charges with it. Recording starts once you add the webhook signing secret below.",
-    "subTypeActivitiesEmptyAction": "Create an activity"
+    "subTypeActivitiesEmptyAction": "Create an activity",
+    "paymentsWebhookEventsHelp": "Subscribe the endpoint to <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code>. Do not add <code>invoice.payment_succeeded</code> as well: Stripe no longer links an invoice to its payment, so recurring payments would be recorded twice."
   },
   "Bookings": {
     "title": "Bookings",
@@ -2709,7 +2710,10 @@
     "sectionSchedule": "Schedule",
     "sectionScheduleDesc": "Upcoming sessions, pulled live.",
     "sectionContact": "Contact",
-    "sectionContactDesc": "Address, hours, map and socials."
+    "sectionContactDesc": "Address, hours, map and socials.",
+    "unpublishConfirmTitle": "Take your website offline?",
+    "unpublishConfirmBody": "Your published site goes offline immediately: visitors see nothing, and any bio-link entry pointing at it stops being shown. Nothing is lost — your draft pages, wording and images are kept exactly as they are, so you can publish again whenever you like.",
+    "unpublishConfirmAction": "Take it offline"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -3441,7 +3445,13 @@
     "sendReceiptLabel": "Send the buyer a receipt",
     "sendReceiptHint_subscription": "An email confirming what they now hold — credits, expiry and where to see them.",
     "sendReceiptHint_course": "An email confirming the course and where to watch it.",
-    "sendReceiptHint_product": "An email confirming the item and your collection terms."
+    "sendReceiptHint_product": "An email confirming the item and your collection terms.",
+    "trialCharge": "Paid trial",
+    "mayDuplicate": "May be a duplicate",
+    "mayDuplicateHelp": "This row is keyed on the invoice, not on the payment. If your Stripe webhook also sends payment events, the same money may appear twice in this list.",
+    "markPaidClosesLink": "The payment link sent to this client will be cancelled so it can't be paid twice.",
+    "markPaidAlreadyOnline": "This client had already paid online — nothing was recorded here.",
+    "markPaidLinkStillOpen": "Payment recorded, but the payment link could not be cancelled — cancel it in Stripe. If it is paid anyway, the charge is refunded automatically."
   },
   "PaymentErrors": {
     "setupIncomplete": "Payment account setup isn't finished yet, so this couldn't go through. Finish setup in Settings → Payments.",
@@ -4015,7 +4025,15 @@
     "healthBenefitBadPercent": "{name}'s member discount has an invalid percentage.",
     "healthGatedNoNewcomerPath": "{name} has no way in for a newcomer — no drop-in price and no trial.",
     "healthCreditsUnusable": "{name} sells credit packs, but no activity accepts them.",
-    "fixLink": "Fix"
+    "fixLink": "Fix",
+    "sectionDiscountsTitle": "Discounts",
+    "sectionDiscountsSubtitle": "Promo codes a visitor types at checkout to change what they pay.",
+    "discountsNotInstalled": "Run a discount campaign: a code with an end date, a usage cap and the things it applies to.",
+    "discountsSetUpLink": "Set up",
+    "discountsNoneRunning": "No discount is running right now.",
+    "discountsManageLink": "Manage promo codes",
+    "discountPercentOff": "{percent}% off",
+    "discountFixedPrice": "{price} with this code"
   },
   "PublicBooking": {
     "titleBookSession": "Book a Session",
@@ -5148,6 +5166,21 @@
         "saveChanges": "Save changes",
         "createTemplate": "Create template"
       }
+    },
+    "history": {
+      "title": "Run history",
+      "subtitle": "Every time one of your automations ran, most recent first.",
+      "subtitleForRule": "Every time {name} ran, most recent first.",
+      "pageButton": "History",
+      "ruleAction": "Run history",
+      "empty": "Nothing has run yet.",
+      "counts": "{matched} matched · {executed} sent",
+      "failedCount": "· {count} failed",
+      "recipientsNote": "A run records how many people it reached, not who they were. Use Preview to see who a rule matches right now.",
+      "tier_event": "On event",
+      "tier_delayed": "Delayed",
+      "tier_scheduled": "Scheduled",
+      "tier_manual": "Run now"
     }
   },
   "SettingsEmails": {

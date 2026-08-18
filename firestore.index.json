@@ -2116,6 +2116,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "automation_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "rule_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "triggered_at",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

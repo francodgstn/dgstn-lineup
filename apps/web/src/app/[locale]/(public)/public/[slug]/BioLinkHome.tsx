@@ -20,9 +20,16 @@ import {
 import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
-import { SYSTEM_LINK_META, SYSTEM_LINK_ROUTE } from '@linyup/shared'
+import { SYSTEM_LINK_META, SYSTEM_LINK_ROUTE, systemLinkIsLive } from '@linyup/shared'
 import { publicHref } from '@/lib/publicRoutes'
-import type { TeamLink, SocialLink, BioLinkTheme, BioLinkBackground, PublicMainAddress } from '@linyup/shared'
+import type {
+  TeamLink,
+  SocialLink,
+  BioLinkTheme,
+  BioLinkBackground,
+  PublicMainAddress,
+  ActivePublicSurfaces,
+} from '@linyup/shared'
 import { DEFAULT_ACCENT } from '@/lib/colors'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -42,6 +49,11 @@ export interface BioLinkTeamData {
   showBranding?: boolean
   /** The team's primary place (Main Address), denormalized for the address + map. */
   mainAddress?: PublicMainAddress | null
+  /** Which of this team's public surfaces are actually live, computed by
+   *  syncTeamPublicProfile. Read here so a page link whose destination has been
+   *  taken down is not offered — see `systemLinkIsLive` for why it fails open,
+   *  and why the admin preview (which never sets this) is unaffected. */
+  active_public_surfaces?: ActivePublicSurfaces
 }
 
 // ─── social icon map ──────────────────────────────────────────────────────────
@@ -140,7 +152,16 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
   const cardBorder = onDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)'
   const iconBg = onDark ? 'rgba(255,255,255,0.12)' : `${accent}18`
 
-  const visibleLinks = (team.links ?? []).filter((l) => l.showInBioLink)
+  // Two filters, and the second one is not a preference: `showInBioLink` is what
+  // the STUDIO chose to show, `systemLinkIsLive` is whether there is anything at
+  // the other end. A page link to a surface that has been taken down (website
+  // unpublished, website plugin removed, Connect account no longer chargeable)
+  // is dropped rather than rendered into a dead page — the same rule the website
+  // header already applies via `resolveSiteSurfaceLinks`. Custom links carry no
+  // target and are never touched.
+  const visibleLinks = (team.links ?? []).filter(
+    (l) => l.showInBioLink && (!l.target || systemLinkIsLive(l.target, team.active_public_surfaces))
+  )
   const socialLinks = (team.socialLinks ?? []).filter((s) => s.url)
 
   return (
