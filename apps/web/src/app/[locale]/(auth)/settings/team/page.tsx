@@ -1413,15 +1413,47 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
 
   return (
     <div className="space-y-6">
+      {/* ── TWO THINGS CALLED STRIPE, AND ONLY ONE OF THEM TAKES MONEY ───────
+          This tab shows the Stripe Connect rail (members are charged inside
+          Linyup, money lands in the studio's own Stripe account) directly above
+          a BYO integration whose entire job is to RECORD payments the studio
+          collected somewhere else — and whose provider dropdown also says
+          "Stripe", defaults to it, and used to badge itself "Enabled" (UX-17).
+
+          The distinction is now structural, not just worded: everything that
+          takes money is above the record-only heading, everything that merely
+          writes down money already taken is below it. Keep it that way — a card
+          moved across that line silently reverses what its heading claims. */}
       {/* Accept payments with Linyup (Stripe Connect) — own card; renders only when enabled. */}
       <ConnectPaymentsCard teamId={teamId} />
+
+      {/* The currency the rail above charges in — money-side, so it stays above
+          the record-only heading. */}
+      <BillingCurrencyCard
+        teamId={teamId}
+        current={team?.default_currency}
+        gatewayCurrency={gatewayCurrency}
+        canEdit={canEdit}
+      />
+
+      <div className="space-y-3 pt-2">
+        <div className="border-t pt-4">
+          <p className="text-sm font-semibold">{t('paymentsRecordOnlyTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t('paymentsRecordOnlyDescription')}
+          </p>
+        </div>
 
       <Card>
         <CardContent className="pt-6 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-medium">{t('paymentsGateway')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsGatewayDescription')}</p>
+          {/* Superseded keys `paymentsGateway` / `paymentsGatewayDescription`
+              still exist in the locale files; they said "Payment gateway" and
+              "…to collect member payments", which is the claim this rail cannot
+              honour — it holds no credentials and makes no API call. */}
+          <p className="text-sm font-medium">{t('paymentsExternalTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsExternalDescription')}</p>
           {/* No owner-only note here: the body below says the stronger thing —
               a non-owner cannot even SEE this list — and saying both would be
               two lines of the same sentence. */}
@@ -1429,7 +1461,7 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
         {canEdit && (
           <Button size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" />
-            {t('paymentsAddGateway')}
+            {t('paymentsAddExternal')}
           </Button>
         )}
       </div>
@@ -1443,7 +1475,7 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
           block with a retry, for the same reason. */}
       {!canEdit ? (
         <p className="text-sm text-muted-foreground py-4 text-center">
-          {t('paymentsHiddenOwnerOnly')}
+          {t('paymentsExternalHiddenOwnerOnly')}
         </p>
       ) : isError ? (
         <QueryErrorState
@@ -1451,13 +1483,19 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
           detail={error instanceof Error ? error.message : null}
         />
       ) : integrations.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoGateway')}</p>
+        <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoExternal')}</p>
       ) : (
         <div className="divide-y border rounded-lg">
           {integrations.map((item) => {
             const cfg = item.config
             const label = cfg.type === 'stripe' ? 'Stripe' : 'Payrexx'
             const identifier = cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name
+            // A BYO Stripe row with no signing secret records NOTHING:
+            // handleTeamStripeWebhook answers `no_signing_secret` and returns 400
+            // before it looks at the body. Payrexx is not the same case — a blank
+            // secret there skips signature verification but still records — so the
+            // stalled state is deliberately Stripe-only rather than symmetrical.
+            const stalled = item.enabled && cfg.type === 'stripe' && !cfg.webhook_signing_secret
             return (
               <div key={item.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
@@ -1466,9 +1504,18 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
                     {identifier} · {cfg.currency}
                   </p>
                 </div>
-                <Badge variant={item.enabled ? 'default' : 'outline'} className="text-xs">
-                  {item.enabled ? t('paymentsEnabled') : t('paymentsDisabled')}
-                </Badge>
+                {stalled ? (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                  >
+                    {t('paymentsRecordingStalled')}
+                  </Badge>
+                ) : (
+                  <Badge variant={item.enabled ? 'default' : 'outline'} className="text-xs">
+                    {item.enabled ? t('paymentsRecordingOn') : t('paymentsRecordingOff')}
+                  </Badge>
+                )}
                 <Switch checked={item.enabled} onCheckedChange={() => handleToggleEnabled(item)} />
                 <button
                   onClick={() => openEdit(item)}
@@ -1490,14 +1537,9 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
         </CardContent>
       </Card>
 
-      {/* Studio billing currency + manual payment modes — paired, shown last. */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <BillingCurrencyCard
-          teamId={teamId}
-          current={team?.default_currency}
-          gatewayCurrency={gatewayCurrency}
-          canEdit={canEdit}
-        />
+        {/* Manual modes belong to this group for the same reason the card above
+            does: cash and TWINT are money the studio already took, written down
+            afterwards. */}
         <PaymentModesCard teamId={teamId} current={team?.payment_modes} canEdit={canEdit} />
       </div>
 
@@ -1506,7 +1548,7 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingId ? t('paymentsEditGateway') : t('paymentsAddGateway')}
+              {editingId ? t('paymentsEditExternal') : t('paymentsAddExternal')}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
@@ -1546,6 +1588,16 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
               />
               {errors.identifier && (
                 <p className="text-xs text-destructive">{errors.identifier.message}</p>
+              )}
+              {/* The publishable key is a NAMEPLATE here — it is written to the
+                  integration doc and rendered back in the row above, and nothing
+                  in functions/ ever reads it (BYO holds no credentials and makes
+                  no Stripe API call). Saying so beats leaving an owner to infer
+                  that pasting it turns card payments on. */}
+              {selectedType === 'stripe' && (
+                <p className="text-[11px] text-muted-foreground">
+                  {t('paymentsPublishableKeyHelp')}
+                </p>
               )}
             </div>
             <div className="space-y-1.5">

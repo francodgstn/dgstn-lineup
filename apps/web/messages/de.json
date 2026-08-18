@@ -1567,7 +1567,19 @@
     "subTypeIntroErr_interval_not_monthly": "Ein wöchentlicher oder zweiwöchentlicher Plan kann nur die erste Periode vergünstigen.",
     "subTypeIntroErr_amount_invalid": "Geben Sie einen Einführungspreis von 0 oder mehr ein.",
     "subTypeIntroErr_below_minimum": "Eine Belastung muss mindestens 0.50 betragen. Verwenden Sie 0, um die ersten Perioden gratis zu machen.",
-    "subTypeIntroErr_not_cheaper": "Der Einführungspreis muss tiefer sein als der reguläre Preis des Abos."
+    "subTypeIntroErr_not_cheaper": "Der Einführungspreis muss tiefer sein als der reguläre Preis des Abos.",
+    "paymentsRecordOnlyTitle": "Zahlungen, die du ausserhalb von Linyup einziehst",
+    "paymentsRecordOnlyDescription": "Nichts hier unten belastet ein Mitglied. Es wird nur Geld erfasst, das du bereits eingezogen hast — über dein eigenes Stripe- oder Payrexx-Konto oder von Hand — damit es beim Mitglied erscheint. Um Karten direkt in Linyup zu belasten, nutze oben \"Zahlungen mit Linyup annehmen\".",
+    "paymentsExternalTitle": "Dein eigenes Stripe- oder Payrexx-Konto",
+    "paymentsExternalDescription": "Du ziehst die Zahlung im Dashboard deines Anbieters ein; Linyup empfängt die Benachrichtigung und ordnet sie dem richtigen Kontakt zu. Linyup belastet hier niemanden.",
+    "paymentsExternalHiddenOwnerOnly": "Externe Anbieter sind nur für den Team-Inhaber sichtbar.",
+    "paymentsAddExternal": "Anbieter hinzufügen",
+    "paymentsEditExternal": "Anbieter bearbeiten",
+    "paymentsNoExternal": "Kein externer Anbieter verbunden.",
+    "paymentsRecordingOn": "Erfasst",
+    "paymentsRecordingOff": "Pausiert",
+    "paymentsRecordingStalled": "Erfasst noch nichts",
+    "paymentsPublishableKeyHelp": "Nur eine Bezeichnung — Linyup belastet damit nichts. Die Erfassung startet, sobald du unten den Webhook-Signaturschlüssel hinterlegst."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -4920,7 +4932,8 @@
       "affiliation_changed": "Affiliation geändert (beliebig)",
       "session_ended": "Einheit beendet",
       "inbound_webhook": "Eingehender Webhook",
-      "manual": "Nur manuell"
+      "manual": "Nur manuell",
+      "acquisition_stage_changed": "Akquisitionsphase vorangeschritten"
     },
     "conditions": {
       "addCondition": "Bedingung hinzufügen",

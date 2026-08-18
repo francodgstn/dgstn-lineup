@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   BookOpen, Search, Mail, Bell, Settings2, FileText,
-  Clock, UserPlus, CalendarCheck, ShieldCheck, CreditCard, Play,
+  Clock, UserPlus, TrendingUp, CalendarCheck, ShieldCheck, CreditCard, Play,
   Check, Plus,
 } from 'lucide-react'
 import { TEAMS_COLLECTION } from '@linyup/shared'
@@ -33,6 +33,7 @@ function triggerChip(type: string): { label: string; Icon: React.ElementType } {
   switch (type) {
     case 'schedule_daily':            return { label: 'Daily',         Icon: Clock }
     case 'contact_created':           return { label: 'On create',     Icon: UserPlus }
+    case 'acquisition_stage_changed': return { label: 'Stage moved',   Icon: TrendingUp }
     case 'booking_confirmed':         return { label: 'Booking',       Icon: CalendarCheck }
     case 'booking_no_show':           return { label: 'No-show',       Icon: CalendarCheck }
     case 'affiliation_changed':       return { label: 'Affiliation',   Icon: ShieldCheck }

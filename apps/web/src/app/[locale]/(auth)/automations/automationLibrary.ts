@@ -175,6 +175,102 @@ Il team {{teamName}}`,
   },
 
   {
+    // THE WELCOME, at the moment of joining. Deliberately NOT `contact_created`
+    // with an `acquisition_stage = joined` condition: for the population this
+    // mail is most for — a trial lead who converted — `contact_created` fired at
+    // trial-booking time, when the stage was `trial_booked`, and it never
+    // re-evaluates. `acquisition_stage_changed` fires on the forward move
+    // itself, including the one `auth/signupJoin.ts` makes when the signup form
+    // is completed, so the condition below is read at exactly the right instant.
+    library_key: 'lib_member_welcome',
+    category: 'trial',
+    name: 'Welcome a new member',
+    description:
+      'Sends a welcome email the moment a contact becomes a member — including a trial lead who just completed signup.',
+    tags: ['member', 'welcome', 'joined', 'onboarding', 'conversion'],
+    requires_plan: 'studio',
+    template: {
+      name: 'Welcome to the team',
+      body_mode: 'markdown',
+      translations: {
+        en: {
+          subject: 'You are in, {{firstname}} — welcome to {{teamName}}!',
+          body: `Hi {{firstname}},
+
+Welcome to **{{teamName}}** — we are really glad to have you with us.
+
+Here is how to get going:
+
+- **Book your next sessions** whenever you like, online.
+- Bring anything you need for training; if you are unsure, just ask us.
+- Questions about your membership? Reply to this email and we will sort it out.
+
+**[Book your next session ↗]({{bookingUrl}})**
+
+See you on the floor,
+The {{teamName}} team`,
+        },
+        de: {
+          subject: 'Willkommen im Team, {{firstname}} — schön, dass du bei {{teamName}} bist!',
+          body: `Hallo {{firstname}},
+
+herzlich willkommen bei **{{teamName}}** — wir freuen uns sehr, dass du dabei bist.
+
+So geht es los:
+
+- **Buche deine nächsten Einheiten** jederzeit online.
+- Bring mit, was du fürs Training brauchst; wenn du unsicher bist, frag uns einfach.
+- Fragen zu deiner Mitgliedschaft? Antworte auf diese E-Mail, wir kümmern uns darum.
+
+**[Nächste Einheit buchen ↗]({{bookingUrl}})**
+
+Bis bald,
+Das {{teamName}}-Team`,
+        },
+        fr: {
+          subject: 'Bienvenue parmi nous, {{firstname}} — vous faites partie de {{teamName}} !',
+          body: `Bonjour {{firstname}},
+
+Bienvenue chez **{{teamName}}** — nous sommes ravis de vous compter parmi nous.
+
+Pour bien démarrer :
+
+- **Réservez vos prochaines séances** en ligne, quand vous le souhaitez.
+- Apportez ce dont vous avez besoin pour l'entraînement ; en cas de doute, demandez-nous.
+- Une question sur votre abonnement ? Répondez à cet e-mail et nous nous en occupons.
+
+**[Réserver votre prochaine séance ↗]({{bookingUrl}})**
+
+À très bientôt,
+L'équipe {{teamName}}`,
+        },
+        it: {
+          subject: 'Benvenuto/a nel team, {{firstname}} — siamo felici di averti in {{teamName}}!',
+          body: `Ciao {{firstname}},
+
+Benvenuto/a in **{{teamName}}** — siamo davvero felici di averti con noi.
+
+Ecco come iniziare:
+
+- **Prenota le tue prossime sessioni** online, quando vuoi.
+- Porta ciò che ti serve per l'allenamento; se hai dubbi, chiedici pure.
+- Domande sul tuo abbonamento? Rispondi a questa email e ce ne occupiamo noi.
+
+**[Prenota la prossima sessione ↗]({{bookingUrl}})**
+
+A presto,
+Il team {{teamName}}`,
+        },
+      },
+    },
+    rule: {
+      trigger: { type: 'acquisition_stage_changed' },
+      conditions: [{ type: 'acquisition_stage', value: 'joined' }],
+      actions: [{ type: 'send_email', template_key: 'lib_member_welcome' }],
+    },
+  },
+
+  {
     // Installed ACTIVE by default for every new team (functions onTeamCreated) —
     // rule shape shared via @linyup/shared TRIAL_CLEANUP_RULE. Listed here so
     // existing teams can (re)install it and everyone can see/edit what it does.

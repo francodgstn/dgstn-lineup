@@ -1567,7 +1567,19 @@
     "subTypeIntroErr_interval_not_monthly": "A weekly or fortnightly plan can only discount its first period.",
     "subTypeIntroErr_amount_invalid": "Enter an intro price of 0 or more.",
     "subTypeIntroErr_below_minimum": "A charge has to be at least 0.50. Use 0 to make the first periods free instead.",
-    "subTypeIntroErr_not_cheaper": "The intro price has to be lower than the plan's own price."
+    "subTypeIntroErr_not_cheaper": "The intro price has to be lower than the plan's own price.",
+    "paymentsRecordOnlyTitle": "Payments you take outside Linyup",
+    "paymentsRecordOnlyDescription": "Nothing below charges a member. These only record money you have already collected — in your own Stripe or Payrexx account, or by hand — so it shows on the member's record. To charge cards inside Linyup, use \"Accept payments with Linyup\" above.",
+    "paymentsExternalTitle": "Your own Stripe or Payrexx account",
+    "paymentsExternalDescription": "You take the payment in your provider's own dashboard; Linyup receives the notification and files it against the right contact. Linyup never charges anyone here.",
+    "paymentsExternalHiddenOwnerOnly": "External providers are visible to the team owner only.",
+    "paymentsAddExternal": "Add provider",
+    "paymentsEditExternal": "Edit provider",
+    "paymentsNoExternal": "No external provider connected.",
+    "paymentsRecordingOn": "Recording",
+    "paymentsRecordingOff": "Paused",
+    "paymentsRecordingStalled": "Not recording yet",
+    "paymentsPublishableKeyHelp": "A label only — Linyup never charges with it. Recording starts once you add the webhook signing secret below."
   },
   "Bookings": {
     "title": "Bookings",
@@ -4920,7 +4932,8 @@
       "affiliation_changed": "Affiliation changed (any)",
       "session_ended": "Session ended",
       "inbound_webhook": "Inbound webhook",
-      "manual": "Manual only"
+      "manual": "Manual only",
+      "acquisition_stage_changed": "Acquisition stage advanced"
     },
     "conditions": {
       "addCondition": "Add condition",

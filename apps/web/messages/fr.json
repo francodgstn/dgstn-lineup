@@ -1567,7 +1567,19 @@
     "subTypeIntroErr_interval_not_monthly": "Un abonnement hebdomadaire ou bimensuel ne peut réduire que sa première période.",
     "subTypeIntroErr_amount_invalid": "Saisissez un prix de lancement de 0 ou plus.",
     "subTypeIntroErr_below_minimum": "Un paiement doit être d'au moins 0.50. Utilisez 0 pour offrir les premières périodes.",
-    "subTypeIntroErr_not_cheaper": "Le prix de lancement doit être inférieur au prix normal de l'abonnement."
+    "subTypeIntroErr_not_cheaper": "Le prix de lancement doit être inférieur au prix normal de l'abonnement.",
+    "paymentsRecordOnlyTitle": "Paiements que vous encaissez en dehors de Linyup",
+    "paymentsRecordOnlyDescription": "Rien ci-dessous ne débite un membre. Ces réglages ne font qu'enregistrer l'argent que vous avez déjà encaissé — sur votre propre compte Stripe ou Payrexx, ou à la main — pour qu'il apparaisse sur la fiche du membre. Pour débiter des cartes dans Linyup, utilisez \"Accepter les paiements avec Linyup\" ci-dessus.",
+    "paymentsExternalTitle": "Votre propre compte Stripe ou Payrexx",
+    "paymentsExternalDescription": "Vous encaissez le paiement dans le tableau de bord de votre prestataire ; Linyup reçoit la notification et la rattache au bon contact. Linyup ne débite personne ici.",
+    "paymentsExternalHiddenOwnerOnly": "Les prestataires externes ne sont visibles que par le propriétaire de l'équipe.",
+    "paymentsAddExternal": "Ajouter un prestataire",
+    "paymentsEditExternal": "Modifier le prestataire",
+    "paymentsNoExternal": "Aucun prestataire externe connecté.",
+    "paymentsRecordingOn": "Enregistre",
+    "paymentsRecordingOff": "En pause",
+    "paymentsRecordingStalled": "N'enregistre pas encore",
+    "paymentsPublishableKeyHelp": "Une simple étiquette — Linyup ne débite rien avec. L'enregistrement démarre dès que vous ajoutez la clé de signature du webhook ci-dessous."
   },
   "Bookings": {
     "title": "Réservations",
@@ -4920,7 +4932,8 @@
       "affiliation_changed": "Affiliation modifiée (tout type)",
       "session_ended": "Séance terminée",
       "inbound_webhook": "Webhook entrant",
-      "manual": "Manuel uniquement"
+      "manual": "Manuel uniquement",
+      "acquisition_stage_changed": "Étape d'acquisition franchie"
     },
     "conditions": {
       "addCondition": "Ajouter une condition",

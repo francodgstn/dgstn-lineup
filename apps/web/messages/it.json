@@ -1567,7 +1567,19 @@
     "subTypeIntroErr_interval_not_monthly": "Un piano settimanale o quindicinale può scontare solo il primo periodo.",
     "subTypeIntroErr_amount_invalid": "Inserisci un prezzo di lancio pari o superiore a 0.",
     "subTypeIntroErr_below_minimum": "Un addebito deve essere di almeno 0.50. Usa 0 per rendere gratuiti i primi periodi.",
-    "subTypeIntroErr_not_cheaper": "Il prezzo di lancio deve essere inferiore al prezzo normale dell'abbonamento."
+    "subTypeIntroErr_not_cheaper": "Il prezzo di lancio deve essere inferiore al prezzo normale dell'abbonamento.",
+    "paymentsRecordOnlyTitle": "Pagamenti che incassi fuori da Linyup",
+    "paymentsRecordOnlyDescription": "Niente qui sotto addebita nulla a un membro. Queste impostazioni registrano soltanto il denaro che hai già incassato — sul tuo account Stripe o Payrexx, oppure a mano — così compare nella scheda del membro. Per addebitare le carte dentro Linyup, usa \"Accetta pagamenti con Linyup\" qui sopra.",
+    "paymentsExternalTitle": "Il tuo account Stripe o Payrexx",
+    "paymentsExternalDescription": "Incassi il pagamento nella dashboard del tuo provider; Linyup riceve la notifica e la collega al contatto giusto. Qui Linyup non addebita nulla a nessuno.",
+    "paymentsExternalHiddenOwnerOnly": "I provider esterni sono visibili solo al proprietario del team.",
+    "paymentsAddExternal": "Aggiungi provider",
+    "paymentsEditExternal": "Modifica provider",
+    "paymentsNoExternal": "Nessun provider esterno collegato.",
+    "paymentsRecordingOn": "Registra",
+    "paymentsRecordingOff": "In pausa",
+    "paymentsRecordingStalled": "Non registra ancora",
+    "paymentsPublishableKeyHelp": "Solo un'etichetta — Linyup non addebita nulla con questa. La registrazione inizia quando aggiungi qui sotto la chiave di firma del webhook."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -4920,7 +4932,8 @@
       "affiliation_changed": "Affiliazione modificata (qualsiasi)",
       "session_ended": "Sessione terminata",
       "inbound_webhook": "Webhook in entrata",
-      "manual": "Solo manuale"
+      "manual": "Solo manuale",
+      "acquisition_stage_changed": "Fase di acquisizione avanzata"
     },
     "conditions": {
       "addCondition": "Aggiungi condizione",

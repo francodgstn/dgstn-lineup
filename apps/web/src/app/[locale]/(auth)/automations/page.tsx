@@ -68,6 +68,7 @@ import {
   CirclePlay,
   Clock,
   UserPlus,
+  TrendingUp,
   CheckCircle,
   XCircle,
   CalendarCheck,
@@ -184,6 +185,18 @@ const CONDITION_GROUP_ORDER = ['acquisition', 'subscription', 'affiliation', 'at
 const TRIGGER_OPTIONS = [
   { value: 'schedule_daily', icon: Clock, supportsDelay: false, group: 'general' },
   { value: 'contact_created', icon: UserPlus, supportsDelay: true, group: 'contact' },
+  // Fires on a FORWARD move only (onContactWrite ranks the stage and ignores a
+  // backward correction), which is what makes "when someone joins" expressible:
+  // pair it with an `acquisition_stage = joined` condition. `contact_created`
+  // cannot answer that question — it fired when the lead booked a trial and
+  // never re-evaluates.
+  //
+  // supportsDelay is FALSE on purpose, and not an oversight: `fireEventRules`
+  // runs the rule inline and reads `trigger.delayMinutes` nowhere. Only
+  // `session_ended` is actually deferred (onSessionWrite enqueues a Cloud Task).
+  // Every other `supportsDelay: true` here stores a delay that nothing honours —
+  // a pre-existing defect this trigger declines to join.
+  { value: 'acquisition_stage_changed', icon: TrendingUp, supportsDelay: false, group: 'contact' },
   { value: 'booking_confirmed', icon: CheckCircle, supportsDelay: true, group: 'booking' },
   { value: 'booking_no_show', icon: XCircle, supportsDelay: true, group: 'booking' },
   { value: 'booking_cancelled', icon: XCircle, supportsDelay: true, group: 'booking' },
