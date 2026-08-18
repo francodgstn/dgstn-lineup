@@ -17,6 +17,7 @@ import {
   Send,
   Mail,
   ListChecks,
+  ListTodo,
   LayoutTemplate,
   FlaskConical,
 } from 'lucide-react'
@@ -65,6 +66,9 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // just visual grouping. Revisit if it drops to one row: a group of one is a
   // header with nothing to head.
   { id: 'eventTypes', href: '/settings/event-types', labelKey: 'eventTypes', icon: CalendarRange, group: 'scheduling' },
+  // Reusable event programmes. Renders inside the /settings shell, so it stays a
+  // rail row (unlike Places below).
+  { id: 'programTemplates', href: '/settings/program-templates', labelKey: 'programTemplates', icon: ListTodo, group: 'scheduling' },
   // Places is NOT here any more: it moved to /schedule/places, beside the calendar
   // that reads it, and is listed in the main nav's Run section (UX-67). It is not
   // kept as a rail row pointing there, deliberately — a rail row whose page lives

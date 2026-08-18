@@ -68,7 +68,7 @@ const linkSchema = z.object({
   iconName: z.string().optional(),
   // Set → this is a "page link" to one of the team's public surfaces.
   target: z
-    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site', 'documents'])
+    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site', 'documents', 'events'])
     .optional(),
 })
 
@@ -356,6 +356,7 @@ function useTargetLabel() {
   const t = useTranslations('BioLink')
   const KEYS: Record<SystemLinkTarget, Parameters<typeof t>[0]> = {
     booking: 'bookingLink',
+    events: 'eventsLink',
     signup: 'membershipLink',
     shop: 'shopLink',
     'shop-subscriptions': 'subscriptionsLink',
@@ -686,7 +687,7 @@ export default function TeamBioLinkEditorPage() {
   // Public-surface availability comes from the shared usePublicSurfaces hook so the
   // page-link picker and the "Public page" hub read identical state (no drift).
   const { flags } = usePublicSurfaces()
-  const { coursesActive, connectEnabled, productsActive, websiteActive, documentsLive } = flags
+  const { coursesActive, connectEnabled, productsActive, websiteActive, documentsLive, eventsLive } = flags
 
   // Page-link surfaces this team can offer (before subtracting already-added). The
   // generic `shop` target stays valid for back-compat but isn't suggested — the three
@@ -701,6 +702,7 @@ export default function TeamBioLinkEditorPage() {
     'space',
     'site',
     'documents',
+    'events',
   ]
   const availableTargets = offeredTargets.filter((tgt) => {
     if (tgt === 'shop-subscriptions') return connectEnabled
@@ -712,6 +714,10 @@ export default function TeamBioLinkEditorPage() {
     // public document exists — same "published content, not just plugin" gating
     // as site/space (activeSurfaces computed server-side by syncTeamPublicProfile).
     if (tgt === 'documents') return documentsLive
+    // Events are a base feature but PRIVATE by default, so the surface is live
+    // only once the studio has published one — same "published content, not just
+    // a feature" gating as documents.
+    if (tgt === 'events') return eventsLive
     return true // booking, signup
   })
   const qc = useQueryClient()

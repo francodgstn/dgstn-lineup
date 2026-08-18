@@ -18,7 +18,7 @@ import { useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, CalendarDays, MapPin, CreditCard, Users, Mail,
-  Pencil, Trash2, Send,
+  Pencil, Trash2, Send, Copy,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,9 @@ import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useEventTypes } from '@/hooks/useEventTypes'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
+import { ProgramTab } from '@/components/events/program/ProgramTab'
+import { DuplicateEventDialog } from '@/components/events/DuplicateEventDialog'
+import { EventPublishCard } from '@/components/events/EventPublishCard'
 import { useOrg } from '@/contexts/OrgContext'
 import dynamic from 'next/dynamic'
 import type { Route } from 'next'
@@ -407,7 +410,7 @@ function StatCard({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-const DETAIL_TABS = ['overview', 'checkins', 'categories', 'attendees', 'invitations'] as const
+const DETAIL_TABS = ['overview', 'program', 'checkins', 'categories', 'attendees', 'invitations'] as const
 type DetailTab = (typeof DETAIL_TABS)[number]
 
 export default function EventDetailPage() {
@@ -416,12 +419,15 @@ export default function EventDetailPage() {
   const { can } = useCapabilities()
   const { org } = useOrg()
   const t = useTranslations('Events')
+  // Programme + duplication copy lives in its own namespace.
+  const tp = useTranslations('EventProgram')
   const router = useRouter()
   const qc = useQueryClient()
 
   const [tab, setTab] = useTabParam(DETAIL_TABS, 'overview')
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ text: string; isError: boolean } | null>(null)
 
@@ -559,6 +565,10 @@ export default function EventDetailPage() {
 
   const TABS: { key: DetailTab; label: string }[] = [
     { key: 'overview',    label: t('detail_tabOverview') },
+    // Base feature, never plugin-gated — the program is what distinguishes an
+    // event from a session, so the tab is always offered and its empty state
+    // is the discovery affordance.
+    { key: 'program',     label: t('detail_tabProgram') },
     { key: 'checkins',    label: checkinLabel },
     ...(showCategoriesTab ? [{ key: 'categories' as DetailTab, label: 'Categories' }] : []),
     ...(canSeeAttendees ? [{ key: 'attendees' as DetailTab, label: `${t('detail_tabAttendees')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` }] : []),
@@ -627,6 +637,14 @@ export default function EventDetailPage() {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => setDuplicateOpen(true)}
+            title={tp('duplicateEvent')}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             className="text-destructive hover:text-destructive border-destructive/30 hover:border-destructive"
             onClick={() => setDeleteOpen(true)}
           >
@@ -685,6 +703,12 @@ export default function EventDetailPage() {
       {/* ── Overview tab ─────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
         <div className="space-y-6">
+          <EventPublishCard
+            event={event}
+            publicSlug={team?.slug ?? null}
+            canEdit={can('events.manage') || isOrgAdmin}
+          />
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <StatCard
               label={t('detail_statsCheckins')}
@@ -712,6 +736,16 @@ export default function EventDetailPage() {
             <p className="text-sm text-muted-foreground italic">{t('detail_noDescription')}</p>
           )}
         </div>
+      )}
+
+      {/* ── Program tab ──────────────────────────────────────────────────────── */}
+      {tab === 'program' && (
+        <ProgramTab
+          event={event}
+          canEdit={can('events.manage') || isOrgAdmin}
+          // Surfaces the parent org's shared programme templates in the picker.
+          parentOrgId={(team as Team & { org_id?: string })?.org_id ?? null}
+        />
       )}
 
       {/* ── Check-ins tab ───────────────────────────────────────────────────── */}
@@ -838,6 +872,13 @@ export default function EventDetailPage() {
           onCancel={() => setDeleteOpen(false)}
         />
       )}
+
+      <DuplicateEventDialog
+        open={duplicateOpen}
+        onOpenChange={setDuplicateOpen}
+        event={event}
+        onDuplicated={(newId) => router.push(`/events/${newId}` as Route)}
+      />
     </div>
   )
 }

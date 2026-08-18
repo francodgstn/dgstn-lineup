@@ -7,6 +7,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "test": "mocha --require ts-node/register 'src/**/*.test.ts'",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-linyup \"mocha --spec 'src/**/*.rules-test.ts' --ignore 'src/**/*.test.ts'\"",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
@@ -27,9 +28,11 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.10.5",
     "@types/sanitize-html": "^2.13.0",
+    "firebase": "^12.16.0",
     "mocha": "^10.8.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"

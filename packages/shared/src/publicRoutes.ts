@@ -94,6 +94,16 @@ export interface DocumentsParams extends FromOnlyParams {
 }
 
 /**
+ * `/public/{slug}/events`, `/public/{slug}/events/{eventId}` and its printable
+ * sheet `/public/{slug}/events/{eventId}/print`.
+ *
+ * Only PUBLISHED events are reachable — the pages read the world-readable
+ * `events/{id}/public_profile/{id}` mirror, which exists only while
+ * `Event.publicVisibility === 'public'`.
+ */
+export type EventsParams = FromOnlyParams
+
+/**
  * `?from=` values. Every `PublicSurface` plus `'checkout'` (the Stripe return,
  * which is not a surface a visitor can go "back" to). Unknown values are not an
  * error — `returnHref` falls back to the team's default surface.
@@ -109,6 +119,7 @@ export interface PublicRouteParams {
   shop: ShopParams
   signup: SignupParams
   documents: DocumentsParams
+  events: EventsParams
   kiosk: Record<string, never>
   appointments: AppointmentParams
   'appointments/cancel': TokenParams
@@ -322,6 +333,7 @@ export const SYSTEM_LINK_ROUTE: Record<
   space: { route: 'space' },
   site: { route: 'site' },
   documents: { route: 'documents' },
+  events: { route: 'events' },
 }
 
 /**
@@ -339,6 +351,7 @@ export const SYSTEM_LINK_SURFACE: Record<SystemLinkTarget, PublicSurface> = {
   space: 'space',
   site: 'site',
   documents: 'documents',
+  events: 'events',
 }
 
 /**

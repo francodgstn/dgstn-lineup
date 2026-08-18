@@ -38,6 +38,10 @@ export { syncActivityPublicProfile } from './sync/syncActivityPublicProfile'
 export { syncCoursePublicProfile } from './sync/syncCoursePublicProfile'
 export { syncFormPublicProfile } from './sync/syncFormPublicProfile'
 export { syncDocumentPublicProfile } from './sync/syncDocumentPublicProfile'
+export {
+  syncEventPublicProfile,
+  syncEventProgramPublicProfile,
+} from './sync/syncEventPublicProfile'
 export { indexUser } from './sync/indexUser'
 export { syncSubscriptionTypesToPublicProfile } from './sync/syncSubscriptionTypesToPublicProfile'
 export { syncProductsToPublicProfile } from './sync/syncProductsToPublicProfile'
@@ -131,6 +135,7 @@ export {
 } from './events'
 export { trackEventAttendees } from './events/trackEventAttendees'
 export { addEventCheckin } from './events/addEventCheckin'
+export { duplicateEvent } from './events/duplicateEvent'
 
 // Analytics
 export {

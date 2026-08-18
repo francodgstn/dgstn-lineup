@@ -219,6 +219,26 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // decide WHAT is on the shelves; this decides whether there is a till.
   const shopActive = paymentsEnabled
 
+  // events: base feature, no plugin. Probed over the MIRRORS for the same reason
+  // documents is (see above): the flag must agree with what a visitor would
+  // actually see, and only a published event HAS a mirror. Events are private by
+  // default, so this is false for most studios.
+  //
+  // Deliberately the team's OWN events only. A studio whose sole published events
+  // are inherited from its parent org does not get to advertise this as a landing
+  // surface — /public/{slug}/events still lists them, but "this studio published
+  // something" stays an honest claim.
+  //
+  // No new index: the public events index page already runs this exact
+  // type + teamId query.
+  const eventMirrorSnap = await db
+    .collectionGroup('public_profile')
+    .where('teamId', '==', teamId)
+    .where('type', '==', 'event')
+    .limit(1)
+    .get()
+  const eventsActive = !eventMirrorSnap.empty
+
   // signup is a base surface (the subscription sign-up form) — available on every
   // plan, so always live. Denormalized here so the public root can redirect to it
   // when it's chosen as the default landing.
@@ -239,6 +259,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     forms: formsActive,
     documents: documentsActive,
     kiosk: kioskActive,
+    events: eventsActive,
     appointments: appointmentsActive,
   }
 
@@ -251,6 +272,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     name: data.name || '',
     description: data.description || '',
     slug: data.slug || '',
+    // Which organisation this studio belongs to. Public surfaces need it to show
+    // the parent org's published events alongside the studio's own — an org
+    // event has no teamId, so it cannot be found by a teamId query.
+    org_id: data.org_id || null,
     sport_type: data.sport_type || null,
     profileImage: data.profileImage || null,
     heroImage: data.heroImage || null,
