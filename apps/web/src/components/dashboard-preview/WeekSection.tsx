@@ -92,7 +92,12 @@ export function WeekSection({ teamId }: { teamId: string | null }) {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-4">
+      {/* The range and comparison sit BESIDE the heading, not opposite it.
+          Pushed to the far right they read as page chrome and are separated
+          from the word they qualify by the full width of the page; next to
+          "Trends" they read as part of the title — thirteen weeks OF trends,
+          compared WITH last year. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-4">
         <h2 className="font-heading text-base font-bold tracking-tight text-heading">
           {t('trendsTitle')}
         </h2>
