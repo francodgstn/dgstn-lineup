@@ -2299,7 +2299,11 @@
     "removeConfirmBilling": "Billing stops now: the CHF {price}/mo add-on is taken off your subscription. The unused part of this period is credited against your next invoice — nothing is refunded to your card.",
     "removeConfirmBillingUnbilled": "This add-on is not being billed to you at the moment, so removing it changes nothing on your bill.",
     "removeConfirmLocked": "{name} is unlocked with an access key. You will need that key again to install it.",
-    "removing": "Removing…"
+    "removing": "Removing…",
+    "recommendedWhy": "Recommended by Linyup as a common starting point — it is not based on your data.",
+    "suggestionIncluded": "Included in your plan",
+    "suggestionNeedsPlan": "Needs the {plan} plan",
+    "suggestionOpenCatalogue": "Click to open it in the plugin catalogue"
   },
   "AiAssistant": {
     "launcherLabel": "AI assistant",
@@ -6032,5 +6036,11 @@
     "refusedAlreadySettled": "This booking can no longer be cancelled — it was already cancelled, or the studio has confirmed attendance.",
     "refusedPast": "That session has already started, so it can no longer be cancelled here. Please speak to the studio.",
     "failedTransient": "We couldn't cancel this booking — it is still active. Please try again."
+  },
+  "QuickLinks": {
+    "plansToPricing": "Check what a member actually pays",
+    "plansToActivities": "See which classes a plan unlocks",
+    "availabilityToActivities": "Set the appointment types and lengths these hours offer",
+    "promoCodesToPricing": "See your live codes next to the prices they cut"
   }
 }

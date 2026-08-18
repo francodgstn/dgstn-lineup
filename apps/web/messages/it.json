@@ -2299,7 +2299,11 @@
     "removeConfirmBilling": "L'addebito si ferma subito: l'add-on da CHF {price}/mese viene tolto dal tuo abbonamento. La parte non utilizzata di questo periodo viene accreditata sulla prossima fattura — non viene rimborsato nulla sulla tua carta.",
     "removeConfirmBillingUnbilled": "Questo add-on al momento non ti viene addebitato: rimuoverlo non cambia nulla sulla tua fattura.",
     "removeConfirmLocked": "{name} si sblocca con una chiave di accesso. Ti servirà di nuovo quella chiave per installarlo.",
-    "removing": "Rimozione…"
+    "removing": "Rimozione…",
+    "recommendedWhy": "Consigliato da Linyup come punto di partenza comune — non si basa sui tuoi dati.",
+    "suggestionIncluded": "Incluso nel tuo piano",
+    "suggestionNeedsPlan": "Richiede il piano {plan}",
+    "suggestionOpenCatalogue": "Clicca per aprirlo nel catalogo dei plugin"
   },
   "AiAssistant": {
     "launcherLabel": "Assistente IA",
@@ -6032,5 +6036,11 @@
     "refusedAlreadySettled": "Questa prenotazione non può più essere annullata: è già stata annullata oppure lo studio ha confermato la presenza.",
     "refusedPast": "Questa sessione è già iniziata e non può più essere annullata qui. Contattare lo studio.",
     "failedTransient": "Non siamo riusciti ad annullare questa prenotazione: è ancora attiva. Riprova."
+  },
+  "QuickLinks": {
+    "plansToPricing": "Verifica quanto paga davvero un membro",
+    "plansToActivities": "Vedi quali corsi sblocca un abbonamento",
+    "availabilityToActivities": "Imposta i tipi di appuntamento e le durate offerte da questi orari",
+    "promoCodesToPricing": "Vedi i codici attivi accanto ai prezzi che riducono"
   }
 }

@@ -139,10 +139,27 @@ function PluginBadgeIcons({
 
   // Icons are monochrome (muted) at rest and reveal their semantic colour only on
   // hover — keeps the grid calm while still signalling on interaction.
-  const items: { key: string; icon: LucideIcon; label: string; hoverClassName: string }[] = []
+  //
+  // `tooltip` defaults to `label`. It exists for the one signal whose label is a
+  // word rather than a fact: a tooltip reading "Recommended" over an icon that
+  // already means "recommended" explains nothing (UX-65), so the star says who is
+  // recommending and on what basis. The aria-label stays the short form.
+  const items: {
+    key: string
+    icon: LucideIcon
+    label: string
+    tooltip?: string
+    hoverClassName: string
+  }[] = []
 
   if (manifest.recommended) {
-    items.push({ key: 'recommended', icon: Star, label: t('recommended'), hoverClassName: 'hover:text-amber-500' })
+    items.push({
+      key: 'recommended',
+      icon: Star,
+      label: t('recommended'),
+      tooltip: t('recommendedWhy'),
+      hoverClassName: 'hover:text-amber-500',
+    })
   }
   if (access.kind === 'included') {
     items.push({ key: 'included', icon: CheckCircle2, label: t('accessIncluded'), hoverClassName: 'hover:text-green-600' })
@@ -162,7 +179,7 @@ function PluginBadgeIcons({
   return (
     <TooltipProvider delay={200}>
       <div className="flex items-center gap-2.5">
-        {items.map(({ key, icon: Icon, label, hoverClassName }) => (
+        {items.map(({ key, icon: Icon, label, tooltip, hoverClassName }) => (
           <UITooltip key={key}>
             <TooltipTrigger
               className={cn('inline-flex cursor-help text-muted-foreground/60 transition-colors', hoverClassName)}
@@ -170,7 +187,7 @@ function PluginBadgeIcons({
             >
               <Icon className="h-3.5 w-3.5" />
             </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
+            <TooltipContent className="max-w-64">{tooltip ?? label}</TooltipContent>
           </UITooltip>
         ))}
       </div>
@@ -212,14 +229,23 @@ function PluginBadges({
         {categoryLabel}
       </Badge>
 
-      {/* Recommended */}
+      {/* Recommended — the word is meaningless without its basis, so the badge
+          carries the explanation on hover here too (UX-65). Same string as the
+          grid's star icon; there is one definition of "recommended", not two. */}
       {manifest.recommended && (
-        <Badge
-          variant="secondary"
-          className="text-xs bg-amber-50 text-amber-700 border-amber-200"
-        >
-          {t('recommended')}
-        </Badge>
+        <TooltipProvider delay={200}>
+          <UITooltip>
+            <TooltipTrigger className="cursor-help" aria-label={t('recommended')}>
+              <Badge
+                variant="secondary"
+                className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+              >
+                {t('recommended')}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-64">{t('recommendedWhy')}</TooltipContent>
+          </UITooltip>
+        </TooltipProvider>
       )}
 
       {/* Plan / price tier */}

@@ -2299,7 +2299,11 @@
     "removeConfirmBilling": "Die Verrechnung stoppt sofort: Das Add-on für CHF {price}/Mt. wird aus deinem Abo entfernt. Der nicht genutzte Teil dieser Periode wird auf deiner nächsten Rechnung gutgeschrieben — auf deine Karte wird nichts zurückerstattet.",
     "removeConfirmBillingUnbilled": "Dieses Add-on wird dir aktuell nicht verrechnet — das Entfernen ändert nichts an deiner Rechnung.",
     "removeConfirmLocked": "{name} wird mit einem Zugangsschlüssel freigeschaltet. Für eine erneute Installation brauchst du diesen Schlüssel wieder.",
-    "removing": "Wird entfernt…"
+    "removing": "Wird entfernt…",
+    "recommendedWhy": "Von Linyup als üblicher Startpunkt empfohlen – nicht auf Basis Ihrer Daten.",
+    "suggestionIncluded": "In Ihrem Plan enthalten",
+    "suggestionNeedsPlan": "Erfordert den Plan {plan}",
+    "suggestionOpenCatalogue": "Klicken, um es im Plugin-Katalog zu öffnen"
   },
   "AiAssistant": {
     "launcherLabel": "KI-Assistent",
@@ -6032,5 +6036,11 @@
     "refusedAlreadySettled": "Diese Buchung kann nicht mehr storniert werden — sie wurde bereits storniert oder das Studio hat die Teilnahme bestätigt.",
     "refusedPast": "Diese Lektion hat bereits begonnen und kann hier nicht mehr storniert werden. Bitte das Studio kontaktieren.",
     "failedTransient": "Diese Buchung konnte nicht storniert werden — sie ist weiterhin aktiv. Bitte erneut versuchen."
+  },
+  "QuickLinks": {
+    "plansToPricing": "Prüfen, was ein Mitglied tatsächlich bezahlt",
+    "plansToActivities": "Sehen, welche Kurse ein Abo freischaltet",
+    "availabilityToActivities": "Terminarten und Dauern festlegen, die diese Zeiten anbieten",
+    "promoCodesToPricing": "Aktive Codes neben den Preisen sehen, die sie reduzieren"
   }
 }

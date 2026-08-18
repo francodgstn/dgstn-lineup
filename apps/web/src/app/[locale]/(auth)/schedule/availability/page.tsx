@@ -23,6 +23,7 @@ import { AppointmentAvailabilityManager } from '@/components/appointments/Appoin
 export default function BookableHoursPage() {
   const { currentTeamId, user } = useAuth()
   const t = useTranslations('Appointments')
+  const tq = useTranslations('QuickLinks')
 
   return (
     <div className="space-y-6">
@@ -34,7 +35,17 @@ export default function BookableHoursPage() {
         {t('backToSchedule')}
       </Link>
 
-      <PageHeader title={t('bookableHoursTitle')} subtitle={t('bookableHoursSubtitle')} />
+      {/* ONE quick link (UX-71), and it is the one that answers "why can nobody
+          book me?": a window publishes only the appointment ACTIVITIES listed on
+          it, and the bookable lengths + prices live on the activity, never on the
+          window — so hours with no appointment activity behind them produce zero
+          slots and say nothing about why. The calendar is deliberately NOT a
+          second link here: the back-link directly above already goes there. */}
+      <PageHeader
+        title={t('bookableHoursTitle')}
+        subtitle={t('bookableHoursSubtitle')}
+        quickLinks={[{ href: '/offer/activities' as Route, label: tq('availabilityToActivities') }]}
+      />
 
       {currentTeamId && user ? (
         <AppointmentAvailabilityManager teamId={currentTeamId} userId={user.uid} />

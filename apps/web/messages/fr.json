@@ -2299,7 +2299,11 @@
     "removeConfirmBilling": "La facturation s'arrête maintenant : l'option à CHF {price}/mois est retirée de votre abonnement. La partie non utilisée de cette période est créditée sur votre prochaine facture — rien n'est remboursé sur votre carte.",
     "removeConfirmBillingUnbilled": "Cette option ne vous est pas facturée pour le moment : la supprimer ne change rien à votre facture.",
     "removeConfirmLocked": "{name} se déverrouille avec une clé d'accès. Vous aurez besoin de cette clé pour l'installer à nouveau.",
-    "removing": "Suppression…"
+    "removing": "Suppression…",
+    "recommendedWhy": "Recommandé par Linyup comme point de départ courant — ce n'est pas basé sur vos données.",
+    "suggestionIncluded": "Inclus dans votre formule",
+    "suggestionNeedsPlan": "Nécessite la formule {plan}",
+    "suggestionOpenCatalogue": "Cliquez pour l'ouvrir dans le catalogue de plugins"
   },
   "AiAssistant": {
     "launcherLabel": "Assistant IA",
@@ -6032,5 +6036,11 @@
     "refusedAlreadySettled": "Cette réservation ne peut plus être annulée — elle a déjà été annulée ou le studio a confirmé la présence.",
     "refusedPast": "Cette séance a déjà commencé et ne peut plus être annulée ici. Merci de contacter le studio.",
     "failedTransient": "Impossible d'annuler cette réservation : elle est toujours active. Merci de réessayer."
+  },
+  "QuickLinks": {
+    "plansToPricing": "Vérifier ce qu'un membre paie réellement",
+    "plansToActivities": "Voir quels cours un abonnement débloque",
+    "availabilityToActivities": "Définir les types de rendez-vous et les durées proposés par ces horaires",
+    "promoCodesToPricing": "Voir vos codes actifs à côté des prix qu'ils réduisent"
   }
 }

@@ -58,8 +58,9 @@ import {
 import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
-import { type SaasPlan } from '@linyup/shared'
+import { pluginAccessForPlan, type PluginAccess, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
@@ -560,6 +561,10 @@ type PluginNavEntry = {
   category: string
   installed: boolean
   section?: string
+  // Suggestions only — what the hover card needs to make the suggestion
+  // EVALUABLE (UX-65): what the plugin does, and what it would cost here.
+  descriptionKey?: string
+  access?: PluginAccess
 }
 
 // Maps PluginNavContribution.section values to built-in NAV_SECTIONS labelKeys.
@@ -631,12 +636,34 @@ function useAccordionSection() {
   return { open, toggle }
 }
 
+// HOW MANY SUGGESTIONS THE SIDEBAR MAY SHOW AT ONCE (UX-65).
+//
+// The muted discovery rows are opt-in advertising inside the studio's own menu,
+// and the flag that produces them (`recommended` in a manifest) is set by us, not
+// earned by anything the studio did. Uncapped, that stacked up: seven manifests
+// carry the flag today and four of them contribute nav, three of those into a
+// single section — so a new studio's "Grow" section was half real destinations
+// and half things to buy, and the ratio got worse with every plugin shipped.
+//
+// So the cap is structural rather than a rule anyone has to remember:
+//   • at most ONE per section — no section can ever read as a shop shelf;
+//   • at most TWO in the whole sidebar.
+// Dismissing one (the × on hover) promotes the next in line, so nothing becomes
+// undiscoverable — it becomes SEQUENTIAL. The full catalogue stays one click away
+// at the top of the sidebar (EXPLORE_PLUGINS_ITEM) and on the dashboard's Discover
+// panel, which is the surface `recommended` mainly exists to feed: promo-codes was
+// flagged for that panel and contributes no nav entry at all, so the flag's active
+// use is untouched by this cap.
+const MAX_NAV_SUGGESTIONS = 2
+const MAX_NAV_SUGGESTIONS_PER_SECTION = 1
+
 /** All plugin nav entries: installed (real links) + recommended-not-installed
  *  (muted discovery nudges, minus any the user has hidden), plus a `dismiss` to
  *  hide a suggestion. Installed sort before muted. */
 function usePluginNavEntries(): { entries: PluginNavEntry[]; dismiss: (id: string) => void } {
   const { plugins, isInstalled, isLoading } = useInstalledPlugins()
   const { hidden, dismiss } = useHiddenSuggestions()
+  const { plan } = usePlan()
 
   // Engagement-category plugins default into the "Engage" section unless the
   // manifest pins an explicit section.
@@ -650,23 +677,46 @@ function usePluginNavEntries(): { entries: PluginNavEntry[]; dismiss: (id: strin
     }))
   )
 
-  const discovery: PluginNavEntry[] = isLoading
+  // Candidates, best-first: something the current plan can actually run before
+  // something that needs an upgrade (a locked row the studio can't act on is the
+  // least useful thing to spend one of the two slots on), then registry order —
+  // authored, stable, and not a ranking the studio would have to re-learn.
+  // `coming_soon` never appears: there is nothing to install.
+  const accessRank = (a: PluginAccess) => (a.kind === 'upgrade' ? 1 : 0)
+  const candidates = isLoading
     ? []
     : PLUGIN_REGISTRY.filter(
         (m) =>
           m.recommended &&
+          m.status !== 'coming_soon' &&
           (m.navContributions?.length ?? 0) > 0 &&
           !isInstalled(m.id) &&
           !hidden.includes(m.id)
-      ).flatMap((m) =>
-        (m.navContributions ?? []).map((nav) => ({
-          ...nav,
-          section: nav.section ?? (m.category === 'engagement' ? 'engage' : undefined),
-          pluginId: m.id,
-          category: m.category,
-          installed: false,
-        }))
       )
+        .map((m) => ({ m, access: pluginAccessForPlan(m, plan) }))
+        .sort((a, b) => accessRank(a.access) - accessRank(b.access))
+
+  // Apply the caps on the PLUGIN, not on its nav rows: a plugin contributing two
+  // rows would otherwise spend both slots advertising itself.
+  const perSection = new Map<string, number>()
+  const discovery: PluginNavEntry[] = []
+  for (const { m, access } of candidates) {
+    if (discovery.length >= MAX_NAV_SUGGESTIONS) break
+    const rows = (m.navContributions ?? []).map((nav) => ({
+      ...nav,
+      section: nav.section ?? (m.category === 'engagement' ? 'engage' : undefined),
+      pluginId: m.id,
+      category: m.category,
+      installed: false,
+      descriptionKey: m.descriptionKey,
+      access,
+    }))
+    // A plugin lands in exactly one place, so one row decides its section.
+    const sectionKey = rows[0]?.section ?? '_unsectioned'
+    if ((perSection.get(sectionKey) ?? 0) >= MAX_NAV_SUGGESTIONS_PER_SECTION) continue
+    perSection.set(sectionKey, (perSection.get(sectionKey) ?? 0) + 1)
+    discovery.push(...rows.slice(0, 1))
+  }
 
   return { entries: [...installed, ...discovery], dismiss }
 }
@@ -685,13 +735,32 @@ function PluginNavItem({
   const pathname = usePathname()
   const router = useRouter()
   const t = useTranslations('Plugins')
+  const planName = usePlanName()
   const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
   const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
 
   // Recommended but not installed → muted discovery item. Clicking opens the
   // plugin's detail modal on the marketplace (deep-linked via ?plugin=). Hover
   // reveals a × to hide the suggestion (browser-only).
+  //
+  // A SUGGESTION HAS TO BE EVALUABLE FROM WHERE IT SITS (UX-65). It used to say
+  // only "Recommended — add this plugin", which asks the studio to judge a word
+  // it has no way to interpret: recommended by whom, on what evidence, and at
+  // what price? Three of those four are answerable for free — what the plugin
+  // does (its own one-line description), what it would cost on THIS plan, and
+  // the honest provenance of the flag: it is a manifest boolean we set, not
+  // anything derived from the studio's data. Saying so is the difference between
+  // a suggestion and an advert that won't admit what it is.
   if (!nav.installed) {
+    const access = nav.access
+    const accessLine =
+      access?.kind === 'included'
+        ? t('suggestionIncluded')
+        : access?.kind === 'addon'
+          ? t('addonPrice', { price: access.priceMonthly })
+          : access?.kind === 'upgrade'
+            ? t('suggestionNeedsPlan', { plan: planName(access.minPlan) })
+            : null
     return (
       <div className="group/suggestion relative">
         <TooltipProvider delay={300}>
@@ -707,9 +776,30 @@ function PluginNavItem({
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="flex-1 text-left">{linkLabel}</span>}
             </TooltipTrigger>
-            <TooltipContent side="right">{t('discoverTooltip')}</TooltipContent>
+            <TooltipContent side="right" className="max-w-64 flex-col items-start gap-1 text-left">
+              {nav.descriptionKey && (
+                // Clamped: a manifest description is written for a marketplace
+                // card, and a few of them run to three sentences.
+                <span className="line-clamp-3 block">
+                  {t(nav.descriptionKey as Parameters<typeof t>[0])}
+                </span>
+              )}
+              {accessLine && <span className="block font-medium">{accessLine}</span>}
+              <span className="block opacity-70">{t('recommendedWhy')}</span>
+              {/* Replaces the old `discoverTooltip` ("Recommended — add this
+                  plugin"), which said the word "Recommended" a second time right
+                  under the line that finally explains it, and promised an install
+                  the click doesn't perform — it opens the catalogue entry. */}
+              <span className="block opacity-70">{t('suggestionOpenCatalogue')}</span>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        {/* Marks the row as a suggestion rather than a destination, in the same
+            vocabulary the marketplace uses for `recommended` (an amber star).
+            Swaps to the × on hover — one slot, two states. */}
+        {!collapsed && (
+          <Star className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 fill-amber-500/30 text-amber-500/50 transition-opacity group-hover/suggestion:opacity-0" />
+        )}
         {!collapsed && onDismiss && (
           <button
             type="button"

@@ -2687,8 +2687,10 @@ export default function ContactsPage() {
         engagementThresholds={team?.engagement_thresholds}
       />
 
-      {/* Search — sticky, clears with × */}
-      <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-sm border-b border-border/40">
+      {/* Search — sticky, clears with ×. `top-14` on mobile clears the sticky
+          app header (h-14, see components/layout/MobileHeader.tsx); on desktop
+          there is no top bar, so it pins to 0. */}
+      <div className="sticky top-14 md:top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-sm border-b border-border/40">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input

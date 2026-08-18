@@ -24,6 +24,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
 import { toast } from 'sonner'
 import { Lock, Percent, Plus, Tag, Ticket, Undo2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,6 +37,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import {
   Select,
   SelectContent,
@@ -404,7 +406,7 @@ export default function PromoCodesPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <Header t={t} />
+        <Header t={t} showQuickLinks />
         <div className="flex flex-col items-end gap-1">
           <Button size="sm" onClick={openCreate} disabled={atCap}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -893,13 +895,30 @@ function scopeKey(kind: PromoScopeKind): 'scopeDropIn' | 'scopeAppointment' | 's
   }
 }
 
-function Header({ t }: { t: ReturnType<typeof useTranslations> }) {
+function Header({
+  t,
+  showQuickLinks,
+}: {
+  t: ReturnType<typeof useTranslations>
+  showQuickLinks?: boolean
+}) {
+  const tq = useTranslations('QuickLinks')
   return (
-    <div className="flex items-center gap-2">
-      <Ticket className="h-5 w-5 text-muted-foreground" />
+    <div className="flex items-start gap-2">
+      <Ticket className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
       <div>
         <h1 className="text-2xl font-semibold">{t('title')}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">{t('subtitle')}</p>
+        {/* Quick link (UX-71): a code created here changes nothing visible on
+            this page beyond its own row. Pricing's Discounts section is the one
+            admin surface that shows the live, in-window codes next to the prices
+            they cut — i.e. the page that confirms the code is actually running.
+            Not shown in the locked branch below: there are no codes to check. */}
+        {showQuickLinks && (
+          <QuickLinks
+            links={[{ href: '/offer/pricing' as Route, label: tq('promoCodesToPricing') }]}
+          />
+        )}
       </div>
     </div>
   )

@@ -343,8 +343,9 @@ export function CheckinPanel({
 
   return (
     <div className="space-y-4">
-      {/* Summary bar — sticky so "Add checkin" stays visible while list scrolls */}
-      <div className="sticky top-0 z-10 bg-background py-2 flex items-center gap-3 flex-wrap">
+      {/* Summary bar — sticky so "Add checkin" stays visible while list scrolls.
+          `top-14` on mobile clears the sticky app header (see MobileHeader). */}
+      <div className="sticky top-14 md:top-0 z-10 bg-background py-2 flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <span>{t.rich('checkinsCount', { count: checkins.length, strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</span>
           {confirmedCount > 0 && (
