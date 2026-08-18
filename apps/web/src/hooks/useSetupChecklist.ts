@@ -8,20 +8,29 @@ import {
   TEAMS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { Team } from '@linyup/shared'
 
+// A step is on this list because a studio cannot open its doors without it.
+//
+// "Set up ranks" was here and is not any more (UX-39). Ranking systems are a
+// martial-arts / grading-school feature stored as one array on the team doc —
+// not a plugin, not plan-gated, and nothing anywhere requires one. Shipping it
+// as a checklist step advertised the feature to every yoga studio, gym and
+// coach that will never award a rank, on the one screen whose whole job is to
+// say "these are the things still standing between you and taking bookings".
+// It is DEMOTED, not gated: Settings → Team → Ranking still holds it, so a
+// school that does grade its students finds it exactly where it always was.
 export type SetupStepKey =
   | 'activities'
   | 'sessions'
   | 'subscriptions'
   | 'bioLink'
   | 'contacts'
-  | 'ranks'
 
 export interface SetupStep {
   key: SetupStepKey
   done: boolean
   href: string
+  /** Counted out of the progress denominator. Honoured by every renderer. */
   optional?: boolean
 }
 
@@ -72,18 +81,18 @@ async function firstUpcomingSessionId(teamId: string, nowTs: Timestamp): Promise
 /**
  * Data-driven setup checklist. Each step auto-completes from real data, so the
  * checklist reflects the team's actual readiness rather than a manual tick.
- * Bio-link counts as done once a public_profile has been published; ranks read
- * straight off the team document and are optional.
+ * Bio-link counts as done once a public_profile has been published.
+ *
+ * It takes no team document: every step now answers from a collection probe.
+ * The one that read the team doc was `ranks` — see the note on SetupStepKey.
  */
-export function useSetupChecklist(teamId: string | null, team: Team | null) {
-  const ranksDone = (team?.ranking_systems?.length ?? 0) > 0
-
+export function useSetupChecklist(teamId: string | null) {
   const queryResult = useQuery({
     queryKey: ['setup-checklist', teamId],
     enabled: !!teamId,
     staleTime: 60 * 1000,
     queryFn: async (): Promise<
-      Record<Exclude<SetupStepKey, 'ranks'>, boolean> & {
+      Record<SetupStepKey, boolean> & {
         sessionsBookable: boolean
         nextUnbookableSessionId: string | null
       }
@@ -116,24 +125,18 @@ export function useSetupChecklist(teamId: string | null, team: Team | null) {
 
   const d = queryResult.data
   // UX-27: every href must land on the surface that can COMPLETE the step, not
-  // merely on one that reports it. `subscriptions` and `ranks` were landing on
-  // reporting surfaces:
-  //   • subscriptions → `/subscriptions` is the member roster ("who holds
-  //     what"), derived from contacts. On a new team it renders an empty table
-  //     and has no create control at all. Subscription TYPES — the thing the
-  //     step's own done-check reads (teams/{id}/subscription_types) — are
-  //     created by SubscriptionsPanel's "Add subscription type", which lives on
-  //     the Plans hub's first tab.
-  //   • ranks → `/settings/team` has no default tab, so it opens on General;
-  //     the ranking-system manager is behind `?tab=ranking` (same deep link the
-  //     settings rail uses, see lib/settings-nav.ts).
+  // merely on one that reports it. `subscriptions` was landing on a reporting
+  // surface: `/subscriptions` is the member roster ("who holds what"), derived
+  // from contacts. On a new team it renders an empty table and has no create
+  // control at all. Subscription TYPES — the thing the step's own done-check
+  // reads (teams/{id}/subscription_types) — are created by SubscriptionsPanel's
+  // "Add subscription type", which lives on the Plans hub's first tab.
   const steps: SetupStep[] = [
     { key: 'activities', href: '/offer/activities', done: !!d?.activities },
     { key: 'sessions', href: '/schedule', done: !!d?.sessions },
     { key: 'subscriptions', href: '/offer/plans?tab=subscriptions', done: !!d?.subscriptions },
     { key: 'bioLink', href: '/team/bio-link', done: !!d?.bioLink },
     { key: 'contacts', href: '/contacts', done: !!d?.contacts },
-    { key: 'ranks', href: '/settings/team?tab=ranking', done: ranksDone, optional: true },
   ]
 
   const required = steps.filter((s) => !s.optional)

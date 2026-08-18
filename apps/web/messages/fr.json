@@ -1363,7 +1363,11 @@
     "waitlistRequiresCapacity": "N’a d’effet que sur les séances avec une limite de participants — une séance sans limite n’est jamais complète.",
     "waitlistRequiresPlan": "Disponible à partir de la formule {plan}.",
     "level_none": "Non précisé",
-    "accessNoSubsAction": "Créer un type d’abonnement"
+    "accessNoSubsAction": "Créer un type d’abonnement",
+    "sectionBookingTitle": "Réservation et tarifs",
+    "sectionBookingSubtitle": "Qui peut réserver, et à quel prix.",
+    "moreOptionsLabel": "Plus d'options",
+    "moreOptionsHint": "Couleur, niveau et les informations affichées sur votre page publique"
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -4396,7 +4400,9 @@
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 heure} =1440 {1 jour} other {# minutes}}",
     "toggleWaitlistEnabledLabel": "Listes d’attente",
     "toggleWaitlistEnabledDesc": "Permettez aux clients de faire la queue pour un cours complet et de se voir proposer une place dès qu’elle se libère. Activez pour afficher l’option sur chaque activité.",
-    "noShowPublicNote": "Ces conditions sont affichées aux visiteurs sur vos pages de réservation publiques avant qu'ils ne réservent. Les frais sont envoyés par e-mail sous forme de lien de paiement — ils ne sont jamais débités d'une carte enregistrée."
+    "noShowPublicNote": "Ces conditions sont affichées aux visiteurs sur vos pages de réservation publiques avant qu'ils ne réservent. Les frais sont envoyés par e-mail sous forme de lien de paiement — ils ne sont jamais débités d'une carte enregistrée.",
+    "moreOptionsLabel": "Plus d'options",
+    "moreOptionsHint": "Période de réservation, délai limite, champs demandés et bouton personnalisé"
   },
   "SettingsPlaces": {
     "pageTitle": "Lieux",

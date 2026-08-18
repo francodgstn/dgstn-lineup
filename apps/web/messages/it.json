@@ -1363,7 +1363,11 @@
     "waitlistRequiresCapacity": "Ha effetto solo sulle sessioni con un limite di partecipanti — una sessione senza limite non è mai al completo.",
     "waitlistRequiresPlan": "Disponibile dal piano {plan}.",
     "level_none": "Non specificato",
-    "accessNoSubsAction": "Crea un tipo di abbonamento"
+    "accessNoSubsAction": "Crea un tipo di abbonamento",
+    "sectionBookingTitle": "Prenotazione e prezzi",
+    "sectionBookingSubtitle": "Chi può prenotare e quanto paga.",
+    "moreOptionsLabel": "Altre opzioni",
+    "moreOptionsHint": "Colore, livello e i dettagli mostrati sulla tua pagina pubblica"
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -4396,7 +4400,9 @@
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 ora} =1440 {1 giorno} other {# minuti}}",
     "toggleWaitlistEnabledLabel": "Liste d’attesa",
     "toggleWaitlistEnabledDesc": "Consenti ai clienti di mettersi in coda per una lezione piena e ricevere un posto quando si libera. Attiva per mostrare l’opzione su ogni attività.",
-    "noShowPublicNote": "Queste condizioni vengono mostrate ai visitatori sulle tue pagine di prenotazione pubbliche prima che prenotino. La penale viene inviata via e-mail come link di pagamento — non viene mai addebitata su una carta salvata."
+    "noShowPublicNote": "Queste condizioni vengono mostrate ai visitatori sulle tue pagine di prenotazione pubbliche prima che prenotino. La penale viene inviata via e-mail come link di pagamento — non viene mai addebitata su una carta salvata.",
+    "moreOptionsLabel": "Altre opzioni",
+    "moreOptionsHint": "Periodo di prenotazione, termine ultimo, campi richiesti e pulsante personalizzato"
   },
   "SettingsPlaces": {
     "pageTitle": "Sedi",

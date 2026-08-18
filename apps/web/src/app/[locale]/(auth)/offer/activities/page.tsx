@@ -37,6 +37,7 @@ import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SaasPlan,
  *  than no toggle at all. */
 const WAITLIST_MIN_PLAN: SaasPlan = 'coach'
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
+import { MoreOptions } from '@/components/forms/MoreOptions'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
@@ -378,6 +379,25 @@ function ActivityDialog({
   const waitlistEnabled = watch('waitlistEnabled')
   const durations = watch('durations') || []
 
+  // Does the activity being EDITED already carry anything from the "More
+  // options" tail? If so the disclosure opens showing it — a field the studio
+  // filled in and then cannot find is worse than the long form this replaces.
+  // Colour is compared against the create-time default rather than merely
+  // tested for presence: every activity has one, so `!!editing.color` would
+  // open the panel every time and the disclosure would do nothing at all.
+  const hasStoredDetails =
+    !!editing &&
+    ((!!editing.color && editing.color !== DEFAULT_ACCENT) ||
+      !!editing.level ||
+      !!editing.prerequisites ||
+      !!editing.confirmationInstructions ||
+      !!editing.meetingPoint ||
+      !!editing.whatsIncluded ||
+      !!editing.whatsNotIncluded ||
+      !!editing.faq ||
+      !!editing.cancellationPolicy ||
+      (editing.bookingQuestions?.length ?? 0) > 0)
+
   function toggleDuration(minutes: number) {
     setValue(
       'durations',
@@ -717,497 +737,522 @@ function ActivityDialog({
             </div>
           </div>
 
-          {/* The scattered per-activity settings, gathered into one outlined
-              group: label (+ hint) on the left, control on the right, one per
-              row. Session lengths and the booking cap only apply to
-              appointments, so they join the group only for that kind. */}
-          <div className="divide-y rounded-lg border">
-            <div className="flex items-center justify-between gap-4 p-3">
-              <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
-              <Controller
-                name="color"
-                control={control}
-                render={({ field }) => (
-                  <ColorPicker
-                    id="act-color"
-                    value={field.value}
-                    onChange={field.onChange}
-                    aria-label={t('fieldColor')}
-                  />
-                )}
-              />
+          {/* ── The decisions ──────────────────────────────────────────────
+              Access, price, the trial door and the queue: what someone is
+              charged and who can get in. Grouped and ordered here, NEVER moved
+              behind the disclosure below — see components/forms/MoreOptions.tsx
+              for why, and UX-11 for the public half of the same rule. */}
+          <section className="space-y-2">
+            <div>
+              <p className="text-sm font-medium">{t('sectionBookingTitle')}</p>
+              <p className="text-xs text-muted-foreground">{t('sectionBookingSubtitle')}</p>
             </div>
 
-            <div className="flex items-center justify-between gap-4 p-3">
-              <Label htmlFor="act-level" className="font-medium">{t('fieldLevel')}</Label>
-              <Controller
-                name="level"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    value={field.value ?? LEVEL_NONE}
-                    onValueChange={(v) => field.onChange(v === LEVEL_NONE ? undefined : v)}
-                  >
-                    <SelectTrigger className="w-44">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {field.value ? (
-                          t(`level_${field.value}` as const)
-                        ) : (
-                          <span className="text-muted-foreground">{t('level_none')}</span>
-                        )}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={LEVEL_NONE}>{t('level_none')}</SelectItem>
-                      {LEVELS.map((l) => (
-                        <SelectItem key={l} value={l}>{t(`level_${l}` as const)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-
-            {/* A field, not implied by type: either kind may require a review step. */}
-            <Controller
-              name="autoConfirm"
-              control={control}
-              render={({ field }) => (
-                <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
-                  <span className="text-sm font-medium">{t('fieldAutoConfirm')}</span>
-                  <input
-                    type="checkbox"
-                    className="accent-primary shrink-0"
-                    checked={field.value}
-                    onChange={(e) => {
-                      setAutoConfirmTouched(true)
-                      field.onChange(e.target.checked)
-                    }}
-                  />
-                </label>
-              )}
-            />
-
-            {/* CLASS-ONLY: independent of the access tier below — a gated class
-                may still take a newcomer's trial booking. The optional trial
-                price sits under the toggle: empty keeps the trial free (today's
-                behaviour); a number reduces it to that price instead of the
-                class's normal price. */}
+            {/* CLASS-ONLY: appointments dropped the access gate entirely — the
+                price is the only gate (see the member-benefit row below). */}
             {type === 'class' && (
-              <div className="p-3 space-y-2">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 pr-4">
-                    <p className="text-sm font-medium">{t('fieldTrialEnabled')}</p>
-                    <p className="text-xs text-muted-foreground">{t('trialEnabledHint')}</p>
-                  </div>
-                  <input type="checkbox" {...register('trialEnabled')} className="accent-primary shrink-0" />
-                </div>
-                {/* Only on a GATED class — on an open one the trial door grants
-                    nothing extra (everyone books free), so a price there would be
-                    silently ignored by `bookSession`. Offering the field would
-                    promise a charge the backend never makes. */}
-                {trialEnabled && accessTier !== 'open' && (
+              <div className="space-y-2">
+                <Label>{t('accessLabel')}</Label>
+                <Controller
+                  control={control}
+                  name="accessTier"
+                  render={({ field }) => (
+                    // Selectable tier cards (3-across when the dialog is wide) —
+                    // same pattern as the availability form's mode toggle.
+                    <div className="grid gap-2 lg:grid-cols-3">
+                      {(['open', 'members', 'subscription'] as const).map((tier) => (
+                        <label
+                          key={tier}
+                          className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
+                            field.value === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            className="mt-0.5 accent-primary"
+                            checked={field.value === tier}
+                            onChange={() => field.onChange(tier)}
+                          />
+                          <span>
+                            <span className="font-medium">{t(`access_${tier}`)}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {t(`access_${tier}_desc`)}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                />
+                {accessTier === 'subscription' && (
+                  <Controller
+                    control={control}
+                    name="subscriptionTypeIds"
+                    render={({ field }) => (
+                      <div className="space-y-1.5 rounded-md border p-3">
+                        {subscriptionTypes.length === 0 ? (
+                          /* The tier that gates on subscription types, with none to
+                             gate on: the sentence named the destination and went
+                             nowhere (UX-99). Link it, like UX-92 did on the session
+                             and appointment pickers. */
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
+                            <Link
+                              href={'/offer/plans' as Route}
+                              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              {t('accessNoSubsAction')}
+                            </Link>
+                          </div>
+                        ) : (
+                          subscriptionTypes.map((s) => (
+                            <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                              <input
+                                type="checkbox"
+                                className="accent-primary"
+                                checked={field.value.includes(s.id)}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    e.target.checked
+                                      ? [...field.value, s.id]
+                                      : field.value.filter((id: string) => id !== s.id),
+                                  )
+                                }
+                              />
+                              {s.name}
+                            </label>
+                          ))
+                        )}
+                        <div className="flex items-center gap-2 pt-1.5 border-t mt-1.5">
+                          <Input
+                            value={newSubName}
+                            onChange={(e) => setNewSubName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                void quickCreateSubscription()
+                              }
+                            }}
+                            placeholder={t('quickCreateSubPlaceholder')}
+                            className="h-8 text-sm flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!newSubName.trim() || creatingSub}
+                            onClick={() => void quickCreateSubscription()}
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" />
+                            {t('quickCreateSubButton')}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{t('quickCreateSubHint')}</p>
+                      </div>
+                    )}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* The per-activity switches, gathered into one outlined group:
+                label (+ hint) on the left, control on the right, one per row.
+                Session lengths join the group for appointments only. */}
+            <div className="divide-y rounded-lg border">
+              {/* A field, not implied by type: either kind may require a review step. */}
+              <Controller
+                name="autoConfirm"
+                control={control}
+                render={({ field }) => (
+                  <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
+                    <span className="text-sm font-medium">{t('fieldAutoConfirm')}</span>
+                    <input
+                      type="checkbox"
+                      className="accent-primary shrink-0"
+                      checked={field.value}
+                      onChange={(e) => {
+                        setAutoConfirmTouched(true)
+                        field.onChange(e.target.checked)
+                      }}
+                    />
+                  </label>
+                )}
+              />
+
+              {/* CLASS-ONLY: independent of the access tier above — a gated class
+                  may still take a newcomer's trial booking. The optional trial
+                  price sits under the toggle: empty keeps the trial free (today's
+                  behaviour); a number reduces it to that price instead of the
+                  class's normal price. */}
+              {type === 'class' && (
+                <div className="p-3 space-y-2">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0 pr-4">
-                      <p className="text-xs font-medium">{t('trialPriceLabel')}</p>
-                      <p className="text-xs text-muted-foreground">{t('trialPriceHint')}</p>
+                      <p className="text-sm font-medium">{t('fieldTrialEnabled')}</p>
+                      <p className="text-xs text-muted-foreground">{t('trialEnabledHint')}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">{currency}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        {...register('trialPrice')}
-                        placeholder={t('trialPricePlaceholder')}
-                        className="h-8 w-24 text-sm"
-                      />
-                    </div>
+                    <input type="checkbox" {...register('trialEnabled')} className="accent-primary shrink-0" />
                   </div>
-                )}
-                {errors.trialPrice && <p className="text-destructive text-xs">{errors.trialPrice.message}</p>}
-              </div>
-            )}
-
-            {/* CLASS-ONLY: the queue behind a full session. Independent of every
-                other door here — a members-only class, a drop-in class and an
-                open one all fill up the same way. Appointments have none: an
-                appointment session does not exist until it is booked, so
-                "this one is full" has no meaning there. */}
-            {type === 'class' && (waitlistOffered || editing?.waitlistEnabled === true) && (
-              <div className="p-3 space-y-2">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 pr-4">
-                    <p className="text-sm font-medium">{t('waitlistEnabledLabel')}</p>
-                    <p className="text-xs text-muted-foreground">{t('waitlistEnabledHint')}</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    {...register('waitlistEnabled')}
-                    disabled={!waitlistAllowed}
-                    className="accent-primary shrink-0 disabled:opacity-40"
-                  />
-                </div>
-                {/* The plan gate, on the control that writes the flag. */}
-                {!waitlistAllowed && (
-                  <p className="text-xs text-muted-foreground">
-                    {t('waitlistRequiresPlan', { plan: planName(WAITLIST_MIN_PLAN) })}
-                  </p>
-                )}
-                {/* Not a validation error: the limit lives on each SESSION, not
-                    here, so the form cannot know whether any of them has one. */}
-                {waitlistAllowed && waitlistEnabled && (
-                  <p className="text-xs text-muted-foreground">{t('waitlistRequiresCapacity')}</p>
-                )}
-              </div>
-            )}
-
-            {/* CLASS-ONLY: the one drop-in concept — always visible, not nested
-                under an access tier. */}
-            {type === 'class' && (
-              <div className="p-3 space-y-2">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 pr-4">
-                    <p className="text-sm font-medium">{t('dropInLabel')}</p>
-                    <p className="text-xs text-muted-foreground">{t('dropInHelp')}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
-                    {dropInEnabled && (
-                      <div className="flex items-center gap-1.5">
+                  {/* Only on a GATED class — on an open one the trial door grants
+                      nothing extra (everyone books free), so a price there would be
+                      silently ignored by `bookSession`. Offering the field would
+                      promise a charge the backend never makes. */}
+                  {trialEnabled && accessTier !== 'open' && (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 pr-4">
+                        <p className="text-xs font-medium">{t('trialPriceLabel')}</p>
+                        <p className="text-xs text-muted-foreground">{t('trialPriceHint')}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <span className="text-xs text-muted-foreground">{currency}</span>
                         <Input
                           type="number"
                           min={0}
                           step="0.01"
-                          {...register('dropInPrice')}
-                          placeholder={t('dropInPricePlaceholder')}
+                          {...register('trialPrice')}
+                          placeholder={t('trialPricePlaceholder')}
                           className="h-8 w-24 text-sm"
                         />
                       </div>
-                    )}
-                  </div>
-                </div>
-                {errors.dropInPrice && <p className="text-destructive text-xs">{errors.dropInPrice.message}</p>}
-
-                {/* Member rate on the drop-in price — only while drop-in is
-                    enabled (a benefit with no priced drop-in to modify is
-                    inert). Coverage (free/credits) stays the access tier's
-                    job; this only ever lowers the PRICE a not-covered member
-                    pays. */}
-                {dropInEnabled && (
-                  <div className="pt-2 mt-1 border-t">
-                    <Controller
-                      control={control}
-                      name="memberBenefit"
-                      render={({ field }) => (
-                        <BenefitEditor
-                          value={field.value}
-                          onChange={field.onChange}
-                          subscriptionTypes={subscriptionTypes}
-                          context="class"
-                          percentError={errors.memberBenefit?.percent?.message}
-                          amountError={errors.memberBenefit?.amount?.message}
-                        />
-                      )}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {type === 'appointment' && (
-              <div className="p-3 space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
-                    <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                    {APPOINTMENT_DURATION_PRESETS.map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => toggleDuration(d)}
-                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                          durations.some((x) => x.minutes === d)
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                        }`}
-                      >
-                        {formatDuration(d)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {errors.durations?.message && (
-                  <p className="text-destructive text-xs">{errors.durations.message}</p>
-                )}
-
-                {/* One price sub-row per SELECTED duration — the coach sells TIME,
-                    so price is per-length, not one flat activity price. Empty =
-                    unpriced, which is free for anyone (no separate access gate
-                    for appointments any more — see the member-benefit row below). */}
-                {durations.length > 0 && (
-                  <div className="space-y-2 rounded-md bg-muted/30 p-2.5">
-                    <p className="text-xs text-muted-foreground">{t('durationPriceHint')}</p>
-                    {[...durations]
-                      .sort((a, b) => a.minutes - b.minutes)
-                      .map((d) => {
-                        const idx = durations.findIndex((x) => x.minutes === d.minutes)
-                        const priceError = errors.durations?.[idx]?.price?.message
-                        return (
-                          <div key={d.minutes} className="space-y-1.5 rounded-md border bg-background p-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-sm font-medium">{formatDuration(d.minutes)}</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground">{currency}</span>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={d.price}
-                                  onChange={(e) => updateDurationPrice(d.minutes, e.target.value)}
-                                  placeholder="0.00"
-                                  className="h-8 w-24 text-sm"
-                                  aria-label={t('durationPriceLabel', { duration: formatDuration(d.minutes) })}
-                                />
-                              </div>
-                            </div>
-                            {priceError && <p className="text-destructive text-xs">{priceError}</p>}
-                          </div>
-                        )
-                      })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* APPOINTMENT-ONLY: the one member-benefit rule for the whole
-                activity — every priced duration. Absent selection = no
-                benefit, everyone pays base. */}
-            {type === 'appointment' && (
-              <div className="p-3 space-y-3">
-                <Controller
-                  control={control}
-                  name="memberBenefit"
-                  render={({ field }) => (
-                    <BenefitEditor
-                      value={field.value}
-                      onChange={field.onChange}
-                      subscriptionTypes={subscriptionTypes}
-                      context="appointment"
-                      percentError={errors.memberBenefit?.percent?.message}
-                      amountError={errors.memberBenefit?.amount?.message}
-                    />
-                  )}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* CLASS-ONLY: appointments dropped the access gate entirely — the
-              price is the only gate (see the member-benefit row above). */}
-          {type === 'class' && (
-            <div className="space-y-2">
-              <Label>{t('accessLabel')}</Label>
-              <Controller
-                control={control}
-                name="accessTier"
-                render={({ field }) => (
-                  // Selectable tier cards (3-across when the dialog is wide) —
-                  // same pattern as the availability form's mode toggle.
-                  <div className="grid gap-2 lg:grid-cols-3">
-                    {(['open', 'members', 'subscription'] as const).map((tier) => (
-                      <label
-                        key={tier}
-                        className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
-                          field.value === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          className="mt-0.5 accent-primary"
-                          checked={field.value === tier}
-                          onChange={() => field.onChange(tier)}
-                        />
-                        <span>
-                          <span className="font-medium">{t(`access_${tier}`)}</span>
-                          <span className="block text-xs text-muted-foreground">
-                            {t(`access_${tier}_desc`)}
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              />
-              {accessTier === 'subscription' && (
-                <Controller
-                  control={control}
-                  name="subscriptionTypeIds"
-                  render={({ field }) => (
-                    <div className="space-y-1.5 rounded-md border p-3">
-                      {subscriptionTypes.length === 0 ? (
-                        /* The tier that gates on subscription types, with none to
-                           gate on: the sentence named the destination and went
-                           nowhere (UX-99). Link it, like UX-92 did on the session
-                           and appointment pickers. */
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
-                          <Link
-                            href={'/offer/plans' as Route}
-                            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            {t('accessNoSubsAction')}
-                          </Link>
-                        </div>
-                      ) : (
-                        subscriptionTypes.map((s) => (
-                          <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                            <input
-                              type="checkbox"
-                              className="accent-primary"
-                              checked={field.value.includes(s.id)}
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.checked
-                                    ? [...field.value, s.id]
-                                    : field.value.filter((id: string) => id !== s.id),
-                                )
-                              }
-                            />
-                            {s.name}
-                          </label>
-                        ))
-                      )}
-                      <div className="flex items-center gap-2 pt-1.5 border-t mt-1.5">
-                        <Input
-                          value={newSubName}
-                          onChange={(e) => setNewSubName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              void quickCreateSubscription()
-                            }
-                          }}
-                          placeholder={t('quickCreateSubPlaceholder')}
-                          className="h-8 text-sm flex-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!newSubName.trim() || creatingSub}
-                          onClick={() => void quickCreateSubscription()}
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          {t('quickCreateSubButton')}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t('quickCreateSubHint')}</p>
                     </div>
                   )}
-                />
+                  {errors.trialPrice && <p className="text-destructive text-xs">{errors.trialPrice.message}</p>}
+                </div>
+              )}
+
+              {/* CLASS-ONLY: the queue behind a full session. Independent of every
+                  other door here — a members-only class, a drop-in class and an
+                  open one all fill up the same way. Appointments have none: an
+                  appointment session does not exist until it is booked, so
+                  "this one is full" has no meaning there. */}
+              {type === 'class' && (waitlistOffered || editing?.waitlistEnabled === true) && (
+                <div className="p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 pr-4">
+                      <p className="text-sm font-medium">{t('waitlistEnabledLabel')}</p>
+                      <p className="text-xs text-muted-foreground">{t('waitlistEnabledHint')}</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      {...register('waitlistEnabled')}
+                      disabled={!waitlistAllowed}
+                      className="accent-primary shrink-0 disabled:opacity-40"
+                    />
+                  </div>
+                  {/* The plan gate, on the control that writes the flag. */}
+                  {!waitlistAllowed && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('waitlistRequiresPlan', { plan: planName(WAITLIST_MIN_PLAN) })}
+                    </p>
+                  )}
+                  {/* Not a validation error: the limit lives on each SESSION, not
+                      here, so the form cannot know whether any of them has one. */}
+                  {waitlistAllowed && waitlistEnabled && (
+                    <p className="text-xs text-muted-foreground">{t('waitlistRequiresCapacity')}</p>
+                  )}
+                </div>
+              )}
+
+              {/* CLASS-ONLY: the one drop-in concept — always visible, not nested
+                  under an access tier. */}
+              {type === 'class' && (
+                <div className="p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 pr-4">
+                      <p className="text-sm font-medium">{t('dropInLabel')}</p>
+                      <p className="text-xs text-muted-foreground">{t('dropInHelp')}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
+                      {dropInEnabled && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">{currency}</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            {...register('dropInPrice')}
+                            placeholder={t('dropInPricePlaceholder')}
+                            className="h-8 w-24 text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {errors.dropInPrice && <p className="text-destructive text-xs">{errors.dropInPrice.message}</p>}
+
+                  {/* Member rate on the drop-in price — only while drop-in is
+                      enabled (a benefit with no priced drop-in to modify is
+                      inert). Coverage (free/credits) stays the access tier's
+                      job; this only ever lowers the PRICE a not-covered member
+                      pays. */}
+                  {dropInEnabled && (
+                    <div className="pt-2 mt-1 border-t">
+                      <Controller
+                        control={control}
+                        name="memberBenefit"
+                        render={({ field }) => (
+                          <BenefitEditor
+                            value={field.value}
+                            onChange={field.onChange}
+                            subscriptionTypes={subscriptionTypes}
+                            context="class"
+                            percentError={errors.memberBenefit?.percent?.message}
+                            amountError={errors.memberBenefit?.amount?.message}
+                          />
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {type === 'appointment' && (
+                <div className="p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
+                      <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      {APPOINTMENT_DURATION_PRESETS.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => toggleDuration(d)}
+                          className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                            durations.some((x) => x.minutes === d)
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                          }`}
+                        >
+                          {formatDuration(d)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {errors.durations?.message && (
+                    <p className="text-destructive text-xs">{errors.durations.message}</p>
+                  )}
+
+                  {/* One price sub-row per SELECTED duration — the coach sells TIME,
+                      so price is per-length, not one flat activity price. Empty =
+                      unpriced, which is free for anyone (no separate access gate
+                      for appointments any more — see the member-benefit row below). */}
+                  {durations.length > 0 && (
+                    <div className="space-y-2 rounded-md bg-muted/30 p-2.5">
+                      <p className="text-xs text-muted-foreground">{t('durationPriceHint')}</p>
+                      {[...durations]
+                        .sort((a, b) => a.minutes - b.minutes)
+                        .map((d) => {
+                          const idx = durations.findIndex((x) => x.minutes === d.minutes)
+                          const priceError = errors.durations?.[idx]?.price?.message
+                          return (
+                            <div key={d.minutes} className="space-y-1.5 rounded-md border bg-background p-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-medium">{formatDuration(d.minutes)}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-muted-foreground">{currency}</span>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={d.price}
+                                    onChange={(e) => updateDurationPrice(d.minutes, e.target.value)}
+                                    placeholder="0.00"
+                                    className="h-8 w-24 text-sm"
+                                    aria-label={t('durationPriceLabel', { duration: formatDuration(d.minutes) })}
+                                  />
+                                </div>
+                              </div>
+                              {priceError && <p className="text-destructive text-xs">{priceError}</p>}
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* APPOINTMENT-ONLY: the one member-benefit rule for the whole
+                  activity — every priced duration. Absent selection = no
+                  benefit, everyone pays base. */}
+              {type === 'appointment' && (
+                <div className="p-3 space-y-3">
+                  <Controller
+                    control={control}
+                    name="memberBenefit"
+                    render={({ field }) => (
+                      <BenefitEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                        subscriptionTypes={subscriptionTypes}
+                        context="appointment"
+                        percentError={errors.memberBenefit?.percent?.message}
+                        amountError={errors.memberBenefit?.amount?.message}
+                      />
+                    )}
+                  />
+                </div>
               )}
             </div>
-          )}
+          </section>
 
-          {/* Secondary prose — side by side when the dialog is wide */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
-              <textarea
-                id="act-prereq"
-                {...register('prerequisites')}
-                rows={3}
-                placeholder={t('prerequisitesPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
-              />
-              <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
-              <textarea
-                id="act-confirm-instructions"
-                {...register('confirmationInstructions')}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-              <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
-            </div>
-
-            {/* Rich detail shown on the public booking page before a visitor
-                books — everything the item page in a mature booking tool
-                answers up front so it never becomes a support email. */}
-            <div className="space-y-1.5">
-              <Label htmlFor="act-meeting-point">{t('fieldMeetingPoint')}</Label>
-              <Input
-                id="act-meeting-point"
-                {...register('meetingPoint')}
-                placeholder={t('meetingPointPlaceholder')}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
-              <textarea
-                id="act-whats-included"
-                {...register('whatsIncluded')}
-                rows={3}
-                placeholder={t('whatsIncludedPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-              <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
-              <textarea
-                id="act-whats-not-included"
-                {...register('whatsNotIncluded')}
-                rows={3}
-                placeholder={t('whatsIncludedPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
-              <textarea
-                id="act-faq"
-                {...register('faq')}
-                rows={4}
-                placeholder={t('faqPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
-              <textarea
-                id="act-cancellation-policy"
-                {...register('cancellationPolicy')}
-                rows={3}
-                placeholder={t('cancellationPolicyPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-              <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
-            </div>
-
-            <Controller
-              control={control}
-              name="bookingQuestions"
-              render={({ field }) => (
-                <BookingQuestionsEditor
-                  value={(field.value ?? []) as FormField[]}
-                  onChange={field.onChange}
+          {/* ── Everything with an honest default ─────────────────────────────
+              Presentation and the public-page prose. Every field in here is
+              optional and an empty one renders nothing, so a studio that never
+              opens this ships a correct class. Opened up-front when the
+              activity being edited already carries any of it — a field she
+              filled in must never be the one she cannot find. */}
+          <MoreOptions
+            label={t('moreOptionsLabel')}
+            hint={t('moreOptionsHint')}
+            defaultOpen={hasStoredDetails}
+          >
+            <div className="divide-y rounded-lg border">
+              <div className="flex items-center justify-between gap-4 p-3">
+                <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
+                <Controller
+                  name="color"
+                  control={control}
+                  render={({ field }) => (
+                    <ColorPicker
+                      id="act-color"
+                      value={field.value}
+                      onChange={field.onChange}
+                      aria-label={t('fieldColor')}
+                    />
+                  )}
                 />
-              )}
-            />
-          </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 p-3">
+                <Label htmlFor="act-level" className="font-medium">{t('fieldLevel')}</Label>
+                <Controller
+                  name="level"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? LEVEL_NONE}
+                      onValueChange={(v) => field.onChange(v === LEVEL_NONE ? undefined : v)}
+                    >
+                      <SelectTrigger className="w-44">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {field.value ? (
+                            t(`level_${field.value}` as const)
+                          ) : (
+                            <span className="text-muted-foreground">{t('level_none')}</span>
+                          )}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={LEVEL_NONE}>{t('level_none')}</SelectItem>
+                        {LEVELS.map((l) => (
+                          <SelectItem key={l} value={l}>{t(`level_${l}` as const)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Secondary prose — side by side when the dialog is wide */}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
+                <textarea
+                  id="act-prereq"
+                  {...register('prerequisites')}
+                  rows={3}
+                  placeholder={t('prerequisitesPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+                />
+                <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
+                <textarea
+                  id="act-confirm-instructions"
+                  {...register('confirmationInstructions')}
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+                />
+                <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
+              </div>
+
+              {/* Rich detail shown on the public booking page before a visitor
+                  books — everything the item page in a mature booking tool
+                  answers up front so it never becomes a support email. */}
+              <div className="space-y-1.5">
+                <Label htmlFor="act-meeting-point">{t('fieldMeetingPoint')}</Label>
+                <Input
+                  id="act-meeting-point"
+                  {...register('meetingPoint')}
+                  placeholder={t('meetingPointPlaceholder')}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
+                <textarea
+                  id="act-whats-included"
+                  {...register('whatsIncluded')}
+                  rows={3}
+                  placeholder={t('whatsIncludedPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+                />
+                <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
+                <textarea
+                  id="act-whats-not-included"
+                  {...register('whatsNotIncluded')}
+                  rows={3}
+                  placeholder={t('whatsIncludedPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
+                <textarea
+                  id="act-faq"
+                  {...register('faq')}
+                  rows={4}
+                  placeholder={t('faqPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
+                <textarea
+                  id="act-cancellation-policy"
+                  {...register('cancellationPolicy')}
+                  rows={3}
+                  placeholder={t('cancellationPolicyPlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+                />
+                <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
+              </div>
+
+              <Controller
+                control={control}
+                name="bookingQuestions"
+                render={({ field }) => (
+                  <BookingQuestionsEditor
+                    value={(field.value ?? []) as FormField[]}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+          </MoreOptions>
           </DialogBody>
 
           <DialogFooter>

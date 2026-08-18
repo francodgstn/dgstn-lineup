@@ -4,7 +4,6 @@ import { useState, use, useMemo, useEffect } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useBack } from '@/hooks/useBackNavigation'
 import { useTabParam } from '@/hooks/useTabParam'
@@ -1969,20 +1968,17 @@ function ProfileTab({
           </div>
         </FormBlock>
 
-        {/* Ranks */}
-        <FormBlock title={t('sectionRanks')}>
-          {rankingSystems.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-4 text-center">
-              <Award className="h-6 w-6 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">{t('rankNoSystemsPrompt')}</p>
-              <Link
-                href="/settings/team"
-                className="text-sm text-primary hover:underline underline-offset-2"
-              >
-                {t('rankNoSystemsLink')}
-              </Link>
-            </div>
-          ) : (
+        {/* Ranks — rendered only where a studio actually awards them (UX-39).
+            This block used to render for everyone: a studio with no ranking
+            system met an empty panel, an icon and a link inviting it to go set
+            one up, on the page it opens most often in the product. Ranks are a
+            martial-arts / grading-school feature, not a general one, and this
+            was the loudest of the places the product taxed every studio that
+            will never award one. It is demoted, not gated — the manager
+            lives at Settings → Team → Ranking, and the moment a system exists
+            this panel comes back on every contact with nothing to migrate. */}
+        {rankingSystems.length > 0 && (
+          <FormBlock title={t('sectionRanks')}>
             <Controller
               control={control}
               name="ranks"
@@ -2090,8 +2086,8 @@ function ProfileTab({
                 </div>
               )}
             />
-          )}
-        </FormBlock>
+          </FormBlock>
+        )}
 
         {/* Acquisition — stage timeline + entry/source */}
         <div className="rounded-xl border bg-card p-4 space-y-4">

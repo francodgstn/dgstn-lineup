@@ -18,7 +18,7 @@ import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslations } from 'next-intl'
@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, BookingSettings } from '@linyup/shared'
+import { MoreOptions } from '@/components/forms/MoreOptions'
 import { NoShowPolicyCard } from './NoShowPolicyCard'
 import { CancellationPolicyCard } from './CancellationPolicyCard'
 
@@ -168,6 +169,57 @@ function FlowPreview({
   )
 }
 
+// One switch row. Extracted from the old inline map because the waitlist row
+// now nests a control inside itself, and two shapes of the same row rendered
+// two different ways is how they drift apart.
+function ToggleRow({
+  control,
+  name,
+  label,
+  desc,
+  children,
+}: {
+  control: ReturnType<typeof useForm<FormData>>['control']
+  name: 'booking.showPhone' | 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled' | 'booking.waitlistEnabled'
+  label: string
+  desc: string
+  /** Rendered under the row, inside its border — the settings this switch owns. */
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="rounded-lg border">
+      <div className="flex items-center justify-between gap-4 p-3">
+        <div>
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-xs text-muted-foreground">{desc}</p>
+        </div>
+        <Controller
+          control={control}
+          name={name}
+          render={({ field }) => (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={field.value}
+              onClick={() => field.onChange(!field.value)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                field.value ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                  field.value ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          )}
+        />
+      </div>
+      {children && <div className="border-t p-3">{children}</div>}
+    </div>
+  )
+}
+
 function BookingForm({
   control,
   register,
@@ -176,6 +228,9 @@ function BookingForm({
   register: ReturnType<typeof useForm<FormData>>['register']
 }) {
   const t = useTranslations('SettingsBooking')
+  // Subscribed, not read once: the claim window below appears the moment the
+  // queue is switched on, without a save in between.
+  const waitlistEnabled = useWatch({ control, name: 'booking.waitlistEnabled' })
   return (
     <div className="space-y-6">
       {/* Flow type */}
@@ -233,170 +288,176 @@ function BookingForm({
         />
       </div>
 
-      {/* Booking window */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">{t('windowTitle')}</p>
-        <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
-        <Controller
-          control={control}
-          name="booking.windowMonths"
-          render={({ field }) => (
-            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-              <SelectTrigger className="h-9 w-36">
-                <span className="flex flex-1 text-left text-sm truncate">
-                  {t('windowMonths', { count: field.value })}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">{t('windowMonths', { count: 1 })}</SelectItem>
-                <SelectItem value="2">{t('windowMonths', { count: 2 })}</SelectItem>
-                <SelectItem value="3">{t('windowMonths', { count: 3 })}</SelectItem>
-                <SelectItem value="6">{t('windowMonths', { count: 6 })}</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
+      {/* ── What you offer ──────────────────────────────────────────────────
+          Two switches that decide what the public booking page CONTAINS.
+          Neither has a safe silent answer — turning appointments on publishes a
+          picker, turning the queue on changes what happens to the person who
+          finds a full class — so they stay in front of the studio rather than
+          behind the disclosure below. */}
+      <ToggleRow
+        control={control}
+        name="booking.appointmentsEnabled"
+        label={t('toggleAppointmentsEnabledLabel')}
+        desc={t('toggleAppointmentsEnabledDesc')}
+      />
 
-      {/* Booking cutoff */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">{t('cutoffTitle')}</p>
-        <p className="text-xs text-muted-foreground">{t('cutoffSubtitle')}</p>
-        <Controller
-          control={control}
-          name="booking.cutoffMinutes"
-          render={({ field }) => (
-            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-              <SelectTrigger className="h-9 w-48">
-                <span className="flex flex-1 text-left text-sm truncate">
-                  {field.value === 0 ? t('cutoffNone') : t('cutoffMinutesBefore', { minutes: field.value })}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">{t('cutoffNone')}</SelectItem>
-                <SelectItem value="15">{t('cutoffMinutesBefore', { minutes: 15 })}</SelectItem>
-                <SelectItem value="30">{t('cutoffMinutesBefore', { minutes: 30 })}</SelectItem>
-                <SelectItem value="60">{t('cutoffMinutesBefore', { minutes: 60 })}</SelectItem>
-                <SelectItem value="120">{t('cutoffMinutesBefore', { minutes: 120 })}</SelectItem>
-                <SelectItem value="1440">{t('cutoffMinutesBefore', { minutes: 1440 })}</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
-
-      {/* Waitlist claim window. Sits under the cutoff on purpose — the cutoff is
-          a hard clamp on it, so the two only make sense read together. */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
-        <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
-        <Controller
-          control={control}
-          name="booking.waitlistClaimMinutes"
-          render={({ field }) => (
-            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-              <SelectTrigger className="h-9 w-48">
-                <span className="flex flex-1 text-left text-sm truncate">
-                  {t('waitlistClaimMinutesValue', { minutes: field.value })}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {[60, 120, 240, 480, 1440].map((minutes) => (
-                  <SelectItem key={minutes} value={String(minutes)}>
-                    {t('waitlistClaimMinutesValue', { minutes })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
-
-      {/* Toggles */}
-      {(
-        [
-          {
-            name: 'booking.showPhone' as const,
-            label: t('toggleShowPhoneLabel'),
-            desc: t('toggleShowPhoneDesc'),
-          },
-          {
-            name: 'booking.showActivityDescription' as const,
-            label: t('toggleShowActivityDescriptionLabel'),
-            desc: t('toggleShowActivityDescriptionDesc'),
-          },
-          {
-            name: 'booking.showFitnessAppField' as const,
-            label: t('toggleShowFitnessAppLabel'),
-            desc: t('toggleShowFitnessAppDesc'),
-          },
-          {
-            name: 'booking.appointmentsEnabled' as const,
-            label: t('toggleAppointmentsEnabledLabel'),
-            desc: t('toggleAppointmentsEnabledDesc'),
-          },
-          {
-            name: 'booking.waitlistEnabled' as const,
-            label: t('toggleWaitlistEnabledLabel'),
-            desc: t('toggleWaitlistEnabledDesc'),
-          },
-        ] as const
-      ).map(({ name, label, desc }) => (
-        <div key={name} className="flex items-center justify-between rounded-lg border p-3">
-          <div>
-            <p className="text-sm font-medium">{label}</p>
-            <p className="text-xs text-muted-foreground">{desc}</p>
+      {/* The claim window is the waitlist's OWN setting, so it lives inside the
+          waitlist row and renders only once the queue is on. It used to sit
+          three rows further up as a peer of the cutoff, where a studio with no
+          waitlist at all met it as a question — and where the only thing it
+          could possibly do was make a queue that studio did not have worse
+          (UX-41). Its default, 120 minutes, is the SAME one the promoter
+          applies server-side (WAITLIST_DEFAULT_CLAIM_MINUTES), so a studio that
+          switches the queue on and never opens this gets exactly what the
+          server would have done anyway. Still a maximum: the cutoff above and
+          the session start both clamp it. */}
+      <ToggleRow
+        control={control}
+        name="booking.waitlistEnabled"
+        label={t('toggleWaitlistEnabledLabel')}
+        desc={t('toggleWaitlistEnabledDesc')}
+      >
+        {waitlistEnabled && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
+            <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
+            <Controller
+              control={control}
+              name="booking.waitlistClaimMinutes"
+              render={({ field }) => (
+                <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                  <SelectTrigger className="h-9 w-48">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {t('waitlistClaimMinutesValue', { minutes: field.value })}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[60, 120, 240, 480, 1440].map((minutes) => (
+                      <SelectItem key={minutes} value={String(minutes)}>
+                        {t('waitlistClaimMinutesValue', { minutes })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
+        )}
+      </ToggleRow>
+
+      {/* ── Everything already answered ──────────────────────────────────────
+          Each of these is stored with a default that is right for a studio that
+          never opens this panel, so none of them is a question it has to answer
+          to go live:
+            • booking window   → 2 months ahead
+            • booking cutoff   → none, i.e. bookable up to the start. A
+              restriction that defaults OFF is the safe direction to demote: the
+              studio is never surprised by a booking the product refused on its
+              behalf.
+            • ask for a phone  → off (one less field on the public form)
+            • show description → on (what the studio wrote is what visitors see)
+            • fitness-app field→ off
+            • custom button    → empty, so no extra button is rendered
+          Nothing here changes what anybody is charged or who may book. */}
+      <MoreOptions label={t('moreOptionsLabel')} hint={t('moreOptionsHint')}>
+        {/* Booking window */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t('windowTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
           <Controller
             control={control}
-            name={name}
+            name="booking.windowMonths"
             render={({ field }) => (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={field.value}
-                onClick={() => field.onChange(!field.value)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                  field.value ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
-                    field.value ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-9 w-36">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {t('windowMonths', { count: field.value })}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">{t('windowMonths', { count: 1 })}</SelectItem>
+                  <SelectItem value="2">{t('windowMonths', { count: 2 })}</SelectItem>
+                  <SelectItem value="3">{t('windowMonths', { count: 3 })}</SelectItem>
+                  <SelectItem value="6">{t('windowMonths', { count: 6 })}</SelectItem>
+                </SelectContent>
+              </Select>
             )}
           />
         </div>
-      ))}
 
-      {/* CTA button */}
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-medium">{t('ctaTitle')}</p>
-          <p className="text-xs text-muted-foreground">{t('ctaSubtitle')}</p>
-        </div>
+        {/* Booking cutoff */}
         <div className="space-y-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t('ctaUrlLabel')}</label>
-            <Input
-              {...register('booking.ctaUrl')}
-              type="url"
-              placeholder={t('ctaUrlPlaceholder')}
-              className="h-9 text-sm font-mono"
-            />
+          <p className="text-sm font-medium">{t('cutoffTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('cutoffSubtitle')}</p>
+          <Controller
+            control={control}
+            name="booking.cutoffMinutes"
+            render={({ field }) => (
+              <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-9 w-48">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {field.value === 0 ? t('cutoffNone') : t('cutoffMinutesBefore', { minutes: field.value })}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">{t('cutoffNone')}</SelectItem>
+                  <SelectItem value="15">{t('cutoffMinutesBefore', { minutes: 15 })}</SelectItem>
+                  <SelectItem value="30">{t('cutoffMinutesBefore', { minutes: 30 })}</SelectItem>
+                  <SelectItem value="60">{t('cutoffMinutesBefore', { minutes: 60 })}</SelectItem>
+                  <SelectItem value="120">{t('cutoffMinutesBefore', { minutes: 120 })}</SelectItem>
+                  <SelectItem value="1440">{t('cutoffMinutesBefore', { minutes: 1440 })}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <ToggleRow
+          control={control}
+          name="booking.showPhone"
+          label={t('toggleShowPhoneLabel')}
+          desc={t('toggleShowPhoneDesc')}
+        />
+        <ToggleRow
+          control={control}
+          name="booking.showActivityDescription"
+          label={t('toggleShowActivityDescriptionLabel')}
+          desc={t('toggleShowActivityDescriptionDesc')}
+        />
+        <ToggleRow
+          control={control}
+          name="booking.showFitnessAppField"
+          label={t('toggleShowFitnessAppLabel')}
+          desc={t('toggleShowFitnessAppDesc')}
+        />
+
+        {/* CTA button */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium">{t('ctaTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('ctaSubtitle')}</p>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t('ctaLabelLabel')}</label>
-            <Input
-              {...register('booking.ctaLabel')}
-              placeholder={t('ctaLabelPlaceholder')}
-              className="h-9 text-sm"
-            />
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">{t('ctaUrlLabel')}</label>
+              <Input
+                {...register('booking.ctaUrl')}
+                type="url"
+                placeholder={t('ctaUrlPlaceholder')}
+                className="h-9 text-sm font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">{t('ctaLabelLabel')}</label>
+              <Input
+                {...register('booking.ctaLabel')}
+                placeholder={t('ctaLabelPlaceholder')}
+                className="h-9 text-sm"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      </MoreOptions>
     </div>
   )
 }

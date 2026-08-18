@@ -1363,7 +1363,11 @@
     "waitlistRequiresCapacity": "Only has an effect on sessions with a participant limit — a session with no limit is never full.",
     "waitlistRequiresPlan": "Available from the {plan} plan.",
     "level_none": "Not specified",
-    "accessNoSubsAction": "Create a subscription type"
+    "accessNoSubsAction": "Create a subscription type",
+    "sectionBookingTitle": "Booking and pricing",
+    "sectionBookingSubtitle": "Who can book this, and what it costs them.",
+    "moreOptionsLabel": "More options",
+    "moreOptionsHint": "Colour, level, and the details shown on your public page"
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -4396,7 +4400,9 @@
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 hour} =1440 {1 day} other {# minutes}}",
     "toggleWaitlistEnabledLabel": "Waitlists",
     "toggleWaitlistEnabledDesc": "Let clients queue for a full class and be offered a seat when one frees up. Turn this on to show the waitlist option on each activity.",
-    "noShowPublicNote": "These terms are shown to visitors on your public booking pages before they book. The fee is emailed as a payment link — it is never charged to a saved card."
+    "noShowPublicNote": "These terms are shown to visitors on your public booking pages before they book. The fee is emailed as a payment link — it is never charged to a saved card.",
+    "moreOptionsLabel": "More options",
+    "moreOptionsHint": "Booking window, cutoff, the fields you ask for, and a custom button"
   },
   "SettingsPlaces": {
     "pageTitle": "Places",

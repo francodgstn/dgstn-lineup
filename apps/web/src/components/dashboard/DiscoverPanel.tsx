@@ -294,8 +294,8 @@ function OnboardingTab({ steps, onDismiss }: { steps: SetupStep[]; onDismiss: ()
 
 export function DiscoverPanel() {
   const t = useTranslations('Discover')
-  const { currentTeamId, team } = useAuth()
-  const { steps, allRequiredDone } = useSetupChecklist(currentTeamId, team)
+  const { currentTeamId } = useAuth()
+  const { steps, allRequiredDone } = useSetupChecklist(currentTeamId)
 
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => {

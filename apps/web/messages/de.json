@@ -1363,7 +1363,11 @@
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
     "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
     "level_none": "Nicht angegeben",
-    "accessNoSubsAction": "Abo-Typ erstellen"
+    "accessNoSubsAction": "Abo-Typ erstellen",
+    "sectionBookingTitle": "Buchung und Preise",
+    "sectionBookingSubtitle": "Wer das buchen kann und was es kostet.",
+    "moreOptionsLabel": "Weitere Optionen",
+    "moreOptionsHint": "Farbe, Niveau und die Angaben auf deiner öffentlichen Seite"
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -4396,7 +4400,9 @@
     "waitlistClaimMinutesValue": "{minutes, plural, =60 {1 Stunde} =1440 {1 Tag} other {# Minuten}}",
     "toggleWaitlistEnabledLabel": "Wartelisten",
     "toggleWaitlistEnabledDesc": "Lass Kundinnen und Kunden sich für eine volle Klasse anstellen und einen Platz erhalten, sobald einer frei wird. Aktivieren, um die Wartelisten-Option bei jeder Aktivität zu zeigen.",
-    "noShowPublicNote": "Diese Bedingungen werden Besuchern auf Ihren öffentlichen Buchungsseiten vor der Buchung angezeigt. Die Gebühr wird per E-Mail als Zahlungslink verschickt — sie wird nie von einer gespeicherten Karte abgebucht."
+    "noShowPublicNote": "Diese Bedingungen werden Besuchern auf Ihren öffentlichen Buchungsseiten vor der Buchung angezeigt. Die Gebühr wird per E-Mail als Zahlungslink verschickt — sie wird nie von einer gespeicherten Karte abgebucht.",
+    "moreOptionsLabel": "Weitere Optionen",
+    "moreOptionsHint": "Buchungszeitraum, Buchungsschluss, abgefragte Felder und ein eigener Button"
   },
   "SettingsPlaces": {
     "pageTitle": "Standorte",
