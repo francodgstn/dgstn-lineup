@@ -210,3 +210,15 @@ state — they render axes and a flat line, which reads as a broken chart rather
 than a new studio. Day one no longer shows them (the dashboard collapses to three
 cards until the team has a contact or a session), so the case is now rare rather
 than universal — but a studio that deletes its data still meets it.
+
+## 27. Two holders of the contact-session storage contract (UX-88)
+**FOLLOW-UP.** `apps/web/src/lib/contactSession.ts` (new) and
+`PublicContactAuthProvider.tsx` both own load/save/clear against the
+`linyup:space:session` key — and without a localStorage record a valid Firebase
+session is ignored by every public surface. The provider was being edited by a
+sibling lane at the time, so it was not pointed at the module. Its header names
+the provider as the other holder. Import from it the next time either is touched.
+
+## 28. `SectionEditor.tsx` is now mixed English/translated (UX-94)
+**FOLLOW-UP.** That panel is otherwise hardcoded English; the new pricing-display
+controls use `useTranslations('Website')`. Finish the file when someone owns it.

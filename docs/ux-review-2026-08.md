@@ -94,9 +94,9 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ✅ Fixed |
 | 16 | costs-money | once | Plugin removal is one unconfirmed click, including paid add-ons | M8 | web | ✅ Fixed |
 | 17 | costs-money | at-setup | Two things called Stripe on one screen; the record-only one says "Enabled" | M6 | web | ✅ Fixed |
-| 18 | slows | every-session | Confirming a booking writes different data depending on which page you used | M3×M4×M1 | web/functions | ▶ Open |
-| 19 | slows | every-session | Booking a known person into a class has exactly one door — the one that corrupts the counts | M3×M4 | web | ▶ Open |
-| 20 | confuses | every-session | The schedule contradicts itself: "0 upcoming" over a full grid | M3 | web | ▶ Open |
+| 18 | slows | every-session | Confirming a booking writes different data depending on which page you used | M3×M4×M1 | web/functions | ✅ Fixed |
+| 19 | slows | every-session | Booking a known person into a class has exactly one door — the one that corrupts the counts | M3×M4 | web | ✅ Fixed |
+| 20 | confuses | every-session | The schedule contradicts itself: "0 upcoming" over a full grid | M3 | web | ✅ Fixed |
 | 21 | slows | every-session | No way to open one person's record without going to Contacts first | M1×M4 | web | ✅ Fixed |
 | 22 | confuses | every-session | Refresh, share or reopen a detail page and lose the tab you were on | M4×M3×M5×M8 | web | ✅ Fixed |
 | 23 | confuses | every-session | Three parallel "remembered destination" mechanisms; "pin" means two things | M1 | web | ✅ Fixed |
@@ -107,14 +107,14 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 28 | slows | weekly | Nine public surfaces managed from six route prefixes across three partial maps | M11×M7×M5×M8 | web | ✅ Fixed |
 | 29 | slows | every-session | Find "Schedule" only after scanning past five less-used items — a regression from `6d94638` | M1 | web | ✅ Fixed |
 | 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ✅ Fixed |
-| 31 | confuses | every-session | The bio-link — the one artifact meant to be shared — previews as "Linyup" | C1 | web | ▶ Open |
+| 31 | confuses | every-session | The bio-link — the one artifact meant to be shared — previews as "Linyup" | C1 | web | ✅ Fixed |
 | 32 | costs-money | weekly | Cancelling from the emailed link answers in English and says nothing about money | C2 | web | ✅ Fixed |
 | 33 | blocks | at-setup | A studio that cannot take money still advertises priced doors | C2×M6 | web + functions | ✅ Fixed |
 | 34 | blocks | at-setup | The org Members tab is a fully-styled form whose callables do not exist | M10 | functions + web | ✅ Fixed |
 | 35 | costs-money | weekly | Org plugin installs hand affiliated studios plan-gated features for free | M10 | web | ✅ Fixed |
 | 36 | slows | every-session | The mobile hamburger scrolls away with the page | M1 | web | ✅ Fixed |
-| 37 | confuses | every-session | The member portal greets a signed-in member by telling her she is a stranger | C4 | web | ▶ Open |
-| 38 | slows | every-session | Space Home never answers "what's next", and duplicates four blocks that live elsewhere | C4 | web | ▶ Open |
+| 37 | confuses | every-session | The member portal greets a signed-in member by telling her she is a stranger | C4 | web | ✅ Fixed |
+| 38 | slows | every-session | Space Home never answers "what's next", and duplicates four blocks that live elsewhere | C4 | web | ✅ Fixed |
 | 39 | confuses | at-setup | Ranks taxes every studio that does not award them | M7×M4×M2 | web | ✅ Fixed |
 | 40 | slows | at-setup | Adding one class means meeting 23 fields, one of them required | M2×M5 | web | ✅ Fixed |
 | 41 | slows | at-setup | Turning on public booking asks 11 questions, at least 3 with a right answer | M7×C2 | web | ✅ Fixed |
@@ -128,19 +128,19 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 49 | confuses | weekly | Unpublishing a surface leaves the bio-link pointing at a dead page | M11 | web + functions | ✅ Fixed |
 | 50 | slows | weekly | "Take it off the internet" is one unconfirmed click, next to Publish | M11 | web | ✅ Fixed |
 | 51 | confuses | at-setup | "Create alert" is selectable and silently stripped at save | M9 | web | ✅ Fixed |
-| 52 | confuses | every-session | A purchase-tier course opened by shared link shows a signed-in member a sign-in wall | C4×C3 | web | ▶ Open |
-| 53 | slows | weekly | Class bookings send no calendar invite; the manage link exists only in the email | C2 | functions + web | ▶ Open |
+| 52 | confuses | every-session | A purchase-tier course opened by shared link shows a signed-in member a sign-in wall | C4×C3 | web | ✅ Fixed |
+| 53 | slows | weekly | Class bookings send no calendar invite; the manage link exists only in the email | C2 | functions + web | ✅ Fixed |
 | 54 | confuses | every-session | Filtering contacts in German reads English — 15 hardcoded strings | M4 | web | ✅ Fixed |
-| 55 | slows | every-session | The member portal links to the shop four ways and to booking not at all | C4 | web | ▶ Open |
+| 55 | slows | every-session | The member portal links to the shop four ways and to booking not at all | C4 | web | ✅ Fixed |
 | 56 | confuses | weekly | Cancelling a class says nothing about the credit, and offers "try again" for a permanent refusal | C4 | web | ✅ Fixed |
-| 57 | confuses | every-session | A prospect on the Shop has no path to the studio's terms | C3 | web | ▶ Open |
-| 58 | confuses | weekly | Two competing sign-in UIs fire off the same state on gated forms | C3 | web | ▶ Open |
+| 57 | confuses | every-session | A prospect on the Shop has no path to the studio's terms | C3 | web | ✅ Fixed |
+| 58 | confuses | weekly | Two competing sign-in UIs fire off the same state on gated forms | C3 | web | ✅ Fixed |
 | 59 | slows | weekly | A settled-in-cash appointment whose payment link went unpaid has no action at all | M6 | web + functions | ✅ Fixed |
 | 60 | confuses | weekly | A BYO studio's doubled revenue rows are indistinguishable from two real payments | M6 | web | ✅ Fixed |
 | 61 | slows | weekly | Public pages is the only settings section that isn't a settings panel | M7×M11 | web | ✅ Fixed |
 | 62 | slows | weekly | Contacts cannot be filtered by coach, or by "in no group" | M4 | functions + web | ▶ Open |
 | 63 | slows | every-session | A booking row hides its own contact and session behind an action menu | M3×M4 | web | ✅ Fixed |
-| 64 | slows | weekly | The schedule cannot show a season, only a three-month window | M3 | web | ▶ Open |
+| 64 | slows | weekly | The schedule cannot show a season, only a three-month window | M3 | web | ✅ Fixed |
 | 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ✅ Fixed |
 | 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ✅ Fixed |
 | 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ✅ Fixed |
@@ -163,20 +163,20 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 84 | blocks | weekly | "When someone joins" cannot be built: the trigger exists but is unreachable | M9 | web | ✅ Fixed |
 | 85 | costs-money | weekly | Ten automation triggers offer a delay that is silently ignored | M9 | web + functions | ✅ Fixed |
 | 86 | costs-money | once | A library automation gated to a paid plan installs on any plan | M9×M8 | web | ▶ Open |
-| 87 | confuses | at-setup | Declared triggers that can never fire, and mounted ones that never do | M9 | functions + web | ▶ Open |
-| 88 | blocks | every-session | After paying, the buyer lands on a page that asks them to sign in again | C2 | web + functions | ▶ Open |
-| 89 | confuses | every-session | A confirmed newcomer booking is not tracked - contact still shows 0 attended | M4xM3 | functions | ▶ Open |
+| 87 | confuses | at-setup | Declared triggers that can never fire, and mounted ones that never do | M9 | functions + web | ✅ Fixed |
+| 88 | blocks | every-session | After paying, the buyer lands on a page that asks them to sign in again | C2 | web + functions | ✅ Fixed |
+| 89 | confuses | every-session | A confirmed newcomer booking is not tracked - contact still shows 0 attended | M4xM3 | functions | ✅ Fixed |
 | 90 | slows | every-session | Sidebar search finds pages, not contacts, subscriptions or activities | M1 | web | ✅ Fixed |
 | 91 | slows | every-session | Session detail: secondary-looking primary action, unlinked names, heavy share control | M3 | web | ✅ Fixed |
 | 92 | slows | every-session | Schedule: oversized bookable-hours control, and no way to reach "new activity" | M3xM5 | web | ✅ Fixed |
-| 93 | slows | weekly | Documents are listed twice, and the publish controls scroll away from a long body | M11 | web | ▶ Open |
-| 94 | slows | weekly | The website's activity cards cannot control how pricing is shown | M7 | web | ▶ Open |
-| 95 | slows | weekly | The website has no pricing TABLE - activities as rows, plans as columns | M7 | web | ▶ Open |
+| 93 | slows | weekly | Documents are listed twice, and the publish controls scroll away from a long body | M11 | web | ✅ Fixed |
+| 94 | slows | weekly | The website's activity cards cannot control how pricing is shown | M7 | web | ✅ Fixed |
+| 95 | slows | weekly | The website has no pricing TABLE - activities as rows, plans as columns | M7 | web | ✅ Fixed |
 | 96 | slows | weekly | Contact notes cannot be colour-tagged | M2 | web | ▶ Open |
-| 97 | confuses | weekly | Nine emailed links still drop the locale, so the page answers in English | C2xM9 | functions | ▶ Open |
+| 97 | confuses | weekly | Nine emailed links still drop the locale, so the page answers in English | C2xM9 | functions | ✅ Fixed |
 | 98 | slows | every-session | A person's name is a dead end on four more lists | M2xM3 | web | ✅ Fixed |
 | 99 | slows | at-setup | Three more "create one first" dead ends, all naming a destination they don't link | M5 | web | ✅ Fixed |
-| 100 | slows | weekly | Four more unpublish buttons take a public page down with no confirmation | M7xM11 | web | ▶ Open |
+| 100 | slows | weekly | Four more unpublish buttons take a public page down with no confirmation | M7xM11 | web | ✅ Fixed |
 | 101 | costs-money | every-session | A gated class whose plans are not public shows no gate at all | M5xM7 | web | ▶ Open |
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
