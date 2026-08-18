@@ -1619,11 +1619,23 @@ function NavSearch({
 
   // The trigger — a MINI-INPUT, not a bare icon.
   //
-  // It reads as a field (icon + placeholder + a rule under it) so it still says
-  // "you can search here", while costing a share of one row instead of a whole
-  // one — which is what freed the space the studio name now uses in the header.
-  // Clicking it opens the real input in an overlay; because the two look alike,
-  // that reads as the field growing rather than a different thing appearing.
+  // It reads as a field so it says "you can search here", while costing a share
+  // of one row instead of a whole one — which is what freed the space the studio
+  // name now uses in the header. Clicking it opens the real input in an overlay;
+  // because the two look alike, that reads as the field growing rather than a
+  // different thing appearing.
+  //
+  // THE BOX IS BORROWED FROM `components/ui/input.tsx`, not invented: same h-8,
+  // same rounded-lg, same `border-input`, same `dark:bg-input/30` fill, same
+  // `focus-visible` ring. The panel animates OUT OF this trigger, so a shape of
+  // its own would break the one illusion the whole control depends on. Before
+  // this it wore a transparent bottom border that only appeared on hover — at
+  // rest there was no box at all, and nothing said it was a place you can type.
+  // Deliberately no filled background in light mode (Input has none either): it
+  // sits above the nav rows, and a solid block here would out-shout them.
+  //
+  // It stays a <button>. The panel owns the real field; a second focusable input
+  // in the sidebar would be two things that look typeable and one that is not.
   //
   // It takes the row's spare width (`flex-1`) and pushes the true icon buttons
   // right, which is also what keeps THEM reading as secondary.
@@ -1645,7 +1657,12 @@ function NavSearch({
         className={
           collapsed
             ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
-            : 'group/search flex h-8 min-w-0 flex-1 items-center gap-1.5 border-b border-transparent px-1 text-muted-foreground transition-colors hover:border-border hover:text-foreground'
+            : // Hover lifts the border towards the ring colour rather than filling the
+              // box — the fill is reserved for focus, which is the state a keyboard
+              // user has to be able to find. focus-visible copies Input's ring
+              // exactly (the old trigger had NO focus style at all: tabbing to it
+              // showed nothing, because its only border was a hover border).
+              'flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-input bg-transparent px-2.5 text-muted-foreground outline-none transition-colors hover:border-ring/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
         }
       >
         {/* Primary, not inherited muted: search is the fastest route to anything
@@ -1655,9 +1672,14 @@ function NavSearch({
             token is theme-aware (the dark palette lightens --primary for exactly
             this), so it holds against both backgrounds. */}
         <Search className="h-4 w-4 shrink-0 text-primary" />
-        {/* Placeholder only — no ⌘K badge. The shortcut still works and is in
-            the tooltip; printed in the row it was visual noise on a control
-            whose whole job is to stay quiet until wanted. */}
+        {/* Placeholder only — still no ⌘K badge, but for a MEASURED reason now
+            that this is a real box: it does not fit. The expanded sidebar is
+            w-60; minus the row's mx-2 and the three 32px icon buttons beside it,
+            this field is ~116px, and minus px-2.5 + the 16px icon + its gap the
+            label gets ~74px. "Search…" clears that; "Rechercher…", "Suchen…" and
+            "Cerca…" do not once a badge takes ~17px more, so three locales out of
+            four would ship a truncated placeholder to buy a hint that is already
+            in the tooltip. Revisit if the sidebar ever widens. */}
         {!collapsed && <span className="truncate text-xs">{t('navSearchPlaceholder')}</span>}
       </button>
 
