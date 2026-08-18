@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, use } from 'react'
+import { useState, useEffect, useCallback, useRef, use, type ReactNode } from 'react'
+import type { Route } from 'next'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useParams, useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -16,7 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useRouter as useI18nRouter } from '@/i18n/navigation'
+import { Link, useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
@@ -128,6 +129,36 @@ interface ParticipantDoc {
   avatar_url?: string | null
   checkedInAt?: { toDate(): Date }
   confirmedFromBooking?: boolean
+}
+
+// ─── roster name ──────────────────────────────────────────────────────────────
+
+/**
+ * A person's name on this page's rosters — booked, no-show, waiting, checked in
+ * — rendered as a link to their record.
+ *
+ * UX-63 made the same names links on /bookings; every roster one page over was
+ * still plain text, so the most common next step from a roster ("who is this?")
+ * cost a detour through /contacts and a search. Rows carrying no contact id — a
+ * guest booking that never became a contact — stay plain text rather than
+ * linking to nothing.
+ */
+function RosterName({
+  contactId,
+  className = '',
+  children,
+}: {
+  contactId?: string | null
+  className?: string
+  children: ReactNode
+}) {
+  const base = `block text-sm font-medium truncate ${className}`
+  if (!contactId) return <p className={base}>{children}</p>
+  return (
+    <Link href={`/contacts/${contactId}` as Route} className={`${base} hover:underline`}>
+      {children}
+    </Link>
+  )
 }
 
 // ─── QR scanner hook ──────────────────────────────────────────────────────────
@@ -858,60 +889,71 @@ export default function SessionDetailPage() {
                 <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{session.notes}</p>
               )}
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={t('editTitle')}>
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title={t('deleteTitle')}>
-                <Trash2 className="h-4 w-4" />
-              </button>
+            {/* The heading's own controls: what to do to THIS session, kept out
+                of the action row below, which is what to do with the PEOPLE. */}
+            <div className="flex flex-col items-end justify-between gap-2 self-stretch shrink-0">
+              <div className="flex items-center gap-1">
+                <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={t('editTitle')}>
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title={t('deleteTitle')}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              {/* SHARE the link to THIS session, don't open it — the coach's actual
+                  need is sending it to someone, and they can already see the session
+                  on the page they are standing on.
+                  `?session=` is the booking form's highest-precedence entry point and
+                  degrades on its own to the slot list when the session can't be
+                  honoured (past, full, unpublished), so a link that has aged in
+                  someone's inbox is never a dead end.
+                  Slug, not team id: public routes are slug-addressed.
+                  An ICON, at the bottom of the heading: sharing is occasional, and
+                  as a full-width labelled button in the action row it competed with
+                  "Add contact", which is the page's job. The copied state is the
+                  only feedback there is, so it stays visible (a green check), not
+                  just a title attribute. */}
+              {session.allowBooking && teamSlug && (
+                <button
+                  onClick={shareBookingLink}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  title={linkCopied ? t('bookingLinkCopied') : t('bookingLinkShare')}
+                  aria-label={linkCopied ? t('bookingLinkCopied') : t('bookingLinkShare')}
+                >
+                  {linkCopied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Share2 className="h-4 w-4" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Action row */}
+        {/* Action row. "Add contact" LEADS and is the only primary here — putting
+            a person in the room is what this page is for, and it used to sit
+            third, styled like the scanner and the share link beside it. The
+            scanner is the same verb by another route, so it stays an outline
+            sibling rather than a second primary. */}
         <div className="px-5 pb-4 flex flex-wrap gap-2">
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            <UserPlus className="h-4 w-4" /> {t('addContact')}
+          </button>
           <button
             onClick={() => setScanning((v) => !v)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              scanning ? 'bg-primary text-primary-foreground' : 'border hover:bg-muted'
+              /* "On" stays filled — but neutral, not the primary accent, which
+                 now belongs to "Add contact" alone. */
+              scanning ? 'bg-foreground text-background' : 'border hover:bg-muted'
             }`}
           >
             <QrCode className="h-4 w-4" />
             {scanning ? t('stopScannerButton') : t('checkInScannerButton')}
           </button>
-          <button
-            onClick={() => setAddOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
-          >
-            <UserPlus className="h-4 w-4" /> {t('addContact')}
-          </button>
-          {/* SHARE the link to THIS session, don't open it — the coach's actual
-              need is sending it to someone, and they can already see the session
-              on the page they are standing on.
-              `?session=` is the booking form's highest-precedence entry point and
-              degrades on its own to the slot list when the session can't be
-              honoured (past, full, unpublished), so a link that has aged in
-              someone's inbox is never a dead end.
-              Slug, not team id: public routes are slug-addressed. The previous
-              href pointed at a `/portal/` prefix that is not a route at all, so
-              this button 404'd. */}
-          {session.allowBooking && teamSlug && (
-            <button
-              onClick={shareBookingLink}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors text-muted-foreground"
-            >
-              {linkCopied ? (
-                <>
-                  <Check className="h-3.5 w-3.5" /> {t('bookingLinkCopied')}
-                </>
-              ) : (
-                <>
-                  <Share2 className="h-3.5 w-3.5" /> {t('bookingLinkShare')}
-                </>
-              )}
-            </button>
-          )}
         </div>
       </div>
 
@@ -955,7 +997,7 @@ export default function SessionDetailPage() {
                 {b.firstname?.[0]}{b.lastname?.[0]}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{b.lastname} {b.firstname}</p>
+                <RosterName contactId={b.contact}>{b.lastname} {b.firstname}</RosterName>
                 {b.email && <p className="text-xs text-muted-foreground">{b.email}</p>}
               </div>
               {showsNoSubBadge(b.contact) && (
@@ -995,7 +1037,7 @@ export default function SessionDetailPage() {
                     {b.firstname?.[0]}{b.lastname?.[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium line-through">{b.lastname} {b.firstname}</p>
+                    <RosterName contactId={b.contact} className="line-through">{b.lastname} {b.firstname}</RosterName>
                   </div>
                   <Badge variant="outline" className="text-xs text-destructive border-destructive/30">{t('noShowBadge')}</Badge>
                   <div className="flex items-center gap-1">
@@ -1039,7 +1081,7 @@ export default function SessionDetailPage() {
                   {i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{e.lastname} {e.firstname}</p>
+                  <RosterName contactId={e.contact}>{e.lastname} {e.firstname}</RosterName>
                   <p className="text-xs text-muted-foreground truncate">
                     {[e.email, e.phone].filter(Boolean).join(' · ')}
                   </p>
@@ -1123,7 +1165,7 @@ export default function SessionDetailPage() {
               {p.firstname?.[0]}{p.lastname?.[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{p.lastname} {p.firstname}</p>
+              <RosterName contactId={p.contact}>{p.lastname} {p.firstname}</RosterName>
               {p.confirmedFromBooking && (
                 <p className="text-xs text-muted-foreground">{t('confirmedFromBooking')}</p>
               )}

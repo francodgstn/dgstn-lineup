@@ -973,7 +973,9 @@
     "sectionDetails": "Détails",
     "durationMinutes": "min",
     "saveError": "Impossible d'enregistrer la séance : {message}",
-    "saveTimeoutError": "Cela prend trop de temps — le serveur est peut-être indisponible. Réessayez."
+    "saveTimeoutError": "Cela prend trop de temps — le serveur est peut-être indisponible. Réessayez.",
+    "noClassActivitiesHint": "Aucune activité de type cours pour l'instant. Un cours se planifie à partir d'une activité : créez-en une d'abord.",
+    "createActivityAction": "Créer une activité"
   },
   "Calendar": {
     "title": "Planning",
@@ -1982,7 +1984,9 @@
     "saveTimeoutError": "Cela prend trop de temps — le serveur est peut-être indisponible. Réessayez.",
     "createdToast": "Rendez-vous réservé.",
     "paymentLinkToast": "Lien de paiement créé",
-    "copyLink": "Copier le lien"
+    "copyLink": "Copier le lien",
+    "noAppointmentActivitiesHint": "Aucune offre de rendez-vous pour l'instant. Un rendez-vous se réserve à partir d'une offre : créez-en une d'abord.",
+    "createActivityAction": "Créer une activité"
   },
   "AppointmentBooking": {
     "title": "Prendre rendez-vous",

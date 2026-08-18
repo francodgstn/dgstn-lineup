@@ -973,7 +973,9 @@
     "sectionDetails": "Dettagli",
     "durationMinutes": "min",
     "saveError": "Impossibile salvare la sessione: {message}",
-    "saveTimeoutError": "Ci vuole troppo tempo — il server potrebbe non essere disponibile. Riprova."
+    "saveTimeoutError": "Ci vuole troppo tempo — il server potrebbe non essere disponibile. Riprova.",
+    "noClassActivitiesHint": "Nessuna attività di tipo corso. Un corso si pianifica a partire da un'attività: creane una prima.",
+    "createActivityAction": "Crea un'attività"
   },
   "Calendar": {
     "title": "Programma",
@@ -1982,7 +1984,9 @@
     "saveTimeoutError": "Ci vuole troppo tempo — il server potrebbe non essere disponibile. Riprova.",
     "createdToast": "Appuntamento prenotato.",
     "paymentLinkToast": "Link di pagamento creato",
-    "copyLink": "Copia link"
+    "copyLink": "Copia link",
+    "noAppointmentActivitiesHint": "Nessuna offerta di appuntamenti. Un appuntamento si prenota a partire da un'offerta: creane una prima.",
+    "createActivityAction": "Crea un'attività"
   },
   "AppointmentBooking": {
     "title": "Prenota un appuntamento",

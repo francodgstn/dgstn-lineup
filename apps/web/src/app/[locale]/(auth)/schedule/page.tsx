@@ -958,6 +958,12 @@ export default function CalendarPage() {
             {t('subtitle', { count: upcomingCount })}
           </p>
         </div>
+        {/* ONE height across this row. The three controls were hand-sized
+            independently — a p-1 segmented group, a `size="sm"` link and a
+            px-4/py-2 trigger — so nothing lined up. They all render at the
+            Button default (h-8) now; only the view toggle keeps its own padding,
+            because its inner buttons sit inside a p-1 track that must add up to
+            the same 32px. */}
         <div className="flex items-center gap-2">
           {/* View toggle */}
           <div className="hidden sm:flex gap-1 p-1 bg-muted rounded-lg">
@@ -970,7 +976,7 @@ export default function CalendarPage() {
               <button
                 key={key}
                 onClick={() => setView(key)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+                className={`flex h-6 items-center gap-1.5 px-2.5 rounded-md text-sm font-medium transition-colors ${
                   view === key
                     ? 'bg-background shadow-sm text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -987,7 +993,7 @@ export default function CalendarPage() {
               found it. Never reduce this to an icon. */}
           <Link
             href={'/schedule/availability' as Route}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0')}
+            className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}
           >
             <CalendarClock className="h-3.5 w-3.5" />
             {t('bookableHours')}
@@ -995,7 +1001,11 @@ export default function CalendarPage() {
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>
-              <DropdownMenuTrigger className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+              {/* `hover:bg-primary/90` is not redundant: the default variant's
+                  own hover is `[a]:hover:…`, which never matches a button. */}
+              <DropdownMenuTrigger
+                className={cn(buttonVariants(), 'hidden sm:inline-flex gap-2 hover:bg-primary/90')}
+              >
                 <Plus className="h-4 w-4" />
                 {t('newEntry')}
                 <ChevronDown className="h-3.5 w-3.5" />

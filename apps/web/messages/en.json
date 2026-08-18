@@ -973,7 +973,9 @@
     "sectionDetails": "Details",
     "durationMinutes": "min",
     "saveError": "Couldn't save the session: {message}",
-    "saveTimeoutError": "This is taking too long — the server may be unavailable. Try again."
+    "saveTimeoutError": "This is taking too long — the server may be unavailable. Try again.",
+    "noClassActivitiesHint": "No class activities yet. A class is scheduled from one, so create one first.",
+    "createActivityAction": "Create an activity"
   },
   "Calendar": {
     "title": "Schedule",
@@ -1982,7 +1984,9 @@
     "saveTimeoutError": "This is taking too long — the server may be unavailable. Try again.",
     "createdToast": "Appointment booked.",
     "paymentLinkToast": "Payment link created",
-    "copyLink": "Copy link"
+    "copyLink": "Copy link",
+    "noAppointmentActivitiesHint": "No appointment offerings yet. An appointment is booked against one, so create one first.",
+    "createActivityAction": "Create an activity"
   },
   "AppointmentBooking": {
     "title": "Book an appointment",

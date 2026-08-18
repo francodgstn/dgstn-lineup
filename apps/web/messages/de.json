@@ -973,7 +973,9 @@
     "sectionDetails": "Details",
     "durationMinutes": "Min.",
     "saveError": "Der Termin konnte nicht gespeichert werden: {message}",
-    "saveTimeoutError": "Das dauert zu lange — der Server ist möglicherweise nicht erreichbar. Bitte erneut versuchen."
+    "saveTimeoutError": "Das dauert zu lange — der Server ist möglicherweise nicht erreichbar. Bitte erneut versuchen.",
+    "noClassActivitiesHint": "Noch keine Kurs-Aktivitäten. Ein Kurs wird auf Basis einer Aktivität geplant – erstelle also zuerst eine.",
+    "createActivityAction": "Aktivität erstellen"
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -1982,7 +1984,9 @@
     "saveTimeoutError": "Das dauert zu lange — der Server ist möglicherweise nicht erreichbar. Bitte erneut versuchen.",
     "createdToast": "Termin gebucht.",
     "paymentLinkToast": "Zahlungslink erstellt",
-    "copyLink": "Link kopieren"
+    "copyLink": "Link kopieren",
+    "noAppointmentActivitiesHint": "Noch keine Termin-Angebote. Ein Termin wird auf Basis eines Angebots gebucht – erstelle also zuerst eines.",
+    "createActivityAction": "Aktivität erstellen"
   },
   "AppointmentBooking": {
     "title": "Termin buchen",

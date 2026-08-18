@@ -12,7 +12,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { httpsCallable } from 'firebase/functions'
 import { toast } from 'sonner'
-import { Ban, Loader2, UserPlus, UserRound } from 'lucide-react'
+import { Ban, Loader2, Plus, UserPlus, UserRound } from 'lucide-react'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
+import { cn } from '@/lib/utils'
 import { functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/lib/format'
@@ -22,7 +25,7 @@ import { DateTimePicker } from '@/components/ui/date-picker'
 import {
   Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -283,7 +286,20 @@ export function AppointmentFormDialog({
 
         <DialogBody>
         {appointmentActivities.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">{t('noAppointmentActivities')}</p>
+          /* An appointment is booked AGAINST an offering, so with none there is
+             nothing to fill this dialog with. It used to say "create one under
+             Offer -> Activities" and leave the manager to find it; it links
+             there now. */
+          <div className="rounded-md border border-dashed p-3 space-y-2">
+            <p className="text-sm text-muted-foreground">{t('noAppointmentActivitiesHint')}</p>
+            <Link
+              href={'/offer/activities' as Route}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t('createActivityAction')}
+            </Link>
+          </div>
         ) : (
           <div className="space-y-5 py-1">
             {/* Appointment — one param per row */}

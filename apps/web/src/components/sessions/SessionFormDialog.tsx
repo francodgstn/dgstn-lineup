@@ -22,8 +22,12 @@ import { useAuth } from '@/contexts/AuthContext'
 import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { SESSIONS_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
-import { Loader2, Repeat2 } from 'lucide-react'
+import { Loader2, Repeat2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 // ─── shared helpers (single source of truth for session forms) ─────────────────
 
@@ -704,6 +708,26 @@ export function SessionFormDialog({
                     </SelectContent>
                   </Select>
                 )} />
+                {/* A team with no class activity finds an empty picker and no
+                    way out of it: the thing a session is scheduled FROM is
+                    created on another page, and this dialog never said where.
+                    So say it, and link there. (Sibling of the availability
+                    dialog's empty state, which creates one inline — a class
+                    activity carries a name, a level and an access rule that
+                    nobody can invent on the studio's behalf, so this one
+                    navigates instead.) */}
+                {classActivities.length === 0 && (
+                  <div className="rounded-md border border-dashed p-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">{t('noClassActivitiesHint')}</p>
+                    <Link
+                      href={'/offer/activities' as Route}
+                      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t('createActivityAction')}
+                    </Link>
+                  </div>
+                )}
               </div>
             </section>
 

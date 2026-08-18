@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
@@ -49,6 +50,20 @@ interface ParticipantDoc {
   firstname: string
   lastname: string
   avatar_url?: string | null
+}
+
+/**
+ * A roster name in the peek, linked to the person's record — the same fix
+ * UX-63 made on /bookings and UX-91 made on the session detail page. A row
+ * with no contact id (a guest booking that never became a contact) stays text.
+ */
+function PeekName({ contactId, children }: { contactId?: string | null; children: ReactNode }) {
+  if (!contactId) return <span className="text-sm truncate">{children}</span>
+  return (
+    <Link href={`/contacts/${contactId}` as Route} className="text-sm truncate hover:underline">
+      {children}
+    </Link>
+  )
 }
 
 interface SessionPeekSheetProps {
@@ -240,7 +255,7 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
                         <div className="h-7 w-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] font-bold shrink-0">
                           {b.firstname?.[0]}{b.lastname?.[0]}
                         </div>
-                        <span className="text-sm truncate">{b.lastname} {b.firstname}</span>
+                        <PeekName contactId={b.contact}>{b.lastname} {b.firstname}</PeekName>
                       </div>
                     ))}
                   </div>
@@ -266,7 +281,7 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
                       <div className="h-7 w-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-[10px] font-bold shrink-0">
                         {p.firstname?.[0]}{p.lastname?.[0]}
                       </div>
-                      <span className="text-sm truncate">{p.lastname} {p.firstname}</span>
+                      <PeekName contactId={p.contact}>{p.lastname} {p.firstname}</PeekName>
                     </div>
                   ))}
                 </div>
