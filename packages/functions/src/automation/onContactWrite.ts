@@ -133,7 +133,9 @@ export const onContactWrite = onDocumentWritten(
 
     for (const { triggerType, delta } of contactEvents) {
       console.log(`[onContactWrite] contact=${event.params.contactId} team=${teamId} trigger=${triggerType}${delta?.subscriptionTypeId ? ` subId=${delta.subscriptionTypeId}` : ''}`) // eslint-disable-line no-console
-      await fireEventRules(teamId, triggerType, [contact], undefined, delta)
+      // event.id is the CloudEvent id of this write — stable across a duplicate
+      // delivery, and the occurrence half of a delayed rule's dedup key.
+      await fireEventRules(teamId, triggerType, [contact], { eventId: event.id }, delta)
     }
   }
 )

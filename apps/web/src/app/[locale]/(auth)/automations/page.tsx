@@ -182,6 +182,24 @@ interface FormAction {
 const TRIGGER_GROUP_ORDER = ['contact', 'booking', 'attendance', 'subscription', 'affiliation', 'general', 'plugins']
 const CONDITION_GROUP_ORDER = ['acquisition', 'subscription', 'affiliation', 'attendance', 'other']
 
+// supportsDelay says the DELAY IS HONOURED, not merely stored — which is what
+// it did not say until UX-85. A trigger marked true is deferred for real:
+// `session_ended` through onSessionWrite, every other event trigger through
+// fireEventRules -> executeDelayedRule. Do not flip one to true without a
+// matching arm in resolveEventDelayMinutes; automation/delayedRules.test.ts
+// reads BOTH files and fails the build on a disagreement.
+//
+// Marked false, and why — each is a decision, not an omission:
+//   schedule_daily, manual — not event triggers; there is nothing to defer from.
+//   inbound_webhook — a delayed run persists its payload in the Cloud Tasks
+//     queue, and that payload is the caller's raw POST body. The engine refuses
+//     a delay for ANY trigger carrying a payload (resolveEventDelayMinutes), so
+//     this must stay false or the field would lie again.
+//
+// The delay is capped at MAX_DELAY_MINUTES: Cloud Tasks will not schedule a task
+// more than 30 days out. Beyond that the engine clamps and logs.
+const MAX_DELAY_MINUTES = 30 * 24 * 60
+
 const TRIGGER_OPTIONS = [
   { value: 'schedule_daily', icon: Clock, supportsDelay: false, group: 'general' },
   { value: 'contact_created', icon: UserPlus, supportsDelay: true, group: 'contact' },
@@ -191,12 +209,11 @@ const TRIGGER_OPTIONS = [
   // cannot answer that question — it fired when the lead booked a trial and
   // never re-evaluates.
   //
-  // supportsDelay is FALSE on purpose, and not an oversight: `fireEventRules`
-  // runs the rule inline and reads `trigger.delayMinutes` nowhere. Only
-  // `session_ended` is actually deferred (onSessionWrite enqueues a Cloud Task).
-  // Every other `supportsDelay: true` here stores a delay that nothing honours —
-  // a pre-existing defect this trigger declines to join.
-  { value: 'acquisition_stage_changed', icon: TrendingUp, supportsDelay: false, group: 'contact' },
+  // supportsDelay flipped to TRUE (2026-08-18, UX-85): `fireEventRules` now
+  // defers any event rule carrying trigger.delayMinutes to the same Cloud Tasks
+  // handler `session_ended` uses. "Welcome them three days after they join" is
+  // the natural shape for this trigger and is what the delay was withheld from.
+  { value: 'acquisition_stage_changed', icon: TrendingUp, supportsDelay: true, group: 'contact' },
   { value: 'booking_confirmed', icon: CheckCircle, supportsDelay: true, group: 'booking' },
   { value: 'booking_no_show', icon: XCircle, supportsDelay: true, group: 'booking' },
   { value: 'booking_cancelled', icon: XCircle, supportsDelay: true, group: 'booking' },
@@ -1431,8 +1448,10 @@ function RuleDialog({
         active: values.active,
         trigger: {
           type: values.trigger_type,
+          // Clamped to the Cloud Tasks ceiling here as well as in the engine,
+          // so the number the studio sees stored is the number that will run.
           ...(supportsDelay && values.delay_minutes && values.delay_minutes > 0
-            ? { delayMinutes: values.delay_minutes }
+            ? { delayMinutes: Math.min(Math.floor(values.delay_minutes), MAX_DELAY_MINUTES) }
             : {}),
           ...(values.trigger_type === 'inbound_webhook' && webhookEndpointId
             ? { webhook_endpoint_id: webhookEndpointId }
@@ -1573,6 +1592,7 @@ function RuleDialog({
                   <Input
                     type="number"
                     min={0}
+                    max={MAX_DELAY_MINUTES}
                     className="mt-1 h-8 text-xs"
                     {...register('delay_minutes')}
                     placeholder="0"

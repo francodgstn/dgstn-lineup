@@ -1,14 +1,35 @@
 // Tier 2 — Cloud Tasks handler for delayed automation rule execution.
 // Registered as a task queue function (onTaskDispatched). Firebase automatically
-// creates the Cloud Tasks queue with the same name as this function.
+// creates the Cloud Tasks queue with the same name as this function, in the
+// function's region — which is why enqueuers address it by its fully-qualified
+// name (see DELAYED_RULE_FUNCTION in utils/automationEngine.ts).
 //
-// Enqueued by: onSessionWrite (session_ended trigger with delayMinutes > 0)
-// Payload: { ruleId, teamId, sessionId, contactIds, idempotencyKey }
+// TWO KINDS of delayed run land here, and the payload's `kind` says which:
+//
+//   'session' — enqueued by onSessionWrite for a session_ended rule, against
+//               the session's END time. Participants are re-read from the
+//               session at fire time (check-in happens AFTER enqueue).
+//               `kind` ABSENT also means session: tasks enqueued before event
+//               delays existed carry none.
+//   'event'   — enqueued by fireEventRules for any other event trigger whose
+//               rule carries trigger.delayMinutes > 0, against NOW + the delay.
+//               contactIds are snapshotted at enqueue; the contact DOCUMENTS
+//               are re-read here.
+//
+// WHAT IS DECIDED HERE, not at enqueue time: everything about the contact.
+// runRule -> runContactRule re-reads each contact and skips it when archived,
+// deleted, unsubscribed, without an email, inside the per-rule/per-contact
+// dedup window, or no longer matching the rule's conditions. A delayed rule
+// therefore cannot mail someone who left in the meantime.
 //
 // Idempotency: before executing, checks automation_logs for a doc with
 // idempotency_key matching the payload. If found, the task is a no-op.
-// This prevents double-execution when a session's end time changes and
-// multiple tasks are enqueued with the same ruleId:sessionId key.
+// Session keys are {ruleId}:{sessionId} (re-enqueue after an end-time edit
+// collapses onto the same key); event keys are built by
+// buildEventIdempotencyKey — see its docstring for why the occurrence is the
+// event and not the contact. There is no third dedup mechanism: this guard and
+// the per-contact window in runContactRule are the two, and they compose (a
+// retry that lost its log write is still caught per contact).
 import { onTaskDispatched } from 'firebase-functions/v2/tasks'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -21,7 +42,8 @@ export const executeDelayedRule = onTaskDispatched(
     rateLimits: { maxConcurrentDispatches: 20 },
   },
   async (req) => {
-    const { ruleId, teamId, sessionId, contactIds, idempotencyKey } = req.data as DelayedRulePayload
+    const { ruleId, teamId, sessionId, contactIds, idempotencyKey, kind, triggerType } =
+      req.data as DelayedRulePayload
 
     if (!ruleId || !teamId || !idempotencyKey) {
       console.error('[executeDelayedRule] Invalid payload:', req.data) // eslint-disable-line no-console
@@ -59,33 +81,53 @@ export const executeDelayedRule = onTaskDispatched(
       return
     }
 
+    // Event-kind only: if the studio re-pointed the rule at a different trigger
+    // while this task was in flight, drop it rather than run the new rule's
+    // actions against contacts gathered for the old one. Session-kind tasks
+    // carry no triggerType and are untouched by this check.
+    if (triggerType && rule.trigger.type !== triggerType) {
+      console.log(`[executeDelayedRule] Rule ${ruleId} trigger changed ${triggerType} -> ${rule.trigger.type}, skipping`) // eslint-disable-line no-console
+      return
+    }
+
     // Load team data for variable substitution
     const [teamErr, teamDoc] = await to(db.collection('teams').doc(teamId).get())
     const teamData = !teamErr && teamDoc && teamDoc.exists
       ? (teamDoc.data() as Record<string, unknown>)
       : {}
 
-    // Load participants at execution time from the session's participants subcollection.
-    // We intentionally do NOT use the snapshotted contactIds because participants are created
-    // during check-in (which happens during/after the session, not at enqueue time).
-    // Loading at execution time ensures we capture everyone who actually attended.
-    const contacts: ContactData[] = []
-    if (sessionId) {
-      const [partErr, partSnap] = await to(
-        db.collection('sessions').doc(sessionId).collection('participants').get()
-      )
-      if (!partErr && partSnap && !partSnap.empty) {
-        for (const partDoc of partSnap.docs) {
-          const [cErr, cDoc] = await to(db.collection('contacts').doc(partDoc.id).get())
-          if (!cErr && cDoc && cDoc.exists) {
-            contacts.push({ id: partDoc.id, ...(cDoc.data() as Omit<ContactData, 'id'>) })
-          }
+    // Resolve the contact set. Either way the contact DOCUMENTS are read now, at
+    // fire time — never trusted from the enqueue-time snapshot.
+    let contactIdsToLoad: string[]
+    if (kind === 'event') {
+      // Event-kind: the subjects the event named. A contact deleted in the
+      // meantime simply drops out below.
+      contactIdsToLoad = contactIds ?? []
+    } else {
+      // Session-kind: we intentionally do NOT use the snapshotted contactIds because
+      // participants are created during check-in (which happens during/after the session,
+      // not at enqueue time). Loading at execution time captures everyone who attended.
+      contactIdsToLoad = []
+      if (sessionId) {
+        const [partErr, partSnap] = await to(
+          db.collection('sessions').doc(sessionId).collection('participants').get()
+        )
+        if (!partErr && partSnap && !partSnap.empty) {
+          contactIdsToLoad = partSnap.docs.map((d) => d.id)
         }
       }
     }
 
+    const contacts: ContactData[] = []
+    for (const contactId of contactIdsToLoad) {
+      const [cErr, cDoc] = await to(db.collection('contacts').doc(contactId).get())
+      if (!cErr && cDoc && cDoc.exists) {
+        contacts.push({ id: contactId, ...(cDoc.data() as Omit<ContactData, 'id'>) })
+      }
+    }
+
     if (contacts.length === 0) {
-      console.log(`[executeDelayedRule] No participants for rule=${ruleId} session=${sessionId} — writing idempotency log only`) // eslint-disable-line no-console
+      console.log(`[executeDelayedRule] No contacts for rule=${ruleId} kind=${kind ?? 'session'} session=${sessionId ?? '-'} — writing idempotency log only`) // eslint-disable-line no-console
       // Still write a log entry so the idempotency guard works on duplicate tasks
     }
 
@@ -99,7 +141,7 @@ export const executeDelayedRule = onTaskDispatched(
       db.collection('teams').doc(teamId).collection('automation_logs').add({
         ...log,
         idempotency_key: idempotencyKey,
-        session_id: sessionId,
+        ...(sessionId ? { session_id: sessionId } : {}),
       })
     )
     await to(
@@ -109,7 +151,7 @@ export const executeDelayedRule = onTaskDispatched(
       })
     )
 
-    console.log(`[executeDelayedRule] rule=${ruleId} team=${teamId} session=${sessionId}`, { // eslint-disable-line no-console
+    console.log(`[executeDelayedRule] rule=${ruleId} team=${teamId} kind=${kind ?? 'session'} session=${sessionId ?? '-'}`, { // eslint-disable-line no-console
       contacts: contacts.length,
       executed: log.actions_executed,
       failed: log.actions_failed,
