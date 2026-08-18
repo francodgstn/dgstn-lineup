@@ -93,7 +93,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 14 | costs-money | every-session | A visitor commits without seeing cancellation terms or the no-show fee | C2 | web + functions | ✅ Fixed |
 | 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ▶ Open |
 | 16 | costs-money | once | Plugin removal is one unconfirmed click, including paid add-ons | M8 | web | ✅ Fixed |
-| 17 | costs-money | at-setup | Two things called Stripe on one screen; the record-only one says "Enabled" | M6 | web | ▶ Open |
+| 17 | costs-money | at-setup | Two things called Stripe on one screen; the record-only one says "Enabled" | M6 | web | ✅ Fixed |
 | 18 | slows | every-session | Confirming a booking writes different data depending on which page you used | M3×M4×M1 | web/functions | ▶ Open |
 | 19 | slows | every-session | Booking a known person into a class has exactly one door — the one that corrupts the counts | M3×M4 | web | ▶ Open |
 | 20 | confuses | every-session | The schedule contradicts itself: "0 upcoming" over a full grid | M3 | web | ▶ Open |
@@ -160,10 +160,19 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
 | 82 | blocks | weekly | A member can buy a plan and still be locked out, with no self-serve way back | M5×M8 | functions | ✅ Fixed |
 | 83 | blocks | every-session | A trial lead who signs up is still refused, and the card promises otherwise | M5×M8 | functions | ✅ Fixed |
-| 84 | blocks | weekly | "When someone joins" cannot be built: the trigger exists but is unreachable | M9 | web | ▶ Open |
+| 84 | blocks | weekly | "When someone joins" cannot be built: the trigger exists but is unreachable | M9 | web | ✅ Fixed |
 | 85 | costs-money | weekly | Ten automation triggers offer a delay that is silently ignored | M9 | web + functions | ▶ Open |
 | 86 | costs-money | once | A library automation gated to a paid plan installs on any plan | M9×M8 | web | ▶ Open |
 | 87 | confuses | at-setup | Declared triggers that can never fire, and mounted ones that never do | M9 | functions + web | ▶ Open |
+| 88 | blocks | every-session | After paying, the buyer lands on a page that asks them to sign in again | C2 | web + functions | ▶ Open |
+| 89 | confuses | every-session | A confirmed newcomer booking is not tracked - contact still shows 0 attended | M4xM3 | functions | ▶ Open |
+| 90 | slows | every-session | Sidebar search finds pages, not contacts, subscriptions or activities | M1 | web | ▶ Open |
+| 91 | slows | every-session | Session detail: secondary-looking primary action, unlinked names, heavy share control | M3 | web | ▶ Open |
+| 92 | slows | every-session | Schedule: oversized bookable-hours control, and no way to reach "new activity" | M3xM5 | web | ▶ Open |
+| 93 | slows | weekly | Documents are listed twice, and the publish controls scroll away from a long body | M11 | web | ▶ Open |
+| 94 | slows | weekly | The website's activity cards cannot control how pricing is shown | M7 | web | ▶ Open |
+| 95 | slows | weekly | The website has no pricing TABLE - activities as rows, plans as columns | M7 | web | ▶ Open |
+| 96 | slows | weekly | Contact notes cannot be colour-tagged | M2 | web | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1201,6 +1210,151 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-88 — After paying, the buyer lands on a page that asks them to sign in again
+`blocks` · every-session · **reported by Franco 2026-08-18**
+
+**Now.** A newcomer completes a booking and a payment, and the success/redirect page asks them to
+sign in before showing what they just bought. But the payment already identified them — checkout
+collected their email and the webhook has just linked or created their contact.
+
+**Cost.** It is the worst moment in the product to demand a credential: the person has paid, is
+holding a receipt, and is being treated as a stranger. It also lands immediately after
+`checkout_contact_mode` deliberately kept the flow short — the friction saved at the door is
+handed straight back.
+
+**Fix.** Mint the contact session on the success path from the completed checkout, so the redirect
+arrives signed in. One constraint that rules out the quick version: the session claims
+(`contactId`, `teamId`, `sessionExpires`) are what Firestore and Storage rules check, so this must
+go through the same `buildContactSession` the passwordless login uses — never a client-side
+shortcut. Check the interaction with UX-82/83: a shop buyer's contact may exist with no
+`acquisition_stage`, so signing them in is not the same as their being joined.
+**Build:** M. **Owner:** functions + web.
+**Verify:** book and pay a drop-in as a brand-new person; the success page shows the booking.
+
+---
+
+### UX-89 — A confirmed newcomer booking is not tracked
+`confuses` · every-session · **reported by Franco 2026-08-18** · relates to UX-18, UX-78
+
+**Now.** A newcomer books, the booking is confirmed, and the contact detail still shows **0
+sessions attended**. Establish *which* counter is meant before changing anything: attendance is
+normally a check-in fact, not a booking fact, so "0 attended" may be literally correct and the
+missing number may be "1 booked". Both readings are defects — either the counter is not written,
+or the page shows a number that cannot answer the question the studio is asking it.
+
+**Cost.** The contact record is where a studio decides who to chase. A zero that should be one is
+indistinguishable from a person who has genuinely never come.
+
+**Fix.** Trace `bookSession` → the contact counters → the detail page. UX-18 already found that
+confirming a booking writes different data depending on which page is used, and UX-78 found a
+counter living inside a notification loop; this is likely the same family, and the fix should not
+add a third writer. **Build:** M. **Owner:** functions-agent.
+**Verify:** book a newcomer into a class, confirm it, open their record.
+
+---
+
+### UX-90 — Sidebar search finds pages, not the things a studio looks up
+`slows` · every-session · **reported by Franco 2026-08-18**
+
+**Now.** The sidebar search returns navigation destinations only. It cannot find a **contact**, a
+**subscription type** or an **activity** — the three things a studio looks up by name all day.
+Settings destinations are also listed as ordinary pages rather than grouped as settings.
+
+**Fix.** Extend the index to contacts, subscription types and activities, grouped by kind, and
+label settings destinations as settings. Contacts are the volume case: reuse the existing list
+query and its `(lastname, firstname)` ordering rather than introducing a second contact query
+(see the index/query note in CLAUDE.md — a contacts query without that ordering works in the
+emulator and fails on a real project). **Build:** M. **Owner:** web-agent.
+
+---
+
+### UX-91 — Session detail: the primary action does not look primary
+`slows` · every-session · **reported by Franco 2026-08-18** · relates to UX-63
+
+**Now.** Three things on the session detail page. **"Add contact"** is not styled as the primary
+action although it is the page's main job. The **link-sharing** control takes more room than it
+earns and belongs as an icon button at the bottom-right of the heading. And **contact names in
+the roster do not link** to their records — the same defect UX-63 fixed on the bookings list,
+surviving one page over.
+
+**Fix.** Promote "Add contact" to primary, demote sharing to an icon button, link the names.
+**Build:** S. **Owner:** web-agent.
+
+---
+
+### UX-92 — Schedule: an oversized control, and no route to "new activity"
+`slows` · every-session · **reported by Franco 2026-08-18** · relates to UX-27
+
+**Now.** The bookable-hours control is larger than the components beside it, breaking the row's
+rhythm. And **New class / New appointment** offers no path to *create an activity* — but a session
+cannot exist without one, so a studio with no activities is stopped with no next step from the
+place it is standing.
+
+**Fix.** Normal-size the control; add a link to create an activity from the new-session surface.
+This is UX-27's family — a step that cannot be completed from where it lands — so check whether
+the same gap exists on any other "new X" surface while you are there. **Build:** S.
+**Owner:** web-agent.
+
+---
+
+### UX-93 — Documents are listed twice, and publishing scrolls away
+`slows` · weekly · **reported by Franco 2026-08-18** · relates to UX-74
+
+**Now.** Documents appear as **two lists** — one for signup-consent selection, one general — for
+what is one set of objects. And on a single document page the body can grow long, pushing **save
+and publish** off-screen; they are not sticky.
+
+**Fix.** Merge into one list, with signup-consent membership as a property of the row rather than
+a second list. For the editor, apply UX-74's shipped pattern: `DialogBody` established the scroll
+rule for dialogs, and this is its full-page equivalent — a sticky footer or side rail so the
+publish controls never leave the viewport. Care: publishing a document mints an immutable version
+(`publishDocumentVersion`), so the control must stay unambiguous when it becomes always-visible —
+easier to reach must not mean easier to hit by accident. **Build:** M. **Owner:** web-agent.
+
+---
+
+### UX-94 — The website's activity cards cannot control how pricing is shown
+`slows` · weekly · **reported by Franco 2026-08-18** · relates to UX-11
+
+**Now.** `ActivitiesBlock` renders pricing lines with no per-site control. A studio may want them
+hidden, listed, or reduced to an icon with a tooltip.
+
+**Fix.** A display option on the block: hide / list / icon + tooltip. Note UX-11 has just made
+these lines meaningful for the default access tier, so this now controls something that says
+something. **Keep the honest-copy rule:** hiding a *price* must not hide a *gate* — "Members only"
+is not pricing, and a card that silently drops it invites a click that ends in a refusal.
+**Build:** M. **Owner:** web-agent.
+
+---
+
+### UX-95 — The website has no pricing table
+`slows` · weekly · **reported by Franco 2026-08-18**
+
+**Now.** The pricing block lists plans as cards only. The comparison a prospect actually makes —
+**which activities does each plan include** — has no layout: activities as rows, plans as columns.
+
+**Fix.** A table style for the pricing block. The data already exists: each activity's `accessRule`
+plus the public subscription types, which is exactly what `resolveActivityPricingDisplay` resolves
+— so this is a rendering variant, not new data. Mind the `members` tier: it means *any* membership,
+so its row is ticked under every plan, and rendering it blank (or inventing a plan list for it)
+would be wrong. Wide tables must scroll inside their own container, not the page.
+**Build:** M. **Owner:** web-agent.
+
+---
+
+### UX-96 — Contact notes cannot be colour-tagged
+`slows` · weekly · **reported by Franco 2026-08-18**
+
+**Now.** Notes on a contact are visually uniform. A studio triaging a record wants the grouping a
+few predefined colours give — post-it style.
+
+**Fix.** A small fixed palette, not a colour picker. **Store the NAME of the colour, never a hex
+value:** a pastel chosen against a white card is unreadable on a dark one, and a stored hex cannot
+be re-themed. The token then resolves per theme, which is the same rule the artifact/theming
+guidance elsewhere in this app already follows. **Build:** S. **Owner:** web-agent.
 
 ---
 
