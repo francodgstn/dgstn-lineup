@@ -23,6 +23,7 @@ import {
 import type { PluginManifest, InstalledPlugin } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { TIPS } from '@/data/tips'
@@ -154,11 +155,18 @@ function SuggestionRow({ manifest }: { manifest: PluginManifest }) {
 function PluginsTab() {
   const t = useTranslations('Discover')
   const { isInstalled } = useInstalledPlugins()
+  const { canDiscover } = usePluginDiscovery()
 
   // Recommended plugins first (all of them), then fill with other available
   // plugins up to a small cap. Locked plugins are excluded — they can't be
-  // installed without a key, so they're never a discovery nudge.
-  const notInstalled = PLUGIN_REGISTRY.filter((m) => !isInstalled(m.id) && !m.locked)
+  // installed without a key, so they're never a discovery nudge. Plugins whose
+  // audience does not name this tenant are excluded for the same reason, and
+  // more so: this panel is the most unsolicited surface there is, so a
+  // customer-specific plugin has no business appearing in it at all. No
+  // installed-plugin exception is needed here — the list already drops those.
+  const notInstalled = PLUGIN_REGISTRY.filter(
+    (m) => !isInstalled(m.id) && !m.locked && canDiscover(m),
+  )
   const recommended = notInstalled.filter((m) => m.recommended)
   const others = notInstalled.filter((m) => !m.recommended && m.status === 'available')
   const suggestions = [...recommended, ...others].slice(0, 4)

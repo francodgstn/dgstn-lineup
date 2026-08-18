@@ -1164,8 +1164,14 @@ Check the contact in your Linyup dashboard to follow up.`,
 ]
 
 // ---------------------------------------------------------------------------
-// Starter bundle — subset of library items to install in one click
-// Keeps the same library_keys as the old SYSTEM_RULES for backward compat.
+// Starter bundle — subset of library items to install in one click.
+// The `sys_rule_*` keys are the old SYSTEM_RULES, kept verbatim for backward
+// compat; membership is not restricted to that prefix (see lib_member_welcome).
+// Every item lands `active: false` — the bundle installs through the same
+// `installItems` writer as the library dialog, and nothing in it is an
+// exception. Nothing here counts itself either: the button's label reads
+// `starterBundleItemsForPlan(plan).length`, so this list is the only place a
+// bundle change is made.
 // ---------------------------------------------------------------------------
 
 export const STARTER_BUNDLE_KEYS: string[] = [
@@ -1177,6 +1183,15 @@ export const STARTER_BUNDLE_KEYS: string[] = [
   'sys_rule_winback_30d',
   'sys_rule_winback_60d',
   'sys_rule_milestone_10',
+  // The welcome at the moment of joining. In the bundle because the day-one
+  // studio's first automated mail should be the one that greets a new member,
+  // not only the ones that chase a lapsed one. It fires on
+  // `acquisition_stage_changed` — the trigger that also fires when a trial lead
+  // completes the signup form — so it reaches the population it is written for
+  // rather than only contacts created already-joined. `requires_plan: 'studio'`
+  // still applies: `starterBundleItemsForPlan` filters it out below Studio, and
+  // the button's count follows.
+  'lib_member_welcome',
 ]
 
 // ---------------------------------------------------------------------------

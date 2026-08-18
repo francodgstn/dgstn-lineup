@@ -28,6 +28,7 @@ import {
 } from '@linyup/shared'
 import type { EventTypeConfig, EventTypeField, EventTypeFieldType } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import { useTranslations } from 'next-intl'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -197,6 +198,7 @@ function EventTypeFormDialog({
 export default function EventTypesPage() {
   const t = useTranslations('EventTypesSettings')
   const { currentTeamId } = useAuth()
+  const { canDiscover } = usePluginDiscovery()
   const qc = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<EventTypeConfig | null>(null)
@@ -239,7 +241,13 @@ export default function EventTypesPage() {
     invalidate()
   }
 
-  const pluginTypes = PLUGIN_REGISTRY.filter((p) => p.eventType)
+  // This section names the plugin that provides each type ("Provided by
+  // hmd-fighting-cup"), so it is a discovery surface even though it installs
+  // nothing — it was the second place a customer's name reached every other
+  // tenant. Install state is deliberately NOT part of the filter: the list has
+  // always shown plugin types whether or not the team installed them, and
+  // narrowing that here would be a separate behaviour change.
+  const pluginTypes = PLUGIN_REGISTRY.filter((p) => p.eventType && canDiscover(p))
 
   return (
     <div className="space-y-6">

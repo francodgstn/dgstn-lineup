@@ -10,6 +10,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import {
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
@@ -750,6 +751,7 @@ export default function PluginsPage() {
   const { user, currentTeamId } = useAuth()
   const { plugins: installedPlugins, isInstalled, getConfig, isLoading: pluginsLoading } = useInstalledPlugins()
   const { data: isOwner, isLoading: roleLoading } = useIsOwner(currentTeamId, user?.uid ?? null)
+  const { canDiscover } = usePluginDiscovery()
   const { plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const searchParams = useSearchParams()
@@ -777,9 +779,12 @@ export default function PluginsPage() {
     if (lastAutoOpenedRef.current === pluginParam) return
     const manifest = PLUGIN_REGISTRY.find((m) => m.id === pluginParam)
     if (!manifest) return
+    // A guessed ?plugin= is discovery too — the detail modal names and describes
+    // the plugin. Treat an out-of-audience id exactly like an unknown one.
+    if (!canDiscover(manifest) && !isInstalled(manifest.id)) return
     lastAutoOpenedRef.current = pluginParam
     setDetailPlugin(manifest)
-  }, [searchParams])
+  }, [searchParams, canDiscover, isInstalled])
 
   // ── Install mutation ──
   const installMutation = useMutation({
@@ -880,6 +885,12 @@ export default function PluginsPage() {
 
   const search = searchTerm.trim().toLowerCase()
   const filteredPlugins = PLUGIN_REGISTRY
+    // Discovery allow-list (see PluginAudience). A tenant-specific plugin is
+    // invisible to everyone it does not name — EXCEPT to a tenant already
+    // running it, which keeps its card (and its Configure/Remove controls) in
+    // the Installed section below whatever the list says today. Removing a
+    // tenant from an allow-list must not take its live feature away.
+    .filter((m) => canDiscover(m) || isInstalled(m.id))
     .filter((m) => categoryFilter === 'all' || m.category === categoryFilter)
     .filter(
       (m) =>

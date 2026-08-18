@@ -516,10 +516,15 @@ export function LibraryDialog({
 // ─── Quick-start installer (used by empty-state button) ───────────────────────
 
 /** `plan` is REQUIRED, and deliberately not optional-with-a-default: the
- *  quick-start button installs eight rules in one click with no review step,
- *  so a call site that forgot to pass it would reopen UX-86 at its widest
- *  point. Filtering happens in `starterBundleItemsForPlan`, the same reader
- *  the dialog locks on. */
+ *  quick-start button installs the whole starter bundle in one click with no
+ *  review step, so a call site that forgot to pass it would reopen UX-86 at its
+ *  widest point. Filtering happens in `starterBundleItemsForPlan`, the same
+ *  reader the dialog locks on.
+ *
+ *  Every rule lands `active: false` (installItems, above) — including the
+ *  welcome mail, which is the one whose failure mode is loudest: a bundle that
+ *  installed it live would greet the entire existing roster the first time
+ *  anyone's stage moved. The studio switches each rule on after reading it. */
 export async function installStarterBundle(
   teamId: string,
   allTemplates: InstalledTemplate[],
