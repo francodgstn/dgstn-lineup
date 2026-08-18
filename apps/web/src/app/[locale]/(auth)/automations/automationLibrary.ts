@@ -16,7 +16,7 @@
 
 import type { LucideIcon } from 'lucide-react'
 import { UserPlus, RefreshCw, Trophy, CalendarCheck, Settings2 } from 'lucide-react'
-import { TRIAL_CLEANUP_RULE, TRIAL_CLEANUP_RULE_KEY } from '@linyup/shared'
+import { TRIAL_CLEANUP_RULE, TRIAL_CLEANUP_RULE_KEY, planIsAtLeast, type SaasPlan } from '@linyup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +44,12 @@ export interface LibraryItem {
   name: string
   description: string // 1-line shown on card
   tags: string[]
-  requires_plan: 'coach' | 'studio'
+  /** The tier this ready-made rule belongs to. READ — see
+   *  `libraryItemUnlocked`: for a long time this field was declared on every
+   *  item and consulted by nothing, so a Free team could install a 'studio'
+   *  item from the dialog. A declared-but-unenforced gate is worse than none,
+   *  because everyone maintaining the catalogue reads it as a guarantee. */
+  requires_plan: 'free' | 'coach' | 'studio'
   /** Defined only for items that own their email template. Migrated items reference
    *  an existing sys_* template via the action's template_key instead. */
   template?: {
@@ -280,7 +285,10 @@ Il team {{teamName}}`,
     description:
       'Keeps your list clean: archives (never deletes) trial bookings that never attended within 30 days. Edit the rule to change the window. Installed automatically for new teams.',
     tags: ['trial', 'cleanup', 'archive', 'hygiene'],
-    requires_plan: 'coach',
+    // 'free', and provably so: `onTeamCreated` installs this rule ACTIVE for
+    // EVERY new team whatever its plan. Locking the re-install behind Coach
+    // would refuse a Free team a rule it is already running.
+    requires_plan: 'free',
     rule: {
       trigger: { type: TRIAL_CLEANUP_RULE.trigger.type },
       conditions: TRIAL_CLEANUP_RULE.conditions.map((c) => ({ ...c })),
@@ -1170,3 +1178,28 @@ export const STARTER_BUNDLE_KEYS: string[] = [
   'sys_rule_winback_60d',
   'sys_rule_milestone_10',
 ]
+
+// ---------------------------------------------------------------------------
+// Plan gating
+// ---------------------------------------------------------------------------
+
+/** Whether `plan` may install `item`. THE ONE READER of `requires_plan` —
+ *  the dialog locks on it, the select-all skips it, the install filters on it
+ *  and the starter bundle filters on it, so a new call site cannot quietly
+ *  reintroduce the unenforced-gate bug.
+ *
+ *  Fails CLOSED on an unknown plan: `usePlan()` reports null while the team
+ *  doc loads, and treating that as "allowed" would open the gate for exactly
+ *  as long as it takes to click. */
+export function libraryItemUnlocked(item: LibraryItem, plan: SaasPlan | null): boolean {
+  return plan != null && planIsAtLeast(plan, item.requires_plan)
+}
+
+/** The starter-bundle items this plan may actually install. The empty state
+ *  counts them: offering "Quick-start (8 rules)" to a team that can install
+ *  none of them is a button that does nothing. */
+export function starterBundleItemsForPlan(plan: SaasPlan | null): LibraryItem[] {
+  return AUTOMATION_LIBRARY.filter(
+    (i) => STARTER_BUNDLE_KEYS.includes(i.library_key) && libraryItemUnlocked(i, plan)
+  )
+}

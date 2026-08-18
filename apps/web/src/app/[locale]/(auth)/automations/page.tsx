@@ -95,6 +95,7 @@ import { Link, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
+import { starterBundleItemsForPlan } from './automationLibrary'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
 import { PreviewRunDialog } from './PreviewRunDialog'
 import { RunHistoryDialog } from './RunHistoryDialog'
@@ -1921,7 +1922,7 @@ export default function AutomationsPage() {
   const t = useTranslations('Automations')
   const planName = usePlanName()
   const { currentTeamId, user } = useAuth()
-  const { isAtLeast } = usePlan()
+  const { plan, isAtLeast } = usePlan()
   // `automation_logs` is manager/owner-read in firestore.rules, so the history
   // entry points are offered only to someone the rules would actually serve —
   // an ungated button here would hand a coach a permission error instead of a
@@ -1998,6 +1999,8 @@ export default function AutomationsPage() {
   // Team-wide run history (UX-48) — the per-rule entry lives in each card's menu.
   const [historyOpen, setHistoryOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
+  // How many starter-kit rules this plan may actually install (UX-86).
+  const starterCount = starterBundleItemsForPlan(plan).length
 
   // Deep-link entry: ?editRule=<id> opens that rule; ?newTrigger=<type>&subType=<id>
   // opens a NEW rule prefilled (e.g. from the subscription editor). Params are cleared
@@ -2045,7 +2048,7 @@ export default function AutomationsPage() {
       )
       const allTmpl = snap.docs.map((d) => ({ ...d.data(), id: d.id }))
       const installedRuleKeys = new Set(rules.flatMap((r) => (r.system_key ? [r.system_key] : [])))
-      await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys)
+      await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys, { plan })
       invalidateAll()
     } catch (err) {
       console.error('[QuickStart] failed:', err)
@@ -2176,14 +2179,19 @@ export default function AutomationsPage() {
             <div>
               <p className="font-semibold">{t('page.emptyTitle')}</p>
               <p className="text-muted-foreground text-sm mt-1 max-w-xs">
-                {t('page.emptyBody')}
+                {starterCount > 0 ? t('page.emptyBody') : t('page.emptyBodyNoStarter')}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
+              {/* Offered only when it would install something. On a plan below
+                  the starter kit's items the button used to promise eight rules
+                  and quietly install none (UX-86). */}
+              {starterCount > 0 && (
               <Button variant="outline" onClick={handleQuickStart} disabled={quickStarting}>
                 <Sparkles className="h-4 w-4 mr-2" />
-                {quickStarting ? t('page.installing') : t('page.quickStart')}
+                {quickStarting ? t('page.installing') : t('page.quickStart', { count: starterCount })}
               </Button>
+              )}
               <Button onClick={() => setLibraryOpen(true)}>
                 <BookOpen className="h-4 w-4 mr-2" />
                 {t('page.browseLibrary')}

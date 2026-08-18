@@ -375,6 +375,26 @@
     "trendsNoHistoryBody": "Les tendances comparent les semaines entre elles. Après quelques séances, les graphiques apparaîtront ici d'eux-mêmes."
   },
   "Contacts": {
+    "noteColor_none": "Sans couleur",
+    "noteColor_yellow": "Jaune",
+    "noteColor_green": "Vert",
+    "noteColor_blue": "Bleu",
+    "noteColor_pink": "Rose",
+    "noteColor_purple": "Violet",
+    "sortLabel": "Trier",
+    "sort_name": "Nom",
+    "sort_attention": "À traiter",
+    "sort_recent": "Ajoutés récemment",
+    "filterGroupNone": "Dans aucun groupe",
+    "filterCoach": "Coach",
+    "filterCoachNone": "Aucun coach assigné",
+    "filterCoachesNoun": "coachs",
+    "filterNeedsAttention": "À traiter",
+    "attention_alerts": "Alerte",
+    "attention_pending_signup": "Inscription en attente",
+    "attention_trial_pending": "Séance d'essai non honorée",
+    "attention_new_lead": "Nouveau contact",
+    "attention_gone_quiet": "Devenu inactif",
     "reqEmpty": "Aucune demande en attente.",
     "reqTitle": "Demande de mise à jour",
     "reqNote": "Note",
@@ -1389,7 +1409,12 @@
     "fieldOfferAs": "Proposer comme",
     "type_class_desc": "Vous le planifiez ; les gens réservent une place.",
     "type_appointment_desc": "Les gens choisissent un créneau dans vos disponibilités.",
-    "durationPriceHint": "Laissez le prix d'une durée vide pour la rendre gratuite pour tout le monde.",
+    "durationPriceHint": "Choisissez comment chaque durée est vendue : gratuite pour tous, à un prix, ou uniquement via un abonnement ou une carte.",
+    "durationModeFree": "Gratuit",
+    "durationModePriced": "Payant",
+    "durationModeBenefitOnly": "Uniquement avec un abonnement",
+    "durationBenefitOnlyHint": "Pas vendue à l'unité — seuls les abonnements ou cartes sélectionnés ci-dessous peuvent la réserver.",
+    "durationBenefitOnlyNoWayIn": "Personne ne peut réserver cette durée : choisissez ci-dessous les abonnements ou cartes qui la comprennent.",
     "durationPriceLabel": "Prix pour {duration}",
     "durationPriceValidation": "Saisissez un prix d'au moins 0.50, ou laissez le champ vide.",
     "chipDropIn": "À la séance {amount}",
@@ -2012,6 +2037,7 @@
     "timeOffPickCoach": "Sélectionner un coach"
   },
   "AppointmentForm": {
+    "durationBenefitOnly": "Avec un abonnement",
     "title": "Nouveau rendez-vous",
     "sectionAppointment": "Rendez-vous",
     "fieldActivity": "Activité",
@@ -2057,6 +2083,12 @@
     "createActivityAction": "Créer une activité"
   },
   "AppointmentBooking": {
+    "durationBenefitOnly": "avec un abonnement",
+    "benefitOnlyTitle": "Compris dans un abonnement",
+    "benefitOnlyBodyGuest": "Cette durée n'est pas vendue à l'unité — un abonnement ou une carte la couvre. Vous en avez déjà un ? Connectez-vous pour réserver.",
+    "benefitOnlyBodyMember": "Cette durée n'est pas vendue à l'unité, et votre abonnement actuel ne la comprend pas.",
+    "benefitOnlySeePlans": "Voir les abonnements et cartes",
+    "benefitOnlySignIn": "Déjà membre ? Se connecter",
     "title": "Prendre rendez-vous",
     "subtitle": "Choisissez un créneau qui vous convient",
     "teamNotFound": "Cette page n'est pas disponible",
@@ -4141,6 +4173,7 @@
     "healthBenefitBadPercent": "La réduction membre de {name} a un pourcentage invalide.",
     "healthGatedNoNewcomerPath": "{name} n'offre aucune entrée pour un nouveau venu — ni tarif à la séance, ni essai.",
     "healthCreditsUnusable": "{name} vend des packs de crédits, mais aucune activité ne les accepte.",
+    "healthAppointmentNoWayIn": "Ce rendez-vous a une durée réservée aux abonnements ou cartes, mais aucun forfait ne la comprend — personne ne peut la réserver.",
     "fixLink": "Corriger",
     "sectionDiscountsTitle": "Réductions",
     "sectionDiscountsSubtitle": "Codes promo qu'un visiteur saisit au paiement pour modifier ce qu'il paie.",
@@ -4165,6 +4198,7 @@
     "includedWithSub": "Inclus avec {name}",
     "includedWithSubPriced": "Inclus avec {name} — {price}",
     "signedUpOnlyLine": "Réservé aux membres — l'inscription est gratuite",
+    "planRequiredLine": "Nécessite un abonnement actif",
     "discountWithSub": "Réduction avec {name} — {percent} %",
     "prerequisitesLabel": "Prérequis :",
     "meetingPointLabel": "Point de rendez-vous :",
@@ -5018,6 +5052,9 @@
       "formReceipt": "Accusés de réception de formulaire",
       "formReceiptDesc": "Confirmation à l'expéditeur — activée par formulaire, dans ses paramètres."
     },
+    "library": {
+      "lockedNotice": "Certaines automatisations prêtes à l'emploi nécessitent un plan supérieur. Vous pouvez créer vos propres règles avec n'importe quel plan."
+    },
     "page": {
       "title": "Automatisations",
       "subtitle": "Déclenchez automatiquement des e-mails et des alertes selon l'activité des contacts.",
@@ -5028,8 +5065,9 @@
       "limitedPlanBody": "Vous pouvez automatiser autour de vos modules actifs et de vos extensions installées. Passez à {plan} pour la suite d'automatisation complète — y compris les déclencheurs et actions de chaque extension.",
       "emptyTitle": "Aucune automatisation pour l'instant",
       "emptyBody": "Chargez un kit de démarrage en un clic, parcourez la bibliothèque pour choisir des règles individuelles, ou créez la vôtre.",
+      "emptyBodyNoStarter": "Parcourez la bibliothèque pour voir ce que votre plan inclut, ou créez votre propre règle.",
       "installing": "Installation…",
-      "quickStart": "Démarrage rapide (8 règles)",
+      "quickStart": "Démarrage rapide ({count} règles)",
       "browseLibrary": "Parcourir la bibliothèque"
     },
     "common": {
@@ -6187,6 +6225,7 @@
     "termIncludedWithSubscription": "Inclus avec l'abonnement",
     "termMemberDiscount": "−{percent}% pour les membres",
     "signedUpOnlyLine": "Réservé aux membres — l'inscription est gratuite",
+    "planRequiredLine": "Nécessite un abonnement actif",
     "includedWithSub": "Inclus avec {name}",
     "includedWithSubPriced": "Inclus avec {name} — {price}",
     "discountWithSub": "Réduction avec {name} — {percent} %",

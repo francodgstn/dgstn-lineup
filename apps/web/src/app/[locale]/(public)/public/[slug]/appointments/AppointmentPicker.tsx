@@ -24,7 +24,7 @@ import {
 } from '@/components/booking/PromoCodeField'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
 import { useRouter } from '@/i18n/navigation'
-import { returnHref } from '@/lib/publicRoutes'
+import { publicHrefLocalized, returnHref } from '@/lib/publicRoutes'
 import { useStepUrl } from '@/hooks/useStepUrl'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { formatCurrency } from '@/lib/format'
@@ -66,6 +66,10 @@ import { CalendarClock, MapPin, Video, Clock, User, Check, ChevronRight, Tag } f
 interface AvailDuration {
   minutes: number
   priceAmount: number | null
+  /** NOT SOLD INDIVIDUALLY (UX-70) — bookable only through `memberBenefit`.
+   *  Distinct from `priceAmount: null`, which means free for anyone: the two
+   *  used to be the same value and the coach could express only one of them. */
+  benefitOnly?: boolean
 }
 
 interface AvailActivity {
@@ -100,6 +104,7 @@ interface WindowBooking {
   location: string | null
   onlineUrl: string | null
   priceAmount: number | null
+  benefitOnly: boolean
   memberBenefit: ActivityMemberBenefit | Benefit | null
   /** Carried to the booking step so the terms are on the screen that commits. */
   cancellationPolicy: string | null
@@ -298,7 +303,9 @@ function activityPriceRangeLabel(
   locale: string,
   t: ReturnType<typeof useTranslations>
 ): string | null {
-  const priced = activity.durations.filter((d) => typeof d.priceAmount === 'number')
+  const priced = activity.durations.filter(
+    (d) => d.benefitOnly !== true && typeof d.priceAmount === 'number'
+  )
   if (priced.length === 0) return null
   const amounts = priced.map((d) => d.priceAmount as number)
   const min = Math.min(...amounts)
@@ -310,11 +317,13 @@ function activityPriceRangeLabel(
   return t('priceFrom', { price: formatCurrency(min, currency, locale) })
 }
 
-// A duration is "for sale" when it has a base price — an unpriced duration is
-// free for anyone regardless of `memberBenefit` (the shared resolver returns
-// `covered` for it before ever looking at the benefit).
-function durationIsPriced(priceAmount: number | null): boolean {
-  return typeof priceAmount === 'number'
+// A duration is "for sale" when it has a base price AND is sold individually —
+// a free length is free for anyone regardless of `memberBenefit` (the shared
+// resolver returns `covered` before ever looking at it), and a benefit_only one
+// has no individual price at all, only a leftover number that must never be
+// quoted (UX-70).
+function durationIsPriced(d: { priceAmount: number | null; benefitOnly?: boolean }): boolean {
+  return d.benefitOnly !== true && typeof d.priceAmount === 'number'
 }
 
 // Pulls the {code, reason, priceAmount} triad off a callable's FunctionsError —
@@ -347,6 +356,8 @@ function SlotBookingForm({
   onSubmittingChange,
   accentColor,
   hasAnyPrice,
+  benefitOnly,
+  shopHref,
   priceAmount,
   memberBenefit,
   cancellationPolicy,
@@ -368,6 +379,11 @@ function SlotBookingForm({
   onSubmittingChange: (submitting: boolean) => void
   accentColor: string | null
   hasAnyPrice: boolean
+  /** This length is not sold individually (UX-70). Never true together with
+   *  `hasAnyPrice`: the resolver reads the mode, not the leftover number. */
+  benefitOnly: boolean
+  /** Where "see plans" goes — the parent owns the slug. */
+  shopHref: string
   priceAmount: number | null
   /** null/empty subscriptionTypeIds = nothing to offer — the sign-in link never
    *  renders (there's no price a member could get that a guest can't). */
@@ -655,13 +671,19 @@ function SlotBookingForm({
       }),
       {
         kind: 'appointment',
-        duration: { minutes: durationMinutes, priceAmount },
+        duration: { minutes: durationMinutes, priceAmount, benefitOnly },
         benefit: memberBenefit,
       },
       promoApplied ? { promo: promoApplied } : undefined
     )
 
-  const callerQuote = hasAnyPrice ? quote(caller) : null
+  // Also resolved for a benefit_only length, where the interesting answer is
+  // not a price but the ABSENCE of any option — the refusal below reads it.
+  const callerQuote = hasAnyPrice || benefitOnly ? quote(caller) : null
+  /** No option at all: this length is not sold on its own and this caller holds
+   *  nothing that opens it. The server refuses the same booking, so offering
+   *  the Confirm button would be a button whose only outcome is an error. */
+  const noWayIn = benefitOnly && callerQuote?.options.length === 0
   const callerPay = callerQuote?.options[0]
   const resolvedAmount = callerPay?.type === 'pay' ? callerPay.amount : null
   /** What this screen renders, and what the next attempt sends back as
@@ -1102,6 +1124,47 @@ function SlotBookingForm({
     />
   )
 
+  // ── NOT SOLD INDIVIDUALLY, and this caller holds nothing that opens it
+  // (UX-70). BEFORE every other screen, because none of them can be reached
+  // from here: there is no price to quote, no code to type, and the only submit
+  // this screen could offer is one the server refuses. It says what to buy —
+  // and, for a visitor we don't recognise, offers the sign-in that might
+  // already answer it. The sign-in screen itself is allowed through below.
+  if (noWayIn && screen !== 'signIn') {
+    return (
+      <>
+        <div>
+          <BackButton label={backLabel} onClick={onExit} />
+          <h1 className="text-2xl font-bold">{t('benefitOnlyTitle')}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {caller.kind === 'guest' ? t('benefitOnlyBodyGuest') : t('benefitOnlyBodyMember')}
+          </p>
+        </div>
+        {/* New tab, the same reason the class flow opens the shop in one: buying
+            is a detour, and losing the slot they picked loses the booking. */}
+        <a
+          href={shopHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={accentColor ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          {t('benefitOnlySeePlans')}
+        </a>
+        {caller.kind === 'guest' && (
+          <button
+            type="button"
+            onClick={() => setScreen('signIn')}
+            className="flex w-full items-center gap-2 rounded-lg border border-dashed p-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+          >
+            <Tag className="h-4 w-4 shrink-0" />
+            {t('benefitOnlySignIn')}
+          </button>
+        )}
+      </>
+    )
+  }
+
   // ── The consent screen — FIRST, because it stands in front of all three ──
   // submits and must win over `autobooking`'s spinner and `memberPay`'s CTA.
   // It carries its own Confirm for the same reason the member-pay screen does:
@@ -1491,6 +1554,7 @@ function buildWindowBooking(
     location: activity.location,
     onlineUrl: activity.onlineUrl,
     priceAmount: chosen?.priceAmount ?? null,
+    benefitOnly: chosen?.benefitOnly === true,
     memberBenefit: activity.memberBenefit,
     cancellationPolicy: activity.cancellationPolicy,
   }
@@ -1554,7 +1618,7 @@ function TimePicker({
   const times = day?.slotsByDuration[String(duration)] ?? []
   const chosenDuration =
     activity.durations.find((d) => d.minutes === duration) ??
-    activity.durations[0] ?? { minutes: duration, priceAmount: null }
+    activity.durations[0] ?? { minutes: duration, priceAmount: null, benefitOnly: false }
 
   return (
     <>
@@ -1592,7 +1656,10 @@ function TimePicker({
                     }`}
                   >
                     {fmtDuration(d.minutes)}
-                    {typeof d.priceAmount === 'number' && ` · ${formatCurrency(d.priceAmount, currency, locale)}`}
+                    {d.benefitOnly === true
+                      ? ` · ${t('durationBenefitOnly')}`
+                      : typeof d.priceAmount === 'number' &&
+                        ` · ${formatCurrency(d.priceAmount, currency, locale)}`}
                   </button>
                 ))}
               </div>
@@ -2091,7 +2158,12 @@ export default function AppointmentPicker({
               onScreenChange={setBookScreen}
               onSubmittingChange={setBookSubmitting}
               accentColor={accentColor}
-              hasAnyPrice={durationIsPriced(windowBooking.priceAmount)}
+              hasAnyPrice={durationIsPriced(windowBooking)}
+              benefitOnly={windowBooking.benefitOnly}
+              shopHref={publicHrefLocalized(locale, slug, 'shop', {
+                tab: 'subscriptions',
+                from: 'booking',
+              })}
               priceAmount={windowBooking.priceAmount}
               memberBenefit={windowBooking.memberBenefit}
               cancellationPolicy={windowBooking.cancellationPolicy}

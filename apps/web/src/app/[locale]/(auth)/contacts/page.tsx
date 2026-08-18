@@ -16,6 +16,7 @@ import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
@@ -39,8 +40,11 @@ import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS 
 import {
   EMPTY_CONTACT_FILTER, emptyContactFilter, normalizeContactFilter, countActiveFilters,
   filterContacts, flattenGroupTree, isDynamicGroup, toGroupRule, ruleWouldDropGroups,
+  compareContactsByAttention, contactAttentionReasons, resolveTimestampMs,
+  GROUP_NONE, COACH_NONE,
 } from '@linyup/shared'
 import type {
+  ContactAttentionReason,
   ContactFilter, ConsentFilter, InactivityPreset, RankFilter,
   AgeFilter, CustomFieldCondition, CustomFieldOp, WaiverAcceptanceState,
 } from '@linyup/shared'
@@ -507,6 +511,11 @@ function OverviewPanel({
 // dynamic groups and the automation engine agree on what "matches" means.
 type Filters = ContactFilter
 const EMPTY_FILTERS = EMPTY_CONTACT_FILTER
+
+/** How the list is ordered. 'name' is the query's own (lastname, firstname);
+ *  the other two are client sorts over the already-loaded list (UX-44). */
+type SortMode = 'name' | 'attention' | 'recent'
+const SORT_MODES: SortMode[] = ['name', 'attention', 'recent']
 
 // ─── filter chips ─────────────────────────────────────────────────────────────
 
@@ -1139,6 +1148,10 @@ function FilterChips({
   // See ConsentFilterContent: the five acceptance-state names live once, in the
   // Waivers namespace.
   const tWaivers = useTranslations('Waivers')
+  // The assignable staff — the same roster the contact detail page assigns from
+  // (`CoachAssignment`), so the filter can only offer people who could actually
+  // be in `assigned_coach_ids`.
+  const { pickable: coachOptions } = useCoaches(teamId)
   const { saved, save, remove, togglePin, pinnedPresets, togglePresetPin } = useSavedQueries(teamId)
   const presets = usePresets()
   const pinnedQueries = [
@@ -1259,18 +1272,73 @@ function FilterChips({
       available: !!contactGroups && contactGroups.length > 0,
       isActive: (f) => f.groups.length > 0,
       clear: (f) => ({ ...f, groups: [] }),
-      activeLabel: (f) => chip(f.groups, (contactGroups ?? []).map((g) => ({ value: g.id, label: g.name })), t('filterGroupsNoun')),
-      render: (f, set) => flattenGroupTree(contactGroups ?? []).map(({ group, depth }) => (
-        <div key={group.id} style={{ paddingLeft: `${depth * 14}px` }}>
+      activeLabel: (f) =>
+        chip(
+          f.groups,
+          [
+            { value: GROUP_NONE, label: t('filterGroupNone') },
+            ...(contactGroups ?? []).map((g) => ({ value: g.id, label: g.name })),
+          ],
+          t('filterGroupsNoun')
+        ),
+      render: (f, set) => (
+        <>
+          {/* "In no group" — who has fallen through the studio's own
+              segmentation. Resolved against DYNAMIC groups too (the predicate
+              asks every group, it never reads a stored flag), which is why it
+              belongs in this dimension rather than being a separate toggle. */}
           <CheckOption
-            label={group.name}
-            // A dynamic group resolves its rule at read time; the dot marks it
-            // so a manual and a derived group are never confused in a picker.
-            dot={isDynamicGroup(group) ? 'bg-violet-500' : undefined}
-            checked={f.groups.includes(group.id)}
-            onToggle={() => set({ ...f, groups: toggle(f.groups, group.id) })} />
-        </div>
-      )),
+            label={t('filterGroupNone')}
+            checked={f.groups.includes(GROUP_NONE)}
+            onToggle={() => set({ ...f, groups: toggle(f.groups, GROUP_NONE) })} />
+          <div className="border-t my-1.5 mx-1" />
+          {flattenGroupTree(contactGroups ?? []).map(({ group, depth }) => (
+            <div key={group.id} style={{ paddingLeft: `${depth * 14}px` }}>
+              <CheckOption
+                label={group.name}
+                // A dynamic group resolves its rule at read time; the dot marks it
+                // so a manual and a derived group are never confused in a picker.
+                dot={isDynamicGroup(group) ? 'bg-violet-500' : undefined}
+                checked={f.groups.includes(group.id)}
+                onToggle={() => set({ ...f, groups: toggle(f.groups, group.id) })} />
+            </div>
+          ))}
+        </>
+      ),
+    },
+    {
+      key: 'coaches',
+      label: t('filterCoach'),
+      // Offered once there is more than one person it could distinguish — a
+      // solo owner filtering by "assigned to me" narrows nothing.
+      available: coachOptions.length > 1,
+      isActive: (f) => f.coaches.length > 0,
+      clear: (f) => ({ ...f, coaches: [] }),
+      activeLabel: (f) =>
+        chip(
+          f.coaches,
+          [
+            { value: COACH_NONE, label: t('filterCoachNone') },
+            ...coachOptions.map((c) => ({ value: c.userId, label: coachLabel(c) })),
+          ],
+          t('filterCoachesNoun')
+        ),
+      render: (f, set) => (
+        <>
+          <CheckOption
+            label={t('filterCoachNone')}
+            checked={f.coaches.includes(COACH_NONE)}
+            onToggle={() => set({ ...f, coaches: toggle(f.coaches, COACH_NONE) })} />
+          <div className="border-t my-1.5 mx-1" />
+          {coachOptions.map((c) => (
+            <CheckOption
+              key={c.userId}
+              label={coachLabel(c)}
+              checked={f.coaches.includes(c.userId)}
+              onToggle={() => set({ ...f, coaches: toggle(f.coaches, c.userId) })} />
+          ))}
+        </>
+      ),
     },
     {
       key: 'age',
@@ -1427,6 +1495,18 @@ function FilterChips({
       clear: (f) => ({ ...f, pendingSignup: false }),
       toggle: (f) => ({ ...f, pendingSignup: !f.pendingSignup }),
     },
+    {
+      // The filter twin of the "Needs attention" SORT — same predicate, and it
+      // is a filter dimension rather than a one-off so it saves as a preset, a
+      // dynamic group and an automation condition for free.
+      key: 'needsAttention',
+      label: t('filterNeedsAttention'),
+      available: true,
+      icon: AlertCircle,
+      isActive: (f) => f.needsAttention,
+      clear: (f) => ({ ...f, needsAttention: false }),
+      toggle: (f) => ({ ...f, needsAttention: !f.needsAttention }),
+    },
   ]
 
   const visible = DIMENSIONS.filter((d) => d.available && (d.isActive(filters) || revealed.includes(d.key)))
@@ -1549,12 +1629,16 @@ function ContactRow({
   selected,
   onSelect,
   rankingSystems = [],
+  attentionReason,
 }: {
   contact: Contact
   selectable: boolean
   selected: boolean
   onSelect: (id: string) => void
   rankingSystems?: RankingSystem[]
+  /** The single most urgent reason this contact is waiting on the studio, or
+   *  undefined when the list is not ordered by it (UX-44). */
+  attentionReason?: ContactAttentionReason
 }) {
   const router = useRouter()
   const { openInNewTab } = useOpenTabs()
@@ -1659,6 +1743,15 @@ function ContactRow({
           </div>
         </div>
       </button>
+
+      {/* WHY this row is near the top, shown only while the list is ordered by
+          it: an urgency ranking nobody can see the reason for is a ranking
+          nobody trusts. */}
+      {attentionReason && (
+        <span className="shrink-0 px-2 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          {t(`attention_${attentionReason}` as 'attention_alerts')}
+        </span>
+      )}
 
       {/* Alerts indicator */}
       {(contact.alerts_count ?? 0) > 0 && (
@@ -2409,6 +2502,9 @@ export default function ContactsPage() {
   const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
 
   const [tab, setTab] = useTabParam(TAB_IDS, 'active')
+  // Ephemeral on purpose: a persisted per-device sort is one more of the
+  // device-local preferences UX-23 counts, and this one is cheap to re-pick.
+  const [sortMode, setSortMode] = useState<SortMode>('name')
   // The Unconfirmed tab only exists while provisional contacts do — hop back to
   // Active when the last one is confirmed/deleted (its tab entry disappears).
   useEffect(() => {
@@ -2469,11 +2565,27 @@ export default function ContactsPage() {
 
   // ── current list & loading state ──────────────────────────────────────────
 
-  const currentList =
+  const currentListUnsorted =
     tab === 'active' ? filteredActive
     : tab === 'leads' ? filteredLeads
     : tab === 'archived' ? filteredArchived
     : filteredDeleted
+  // ORDERING (UX-44). Surname order answers "where is Meier?" — the question you
+  // ask when you already know the name. It cannot answer the one a studio opens
+  // this page with: WHO IS WAITING ON ME. That answer is derived (see
+  // `contactAttentionReasons`), so it can only be a client sort — there is no
+  // stored field to index, and the (lastname, firstname) index the list query
+  // needs is untouched. The list is already loaded and already filtered in
+  // memory, so sorting it costs nothing extra.
+  const currentList = useMemo(() => {
+    if (sortMode === 'name') return currentListUnsorted // already (lastname, firstname)
+    const list = [...currentListUnsorted]
+    if (sortMode === 'attention')
+      return list.sort((a, b) => compareContactsByAttention(a, b, filterContext))
+    return list.sort(
+      (a, b) => (resolveTimestampMs(b.created_at) ?? 0) - (resolveTimestampMs(a.created_at) ?? 0)
+    )
+  }, [currentListUnsorted, sortMode, filterContext])
   // The same tab BEFORE filtering — a dynamic rule can resolve wider than the
   // current view (it can't keep the `groups` dimension), so previewing it
   // against `currentList` would understate the group.
@@ -2805,6 +2917,33 @@ export default function ContactsPage() {
       {/* Main list */}
       {tab !== 'requests' && (
         <div className="rounded-xl border overflow-hidden bg-card">
+          {/* Ordering (UX-44). Rendered above the list rather than hidden in the
+              filter panel: a filter removes people, a sort answers a different
+              question about the same people, and conflating the two is why
+              "who needs me today" had nowhere to live. */}
+          {!isLoading && currentList.length > 0 && (
+            <div className="flex items-center justify-end gap-2 px-4 py-2 border-b bg-muted/10">
+              <span className="text-xs text-muted-foreground">{t('sortLabel')}</span>
+              <div className="flex gap-1">
+                {SORT_MODES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setSortMode(m)}
+                    aria-pressed={sortMode === m}
+                    className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                      sortMode === m
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t(`sort_${m}` as 'sort_name')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Select-all header */}
           {!isLoading && currentList.length > 0 && selectable && (
             <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
@@ -2850,6 +2989,11 @@ export default function ContactsPage() {
               selected={selected.has(c.id)}
               onSelect={toggleSelect}
               rankingSystems={rankingSystems}
+              attentionReason={
+                sortMode === 'attention'
+                  ? contactAttentionReasons(c, filterContext)[0]
+                  : undefined
+              }
             />
           ))}
 

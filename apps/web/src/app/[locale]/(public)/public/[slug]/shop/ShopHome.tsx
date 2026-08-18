@@ -24,6 +24,7 @@ import {
   resolveProductPrice,
   resolveProductCollectionNote,
   compareActivities,
+  resolveDurationSale,
   resolvePaymentOptions,
   planGiftCardRedemption,
   type CheckoutContactMode,
@@ -146,7 +147,7 @@ interface PayPerVisitEntry {
   slug: string
   activityType?: string
   dropIn?: { enabled: boolean; priceAmount?: number }
-  durations?: Array<{ minutes: number; priceAmount: number | null }>
+  durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   memberBenefit?: ActivityMemberBenefit | Benefit
   accessRule?: ActivityAccessRule
   order?: number
@@ -157,7 +158,9 @@ interface PayPerVisitEntry {
 // to "pay per visit" for.
 function hasMoneyStory(a: PayPerVisitEntry): boolean {
   if (a.activityType === 'appointment') {
-    return (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+    // A benefit_only length (UX-70) carries no individual price — it is bought
+    // as the subscription/pack, not per visit.
+    return (a.durations ?? []).some((d) => resolveDurationSale(d).priceAmount !== null)
   }
   return a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
 }

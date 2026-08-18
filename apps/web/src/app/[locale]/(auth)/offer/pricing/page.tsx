@@ -552,6 +552,7 @@ const HEALTH_MESSAGE_KEY: Record<PricingWarningCode, string> = {
   benefit_bad_percent: 'healthBenefitBadPercent',
   gated_no_newcomer_path: 'healthGatedNoNewcomerPath',
   credits_unusable: 'healthCreditsUnusable',
+  appointment_no_way_in: 'healthAppointmentNoWayIn',
 }
 
 function severityIcon(severity: PricingWarning['severity']) {

@@ -60,6 +60,7 @@ import {
   compareActivities,
   mergeAvailabilitySlots,
   resolveActivityAccessRule,
+  resolveDurationSale,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
 } from '@linyup/shared'
@@ -447,7 +448,7 @@ interface ActivityEntry {
    *  FREE (today's behaviour); a number ⇒ the trial costs that instead. */
   trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
-  durations?: Array<{ minutes: number; priceAmount: number | null }>
+  durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
   memberBenefit?: ActivityMemberBenefit
 }
@@ -482,7 +483,8 @@ function activityTermLabel(term: ActivityTerm, currency: string, t: SiteT): stri
 // per visit, so it never appears on the Pricing block's pay-per-visit card.
 function activityHasMoneyStory(a: ActivityEntry): boolean {
   if (a.activityType === 'appointment') {
-    return (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+    // A benefit_only length is not sold per visit — it is sold as the plan.
+    return (a.durations ?? []).some((d) => resolveDurationSale(d).priceAmount !== null)
   }
   return a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
 }
@@ -753,6 +755,10 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               // the gate that is enforced (being signed up) rather than a plan
               // price nobody has to pay to book it. See `signedUpOnly`.
               if (d.signedUpOnly) gate.push(t('signedUpOnlyLine'))
+              // A gated class whose plans are not public resolved to NO line at
+              // all before this — the card looked open. Hiding a price must
+              // never hide a gate, so the requirement is stated generically.
+              if (d.planRequired) gate.push(t('planRequiredLine'))
               for (const s of d.includedWith) {
                 const line =
                   s.priceLabel && amountsShown
@@ -944,9 +950,13 @@ function pricingCell(
     if (covered && benefit?.kind === 'included') return { kind: 'yes' }
     if (covered && benefit?.kind === 'discount')
       return { kind: 'text', text: t('tableDiscount', { percent: benefit.discountPercent ?? 0 }) }
-    const priced = (a.durations ?? []).filter((d) => typeof d.priceAmount === 'number')
+    // `resolveDurationSale` rather than a raw price test: a benefit_only length
+    // (UX-70) has no individual price, so it must not produce a "from" figure.
+    const priced = (a.durations ?? [])
+      .map((d) => resolveDurationSale(d).priceAmount)
+      .filter((p): p is number => typeof p === 'number')
     if (priced.length === 0) return { kind: 'yes' }
-    const min = Math.min(...priced.map((d) => d.priceAmount as number))
+    const min = Math.min(...priced)
     return { kind: 'text', text: t('termFrom', { price: formatCurrency(min, currency) }) }
   }
 
@@ -964,7 +974,9 @@ function pricingCell(
 /** The row's one-line explanation, where the row needs one. */
 function pricingRowNote(a: ActivityEntry, t: SiteT): string | null {
   if (a.activityType === 'appointment') {
-    const priced = (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+    const priced = (a.durations ?? []).some(
+      (d) => resolveDurationSale(d).priceAmount !== null
+    )
     return priced ? null : t('tableFreeNote')
   }
   const rule = resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })

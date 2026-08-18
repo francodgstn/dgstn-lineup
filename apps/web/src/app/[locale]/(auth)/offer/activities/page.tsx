@@ -29,7 +29,8 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityType, SaasPlan, SubscriptionType, FormField } from '@linyup/shared'
+import { resolveDurationSale } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField } from '@linyup/shared'
 
 /** The waitlist's plan gate, mirroring the server side of it
  *  (`requirePlan(teamId, 'coach')` in joinWaitlist). One constant, because a
@@ -113,13 +114,22 @@ function slugify(name: string): string {
 interface DurationFormValue {
   minutes: number
   price: string
+  /** THE FORM holds the tri-state explicitly, the DOCUMENT does not (see
+   *  `ActivityDuration` in @linyup/shared): "priced with the box still empty"
+   *  and "free" are the same stored bytes but different intentions, and only a
+   *  stored mode can tell the validator which one the coach meant. */
+  mode: DurationSaleMode
 }
 
 function toDurationFormValues(durations?: ActivityDuration[] | null): DurationFormValue[] {
-  return (durations ?? []).map((d) => ({
-    minutes: d.minutes,
-    price: d.priceAmount != null ? String(d.priceAmount) : '',
-  }))
+  return (durations ?? []).map((d) => {
+    const sale = resolveDurationSale(d)
+    return {
+      minutes: d.minutes,
+      price: sale.priceAmount != null ? String(sale.priceAmount) : '',
+      mode: sale.mode,
+    }
+  })
 }
 
 function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[] {
@@ -127,7 +137,11 @@ function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[]
     .sort((a, b) => a.minutes - b.minutes)
     .map((d) => ({
       minutes: d.minutes,
-      priceAmount: d.price.trim() === '' ? null : Number(d.price),
+      // A price is written ONLY in 'priced' mode, so switching a length to
+      // "only with a plan" (or back to free) cannot leave a sellable number
+      // behind it.
+      priceAmount: d.mode === 'priced' && d.price.trim() !== '' ? Number(d.price) : null,
+      ...(d.mode === 'benefit_only' ? { benefitOnly: true } : {}),
     }))
 }
 
@@ -211,6 +225,7 @@ function createActivitySchema(
       z.object({
         minutes: z.number(),
         price: z.string(),
+        mode: z.enum(['free', 'priced', 'benefit_only'] as const),
       })
     ),
     // The one member-benefit rule for the whole activity — appointments (every
@@ -233,7 +248,13 @@ function createActivitySchema(
       ctx.addIssue({ code: 'custom', path: ['durations'], message: 'Pick at least one session length' })
     }
     d.durations.forEach((dur, i) => {
-      if (dur.price.trim() !== '' && !(Number(dur.price) >= 0.5)) {
+      // 'priced' with nothing in the box is the one state the stored shape
+      // cannot distinguish from free — so it is refused here rather than saved
+      // as an accidentally-free one-to-one.
+      if (dur.mode === 'priced' && !(Number(dur.price) >= 0.5)) {
+        ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
+      }
+      if (dur.mode !== 'priced' && dur.price.trim() !== '' && !(Number(dur.price) >= 0.5)) {
         ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
       }
     })
@@ -398,6 +419,13 @@ function ActivityDialog({
   const trialEnabled = watch('trialEnabled')
   const waitlistEnabled = watch('waitlistEnabled')
   const durations = watch('durations') || []
+  // Can a 'benefit_only' length actually be opened by anything? Only an
+  // INCLUDED benefit is a way in — a percentage off a price that does not exist
+  // opens nothing (the resolver refuses it; see the appointment arm).
+  const memberBenefitValue = watch('memberBenefit')
+  const benefitOpensDoor =
+    memberBenefitValue?.effect === 'included' &&
+    (memberBenefitValue?.subscriptionTypeIds?.length ?? 0) > 0
 
   // Does the activity being EDITED already carry anything from the "More
   // options" tail? If so the disclosure opens showing it — a field the studio
@@ -423,7 +451,9 @@ function ActivityDialog({
       'durations',
       durations.some((d) => d.minutes === minutes)
         ? durations.filter((d) => d.minutes !== minutes)
-        : [...durations, { minutes, price: '' }].sort((a, b) => a.minutes - b.minutes)
+        : [...durations, { minutes, price: '', mode: 'free' as DurationSaleMode }].sort(
+            (a, b) => a.minutes - b.minutes
+          )
     )
   }
 
@@ -432,6 +462,18 @@ function ActivityDialog({
   // never derived from a price edit.
   function updateDurationPrice(minutes: number, price: string) {
     setValue('durations', durations.map((d) => (d.minutes === minutes ? { ...d, price } : d)))
+  }
+
+  // Switch a length between the three ways it can be sold. Changing mode always
+  // clears the price box: a number left behind a "free" or "only with a plan"
+  // choice is the exact ambiguity this control exists to remove.
+  function updateDurationMode(minutes: number, mode: DurationSaleMode) {
+    setValue(
+      'durations',
+      durations.map((d) =>
+        d.minutes === minutes ? { ...d, mode, price: mode === 'priced' ? d.price : '' } : d
+      )
+    )
   }
 
   // Re-default autoConfirm when the studio flips the type — but only while the
@@ -1058,10 +1100,13 @@ function ActivityDialog({
                     <p className="text-destructive text-xs">{errors.durations.message}</p>
                   )}
 
-                  {/* One price sub-row per SELECTED duration — the coach sells TIME,
-                      so price is per-length, not one flat activity price. Empty =
-                      unpriced, which is free for anyone (no separate access gate
-                      for appointments any more — see the member-benefit row below). */}
+                  {/* One sub-row per SELECTED duration — the coach sells TIME, so
+                      how it is sold is per-length, not one flat activity price.
+                      THREE modes, because an empty price used to mean two things
+                      at once (UX-70): free for anyone · priced · not sold
+                      individually, i.e. only through the member benefit below.
+                      There is still no access rule on an appointment — the third
+                      mode says only that there is no individual price to quote. */}
                   {durations.length > 0 && (
                     <div className="space-y-2 rounded-md bg-muted/30 p-2.5">
                       <p className="text-xs text-muted-foreground">{t('durationPriceHint')}</p>
@@ -1070,11 +1115,35 @@ function ActivityDialog({
                         .map((d) => {
                           const idx = durations.findIndex((x) => x.minutes === d.minutes)
                           const priceError = errors.durations?.[idx]?.price?.message
+                          const modes: Array<{ value: DurationSaleMode; label: string }> = [
+                            { value: 'free', label: t('durationModeFree') },
+                            { value: 'priced', label: t('durationModePriced') },
+                            { value: 'benefit_only', label: t('durationModeBenefitOnly') },
+                          ]
                           return (
                             <div key={d.minutes} className="space-y-1.5 rounded-md border bg-background p-2">
-                              <div className="flex items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="text-sm font-medium">{formatDuration(d.minutes)}</span>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {modes.map((m) => (
+                                    <button
+                                      key={m.value}
+                                      type="button"
+                                      onClick={() => updateDurationMode(d.minutes, m.value)}
+                                      aria-pressed={d.mode === m.value}
+                                      className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                                        d.mode === m.value
+                                          ? 'bg-primary text-primary-foreground border-primary'
+                                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
+                                      }`}
+                                    >
+                                      {m.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              {d.mode === 'priced' && (
+                                <div className="flex items-center justify-end gap-1.5">
                                   <span className="text-xs text-muted-foreground">{currency}</span>
                                   <Input
                                     type="number"
@@ -1087,7 +1156,21 @@ function ActivityDialog({
                                     aria-label={t('durationPriceLabel', { duration: formatDuration(d.minutes) })}
                                   />
                                 </div>
-                              </div>
+                              )}
+                              {/* A pack-only length with nothing that covers it is
+                                  bookable by NOBODY — said here, where it is
+                                  authored, as well as on the pricing health page. */}
+                              {d.mode === 'benefit_only' && (
+                                <p
+                                  className={`text-xs ${
+                                    benefitOpensDoor ? 'text-muted-foreground' : 'text-destructive'
+                                  }`}
+                                >
+                                  {benefitOpensDoor
+                                    ? t('durationBenefitOnlyHint')
+                                    : t('durationBenefitOnlyNoWayIn')}
+                                </p>
+                              )}
                               {priceError && <p className="text-destructive text-xs">{priceError}</p>}
                             </div>
                           )

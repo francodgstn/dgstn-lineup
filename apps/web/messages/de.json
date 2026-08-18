@@ -375,6 +375,26 @@
     "trendsNoHistoryBody": "Trends vergleichen Woche für Woche. Sobald ein paar Sessions gelaufen sind, erscheinen die Diagramme hier von selbst."
   },
   "Contacts": {
+    "noteColor_none": "Keine Farbe",
+    "noteColor_yellow": "Gelb",
+    "noteColor_green": "Grün",
+    "noteColor_blue": "Blau",
+    "noteColor_pink": "Rosa",
+    "noteColor_purple": "Violett",
+    "sortLabel": "Sortieren",
+    "sort_name": "Name",
+    "sort_attention": "Braucht Aufmerksamkeit",
+    "sort_recent": "Zuletzt hinzugefügt",
+    "filterGroupNone": "In keiner Gruppe",
+    "filterCoach": "Coach",
+    "filterCoachNone": "Kein Coach zugewiesen",
+    "filterCoachesNoun": "Coaches",
+    "filterNeedsAttention": "Braucht Aufmerksamkeit",
+    "attention_alerts": "Hinweis",
+    "attention_pending_signup": "Anmeldung offen",
+    "attention_trial_pending": "Probetermin offen",
+    "attention_new_lead": "Neuer Lead",
+    "attention_gone_quiet": "Inaktiv geworden",
     "reqEmpty": "Keine offenen Anfragen.",
     "reqTitle": "Aktualisierungsanfrage",
     "reqNote": "Notiz",
@@ -1389,7 +1409,12 @@
     "fieldOfferAs": "Anbieten als",
     "type_class_desc": "Du planst ihn; Leute buchen einen Platz.",
     "type_appointment_desc": "Leute wählen eine Zeit aus deiner Verfügbarkeit.",
-    "durationPriceHint": "Lass den Preis einer Dauer leer, um sie für alle kostenlos zu lassen.",
+    "durationPriceHint": "Wähle, wie jede Länge verkauft wird: kostenlos für alle, zu einem Preis oder nur über ein Abo bzw. ein Paket.",
+    "durationModeFree": "Kostenlos",
+    "durationModePriced": "Mit Preis",
+    "durationModeBenefitOnly": "Nur mit Abo",
+    "durationBenefitOnlyHint": "Nicht einzeln buchbar — nur die unten gewählten Abos oder Pakete können diese Länge buchen.",
+    "durationBenefitOnlyNoWayIn": "Diese Länge kann niemand buchen: Wähle unten die Abos oder Pakete, die sie enthalten.",
     "durationPriceLabel": "Preis für {duration}",
     "durationPriceValidation": "Gib einen Preis von mindestens 0.50 ein oder lass das Feld leer.",
     "chipDropIn": "Einzeleintritt {amount}",
@@ -2012,6 +2037,7 @@
     "timeOffPickCoach": "Coach auswählen"
   },
   "AppointmentForm": {
+    "durationBenefitOnly": "Mit Abo",
     "title": "Neuer Termin",
     "sectionAppointment": "Termin",
     "fieldActivity": "Aktivität",
@@ -2057,6 +2083,12 @@
     "createActivityAction": "Aktivität erstellen"
   },
   "AppointmentBooking": {
+    "durationBenefitOnly": "mit Abo",
+    "benefitOnlyTitle": "Im Abo enthalten",
+    "benefitOnlyBodyGuest": "Diese Länge wird nicht einzeln verkauft — ein Abo oder Paket deckt sie ab. Schon eines? Melde dich an, um zu buchen.",
+    "benefitOnlyBodyMember": "Diese Länge wird nicht einzeln verkauft, und dein aktuelles Abo enthält sie nicht.",
+    "benefitOnlySeePlans": "Abos und Pakete ansehen",
+    "benefitOnlySignIn": "Schon Mitglied? Anmelden",
     "title": "Termin buchen",
     "subtitle": "Wähle einen passenden Termin",
     "teamNotFound": "Diese Seite ist nicht verfügbar",
@@ -4141,6 +4173,7 @@
     "healthBenefitBadPercent": "Der Mitgliederrabatt von {name} hat einen ungültigen Prozentsatz.",
     "healthGatedNoNewcomerPath": "{name} hat keinen Einstieg für Neulinge — weder Einzeleintritt noch Probetraining.",
     "healthCreditsUnusable": "{name} verkauft Credit-Pakete, aber keine Aktivität akzeptiert sie.",
+    "healthAppointmentNoWayIn": "Bei diesem Termin gibt es eine Länge, die nur mit Abo oder Paket buchbar ist — aber kein Abo enthält sie. Niemand kann sie buchen.",
     "fixLink": "Beheben",
     "sectionDiscountsTitle": "Rabatte",
     "sectionDiscountsSubtitle": "Aktionscodes, die Besucher beim Bezahlen eingeben, um den Preis zu ändern.",
@@ -4165,6 +4198,7 @@
     "includedWithSub": "Inklusive mit {name}",
     "includedWithSubPriced": "Inklusive mit {name} — {price}",
     "signedUpOnlyLine": "Nur für Mitglieder — die Registrierung ist kostenlos",
+    "planRequiredLine": "Erfordert ein aktives Abo",
     "discountWithSub": "Rabatt mit {name} — {percent}%",
     "prerequisitesLabel": "Voraussetzungen:",
     "meetingPointLabel": "Treffpunkt:",
@@ -5018,6 +5052,9 @@
       "formReceipt": "Formular-Eingangsbestätigungen",
       "formReceiptDesc": "Bestätigung an den Absender — pro Formular in dessen Einstellungen aktivierbar."
     },
+    "library": {
+      "lockedNotice": "Einige fertige Automationen benötigen einen höheren Plan. Eigene Regeln kannst du in jedem Plan erstellen."
+    },
     "page": {
       "title": "Automatisierungen",
       "subtitle": "Löse automatisch E-Mails und Benachrichtigungen basierend auf Kontaktaktivität aus.",
@@ -5028,8 +5065,9 @@
       "limitedPlanBody": "Du kannst rund um deine aktiven Module und installierten Add-ons automatisieren. Upgrade auf {plan} für die vollständige Automatisierungssuite — inklusive aller Auslöser und Aktionen jedes Add-ons.",
       "emptyTitle": "Noch keine Automatisierungen",
       "emptyBody": "Lade ein Starter-Kit mit einem Klick, durchsuche die Bibliothek für einzelne Regeln oder erstelle deine eigene.",
+      "emptyBodyNoStarter": "Durchsuche die Bibliothek, um zu sehen, was dein Plan enthält, oder erstelle deine eigene Regel.",
       "installing": "Wird installiert…",
-      "quickStart": "Schnellstart (8 Regeln)",
+      "quickStart": "Schnellstart ({count} Regeln)",
       "browseLibrary": "Bibliothek durchsuchen"
     },
     "common": {
@@ -6187,6 +6225,7 @@
     "termIncludedWithSubscription": "Im Abo inbegriffen",
     "termMemberDiscount": "−{percent}% für Mitglieder",
     "signedUpOnlyLine": "Nur für Mitglieder — die Registrierung ist kostenlos",
+    "planRequiredLine": "Erfordert ein aktives Abo",
     "includedWithSub": "Inklusive mit {name}",
     "includedWithSubPriced": "Inklusive mit {name} — {price}",
     "discountWithSub": "Rabatt mit {name} — {percent}%",

@@ -195,7 +195,7 @@ import {
   Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
-import { NotesTab, useContactNotesCount, useContactNotes, type ContactNote } from './NotesTab'
+import { NotesTab, useContactNotesCount, useContactNotes, noteColorClasses, type ContactNote } from './NotesTab'
 import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
 import { PlanGate } from '@/components/plan/PlanGate'
 import {
@@ -1710,15 +1710,20 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
               key={n.id}
               type="button"
               onClick={onOpen}
-              className="group relative block w-full overflow-hidden rounded-lg border bg-card p-3 text-left transition-colors hover:border-border"
+              className={`group relative block w-full overflow-hidden rounded-lg border p-3 text-left transition-colors hover:border-border ${noteColorClasses(n.color).card}`}
             >
               <div className="mb-1 text-[11px] text-muted-foreground">{fmt(n)}</div>
               <div
                 className="prose-notes max-h-24 overflow-hidden text-sm"
                 dangerouslySetInnerHTML={{ __html: n.content }}
               />
-              {/* Fade the truncated content into the card background. */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent" />
+              {/* Fade the truncated content into the card background. Only on
+                  an UNCOLOURED card: the gradient is a `from-card` fade, so over
+                  a colour tag it would fade to the wrong colour — and a fade
+                  that ends in the wrong colour reads as a rendering bug. */}
+              {!n.color && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent" />
+              )}
             </button>
           ))}
           {extra > 0 && (

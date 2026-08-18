@@ -28,6 +28,7 @@ import {
   GUEST_SNAPSHOT,
   appointmentSlotBlocked,
   resolveAppointmentDurations,
+  resolveDurationSale,
   resolvePaymentOptions,
   type Activity,
   type ActivityDuration,
@@ -222,9 +223,12 @@ export const listAvailability = onCall(async (request) => {
     const info = toActivityInfo(doc.id, a)
     if (!info) continue
     if (!canCharge) {
-      const free = info.durations.filter((d) => typeof d.priceAmount !== 'number')
-      if (free.length === 0) continue // nothing here anyone could book
-      info.durations = free
+      // 'priced' is the only mode that needs Stripe. A benefit_only length is
+      // paid for by the subscription/pack the contact already holds, so it
+      // survives an unfinished Connect account exactly as an unpriced one does.
+      const bookable = info.durations.filter((d) => resolveDurationSale(d).mode !== 'priced')
+      if (bookable.length === 0) continue // nothing here anyone could book
+      info.durations = bookable
     }
     activityMap.set(doc.id, info)
   }
@@ -329,10 +333,17 @@ export const listAvailability = onCall(async (request) => {
           activityId: acc.activityId,
           activityName: acc.activityName,
           // Priced duration menu so the picker can show prices per length.
-          durations: acc.durations.map((d) => ({
-            minutes: d.minutes,
-            priceAmount: d.priceAmount ?? null,
-          })),
+          // `benefitOnly` rides along because the picker must be able to say
+          // "not sold individually — {pack} opens it" instead of rendering a
+          // free-looking slot the server will refuse (UX-70).
+          durations: acc.durations.map((d) => {
+            const sale = resolveDurationSale(d)
+            return {
+              minutes: d.minutes,
+              priceAmount: sale.priceAmount,
+              benefitOnly: sale.mode === 'benefit_only',
+            }
+          }),
           // Verbatim from the activity — the picker mirrors the resolver
           // (resolveEffectiveAppointmentPrice) for display; the server always
           // re-resolves authoritatively at booking/checkout.
@@ -410,6 +421,17 @@ export const bookAppointment = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'This duration requires payment.', {
       reason: 'payment_required',
       priceAmount: priceOption.amount,
+    })
+  }
+  // NO OPTION AT ALL — a benefit_only length (UX-70) the caller has no way into.
+  // This branch must exist and must come BEFORE the free path: without it an
+  // empty options array falls straight through to "books without spending",
+  // which is the free one-to-one the whole feature exists to prevent. The
+  // resolver's denial is passed through verbatim so the picker can say sign in
+  // vs buy the pack.
+  if (!priceOption) {
+    throw new HttpsError('failed-precondition', 'This duration is not sold individually.', {
+      reason: priced.denial ?? 'no_subscription',
     })
   }
   // Free path: 'covered' (unpriced, or included via an unmetered subscription)

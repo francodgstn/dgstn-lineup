@@ -1,6 +1,6 @@
 // Keeps activities/{activityId}/public_profile/{activityId} in sync
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { resolveActivityAccessRule } from '@linyup/shared'
+import { resolveActivityAccessRule, resolveDurationSale } from '@linyup/shared'
 
 
 export const syncActivityPublicProfile = onDocumentWritten('activities/{activityId}', async (event) => {
@@ -63,10 +63,19 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     // (the old subscriptionPricing matrix is gone).
     ...(data.type === 'appointment' && Array.isArray(data.durations) && data.durations.length
       ? {
-          durations: data.durations.map((d: { minutes: number; priceAmount?: number | null }) => ({
-            minutes: d.minutes,
-            priceAmount: d.priceAmount ?? null,
-          })),
+          durations: data.durations.map(
+            (d: { minutes: number; priceAmount?: number | null; benefitOnly?: boolean }) => {
+              // Through `resolveDurationSale`, so a benefit_only length mirrors
+              // with NO price at all: a stale amount left by a mode switch must
+              // never reach a public card as a sellable figure (UX-70).
+              const sale = resolveDurationSale(d)
+              return {
+                minutes: d.minutes,
+                priceAmount: sale.priceAmount,
+                ...(sale.mode === 'benefit_only' ? { benefitOnly: true } : {}),
+              }
+            }
+          ),
         }
       : {}),
     // The one member-benefit rule, mirrored verbatim — public-safe, since the

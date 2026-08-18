@@ -110,9 +110,10 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
     const window = read('appointments/window.ts')
     assert.ok(window.includes('const canCharge ='))
     assert.ok(
-      window.includes("info.durations.filter((d) => typeof d.priceAmount !== 'number')"),
-      'listAvailability must keep the FREE durations and drop only the priced ones — ' +
-        'being unable to take money is not the same as being free',
+      window.includes("info.durations.filter((d) => resolveDurationSale(d).mode !== 'priced')"),
+      'listAvailability must keep every NON-PRICED duration and drop only the priced ones — ' +
+        'being unable to take money is not the same as being free, and a benefit_only ' +
+        'length (UX-70) is paid for by a plan the contact already holds',
     )
   })
 

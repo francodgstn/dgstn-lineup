@@ -103,11 +103,23 @@ export interface ContactFilter {
   sources: string[]          // ContactSource values
   statuses: string[]         // 'active' (affiliated) / 'none'
   subscriptions: string[]    // subscription_type_id values; 'none' = no subscription
-  groups: string[]           // contact_groups IDs; parents include subgroups
+  /** contact_groups IDs; parents include subgroups. `GROUP_NONE` = in NO group
+   *  at all — see `matchesGroupSelection` for why that has to be asked here and
+   *  cannot be a saved list of ids. */
+  groups: string[]
+  /** Assigned-coach uids (`Contact.assigned_coach_ids`); `COACH_NONE` = nobody
+   *  is assigned. A manager who can see everyone still needs to narrow to one
+   *  coach's people, and "unassigned" is the follow-up question that makes the
+   *  dimension worth having. */
+  coaches: string[]
   engagement: EngagementBand[]
   tags: string[]
   hasAlerts: boolean
   pendingSignup: boolean
+  /** "Who needs me today" — derived, never stored; see
+   *  `contactAttentionReasons` for exactly what counts and why the answer is a
+   *  LIST of reasons rather than a flag. */
+  needsAttention: boolean
   sessionsMin: number | null
   sessionsMax: number | null
   inactivity: InactivityPreset | null
@@ -117,11 +129,19 @@ export interface ContactFilter {
   consent: ConsentFilter | null
 }
 
+/** "In no group at all" — a sentinel inside the `groups` dimension, mirroring
+ *  the `'none'` the `subscriptions` dimension already uses. A group id can
+ *  never collide with it (Firestore ids are 20 chars). */
+export const GROUP_NONE = 'none'
+/** "No coach assigned" — the same sentinel convention inside `coaches`. A uid
+ *  can never be this string. */
+export const COACH_NONE = 'none'
+
 export const EMPTY_CONTACT_FILTER: ContactFilter = {
   search: '',
-  stages: [], sources: [], statuses: [], subscriptions: [], groups: [],
+  stages: [], sources: [], statuses: [], subscriptions: [], groups: [], coaches: [],
   engagement: [], tags: [],
-  hasAlerts: false, pendingSignup: false,
+  hasAlerts: false, pendingSignup: false, needsAttention: false,
   sessionsMin: null, sessionsMax: null,
   inactivity: null, rankFilter: null, age: null, customFields: [],
   consent: null,
@@ -144,10 +164,12 @@ export function normalizeContactFilter(filter: Partial<ContactFilter> | null | u
     statuses: [...(f.statuses ?? [])],
     subscriptions: [...(f.subscriptions ?? [])],
     groups: [...(f.groups ?? [])],
+    coaches: [...(f.coaches ?? [])],
     engagement: [...(f.engagement ?? [])],
     tags: [...(f.tags ?? [])],
     hasAlerts: f.hasAlerts ?? false,
     pendingSignup: f.pendingSignup ?? false,
+    needsAttention: f.needsAttention ?? false,
     sessionsMin: f.sessionsMin ?? null,
     sessionsMax: f.sessionsMax ?? null,
     inactivity: f.inactivity ?? null,
@@ -173,10 +195,12 @@ export function activeFilterKeys(filter: Partial<ContactFilter> | null | undefin
   if (f.statuses.length) keys.push('statuses')
   if (f.subscriptions.length) keys.push('subscriptions')
   if (f.groups.length) keys.push('groups')
+  if (f.coaches.length) keys.push('coaches')
   if (f.engagement.length) keys.push('engagement')
   if (f.tags.length) keys.push('tags')
   if (f.hasAlerts) keys.push('hasAlerts')
   if (f.pendingSignup) keys.push('pendingSignup')
+  if (f.needsAttention) keys.push('needsAttention')
   if (f.sessionsMin != null || f.sessionsMax != null) keys.push('sessionsMin')
   if (f.inactivity) keys.push('inactivity')
   if (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0)) keys.push('rankFilter')
@@ -270,9 +294,12 @@ export interface ContactFilterSubject {
   subscription_type_id?: string
   active_subscriptions?: { subscription_type_id: string }[]
   group_ids?: string[]
+  assigned_coach_ids?: string[]
   tags?: string[]
   alerts_count?: number
   pending_signup?: boolean
+  /** `false` = a lead nobody has opened yet. Absent/true = seen. */
+  lead_acknowledged?: boolean
   total_sessions?: number
   last_session_at?: TimestampLike
   created_at?: TimestampLike
@@ -427,14 +454,37 @@ export function membersOfGroup<T extends ContactFilterSubject>(
   return contacts.filter((c) => contactMatchesGroup(c, group, ctx))
 }
 
-/** Does the contact belong to ANY of the selected groups (descendants included)? */
+/**
+ * Is the contact in NO group at all?
+ *
+ * It has to be ASKED, not stored: half the groups in this product are dynamic,
+ * so "ungrouped" is not `group_ids.length === 0` — a contact with an empty array
+ * can still be derived into three dynamic groups, and a materialized "ungrouped"
+ * flag would be wrong the moment a rule (or the contact's birthday) changed.
+ * Asking is cheap and correct: it is `groupsForContact` with an early exit, over
+ * the group list the caller already holds.
+ *
+ * With NO group context loaded it falls back to the stored membership — the
+ * caller cannot be told about groups it did not load, and every real caller
+ * (contacts page, group surfaces, automation scan) loads them.
+ */
+function contactIsUngrouped(subject: ContactFilterSubject, ctx: ContactFilterContext): boolean {
+  const all = ctx.groups ?? []
+  if (all.length === 0) return (subject.group_ids ?? []).length === 0
+  return !all.some((g) => contactMatchesGroup(subject, g, ctx))
+}
+
+/** Does the contact belong to ANY of the selected groups (descendants included),
+ *  or — for `GROUP_NONE` — to none at all? */
 function matchesGroupSelection(
   subject: ContactFilterSubject,
   selected: string[],
   ctx: ContactFilterContext,
 ): boolean {
+  if (selected.includes(GROUP_NONE) && contactIsUngrouped(subject, ctx)) return true
   const all = ctx.groups ?? []
-  const wanted = expandGroupSelection(all, selected)
+  // The sentinel is not an id and must never reach the tree expansion.
+  const wanted = expandGroupSelection(all, selected.filter((id) => id !== GROUP_NONE))
   const byId = new Map(all.map((g) => [g.id, g]))
   const memberIds = subject.group_ids ?? []
   for (const gid of wanted) {
@@ -448,6 +498,112 @@ function matchesGroupSelection(
     if (contactMatchesGroup(subject, group, ctx)) return true
   }
   return false
+}
+
+// ─── "who needs me today" ─────────────────────────────────────────────────────
+
+/**
+ * WHY THIS EXISTS. A contacts list ordered by surname answers "where is
+ * Meier?" — the question you ask when you already know the name. It cannot
+ * answer the question a studio actually opens the page with in the morning:
+ * *who is waiting on me?* That was UX-44, and the surname ordering was only its
+ * symptom: no ordering of an alphabet can answer it, because the answer is not
+ * a property of the name.
+ *
+ * So the answer is a derived LIST OF REASONS, not a flag and not a score:
+ * "needs attention" with no reason attached is a badge nobody trusts, and the
+ * studio has to be able to see WHY a person is at the top of the list before
+ * they will believe the list.
+ *
+ * Every reason reads a fact that is already ON the contact document — no extra
+ * read, no fan-out, nothing stored, nothing to invalidate. That is deliberate
+ * and it is also the constraint: a reason that would need another query
+ * (unpaid invoice, unanswered message) belongs here only once its fact is
+ * denormalized onto the contact, the same rule `affiliation_summary` and
+ * `active_subscriptions` already follow.
+ */
+export type ContactAttentionReason =
+  /** An open alert on the record — the studio's own explicit flag. */
+  | 'alerts'
+  /** A signup request the studio has not processed. */
+  | 'pending_signup'
+  /** A lead nobody has looked at yet (`lead_acknowledged === false`). */
+  | 'new_lead'
+  /** Booked a trial and has not attended it — the highest-intent moment in the
+   *  funnel, and the one that goes cold fastest. */
+  | 'trial_pending'
+  /** Someone who used to come and has stopped: engagement resolves to the
+   *  lowest band AND they have attended at least once. Never fires for a
+   *  brand-new contact, whose "inactivity" is just newness. */
+  | 'gone_quiet'
+
+/** Descending urgency — the sort order and nothing else. Kept beside the union
+ *  so a new reason cannot be added without placing it. */
+const ATTENTION_WEIGHT: Record<ContactAttentionReason, number> = {
+  alerts: 5,
+  pending_signup: 4,
+  trial_pending: 3,
+  new_lead: 2,
+  gone_quiet: 1,
+}
+
+/** Every reason this contact is waiting on the studio, most urgent first. */
+export function contactAttentionReasons(
+  subject: ContactFilterSubject,
+  ctx: ContactFilterContext = {},
+): ContactAttentionReason[] {
+  const nowMs = ctx.nowMs ?? Date.now()
+  const reasons: ContactAttentionReason[] = []
+  if ((subject.alerts_count ?? 0) > 0) reasons.push('alerts')
+  if (subject.pending_signup === true) reasons.push('pending_signup')
+  if (subject.acquisition_stage === 'trial_booked') reasons.push('trial_pending')
+  if (subject.lead_acknowledged === false) reasons.push('new_lead')
+  if ((subject.total_sessions ?? 0) > 0) {
+    const refMs =
+      resolveTimestampMs(subject.last_session_at) ?? resolveTimestampMs(subject.created_at)
+    if (computeEngagementBand(refMs, ctx.engagementThresholds, nowMs) === 'inactive') {
+      reasons.push('gone_quiet')
+    }
+  }
+  return reasons.sort((a, b) => ATTENTION_WEIGHT[b] - ATTENTION_WEIGHT[a])
+}
+
+export function contactNeedsAttention(
+  subject: ContactFilterSubject,
+  ctx: ContactFilterContext = {},
+): boolean {
+  return contactAttentionReasons(subject, ctx).length > 0
+}
+
+/** The urgency of the single most urgent reason (0 = nothing waiting). */
+export function contactAttentionScore(
+  subject: ContactFilterSubject,
+  ctx: ContactFilterContext = {},
+): number {
+  const top = contactAttentionReasons(subject, ctx)[0]
+  return top ? ATTENTION_WEIGHT[top] : 0
+}
+
+/**
+ * Sort comparator: most urgent first, alphabetical within equal urgency.
+ *
+ * A CLIENT sort on an already-loaded list, and that is a decision rather than a
+ * shortcut — this ordering CANNOT be a Firestore query. It is derived (the
+ * engagement band moves with the clock, with no write), so there is no field to
+ * index and no composite index to add; the surname index the list query needs
+ * stays exactly as it is.
+ */
+export function compareContactsByAttention(
+  a: ContactFilterSubject,
+  b: ContactFilterSubject,
+  ctx: ContactFilterContext = {},
+): number {
+  const diff = contactAttentionScore(b, ctx) - contactAttentionScore(a, ctx)
+  if (diff !== 0) return diff
+  return (
+    (a.lastname ?? '').localeCompare(b.lastname ?? '') ||
+    (a.firstname ?? '').localeCompare(b.firstname ?? '')
+  )
 }
 
 // ─── the predicate ────────────────────────────────────────────────────────────
@@ -501,12 +657,27 @@ export function matchesFilter(
     if (!matchesGroupSelection(subject, f.groups, ctx)) return false
   }
 
+  // Coach — ORed within the dimension, with COACH_NONE meaning unassigned. Read
+  // off `assigned_coach_ids`, the SAME array the own-scope Firestore rules and
+  // `useActiveContacts`' coach-scoped query use, so "one coach's people" means
+  // one thing everywhere.
+  if (f.coaches.length > 0) {
+    const assigned = subject.assigned_coach_ids ?? []
+    const wantsNone = f.coaches.includes(COACH_NONE)
+    const wantedUids = f.coaches.filter((c) => c !== COACH_NONE)
+    const matched =
+      (wantsNone && assigned.length === 0) || wantedUids.some((uid) => assigned.includes(uid))
+    if (!matched) return false
+  }
+
   if (f.tags.length > 0) {
     const tags = subject.tags ?? []
     if (!f.tags.some((t) => tags.includes(t))) return false
   }
 
   if (f.hasAlerts && (subject.alerts_count ?? 0) <= 0) return false
+
+  if (f.needsAttention && contactAttentionReasons(subject, ctx).length === 0) return false
 
   if (f.pendingSignup && subject.pending_signup !== true) return false
 

@@ -1802,6 +1802,11 @@ export default function BookingForm({
                     // nothing, and a subscription price would send this visitor
                     // to the shop for something they don't need to book.
                     if (d.signedUpOnly) lines.push(t('signedUpOnlyLine'))
+                    // 'subscription' tier whose plans this surface cannot name
+                    // (not public, or the rule lists none). Naming nothing is
+                    // what made the card look OPEN — the gate gets its own
+                    // sentence, distinct from the free 'members' one above.
+                    if (d.planRequired) lines.push(t('planRequiredLine'))
                     for (const s of d.includedWith)
                       lines.push(
                         s.priceLabel

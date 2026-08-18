@@ -174,6 +174,11 @@ export interface ContactData {
   custom_fields?: Record<string, string | number | boolean>
   alerts_count?: number
   pending_signup?: boolean
+  // Declared for the same reason as `group_ids` above: a dynamic group's rule
+  // may filter on the coach assignment or on "needs attention", and both read
+  // these off the contact document (UX-62 / UX-44).
+  assigned_coach_ids?: string[]
+  lead_acknowledged?: boolean
   [key: string]: unknown
 }
 

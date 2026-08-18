@@ -31,7 +31,7 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { DEFAULT_PAYMENT_MODES, resolveAppointmentDurations } from '@linyup/shared'
+import { DEFAULT_PAYMENT_MODES, resolveAppointmentDurations, resolveDurationSale } from '@linyup/shared'
 import type { Activity, ActivityDuration } from '@linyup/shared'
 import { coachLabel, type CoachOption } from '@/hooks/useCoaches'
 
@@ -176,7 +176,10 @@ export function AppointmentFormDialog({
 
   const selectedDuration: ActivityDuration | undefined =
     durations.find((d) => d.minutes === durationMinutes) ?? durations[0]
-  const basePrice = selectedDuration?.priceAmount ?? null
+  // Through the shared reader, so a length that is not sold individually
+  // (UX-70) suggests NO amount here — a staff booking may still be made, it
+  // just isn't priced from a number the studio removed from sale.
+  const basePrice = selectedDuration ? resolveDurationSale(selectedDuration).priceAmount : null
   const showPayment = clientMode !== 'blocked' && typeof basePrice === 'number' && basePrice > 0
 
   // Suggest the base price whenever the priced item changes; the manager can
@@ -361,9 +364,14 @@ export function AppointmentFormDialog({
                       >
                         {formatDuration(d.minutes)}
                         <span className="ml-1.5 opacity-80">
-                          {typeof d.priceAmount === 'number' && d.priceAmount > 0
-                            ? formatCurrency(d.priceAmount, currency, locale)
-                            : t('free')}
+                          {/* Three modes, not two: a length sold only through a
+                              plan is not free, and labelling it "Free" here is
+                              what would have a coach book it as one (UX-70). */}
+                          {resolveDurationSale(d).mode === 'benefit_only'
+                            ? t('durationBenefitOnly')
+                            : resolveDurationSale(d).priceAmount
+                              ? formatCurrency(resolveDurationSale(d).priceAmount as number, currency, locale)
+                              : t('free')}
                         </span>
                       </button>
                     ))}

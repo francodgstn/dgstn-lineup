@@ -8,6 +8,7 @@ import {
   normalizeBenefit,
   resolveActivityAccessRule,
   resolveAppointmentDurations,
+  resolveDurationSale,
   resolvePaymentOptions,
   resolveProductPrice,
   resolveUsageLimit,
@@ -340,6 +341,7 @@ export type PricingWarningCode =
   | 'benefit_bad_percent'
   | 'gated_no_newcomer_path'
   | 'credits_unusable'
+  | 'appointment_no_way_in'
 
 export interface PricingWarning {
   code: PricingWarningCode
@@ -381,7 +383,36 @@ export function computePricingHealth(
   for (const a of activities) {
     const isAppointment = a.type === 'appointment'
     checkBenefit(a.memberBenefit, a.name, 'activity', a.id)
-    if (isAppointment) continue
+    if (isAppointment) {
+      // UX-70's own failure mode: a length sold ONLY through the member benefit
+      // (`benefitOnly`), with no benefit that actually covers it, is bookable by
+      // NOBODY — the appointment twin of `gated_no_newcomer_path`, and the
+      // reason that fix could not ship without this check. Only an INCLUDED
+      // benefit is a way in: a percentage off a price that does not exist opens
+      // nothing (see the resolver's appointment arm).
+      const hasBenefitOnly = (a.durations ?? []).some(
+        (d) => resolveDurationSale(d).mode === 'benefit_only'
+      )
+      const benefit = normalizeBenefit(a.memberBenefit)
+      const opensDoor =
+        !!benefit &&
+        (benefit.effect === 'included' || benefit.effect === 'spend_credits') &&
+        benefit.subscriptionTypeIds.length > 0
+      if (hasBenefitOnly) {
+        // Those types ARE where a credit pack gets spent, so they count for
+        // `credits_unusable` exactly as a subscription-gated class does.
+        if (opensDoor) benefit!.subscriptionTypeIds.forEach((id) => acceptedTypeIds.add(id))
+        else
+          warnings.push({
+            code: 'appointment_no_way_in',
+            severity: 'error',
+            subjectName: a.name,
+            subjectKind: 'activity',
+            subjectId: a.id,
+          })
+      }
+      continue
+    }
     const rule = resolveActivityAccessRule(a)
     // 'open' is the only tier a newcomer can always walk into. BOTH gated tiers
     // ('members' and 'subscription') refuse a stranger — resolveClassCoverage

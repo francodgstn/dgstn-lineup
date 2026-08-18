@@ -317,6 +317,81 @@ describe('resolvePaymentOptions — appointment (effectivePrice parity rows)', (
   ])
 })
 
+// UX-70 — the third sale mode. An absent price used to mean BOTH "free for
+// everyone" and "not sold by the session"; `benefitOnly` separates them. The
+// rows that matter are the refusals: a benefit_only duration must never fall
+// through to the unpriced/covered branch, which is what would hand a stranger a
+// free one-to-one.
+describe('resolvePaymentOptions — appointment benefit_only (UX-70)', () => {
+  const packOnly = { minutes: 60, benefitOnly: true }
+  const included = { subscriptionTypeIds: ['pack10'], kind: 'included' as const }
+  const t = (over: Partial<Extract<PaymentTarget, { kind: 'appointment' }>> = {}): PaymentTarget => ({
+    kind: 'appointment',
+    duration: packOnly,
+    benefit: included,
+    ...over,
+  })
+  runRows([
+    {
+      name: 'guest: refused sign_in_required — never the free unpriced path',
+      snapshot: GUEST_SNAPSHOT,
+      target: t(),
+      expected: denied('sign_in_required'),
+    },
+    {
+      name: 'signed-in non-holder: refused no_subscription (what to buy, not who to be)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['other'] }),
+      target: t(),
+      expected: denied('no_subscription'),
+    },
+    {
+      name: 'unmetered holder: covered(benefit_included)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['pack10'] }),
+      target: t(),
+      expected: covered({ reason: 'benefit_included', subscriptionTypeId: 'pack10' }),
+    },
+    {
+      name: 'credit-pack holder with balance: spends one credit',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 3 }] }),
+      target: t(),
+      expected: {
+        options: [{ type: 'spend_credits', via: { subscriptionTypeId: 'pack10' }, remaining: 3 }],
+        denial: null,
+      },
+    },
+    {
+      name: 'exhausted pack: refused — there is no per-session price to fall back to',
+      snapshot: contact({ heldCreditTypes: [{ subscriptionTypeId: 'pack10', remaining: 0 }] }),
+      target: t(),
+      expected: denied('no_subscription'),
+    },
+    {
+      name: 'a DISCOUNT benefit is not a way in: there is no price to discount',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: t({ benefit: { subscriptionTypeIds: ['gold'], kind: 'discount', discountPercent: 50 } }),
+      expected: denied('no_subscription'),
+    },
+    {
+      name: 'no benefit at all: nobody can book it (computePricingHealth reports this)',
+      snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
+      target: t({ benefit: null }),
+      expected: denied('no_subscription'),
+    },
+    {
+      name: 'a stale priceAmount beside benefitOnly is IGNORED, never charged',
+      snapshot: GUEST_SNAPSHOT,
+      target: t({ duration: { minutes: 60, priceAmount: 120, benefitOnly: true } }),
+      expected: denied('sign_in_required'),
+    },
+    {
+      name: 'benefitOnly false is the ordinary unpriced duration: free for everyone',
+      snapshot: GUEST_SNAPSHOT,
+      target: t({ duration: { minutes: 60, benefitOnly: false }, benefit: included }),
+      expected: covered({ reason: 'unpriced' }),
+    },
+  ])
+})
+
 describe('resolvePaymentOptions — course (shop/Space tiers incl. P6 widening)', () => {
   const t = (accessRule: Extract<PaymentTarget, { kind: 'course' }>['accessRule']): PaymentTarget => ({
     kind: 'course',

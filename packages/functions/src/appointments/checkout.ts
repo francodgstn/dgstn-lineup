@@ -9,7 +9,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { GUEST_SNAPSHOT, resolvePaymentOptions } from '@linyup/shared'
+import { GUEST_SNAPSHOT, resolveDurationSale, resolvePaymentOptions } from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
   assertQuotedAmount,
@@ -161,7 +161,11 @@ export const createAppointmentCheckout = onCall(
 
     // ── The *what* + the *when* ──
     const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
-    if (typeof ctx.chosenDuration.priceAmount !== 'number') {
+    // Covers BOTH non-priced modes: a free length has nothing to charge for,
+    // and a benefit_only one (UX-70) is deliberately not sold by the session —
+    // reading the mode rather than the raw number is what stops a stale
+    // `priceAmount` left behind by a mode switch from being charged.
+    if (resolveDurationSale(ctx.chosenDuration).mode !== 'priced') {
       throw new HttpsError('failed-precondition', 'This duration is not for sale', { reason: 'not_priced' })
     }
 

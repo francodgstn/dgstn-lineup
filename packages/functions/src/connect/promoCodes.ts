@@ -179,6 +179,7 @@ import {
   promoReservationKey,
   promoUsesLeft,
   promoWindowOpen,
+  resolveDurationSale,
   resolvePaymentOptions,
   resolveProductPrice,
   type PaymentOptionsResult,
@@ -2189,7 +2190,10 @@ async function loadPreviewRail(params: {
         startMs: t.startMs,
         durationMinutes: t.durationMinutes,
       })
-      if (typeof ctx.chosenDuration.priceAmount !== 'number') return null
+      // Only a 'priced' length has a price a code could modify: a free one has
+      // nothing to discount, and a benefit_only one (UX-70) is not sold here at
+      // all — quoting it would invent an individual price the studio removed.
+      if (resolveDurationSale(ctx.chosenDuration).mode !== 'priced') return null
       const benefit = ctx.activity.memberBenefit ?? null
       return {
         target,

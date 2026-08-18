@@ -60,6 +60,25 @@ export function resolveAutoConfirm(a: {
  *  guests included — there is no separate access gate for appointments any
  *  more (see `ActivityMemberBenefit`).
  *
+ *  `benefitOnly` is the third state, and it exists because the two above were
+ *  ONE FIELD SAYING TWO THINGS: an absent price meant both "free for everyone"
+ *  and "not sold by the session", so a coach who sells only packs could express
+ *  neither (leave it unpriced → a stranger books a free one-to-one; price it →
+ *  anyone buys the single session the coach does not sell). Same conflation the
+ *  `Activity.level` field was made optional to escape.
+ *
+ *  IT IS NOT A SECOND GATE. Appointments have no `accessRule` and gain none
+ *  here: this flag introduces no list of subscription ids and no new predicate.
+ *  It says only that there is NO INDIVIDUAL PRICE to quote — so the price is
+ *  still the gate, and the way in is the activity's ONE `memberBenefit` rule,
+ *  which already names who books free or on credits. Read it through
+ *  `resolveDurationSale`, never as a raw field.
+ *
+ *  Stored as a flag rather than a `'free' | 'priced' | 'benefit_only'` enum on
+ *  purpose: an enum member would be able to disagree with `priceAmount`
+ *  ('free' beside a number), and there is no answer to which one wins. The
+ *  TRI-STATE IS THE READING, not the storage.
+ *
  *  History: until 2026-07 this also carried `subscriptionPricing`, a per-
  *  duration × per-subscription-type price matrix. Cut after a persona test
  *  showed it produced real coach confusion ("who pays base price if only
@@ -68,6 +87,33 @@ export function resolveAutoConfirm(a: {
 export interface ActivityDuration {
   minutes: number
   priceAmount?: number | null
+  /** APPOINTMENT-ONLY. This length is not sold individually — it is bookable
+   *  only through the activity's `memberBenefit`. Any `priceAmount` beside it
+   *  is IGNORED (`resolveDurationSale` returns no price), so a stale number
+   *  left by a studio switching modes can never be charged. */
+  benefitOnly?: boolean
+}
+
+/** How a duration is sold. `'benefit_only'` = not sold individually; the
+ *  activity's `memberBenefit` is the only way in. */
+export type DurationSaleMode = 'free' | 'priced' | 'benefit_only'
+
+/** THE ONE READER of a duration's sale state — every surface that asks "is this
+ *  free / what does it cost / is it sold at all" goes through here rather than
+ *  testing `typeof priceAmount === 'number'` inline, which is what made
+ *  `benefitOnly` expressible as an addition instead of a migration.
+ *
+ *  Legacy docs (no `benefitOnly`) resolve to exactly today's meaning: a number
+ *  is 'priced', anything else is 'free'. */
+export function resolveDurationSale(d: ActivityDuration): {
+  mode: DurationSaleMode
+  /** The individual price, or null when there is none to quote. */
+  priceAmount: number | null
+} {
+  if (d.benefitOnly === true) return { mode: 'benefit_only', priceAmount: null }
+  return typeof d.priceAmount === 'number'
+    ? { mode: 'priced', priceAmount: d.priceAmount }
+    : { mode: 'free', priceAmount: null }
 }
 
 /** An appointment activity's duration menu, defaulting to a single unpriced
@@ -276,7 +322,7 @@ export interface ActivityPublicProfile {
    *  show "from CHF 45". Mirrored verbatim from `Activity.durations` — there's
    *  no per-contact data to strip any more (the old `subscriptionPricing`
    *  matrix is gone; see `ActivityDuration`'s history note). */
-  durations?: Array<{ minutes: number; priceAmount: number | null }>
+  durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   /** Mirrored verbatim from `Activity.memberBenefit` (appointments AND class
    *  drop-in member rates) — public-safe, since the referenced
    *  subscription-type ids are already public in the shop. */

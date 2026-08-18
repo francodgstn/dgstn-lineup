@@ -375,6 +375,26 @@
     "trendsNoHistoryBody": "Trends compare week against week. Once you have run a few sessions, the charts appear here on their own."
   },
   "Contacts": {
+    "noteColor_none": "No colour",
+    "noteColor_yellow": "Yellow",
+    "noteColor_green": "Green",
+    "noteColor_blue": "Blue",
+    "noteColor_pink": "Pink",
+    "noteColor_purple": "Purple",
+    "sortLabel": "Sort",
+    "sort_name": "Name",
+    "sort_attention": "Needs attention",
+    "sort_recent": "Recently added",
+    "filterGroupNone": "In no group",
+    "filterCoach": "Coach",
+    "filterCoachNone": "No coach assigned",
+    "filterCoachesNoun": "coaches",
+    "filterNeedsAttention": "Needs attention",
+    "attention_alerts": "Alert",
+    "attention_pending_signup": "Signup waiting",
+    "attention_trial_pending": "Trial not attended",
+    "attention_new_lead": "New lead",
+    "attention_gone_quiet": "Gone quiet",
     "reqEmpty": "No pending requests.",
     "reqTitle": "Update request",
     "reqNote": "Note",
@@ -1389,7 +1409,12 @@
     "fieldOfferAs": "Offer as",
     "type_class_desc": "You put it on the calendar; people book a seat.",
     "type_appointment_desc": "People pick a time from your availability.",
-    "durationPriceHint": "Leave a length's price empty to keep it free for anyone.",
+    "durationPriceHint": "Choose how each length is sold: free for anyone, at a price, or only through a subscription or pack.",
+    "durationModeFree": "Free",
+    "durationModePriced": "Priced",
+    "durationModeBenefitOnly": "Only with a plan",
+    "durationBenefitOnlyHint": "Not sold on its own — only the subscriptions or packs selected below can book it.",
+    "durationBenefitOnlyNoWayIn": "Nobody can book this length: pick the subscriptions or packs that include it below.",
     "durationPriceLabel": "Price for {duration}",
     "durationPriceValidation": "Enter a price of at least 0.50, or leave it empty.",
     "chipDropIn": "Drop-in {amount}",
@@ -2012,6 +2037,7 @@
     "timeOffPickCoach": "Select a coach"
   },
   "AppointmentForm": {
+    "durationBenefitOnly": "With a plan",
     "title": "New appointment",
     "sectionAppointment": "Appointment",
     "fieldActivity": "Activity",
@@ -2057,6 +2083,12 @@
     "createActivityAction": "Create an activity"
   },
   "AppointmentBooking": {
+    "durationBenefitOnly": "with a plan",
+    "benefitOnlyTitle": "Included with a plan",
+    "benefitOnlyBodyGuest": "This length is not sold on its own — a subscription or pack covers it. Already have one? Sign in to book.",
+    "benefitOnlyBodyMember": "This length is not sold on its own, and your current plan does not include it.",
+    "benefitOnlySeePlans": "See plans and packs",
+    "benefitOnlySignIn": "Already a member? Sign in",
     "title": "Book an appointment",
     "subtitle": "Choose a time that works for you",
     "teamNotFound": "This page is not available",
@@ -4141,6 +4173,7 @@
     "healthBenefitBadPercent": "{name}'s member discount has an invalid percentage.",
     "healthGatedNoNewcomerPath": "{name} has no way in for a newcomer — no drop-in price and no trial.",
     "healthCreditsUnusable": "{name} sells credit packs, but no activity accepts them.",
+    "healthAppointmentNoWayIn": "This appointment has a length sold only with a subscription or pack, but no plan includes it — nobody can book it.",
     "fixLink": "Fix",
     "sectionDiscountsTitle": "Discounts",
     "sectionDiscountsSubtitle": "Promo codes a visitor types at checkout to change what they pay.",
@@ -4165,6 +4198,7 @@
     "includedWithSub": "Included with {name}",
     "includedWithSubPriced": "Included with {name} — {price}",
     "signedUpOnlyLine": "Members only — signing up is free",
+    "planRequiredLine": "Requires an active subscription",
     "discountWithSub": "Discount with {name} — {percent}%",
     "prerequisitesLabel": "Prerequisites:",
     "meetingPointLabel": "Meeting point:",
@@ -5018,6 +5052,9 @@
       "formReceipt": "Form submission receipts",
       "formReceiptDesc": "Confirmation to the submitter — switched on per form, in each form's settings."
     },
+    "library": {
+      "lockedNotice": "Some ready-made automations need a higher plan. You can still build your own rules on any plan."
+    },
     "page": {
       "title": "Automations",
       "subtitle": "Trigger emails and alerts automatically based on contact activity.",
@@ -5028,8 +5065,9 @@
       "limitedPlanBody": "You can automate around your active modules and installed add-ons. Upgrade to {plan} for the full automation suite — including every add-on's triggers and actions.",
       "emptyTitle": "No automations yet",
       "emptyBody": "Load a starter kit in one click, browse the library to pick individual rules, or build your own.",
+      "emptyBodyNoStarter": "Browse the library to see what your plan includes, or build your own rule.",
       "installing": "Installing…",
-      "quickStart": "Quick-start (8 rules)",
+      "quickStart": "Quick-start ({count} rules)",
       "browseLibrary": "Browse library"
     },
     "common": {
@@ -6187,6 +6225,7 @@
     "termIncludedWithSubscription": "Included with subscription",
     "termMemberDiscount": "−{percent}% for members",
     "signedUpOnlyLine": "Members only — signing up is free",
+    "planRequiredLine": "Requires an active subscription",
     "includedWithSub": "Included with {name}",
     "includedWithSubPriced": "Included with {name} — {price}",
     "discountWithSub": "Discount with {name} — {percent}%",

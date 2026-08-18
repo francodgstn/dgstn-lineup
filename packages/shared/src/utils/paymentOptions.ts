@@ -17,7 +17,12 @@
 // not here. Web builds an optimistic snapshot from the client mirror; the
 // server re-resolves authoritatively on every write path.
 
-import type { ActivityAccessRule, ActivityDuration, ActivityMemberBenefit } from '../types/activity'
+import {
+  resolveDurationSale,
+  type ActivityAccessRule,
+  type ActivityDuration,
+  type ActivityMemberBenefit,
+} from '../types/activity'
 import type { CourseAccessRule } from '../types/course'
 import { normalizeBenefit, type Benefit, type BenefitEffect } from '../types/benefit'
 // The promo's own vocabulary is declared beside the promo type, exactly as
@@ -679,14 +684,49 @@ function resolveTarget(
     }
 
     case 'appointment': {
-      // THE PRICE IS THE GATE — guests always get an answer, never a denial.
+      // THE PRICE IS THE GATE — which is why the third sale mode lives here and
+      // not at the booking callable. This arm already owns the sentence "an
+      // unpriced duration is free to everyone"; `benefit_only` CHANGES THAT
+      // SENTENCE, so it is a modification of an existing branch's reading of
+      // its input, not a new gate: no new denial member, no new option type, no
+      // list of subscription ids that isn't the benefit's own. Putting the
+      // refusal in `bookAppointment` instead would have forced the picker, the
+      // public card and `createAppointmentCheckout` to re-derive it — three
+      // parallel coverage checks, the one thing this module exists to prevent.
+      const sale = resolveDurationSale(target.duration)
+
+      if (sale.mode === 'benefit_only') {
+        // Not sold individually: the ONLY way in is the activity's own member
+        // benefit, so ask it and refuse when it does not answer. `base` is
+        // irrelevant here and passed as 0 — only a COVERAGE resolution counts,
+        // and a price-modifying benefit (percent_off / fixed_price) is not a
+        // way in at all: there is no price for it to modify. That combination
+        // is a no-way-in offering, which `computePricingHealth` reports.
+        const resolved = resolveBenefitCandidate(snapshot, target.benefit, 0, APPOINTMENT_EFFECTS)
+        if (resolved?.kind === 'coverage') return resolved.result
+        // Same authenticated split the course arm uses: a guest is told to sign
+        // in, a signed-in non-holder is told what to buy. A promo cannot reach
+        // this — there is no pay option — and is reported `not_applicable` by
+        // the caller.
+        return {
+          options: [],
+          denial: snapshot.authenticated ? 'no_subscription' : 'sign_in_required',
+        }
+      }
+
       // Exact port of the old resolveEffectiveAppointmentPrice rules (see the
       // appointment parity fixtures), generalized through `applyModifiers`.
-      const base = target.duration.priceAmount
-      if (typeof base !== 'number') {
+      if (sale.priceAmount === null) {
         return { options: [{ type: 'covered', via: { reason: 'unpriced' } }], denial: null }
       }
-      return applyModifiers(snapshot, target.benefit, base, 'base', APPOINTMENT_EFFECTS, promo)
+      return applyModifiers(
+        snapshot,
+        target.benefit,
+        sale.priceAmount,
+        'base',
+        APPOINTMENT_EFFECTS,
+        promo
+      )
     }
 
     case 'course': {

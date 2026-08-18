@@ -375,6 +375,26 @@
     "trendsNoHistoryBody": "Le tendenze confrontano settimana per settimana. Dopo qualche sessione, i grafici compariranno qui da soli."
   },
   "Contacts": {
+    "noteColor_none": "Nessun colore",
+    "noteColor_yellow": "Giallo",
+    "noteColor_green": "Verde",
+    "noteColor_blue": "Blu",
+    "noteColor_pink": "Rosa",
+    "noteColor_purple": "Viola",
+    "sortLabel": "Ordina",
+    "sort_name": "Nome",
+    "sort_attention": "Da seguire",
+    "sort_recent": "Aggiunti di recente",
+    "filterGroupNone": "In nessun gruppo",
+    "filterCoach": "Coach",
+    "filterCoachNone": "Nessun coach assegnato",
+    "filterCoachesNoun": "coach",
+    "filterNeedsAttention": "Da seguire",
+    "attention_alerts": "Avviso",
+    "attention_pending_signup": "Iscrizione in attesa",
+    "attention_trial_pending": "Prova non svolta",
+    "attention_new_lead": "Nuovo contatto",
+    "attention_gone_quiet": "Diventato inattivo",
     "reqEmpty": "Nessuna richiesta in sospeso.",
     "reqTitle": "Richiesta di aggiornamento",
     "reqNote": "Nota",
@@ -1389,7 +1409,12 @@
     "fieldOfferAs": "Offri come",
     "type_class_desc": "Lo pianifichi tu; le persone prenotano un posto.",
     "type_appointment_desc": "Le persone scelgono un orario dalla tua disponibilità.",
-    "durationPriceHint": "Lascia vuoto il prezzo di una durata per renderla gratuita per tutti.",
+    "durationPriceHint": "Scegli come viene venduta ogni durata: gratuita per tutti, a pagamento oppure solo tramite un abbonamento o un pacchetto.",
+    "durationModeFree": "Gratuita",
+    "durationModePriced": "A pagamento",
+    "durationModeBenefitOnly": "Solo con abbonamento",
+    "durationBenefitOnlyHint": "Non venduta singolarmente — possono prenotarla solo gli abbonamenti o i pacchetti selezionati qui sotto.",
+    "durationBenefitOnlyNoWayIn": "Nessuno può prenotare questa durata: scegli qui sotto gli abbonamenti o i pacchetti che la includono.",
     "durationPriceLabel": "Prezzo per {duration}",
     "durationPriceValidation": "Inserisci un prezzo di almeno 0.50, oppure lascia il campo vuoto.",
     "chipDropIn": "Ingresso singolo {amount}",
@@ -2012,6 +2037,7 @@
     "timeOffPickCoach": "Seleziona un coach"
   },
   "AppointmentForm": {
+    "durationBenefitOnly": "Con abbonamento",
     "title": "Nuovo appuntamento",
     "sectionAppointment": "Appuntamento",
     "fieldActivity": "Attività",
@@ -2057,6 +2083,12 @@
     "createActivityAction": "Crea un'attività"
   },
   "AppointmentBooking": {
+    "durationBenefitOnly": "con abbonamento",
+    "benefitOnlyTitle": "Inclusa in un abbonamento",
+    "benefitOnlyBodyGuest": "Questa durata non si vende singolarmente — la copre un abbonamento o un pacchetto. Ne hai già uno? Accedi per prenotare.",
+    "benefitOnlyBodyMember": "Questa durata non si vende singolarmente e il tuo abbonamento attuale non la include.",
+    "benefitOnlySeePlans": "Vedi abbonamenti e pacchetti",
+    "benefitOnlySignIn": "Sei già membro? Accedi",
     "title": "Prenota un appuntamento",
     "subtitle": "Scegli un orario che ti conviene",
     "teamNotFound": "Questa pagina non è disponibile",
@@ -4141,6 +4173,7 @@
     "healthBenefitBadPercent": "Lo sconto membri di {name} ha una percentuale non valida.",
     "healthGatedNoNewcomerPath": "{name} non ha un accesso per i nuovi arrivati — né ingresso singolo né prova.",
     "healthCreditsUnusable": "{name} vende pacchetti di crediti, ma nessuna attività li accetta.",
+    "healthAppointmentNoWayIn": "Questo appuntamento ha una durata prenotabile solo con abbonamento o pacchetto, ma nessun piano la include: nessuno può prenotarla.",
     "fixLink": "Correggi",
     "sectionDiscountsTitle": "Sconti",
     "sectionDiscountsSubtitle": "Codici promozionali che il visitatore inserisce al pagamento per cambiare quanto paga.",
@@ -4165,6 +4198,7 @@
     "includedWithSub": "Incluso con {name}",
     "includedWithSubPriced": "Incluso con {name} — {price}",
     "signedUpOnlyLine": "Solo per membri — la registrazione è gratuita",
+    "planRequiredLine": "Richiede un abbonamento attivo",
     "discountWithSub": "Sconto con {name} — {percent}%",
     "prerequisitesLabel": "Prerequisiti:",
     "meetingPointLabel": "Punto d'incontro:",
@@ -5018,6 +5052,9 @@
       "formReceipt": "Ricevute di invio modulo",
       "formReceiptDesc": "Conferma al mittente — attivabile per modulo, nelle impostazioni del modulo."
     },
+    "library": {
+      "lockedNotice": "Alcune automazioni pronte richiedono un piano superiore. Puoi comunque creare regole tue con qualsiasi piano."
+    },
     "page": {
       "title": "Automazioni",
       "subtitle": "Attiva automaticamente email e avvisi in base all'attività dei contatti.",
@@ -5028,8 +5065,9 @@
       "limitedPlanBody": "Puoi automatizzare in base ai tuoi moduli attivi e ai componenti aggiuntivi installati. Passa a {plan} per la suite di automazione completa, inclusi trigger e azioni di ogni componente aggiuntivo.",
       "emptyTitle": "Nessuna automazione ancora",
       "emptyBody": "Carica un kit iniziale con un clic, sfoglia la libreria per scegliere singole regole o creane una tua.",
+      "emptyBodyNoStarter": "Sfoglia la libreria per vedere cosa include il tuo piano, oppure crea una tua regola.",
       "installing": "Installazione…",
-      "quickStart": "Avvio rapido (8 regole)",
+      "quickStart": "Avvio rapido ({count} regole)",
       "browseLibrary": "Sfoglia la libreria"
     },
     "common": {
@@ -6187,6 +6225,7 @@
     "termIncludedWithSubscription": "Incluso con l'abbonamento",
     "termMemberDiscount": "−{percent}% per i soci",
     "signedUpOnlyLine": "Solo per membri — la registrazione è gratuita",
+    "planRequiredLine": "Richiede un abbonamento attivo",
     "includedWithSub": "Incluso con {name}",
     "includedWithSubPriced": "Incluso con {name} — {price}",
     "discountWithSub": "Sconto con {name} — {percent}%",

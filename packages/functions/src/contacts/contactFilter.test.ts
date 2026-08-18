@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import {
   EMPTY_CONTACT_FILTER,
   calcAgeYears,
+  compareContactsByAttention,
+  contactAttentionReasons,
+  contactNeedsAttention,
   contactMatchesGroup,
   countActiveFilters,
   filterContacts,
@@ -392,6 +395,97 @@ describe('dynamic groups', () => {
     const f = filter({ groups: ['unknown-group'] })
     assert.equal(matchesFilter(contact({ group_ids: ['unknown-group'] }), f, { nowMs: NOW }), true)
     assert.equal(matchesFilter(contact(), f, { nowMs: NOW }), false)
+  })
+})
+
+// UX-62 — the two dimensions a manager kept reaching for and not finding.
+describe('matchesFilter — coach assignment', () => {
+  const f = (coaches: string[]) => filter({ coaches })
+  it("narrows to one coach's people", () => {
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: ['u1'] }), f(['u1']), { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: ['u2'] }), f(['u1']), { nowMs: NOW }), false)
+    assert.equal(matchesFilter(contact(), f(['u1']), { nowMs: NOW }), false)
+  })
+  it('ORs several coaches, and matches a contact assigned to more than one', () => {
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: ['u2', 'u3'] }), f(['u1', 'u2']), { nowMs: NOW }), true)
+  })
+  it("'none' finds the unassigned", () => {
+    assert.equal(matchesFilter(contact(), f(['none']), { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: [] }), f(['none']), { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: ['u1'] }), f(['none']), { nowMs: NOW }), false)
+  })
+  it("'none' ORs with a named coach, like every other dimension", () => {
+    const both = f(['none', 'u1'])
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: ['u1'] }), both, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact(), both, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ assigned_coach_ids: ['u9'] }), both, { nowMs: NOW }), false)
+  })
+})
+
+describe('matchesFilter — in NO group', () => {
+  const manual = group({ id: 'squad-a' })
+  const juniors = group({
+    id: 'juniors',
+    rule: filter({ age: { mode: 'age', min: null, max: 12 } }),
+  })
+  const ctx: ContactFilterContext = { groups: [manual, juniors], nowMs: NOW }
+  const none = filter({ groups: ['none'] })
+
+  it('finds a contact in no group at all', () => {
+    assert.equal(matchesFilter(contact({ birthdate: ts('1990-05-02') }), none, ctx), true)
+  })
+  it('excludes a contact in a MANUAL group', () => {
+    assert.equal(matchesFilter(contact({ birthdate: ts('1990-05-02'), group_ids: ['squad-a'] }), none, ctx), false)
+  })
+  it('excludes a contact only a DYNAMIC group claims — the whole point', () => {
+    // group_ids is empty; the junior is derived into `juniors` by her birthdate.
+    assert.equal(matchesFilter(contact({ birthdate: ts('2016-05-02') }), none, ctx), false)
+  })
+  it('ORs with a named group', () => {
+    const f = filter({ groups: ['none', 'squad-a'] })
+    assert.equal(matchesFilter(contact({ birthdate: ts('1990-05-02'), group_ids: ['squad-a'] }), f, ctx), true)
+    assert.equal(matchesFilter(contact({ birthdate: ts('1990-05-02') }), f, ctx), true)
+    assert.equal(matchesFilter(contact({ birthdate: ts('2016-05-02') }), f, ctx), false)
+  })
+  it('falls back to stored membership with no group context', () => {
+    assert.equal(matchesFilter(contact(), none, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ group_ids: ['x'] }), none, { nowMs: NOW }), false)
+  })
+})
+
+// UX-44 — "who needs me today", derived from facts already on the contact.
+describe('contact attention', () => {
+  const ctx: ContactFilterContext = { nowMs: NOW }
+  it('reports nothing for a contact with nothing waiting', () => {
+    assert.deepEqual(contactAttentionReasons(contact({ total_sessions: 3, last_session_at: ts('2026-08-12') }), ctx), [])
+    assert.equal(contactNeedsAttention(contact({ total_sessions: 3, last_session_at: ts('2026-08-12') }), ctx), false)
+  })
+  it('orders several reasons by urgency, alerts first', () => {
+    const c = contact({ alerts_count: 2, lead_acknowledged: false, acquisition_stage: 'trial_booked' })
+    assert.deepEqual(contactAttentionReasons(c, ctx), ['alerts', 'trial_pending', 'new_lead'])
+  })
+  it('does NOT call a brand-new contact "gone quiet"', () => {
+    // No attended session yet: inactivity here is newness, not churn.
+    const c = contact({ created_at: ts('2020-01-01') })
+    assert.equal(contactAttentionReasons(c, ctx).includes('gone_quiet'), false)
+  })
+  it('calls a lapsed attender gone quiet', () => {
+    const c = contact({ total_sessions: 12, last_session_at: ts('2026-01-01') })
+    assert.deepEqual(contactAttentionReasons(c, ctx), ['gone_quiet'])
+  })
+  it('is filterable, so it works in dynamic groups and automations too', () => {
+    const f = filter({ needsAttention: true })
+    assert.equal(matchesFilter(contact({ pending_signup: true }), f, ctx), true)
+    assert.equal(matchesFilter(contact({ total_sessions: 3, last_session_at: ts('2026-08-12') }), f, ctx), false)
+  })
+  it('sorts the urgent first and alphabetically within a tier', () => {
+    const list = [
+      contact({ firstname: 'Zoe', lastname: 'Zeta', total_sessions: 3, last_session_at: ts('2026-08-12') }),
+      contact({ firstname: 'Bo', lastname: 'Beta', alerts_count: 1 }),
+      contact({ firstname: 'Al', lastname: 'Alpha', total_sessions: 3, last_session_at: ts('2026-08-12') }),
+    ]
+    const sorted = [...list].sort((a, b) => compareContactsByAttention(a, b, ctx))
+    assert.deepEqual(sorted.map((c) => c.firstname), ['Bo', 'Al', 'Zoe'])
   })
 })
 
