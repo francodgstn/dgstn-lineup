@@ -236,12 +236,36 @@ The emulator hides a missing index; a real project returns 400. Order:
 rules+indexes, then functions, then web.
 
 ## 16. Cancelling a link-mode appointment does not close its Stripe link (UX-59)
-**PARKED, and it is the same family as the bug just fixed.** A manager cancelling
-a link-mode appointment from the sessions UI leaves the Checkout Session live —
-the client can still pay, and the webhook's case 3 then **re-acquires and
-confirms the cancelled slot**. Now cheap to fix (UX-59 stores
-`payment_checkout_session_id`), but it touches `sessions/index.ts` plus the
-client-side cancel path, so it was left rather than widened into a live lane.
+**ANSWERED 2026-08-18 — Franco: close it. Shipped.** The manager's cancel moved
+behind a callable, `cancelAppointmentSlot`
+(`packages/functions/src/appointments/cancelSlot.ts`), which closes the Checkout
+Session and then cancels. Census site 8 in `appointments/holdRelease.ts`, the
+twin of site 7's deliberate manager exemption.
+
+**THE ORDERING IS THE REVERSE OF `markAppointmentPaid`'s, deliberately.** Closing
+a session makes Stripe deliver `checkout.session.expired` — census site 3, which
+carries this hold's own booking token, so its ownership proof SUCCEEDS. For a
+SETTLEMENT that event is an UNDO, which is why `markAppointmentPaid` settles
+first. For a CANCELLATION it writes the same end state, so the two writers
+COMMUTE: event first and our transaction re-reads an already-cancelled session;
+transaction first and `releaseAppointmentHold` answers `not_a_live_hold`. What
+does NOT commute is a PAYMENT landing between a cancel write and a successful
+close — that is the defect itself, merely narrowed to milliseconds. So the
+irreversible half goes first: close, then cancel. Pinned by source assertions in
+`appointments/cancelSlot.test.ts`.
+
+The three outcomes, all surfaced: `closed` → the cancellation proceeds silently;
+`paid` → **refused**, nothing is cancelled and the manager is told the client
+paid and the appointment is confirmed (the refusal clears itself once the webhook
+confirms the session, so it is not a deadlock); `failed` → the cancellation
+proceeds (Stripe being unreachable must not block a manager clearing a slot) and
+the manager is told the link may still be payable.
+
+**Not widened:** a public-checkout hold stores no session id (30-minute deadline,
+own rollback) and a DELETED session sends a late payment into
+`handleAppointmentCheckout`'s case 4, which refunds rather than re-acquires — so
+the delete path is only routed through the callable when a link id exists, which
+is about not throwing that id away.
 
 ## 17. A gift-card-covered trial carries no "Paid trial" chip (UX-66)
 **NOTED, no action.** Full-cover gift-card redemption writes a finance reclass and
@@ -284,11 +308,45 @@ clearly-named distinct concepts. Say if you want it; it should reuse the Open-ta
 store rather than adding another.
 
 ## 21. The public-pages hub is missing the appointment picker (UX-28)
-**PARKED, small.** `/public/{slug}/appointments` is a genuine public surface — the
-How-to list treats it as one — and the hub's census omits it. Not added because
-`usePublicSurfaces` has no `appointmentsLive` flag and the live signal comes from
-`active_public_surfaces` in `packages/functions` (reserved that round). **A row
-with a guessed live state would be worse than an absent one.**
+**ANSWERED 2026-08-18 — computed, then added. Shipped.**
+
+**The liveness rule, in one line:** the picker is live when the studio's
+`bookingSettings.appointmentsEnabled` toggle is on **AND** at least one
+`status: 'active'` availability window links to at least one `type: 'appointment'`
+activity of the team with a bookable duration menu — where "bookable" drops
+priced durations for a studio with no chargeable Connect account, exactly as
+`listAvailability` does. It is a mirror of that callable's own refusals (it
+returns `{ coaches: [] }` on each of them), because that callable is what a
+visitor actually sees.
+
+**It is stored as HALF an answer, on purpose.** `active_public_surfaces.appointments`
+holds only the CONTENT half (`syncTeamPublicProfile` → `appointmentContentExists`).
+The toggle is written straight to the public_profile document by Settings →
+Booking, which never touches the team document — so a stored copy would be
+silently stale from the moment a studio flipped the switch, which is the exact
+failure this flag was added to avoid. The toggle is read LIVE from the same
+document, in the same read, at no cost. `appointmentPickerLive`
+(`shared/publicRoutes.ts`) is the ONE place the two are combined, and it fails
+closed.
+
+Freshness of the content half: `onAvailabilityWrite` (new) and an appointment-only
+nudge in `syncActivityPublicProfile`, both through the existing
+`touchTeamForSurfaceRecompute`.
+
+What it does NOT claim: that a given day has a free time. Expanding recurrence
+against booked sessions is a request-time computation. The flag says a visitor
+arrives at a configured picker rather than an empty state.
+
+**A studio with the toggle on and nothing bookable sees a DIM row with "Set up"**
+pointing at `/schedule/availability` — the hours are what is missing. With the
+toggle off it points at `/settings/booking` instead. It is the only row on the
+hub whose action switches, because it is the only one with two management homes.
+
+**Not made a `PublicSurface`:** that would also put it in the default-landing
+choices, the website header link derivation and the bio-link page-link picker.
+The picker is a deep-link destination (activity/provider/date presets), not a
+front door. Say if you want a bio-link "Book an appointment" target — that is the
+change this deliberately did not make.
 
 ## 22. "Scheduling" in the settings rail is now two rows (UX-67)
 **NOTED.** Event types and Booking page remain there. Only Places was used

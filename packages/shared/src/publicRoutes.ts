@@ -372,6 +372,40 @@ export function routableSurfaces<T extends Partial<Record<PublicSurface, boolean
 }
 
 /**
+ * IS THE APPOINTMENT PICKER (`/public/{slug}/appointments`) LIVE?
+ *
+ * THE ONE PLACE THE TWO HALVES ARE COMBINED. Neither half is the answer:
+ *
+ *   • `bookingSettings.appointmentsEnabled` is the studio's TOGGLE — an
+ *     intention, not a fact. On with nothing published, the picker renders an
+ *     empty state and every visitor sent there finds nothing to book.
+ *   • `active_public_surfaces.appointments` is the CONTENT — server-computed by
+ *     `syncTeamPublicProfile` from the same inputs `listAvailability` reads
+ *     (active hours × bookable appointment activities). It says something is
+ *     behind the door, not that the studio wants the door open.
+ *
+ * They live on the same public_profile document and are read in the same read,
+ * so composing them costs nothing — but they are refreshed by different writers
+ * (the toggle by the settings form, the content by the team-doc sync), which is
+ * exactly why the toggle is not stored inside the content flag. See
+ * `ActivePublicSurfaces.appointments`.
+ *
+ * FAILS CLOSED, unlike `systemLinkIsLive` below: this answers "should I tell the
+ * studio this surface is live", and a row claiming live over an empty picker is
+ * worse than an absent one (UX-28).
+ */
+export function appointmentPickerLive(profile: {
+  active_public_surfaces?: { appointments?: boolean }
+  bookingSettings?: { appointmentsEnabled?: boolean }
+} | undefined | null): boolean {
+  if (!profile) return false
+  return (
+    profile.bookingSettings?.appointmentsEnabled === true &&
+    profile.active_public_surfaces?.appointments === true
+  )
+}
+
+/**
  * Is a bio-link page link's destination actually live?
  *
  * THE SAME RULE THE WEBSITE HEADER ALREADY FOLLOWS (`resolveSiteSurfaceLinks`,

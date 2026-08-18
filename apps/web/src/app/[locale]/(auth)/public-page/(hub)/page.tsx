@@ -9,15 +9,23 @@
 // record of WHERE that surface is managed, and those prefixes have nothing in
 // common with each other:
 //
-//   bio-link   → /team/bio-link
-//   website    → /plugins/website          (set up via /settings/plugins)
-//   shop       → /public-page/shop
-//   space      → /public-page/space
-//   booking    → /settings/booking
-//   kiosk      → /plugins/kiosk            (set up via /settings/plugins)
-//   signup     → /offer/plans?tab=subscriptions
-//   forms      → /plugins/custom-forms     (set up via /settings/plugins)
-//   documents  → /documents
+//   bio-link     → /team/bio-link
+//   website      → /plugins/website          (set up via /settings/plugins)
+//   shop         → /public-page/shop
+//   space        → /public-page/space
+//   booking      → /settings/booking
+//   appointments → /schedule/availability    (switched on in /settings/booking)
+//   kiosk        → /plugins/kiosk            (set up via /settings/plugins)
+//   signup       → /offer/plans?tab=subscriptions
+//   forms        → /plugins/custom-forms     (set up via /settings/plugins)
+//   documents    → /documents
+//
+// APPOINTMENTS IS THE ONE ROW WITH TWO MANAGEMENT HOMES, which is why its action
+// switches: the toggle lives in /settings/booking and the bookable hours behind
+// it in /schedule/availability, and a row that is dark for the first reason must
+// not send the studio to the second. Its live state is the only one on this page
+// composed from two facts (`appointmentPickerLive`) — the toggle alone would say
+// "live" over a picker with nothing in it (UX-28).
 //
 // That spread is the reason this page exists (UX-28) and the reason it must be
 // findable: it is linked from the main nav's Grow section AND the Settings rail,
@@ -50,8 +58,8 @@ import type { PublicSurface } from '@linyup/shared'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck, UserPlus,
-  ClipboardList, FileText, ExternalLink, Copy, Check, Plus, Settings2,
+  Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck, CalendarClock,
+  UserPlus, ClipboardList, FileText, ExternalLink, Copy, Check, Plus, Settings2,
 } from 'lucide-react'
 
 // Plugin a surface needs; clicking "Set up" deep-links the plugins page, whose
@@ -220,6 +228,18 @@ export default function PublicPageHub() {
       key: 'booking', icon: CalendarCheck, title: t('surfaceBooking'), desc: t('bookingDesc'),
       live: flags.bookingLive, previewUrl: publicUrl('booking'),
       action: <ManageLink href={'/settings/booking' as Route} label={t('manage')} />,
+    },
+    {
+      // Dark until BOTH halves are true, and the action names which half is
+      // missing: the toggle first (nothing else can matter while it is off),
+      // then the hours. A row asserting "Live" over a picker that returns no
+      // slots is the same lie as the missing row it replaced.
+      key: 'appointments', icon: CalendarClock, title: t('surfaceAppointments'),
+      desc: t('appointmentsDesc'),
+      live: flags.appointmentsLive, previewUrl: publicUrl('appointments'),
+      action: flags.appointmentsEnabled
+        ? <ManageLink href={'/schedule/availability' as Route} label={t('manage')} />
+        : <SetupLink href={'/settings/booking' as Route} label={t('setUp')} />,
     },
     {
       key: 'kiosk', icon: MonitorCheck, title: t('surfaceKiosk'), desc: t('kioskDesc'),

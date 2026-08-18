@@ -18,6 +18,7 @@ import {
   Mail,
   ListChecks,
   LayoutTemplate,
+  FlaskConical,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -104,6 +105,13 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },
   { id: 'roles', href: '/settings/roles', labelKey: 'roles', icon: ShieldCheck, group: 'account' },
   { id: 'billing', href: '/settings/billing', labelKey: 'billing', icon: CreditCard, group: 'account', gate: 'ownerOnly' },
+  // Experimental features — the studio's opt-in for surfaces that are built and
+  // working but not yet settled. Account, not Studio: it is a workspace-wide
+  // "what have we turned on", and Studio is already the long group. Owner-only
+  // because the switch is a team-doc write (firestore.rules), so a manager who
+  // reached it could only look at it. NOT a plugin, deliberately — see the
+  // registry header in packages/shared/src/types/experimental.ts.
+  { id: 'experimental', href: '/settings/experimental', labelKey: 'experimentalFeatures', icon: FlaskConical, group: 'account', gate: 'ownerOnly' },
 ]
 
 // Group order + their `Nav` namespace label keys (rendered in the rail). Account on

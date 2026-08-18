@@ -94,6 +94,19 @@
 //         and nothing in this file can bind it. Anything that ever has to be
 //         enforced rather than documented has to move into those rules or
 //         behind a callable first.
+//  8. `cancelAppointmentSlot` (appointments/cancelSlot.ts) — the manager
+//     cancelling ONE appointment from the admin, which is the client-side
+//     `updateDoc(status: 'cancelled')` above moved behind a callable so the
+//     Stripe payment link behind a link-mode hold can be closed with it.
+//         SAME DELIBERATE EXEMPTION AS 7, for the same reason: the manager's
+//         cancellation is the operation no attempt owns. It cancels the session
+//         and deletes the hold's booking (a CONFIRMED booking is left standing)
+//         without presenting a token.
+//         IT CLOSES THE CHECKOUT SESSION *BEFORE* IT CANCELS — the reverse of
+//         `markAppointmentPaid` below, and deliberately so. The argument for the
+//         reversal lives in that file's header; do not copy either order across
+//         without re-deriving it, because the two are right for opposite
+//         reasons.
 //
 // Sites 1–3 are the ones that address a hold BY ITS SHARED ADDRESS while another
 // attempt may own it. They are the ones this file exists for, and they are now

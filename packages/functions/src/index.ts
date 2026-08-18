@@ -51,6 +51,9 @@ export { onActivityTypeChange } from './sync/onActivityTypeChange'
 export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
 export { onAffiliationWrite } from './sync/onAffiliationWrite'
 export { onCreditGrantWrite } from './sync/onCreditGrantWrite'
+// Availability writes re-run the team sync so the appointment picker's liveness
+// flag (active_public_surfaces.appointments) can't go stale — see the file.
+export { onAvailabilityWrite } from './sync/onAvailabilityWrite'
 
 // Booking
 export {
@@ -158,6 +161,10 @@ export { createAppointmentCheckout } from './appointments/checkout'
 // from the admin (existing/new contact, free/paid-offline/pending-offline/
 // payment-link), and settles a pending offline hold once paid in person.
 export { createStaffAppointment, markAppointmentPaid } from './appointments/staffBooking'
+// A manager cancels an appointment — and kills the Stripe payment link behind a
+// link-mode hold on the way out, so a late payment can no longer re-acquire the
+// slot that was just called off (see cancelSlot.ts for the ordering).
+export { cancelAppointmentSlot } from './appointments/cancelSlot'
 
 // SaaS billing (Linyup's own platform subscriptions — Stripe)
 export {

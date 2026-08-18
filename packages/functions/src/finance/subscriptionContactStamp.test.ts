@@ -84,7 +84,9 @@ describe('a subscription first charge — the stamp', () => {
     // The journal permits exactly ONE financial mutation (upgradeFees). This is
     // the guard that the metadata linkage never becomes a second one — which is
     // what would put a row through the invariant's back door.
-    const journal = read('finance/journal.ts')
+    // LF-normalised — see the note in connect/dahliaReads.test.ts. The slice
+    // below is anchored on a bare newline, and a CRLF checkout makes it miss.
+    const journal = read('finance/journal.ts').replace(/\r\n/g, '\n')
     const fn = journal.slice(journal.indexOf('export async function linkFinanceTxnContact'))
     const body = fn.slice(0, fn.indexOf('\n}\n') + 3)
     const updated = [...body.matchAll(/\.update\(\{([^}]*)\}\)/g)].map((m) => m[1].trim())

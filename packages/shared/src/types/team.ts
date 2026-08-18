@@ -97,6 +97,36 @@ export interface ActivePublicSurfaces {
   // kiosk plugin active — the entrance-tablet surface at /public/{slug}/kiosk.
   // Reached by its own URL (paired to a device), never a default landing.
   kiosk?: boolean
+  // ── THE APPOINTMENT PICKER (/public/{slug}/appointments) — HALF AN ANSWER,
+  // and it says so in its own doc comment because the other half is on this very
+  // document and must NOT be copied into this flag.
+  //
+  // THIS FLAG IS THE CONTENT HALF: is there anything bookable behind the picker?
+  // It mirrors what `listAvailability` would return — ≥1 `status: 'active'`
+  // availability window whose `activityIds` resolve to ≥1 `type: 'appointment'`
+  // activity of this team with a bookable duration menu (priced-only durations
+  // drop out when the studio has no chargeable Connect account, exactly as they
+  // do there). Hours with no appointment activity yield zero slots, and an
+  // activity nobody published hours for is equally unbookable, so neither on its
+  // own is a live surface.
+  //
+  // THE OTHER HALF IS `bookingSettings.appointmentsEnabled`, the studio's own
+  // toggle, and it is deliberately NOT folded in here: it is written straight to
+  // this public_profile document by Settings → Booking, which does not touch the
+  // team document, so `syncTeamPublicProfile` never sees the write. A stored
+  // copy would be silently stale from the moment a studio flipped the switch —
+  // which is the one failure mode this flag was added to avoid. It is read LIVE
+  // from the same document instead, in the same read, at no cost.
+  //
+  // COMPOSE THE TWO THROUGH `appointmentPickerLive` (publicRoutes.ts) and
+  // nowhere else. Absent ⇒ not computed ⇒ treated as not live, which is the
+  // safe direction: an absent row beats a row with a guessed live state.
+  //
+  // Not a `PublicSurface` member: the picker has a landing URL, but making it
+  // one would also put it in the default-landing choices, the website header
+  // link derivation and the bio-link page-link picker. It is a deep-link
+  // destination (activity/provider/date presets), not a front door.
+  appointments?: boolean
 }
 
 // ─── Documents settings (teams/{teamId}/settings/documents) ──────────────────
@@ -324,6 +354,11 @@ export interface Team {
   // sub-shapes (e.g. TeamNavDefaults for `defaultNavPins`, BookingSettings)
   // live alongside their feature and get cast at the read site — see
   // TeamNavDefaults above for the nav-pins-seeding key.
+  //
+  // `settings.experimentalFeatures` is one such sub-shape:
+  // ExperimentalFeatureSettings in types/experimental.ts, read through
+  // resolveExperimentalFeatures / isExperimentalFeatureEnabled. Owner-write,
+  // like every other key in this bag.
   settings?: Record<string, unknown>
 
   // Bio-link / link-in-bio

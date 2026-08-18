@@ -426,6 +426,38 @@ payment may already be on its way; the `paid` outcome is the one branch that
 **retracts** it, since there the incoming charge is the client's real and only
 payment and refunding it would be the defect rather than the guard.
 
+### Cancelling an awaiting-payment appointment
+
+The other ending of the same rail, and the same obligation
+(`cancelAppointmentSlot`, `appointments/cancelSlot.ts`). The manager's cancel
+used to be a client-side `updateDoc(status: 'cancelled')`, which left the link
+payable: the client paid days later and the webhook's **case 3 re-acquired and
+confirmed the cancelled slot**. It is now a callable that closes the link.
+
+**THE ORDER IS THE REVERSE OF THE SETTLEMENT'S, and that is the point.** A
+settlement and a cancellation face the same racing `checkout.session.expired`,
+and it hurts them differently:
+
+|  | What the expiry event would do | So the order is |
+|---|---|---|
+| `markAppointmentPaid` | **undo** the settlement (cancel the appointment it just settled) | settle, then close |
+| `cancelAppointmentSlot` | write **the same end state** (the two writers commute) | close, then cancel |
+
+What does *not* commute for a cancellation is a **payment**: cancel first and the
+window before the close is the original defect, merely shortened. So the close
+goes first, and the same three outcomes are reported — `closed` (cancel
+proceeds), `paid` (**refused**: the client paid, the appointment is theirs, and
+the manager is told rather than left with their money and no appointment),
+`failed` (cancel proceeds — Stripe being unreachable must not block a manager
+clearing a slot — and the manager is told the link may still be payable).
+Pinned in `appointments/cancelSlot.test.ts`; the release census entry is site 8
+in `appointments/holdRelease.ts`.
+
+Gated on `schedule.manage` with the rules' own coach own-scope, **not** on the
+manager role its siblings use: this replaces a client write the rules already
+allowed, and a role gate would have silently taken the cancel button away from
+every coach.
+
 ### Gotchas
 
 - **Payment auto-confirms even when `autoConfirm: false`.** A paid booking is

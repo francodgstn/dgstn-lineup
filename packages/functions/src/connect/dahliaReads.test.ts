@@ -343,7 +343,13 @@ describe('THE BACKFILL WRITES WHAT THE WEBHOOK WRITES', () => {
       /current_period_end:\s*periodEnd/.test(handler),
       'handleSubscription must still write the period END it owns'
     )
-    const memberType = readRoot('packages/shared/src/types/connect.ts')
+    // LF-normalised, because the slice below is anchored on a bare newline and
+    // core.autocrlf gives every Windows checkout CRLF. The needle then misses,
+    // the slice collapses to nothing, and the assertion fails against an empty
+    // string while the source it is guarding is perfectly correct. That failure
+    // has now cost time twice in this repo — see the same note in
+    // sync/documentsDegating.test.ts.
+    const memberType = readRoot('packages/shared/src/types/connect.ts').replace(/\r\n/g, '\n')
     const ifaceStart = memberType.indexOf('export interface MemberSubscription {')
     assert.notEqual(ifaceStart, -1, 'MemberSubscription moved — this guard has drifted')
     const iface = memberType.slice(ifaceStart, memberType.indexOf('\n}\n', ifaceStart))

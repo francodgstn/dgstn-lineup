@@ -185,6 +185,33 @@ export async function hasCapability(
   return caps.includes(cap)
 }
 
+/**
+ * Is the caller ALL-scoped in this team — i.e. do their capabilities reach every
+ * record, or only their own?
+ *
+ * The functions-side twin of `callerIsAllScoped` in `firestore.rules`, and it
+ * copies that function's defaults deliberately: a missing member document, or a
+ * member document with no `scope`, is ALL-scoped. Only an explicit
+ * `scope: 'own'` (a coach) narrows anything, so a legacy member is never
+ * tightened by this existing.
+ *
+ * It exists because a client write that moves behind a callable stops being
+ * gated by the rules and starts being gated by the callable — and a capability
+ * check alone is a WIDENING for exactly the people the rules narrow. Pair it
+ * with `requireCapability` wherever that happens.
+ */
+export async function callerIsAllScoped(userId: string, teamId: string): Promise<boolean> {
+  const doc = await admin
+    .firestore()
+    .collection('teams')
+    .doc(teamId)
+    .collection('team_members')
+    .doc(userId)
+    .get()
+  if (!doc.exists) return true
+  return (doc.data()?.scope ?? 'all') !== 'own'
+}
+
 /** Throw permission-denied unless the caller holds `cap` in the team. */
 export async function requireCapability(
   userId: string,

@@ -161,7 +161,8 @@
     "navSearchKeepTyping": "Continua a digitare per cercare contatti, abbonamenti e attività",
     "navShortcutsClearExplain": "Rimuove le pagine sempre visibili e quelle visitate di recente. L’azione non è reversibile; le pagine sempre visibili mantengono il loro ordine finché non le cancelli.",
     "navSearchArchivedBadge": "Archiviato",
-    "navRecentContactsGroup": "Contatti visti di recente"
+    "navRecentContactsGroup": "Contatti visti di recente",
+    "experimentalFeatures": "Funzionalità sperimentali"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -201,7 +202,9 @@
     "documentsDesc": "Documenti pubblici come liberatorie, termini e informative.",
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "Uno schermo di check-in su tablet per la reception – membri e walk-in si registrano sul posto.",
-    "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti."
+    "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti.",
+    "surfaceAppointments": "Appuntamenti",
+    "appointmentsDesc": "I visitatori scelgono un orario libero con un coach e lo prenotano da soli."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -1041,7 +1044,9 @@
     "saveError": "Impossibile salvare la sessione: {message}",
     "saveTimeoutError": "Ci vuole troppo tempo — il server potrebbe non essere disponibile. Riprova.",
     "noClassActivitiesHint": "Nessuna attività di tipo corso. Un corso si pianifica a partire da un'attività: creane una prima.",
-    "createActivityAction": "Crea un'attività"
+    "createActivityAction": "Crea un'attività",
+    "deleteAppointmentPaidInWindow": "Il cliente ha appena pagato, quindi non è stato eliminato nulla. L'appuntamento è confermato — rimborsalo in Stripe se vuoi comunque rimuoverlo.",
+    "deleteAppointmentLinkStillOpen": "Il link di pagamento non è stato chiuso — potrebbe essere ancora pagabile. Fallo scadere nella tua dashboard Stripe."
   },
   "Calendar": {
     "title": "Programma",
@@ -2049,7 +2054,11 @@
     "timeOffCount": "{count, plural, one {# assenza} other {# assenze}}",
     "openFullPage": "Apri la pagina completa",
     "hoursHiddenNote": "Questi orari non sono mostrati nel calendario dietro questo pannello.",
-    "hoursShowOnCalendar": "Mostra nel calendario"
+    "hoursShowOnCalendar": "Mostra nel calendario",
+    "cancelSlotClosesLink": "Il link di pagamento inviato al cliente verrà chiuso e non potrà più essere pagato.",
+    "cancelSlotPaidInWindow": "Il cliente ha appena pagato, quindi non è stato annullato nulla. L'appuntamento è confermato — rimborsalo in Stripe se vuoi comunque annullarlo.",
+    "cancelSlotLinkStillOpen": "Annullato, ma il link di pagamento non è stato chiuso — potrebbe essere ancora pagabile. Fallo scadere nella tua dashboard Stripe.",
+    "cancelSlotFailed": "Non è stato possibile annullare l'appuntamento."
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Con abbonamento",
@@ -6400,5 +6409,22 @@
     "errorPasswordMismatch": "Le due password non coincidono.",
     "errorEmailInUse": "Esiste già un account per questo indirizzo. Accedi invece.",
     "errorWrongPassword": "La password non è corretta. Riprova o reimpostala."
+  },
+  "SettingsExperimental": {
+    "pageTitle": "Funzionalità sperimentali",
+    "pageSubtitle": "Prova ciò su cui stiamo ancora lavorando. Qui è tutto disattivato finché non lo attivi.",
+    "meaningTitle": "Cosa significa sperimentale",
+    "meaningBody": "Queste funzionalità funzionano, ma non sono finite. Possono cambiare, comportarsi diversamente dal resto dell'app o essere ritirate — e non fanno parte di ciò che il tuo piano promette. Puoi disattivarle in qualsiasi momento; nulla di ciò che hai già registrato ne risente.",
+    "ownerOnly": "Solo il titolare di questo account può modificare queste impostazioni.",
+    "whereLabel": "Dove lo vedrai:",
+    "emptyTitle": "Al momento non c'è nulla da provare",
+    "emptyBody": "Quando avremo qualcosa di nuovo da testare, comparirà qui.",
+    "toastEnabled": "Attivata",
+    "toastDisabled": "Disattivata",
+    "toastFailed": "Impossibile salvare questa modifica",
+    "engagementMatrixName": "Matrice di coinvolgimento",
+    "engagementMatrixDescription": "Rappresenta ogni settimana in base a quante persone sono venute e con quale frequenza sono tornate, dividendo il risultato in quattro quadranti. Il modello a quadranti è ancora in fase di messa a punto: leggilo come un'indicazione, non come un verdetto.",
+    "engagementMatrixSurface": "Dashboard, nella sezione Tendenze.",
+    "planNote": "Richiede il piano {plan}, quindi con il tuo non lo vedrai ancora."
   }
 }

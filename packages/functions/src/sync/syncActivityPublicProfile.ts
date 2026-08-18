@@ -1,11 +1,29 @@
 // Keeps activities/{activityId}/public_profile/{activityId} in sync
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { resolveActivityAccessRule, resolveDurationSale } from '@linyup/shared'
+import { touchTeamForSurfaceRecompute } from '../utils/plugins'
+
+// An APPOINTMENT activity is half of what makes the appointment picker live
+// (`ActivePublicSurfaces.appointments`), and that flag is computed by the
+// team-document sync — which an activity write does not trigger. Same nudge the
+// forms/courses/documents syncs use, and narrowed to appointment activities on
+// either side of the write so editing a class never touches the team document.
+async function touchIfAppointmentActivity(
+  before: FirebaseFirestore.DocumentData | undefined,
+  after: FirebaseFirestore.DocumentData | undefined
+): Promise<void> {
+  const teamId = (after?.teamId ?? before?.teamId) as string | undefined
+  if (!teamId) return
+  if (before?.type !== 'appointment' && after?.type !== 'appointment') return
+  await touchTeamForSurfaceRecompute(teamId)
+}
 
 
 export const syncActivityPublicProfile = onDocumentWritten('activities/{activityId}', async (event) => {
   const { activityId } = event.params
   const afterRef = event.data!.after.ref
+
+  await touchIfAppointmentActivity(event.data!.before.data(), event.data!.after.data())
 
   // Remove public profile when document is deleted or activity is deactivated
   if (!event.data!.after.exists || event.data!.after.data()?.isActive === false) {

@@ -8,6 +8,8 @@ import {
   SITE_PUBLISHED_COLLECTION,
   FORMS_COLLECTION,
   DOCUMENTS_COLLECTION,
+  ACTIVITIES_COLLECTION,
+  AVAILABILITY_COLLECTION,
   TEAM_SETTINGS_SUBCOLLECTION,
   DOCUMENTS_SETTINGS_DOC_ID,
   WAIVER_POLICY_SUBCOLLECTION,
@@ -18,8 +20,11 @@ import {
   resolveSystemLinkTarget,
   toKioskPublicConfig,
   normalizeKioskConfig,
+  resolveAppointmentDurations,
+  resolveDurationSale,
 } from '@linyup/shared'
 import type {
+  Activity,
   PublicSurface,
   ActivePublicSurfaces,
   DocumentKind,
@@ -219,6 +224,12 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // when it's chosen as the default landing.
   const signupActive = true
 
+  // appointments: THE CONTENT HALF of the appointment picker's liveness — see
+  // `ActivePublicSurfaces.appointments` for why the studio's own
+  // `bookingSettings.appointmentsEnabled` toggle is deliberately NOT folded in
+  // here, and `appointmentPickerLive` for the one place the two are combined.
+  const appointmentsActive = await appointmentContentExists(db, teamId, paymentsEnabled)
+
   const active_public_surfaces: ActivePublicSurfaces = {
     site: siteActive,
     space: spaceActive,
@@ -228,6 +239,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     forms: formsActive,
     documents: documentsActive,
     kiosk: kioskActive,
+    appointments: appointmentsActive,
   }
 
   // ── default_public_surface ───────────────────────────────────────────────────
@@ -361,3 +373,77 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // `public_coaches_enabled` gets toggled, and that field lives on this same doc.
   await rebuildTeamPublicCoaches(teamId)
 })
+
+// ── The appointment picker's CONTENT probe ──────────────────────────────────
+//
+// "Is there anything bookable behind /public/{slug}/appointments?" — answered by
+// mirroring what `listAvailability` (appointments/window.ts) actually does,
+// because that callable IS what a visitor sees. It returns `{ coaches: [] }`,
+// i.e. an empty picker, unless an ACTIVE availability window links to an
+// appointment activity of this team with at least one offerable duration; and it
+// drops priced durations when the studio has no chargeable Connect account
+// (UX-33), which can empty the picker on its own. All three conditions are
+// reproduced here. If that resolver's rule changes, this one changes with it —
+// the two disagreeing is precisely the guessed live state this flag exists to
+// avoid.
+//
+// WHAT IT DELIBERATELY DOES NOT ASK: whether a given DAY has a free time. That
+// needs the recurrence expanded over a date range against every booked session,
+// which is a request-time computation, not a sync-time one. The flag says a
+// visitor arrives at a configured picker rather than an empty state — not that
+// tomorrow at 10:00 is free.
+//
+// The scan caps below bound the work this adds to EVERY team write. A studio
+// with more active windows than the cap, whose only bookable one sits beyond it,
+// gets a FALSE — an absent hub row rather than a wrong one, which is the safe
+// direction (UX-28). No composite index: two equality filters, the same query
+// `listAvailability` already runs, and the activities are fetched by id.
+const APPOINTMENT_WINDOW_SCAN_LIMIT = 50
+const APPOINTMENT_ACTIVITY_SCAN_LIMIT = 25
+
+async function appointmentContentExists(
+  db: admin.firestore.Firestore,
+  teamId: string,
+  canCharge: boolean
+): Promise<boolean> {
+  const windows = await db
+    .collection(AVAILABILITY_COLLECTION)
+    .where('teamId', '==', teamId)
+    .where('status', '==', 'active')
+    .limit(APPOINTMENT_WINDOW_SCAN_LIMIT)
+    .get()
+  if (windows.empty) return false
+
+  const referenced = new Set<string>()
+  for (const doc of windows.docs) {
+    for (const id of (doc.data().activityIds ?? []) as string[]) {
+      if (referenced.size >= APPOINTMENT_ACTIVITY_SCAN_LIMIT) break
+      referenced.add(id)
+    }
+  }
+  if (referenced.size === 0) return false
+
+  const activityDocs = await Promise.all(
+    [...referenced].map((id) => db.collection(ACTIVITIES_COLLECTION).doc(id).get())
+  )
+  const bookable = new Set<string>()
+  for (const doc of activityDocs) {
+    if (!doc.exists) continue
+    const a = doc.data() as Activity
+    if (a.type !== 'appointment' || a.teamId !== teamId) continue
+    // 'priced' is the only mode that needs Stripe; a benefit-only or unpriced
+    // length survives an unfinished Connect account. Same filter, same reason.
+    const offerable = canCharge
+      ? resolveAppointmentDurations(a)
+      : resolveAppointmentDurations(a).filter((d) => resolveDurationSale(d).mode !== 'priced')
+    if (offerable.length === 0) continue
+    bookable.add(doc.id)
+  }
+  if (bookable.size === 0) return false
+
+  // The PAIRING, not merely the two sets being non-empty: a window offering only
+  // activities that dropped out above is a window that yields nothing.
+  return windows.docs.some((doc) =>
+    ((doc.data().activityIds ?? []) as string[]).some((id) => bookable.has(id))
+  )
+}

@@ -161,7 +161,8 @@
     "navSearchKeepTyping": "Weitertippen, um Kontakte, Abos und Aktivitäten zu durchsuchen",
     "navShortcutsClearExplain": "Damit werden die immer angezeigten Seiten und die zuletzt besuchten entfernt. Das lässt sich nicht rückgängig machen; immer angezeigte Seiten behalten ihre Reihenfolge, bis du sie entfernst.",
     "navSearchArchivedBadge": "Archiviert",
-    "navRecentContactsGroup": "Zuletzt angesehene Kontakte"
+    "navRecentContactsGroup": "Zuletzt angesehene Kontakte",
+    "experimentalFeatures": "Experimentelle Funktionen"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -201,7 +202,9 @@
     "documentsDesc": "Öffentliche Dokumente wie Verzichtserklärungen, AGB und Richtlinien.",
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "Ein Tablet-Check-in für deinen Empfang – Mitglieder und Walk-ins melden sich direkt vor Ort an.",
-    "shopDescPriceList": "Zeigt deine Preise. Online-Zahlungen sind aus, daher werden Besucher gebeten, dich zu kontaktieren."
+    "shopDescPriceList": "Zeigt deine Preise. Online-Zahlungen sind aus, daher werden Besucher gebeten, dich zu kontaktieren.",
+    "surfaceAppointments": "Termine",
+    "appointmentsDesc": "Besucherinnen und Besucher wählen eine freie Zeit bei einem Coach und buchen sie selbst."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -1041,7 +1044,9 @@
     "saveError": "Der Termin konnte nicht gespeichert werden: {message}",
     "saveTimeoutError": "Das dauert zu lange — der Server ist möglicherweise nicht erreichbar. Bitte erneut versuchen.",
     "noClassActivitiesHint": "Noch keine Kurs-Aktivitäten. Ein Kurs wird auf Basis einer Aktivität geplant – erstelle also zuerst eine.",
-    "createActivityAction": "Aktivität erstellen"
+    "createActivityAction": "Aktivität erstellen",
+    "deleteAppointmentPaidInWindow": "Die Kundin oder der Kunde hat soeben bezahlt, daher wurde nichts gelöscht. Der Termin ist bestätigt — erstatte den Betrag in Stripe, wenn du ihn trotzdem entfernen willst.",
+    "deleteAppointmentLinkStillOpen": "Der Zahlungslink konnte nicht geschlossen werden — er ist möglicherweise noch bezahlbar. Beende ihn in deinem Stripe-Dashboard."
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -2049,7 +2054,11 @@
     "timeOffCount": "{count, plural, one {# Abwesenheit} other {# Abwesenheiten}}",
     "openFullPage": "Ganze Seite öffnen",
     "hoursHiddenNote": "Diese Zeiten werden im Kalender hinter diesem Bereich nicht angezeigt.",
-    "hoursShowOnCalendar": "Im Kalender anzeigen"
+    "hoursShowOnCalendar": "Im Kalender anzeigen",
+    "cancelSlotClosesLink": "Der an die Kundin oder den Kunden gesendete Zahlungslink wird geschlossen und kann nicht mehr bezahlt werden.",
+    "cancelSlotPaidInWindow": "Die Kundin oder der Kunde hat soeben bezahlt, daher wurde nichts storniert. Der Termin ist bestätigt — erstatte den Betrag in Stripe, wenn du ihn trotzdem absagen willst.",
+    "cancelSlotLinkStillOpen": "Storniert, aber der Zahlungslink konnte nicht geschlossen werden — er ist möglicherweise noch bezahlbar. Beende ihn in deinem Stripe-Dashboard.",
+    "cancelSlotFailed": "Der Termin konnte nicht storniert werden."
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Mit Abo",
@@ -6400,5 +6409,22 @@
     "errorPasswordMismatch": "Die beiden Passwörter stimmen nicht überein.",
     "errorEmailInUse": "Für diese Adresse gibt es bereits ein Konto. Melde dich stattdessen an.",
     "errorWrongPassword": "Das Passwort war nicht korrekt. Versuche es erneut oder setze es zurück."
+  },
+  "SettingsExperimental": {
+    "pageTitle": "Experimentelle Funktionen",
+    "pageSubtitle": "Probieren Sie aus, woran wir noch arbeiten. Alles hier ist aus, bis Sie es einschalten.",
+    "meaningTitle": "Was experimentell bedeutet",
+    "meaningBody": "Diese Funktionen laufen, sind aber nicht fertig. Sie können sich ändern, sich anders verhalten als der Rest der App oder ganz entfernt werden — und sie gehören nicht zum Leistungsumfang Ihres Plans. Sie können sie jederzeit ausschalten; bereits erfasste Daten sind davon nicht betroffen.",
+    "ownerOnly": "Nur die Inhaberin oder der Inhaber dieses Kontos kann dies ändern.",
+    "whereLabel": "Wo Sie es sehen:",
+    "emptyTitle": "Zurzeit gibt es nichts zum Ausprobieren",
+    "emptyBody": "Sobald wir etwas Neues zum Testen haben, erscheint es hier.",
+    "toastEnabled": "Eingeschaltet",
+    "toastDisabled": "Ausgeschaltet",
+    "toastFailed": "Diese Änderung konnte nicht gespeichert werden",
+    "engagementMatrixName": "Engagement-Matrix",
+    "engagementMatrixDescription": "Stellt jede Woche danach dar, wie viele Personen kamen und wie oft sie wiederkamen, und teilt das Ergebnis in vier Quadranten. Das Quadrantenmodell wird noch abgestimmt — lesen Sie es als Hinweis, nicht als Urteil.",
+    "engagementMatrixSurface": "Dashboard, im Abschnitt Trends.",
+    "planNote": "Erfordert den Plan {plan} — in Ihrem Plan ist es daher noch nicht sichtbar."
   }
 }

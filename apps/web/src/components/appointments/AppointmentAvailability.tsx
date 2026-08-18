@@ -744,12 +744,31 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
     } finally { setLoadingBookings(false) }
   }
 
+  // THROUGH THE CALLABLE, not a direct write. A link-mode hold has a Stripe
+  // Checkout Session that stays payable for a week, and a client-side
+  // `updateDoc(status: 'cancelled')` left it live: the client paid days later
+  // and the Connect webhook RE-ACQUIRED the cancelled slot and confirmed it.
+  // `cancelAppointmentSlot` closes the link first and cancels second (its header
+  // owns that reasoning), and reports the three things a close can mean.
   async function cancelSlot() {
     if (!slot) return
     setCancelling(true)
     try {
-      await updateDoc(doc(db, SESSIONS_COLLECTION, slot.id), { status: 'cancelled', allowBooking: false })
+      const fn = httpsCallable<
+        { teamId: string; sessionId: string },
+        { ok: boolean; cancelled: boolean; reason?: string; linkStillOpen?: boolean }
+      >(functions, 'cancelAppointmentSlot')
+      const res = await fn({ teamId: slot.teamId, sessionId: slot.id })
+      if (res.data?.ok === false) {
+        // The client paid the link in the seconds before this call. Nothing was
+        // cancelled on purpose — the appointment is theirs and paid for.
+        toast.warning(t('cancelSlotPaidInWindow'), { duration: 10_000 })
+      } else if (res.data?.linkStillOpen) {
+        toast.warning(t('cancelSlotLinkStillOpen'), { duration: 10_000 })
+      }
       onCancelled()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('cancelSlotFailed'))
     } finally { setCancelling(false); setConfirmCancel(false) }
   }
 
@@ -815,7 +834,14 @@ export function AppointmentDetail({ slot, onClose, onCancelled }: {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('cancelSlot')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('cancelSlotConfirm')}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {t('cancelSlotConfirm')}
+              {/* Said BEFORE the click, because it is a side effect on something
+                  the client already has in their inbox. */}
+              {slot?.payment_pending && slot?.payment_intent_mode === 'link' && (
+                <span className="mt-2 block">{t('cancelSlotClosesLink')}</span>
+              )}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>

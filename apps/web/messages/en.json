@@ -161,7 +161,8 @@
     "navSearchKeepTyping": "Keep typing to search contacts, plans and activities",
     "navShortcutsClearExplain": "This removes the pages you always show and the ones you recently visited. It can't be undone, and always-shown pages keep their order until you clear them.",
     "navSearchArchivedBadge": "Archived",
-    "navRecentContactsGroup": "Recently viewed contacts"
+    "navRecentContactsGroup": "Recently viewed contacts",
+    "experimentalFeatures": "Experimental features"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -201,7 +202,9 @@
     "documentsDesc": "Public documents like waivers, terms and policies.",
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot.",
-    "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you."
+    "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you.",
+    "surfaceAppointments": "Appointments",
+    "appointmentsDesc": "Let visitors pick a free time with a coach and book it themselves."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -1041,7 +1044,9 @@
     "saveError": "Couldn't save the session: {message}",
     "saveTimeoutError": "This is taking too long — the server may be unavailable. Try again.",
     "noClassActivitiesHint": "No class activities yet. A class is scheduled from one, so create one first.",
-    "createActivityAction": "Create an activity"
+    "createActivityAction": "Create an activity",
+    "deleteAppointmentPaidInWindow": "The client paid just now, so nothing was deleted. The appointment is confirmed — refund them in Stripe if you still want to remove it.",
+    "deleteAppointmentLinkStillOpen": "The payment link could not be closed — it may still be payable. Expire it in your Stripe dashboard."
   },
   "Calendar": {
     "title": "Schedule",
@@ -2049,7 +2054,11 @@
     "timeOffCount": "{count, plural, one {# time off} other {# time off}}",
     "openFullPage": "Open the full page",
     "hoursHiddenNote": "These hours are not drawn on the calendar behind this panel.",
-    "hoursShowOnCalendar": "Show on calendar"
+    "hoursShowOnCalendar": "Show on calendar",
+    "cancelSlotClosesLink": "The payment link sent to the client will be closed so it can no longer be paid.",
+    "cancelSlotPaidInWindow": "The client paid just now, so nothing was cancelled. The appointment is confirmed — refund them in Stripe if you still want to cancel it.",
+    "cancelSlotLinkStillOpen": "Cancelled, but the payment link could not be closed — it may still be payable. Expire it in your Stripe dashboard.",
+    "cancelSlotFailed": "The appointment could not be cancelled."
   },
   "AppointmentForm": {
     "durationBenefitOnly": "With a plan",
@@ -6400,5 +6409,22 @@
     "errorPasswordMismatch": "The two passwords do not match.",
     "errorEmailInUse": "An account already exists for this address. Sign in instead.",
     "errorWrongPassword": "That password did not work. Try again or reset it."
+  },
+  "SettingsExperimental": {
+    "pageTitle": "Experimental features",
+    "pageSubtitle": "Try things we are still working on. Everything here is off until you switch it on.",
+    "meaningTitle": "What experimental means",
+    "meaningBody": "These features work, but they are not finished. They can change, behave differently from the rest of the app, or be withdrawn entirely — and they are not part of what your plan promises. Switch one off at any time; nothing you have already recorded is affected.",
+    "ownerOnly": "Only the owner of this account can change these.",
+    "whereLabel": "Where you will see it:",
+    "emptyTitle": "Nothing to try right now",
+    "emptyBody": "When we have something new to test, it will show up here.",
+    "toastEnabled": "Switched on",
+    "toastDisabled": "Switched off",
+    "toastFailed": "Could not save that change",
+    "engagementMatrixName": "Engagement matrix",
+    "engagementMatrixDescription": "Plots each week by how many people came and how often they came back, splitting the result into four quadrants. The quadrant model is still being tuned, so read it as a hint rather than a verdict.",
+    "engagementMatrixSurface": "Dashboard, in the Trends section.",
+    "planNote": "Needs the {plan} plan, so you will not see it on yours yet."
   }
 }
