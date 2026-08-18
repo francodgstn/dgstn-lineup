@@ -209,6 +209,7 @@ export default function PublicSite({ slug }: { slug: string }) {
         onBook={openBooking}
         surfaceLinks={surfaceLinks}
         memberControl={memberControl}
+        paymentsEnabled={team.payments_enabled === true}
       />
       <BookingOverlay
         slug={slug}

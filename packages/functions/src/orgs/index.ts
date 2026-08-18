@@ -60,6 +60,13 @@ export const createOrganization = onCall(async (request) => {
   const now = FieldValue.serverTimestamp()
   const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))
 
+  // Display copy for the creator's own member row. The org Members list names
+  // people from the membership document — an org admin has no rule that lets
+  // them read `users/{uid}` — so a row written without these renders a raw uid.
+  const creatorDoc = await db.collection('users').doc(uid).get()
+  const creatorName = (creatorDoc.data()?.displayName as string | undefined) ?? ''
+  const creatorEmail = (creatorDoc.data()?.email as string | undefined) ?? ''
+
   const orgRef = db.collection('organizations').doc()
   const batch = db.batch()
 
@@ -82,6 +89,8 @@ export const createOrganization = onCall(async (request) => {
     role: 'org_admin',
     joined: now,
     addedBy: uid,
+    displayName: creatorName,
+    email: creatorEmail,
   })
 
   // Record orgId on the user profile so the sidebar can find it without a collectionGroup query
@@ -267,11 +276,17 @@ export const acceptOrgInvitation = onCall(async (request) => {
     }
   )
 
-  // Link team to org and upgrade its plan
+  // Link team to org and upgrade its plan. `trial_ends_at` is CLEARED: the
+  // team's own trial is over as a fact — the organisation's subscription is what
+  // governs it now, and a leftover past date on a team whose status is 'trial'
+  // (which it is whenever the org is still trialing) is precisely what made
+  // handleTrialLifecycle reset member studios to Free (UX-35). One stale field,
+  // two systems disagreeing about who is paying.
   batch.update(db.collection('teams').doc(data.teamId), {
     org_id: orgId,
     plan: 'organization',
     plan_status: orgPlanStatus,
+    trial_ends_at: FieldValue.delete(),
     updated_at: now,
   })
 

@@ -32,6 +32,12 @@ export interface OrgMember {
   role: OrgRole
   joined: Timestamp
   addedBy: string
+  /** Display copy denormalized from `users/{uid}` when the member is added, so
+   *  the org Members list can name people without reading the users collection
+   *  (an org admin has no rule that lets them). Absent on rows written before
+   *  the member callables existed — the list falls back to the uid. */
+  displayName?: string
+  email?: string
 }
 
 export interface OrgTeam {

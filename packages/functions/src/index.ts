@@ -191,6 +191,10 @@ export {
   requestTeamAccess,
 } from './orgs'
 
+// Org member management (add / change role / remove). Authorized by
+// assertOrgAdmin against org_members — never hasTeamRole (UX-75, UX-34).
+export { addOrgMember, updateOrgMemberRole, removeOrgMember } from './orgs/members'
+
 // An org's OWN Linyup billing. Separate from the team callables below because
 // the payer is authorized through org_members, not team_members (UX-75).
 export {

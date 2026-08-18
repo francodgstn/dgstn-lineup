@@ -63,13 +63,6 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     sitePublishedSnap.exists
   const kioskActive = kioskPluginSnap.exists && kioskPluginSnap.data()?.status === 'active'
 
-  // online-courses plugin snapshot — used by the shop capability check below.
-  const onlineCoursesPluginSnap = await db
-    .doc(
-      `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/online-courses`
-    )
-    .get()
-
   // Portal (stored under the stable `space` key): the contact's PERSONAL member
   // portal — membership, bookings, profile, and the courses they can open. Decoupled
   // from the course catalogue (that lives in the shop), so it's a BASE surface,
@@ -199,23 +192,27 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // Default to true — booking works on every plan, plugin-free.
   const bookingActive = true
 
-  // shop: live when a sellable channel is enabled — the products or online-courses
-  // plugin, or Stripe Connect (subscriptions). The public shop aggregates whatever
-  // exists, so this capability check is enough to offer it as a landing surface.
-  const productsPluginSnap = await db
-    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/products`)
-    .get()
-  const productsPluginActive = productsPluginSnap.exists && productsPluginSnap.data()?.status === 'active'
   const giftCardsPluginSnap = await db
     .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/gift-cards`)
     .get()
   const giftCardsPluginActive =
     giftCardsPluginSnap.exists && giftCardsPluginSnap.data()?.status === 'active'
-  const onlineCoursesActive =
-    onlineCoursesPluginSnap.exists && onlineCoursesPluginSnap.data()?.status === 'active'
-  const connectEnabled =
-    (data.payments as { connectStatus?: string } | undefined)?.connectStatus === 'enabled'
-  const shopActive = productsPluginActive || onlineCoursesActive || connectEnabled
+  // CAN THIS STUDIO BE PAID? Both halves of the server-side answer, read from
+  // the same two fields `loadEnabledTeam` + `requireChargeableAccount` enforce
+  // (connect/access.ts): the operator kill-switch must not be down, and the
+  // connected account must be chargeable. Mirrored below as `payments_enabled`
+  // so public surfaces can ask the question without reading teams/.
+  const payments = data.payments as
+    | { connectStatus?: string; connectEnabled?: boolean }
+    | undefined
+  const paymentsEnabled = payments?.connectEnabled !== false && payments?.connectStatus === 'enabled'
+  // shop: EVERY shop item — memberships, products, courses, gift cards — is
+  // bought through Stripe Connect, so the surface is live only when the studio
+  // can actually take the money. A products plugin without a chargeable account
+  // used to light this up, which put a page full of buy buttons in front of
+  // visitors and refused every one of them at the callable (UX-33). The plugins
+  // decide WHAT is on the shelves; this decides whether there is a till.
+  const shopActive = paymentsEnabled
 
   // signup is a base surface (the subscription sign-up form) — available on every
   // plan, so always live. Denormalized here so the public root can redirect to it
@@ -277,6 +274,11 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       plan: data.plan as SaasPlan | undefined,
       plan_status: data.plan_status as string | undefined,
     }),
+    // Whether a priced door may be OFFERED at all — see
+    // TeamPublicProfile.payments_enabled. Written on every sync, so switching
+    // the kill-switch or finishing Connect onboarding (both touch the team doc)
+    // takes the priced doors down or puts them up on the next write.
+    payments_enabled: paymentsEnabled,
     // Billing currency for the website pricing table (bio-link/website never read teams/).
     default_currency: (data.default_currency as string | undefined) || null,
     // Team-wide cancellation policy default (activity-level override lives on

@@ -70,8 +70,10 @@ export interface ActivePublicSurfaces {
   // available on every plan, so effectively always true. Present so the root can
   // redirect to it when chosen as the default landing.
   signup?: boolean
-  // shop is live when a sellable channel is enabled (products / online-courses
-  // plugin or Stripe Connect); the public shop aggregates whatever exists.
+  // shop is live when the studio can BE PAID (a chargeable Stripe Connect
+  // account, kill-switch up) — every shop item, membership / product / course /
+  // gift card alike, is bought through Connect. The plugins decide what is on
+  // the shelves; this decides whether there is a till (UX-33).
   shop?: boolean
   // ≥1 published Custom Form exists (custom-forms plugin active). Optional — forms
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
@@ -511,6 +513,21 @@ export interface TeamPublicProfile {
   // free plan, where the bio-link shows a "Powered by Linyup" badge. The bio-link
   // must never read teams/, so the flag lives here.
   showBranding?: boolean
+  // Whether the studio can actually BE PAID online right now — its Stripe
+  // Connect account is chargeable AND the operator kill-switch is not down.
+  // Computed by syncTeamPublicProfile from the same two facts
+  // `loadEnabledTeam` + `requireChargeableAccount` enforce server-side
+  // (packages/functions/src/connect/access.ts), so the public surface and the
+  // callable cannot disagree about whether a checkout would open.
+  //
+  // It is here because a public surface may not read teams/, and it exists so
+  // that A DOOR NOBODY CAN PAY THROUGH IS NOT OFFERED: the drop-in door, the
+  // priced trial, the shop. It is NOT a "this studio is closed" flag — free
+  // and members-only doors are governed by their own rules and stay open when
+  // this is false. ABSENT/FALSE means cannot charge (fail closed): a profile
+  // written before this field existed advertises no priced door until its next
+  // sync, which is the safe direction.
+  payments_enabled?: boolean
   // Denormalized from teams/{id}.default_currency by syncTeamPublicProfile so the
   // public website pricing table can format prices without reading teams/.
   default_currency?: string

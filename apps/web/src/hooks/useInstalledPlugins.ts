@@ -36,6 +36,19 @@ export interface UseInstalledPluginsResult {
  * Real-time subscription to a team's installed plugins, merged with any plugins
  * installed at the org level (when the team belongs to an organisation).
  *
+ * AN ORG INSTALL DELIBERATELY CONFERS THE FEATURE, and there is no second
+ * plan check here on purpose (UX-35). The organisation is the payer: joining one
+ * sets `teams/{id}.plan = 'organization'` in the same write that sets `org_id`
+ * (acceptOrgInvitation), and `pluginAccessForPlan` includes every plugin at that
+ * tier — so the receiving team's own plan already says yes, and re-asking would
+ * only introduce a way for the two answers to differ. `org_id` IS the grant.
+ *
+ * That invariant — org_id ⇒ plan 'organization' — is the thing to protect. It
+ * was broken once, by the trial sweep downgrading a member studio for its
+ * ORG's trial status; the fix belongs where the invariant is broken, never in a
+ * second gate here that would silently strip a paying org's studios of their
+ * features whenever plan propagation lagged by a webhook.
+ *
  * - Subscribes to `teams/{teamId}/installed_plugins` (always).
  * - Also subscribes to `organizations/{orgId}/installed_plugins` when the team
  *   has an `org_id` field. Org plugins are shown as active for all sub-studios.

@@ -24,6 +24,7 @@ import {
   AVAILABILITY_COLLECTION,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   ACTIVITIES_COLLECTION,
+  TEAMS_COLLECTION,
   GUEST_SNAPSHOT,
   appointmentSlotBlocked,
   resolveAppointmentDurations,
@@ -185,6 +186,27 @@ export const listAvailability = onCall(async (request) => {
   if (data.providerId) templates = templates.filter((t) => t.providerId === data.providerId)
   if (templates.length === 0) return { coaches: [] }
 
+  // CAN THE STUDIO BE PAID? A priced duration is a door that only opens through
+  // Stripe: `createAppointmentCheckout` calls requireChargeableAccount and
+  // `bookAppointment` refuses a payable caller with `payment_required`. So when
+  // the studio has no chargeable account, offering a priced length puts a slot
+  // in front of a visitor that neither path can complete (UX-33) — the menu
+  // drops those lengths instead, here rather than in each client, so the web
+  // picker and the mobile app cannot disagree.
+  //
+  // "Cannot take money" is NOT "free": an UNPRICED duration stays bookable for
+  // anyone, exactly as before. The deliberate cost is a member whose
+  // `memberBenefit` would have covered a priced length free — they lose that
+  // length too while the account is unfinished, because this listing is built
+  // once for every caller (anonymous included) and does not resolve the
+  // caller's coverage. Finishing Connect onboarding restores it.
+  const teamSnap = await db.collection(TEAMS_COLLECTION).doc(data.teamId).get()
+  const teamPayments = teamSnap.data()?.payments as
+    | { connectStatus?: string; connectEnabled?: boolean }
+    | undefined
+  const canCharge =
+    teamPayments?.connectEnabled !== false && teamPayments?.connectStatus === 'enabled'
+
   // Batch-load the union of referenced activities; keep only bookable appointment offerings.
   const activityIds = new Set<string>()
   for (const t of templates) for (const id of t.activityIds ?? []) activityIds.add(id)
@@ -198,7 +220,13 @@ export const listAvailability = onCall(async (request) => {
     if (a.type !== 'appointment' || a.teamId !== data.teamId) continue
     if (data.activityId && doc.id !== data.activityId) continue
     const info = toActivityInfo(doc.id, a)
-    if (info) activityMap.set(doc.id, info)
+    if (!info) continue
+    if (!canCharge) {
+      const free = info.durations.filter((d) => typeof d.priceAmount !== 'number')
+      if (free.length === 0) continue // nothing here anyone could book
+      info.durations = free
+    }
+    activityMap.set(doc.id, info)
   }
   if (activityMap.size === 0) return { coaches: [] }
 

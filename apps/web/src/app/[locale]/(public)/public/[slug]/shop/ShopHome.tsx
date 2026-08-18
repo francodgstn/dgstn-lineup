@@ -22,6 +22,7 @@ import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { formatCurrency } from '@/lib/format'
 import {
   resolveProductPrice,
+  resolveProductCollectionNote,
   compareActivities,
   resolvePaymentOptions,
   planGiftCardRedemption,
@@ -89,6 +90,11 @@ interface ProductEntry {
   priceAmount: number
   variantLabel?: string
   variants?: ProductVariantEntry[]
+  // How the buyer gets it (UX-79) — the product's OWN terms. The team default
+  // arrives separately on the profile, and the pair is resolved by the shared
+  // `resolveProductCollectionNote` so this surface and the receipt cannot
+  // disagree about which of the two applies.
+  collectionNote?: string
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -402,6 +408,15 @@ export default function ShopHome({
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [team?.bioLinkTheme])
+
+  // Can this studio BE PAID? Everything on this page — memberships, products,
+  // courses, gift cards — is bought through Stripe Connect, so with no
+  // chargeable account there is nothing here anyone could complete. The surface
+  // is normally already hidden (active_public_surfaces.shop is computed from the
+  // same fact), but the URL is guessable and the mirror can lag a sync, so the
+  // page says so itself rather than rendering a wall of buttons that every
+  // callable would refuse (UX-33). Absent ⇒ closed: fail in the safe direction.
+  const paymentsEnabled = team.payments_enabled === true
 
   const hasSubscriptions = plans.length > 0
   const hasProducts = products.length > 0
@@ -985,6 +1000,20 @@ export default function ShopHome({
     }
   }
 
+  // WHAT HAPPENS AFTER YOU PAY, stated BEFORE you pay (UX-79) — the product's
+  // own terms, else the studio's default, else nothing (and then the modal stays
+  // silent rather than inventing a delivery promise the data cannot back).
+  //
+  // It renders in the CHECKOUT MODAL rather than on the grid card: this is the
+  // last screen before Stripe and the one place a full sentence fits, whereas a
+  // two-column card would truncate it to a fragment — which answers the question
+  // worse than not asking it. Same placement, and the same reasoning, as the
+  // course access note directly beside it.
+  const checkoutCollectionNote =
+    checkout?.kind === 'product'
+      ? resolveProductCollectionNote(checkout.product, team?.productCollectionNote)
+      : null
+
   const checkoutTitle =
     checkout?.kind === 'membership'
       ? checkout.typeName
@@ -1042,7 +1071,7 @@ export default function ShopHome({
         )}
 
         {/* Memberships ⇄ Products ⇄ Courses toggle (only when 2+ surfaces exist) */}
-        {showTabs && (
+        {showTabs && paymentsEnabled && (
           <div
             className="mt-6 inline-flex rounded-full p-1"
             style={{ background: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}
@@ -1094,6 +1123,13 @@ export default function ShopHome({
             detail={loadFailureDetail(catalogueLoadError)}
             theme={{ textMain, textMuted, accent, border: cardBorder }}
           />
+        ) : !paymentsEnabled ? (
+          // Not "nothing for sale" and not an error — the shelves may be full,
+          // the till is not open. Say which, so the visitor contacts the studio
+          // instead of retrying a checkout that cannot succeed.
+          <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
+            {t('paymentsUnavailable')}
+          </p>
         ) : catalogueIsEmpty ? (
           // The catalogue loaded and is genuinely empty. True regardless of what
           // else failed — the banner above carries that part.
@@ -1253,6 +1289,15 @@ export default function ShopHome({
               </h2>
             )}
             {products.map((product) => {
+              // ONE LINE on the card, the WHOLE note in the modal. A browsing
+              // buyer's question is binary ("do they post it, or am I collecting
+              // it?") and is answered by the opening words; the terms themselves
+              // need room, and a two-column card has none. Truncated on purpose,
+              // never the only place it appears.
+              const collectionNote = resolveProductCollectionNote(
+                product,
+                team?.productCollectionNote
+              )
               const fromVariant =
                 product.variants && product.variants.length > 0
                   ? Math.min(
@@ -1295,6 +1340,11 @@ export default function ShopHome({
                       )}
                       {formatCurrency(fromVariant, currency)}
                     </p>
+                    {collectionNote && (
+                      <p className="text-xs line-clamp-1" style={{ color: textMuted }}>
+                        {collectionNote}
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={() => openProduct(product)}
@@ -1526,6 +1576,12 @@ export default function ShopHome({
             {checkout.kind === 'course' && (
               <p className="mt-3 text-xs" style={{ color: textMuted }}>
                 {t('courseAccessNote')}
+              </p>
+            )}
+
+            {checkoutCollectionNote && (
+              <p className="mt-3 text-xs whitespace-pre-line" style={{ color: textMuted }}>
+                {checkoutCollectionNote}
               </p>
             )}
 

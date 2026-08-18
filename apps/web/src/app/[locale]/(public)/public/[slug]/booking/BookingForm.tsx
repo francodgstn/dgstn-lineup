@@ -221,11 +221,35 @@ function sessionDuration(
 // activityGradient now lives in components/booking/StickyBar (shared with the
 // appointment picker) — imported above and reused by the activity cards below.
 
-/** Drop-in (pay-per-class) price for a gated class, else null. */
-function dropInPriceOf(a: ActivityProfile | null | undefined): number | null {
+/** Drop-in (pay-per-class) price for a gated class, else null.
+ *
+ *  `paymentsEnabled` is TeamPublicProfile.payments_enabled — whether the studio
+ *  has a chargeable Stripe Connect account at all. A drop-in is nothing but a
+ *  price, so with no way to take it there is no door: `createDropInCheckout`
+ *  calls requireChargeableAccount and refuses every one of these (UX-33).
+ *  Suppressing it here leaves the class exactly as gated as it was — the
+ *  members' own door is unaffected. */
+function dropInPriceOf(
+  a: ActivityProfile | null | undefined,
+  paymentsEnabled: boolean
+): number | null {
+  if (!paymentsEnabled) return null
   if (!a || a.isFreeTrial !== false) return null
   if (!a.dropIn?.enabled) return null
   return typeof a.dropIn.priceAmount === 'number' ? a.dropIn.priceAmount : null
+}
+
+/** Is the newcomer's trial door open? A FREE trial always is — being unable to
+ *  charge is not the same as being closed. A PRICED trial
+ *  (Activity.trialPriceAmount) is charged through the same drop-in checkout, so
+ *  it closes with the till: it must not be advertised, and it must certainly
+ *  not silently become free. */
+function trialDoorOpen(
+  a: ActivityProfile | null | undefined,
+  paymentsEnabled: boolean
+): boolean {
+  if (a?.trialEnabled !== true) return false
+  return paymentsEnabled || typeof a.trialPriceAmount !== 'number'
 }
 
 /**
@@ -237,9 +261,12 @@ function dropInPriceOf(a: ActivityProfile | null | undefined): number | null {
  * `?session=` deep-link resolver call it, or the click path and the link path
  * silently diverge.
  */
-function nextStepAfterSession(a: ActivityProfile | null | undefined): Step {
+function nextStepAfterSession(
+  a: ActivityProfile | null | undefined,
+  paymentsEnabled: boolean
+): Step {
   const gated = a?.isFreeTrial === false
-  const canGuest = dropInPriceOf(a) != null || a?.trialEnabled === true
+  const canGuest = dropInPriceOf(a, paymentsEnabled) != null || trialDoorOpen(a, paymentsEnabled)
   return gated && !canGuest ? 'returning' : 'who'
 }
 
@@ -323,6 +350,13 @@ export default function BookingForm({
 }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
+  // Can this studio actually BE PAID? Mirrored onto the public profile by
+  // syncTeamPublicProfile from the very fields requireChargeableAccount
+  // enforces, because a public surface may not read teams/. Absent ⇒ false: a
+  // profile written before the field existed advertises no priced door until
+  // its next sync, which is the safe direction. Everything free here is
+  // untouched — see dropInPriceOf / trialDoorOpen.
+  const paymentsEnabled = team.payments_enabled === true
   // The team-root sign-in bar's session — a contact may already be signed in
   // from another surface (Space/Shop). Used ONLY to preview the drop-in
   // member rate here; checkout/booking always re-resolve authoritatively
@@ -649,7 +683,7 @@ export default function BookingForm({
         setSelectedSession(target)
         setSelectedDate(toDateKey(target.start))
         entryResolvedRef.current = true
-        setStep(nextStepAfterSession(activity))
+        setStep(nextStepAfterSession(activity, paymentsEnabled))
         return 'applied'
       }
 
@@ -801,8 +835,11 @@ export default function BookingForm({
 
   // Drop-in (pay-per-class): a gated class where the studio lets uncovered contacts
   // pay a per-class fee to book. Members who are covered still book free via sign-in.
-  const selectedDropInPrice = dropInPriceOf(selectedActivity)
+  const selectedDropInPrice = dropInPriceOf(selectedActivity, paymentsEnabled)
   const dropInAvailable = selectedDropInPrice != null
+  // The newcomer's door, decided in ONE place so the chooser, the Back target
+  // and the deep-link resolver cannot disagree about whether it exists.
+  const trialAvailable = trialDoorOpen(selectedActivity, paymentsEnabled)
 
   // Member rate preview on the drop-in price — a signed-in contact (from the
   // team-root sign-in bar) whose held subscription earns a benefit sees the
@@ -1376,7 +1413,7 @@ export default function BookingForm({
           // which case the queue step no longer applies and the normal funnel
           // does.
           const blocked = sessionBlockReason(restored, bookingSettings?.cutoffMinutes)
-          setStep(offersWaitlist(blocked, activity) ? 'waitlist' : nextStepAfterSession(activity))
+          setStep(offersWaitlist(blocked, activity) ? 'waitlist' : nextStepAfterSession(activity, paymentsEnabled))
         } else if (sub === 'returning') {
           setStep('returning')
         } else {
@@ -1385,7 +1422,7 @@ export default function BookingForm({
           // of are in memory — so restoring it from a pasted or forward-
           // navigated link would render a Confirm with nothing behind it. The
           // visitor re-enters the funnel and reaches it again in one step.
-          setStep(nextStepAfterSession(activity))
+          setStep(nextStepAfterSession(activity, paymentsEnabled))
         }
         return
       }
@@ -1773,9 +1810,13 @@ export default function BookingForm({
                       )
                     for (const s of d.discountWith)
                       lines.push(t('discountWithSub', { name: s.name, percent: s.percent }))
-                    if (d.dropInAmount != null)
+                    // Priced doors are advertised only when one of them could
+                    // actually be walked through (UX-33). The membership lines
+                    // above stay: "included with X" states how access works,
+                    // it is not a checkout this page can open.
+                    if (d.dropInAmount != null && paymentsEnabled)
                       lines.push(t('badgeDropInPrice', { price: formatCurrency(d.dropInAmount, currency, locale) }))
-                    if (d.appointmentPrice)
+                    if (d.appointmentPrice && paymentsEnabled)
                       lines.push(
                         d.appointmentPrice.min === d.appointmentPrice.max
                           ? t('badgeFromPrice', { price: formatCurrency(d.appointmentPrice.min, currency, locale) })
@@ -2006,7 +2047,7 @@ export default function BookingForm({
                         setPromoApplied(null)
                         setDeepLinkNotice(null)
                         setBookingError(null)
-                        setStep(waitlistable ? 'waitlist' : nextStepAfterSession(activity))
+                        setStep(waitlistable ? 'waitlist' : nextStepAfterSession(activity, paymentsEnabled))
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group disabled:pointer-events-none disabled:opacity-60"
                     >
@@ -2093,7 +2134,7 @@ export default function BookingForm({
         </div>
 
         <div className="space-y-3">
-          {(!isMembersOnly || selectedActivity?.trialEnabled) && (
+          {(!isMembersOnly || trialAvailable) && (
             <button
               onClick={() => { setGuestPath('trial'); setStep('details') }}
               className="w-full text-left rounded-xl border bg-card p-4 hover:border-primary hover:bg-primary/5 transition-colors group flex items-center gap-3"
@@ -2184,8 +2225,7 @@ export default function BookingForm({
     const isMembersOnly = selectedActivity?.isFreeTrial === false
     // Back goes to wherever the visitor came from: gated classes with a guest
     // door (drop-in or trial) DID pass through the 'who' chooser.
-    const hadWhoStep =
-      !isMembersOnly || dropInAvailable || selectedActivity?.trialEnabled === true
+    const hadWhoStep = !isMembersOnly || dropInAvailable || trialAvailable
 
     // A members-only class with no guest door sends a NEWCOMER straight here.
     // "Welcome back" is the wrong thing to tell them: it names no reason, offers

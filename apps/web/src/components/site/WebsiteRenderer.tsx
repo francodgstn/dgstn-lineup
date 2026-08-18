@@ -30,6 +30,7 @@ export default function WebsiteRenderer({
   onBook,
   surfaceLinks,
   memberControl,
+  paymentsEnabled,
 }: {
   site: RenderableSite
   preview?: boolean
@@ -50,6 +51,10 @@ export default function WebsiteRenderer({
   surfaceLinks?: { href: string; label: string }[]
   /** "Sign in" / "Hi Anna" — the host owns the contact session. */
   memberControl?: { label: string; onClick: () => void }
+  /** Whether the studio has a chargeable Stripe Connect account. Passed only by
+   *  the live team site (the one host that resolves the team) — see
+   *  RenderCtx.paymentsEnabled for why absent is not the same as false. */
+  paymentsEnabled?: boolean
 }) {
   const locale = useLocale()
   const [systemDark, setSystemDark] = useState(false)
@@ -74,6 +79,7 @@ export default function WebsiteRenderer({
     orgId,
     orgTeams,
     preview,
+    paymentsEnabled,
     socialLinks: site.socialLinks,
     // Second, independent guard (bookProps checks `preview` too): the builder
     // renders this component inside /(auth) with NO PublicTeamProvider, so a

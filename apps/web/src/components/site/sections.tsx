@@ -93,6 +93,16 @@ export interface RenderCtx {
    *  locations/coaches aggregate blocks to fetch each club's live public_profile. */
   orgTeams?: OrgSiteTeamRef[]
   preview: boolean
+  /**
+   * Whether the studio can actually BE PAID (TeamPublicProfile.payments_enabled).
+   * Set by the LIVE team site, which resolves the team; absent on the builder
+   * canvas, the org site and the embed, none of which do. A priced door is
+   * advertised only when true — see the pricing lines in the activities block
+   * (UX-33). Absent ⇒ treated as "unknown", and the prices are shown: the
+   * builder must render the studio's own configuration back to it, and the org
+   * site's activity blocks belong to member teams whose accounts differ.
+   */
+  paymentsEnabled?: boolean
   socialLinks?: SocialLink[]
   /**
    * Set only by the LIVE team site (`PublicSite`), which hosts the booking
@@ -612,8 +622,14 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               for (const s of d.includedWith)
                 pricingLines.push(s.priceLabel ? `Included with ${s.name} — ${s.priceLabel}` : `Included with ${s.name}`)
               for (const s of d.discountWith) pricingLines.push(`Discount with ${s.name} — ${s.percent}%`)
-              if (d.dropInAmount != null) pricingLines.push(`Drop-in ${formatCurrency(d.dropInAmount, currency)}`)
-              if (d.appointmentPrice)
+              // A price is only advertised where somebody could pay it. `false`
+              // is a resolved "this studio has no chargeable account"; undefined
+              // is "not resolved here" (builder / org site / embed) and keeps
+              // the previous behaviour. See RenderCtx.paymentsEnabled.
+              const showPrices = ctx.paymentsEnabled !== false
+              if (d.dropInAmount != null && showPrices)
+                pricingLines.push(`Drop-in ${formatCurrency(d.dropInAmount, currency)}`)
+              if (d.appointmentPrice && showPrices)
                 pricingLines.push(
                   d.appointmentPrice.min === d.appointmentPrice.max
                     ? `From ${formatCurrency(d.appointmentPrice.min, currency)}`

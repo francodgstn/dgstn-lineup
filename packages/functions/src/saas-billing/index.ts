@@ -822,6 +822,24 @@ export const handleTrialLifecycle = onSchedule(
         console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} team ${teamId}`)
         continue
       }
+      // A TEAM INSIDE AN ORGANISATION DOES NOT OWN ITS OWN BILLING (UX-35).
+      // `acceptOrgInvitation` sets org_id together with plan 'organization' and
+      // copies the ORG's plan_status onto the team — so a member studio of an
+      // org that is itself on trial matches this query, on the strength of a
+      // `trial_ends_at` left over from its own signup months earlier, and used
+      // to be reset to Free: plugins deactivated, website unpublished, course
+      // mirrors deleted. Meanwhile `useInstalledPlugins` keeps merging the ORG's
+      // plugin installs in (org_id is still set), which is exactly the
+      // "affiliated studio holding features its plan does not include" state
+      // UX-35 reports — reached from the opposite direction.
+      //
+      // The org's own subscription is the one that governs these teams, and the
+      // webhook already propagates a lapse to every active org_team. Nothing
+      // here may downgrade one.
+      if (doc.data().org_id) {
+        console.log(`[trial] skipped org-affiliated team ${teamId} (org ${doc.data().org_id} bills it)`)
+        continue
+      }
       try {
         await downgradeTeamToFree(teamId, { fromTrial: true })
         await sendTrialExpiredEmail(teamId, doc.data()).catch((e) =>

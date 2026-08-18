@@ -86,15 +86,28 @@ function AddMemberDialog({
     setLoading(true)
     setError(null)
     try {
-      // No dedicated addOrgMember function yet — this would call a future function.
-      // For now, show a placeholder.
+      // addOrgMember / updateOrgMemberRole / removeOrgMember live in
+      // packages/functions/src/orgs/members.ts and are authorized by
+      // assertOrgAdmin against org_members (UX-75's shape). Until UX-34 they did
+      // not exist at all and every submit here came back "internal".
       const fn = httpsCallable(functions, 'addOrgMember')
       await fn({ orgId, email: email.trim(), role })
       setEmail('')
       onSuccess()
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      // The one refusal an org admin will actually meet: the address has no
+      // Linyup account. Say what to do about it rather than echoing the server's
+      // sentence — this is a grant, not an invitation, and the person has to
+      // exist first (see the module header on orgs/members.ts).
+      const code = (err as { code?: string } | null)?.code ?? ''
+      setError(
+        code === 'functions/not-found'
+          ? t('addNoAccount')
+          : err instanceof Error
+            ? err.message
+            : 'Unknown error'
+      )
     } finally {
       setLoading(false)
     }
@@ -170,6 +183,30 @@ export default function OrgMembersPage() {
     qc.invalidateQueries({ queryKey: ['org-members', orgId] })
   }
 
+  async function handleRoleChange(m: OrgMemberRow, role: OrgRole) {
+    if (role === m.role) return
+    setActionLoading(true)
+    try {
+      const fn = httpsCallable(functions, 'updateOrgMemberRole')
+      await fn({ orgId, userId: m.userId, role })
+      showToast(t('roleChangedSuccess'))
+      invalidate()
+    } catch (err: unknown) {
+      // 'last admin' is a precondition, not a bug — an org that demotes its
+      // only admin locks everyone out, so the server refuses and says which.
+      const code = (err as { code?: string } | null)?.code ?? ''
+      showToast(
+        code === 'functions/failed-precondition'
+          ? t('lastAdminBlocked')
+          : err instanceof Error
+            ? err.message
+            : 'Error'
+      )
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   async function handleRemove() {
     if (!removeTarget) return
     setActionLoading(true)
@@ -179,7 +216,14 @@ export default function OrgMembersPage() {
       showToast(t('removedSuccess'))
       invalidate()
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Error')
+      const code = (err as { code?: string } | null)?.code ?? ''
+      showToast(
+        code === 'functions/failed-precondition'
+          ? t('lastAdminBlocked')
+          : err instanceof Error
+            ? err.message
+            : 'Error'
+      )
     } finally {
       setActionLoading(false)
       setRemoveTarget(null)
@@ -236,9 +280,28 @@ export default function OrgMembersPage() {
                       {isSelf && <span className="text-xs text-muted-foreground">({t('you')})</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={m.role === 'org_admin' ? 'default' : 'secondary'}>
-                        {roleLabel(m.role)}
-                      </Badge>
+                      {isAdmin ? (
+                        <Select
+                          value={m.role}
+                          onValueChange={(v) => handleRoleChange(m, v as OrgRole)}
+                          disabled={actionLoading}
+                        >
+                          <SelectTrigger
+                            className="h-8 w-[150px]"
+                            aria-label={t('roleChange')}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="org_admin">{t('role_org_admin')}</SelectItem>
+                            <SelectItem value="org_viewer">{t('role_org_viewer')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant={m.role === 'org_admin' ? 'default' : 'secondary'}>
+                          {roleLabel(m.role)}
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
                       {formatDate(m.joined as { seconds: number } | null | undefined)}
