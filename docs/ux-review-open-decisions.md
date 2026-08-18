@@ -160,3 +160,14 @@ the studio which events to subscribe to; it does not stop the duplication. The
 three real closes each have a cost and none was mine to pick: swap to
 `invoice_payment.paid`, give the rail read-only credentials, or dedupe across
 keys. `docs/open-defects.md` entry 1 says explicitly that this is still not a fix.
+
+## 19. Should search find archived and deleted contacts? (UX-21)
+**PARKED — scope, not mechanism.** `useActiveContacts` filters them out, so looking
+up a former member returns nothing. Fixing it costs a second query per panel
+session. *Meanwhile:* active contacts only, matching every list page's default tab.
+
+## 20. "Recent contacts" in the empty search panel — deliberately not built
+**ASSUMED: no.** It was on the brief as a candidate, and it would be a FOURTH
+remembered-destination store on the day UX-23 reduced three overlapping ones to
+clearly-named distinct concepts. Say if you want it; it should reuse the Open-tabs
+store rather than adding another.

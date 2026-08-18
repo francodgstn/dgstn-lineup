@@ -97,9 +97,9 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 18 | slows | every-session | Confirming a booking writes different data depending on which page you used | M3×M4×M1 | web/functions | ▶ Open |
 | 19 | slows | every-session | Booking a known person into a class has exactly one door — the one that corrupts the counts | M3×M4 | web | ▶ Open |
 | 20 | confuses | every-session | The schedule contradicts itself: "0 upcoming" over a full grid | M3 | web | ▶ Open |
-| 21 | slows | every-session | No way to open one person's record without going to Contacts first | M1×M4 | web | ▶ Open |
-| 22 | confuses | every-session | Refresh, share or reopen a detail page and lose the tab you were on | M4×M3×M5×M8 | web | ▶ Open |
-| 23 | confuses | every-session | Three parallel "remembered destination" mechanisms; "pin" means two things | M1 | web | ▶ Open |
+| 21 | slows | every-session | No way to open one person's record without going to Contacts first | M1×M4 | web | ✅ Fixed |
+| 22 | confuses | every-session | Refresh, share or reopen a detail page and lose the tab you were on | M4×M3×M5×M8 | web | ✅ Fixed |
+| 23 | confuses | every-session | Three parallel "remembered destination" mechanisms; "pin" means two things | M1 | web | ✅ Fixed |
 | 24 | slows | weekly | Saving an offer change tells you nothing — the real cause of reported F2 | M5 | web | ✅ Fixed |
 | 25 | blocks | at-setup | A discount cannot be applied to a membership — the highest-value thing in the shop | M5 | functions + web | ✅ Fixed |
 | 26 | confuses | every-session | Public copy leaks back-office vocabulary: 8 `activity` + 4 `drop-in` hits | C1–C4 | web | ▶ Open |
