@@ -24,6 +24,17 @@
 locals {
   alerting_enabled = var.alert_email != ""
   uptime_enabled   = var.uptime_host != ""
+
+  # Monitoring REFUSES a condition filter with no `resource.type` restriction
+  # (400: "must specify a restriction on resource.type"), so the metric's
+  # deliberately broad `severity>=ERROR` has to be narrowed back down here. Both
+  # types are needed and they are not interchangeable: Cloud Functions log as
+  # `cloud_function`, while App Hosting runs the two Next apps on Cloud Run and
+  # their server-side throws log as `cloud_run_revision`. One condition per type,
+  # OR-combined, rather than a single `one_of(...)` filter — same result, but
+  # each type gets its own named condition in the Console, so an alert says which
+  # half of the stack is failing before you open anything.
+  error_resource_types = ["cloud_function", "cloud_run_revision"]
 }
 
 # ── Where an alert goes ───────────────────────────────────────────────────────
@@ -81,25 +92,32 @@ resource "google_monitoring_alert_policy" "errors" {
     mime_type = "text/markdown"
   }
 
-  conditions {
-    display_name = "ERROR logs > ${var.error_threshold} in 5 minutes"
+  dynamic "conditions" {
+    for_each = local.error_resource_types
 
-    condition_threshold {
-      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.errors.name}\""
-      comparison      = "COMPARISON_GT"
-      threshold_value = var.error_threshold
-      # Fire on the first window that breaches. A longer duration would mean a
-      # burst that stops on its own never pages anyone — which is exactly the
-      # webhook-broke-for-ten-minutes case worth knowing about.
-      duration = "0s"
+    content {
+      display_name = "ERROR logs > ${var.error_threshold} in 5 min (${conditions.value})"
 
-      aggregations {
-        alignment_period   = "300s"
-        per_series_aligner = "ALIGN_SUM"
-      }
+      condition_threshold {
+        filter = join(" AND ", [
+          "metric.type=\"logging.googleapis.com/user/${google_logging_metric.errors.name}\"",
+          "resource.type=\"${conditions.value}\"",
+        ])
+        comparison      = "COMPARISON_GT"
+        threshold_value = var.error_threshold
+        # Fire on the first window that breaches. A longer duration would mean a
+        # burst that stops on its own never pages anyone — which is exactly the
+        # webhook-broke-for-ten-minutes case worth knowing about.
+        duration = "0s"
 
-      trigger {
-        count = 1
+        aggregations {
+          alignment_period   = "300s"
+          per_series_aligner = "ALIGN_SUM"
+        }
+
+        trigger {
+          count = 1
+        }
       }
     }
   }
