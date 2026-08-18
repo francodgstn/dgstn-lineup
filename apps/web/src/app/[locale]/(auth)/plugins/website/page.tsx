@@ -12,6 +12,7 @@ import {
   Plus,
   GripVertical,
   Pencil,
+  Copy,
   Trash2,
   Eye,
   EyeOff,
@@ -60,7 +61,7 @@ import { sectionNavLabel } from '@/components/site/sections'
 import { SectionEditor } from '@/plugins/website/SectionEditor'
 import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugins/website/hooks'
 import { EmbedWidgets } from '@/plugins/website/EmbedWidgets'
-import { SECTION_LIBRARY, newSection, emptyDraft } from '@/plugins/website/defaults'
+import { SECTION_LIBRARY, newSection, newSectionId, emptyDraft } from '@/plugins/website/defaults'
 import { getWebsiteLimits } from '@/plugins/website/limits'
 
 const limits = getWebsiteLimits()
@@ -264,6 +265,10 @@ const SITE_TABS = ['sections', 'appearance', 'embed'] as const
 
 export default function WebsiteBuilderPage() {
   const t = useTranslations('Website')
+  // The published site's own chrome namespace — the builder shows the same
+  // last-resort nav labels a visitor would see when a section has no heading.
+  const tSite = useTranslations('Site')
+  const tCommon = useTranslations('Common')
   const { user, currentTeamId, team } = useAuth()
   const qc = useQueryClient()
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
@@ -321,6 +326,33 @@ export default function WebsiteBuilderPage() {
     setOpenId(sec.id)
     setTab('sections')
   }
+  /**
+   * Copy a section, in place, right below the original.
+   *
+   * The ONLY thing reset is the `id` — and it has to be, because it is three
+   * things at once: the React key, the on-page anchor and the storage path
+   * segment new image uploads are written under. Everything else (including
+   * image URLs, which stay valid download links) is copied as-is. The copy
+   * lands in the DRAFT like every other edit here; the public site is untouched
+   * until Publish, which is already its own explicit step.
+   */
+  function duplicateSection(id: string) {
+    if (draft && draft.sections.length >= limits.maxSections) {
+      toast.error(t('limitSections', { max: limits.maxSections }))
+      return
+    }
+    const source = draft?.sections.find((s) => s.id === id)
+    if (!source) return
+    const copy = { ...source, id: newSectionId() } as WebsiteSection
+    mutate((d) => {
+      const at = d.sections.findIndex((s) => s.id === id)
+      const next = [...d.sections]
+      next.splice(at + 1, 0, copy)
+      return { ...d, sections: next }
+    })
+    setOpenId(copy.id)
+  }
+
   const removeSection = (id: string) =>
     mutate((d) => ({ ...d, sections: d.sections.filter((s) => s.id !== id) }))
   function reorderSections(from: number, to: number) {
@@ -574,6 +606,14 @@ export default function WebsiteBuilderPage() {
                               </button>
                               <button
                                 type="button"
+                                onClick={() => duplicateSection(s.id)}
+                                title={tCommon('duplicate')}
+                                className="rounded p-1 hover:bg-muted"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setDeleteId(s.id)}
                                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                               >
@@ -605,7 +645,7 @@ export default function WebsiteBuilderPage() {
                                         onChange={(e) =>
                                           updateSection(s.id, { menuLabel: e.target.value || undefined })
                                         }
-                                        placeholder={sectionNavLabel(s)}
+                                        placeholder={sectionNavLabel(s, tSite)}
                                         maxLength={120}
                                         className="h-9"
                                       />

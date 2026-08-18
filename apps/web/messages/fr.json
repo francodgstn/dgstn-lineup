@@ -12,7 +12,9 @@
     "language": "Langue",
     "errorLoadTitle": "Impossible de charger ceci",
     "errorRetry": "Réessayer",
-    "back": "Retour"
+    "back": "Retour",
+    "duplicate": "Dupliquer",
+    "copyName": "{name} (copie)"
   },
   "Plans": {
     "free": "Free",
@@ -5099,7 +5101,9 @@
         "field_equals": "Le champ est égal à",
         "birthday_today": "Anniversaire aujourd'hui",
         "in_group": "Est dans le groupe"
-      }
+      },
+      "daysAfterSession": "jours après",
+      "summaryNoShowDays": "Absent, {days} jours plus tard"
     },
     "subscriptionStatus": {
       "active": "Actif",
@@ -5168,7 +5172,11 @@
       "summaryLogActivity": "Journal : {message}",
       "summaryAssignTag": "Ajouter le tag : {tag}",
       "summaryRemoveTag": "Retirer le tag : {tag}",
-      "summaryWebhook": "Webhook : {url}"
+      "summaryWebhook": "Webhook : {url}",
+      "createAlertLabel": "Créer une alerte",
+      "selectPresetPlaceholder": "Choisir un modèle",
+      "noAlertPresets": "Aucun modèle — ajoutez-en un dans Paramètres de l'équipe",
+      "summaryCreateAlertNamed": "Alerte : {name}"
     },
     "placeholders": {
       "title": "Variables",
@@ -5204,7 +5212,10 @@
       "triggerRequired": "Le déclencheur est requis",
       "conditionRequiredDaily": "Une règle quotidienne nécessite au moins une condition. Sans condition, elle s'exécuterait chaque jour pour tous les contacts de votre équipe.",
       "required": "Requis",
-      "groupRequired": "Choisissez un groupe pour la condition « Est dans le groupe »."
+      "groupRequired": "Choisissez un groupe pour la condition « Est dans le groupe ».",
+      "templateRequired": "Choisissez un modèle d'e-mail pour l'action « Envoyer un e-mail ».",
+      "alertPresetRequired": "Choisissez un modèle pour l'action « Créer une alerte ».",
+      "groupRequiredAction": "Choisissez un groupe pour l'action « Ajouter au groupe » / « Retirer du groupe »."
     },
     "dialogs": {
       "rule": {

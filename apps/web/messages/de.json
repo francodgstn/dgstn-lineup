@@ -12,7 +12,9 @@
     "language": "Sprache",
     "errorLoadTitle": "Konnte nicht geladen werden",
     "errorRetry": "Erneut versuchen",
-    "back": "Zurück"
+    "back": "Zurück",
+    "duplicate": "Duplizieren",
+    "copyName": "{name} (Kopie)"
   },
   "Plans": {
     "free": "Free",
@@ -5099,7 +5101,9 @@
         "field_equals": "Feld ist gleich",
         "birthday_today": "Geburtstag heute",
         "in_group": "Ist in Gruppe"
-      }
+      },
+      "daysAfterSession": "Tage danach",
+      "summaryNoShowDays": "Nicht erschienen, {days} Tage später"
     },
     "subscriptionStatus": {
       "active": "Aktiv",
@@ -5168,7 +5172,11 @@
       "summaryLogActivity": "Protokoll: {message}",
       "summaryAssignTag": "Tag hinzufügen: {tag}",
       "summaryRemoveTag": "Tag entfernen: {tag}",
-      "summaryWebhook": "Webhook: {url}"
+      "summaryWebhook": "Webhook: {url}",
+      "createAlertLabel": "Erinnerung erstellen",
+      "selectPresetPlaceholder": "Vorlage auswählen",
+      "noAlertPresets": "Keine Vorlagen — in den Team-Einstellungen hinzufügen",
+      "summaryCreateAlertNamed": "Erinnerung: {name}"
     },
     "placeholders": {
       "title": "Platzhalter",
@@ -5204,7 +5212,10 @@
       "triggerRequired": "Auslöser ist erforderlich",
       "conditionRequiredDaily": "Eine tägliche Regel benötigt mindestens eine Bedingung. Ohne Bedingung würde sie jeden Tag für alle Kontakte deines Teams ausgeführt.",
       "required": "Erforderlich",
-      "groupRequired": "Wählen Sie eine Gruppe für die Bedingung „Ist in Gruppe“."
+      "groupRequired": "Wählen Sie eine Gruppe für die Bedingung „Ist in Gruppe“.",
+      "templateRequired": "Wählen Sie eine E-Mail-Vorlage für die Aktion „E-Mail senden“.",
+      "alertPresetRequired": "Wählen Sie eine Vorlage für die Aktion „Erinnerung erstellen“.",
+      "groupRequiredAction": "Wählen Sie eine Gruppe für die Aktion „Zu Gruppe hinzufügen“ / „Aus Gruppe entfernen“."
     },
     "dialogs": {
       "rule": {

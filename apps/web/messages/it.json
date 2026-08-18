@@ -12,7 +12,9 @@
     "language": "Lingua",
     "errorLoadTitle": "Impossibile caricare questo contenuto",
     "errorRetry": "Riprova",
-    "back": "Indietro"
+    "back": "Indietro",
+    "duplicate": "Duplica",
+    "copyName": "{name} (copia)"
   },
   "Plans": {
     "free": "Free",
@@ -5099,7 +5101,9 @@
         "field_equals": "Il campo è uguale a",
         "birthday_today": "Compleanno oggi",
         "in_group": "È nel gruppo"
-      }
+      },
+      "daysAfterSession": "giorni dopo",
+      "summaryNoShowDays": "Assente, {days} giorni dopo"
     },
     "subscriptionStatus": {
       "active": "Attivo",
@@ -5168,7 +5172,11 @@
       "summaryLogActivity": "Registro: {message}",
       "summaryAssignTag": "Aggiungi tag: {tag}",
       "summaryRemoveTag": "Rimuovi tag: {tag}",
-      "summaryWebhook": "Webhook: {url}"
+      "summaryWebhook": "Webhook: {url}",
+      "createAlertLabel": "Crea avviso",
+      "selectPresetPlaceholder": "Scegli un modello",
+      "noAlertPresets": "Nessun modello — aggiungine uno in Impostazioni del team",
+      "summaryCreateAlertNamed": "Avviso: {name}"
     },
     "placeholders": {
       "title": "Segnaposto",
@@ -5204,7 +5212,10 @@
       "triggerRequired": "Il trigger è obbligatorio",
       "conditionRequiredDaily": "Una regola giornaliera richiede almeno una condizione. Senza condizioni verrebbe eseguita ogni giorno per tutti i contatti del team.",
       "required": "Obbligatorio",
-      "groupRequired": "Scegli un gruppo per la condizione «È nel gruppo»."
+      "groupRequired": "Scegli un gruppo per la condizione «È nel gruppo».",
+      "templateRequired": "Scegli un modello email per l'azione «Invia email».",
+      "alertPresetRequired": "Scegli un modello per l'azione «Crea avviso».",
+      "groupRequiredAction": "Scegli un gruppo per l'azione «Aggiungi al gruppo» / «Rimuovi dal gruppo»."
     },
     "dialogs": {
       "rule": {

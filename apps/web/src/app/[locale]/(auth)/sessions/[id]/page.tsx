@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link, useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Pencil, Trash2, UserPlus,
+  ArrowLeft, ChevronLeft, ChevronRight, Pencil, Copy, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
   Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send,
 } from 'lucide-react'
@@ -425,6 +425,7 @@ function SectionHeader({ icon, label, count, color }: { icon: React.ReactNode; l
 
 export default function SessionDetailPage() {
   const t = useTranslations('SessionDetail')
+  const tCommon = useTranslations('Common')
   const params = useParams()
   const sessionId = params.id as string
   const router = useRouter()
@@ -435,6 +436,9 @@ export default function SessionDetailPage() {
   const [linkCopied, setLinkCopied] = useState(false)
 
   const [editOpen, setEditOpen] = useState(false)
+  // Repeat this session on another date. Opens the create form seeded from this
+  // one — nothing is written until it is saved, and the copy carries no people.
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   // QR scanner state — kept for when scanner is re-enabled; prefixed with _ to suppress unused-var lint
@@ -896,6 +900,9 @@ export default function SessionDetailPage() {
                 <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={t('editTitle')}>
                   <Pencil className="h-4 w-4" />
                 </button>
+                <button onClick={() => setDuplicateOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={tCommon('duplicate')}>
+                  <Copy className="h-4 w-4" />
+                </button>
                 <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title={t('deleteTitle')}>
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -1219,6 +1226,20 @@ export default function SessionDetailPage() {
           open={editOpen}
           onOpenChange={setEditOpen}
           editing={session}
+          activities={activities}
+          teamId={currentTeamId}
+          userId={user.uid}
+          onSaved={invalidate}
+        />
+      )}
+
+      {currentTeamId && user && (
+        <SessionFormDialog
+          key={duplicateOpen ? 'copy-open' : 'copy-closed'}
+          open={duplicateOpen}
+          onOpenChange={setDuplicateOpen}
+          editing={null}
+          duplicating={session}
           activities={activities}
           teamId={currentTeamId}
           userId={user.uid}

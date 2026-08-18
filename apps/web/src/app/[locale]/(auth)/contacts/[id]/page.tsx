@@ -656,6 +656,29 @@ function useContactPerformanceCheckins(contactId: string) {
   })
 }
 
+/**
+ * TWO shapes exist in `contact_alerts`, and this page only ever understood one.
+ *
+ * This page (and the migration) write the FLAT `schedule_type` / `schedule_value`
+ * of the `ContactAlert` type. The server writers — `bookSession`'s booking
+ * notification and the automation engine's `create_alert` — write a NESTED
+ * `schedule: { type, value }` (which is also what the mobile app reads). A
+ * nested-shape alert therefore rendered here with no date, no icon and a
+ * permanent "pending" badge, because `schedule_type` was simply undefined.
+ *
+ * Normalising on READ fixes both writers at once and needs no migration; the
+ * flat shape stays canonical for anything this page writes.
+ */
+function normaliseAlert(raw: Record<string, unknown>, id: string): ContactAlert {
+  const nested = raw.schedule as { type?: string; value?: unknown } | undefined
+  return {
+    ...(raw as Omit<ContactAlert, 'id'>),
+    id,
+    schedule_type: (raw.schedule_type ?? nested?.type ?? 'datetime') as AlertScheduleType,
+    schedule_value: (raw.schedule_value ?? nested?.value) as ContactAlert['schedule_value'],
+  }
+}
+
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
     queryKey: ['contact-alerts', contactId],
@@ -666,7 +689,7 @@ function useContactAlerts(contactId: string) {
           orderBy('created_at', 'desc')
         )
       )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactAlert)
+      return snap.docs.map((d) => normaliseAlert(d.data() as Record<string, unknown>, d.id))
     },
   })
 }

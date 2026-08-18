@@ -58,7 +58,7 @@ import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Plus, Pencil, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Copy, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight } from 'lucide-react'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
 
@@ -264,6 +264,7 @@ function ActivityDialog({
   teamId,
   userId,
   editing,
+  duplicating,
   nextOrder,
   currency,
 }: {
@@ -272,6 +273,15 @@ function ActivityDialog({
   teamId: string
   userId: string
   editing: Activity | null
+  /**
+   * The activity a NEW one is being copied from. `editing` stays null, so the
+   * submit takes the CREATE branch below and every identity field is minted
+   * there exactly as it is for a blank activity: a fresh doc id, a slug derived
+   * from the "(copy)" name (so it can't collide with the original's), this
+   * team, this author, a new `order` at the end of the list. Only the
+   * CONFIGURATION is carried over — which is the whole cost being saved.
+   */
+  duplicating: Activity | null
   /** Order assigned to a newly created activity so it appends to the end. */
   nextOrder: number
   /** Team's billing currency (ISO code), shown next to duration price inputs. */
@@ -279,6 +289,7 @@ function ActivityDialog({
 }) {
   const t = useTranslations('Activities')
   const tBenefit = useTranslations('Benefit')
+  const tCommon = useTranslations('Common')
   const qc = useQueryClient()
   // The waitlist is a paid-tier feature, and THIS is where its flag is written —
   // the activity doc is a client write, so the gate has to sit on the control
@@ -305,12 +316,21 @@ function ActivityDialog({
   const waitlistOffered = bookingSettings?.waitlistEnabled === true
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(editing?.image_url ?? null)
+  // A copy keeps the cover image: `image_url` is a download URL for a file that
+  // outlives the source (activities are ARCHIVED, never deleted), and a new
+  // upload on either side writes under its own activity id.
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    (editing ?? duplicating)?.image_url ?? null
+  )
   const activitySchema = useMemo(() => createActivitySchema(t, tBenefit), [t, tBenefit])
 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
-  const initialRule = editing
-    ? resolveActivityAccessRule(editing)
+  // ONE seed for the form's starting values: the activity being edited, or the
+  // one being copied. `editing` alone still decides which BRANCH of onSubmit
+  // runs — a duplicate is a create, and must go down the create path.
+  const seed = editing ?? duplicating
+  const initialRule = seed
+    ? resolveActivityAccessRule(seed)
     : { type: 'open' as const, subscriptionTypeIds: [] as string[] }
 
   const {
@@ -323,31 +343,31 @@ function ActivityDialog({
     formState: { errors, isSubmitting },
   } = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
-    defaultValues: editing
+    defaultValues: seed
       ? {
-          name: editing.name,
-          description: editing.description ?? '',
-          prerequisites: editing.prerequisites ?? '',
-          confirmationInstructions: editing.confirmationInstructions ?? '',
-          meetingPoint: editing.meetingPoint ?? '',
-          whatsIncluded: editing.whatsIncluded ?? '',
-          whatsNotIncluded: editing.whatsNotIncluded ?? '',
-          faq: editing.faq ?? '',
-          cancellationPolicy: editing.cancellationPolicy ?? '',
-          bookingQuestions: editing.bookingQuestions ?? [],
-          type: (editing.type ?? 'class') as ActivityType,
-          level: editing.level ?? undefined,
-          color: editing.color ?? '',
+          name: duplicating ? tCommon('copyName', { name: seed.name }) : seed.name,
+          description: seed.description ?? '',
+          prerequisites: seed.prerequisites ?? '',
+          confirmationInstructions: seed.confirmationInstructions ?? '',
+          meetingPoint: seed.meetingPoint ?? '',
+          whatsIncluded: seed.whatsIncluded ?? '',
+          whatsNotIncluded: seed.whatsNotIncluded ?? '',
+          faq: seed.faq ?? '',
+          cancellationPolicy: seed.cancellationPolicy ?? '',
+          bookingQuestions: seed.bookingQuestions ?? [],
+          type: (seed.type ?? 'class') as ActivityType,
+          level: seed.level ?? undefined,
+          color: seed.color ?? '',
           accessTier: initialRule.type,
           subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
-          dropInEnabled: editing.dropIn?.enabled ?? false,
-          dropInPrice: editing.dropIn?.priceAmount != null ? String(editing.dropIn.priceAmount) : '',
-          trialEnabled: editing.trialEnabled ?? false,
-          trialPrice: editing.trialPriceAmount != null ? String(editing.trialPriceAmount) : '',
-          waitlistEnabled: editing.waitlistEnabled ?? false,
-          durations: toDurationFormValues(editing.durations),
-          memberBenefit: toBenefitFormValue(editing.memberBenefit),
-          autoConfirm: resolveAutoConfirm(editing),
+          dropInEnabled: seed.dropIn?.enabled ?? false,
+          dropInPrice: seed.dropIn?.priceAmount != null ? String(seed.dropIn.priceAmount) : '',
+          trialEnabled: seed.trialEnabled ?? false,
+          trialPrice: seed.trialPriceAmount != null ? String(seed.trialPriceAmount) : '',
+          waitlistEnabled: seed.waitlistEnabled ?? false,
+          durations: toDurationFormValues(seed.durations),
+          memberBenefit: toBenefitFormValue(seed.memberBenefit),
+          autoConfirm: resolveAutoConfirm(seed),
         }
       : {
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
@@ -386,17 +406,17 @@ function ActivityDialog({
   // tested for presence: every activity has one, so `!!editing.color` would
   // open the panel every time and the disclosure would do nothing at all.
   const hasStoredDetails =
-    !!editing &&
-    ((!!editing.color && editing.color !== DEFAULT_ACCENT) ||
-      !!editing.level ||
-      !!editing.prerequisites ||
-      !!editing.confirmationInstructions ||
-      !!editing.meetingPoint ||
-      !!editing.whatsIncluded ||
-      !!editing.whatsNotIncluded ||
-      !!editing.faq ||
-      !!editing.cancellationPolicy ||
-      (editing.bookingQuestions?.length ?? 0) > 0)
+    !!seed &&
+    ((!!seed.color && seed.color !== DEFAULT_ACCENT) ||
+      !!seed.level ||
+      !!seed.prerequisites ||
+      !!seed.confirmationInstructions ||
+      !!seed.meetingPoint ||
+      !!seed.whatsIncluded ||
+      !!seed.whatsNotIncluded ||
+      !!seed.faq ||
+      !!seed.cancellationPolicy ||
+      (seed.bookingQuestions?.length ?? 0) > 0)
 
   function toggleDuration(minutes: number) {
     setValue(
@@ -638,7 +658,9 @@ function ActivityDialog({
           components/ui/dialog.tsx. */}
       <DialogContent className="sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{editing ? t('editActivity') : t('newActivity')}</DialogTitle>
+          <DialogTitle>
+            {editing ? t('editActivity') : duplicating ? tCommon('duplicate') : t('newActivity')}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
@@ -1312,6 +1334,7 @@ function moneyChipLabel(
 function ActivityCard({
   activity,
   onEdit,
+  onDuplicate,
   onArchive,
   sortable,
   currency,
@@ -1319,12 +1342,14 @@ function ActivityCard({
 }: {
   activity: Activity
   onEdit: () => void
+  onDuplicate: () => void
   onArchive: () => void
   sortable: SortableRenderProps
   currency: string
   subscriptionTypes: SubscriptionType[]
 }) {
   const t = useTranslations('Activities')
+  const tCommon = useTranslations('Common')
   const { setNodeRef, style, attributes, listeners, isDragging } = sortable
   const moneyTerms = resolveActivityTerms(activity).filter(
     // The FREE trial keeps its own badge below (freeTrialBadge); a PRICED
@@ -1414,6 +1439,13 @@ function ActivityCard({
           <Pencil className="h-4 w-4" />
         </button>
         <button
+          onClick={onDuplicate}
+          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+          title={tCommon('duplicate')}
+        >
+          <Copy className="h-4 w-4" />
+        </button>
+        <button
           onClick={onArchive}
           className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
           title={t('archive')}
@@ -1436,11 +1468,15 @@ export default function ActivitiesPage() {
   const t = useTranslations('Activities')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
+  const [duplicating, setDuplicating] = useState<Activity | null>(null)
   const [archiving, setArchiving] = useState<Activity | null>(null)
 
-  function openNew() { setEditing(null); setDialogOpen(true) }
-  function openEdit(a: Activity) { setEditing(a); setDialogOpen(true) }
-  function closeDialog() { setDialogOpen(false); setEditing(null) }
+  function openNew() { setEditing(null); setDuplicating(null); setDialogOpen(true) }
+  function openEdit(a: Activity) { setDuplicating(null); setEditing(a); setDialogOpen(true) }
+  // A copy OPENS in the same dialog rather than being written silently: the name
+  // and everything else is there to change before anything exists.
+  function openDuplicate(a: Activity) { setEditing(null); setDuplicating(a); setDialogOpen(true) }
+  function closeDialog() { setDialogOpen(false); setEditing(null); setDuplicating(null) }
 
   async function handleArchiveConfirm() {
     if (!archiving) return
@@ -1516,6 +1552,7 @@ export default function ActivitiesPage() {
                       <ActivityCard
                         activity={a}
                         onEdit={() => openEdit(a)}
+                        onDuplicate={() => openDuplicate(a)}
                         onArchive={() => setArchiving(a)}
                         sortable={sortable}
                         currency={currency}
@@ -1566,12 +1603,13 @@ export default function ActivitiesPage() {
 
       {currentTeamId && user && (
         <ActivityDialog
-          key={editing?.id ?? 'new'}
+          key={editing?.id ?? (duplicating ? `copy-${duplicating.id}` : 'new')}
           open={dialogOpen}
           onClose={closeDialog}
           teamId={currentTeamId}
           userId={user.uid}
           editing={editing}
+          duplicating={duplicating}
           nextOrder={activities.length}
           currency={team?.default_currency ?? 'CHF'}
         />

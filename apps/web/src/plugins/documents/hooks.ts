@@ -200,6 +200,48 @@ export async function createDocument(input: {
   return ref.id
 }
 
+/**
+ * Copy a document. Goes through `createDocument` — the same path "New document"
+ * takes — then patches the copy with the source's content, so a document's first
+ * state has one writer.
+ *
+ * NOT inherited, on purpose:
+ *   • the SLUG — re-minted by `createDocument` (random suffix); it is the public
+ *     URL of a shared document.
+ *   • the PUBLISHED state and `isPublic` — a copy starts as an unshared DRAFT.
+ *     Text a studio has not read again is not text it has agreed to publish.
+ *   • the VERSION history (`current_version`, `min_valid_version`, the immutable
+ *     `versions/*` snapshots) and any acceptances — those are facts about the
+ *     document that was published and the people who accepted it, and they are
+ *     server-written besides.
+ *
+ * WAIVERS ARE EXCLUDED, and not as an oversight: `firestore.rules` denies client
+ * create/update/delete on `kind: 'waiver'` in every direction, so a waiver can
+ * only be minted by the `createWaiver` callable. Copying one needs a server
+ * change, not a client one.
+ */
+export async function duplicateDocument(input: {
+  source: StudioDocument
+  userId: string
+  title: string
+}): Promise<string> {
+  const { source, userId, title } = input
+  if (source.kind === 'waiver') throw new Error('WAIVER_NOT_DUPLICABLE')
+  const documentId = await createDocument({
+    teamId: source.teamId,
+    userId,
+    title,
+    kind: source.kind,
+    source: source.source,
+  })
+  await updateDocument(documentId, {
+    body: source.body,
+    externalUrl: source.externalUrl,
+    summary: source.summary,
+  })
+  return documentId
+}
+
 export async function updateDocument(
   id: string,
   // `status` is deliberately absent — see setDocumentStatus / publishDocument.

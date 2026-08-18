@@ -193,16 +193,23 @@ export function TemplateEditor({
   onOpenChange,
   teamId,
   editing,
+  duplicating,
   onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   teamId: string
   editing: OutreachTemplate | null
+  /** The template a NEW one is being copied from. `editing` stays null, so the
+   *  save is an `addDoc` — and a copy therefore carries NO `system_key`: that
+   *  marks a stock template, is what "Reset to default" keys off, and is what
+   *  stops the library seeding it twice. A copy is the studio's own. */
+  duplicating?: OutreachTemplate | null
   onSaved: () => void
 }) {
   const t = useTranslations('Automations')
   const te = useTranslations('SettingsEmails')
+  const tCommon = useTranslations('Common')
   const [submitErr, setSubmitErr] = useState('')
   const [sideTab, setSideTab] = useState<'preview' | 'placeholders'>('preview')
 
@@ -236,17 +243,19 @@ export function TemplateEditor({
     if (!open) return
     setSubmitErr('')
     setSideTab('preview')
-    if (editing) {
+    const seed = editing ?? duplicating
+    if (seed) {
       reset({
-        name: editing.name,
-        subject: editing.subject,
-        body: editing.body,
-        language: editing.language,
+        name: duplicating ? tCommon('copyName', { name: seed.name }) : seed.name,
+        subject: seed.subject,
+        body: seed.body,
+        language: seed.language,
       })
     } else {
       reset({ name: '', subject: '', body: '', language: 'en' })
     }
-  }, [open, editing, reset])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, duplicating, reset])
 
   // Live preview — the real production layout around the editable content.
   const body = watch('body')
@@ -291,7 +300,11 @@ export function TemplateEditor({
       <DialogContent className="sm:max-w-[1080px] max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
           <DialogTitle>
-            {editing ? editing.name : t('dialogs.templates.newTemplate')}
+            {editing
+              ? editing.name
+              : duplicating
+                ? tCommon('duplicate')
+                : t('dialogs.templates.newTemplate')}
           </DialogTitle>
         </DialogHeader>
 

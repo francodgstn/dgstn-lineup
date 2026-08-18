@@ -97,6 +97,43 @@ export async function createForm(input: {
   return ref.id
 }
 
+/**
+ * Copy a form. Goes through `createForm` — the SAME create path the "New form"
+ * button uses — and then patches the copy with what the source said, so there is
+ * only ever one writer of a form's first state.
+ *
+ * What a copy deliberately does NOT inherit:
+ *   • the SLUG — `createForm` mints a fresh one (`slugify` adds a random
+ *     suffix). It is the form's public URL; two forms answering the same link is
+ *     the one unrecoverable mistake available here.
+ *   • the PUBLISHED state — a copy starts as a `draft`, so it is not live the
+ *     instant it is created.
+ *   • the SUBMISSIONS and their count — they belong to the form that was filled
+ *     in, and are a subcollection besides.
+ *   • `archived_at`, `createdBy`, `created_at` — all minted for the new doc.
+ *
+ * Field IDs ARE kept: they key the answers of a form that has no answers yet,
+ * and are scoped to their own document.
+ */
+export async function duplicateForm(input: {
+  source: Form
+  userId: string
+  title: string
+}): Promise<string> {
+  const { source, userId, title } = input
+  const formId = await createForm({ teamId: source.teamId, userId, title })
+  await updateForm(formId, {
+    description: source.description,
+    access: source.access,
+    fields: source.fields ?? [],
+    createContact: source.createContact,
+    emailFieldId: source.emailFieldId,
+    notifications: source.notifications,
+    confirmation: source.confirmation,
+  })
+  return formId
+}
+
 export type FormPatch = Partial<
   Pick<
     Form,

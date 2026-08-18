@@ -52,7 +52,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { Tag, Plus, ImageIcon, X, ExternalLink, Trash2, Pencil, Truck } from 'lucide-react'
+import { Tag, Plus, Copy, ImageIcon, X, ExternalLink, Trash2, Pencil, Truck } from 'lucide-react'
 import {
   getProductLimits,
   MAX_PRODUCT_COLLECTION_NOTE,
@@ -132,6 +132,7 @@ function parseAmount(text: string): number | null {
 
 export default function ProductsPage() {
   const t = useTranslations('Products')
+  const tCommon = useTranslations('Common')
   const { user, currentTeamId, team, teamRole } = useAuth()
   const queryClient = useQueryClient()
   const currency = team?.default_currency ?? 'CHF'
@@ -141,6 +142,8 @@ export default function ProductsPage() {
   const atCap = products.length >= limits.maxProductsPerTeam
 
   const [editing, setEditing] = useState<Product | null>(null)
+  // Purely a label: a copy is a CREATE, and the dialog should say which.
+  const [isDuplicate, setIsDuplicate] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [draft, setDraft] = useState<DraftState>(emptyDraft())
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -206,6 +209,7 @@ export default function ProductsPage() {
 
   function openCreate() {
     setEditing(null)
+    setIsDuplicate(false)
     setDraft(emptyDraft())
     clearImage()
     setDialogOpen(true)
@@ -213,7 +217,35 @@ export default function ProductsPage() {
 
   function openEdit(p: Product) {
     setEditing(p)
+    setIsDuplicate(false)
     setDraft(draftFromProduct(p))
+    clearImage()
+    setDialogOpen(true)
+  }
+
+  /**
+   * Copy a product into the CREATE dialog (`editing` stays null), so it is saved
+   * by the same `createProduct` path — under the same per-plan catalogue cap —
+   * and nothing exists until the studio presses save.
+   *
+   * Reset: the name gets "(copy)", every VARIANT gets a fresh id (they are the
+   * ids the checkout charges against), and the copy starts INACTIVE so a
+   * half-edited duplicate is never sitting in the public shop next to the
+   * original. The image URL is kept (it is a download link that outlives the
+   * source; a new upload writes under the new product's own path). There is no
+   * Stripe object on a product — the charge is built at checkout — so nothing
+   * Stripe-shaped can be inherited.
+   */
+  function openDuplicate(p: Product) {
+    const base = draftFromProduct(p)
+    setEditing(null)
+    setIsDuplicate(true)
+    setDraft({
+      ...base,
+      name: tCommon('copyName', { name: p.name }),
+      active: false,
+      variants: base.variants.map((v) => ({ ...v, id: newVariant().id })),
+    })
     clearImage()
     setDialogOpen(true)
   }
@@ -444,6 +476,15 @@ export default function ProductsPage() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-8 w-8 text-muted-foreground"
+                    onClick={() => openDuplicate(p)}
+                    title={tCommon('duplicate')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteTarget(p)}
                     title={t('delete')}
@@ -466,7 +507,9 @@ export default function ProductsPage() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? t('editProduct') : t('newProduct')}</DialogTitle>
+            <DialogTitle>
+              {editing ? t('editProduct') : isDuplicate ? tCommon('duplicate') : t('newProduct')}
+            </DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <div className="space-y-2">

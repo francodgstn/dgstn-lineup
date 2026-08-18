@@ -19,11 +19,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { FileText, Plus, Link2, Globe, Lock, ShieldCheck } from 'lucide-react'
+import { FileText, Plus, Copy, Link2, Globe, Lock, ShieldCheck } from 'lucide-react'
 import { WAIVER_MIN_PLAN } from '@linyup/shared'
 import type { StudioDocument, DocumentKind, DocumentSource, DocumentStatus } from '@linyup/shared'
 import {
-  useDocuments, createDocument, createWaiver, countDocuments, waiverCallableError,
+  useDocuments, createDocument, createWaiver, duplicateDocument, countDocuments,
+  waiverCallableError,
 } from '@/plugins/documents/hooks'
 import { getDocumentsLimits } from '@/plugins/documents/limits'
 import { DocumentSurfaces } from '@/plugins/documents/DocumentSurfaces'
@@ -53,16 +54,33 @@ const STATUS_BADGE: Record<DocumentStatus, string> = {
   archived: 'bg-amber-100 text-amber-700',
 }
 
-function DocumentCard({ document, onOpen }: { document: StudioDocument; onOpen: () => void }) {
+function DocumentCard({
+  document,
+  onOpen,
+  onDuplicate,
+  duplicating,
+}: {
+  document: StudioDocument
+  onOpen: () => void
+  onDuplicate: () => void
+  duplicating: boolean
+}) {
   const t = useTranslations('Documents')
+  const tCommon = useTranslations('Common')
   const SourceIcon = document.source === 'external_link' ? Link2 : FileText
   const isSharedPublic = document.isPublic && document.status === 'published'
+  // A waiver is callable-only in every direction (see duplicateDocument), so it
+  // gets no copy control rather than one that would be refused by the rules.
+  const canDuplicate = document.kind !== 'waiver'
 
   return (
+    /* Duplicate sits BESIDE the card's button, not inside it — nesting one
+       button in another is invalid markup. */
+    <div className="relative">
     <button
       type="button"
       onClick={onOpen}
-      className="text-left rounded-lg border bg-card p-4 hover:shadow-sm hover:border-primary/40 transition-all flex flex-col gap-2"
+      className="w-full text-left rounded-lg border bg-card p-4 hover:shadow-sm hover:border-primary/40 transition-all flex flex-col gap-2"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium line-clamp-2 flex items-center gap-1.5">
@@ -75,7 +93,8 @@ function DocumentCard({ document, onOpen }: { document: StudioDocument; onOpen: 
           {t(`status_${document.status}`)}
         </span>
       </div>
-      <div className="flex items-center gap-2 text-xs">
+      {/* pr-9 keeps the badges clear of the Duplicate control in the corner. */}
+      <div className="flex flex-wrap items-center gap-2 text-xs pr-9">
         <Badge variant="secondary">{t(`kind_${document.kind}`)}</Badge>
         {document.current_version != null && (
           <Badge variant="outline">{t('versionN', { version: document.current_version })}</Badge>
@@ -88,12 +107,26 @@ function DocumentCard({ document, onOpen }: { document: StudioDocument; onOpen: 
         )}
       </div>
     </button>
+      {canDuplicate && (
+        <button
+          type="button"
+          onClick={onDuplicate}
+          disabled={duplicating}
+          title={tCommon('duplicate')}
+          aria-label={tCommon('duplicate')}
+          className="absolute bottom-3 right-3 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   )
 }
 
 export default function DocumentsPage() {
   const t = useTranslations('Documents')
   const tWaivers = useTranslations('Waivers')
+  const tCommon = useTranslations('Common')
   const { currentTeamId, user } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -146,6 +179,32 @@ export default function DocumentsPage() {
       // told only that will not find which of the two it hit.
       const named = waiverCallableError(err, tWaivers)
       toast.error(named === tWaivers('errorGeneric') ? t('createError') : named)
+    },
+  })
+
+  // Copying reuses the create mutation's guards (the per-team cap) and its
+  // landing (open the copy in the editor); it adds nothing of its own.
+  const duplicateMutation = useMutation({
+    mutationFn: async (source: StudioDocument) => {
+      if (!currentTeamId || !user) throw new Error('No team')
+      const count = await countDocuments(currentTeamId)
+      if (count >= limits.maxDocumentsPerTeam) throw new Error('LIMIT')
+      return duplicateDocument({
+        source,
+        userId: user.uid,
+        title: tCommon('copyName', { name: source.title }),
+      })
+    },
+    onSuccess: (documentId) => {
+      queryClient.invalidateQueries({ queryKey: ['documents', currentTeamId] })
+      router.push(`/documents/${documentId}` as Route)
+    },
+    onError: (err: Error) => {
+      toast.error(
+        err.message === 'LIMIT'
+          ? t('limitReached', { max: limits.maxDocumentsPerTeam })
+          : t('createError'),
+      )
     },
   })
 
@@ -219,6 +278,8 @@ export default function DocumentsPage() {
               key={document.id}
               document={document}
               onOpen={() => router.push(`/documents/${document.id}` as Route)}
+              onDuplicate={() => duplicateMutation.mutate(document)}
+              duplicating={duplicateMutation.isPending}
             />
           ))}
         </div>

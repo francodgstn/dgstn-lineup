@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { collection, doc, getDocs, orderBy, query, updateDoc } from 'firebase/firestore'
-import { Mail, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Mail, Pencil, Copy, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
@@ -29,6 +29,7 @@ import { templateDefault } from './templateDefaults'
 export default function SettingsEmailsPage() {
   const t = useTranslations('SettingsEmails')
   const ta = useTranslations('Automations')
+  const tCommon = useTranslations('Common')
   const { currentTeamId } = useAuth()
   const qc = useQueryClient()
 
@@ -48,6 +49,7 @@ export default function SettingsEmailsPage() {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<OutreachTemplate | null>(null)
+  const [duplicating, setDuplicating] = useState<OutreachTemplate | null>(null)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['outreach_templates_all', currentTeamId] })
@@ -61,7 +63,16 @@ export default function SettingsEmailsPage() {
   }, [templates])
 
   const openEditor = (tmpl: OutreachTemplate | null) => {
+    setDuplicating(null)
     setEditing(tmpl)
+    setEditorOpen(true)
+  }
+
+  // A stock template is the natural thing to copy: keep the wording, change the
+  // one paragraph, own the result. The copy is a plain custom template.
+  const openDuplicate = (tmpl: OutreachTemplate) => {
+    setEditing(null)
+    setDuplicating(tmpl)
     setEditorOpen(true)
   }
 
@@ -121,6 +132,15 @@ export default function SettingsEmailsPage() {
             onClick={() => openEditor(tmpl)}
           >
             <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title={tCommon('duplicate')}
+            onClick={() => openDuplicate(tmpl)}
+          >
+            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
           </Button>
           {def && (
             <Button
@@ -210,10 +230,15 @@ export default function SettingsEmailsPage() {
 
       {currentTeamId && (
         <TemplateEditor
+          key={editing?.id ?? (duplicating ? `copy-${duplicating.id}` : 'new')}
           open={editorOpen}
-          onOpenChange={setEditorOpen}
+          onOpenChange={(v) => {
+            setEditorOpen(v)
+            if (!v) setDuplicating(null)
+          }}
           teamId={currentTeamId}
           editing={editing}
+          duplicating={duplicating}
           onSaved={invalidate}
         />
       )}

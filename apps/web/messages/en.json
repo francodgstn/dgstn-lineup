@@ -12,7 +12,9 @@
     "language": "Language",
     "errorLoadTitle": "Couldn't load this",
     "errorRetry": "Try again",
-    "back": "Back"
+    "back": "Back",
+    "duplicate": "Duplicate",
+    "copyName": "{name} (copy)"
   },
   "Plans": {
     "free": "Free",
@@ -5099,7 +5101,9 @@
         "field_equals": "Field equals",
         "birthday_today": "Birthday today",
         "in_group": "Is in group"
-      }
+      },
+      "daysAfterSession": "days after",
+      "summaryNoShowDays": "No-show, {days} days later"
     },
     "subscriptionStatus": {
       "active": "Active",
@@ -5168,7 +5172,11 @@
       "summaryLogActivity": "Log: {message}",
       "summaryAssignTag": "Add tag: {tag}",
       "summaryRemoveTag": "Remove tag: {tag}",
-      "summaryWebhook": "Webhook: {url}"
+      "summaryWebhook": "Webhook: {url}",
+      "createAlertLabel": "Create alert",
+      "selectPresetPlaceholder": "Select preset",
+      "noAlertPresets": "No presets — add one in Team settings",
+      "summaryCreateAlertNamed": "Alert: {name}"
     },
     "placeholders": {
       "title": "Placeholders",
@@ -5204,7 +5212,10 @@
       "triggerRequired": "Trigger is required",
       "conditionRequiredDaily": "A daily rule needs at least one condition. Without one it would run for every contact in your team, every day.",
       "required": "Required",
-      "groupRequired": "Pick a group for the “Is in group” condition."
+      "groupRequired": "Pick a group for the “Is in group” condition.",
+      "templateRequired": "Pick an email template for the “Send email” action.",
+      "alertPresetRequired": "Pick a preset for the “Create alert” action.",
+      "groupRequiredAction": "Pick a group for the “Add to group” / “Remove from group” action."
     },
     "dialogs": {
       "rule": {

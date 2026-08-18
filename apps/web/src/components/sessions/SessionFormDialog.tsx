@@ -365,12 +365,30 @@ function ResponsiveModal({ open, onOpenChange, title, children }: {
 
 // ─── session form dialog ───────────────────────────────────────────────────────
 
+/** A copy lands one WEEK later — same weekday, same time. It is the intent
+ *  behind almost every "run this again", and it is the only default that cannot
+ *  quietly create a second session in a slot that already has one. */
+const COPY_OFFSET_DAYS = 7
+
+function copyStart(source: Session): Date {
+  const d = source.start?.toDate() ?? new Date()
+  return new Date(d.getTime() + COPY_OFFSET_DAYS * 86400000)
+}
+
 export function SessionFormDialog({
-  open, onOpenChange, editing, activities, teamId, userId, onSaved,
+  open, onOpenChange, editing, duplicating, activities, teamId, userId, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   editing: Session | null
+  /**
+   * The session a NEW one is being copied from. `editing` stays null, so the
+   * submit runs the CREATE path: a fresh doc, `participants_count: 0`, no
+   * bookings, no waitlist, no attendance, no `seriesId` (a copy of one
+   * occurrence is a standalone session — it can be made recurring in its own
+   * right, since the recurrence controls are shown for a create).
+   */
+  duplicating?: Session | null
   activities: Activity[]
   teamId: string
   userId: string
@@ -379,6 +397,7 @@ export function SessionFormDialog({
   const t = useTranslations('Sessions')
   const tCommon = useTranslations('Common')
 
+  const seed = editing ?? duplicating ?? null
   const isSeries = !!editing?.seriesId
 
   const [isRecurring, setIsRecurring] = useState(false)
@@ -393,20 +412,22 @@ export function SessionFormDialog({
     useForm<SessionFormValues>({
       resolver: zodResolver(sessionSchema),
       defaultValues: {
-        activityId:      editing?.activityId ?? '',
-        start:           editing?.start?.toDate() ?? defaultStart(),
-        duration:        deriveDefaultDuration(editing),
-        location:        editing?.location ?? '',
-        placeId:         editing?.placeId ?? '',
-        roomId:          editing?.roomId ?? '',
-        providerId:      editing?.providerId ?? '',
-        providerName:    editing?.providerName ?? '',
-        maxParticipants: editing?.max_participants != null ? String(editing.max_participants) : '',
-        notes:           editing?.notes ?? '',
-        headline:        editing?.headline ?? '',
-        headlinePublic:  editing?.headlinePublic ?? false,
-        allowBooking:    editing?.allowBooking ?? false,
-        bookingMandatory: editing?.bookingMandatory ?? false,
+        activityId:      seed?.activityId ?? '',
+        start:           duplicating
+          ? copyStart(duplicating)
+          : (editing?.start?.toDate() ?? defaultStart()),
+        duration:        deriveDefaultDuration(seed),
+        location:        seed?.location ?? '',
+        placeId:         seed?.placeId ?? '',
+        roomId:          seed?.roomId ?? '',
+        providerId:      seed?.providerId ?? '',
+        providerName:    seed?.providerName ?? '',
+        maxParticipants: seed?.max_participants != null ? String(seed.max_participants) : '',
+        notes:           seed?.notes ?? '',
+        headline:        seed?.headline ?? '',
+        headlinePublic:  seed?.headlinePublic ?? false,
+        allowBooking:    seed?.allowBooking ?? false,
+        bookingMandatory: seed?.bookingMandatory ?? false,
       },
     })
 
@@ -631,7 +652,7 @@ export function SessionFormDialog({
     await runSeriesEdit(pendingValues, editScope)
   }
 
-  const title = editing ? t('editSession') : t('newSession')
+  const title = editing ? t('editSession') : duplicating ? tCommon('duplicate') : t('newSession')
 
   return (
     <ResponsiveModal open={open} onOpenChange={(v) => { if (!v) close() }} title={title}>

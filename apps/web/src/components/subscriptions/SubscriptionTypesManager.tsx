@@ -61,7 +61,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } from 'lucide-react'
+import { Plus, Pencil, Copy, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
@@ -135,6 +135,40 @@ const subTypeSchema = z.object({
   introAmount: optionalNonNegativeAmount,
 })
 type SubTypeData = z.infer<typeof subTypeSchema>
+
+/**
+ * The values a COPY starts from. Everything that describes the offer is carried
+ * over; everything that is an identity or a promise to the public is not:
+ *
+ *  • `public` → false. A half-edited copy must not land on the pricing page.
+ *  • every price gets a NEW id (they are client-generated uuids, referenced by
+ *    `introOffer.priceId`, by member subscriptions and by payment rows) — and
+ *    the intro offer is re-pointed at the copy's own price, or dropped if the
+ *    one it named was not copied.
+ *  • no `id` / `order` / `created_at` — the create path below mints those, the
+ *    same way it does for a brand-new type.
+ *
+ * There is no Stripe object on a subscription type (prices are minted at
+ * checkout from these figures), so nothing Stripe-shaped can be inherited here.
+ */
+function duplicateDefaults(source: SubscriptionType, copyName: string): SubTypeData {
+  const base = emptyDefaults(source)
+  const idMap = new Map<string, string>()
+  const prices = (base.prices ?? []).map((p) => {
+    const nextId = crypto.randomUUID()
+    idMap.set(p.id, nextId)
+    return { ...p, id: nextId }
+  })
+  const introPriceId = base.introPriceId ? idMap.get(base.introPriceId) : undefined
+  return {
+    ...base,
+    name: copyName,
+    public: false,
+    prices,
+    introEnabled: base.introEnabled && !!introPriceId,
+    introPriceId: introPriceId ?? '',
+  }
+}
 
 function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
   const limit = resolveUsageLimit(editing ?? {})
@@ -215,6 +249,7 @@ function SubTypeDialog({
   onOpenChange,
   teamId,
   editing,
+  duplicating,
   currency,
   nextOrder,
   onSaved,
@@ -223,6 +258,9 @@ function SubTypeDialog({
   onOpenChange: (v: boolean) => void
   teamId: string
   editing: SubscriptionType | null
+  /** The type a NEW one is being copied from — `editing` stays null so the
+   *  submit takes the CREATE branch and nothing exists until it is saved. */
+  duplicating: SubscriptionType | null
   currency: string
   /** Order assigned to a newly created type so it appends to the end. */
   nextOrder: number
@@ -230,10 +268,16 @@ function SubTypeDialog({
 }) {
   const t = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   // The benefit effect names + validation copy live in ONE namespace, shared with
   // the activity editor's BenefitEditor — two words for one effect would be two
   // concepts to the studio.
   const tb = useTranslations('Benefit')
+
+  const initialValues = () =>
+    duplicating
+      ? duplicateDefaults(duplicating, tCommon('copyName', { name: duplicating.name }))
+      : emptyDefaults(editing)
 
   const {
     register,
@@ -245,7 +289,7 @@ function SubTypeDialog({
     formState: { isSubmitting },
   } = useForm<SubTypeData>({
     resolver: zodResolver(subTypeSchema),
-    defaultValues: emptyDefaults(editing),
+    defaultValues: initialValues(),
   })
 
   const { fields, append, remove, move } = useFieldArray({ control, name: 'prices' })
@@ -264,9 +308,19 @@ function SubTypeDialog({
       .filter((a) => linkedSubscriptionIds(a).includes(editing.id))
       .map((a) => a.id)
   }, [activities, editing])
+  // A COPY starts with the source's activities ticked, but with NOTHING counted
+  // as already-linked: the new type has no id yet, so persistLinkedActivities
+  // has to see every one of them as an addition. (Computed rather than seeded
+  // into state because `activities` may still be loading when the dialog opens.)
+  const duplicateLinks = useMemo(() => {
+    if (!duplicating) return []
+    return activities
+      .filter((a) => linkedSubscriptionIds(a).includes(duplicating.id))
+      .map((a) => a.id)
+  }, [activities, duplicating])
   // null = untouched (mirror the docs); an array = the user's pending selection.
   const [linkedDraft, setLinkedDraft] = useState<string[] | null>(null)
-  const linkedIds = linkedDraft ?? linkedInitially
+  const linkedIds = linkedDraft ?? (duplicating ? duplicateLinks : linkedInitially)
   const toggleLinked = (activityId: string) =>
     setLinkedDraft(
       linkedIds.includes(activityId)
@@ -317,13 +371,14 @@ function SubTypeDialog({
 
   useEffect(() => {
     if (open) {
-      reset(emptyDefaults(editing))
+      reset(initialValues())
       setLinkedDraft(null)
       setBenefitDrafts({})
       setShowBenefitErrors(false)
       setShowIntroError(false)
     }
-  }, [open, editing, reset])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, duplicating, reset])
 
   /** Diff the drafted selection against the docs and write the link — to
    *  `accessRule` on a class, to `memberBenefit` on an appointment.
@@ -340,7 +395,9 @@ function SubTypeDialog({
    *  live doc and a concurrent edit (e.g. from the activity dialog) isn't
    *  clobbered by our cached snapshot. */
   async function persistLinkedActivities(subTypeId: string) {
-    if (!linkedDraft && Object.keys(benefitDrafts).length === 0) return
+    // A duplicate's ticks are inherited rather than drafted, so "nothing was
+    // touched" is not the same as "nothing to write" for a copy.
+    if (!linkedDraft && !duplicating && Object.keys(benefitDrafts).length === 0) return
     const before = new Set(linkedInitially)
     const after = new Set(linkedIds)
     const changed = activities.filter((a) => {
@@ -560,7 +617,11 @@ function SubTypeDialog({
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            {editing ? t('editSubscriptionType') : t('addSubscriptionType')}
+            {editing
+              ? t('editSubscriptionType')
+              : duplicating
+                ? tCommon('duplicate')
+                : t('addSubscriptionType')}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
@@ -1114,23 +1175,33 @@ export const SubscriptionTypesManager = forwardRef<
 >(function SubscriptionTypesManager({ teamId, currency = 'CHF' }, ref) {
   const t = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   const qc = useQueryClient()
   const { data: types = [], isLoading } = useSubscriptionTypes(teamId)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SubscriptionType | null>(null)
+  const [duplicating, setDuplicating] = useState<SubscriptionType | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
 
   const openAdd = () => {
     setEditing(null)
+    setDuplicating(null)
     setDialogOpen(true)
   }
 
   // Let the page header own the primary "New type" action.
   useImperativeHandle(ref, () => ({ openAdd }))
   const openEdit = (st: SubscriptionType) => {
+    setDuplicating(null)
     setEditing(st)
+    setDialogOpen(true)
+  }
+
+  const openDuplicate = (st: SubscriptionType) => {
+    setEditing(null)
+    setDuplicating(st)
     setDialogOpen(true)
   }
 
@@ -1265,6 +1336,13 @@ export const SubscriptionTypesManager = forwardRef<
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                     <button
+                      onClick={() => openDuplicate(st)}
+                      title={tCommon('duplicate')}
+                      className="p-1.5 rounded hover:bg-muted transition-colors"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                    <button
                       onClick={() => setDeleting(st.id)}
                       className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
                     >
@@ -1279,10 +1357,12 @@ export const SubscriptionTypesManager = forwardRef<
       )}
 
       <SubTypeDialog
+        key={editing?.id ?? (duplicating ? `copy-${duplicating.id}` : 'new')}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         teamId={teamId}
         editing={editing}
+        duplicating={duplicating}
         currency={currency}
         nextOrder={types.length}
         onSaved={invalidate}
