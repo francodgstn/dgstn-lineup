@@ -66,6 +66,7 @@ import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
 import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
+import { normalizeTabPath } from '@/lib/tab-routes'
 import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
@@ -1336,7 +1337,7 @@ function NavSearch({
 }) {
   const t = useTranslations('Nav')
   const router = useRouter()
-  const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
+  const { tabs, newTab, switchTab, enabled: tabsEnabled } = useOpenTabs()
   const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
   // The people you just had open — the panel's empty state, replaced by results
   // the moment anything is typed. See the nav-memory census in NavPinsContext.
@@ -1582,14 +1583,28 @@ function NavSearch({
     onNavigate?.()
   }
 
-  // Background tab, matching the ctrl/⌘/middle-click convention OpenTabsContext
-  // already documents. With the strip switched off (Settings → General) there is
-  // nowhere to put a tab, so fall back to opening normally rather than no-op —
-  // a shortcut that silently does nothing reads as broken.
+  // Opens the entry in a tab AND GOES THERE — deliberately not the background
+  // ctrl/⌘-click convention OpenTabsContext documents for links. A search result
+  // is a destination the user just asked for by name; collecting it silently
+  // behind the current page is the browser's answer to a different question.
+  //
+  // `newTab` activates but does not navigate (the strip only navigates on an
+  // explicit click), so the push is required — without it the tab would be
+  // active while the page stayed put. And `newTab` does not dedupe the way
+  // `openInNewTab` does, so an entry already open is focused rather than
+  // duplicated; otherwise searching twice for the same page would stack tabs.
+  //
+  // With the strip switched off (Settings → General) there is nowhere to put a
+  // tab, so fall back to opening normally rather than no-op — a shortcut that
+  // silently does nothing reads as broken.
   const openEntryAsTab = (entry: SearchEntry) => {
     if (!tabsEnabled) return openEntry(entry)
-    openInNewTab(entry.href, entry.label)
+    const existing = tabs.find((tb) => normalizeTabPath(tb.href) === normalizeTabPath(entry.href))
+    if (existing) switchTab(existing.tabId)
+    else newTab(entry.href, entry.label)
+    router.push(entry.href as Route)
     close()
+    onNavigate?.()
   }
 
   // ONE row renderer for both lists — the typed results and the recently-viewed
