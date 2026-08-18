@@ -1111,7 +1111,14 @@
     "places": "Places",
     "horizonLabel": "How far ahead",
     "horizonNext": "Next {months} months",
-    "horizonLast": "Last {months} months"
+    "horizonLast": "Last {months} months",
+    "layersShowAll": "Show all",
+    "layersReset": "Reset",
+    "layerShow": "Show {layer}",
+    "layerHide": "Hide {layer}",
+    "layerCalendarOnly": "Bookable hours are drawn on the calendar, not in the list",
+    "layersHiddenTitle": "Some layers are hidden",
+    "layersHiddenBody": "Nothing is shown here because these layers are switched off: {layers}."
   },
   "Events": {
     "title": "Events",
@@ -2049,7 +2056,12 @@
     "deleteTemplateConfirm": "“{title}” stops being offered, so nobody can book a new appointment in it. Appointments already booked are not affected.",
     "deleteTemplateYes": "Delete hours",
     "deleting": "Deleting…",
-    "timeOffPickCoach": "Select a coach"
+    "timeOffPickCoach": "Select a coach",
+    "pausedCount": "{count, plural, one {# paused} other {# paused}}",
+    "timeOffCount": "{count, plural, one {# time off} other {# time off}}",
+    "openFullPage": "Open the full page",
+    "layerHiddenNote": "These hours are not drawn on the calendar behind this panel.",
+    "layerShowOnCalendar": "Show on calendar"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "With a plan",

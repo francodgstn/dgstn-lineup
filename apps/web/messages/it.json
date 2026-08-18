@@ -1111,7 +1111,14 @@
     "places": "Sedi",
     "horizonLabel": "Periodo mostrato",
     "horizonNext": "Prossimi {months} mesi",
-    "horizonLast": "Ultimi {months} mesi"
+    "horizonLast": "Ultimi {months} mesi",
+    "layersShowAll": "Mostra tutto",
+    "layersReset": "Reimposta",
+    "layerShow": "Mostra {layer}",
+    "layerHide": "Nascondi {layer}",
+    "layerCalendarOnly": "Le ore prenotabili sono mostrate nel calendario, non nell'elenco",
+    "layersHiddenTitle": "Alcuni livelli sono nascosti",
+    "layersHiddenBody": "Qui non viene mostrato nulla perché questi livelli sono nascosti: {layers}."
   },
   "Events": {
     "title": "Eventi",
@@ -2049,7 +2056,12 @@
     "deleteTemplateConfirm": "«{title}» non sarà più offerto: non si potranno prenotare nuovi appuntamenti. Gli appuntamenti già prenotati non vengono modificati.",
     "deleteTemplateYes": "Elimina orari",
     "deleting": "Eliminazione…",
-    "timeOffPickCoach": "Seleziona un coach"
+    "timeOffPickCoach": "Seleziona un coach",
+    "pausedCount": "{count, plural, one {# in pausa} other {# in pausa}}",
+    "timeOffCount": "{count, plural, one {# assenza} other {# assenze}}",
+    "openFullPage": "Apri la pagina completa",
+    "layerHiddenNote": "Queste ore non sono mostrate nel calendario dietro questo pannello.",
+    "layerShowOnCalendar": "Mostra nel calendario"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Con abbonamento",

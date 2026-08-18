@@ -9,6 +9,15 @@
 // linked to by name from the Schedule header, shared, bookmarked, and opened by a
 // test — none of which was true of a menu-triggered dialog.
 //
+// SINCE THE SIDE SHEET LANDED, this route is no longer the everyday entry
+// point — the Schedule header's "Bookable hours" button opens
+// `components/schedule/BookableHoursSheet` over the calendar, because the hours
+// are published against the week they have to fit into. THE ROUTE STAYS, and is
+// linked from that sheet's footer: bookmarks, shared links, QR codes and habits
+// point here, and UX-3's reason for naming a home has not expired. It is the
+// same manager component in its expanded density (`variant='page'`), so there is
+// exactly one writer of availability documents.
+//
 // The surface itself is AppointmentAvailabilityManager; this page is the shell.
 
 import { useTranslations } from 'next-intl'

@@ -4,9 +4,14 @@
 // session, so there is no /appointments page — the pieces here mount on the
 // Schedule surfaces instead:
 //
-//   • AppointmentAvailabilityManager — the "Bookable hours" surface, hosted by the
-//     /schedule/availability ROUTE (it used to be a dialog opened from an unlabelled
-//     caret welded to a filter chip, which no first-time user ever found). Publishes
+//   • AppointmentAvailabilityManager — the "Bookable hours" surface, mounted twice
+//     and ONE writer: by the Schedule's side sheet (components/schedule/
+//     BookableHoursSheet, `variant='sheet'`, coach sections collapsed) and by the
+//     /schedule/availability ROUTE (`variant='page'`, sections expanded), which the
+//     sheet links out to and which stays bookmarkable. It used to be a dialog opened
+//     from an unlabelled caret welded to a filter chip, which no first-time user ever
+//     found — the sheet is NOT a return to that: it is labelled, and the route stayed.
+//     Publishes
 //     the *when*: a time range or a list of explicit times, linked to one or more
 //     type === 'appointment' activities that own the *what* — duration, price,
 //     access. Per coach: list, add, edit, pause/resume, delete, plus time off.
@@ -51,7 +56,7 @@ import {
 import type { Availability, AvailabilityException, AppointmentBooking, Session, Activity } from '@linyup/shared'
 import { useActivities } from '@/hooks/useActivities'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, CalendarOff, Trash2, X, User } from 'lucide-react'
+import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, CalendarOff, ChevronRight, Trash2, X, User } from 'lucide-react'
 
 // ─── error surfacing (mirrors AppointmentFormDialog / TemplateDialog conventions) ──
 
@@ -1047,15 +1052,28 @@ export function AppointmentAvailabilityFormDialog({
 /** The availability MANAGER — "Bookable hours", one section per coach: the
  *  published schedules (add / edit / pause / delete) and that coach's time off.
  *
- *  Hosted by the /schedule/availability ROUTE, not a dialog. It was a dialog
- *  behind an unlabelled caret on a filter chip, which meant the whole surface —
- *  including time off, one level deeper again — was reachable only by guessing.
- *  A route is nameable from the Schedule header, linkable, and openable by a
- *  test. Sections are always expanded for the same reason: nothing here should
- *  need a second click to be seen. */
-export function AppointmentAvailabilityManager({ teamId, userId }: {
+ *  ONE surface, mounted TWICE, and deliberately not two components: this file
+ *  is the only writer of `availability` / `availability_exceptions` from the
+ *  admin app, and a second listing surface that re-implemented pause, archive or
+ *  time-off removal would be a parallel writer of the same documents.
+ *
+ *    • `variant='sheet'` — the Schedule's side sheet (BookableHoursSheet), which
+ *      is where a studio manages hours WITHOUT leaving the calendar it is
+ *      comparing them against.
+ *    • `variant='page'` — the /schedule/availability ROUTE, which stays a
+ *      bookmarkable, linkable, testable destination (UX-3) and is what the sheet
+ *      links out to.
+ *
+ *  The ONLY difference between them is density. On the page every coach section
+ *  is expanded, because a full-width page has room and nothing there should need
+ *  a second click to be seen. In the sheet they are COLLAPSED to one row per
+ *  coach: a sheet is narrow, several coaches' schedules would push the one being
+ *  looked for below the fold, and the collapsed row already answers "does this
+ *  coach have hours" (schedule count, paused count, time off). */
+export function AppointmentAvailabilityManager({ teamId, userId, variant = 'page' }: {
   teamId: string
   userId: string
+  variant?: 'page' | 'sheet'
 }) {
   const t = useTranslations('Appointments')
   const qc = useQueryClient()
@@ -1076,6 +1094,12 @@ export function AppointmentAvailabilityManager({ teamId, userId }: {
   const [deletingExceptionId, setDeletingExceptionId] = useState<string | null>(null)
   const [deletingTemplate, setDeletingTemplate] = useState<(Availability & { id: string }) | null>(null)
   const [deletingTemplateBusy, setDeletingTemplateBusy] = useState(false)
+  // Sheet only — which coach sections the user has opened. The page variant
+  // never reads it (`expanded` is hard-true there).
+  const collapsible = variant === 'sheet'
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  const toggleGroup = (providerId: string) =>
+    setOpenGroups((prev) => ({ ...prev, [providerId]: !prev[providerId] }))
 
   // Time off, grouped by provider.
   const exceptionsByProvider = useMemo(() => {
@@ -1209,17 +1233,21 @@ export function AppointmentAvailabilityManager({ teamId, userId }: {
           )}
 
           <div className="space-y-3">
-            {coachGroups.map((group) => (
-              <div key={group.providerId} className="rounded-xl border overflow-hidden">
-                {/* Per-coach header — both of the coach's actions live here. */}
-                <div className="flex flex-wrap items-center gap-2 bg-muted/30 px-4 py-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <User className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{group.providerName}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {t('templateCount', { count: group.templates.length })}
-                  </span>
+            {coachGroups.map((group) => {
+              const exceptions = exceptionsByProvider.get(group.providerId) ?? []
+              const pausedCount = group.templates.filter((tm) => tm.status === 'paused').length
+              // A COLLAPSED row must already answer "has this coach got hours,
+              // are any paused, is any of it blocked out?" — otherwise the
+              // collapse has only buried the answer one click deeper, which is
+              // the failure the /schedule/availability route was built to end.
+              const summary = [
+                t('templateCount', { count: group.templates.length }),
+                ...(pausedCount > 0 ? [t('pausedCount', { count: pausedCount })] : []),
+                ...(exceptions.length > 0 ? [t('timeOffCount', { count: exceptions.length })] : []),
+              ].join(' · ')
+              const expanded = !collapsible || !!openGroups[group.providerId]
+              const coachActions = (
+                <>
                   <Button
                     type="button"
                     variant="outline"
@@ -1236,101 +1264,151 @@ export function AppointmentAvailabilityManager({ teamId, userId }: {
                   >
                     <CalendarOff className="h-3.5 w-3.5 mr-1.5" />{t('addTimeOff')}
                   </Button>
-                </div>
-
-                <div className="divide-y border-t">
-                  {group.templates.length === 0 ? (
-                    <p className="p-4 text-sm text-muted-foreground">{t('noTemplatesForCoach')}</p>
+                </>
+              )
+              return (
+                <div key={group.providerId} className="rounded-xl border overflow-hidden">
+                  {/* Per-coach header. On the PAGE it carries the coach's two
+                      actions inline. In the SHEET it is the disclosure control
+                      instead and the actions move into the opened body — a
+                      narrow row cannot hold a name, a summary and two buttons
+                      without one of them wrapping onto its own line. */}
+                  {collapsible ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.providerId)}
+                      aria-expanded={expanded}
+                      className="flex w-full items-center gap-2 bg-muted/30 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+                    >
+                      <ChevronRight
+                        aria-hidden
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
+                      />
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <User className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{group.providerName}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{summary}</span>
+                      </span>
+                    </button>
                   ) : (
-                    group.templates.map((tmpl) => (
-                      <div key={tmpl.id} className="p-4 flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-sm">{tmpl.title}</p>
-                            <StatusBadge status={tmpl.status} />
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                              {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {tmpl.mode === 'range' && tmpl.window
-                              ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
-                              : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
-                          </p>
-                          {tmpl.location && (
-                            <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <MapPin className="h-3 w-3" />{tmpl.location}
-                            </p>
-                          )}
-                          {tmpl.onlineUrl && (
-                            <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <Video className="h-3 w-3" />{t('onlineSession')}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button onClick={() => toggleTemplateStatus(tmpl)}
-                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                            title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}
-                            aria-label={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
-                            {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          </button>
-                          <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
-                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                            title={t('editTemplate')}
-                            aria-label={t('editTemplate')}>
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button onClick={() => setDeletingTemplate(tmpl)}
-                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-                            title={t('deleteTemplate')}
-                            aria-label={t('deleteTemplate')}>
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                    <div className="flex flex-wrap items-center gap-2 bg-muted/30 px-4 py-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <User className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{group.providerName}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {t('templateCount', { count: group.templates.length })}
+                      </span>
+                      {coachActions}
+                    </div>
+                  )}
+
+                  {expanded && (
+                    <>
+                      <div className="divide-y border-t">
+                        {group.templates.length === 0 ? (
+                          <p className="p-4 text-sm text-muted-foreground">{t('noTemplatesForCoach')}</p>
+                        ) : (
+                          group.templates.map((tmpl) => (
+                            <div key={tmpl.id} className="p-4 flex items-start gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-medium text-sm">{tmpl.title}</p>
+                                  <StatusBadge status={tmpl.status} />
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                    {t(tmpl.mode === 'range' ? 'modeRange' : 'modeTimes')}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-0.5">
+                                  {(tmpl.activityIds ?? []).map((id) => activityNameById.get(id) ?? id).join(', ')}
+                                </p>
+                                <p className="text-sm text-muted-foreground mt-0.5">
+                                  {tmpl.mode === 'range' && tmpl.window
+                                    ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
+                                    : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
+                                </p>
+                                {tmpl.location && (
+                                  <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                    <MapPin className="h-3 w-3" />{tmpl.location}
+                                  </p>
+                                )}
+                                {tmpl.onlineUrl && (
+                                  <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                    <Video className="h-3 w-3" />{t('onlineSession')}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button onClick={() => toggleTemplateStatus(tmpl)}
+                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                                  title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}
+                                  aria-label={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
+                                  {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </button>
+                                <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
+                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                                  title={t('editTemplate')}
+                                  aria-label={t('editTemplate')}>
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                <button onClick={() => setDeletingTemplate(tmpl)}
+                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                                  title={t('deleteTemplate')}
+                                  aria-label={t('deleteTemplate')}>
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
-                    ))
-                  )}
-                </div>
 
-                {/* Time off — provider unavailability that overrides the
-                    schedules above (see AvailabilityException / listAvailability). */}
-                <div className="border-t p-4 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {t('timeOffTitle')}
-                  </p>
-                  {exceptionsQ.isLoading ? (
-                    <p className="text-xs text-muted-foreground">{t('loading')}</p>
-                  ) : (exceptionsByProvider.get(group.providerId) ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">{t('noTimeOff')}</p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {(exceptionsByProvider.get(group.providerId) ?? []).map((exc) => (
-                        <li key={exc.id} className="flex items-center justify-between gap-2 text-sm">
-                          <span className="min-w-0 truncate">
-                            {formatExceptionRange(exc.start.toDate(), exc.end.toDate())}
-                            {exc.note && <span className="text-muted-foreground"> · {exc.note}</span>}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void deleteException(exc.id)}
-                            disabled={deletingExceptionId === exc.id}
-                            title={t('timeOffRemove')}
-                            aria-label={t('timeOffRemove')}
-                            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                      {/* Time off — provider unavailability that overrides the
+                          schedules above (see AvailabilityException / listAvailability). */}
+                      <div className="border-t p-4 space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {t('timeOffTitle')}
+                        </p>
+                        {exceptionsQ.isLoading ? (
+                          <p className="text-xs text-muted-foreground">{t('loading')}</p>
+                        ) : exceptions.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">{t('noTimeOff')}</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {exceptions.map((exc) => (
+                              <li key={exc.id} className="flex items-center justify-between gap-2 text-sm">
+                                <span className="min-w-0 truncate">
+                                  {formatExceptionRange(exc.start.toDate(), exc.end.toDate())}
+                                  {exc.note && <span className="text-muted-foreground"> · {exc.note}</span>}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteException(exc.id)}
+                                  disabled={deletingExceptionId === exc.id}
+                                  title={t('timeOffRemove')}
+                                  aria-label={t('timeOffRemove')}
+                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {collapsible && (
+                        <div className="flex flex-wrap items-center gap-2 border-t bg-muted/10 px-4 py-3">
+                          {coachActions}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}

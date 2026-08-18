@@ -1111,7 +1111,14 @@
     "places": "Orte",
     "horizonLabel": "Zeitraum",
     "horizonNext": "Nächste {months} Monate",
-    "horizonLast": "Letzte {months} Monate"
+    "horizonLast": "Letzte {months} Monate",
+    "layersShowAll": "Alle anzeigen",
+    "layersReset": "Zurücksetzen",
+    "layerShow": "{layer} anzeigen",
+    "layerHide": "{layer} ausblenden",
+    "layerCalendarOnly": "Buchbare Zeiten werden im Kalender angezeigt, nicht in der Liste",
+    "layersHiddenTitle": "Einige Ebenen sind ausgeblendet",
+    "layersHiddenBody": "Hier wird nichts angezeigt, weil diese Ebenen ausgeblendet sind: {layers}."
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -2049,7 +2056,12 @@
     "deleteTemplateConfirm": "„{title}“ wird nicht mehr angeboten, es können keine neuen Termine darin gebucht werden. Bereits gebuchte Termine bleiben bestehen.",
     "deleteTemplateYes": "Zeiten löschen",
     "deleting": "Wird gelöscht…",
-    "timeOffPickCoach": "Coach auswählen"
+    "timeOffPickCoach": "Coach auswählen",
+    "pausedCount": "{count, plural, one {# pausiert} other {# pausiert}}",
+    "timeOffCount": "{count, plural, one {# Abwesenheit} other {# Abwesenheiten}}",
+    "openFullPage": "Ganze Seite öffnen",
+    "layerHiddenNote": "Diese Zeiten werden im Kalender hinter diesem Bereich nicht angezeigt.",
+    "layerShowOnCalendar": "Im Kalender anzeigen"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Mit Abo",
