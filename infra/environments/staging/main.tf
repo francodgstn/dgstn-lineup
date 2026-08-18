@@ -135,3 +135,16 @@ module "budget" {
 
   depends_on = [module.services]
 }
+
+# ── Error metric, alert policy, uptime check ──────────────────────────────────
+# Until `alert_email` is set in terraform.tfvars, the metric and uptime check
+# collect but NOTHING pages anyone — see `terraform output monitoring_alerting_enabled`.
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project_id  = var.project_id
+  env         = "staging"
+  alert_email = var.alert_email
+  uptime_host = var.uptime_host
+
+  depends_on = [module.services]
+}
