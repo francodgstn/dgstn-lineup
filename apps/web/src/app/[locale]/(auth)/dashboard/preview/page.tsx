@@ -164,7 +164,7 @@ export default function DashboardPreviewPage() {
         <HeaderAction href={'/contacts' as Route} icon={UserPlus} label={t('actionNewContact')} />
       </Header>
 
-      {resolving && <Skeleton className="h-[280px] w-full rounded-xl" />}
+      {resolving && <Skeleton className="h-[264px] w-full rounded-xl" />}
 
       {/* DAY ONE SUBSTITUTES, it does not stack. A studio with no contacts and
           no sessions has nothing for the day, the queue, the figures or the
@@ -183,7 +183,7 @@ export default function DashboardPreviewPage() {
               The figure block opposite runs ~275px, so it fits the row without
               setting it — the day still owns the height. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-7 lg:h-[280px]">
+            <div className="lg:col-span-7 lg:h-[264px]">
               <TodayPanel teamId={currentTeamId} />
             </div>
             <div className="lg:col-span-5">
@@ -203,11 +203,11 @@ export default function DashboardPreviewPage() {
               scrolls (the cap is still 8, and the header carries the count),
               and the 190px donut sits comfortably inside the same height.
 
-              THE WHOLE OF THIS FITS 720px, quote included: 24 + 41 + 20 + 280
-              + 20 + 232 + 20 + ~66 = ~703. The two heights above are the
+              THE WHOLE OF THIS FITS 720px, quote included: 24 + 41 + 20 + 264
+              + 20 + 220 + 20 + ~66 = ~655 (MEASURED: quote ends at ~710). The two heights above are the
               adjustable pair — spend them here, not on the sign-off. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-7 lg:h-[232px]">
+            <div className="lg:col-span-7 lg:h-[220px]">
               <QueuePanel
                 teamId={currentTeamId}
                 contacts={contacts}
