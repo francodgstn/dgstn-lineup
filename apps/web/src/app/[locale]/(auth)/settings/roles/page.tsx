@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { usePlan } from '@/hooks/usePlan'
+import { useTeamSeats } from '@/hooks/useTeamSeats'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import {
   TEAMS_COLLECTION,
@@ -36,15 +37,37 @@ export default function RolePermissionsPage() {
   const tc = useTranslations('Capabilities')
   const { currentTeamId, user } = useAuth()
   const { can } = useCapabilities()
-  const { isAtLeast } = usePlan()
+  const { hasFeature, minimumPlanFor, isLoading: planLoading } = usePlan()
   const qc = useQueryClient()
+  // Asked only when the plan says no — a Studio team needs no roll call to be
+  // allowed, so it pays for no extra callable.
+  const { data: seats, isLoading: seatsLoading } = useTeamSeats(
+    currentTeamId,
+    !hasFeature('multiple_managers')
+  )
   // UX-42: this page had NO plan awareness at all — a complete, saveable Coach
-  // permission editor on the Free plan, where a second user cannot exist, so
-  // nobody can ever hold the role being configured. It stays visible (the
-  // studio should be able to see what the role does before paying for it) and
-  // says why it can't be used, which is the same gate the invite button uses.
-  const planAllows = isAtLeast('coach')
-  const canEdit = can('members.manage') && planAllows
+  // permission editor on a plan where a second user cannot exist, so nobody can
+  // ever hold the role being configured. It stays visible (the studio should be
+  // able to see what the role does before paying for it) and says why it can't
+  // be used, which is the same gate the invite button uses.
+  //
+  // That gate moved from Coach to Studio on 2026-08-18 — it FOLLOWS the invite,
+  // because a role nobody can be invited into governs nobody. It reads the
+  // `multiple_managers` flag rather than naming a tier, so it cannot drift from
+  // the invite gate again.
+  //
+  // …with the exception that makes it honest: a team that ALREADY has somebody
+  // in the Coach role keeps the editor, whatever its plan. The gate is on
+  // adding a person, never on the people who are here — and locking it for them
+  // would leave a real coach's permissions frozen at whatever they were the day
+  // the plan changed.
+  const planAllows = hasFeature('multiple_managers')
+  const minPlan = minimumPlanFor('multiple_managers')
+  const allowed = planAllows || seats?.hasCoachRoleMember === true
+  const canEdit = can('members.manage') && allowed
+  // Neither answer is known until both reads are in; refusing early would flash
+  // a lock at a team that turns out to hold a coach.
+  const gateKnown = !planLoading && (planAllows || !seatsLoading)
 
   const { data: stored, isLoading } = useQuery({
     queryKey: ['role-config', currentTeamId, 'coach'],
@@ -120,12 +143,13 @@ export default function RolePermissionsPage() {
 
       <p className="text-xs text-muted-foreground">{t('coachAssignHint')}</p>
 
-      {!planAllows && (
+      {gateKnown && !allowed && (
         <PlanUpgradeNotice
-          minPlan="coach"
+          minPlan={minPlan}
+          feature="multiple_managers"
           variant="inline"
-          title={t('planLockedTitle')}
-          description={t('planLockedBody')}
+          title={t('seatLockedTitle')}
+          description={t('seatLockedBody')}
         />
       )}
 

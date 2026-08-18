@@ -252,6 +252,19 @@ export type PlanFeature =
   | 'api_access'
   | 'advanced_permissions'
 
+/**
+ * The refusal a member-adding callable throws when the team's plan has no
+ * `multiple_managers`. A STABLE CODE, shared so the client can map it to
+ * localized copy instead of showing the server's English — and shared in BOTH
+ * directions, so renaming it here breaks the reader rather than silencing it.
+ *
+ * Thrown by every server seam that can put a SECOND user on a team
+ * (`sendTeamInvitation`, `acceptTeamInvitation`, `manageTeamMember` action
+ * 'add'); never by anything that manages the people already there — the gate is
+ * on adding, not on being.
+ */
+export const MULTIPLE_USERS_PLAN_REFUSAL = 'multiple-users-plan-required'
+
 // NOTE: features delivered by plugins (gamification, referral_program, courses,
 // ai_insights) are now gated by plugin INSTALL state, not these flags — see
 // pluginAccessForPlan + useInstalledPlugins. The flags remain for reference /

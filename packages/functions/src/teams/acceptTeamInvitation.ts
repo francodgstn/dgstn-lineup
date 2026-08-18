@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { regionalFunctions } from '../utils/functions'
-import { addTeamMember, setUserCurrentTeam, getUserCurrentTeam } from '../utils/teams'
+import { addTeamMember, setUserCurrentTeam, getUserCurrentTeam, requireExtraUserPlan } from '../utils/teams'
 
 export const acceptTeamInvitation = regionalFunctions.https.onCall(
   async (data: { token: string; displayName?: string; password?: string }, context) => {
@@ -23,6 +23,13 @@ export const acceptTeamInvitation = regionalFunctions.https.onCall(
     if (invitation.accepted_at) {
       throw new (await import('firebase-functions')).https.HttpsError('already-exists', 'Invitation already accepted')
     }
+
+    // THE INVITE GATE ALONE IS NOT THE GATE. An invitation lives for seven days,
+    // and this is the call that writes the `team_members` doc — so a team that
+    // dropped below Studio after inviting somebody must not gain the seat when
+    // that link is finally clicked. Re-checked here, against the plan as it is
+    // NOW rather than as it was when the mail was sent.
+    await requireExtraUserPlan(teamId)
 
     const userId = context.auth.uid
     await addTeamMember(teamId, userId, invitation.role, invitation.invitedBy)

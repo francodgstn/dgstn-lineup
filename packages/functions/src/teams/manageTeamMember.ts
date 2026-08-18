@@ -7,6 +7,7 @@ import {
   addTeamMember,
   removeTeamMember,
   updateTeamMemberRole,
+  requireExtraUserPlan,
 } from '../utils/teams'
 import type { TeamRole } from '@linyup/shared'
 
@@ -53,6 +54,13 @@ export const manageTeamMember = onCall(async (request) => {
       if (role === 'owner' && callerRole !== 'owner') {
         throw new HttpsError('permission-denied', 'Only team owners can add other owners')
       }
+
+      // A seat-creating seam, and the quietest one: no invitation, no email,
+      // no shipped UI — just a callable any owner or manager can reach directly.
+      // A client-side gate on the invite button would be no gate at all while
+      // this stayed open. 'remove', 'updateRole' and 'setCoach' below are NOT
+      // gated, deliberately: they manage people who are already here.
+      await requireExtraUserPlan(teamId)
 
       const [addErr] = await to(addTeamMember(teamId, userId, role, callerId))
       if (addErr) {

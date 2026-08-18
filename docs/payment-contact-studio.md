@@ -750,7 +750,17 @@ A studio charging on its **own** Stripe account. Handler:
    | Field | Value |
    |-------|-------|
    | URL | `https://europe-west6-linyup-prod.cloudfunctions.net/handleTeamStripeWebhook?teamId=YOUR_TEAM_ID` |
-   | Events | `checkout.session.completed`, `payment_intent.succeeded`, `invoice.payment_succeeded` |
+   | Events | `payment_intent.succeeded`, `charge.succeeded`, `checkout.session.completed` |
+
+   ⚠ **Do NOT add `invoice.payment_succeeded`.** This table asked for it until
+   2026-08-18, and that is the misconfiguration behind "A BYO studio can
+   double-count its own recurring revenue" (`docs/open-defects.md`): Stripe no
+   longer lets an invoice payload name its PaymentIntent, and this rail holds no
+   credentials to bridge them, so an endpoint subscribed to both families records
+   every recurring payment TWICE and nothing can merge the two rows.
+   `payment_intent.succeeded` already covers subscription renewals;
+   `charge.succeeded` is enrich-only (it never opens a row) and is what recovers
+   the payer's email on an invoice-generated payment.
 
 3. Copy the endpoint's **Signing secret** (`whsec_…`) into the Linyup gateway dialog's
    **Webhook signing secret** field. Without it, no payments are recorded.
@@ -764,6 +774,11 @@ A studio charging on its **own** Stripe account. Handler:
 - Keyed by the underlying **payment reference** (PaymentIntent / invoice / session id),
   so `checkout.session.completed` and the matching `payment_intent.succeeded` converge to
   **one** `payment_events` doc (write-once).
+- **The endpoint is watched, not repaired.** A row records the event type that
+  wrote it (`raw_status`), so Settings → Payments can say plainly when an endpoint
+  has delivered both event families in the last 90 days — a reading of what
+  arrived, never a guess at which two rows are the same money. Nothing merges or
+  deletes a row; the studio fixes the endpoint in Stripe.
 - Scope is **record + assign** only — no in-app checkout, no refunds (those happen in the
   studio's own Stripe dashboard, or use Connect).
 

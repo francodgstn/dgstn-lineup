@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 import { regionalFunctions } from '../utils/functions'
-import { isTeamMember, hasTeamRole, hasCapability, getTeam } from '../utils/teams'
+import { isTeamMember, hasTeamRole, hasCapability, getTeam, requireExtraUserPlan } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { getHostingUrl } from '../utils/env'
@@ -53,14 +53,16 @@ export const sendTeamInvitation = regionalFunctions.https.onCall(
     if (!team)
       throw new (await import('firebase-functions')).https.HttpsError('not-found', 'Team not found')
 
-    // The Free plan is single-user — inviting members requires a paid plan.
-    // The message is a stable code the web app maps to localized copy.
-    if ((team.plan ?? 'free') === 'free') {
-      throw new (await import('firebase-functions')).https.HttpsError(
-        'failed-precondition',
-        'free-plan-single-user'
-      )
-    }
+    // A SECOND USER IS A STUDIO FEATURE (`multiple_managers`). This gate used to
+    // refuse the Free plan alone, which contradicted the flag and let a Coach
+    // team invite managers it was never sold. Franco settled it on 2026-08-18:
+    // the flag is right, so the invite follows it — and it reads the flag rather
+    // than a tier literal so the two cannot drift apart again.
+    //
+    // The refusal is thrown for EVERY role this callable can invite, including
+    // 'coach': the coaches roster that sends those is itself Studio-only, so a
+    // coach invitation on a lower tier arrives from no shipped surface.
+    await requireExtraUserPlan(teamId)
 
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))

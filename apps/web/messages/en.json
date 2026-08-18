@@ -1258,7 +1258,10 @@
     "confirmCancelInviteTitle": "Cancel invitation",
     "confirmCancelInviteMessage": "Cancel the invitation to {email}?",
     "inviteCancelledSuccess": "Invitation cancelled.",
-    "inviteLockedFreeBody": "The Free plan is limited to a single user. Upgrade to Coach to invite team members."
+    "inviteLockedFreeBody": "The Free plan is limited to a single user. Upgrade to Coach to invite team members.",
+    "inviteLockedTitle": "Your plan is for one person",
+    "inviteLockedBody": "Inviting managers, coaches and viewers — and giving the Coach role its own permissions — needs a plan that allows more than one user.",
+    "existingMembersKeepAccess": "People already on your team keep their access and their roles — only adding someone new is affected."
   },
   "Roles": {
     "title": "Roles & permissions",
@@ -1276,7 +1279,9 @@
     "saving": "Saving…",
     "saved": "Saved",
     "planLockedTitle": "Coach permissions need a paid plan",
-    "planLockedBody": "The Free plan is for one person, so nobody can hold the Coach role yet. You can see what the role does — the switches turn on once you can invite people."
+    "planLockedBody": "The Free plan is for one person, so nobody can hold the Coach role yet. You can see what the role does — the switches turn on once you can invite people.",
+    "seatLockedTitle": "Nobody can hold the Coach role yet",
+    "seatLockedBody": "Your plan is for one person, so there is nobody to give these permissions to. You can still see what the role does — the switches turn on when you can invite people."
   },
   "Capabilities": {
     "contacts_view": "View contacts",
@@ -1681,7 +1686,11 @@
     "paymentsRecordingStalled": "Not recording yet",
     "paymentsPublishableKeyHelp": "A label only — Linyup never charges with it. Recording starts once you add the webhook signing secret below.",
     "subTypeActivitiesEmptyAction": "Create an activity",
-    "paymentsWebhookEventsHelp": "Subscribe the endpoint to <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code>. Do not add <code>invoice.payment_succeeded</code> as well: Stripe no longer links an invoice to its payment, so recurring payments would be recorded twice."
+    "paymentsWebhookEventsHelp": "Subscribe the endpoint to <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code>. Do not add <code>invoice.payment_succeeded</code> as well: Stripe no longer links an invoice to its payment, so recurring payments would be recorded twice.",
+    "paymentsWebhookEventsTitle": "Choose the events carefully",
+    "paymentsDoubleRecordingTitle": "This Stripe endpoint is recording payments twice",
+    "paymentsDoubleRecordingBody": "In the last {days} days it delivered {invoiceCount} invoice events and {paymentCount} payment events. Stripe no longer links an invoice to its payment, so a recurring payment that arrives as both is written down twice — and nothing here can tell which two rows are the same money.",
+    "paymentsDoubleRecordingFix": "Fix it in Stripe: edit this endpoint and remove <code>invoice.payment_succeeded</code>. Keep <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code> — they record everything, renewals included. Rows already written stay as they are; the payments list flags the ones at risk."
   },
   "Bookings": {
     "title": "Bookings",

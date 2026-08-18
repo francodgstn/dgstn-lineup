@@ -121,6 +121,32 @@ written before the field existed are not accused of a duplication they are not
 exposed to. **This is still not a fix**: the two rows remain, and everything under
 "What would actually close it" is unchanged.
 
+**Update 2026-08-18 (decision 18, Franco).** The close is **guidance + detection,
+and the structural fix is deliberately NOT being built.** Both alternatives were
+rejected by name: dedupe-by-heuristic, because a wrong match silently deletes a
+real second payment; and giving the rail credentials, because avoiding them is
+what BYO is FOR. So the rail now does two things and neither of them touches a
+row:
+
+- **Guidance is the primary defence, and it was WRONG in one place.** The setup
+  table in `docs/payment-contact-studio.md` told studios to subscribe to
+  `invoice.payment_succeeded` — i.e. the documented setup produced the defect.
+  Corrected, with the reason. The dialog note (UX-17) is accurate and is now a
+  callout rather than an 11px footnote.
+- **Detection turned out to be exact, not heuristic.** A recorded row stores
+  `raw_status` = the literal Stripe event type that wrote it, so "this endpoint
+  delivered both families" is a STORED FACT about deliveries, not an inference
+  from amounts or timing. `detectByoStripeDoubleRecording`
+  (`packages/shared/src/utils/byoStripeEvents.ts`, pure + unit-tested in
+  `packages/functions/src/billing/byoDoubleRecording.test.ts`) counts families
+  over a 90-day window and Settings → Payments renders a warning naming the fix.
+  It is bounded so it SELF-CLEARS once the endpoint is corrected, and it
+  deliberately never pairs two rows — the one thing it cannot say without
+  guessing is *which* two rows are the same money, which is exactly what the
+  "may be a duplicate" chip leaves to the studio's own eyes.
+
+The entry stays open because the duplication itself is unchanged.
+
 **What would actually close it** (each has a real cost — pick deliberately):
 subscribe BYO studios to `invoice_payment.paid` instead of
 `invoice.payment_succeeded` (it carries both ids, so it converges — but adding it

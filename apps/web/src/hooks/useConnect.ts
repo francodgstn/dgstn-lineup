@@ -12,6 +12,8 @@ import { collection, getDocs, limit, orderBy, query, where } from 'firebase/fire
 import { db, functions } from '@/lib/firebase'
 import { usePaymentMutationErrorToast } from './usePaymentErrorToast'
 import {
+  detectByoStripeDoubleRecording,
+  type ByoStripeDoubleRecordingSignal,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   PARTNER_VISITS_SUBCOLLECTION,
@@ -191,6 +193,47 @@ export function usePaymentEvents(teamId: string | null, pageLimit = 100) {
         )
       )
       return snap.docs.map((d) => ({ ...(d.data() as ExternalPayment), id: d.id }))
+    },
+  })
+}
+
+/**
+ * Is the team's BYO Stripe endpoint delivering BOTH event families — i.e. is it
+ * recording every recurring payment twice?
+ *
+ * A READING, never a repair. `raw_status` on a recorded row is the literal
+ * Stripe event type that wrote it, so this is a stored fact rather than a
+ * guess; the resolver (`detectByoStripeDoubleRecording`, shared + unit-tested)
+ * counts families and deliberately never pairs two rows as "the same money".
+ * See docs/open-defects.md → "A BYO studio can double-count its own recurring
+ * revenue" for why merging them is refused rather than unimplemented.
+ *
+ * Same shape of read as `usePaymentEvents` (one ordered page, no composite
+ * index), under its own key so the two never fight over a cache entry.
+ */
+export function useByoStripeDoubleRecording(teamId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['byo-stripe-double-recording', teamId],
+    enabled: !!teamId && enabled,
+    queryFn: async (): Promise<ByoStripeDoubleRecordingSignal> => {
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, PAYMENT_EVENTS_SUBCOLLECTION),
+          orderBy('processed_at', 'desc'),
+          limit(200)
+        )
+      )
+      return detectByoStripeDoubleRecording(
+        snap.docs.map((d) => {
+          const row = d.data() as ExternalPayment
+          const at = row.processed_at as { toDate?: () => Date } | null | undefined
+          return {
+            gateway: row.gateway,
+            raw_status: row.raw_status,
+            processedAtMs: at?.toDate?.().getTime() ?? null,
+          }
+        })
+      )
     },
   })
 }

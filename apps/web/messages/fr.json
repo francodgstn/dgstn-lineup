@@ -1258,7 +1258,10 @@
     "confirmCancelInviteTitle": "Annuler l'invitation",
     "confirmCancelInviteMessage": "Annuler l'invitation à {email} ?",
     "inviteCancelledSuccess": "Invitation annulée.",
-    "inviteLockedFreeBody": "L'offre Gratuite est limitée à un seul utilisateur. Passez à Coach pour inviter des membres de l'équipe."
+    "inviteLockedFreeBody": "L'offre Gratuite est limitée à un seul utilisateur. Passez à Coach pour inviter des membres de l'équipe.",
+    "inviteLockedTitle": "Votre offre est prévue pour une seule personne",
+    "inviteLockedBody": "Inviter des gestionnaires, des coachs et des observateurs — et donner ses propres permissions au rôle Coach — nécessite une offre qui autorise plusieurs utilisateurs.",
+    "existingMembersKeepAccess": "Les personnes déjà dans votre équipe conservent leur accès et leur rôle — seul l'ajout d'une nouvelle personne est concerné."
   },
   "Roles": {
     "title": "Rôles et autorisations",
@@ -1276,7 +1279,9 @@
     "saving": "Enregistrement…",
     "saved": "Enregistré",
     "planLockedTitle": "Les autorisations coach nécessitent un forfait payant",
-    "planLockedBody": "Le forfait Gratuit est prévu pour une seule personne : personne ne peut donc encore avoir le rôle coach. Vous pouvez voir ce que fait ce rôle — les commutateurs s'activeront dès que vous pourrez inviter des personnes."
+    "planLockedBody": "Le forfait Gratuit est prévu pour une seule personne : personne ne peut donc encore avoir le rôle coach. Vous pouvez voir ce que fait ce rôle — les commutateurs s'activeront dès que vous pourrez inviter des personnes.",
+    "seatLockedTitle": "Personne ne peut encore occuper le rôle Coach",
+    "seatLockedBody": "Votre offre est prévue pour une seule personne : il n'y a donc personne à qui accorder ces permissions. Vous pouvez tout de même voir ce que fait le rôle — les interrupteurs s'activent lorsque vous pourrez inviter des personnes."
   },
   "Capabilities": {
     "contacts_view": "Voir les contacts",
@@ -1681,7 +1686,11 @@
     "paymentsRecordingStalled": "N'enregistre pas encore",
     "paymentsPublishableKeyHelp": "Une simple étiquette — Linyup ne débite rien avec. L'enregistrement démarre dès que vous ajoutez la clé de signature du webhook ci-dessous.",
     "subTypeActivitiesEmptyAction": "Créer une activité",
-    "paymentsWebhookEventsHelp": "Abonnez le point de terminaison à <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code>. N'ajoutez pas en plus <code>invoice.payment_succeeded</code> : Stripe ne relie plus une facture à son paiement, les paiements récurrents seraient donc enregistrés deux fois."
+    "paymentsWebhookEventsHelp": "Abonnez le point de terminaison à <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code>. N'ajoutez pas en plus <code>invoice.payment_succeeded</code> : Stripe ne relie plus une facture à son paiement, les paiements récurrents seraient donc enregistrés deux fois.",
+    "paymentsWebhookEventsTitle": "Choisissez les événements avec soin",
+    "paymentsDoubleRecordingTitle": "Ce point de terminaison Stripe enregistre les paiements en double",
+    "paymentsDoubleRecordingBody": "Au cours des {days} derniers jours, il a livré {invoiceCount} événements de facture et {paymentCount} événements de paiement. Stripe ne relie plus une facture à son paiement : un paiement récurrent qui arrive sous les deux formes est donc enregistré deux fois, et rien ici ne peut dire quelles deux lignes correspondent au même argent.",
+    "paymentsDoubleRecordingFix": "À corriger dans Stripe : modifiez ce point de terminaison et retirez <code>invoice.payment_succeeded</code>. Gardez <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code> — ils enregistrent tout, renouvellements compris. Les lignes déjà écrites restent telles quelles ; la liste des paiements signale celles qui sont concernées."
   },
   "Bookings": {
     "title": "Réservations",

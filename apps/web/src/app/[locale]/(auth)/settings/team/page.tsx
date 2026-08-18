@@ -74,6 +74,7 @@ import type {
   PaymentGatewayType,
 } from '@linyup/shared'
 import {
+  AlertTriangle,
   CalendarDays,
   Timer,
   Plus,
@@ -96,6 +97,7 @@ import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useByoStripeDoubleRecording } from '@/hooks/useConnect'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 
@@ -1287,6 +1289,17 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const { data: gatewayCurrency } = useGatewayCurrency(teamId)
 
+  // WHAT THE ENDPOINT ACTUALLY SENT (docs/open-defects.md → "A BYO studio can
+  // double-count its own recurring revenue"). The guidance below the signing
+  // secret is the primary defence; this is the second half — when a studio
+  // subscribed to both Stripe event families anyway, the rail can SEE it in the
+  // rows it wrote, and the owner is the only person who can go and fix it.
+  //
+  // Read only when there IS a Stripe integration to accuse, and only for
+  // somebody who can act on it (a manager cannot even see this list).
+  const hasStripeGateway = integrations.some((i) => i.config.type === 'stripe')
+  const { data: doubleRecording } = useByoStripeDoubleRecording(teamId, canEdit && hasStripeGateway)
+
   const [showDialog, setShowDialog] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
@@ -1534,6 +1547,41 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
           })}
         </div>
       )}
+
+      {/* THIS ENDPOINT IS RECORDING EVERY RECURRING PAYMENT TWICE.
+          Stated, never repaired. The two rows cannot be merged from here (an
+          `invoice.*` payload can no longer name its PaymentIntent, and BYO holds
+          no credentials to bridge them), and matching them by amount and time
+          would be a guess that deletes real money when it is wrong — so this
+          surface tells the one person who can change the endpoint, and touches
+          nothing. `bothFamilies` is a reading of `raw_status`, i.e. of what the
+          endpoint literally delivered, not an inference from the totals. */}
+      {doubleRecording?.bothFamilies && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                {t('paymentsDoubleRecordingTitle')}
+              </p>
+              <p className="text-xs text-amber-900/90 dark:text-amber-200/90">
+                {t('paymentsDoubleRecordingBody', {
+                  days: doubleRecording.windowDays,
+                  invoiceCount: doubleRecording.invoiceRows,
+                  paymentCount: doubleRecording.paymentRows,
+                })}
+              </p>
+              <p className="text-xs text-amber-900/90 dark:text-amber-200/90">
+                {t.rich('paymentsDoubleRecordingFix', {
+                  code: (chunks) => (
+                    <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/60">{chunks}</code>
+                  ),
+                })}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
         </CardContent>
       </Card>
 
@@ -1646,14 +1694,32 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
                   them. So a subscription to BOTH records every recurring payment
                   twice, and nothing on our side can merge the two rows. The rows
                   it does produce are flagged in the payments table
-                  ("may be a duplicate"); this note is how a studio avoids
-                  producing them at all. */}
+                  ("may be a duplicate"), and an endpoint caught sending both
+                  families is called out on the card behind this dialog — but
+                  both of those are after the fact. This is the PRIMARY defence
+                  (Franco, 2026-08-18: guidance + detection is the close for that
+                  defect; dedupe-by-heuristic was rejected), which is why it is a
+                  callout and not a footnote. */}
               {selectedType === 'stripe' && (
-                <p className="text-[11px] text-muted-foreground">
-                  {t.rich('paymentsWebhookEventsHelp', {
-                    code: (chunks) => <code className="bg-muted px-1 rounded">{chunks}</code>,
-                  })}
-                </p>
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
+                        {t('paymentsWebhookEventsTitle')}
+                      </p>
+                      <p className="text-[11px] text-amber-900/90 dark:text-amber-200/90">
+                        {t.rich('paymentsWebhookEventsHelp', {
+                          code: (chunks) => (
+                            <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/60">
+                              {chunks}
+                            </code>
+                          ),
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
             <div className="space-y-1.5">

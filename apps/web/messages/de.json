@@ -1258,7 +1258,10 @@
     "confirmCancelInviteTitle": "Einladung abbrechen",
     "confirmCancelInviteMessage": "Einladung an {email} abbrechen?",
     "inviteCancelledSuccess": "Einladung abgebrochen.",
-    "inviteLockedFreeBody": "Der Free-Plan ist auf einen einzelnen Benutzer begrenzt. Upgrade auf Coach, um Teammitglieder einzuladen."
+    "inviteLockedFreeBody": "Der Free-Plan ist auf einen einzelnen Benutzer begrenzt. Upgrade auf Coach, um Teammitglieder einzuladen.",
+    "inviteLockedTitle": "Ihr Abo ist für eine Person",
+    "inviteLockedBody": "Manager, Coaches und Betrachter einzuladen — und der Coach-Rolle eigene Berechtigungen zu geben — erfordert ein Abo, das mehr als eine Person zulässt.",
+    "existingMembersKeepAccess": "Personen, die bereits im Team sind, behalten ihren Zugang und ihre Rolle — betroffen ist nur das Hinzufügen neuer Personen."
   },
   "Roles": {
     "title": "Rollen & Berechtigungen",
@@ -1276,7 +1279,9 @@
     "saving": "Speichern…",
     "saved": "Gespeichert",
     "planLockedTitle": "Coach-Berechtigungen erfordern einen kostenpflichtigen Plan",
-    "planLockedBody": "Der Gratis-Plan ist für eine Person, daher kann die Coach-Rolle noch niemand haben. Du siehst hier, was die Rolle kann — die Schalter werden aktiv, sobald du Personen einladen kannst."
+    "planLockedBody": "Der Gratis-Plan ist für eine Person, daher kann die Coach-Rolle noch niemand haben. Du siehst hier, was die Rolle kann — die Schalter werden aktiv, sobald du Personen einladen kannst.",
+    "seatLockedTitle": "Die Coach-Rolle kann noch niemand übernehmen",
+    "seatLockedBody": "Ihr Abo ist für eine Person, es gibt also niemanden, dem Sie diese Berechtigungen geben könnten. Sie sehen trotzdem, was die Rolle kann — die Schalter werden aktiv, sobald Sie Personen einladen können."
   },
   "Capabilities": {
     "contacts_view": "Kontakte ansehen",
@@ -1681,7 +1686,11 @@
     "paymentsRecordingStalled": "Erfasst noch nichts",
     "paymentsPublishableKeyHelp": "Nur eine Bezeichnung — Linyup belastet damit nichts. Die Erfassung startet, sobald du unten den Webhook-Signaturschlüssel hinterlegst.",
     "subTypeActivitiesEmptyAction": "Aktivität erstellen",
-    "paymentsWebhookEventsHelp": "Abonnieren Sie für den Endpunkt <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code>. Fügen Sie nicht zusätzlich <code>invoice.payment_succeeded</code> hinzu: Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung, wiederkehrende Zahlungen würden also doppelt erfasst."
+    "paymentsWebhookEventsHelp": "Abonnieren Sie für den Endpunkt <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code>. Fügen Sie nicht zusätzlich <code>invoice.payment_succeeded</code> hinzu: Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung, wiederkehrende Zahlungen würden also doppelt erfasst.",
+    "paymentsWebhookEventsTitle": "Wählen Sie die Ereignisse sorgfältig aus",
+    "paymentsDoubleRecordingTitle": "Dieser Stripe-Endpunkt erfasst Zahlungen doppelt",
+    "paymentsDoubleRecordingBody": "In den letzten {days} Tagen hat er {invoiceCount} Rechnungsereignisse und {paymentCount} Zahlungsereignisse geliefert. Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung — eine wiederkehrende Zahlung, die als beides eintrifft, wird deshalb doppelt erfasst, und hier lässt sich nicht erkennen, welche zwei Zeilen dasselbe Geld sind.",
+    "paymentsDoubleRecordingFix": "In Stripe beheben: Bearbeiten Sie diesen Endpunkt und entfernen Sie <code>invoice.payment_succeeded</code>. Behalten Sie <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code> — sie erfassen alles, auch Verlängerungen. Bereits erfasste Zeilen bleiben bestehen; die Zahlungsliste markiert die betroffenen."
   },
   "Bookings": {
     "title": "Buchungen",

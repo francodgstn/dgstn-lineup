@@ -389,11 +389,23 @@ service cloud.firestore {
         allow read: if isTeamMember(teamId) || memberId == request.auth.uid;
 
         // Only owners can add/remove/update team members, OR a user self-provisioning as owner on signup.
-        // The Free plan is single-user: an owner cannot create membership docs for OTHER users
-        // (invitation acceptance runs through Cloud Functions / Admin SDK and is gated there).
+        //
+        // A SECOND USER IS A STUDIO FEATURE (`multiple_managers` in PLAN_FEATURES).
+        // An owner may always write their OWN membership doc; writing SOMEBODY
+        // ELSE's is a seat-creating seam reachable straight from a client, so it
+        // refuses on exactly the tier the callables do
+        // (`requireExtraUserPlan`) — otherwise that gate is one Firestore write
+        // from being bypassed. This said `!= 'free'` until 2026-08-18, which was
+        // the same contradiction UX-42 settled everywhere else.
+        //
+        // Literals because rules cannot import the flag; `seatGate.test.ts` pins
+        // this list to PLAN_FEATURES so the two cannot drift.
+        //
+        // Invitation acceptance does NOT come through here — it runs on the
+        // Admin SDK and is gated in the callable.
         allow write: if (hasTeamRole(teamId, 'owner') &&
                        (memberId == request.auth.uid ||
-                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') != 'free')) ||
+                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') in ['studio', 'organization'])) ||
                        (isAuthed() && memberId == request.auth.uid &&
                         request.resource.data.role == 'owner' &&
                         request.resource.data.userId == request.auth.uid);
@@ -1665,9 +1677,33 @@ service cloud.firestore {
         allow write: if false; // Cloud Functions only
       }
 
+      // A whole STUDIO invited into the org (accepted by that studio's owner;
+      // moves the studio's billing). NOT the same thing as
+      // org_member_invitations below — see the naming rule in shared/paths.ts.
       match /org_invitations/{invId} {
         allow read: if isOrgMember(orgId)
                     || (isAuthed() && resource.data.inviteeEmail == request.auth.token.email);
+        allow write: if false; // Cloud Functions only
+      }
+
+      // A PERSON invited to help run the organisation (org_admin / org_viewer).
+      // CLOSED: written only by Cloud Functions (inviteOrgMember / accept /
+      // decline / revoke / the daily expiry sweep) — a client write could mint a
+      // membership grant for any address.
+      //
+      // READ IS org_admin ONLY, deliberately narrower than org_invitations
+      // above, and for a reason that is not tidiness: a pending row carries
+      // `token`, which is a bearer credential, and rules cannot withhold one
+      // field. An org_viewer is a read-only role that has no business seeing an
+      // invitation at all; letting one read a token would let them create an
+      // account at the invited address and promote themselves to org_admin.
+      //
+      // The INVITEE never reads this document. They may have no account at all,
+      // so no rule could match them; they hold a token and go through the
+      // unauthenticated `getOrgMemberInvitation` callable, which returns only
+      // what the accept page must show.
+      match /org_member_invitations/{invitationId} {
+        allow read: if hasOrgRole(orgId, 'org_admin');
         allow write: if false; // Cloud Functions only
       }
 

@@ -2,9 +2,13 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError } from 'firebase-functions/v2/https'
-import type { Team, TeamMember, TeamRole, Capability, DataScope } from '@linyup/shared'
+import type { Team, TeamMember, TeamRole, Capability, DataScope, SaasPlan } from '@linyup/shared'
 import {
   isReservedSlug,
+  minimumPlanForFeature,
+  MULTIPLE_USERS_PLAN_REFUSAL,
+  planHasFeature,
+  PLAN_ORDER,
   ROLE_CONFIG_SUBCOLLECTION,
   ROLE_RANK,
   resolveRoleCapabilities,
@@ -89,6 +93,43 @@ export async function hasTeamRole(
   // a viewer here even though its capability set is different. Prefer requireCapability
   // for feature gating; hasTeamRole remains for precedence + legacy call sites.
   return ROLE_RANK[role] >= ROLE_RANK[requiredRole]
+}
+
+/**
+ * A SECOND USER IS A PLAN FEATURE — refuse if this team has no
+ * `multiple_managers` (Studio and up; UX-42, decided 2026-08-18).
+ *
+ * THE GATE IS ON ADDING, NEVER ON BEING. Every caller of this is a seam that
+ * creates or invites a team member; nothing that manages, retitles, removes or
+ * reads an EXISTING member calls it, and nothing anywhere deletes a member when
+ * a team drops below the tier (`downgradeTeamToFree` does not touch
+ * `team_members`). A Coach-plan team that already holds a second person keeps
+ * that person, their role and their capabilities — it simply cannot add a third,
+ * or replace the second once removed.
+ *
+ * TIER ONLY, deliberately: unlike `requirePlan` this does not refuse a
+ * `past_due` team. Losing the ability to bring a colleague back while a card is
+ * being fixed is a punishment the billing state does not need to carry, and
+ * every OTHER member action stays open in that state anyway.
+ *
+ * The message is the stable shared code (never English prose) because the web
+ * maps it to localized copy; the details carry the tier so a caller can name it
+ * without re-deriving it.
+ */
+export async function requireExtraUserPlan(teamId: string): Promise<void> {
+  const team = await getTeam(teamId)
+  if (!team) throw new HttpsError('not-found', 'Team not found')
+
+  // Unknown/legacy values fail CLOSED to the lowest tier, matching requirePlan.
+  const stored = (team.plan ?? 'free') as SaasPlan
+  const plan: SaasPlan = PLAN_ORDER.includes(stored) ? stored : 'free'
+  if (planHasFeature(plan, 'multiple_managers')) return
+
+  throw new HttpsError('failed-precondition', MULTIPLE_USERS_PLAN_REFUSAL, {
+    reason: 'plan_required',
+    feature: 'multiple_managers',
+    minPlan: minimumPlanForFeature('multiple_managers'),
+  })
 }
 
 // ─── Capability resolution + guards ─────────────────────────────────────────────

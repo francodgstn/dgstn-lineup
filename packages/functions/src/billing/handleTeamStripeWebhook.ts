@@ -33,6 +33,16 @@
 // no credentials with which to bridge them. Rows written on a key that is not the
 // payment carry `gateway_ref_kind: 'fallback'` so the divergence shows up in the
 // data rather than only in the totals.
+//
+// WHAT HAPPENS WHEN A STUDIO SUBSCRIBES TO BOTH ANYWAY (decided 2026-08-18):
+// the endpoint is TOLD, and nothing is repaired. `raw_status` on each recorded
+// row is the literal event type that wrote it, so the set of families this
+// endpoint actually delivers is readable from the rows themselves —
+// `detectByoStripeDoubleRecording` (@linyup/shared) counts them and Settings →
+// Payments warns the owner, who is the only person who can change the
+// subscription. Deduping across keys was refused, not deferred: matching two
+// rows by amount and time is a guess, and a wrong guess deletes a real second
+// payment. Do not add a merge here.
 
 import { onRequest } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
