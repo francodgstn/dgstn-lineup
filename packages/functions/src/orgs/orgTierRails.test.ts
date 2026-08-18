@@ -41,15 +41,27 @@ function code(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
 }
 
-/** The org member rail, named — a member added here must be added below. */
-const MEMBER_CALLABLES = ['addOrgMember', 'updateOrgMemberRole', 'removeOrgMember'] as const
+/** The org member rail, named — a member added here must be added below.
+ *  It spans TWO files since decision 12: `orgs/members.ts` holds the direct
+ *  grant and the role/removal callables, `orgs/memberInvitations.ts` the
+ *  invitation lifecycle. Both are read together below, because the property
+ *  under test ("the Members tab's callables exist and are org-authorized") is
+ *  about the RAIL, not about a file. */
+const MEMBER_CALLABLES = [
+  'addOrgMember',
+  'updateOrgMemberRole',
+  'removeOrgMember',
+  'inviteOrgMember',
+  'revokeOrgMemberInvitation',
+] as const
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UX-34 — the org Members tab called three callables that did not exist
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('org member management (UX-34)', () => {
-  const members = read('orgs/members.ts')
+  const members = `${read('orgs/members.ts')}
+${read('orgs/memberInvitations.ts')}`
 
   it('every callable the Members tab invokes actually exists', () => {
     const page = readWeb('app/[locale]/(auth)/org/[orgId]/members/page.tsx')
@@ -75,7 +87,7 @@ describe('org member management (UX-34)', () => {
     }
     const src = code(members)
     assert.ok(!/hasTeamRole|assertOwner|assertManager/.test(src),
-      'orgs/members.ts must not reach for a team_members check — an org admin has no team_members document')
+      'the org member rail must not reach for a team_members check — an org admin has no team_members document')
   })
 
   it('is exported from the functions entrypoint, or it does not exist at runtime', () => {

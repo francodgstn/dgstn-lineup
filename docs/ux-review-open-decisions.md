@@ -25,9 +25,35 @@ seeder writes `signup_completed_at`. **Decide before the first real migration**,
 before launch.
 
 ## 3. `hmd-fighting-cup` and other tenant-specific plugins
-**PARKED, low priority.** Noticed while auditing plugin teardown (UX-16). A
-customer-specific plugin sits in the generic catalogue. Not a defect; a product
-question about what belongs in a white-label catalogue.
+**ANSWERED 2026-08-18 — Franco: hide it behind an allow-list.** Built as a
+mechanism, not a one-off. `PluginManifest.audience` (`packages/shared/src/types/plugin.ts`)
+names `teamIds` and/or `orgIds`; absent means public, so every generic plugin is
+unaffected by construction. **A member studio of an allowed org is ALLOWED** —
+an org-level customization bundle exists so the org's studios can run it, and
+`org_id` is already the grant everywhere else (`useInstalledPlugins`). Its one
+reader is `pluginVisibleToTenant`, whose doc comment owns **the census** of
+discovery surfaces (marketplace + its `?plugin=` deep link, event-types "From
+plugins", DiscoverPanel, org catalogue) and names the one deliberate
+non-caller — the sidebar suggestion in `(auth)/layout.tsx`, unreachable for a
+restricted plugin because it takes only `recommended` manifests with nav rows.
+
+**The gate is on DISCOVERY, never on running.** Nothing that resolves an
+installed plugin consults it, and each catalogue ORs the predicate with its own
+install check, so a tenant dropped from a list keeps its card, its Configure and
+its Remove — a list edit must not be a data change with an outage in it.
+
+**The list lives in the manifest, not in operator-editable data.** A
+tenant-specific plugin is code that exists only because one customer was built
+for, so its audience costs one line in a file already being written; a
+data-backed list needs a collection, rules, an operator screen and a
+per-render read before the first one works, and a globally-readable
+"which plugin belongs to whom" document leaks the customer names the field
+exists to hide. `locked` + `unlockPlugin` remains the no-deploy escape hatch
+and composes with this.
+
+**Not renamed**, per Franco: the rename comes with the widening to HMD's full
+org customization bundle, and doing it now would migrate every
+`installed_plugins` doc and `event.type` value twice. Stated in the manifest.
 
 ## 4. Automation delays (UX-85)
 **ANSWERED 2026-08-18 — Franco: build them for real.** Pre-launch, no productive
@@ -44,10 +70,25 @@ after they were composed. *Meanwhile:* nothing changed, and the new
 `acquisition_stage_changed` trigger declines the delay so it adds no new instances.
 
 ## 5. Should the starter bundle install "Welcome a new member"? (UX-84)
-**ASSUMED: no.** `STARTER_BUNDLE_KEYS` drives the one-click quick-start, and
-changing what a new studio gets on day one is a first-run product decision, not a
-copy fix. The library item ships and is installable; it is simply not bundled.
-One-line change if you want it in.
+**ANSWERED 2026-08-18 — Franco: yes, bundle it.** `lib_member_welcome` is now in
+`STARTER_BUNDLE_KEYS`, so a day-one studio's first automated mail is the one
+that greets a new member rather than only the ones that chase a lapsed one.
+
+Three things checked rather than assumed:
+- **It installs `active: false`,** like every other bundle item and with no
+  exception for this one — `installStarterBundle` goes through the same
+  `installItems` writer as the library dialog, which writes `active: false`
+  unconditionally. It is the item whose failure mode is loudest: installed live,
+  it would greet the whole existing roster the first time anyone's stage moved.
+- **The count follows.** The button reads
+  `starterBundleItemsForPlan(plan).length`; nothing is hardcoded. Since the item
+  is `requires_plan: 'studio'`, `libraryItemUnlocked` still filters it out below
+  Studio and the label shows the smaller number there.
+- **The trigger is right.** It fires on `acquisition_stage_changed`, which
+  `onContactWrite` emits on FORWARD stage moves only and evaluates against the
+  **after** document — so the `acquisition_stage = joined` condition reads the
+  new stage, including the `trial_* → joined` move `auth/signupJoin.ts` makes
+  when a trial lead completes signup.
 
 ## 6. Cloud Tasks region fix wants eyes on the first deploy (UX-85)
 **ASSUMED, needs confirmation once — not blocking.** `getFunctions().taskQueue()`
@@ -109,11 +150,50 @@ visitor can see membership prices. A cash-only studio may still want prices
 published with no buy button.
 
 ## 12. Org-admin invitations by email
-**ASSUMED: out of scope.** UX-34's add-member is a **grant** against an existing
-Linyup account; an address with no account gets a named refusal rather than a
-placeholder user. A pending-invitation lifecycle would need its own accept surface
-and expiry sweep, and `org_invitations` already means something else (inviting a
-whole team). Say if you want it.
+**DECIDED AND BUILT.** Franco asked for it; the three reasons it was previously
+declined became the specification.
+
+- **Where a pending invitation lives.** `organizations/{orgId}/`
+  **`org_member_invitations`**`/{id}`, with the doc id DERIVED FROM THE
+  NORMALISED ADDRESS (`orgMemberInvitationId`, a hashed key — `/` is legal in an
+  RFC 5322 local part). So inviting the same address twice rewrites ONE row: a
+  new token, a new deadline, the older mail's link dead on the spot. Never two
+  live tokens, never two "pending" rows disagreeing about which one accepting
+  consumed.
+- **Kept apart from `org_invitations` by a rule, not by care.** AN INVITATION IS
+  NAMED AFTER THE COLLECTION IT GRANTS INTO — `org_invitations` → `org_teams`
+  (a whole studio, accepted by its owner, billing moves),
+  `org_member_invitations` → `org_members` (one person, accepted by themselves,
+  nothing else moves). The rule is written once, beside
+  `ORG_INVITATIONS_SUBCOLLECTION` in `packages/shared/src/paths.ts`;
+  `org_invitations` is misnamed by it and keeps its name because it is shipped
+  data behind a live route. Separate route (`/org-member-invite/{orgId}/{token}`
+  vs `/org-invite/{orgId}/{invId}`), and the mail + the page say in words that no
+  studio and no billing is involved. `memberInvitations.test.ts` fails the build
+  if this module so much as mentions `org_teams`, `saas_subscriptions` or the
+  teams collection.
+- **The accept surface owns the whole trip.** The invitee may have no account:
+  the page signs them up itself, with the address FIXED to the invited one —
+  not via `/signup` (its second step creates a STUDIO) and not via `/login`
+  (which ignores `?redirect=` today).
+- **The address mismatch.** The token proves control of a mailbox, not of an
+  identity, so `acceptOrgMemberInvitation` refuses unless the signed-in
+  account's own address equals the invited one — `email_mismatch`, naming both
+  addresses, with a sign-out button. It never re-points the invitation at
+  whoever turned up: that would make a forwarded link a transferable grant.
+- **Expiry** is `expireOrgMemberInvitations` in `dailyTasks`, and it earns its
+  place precisely because AUTHORIZATION DOES NOT DEPEND ON IT — the deadline is
+  compared at accept, so a sweep that never ran opens nothing. It selects
+  `status == 'pending'` and writes `status = 'expired'`, so a swept row stops
+  matching, and it notifies nobody, so there is nothing that could double-fire.
+- **The last-admin guard is untouched**, checked rather than assumed: it counts
+  `org_members` rows only. A pending invitation must not satisfy it (an unopened
+  mailbox is not an administrator) and cannot be blocked by it (sending one takes
+  no admin away).
+- **Follow-up, not done:** the invitee's signup allowlist entry
+  (`source: 'org_member_invitation'`) is never removed — it permits creating an
+  account, which is not a grant of anything in the organisation, but it does mean
+  an org admin can widen the closed-signup allowlist one address at a time.
 
 ## 13. `public_profile` is client-writable by any team member
 **NOTED, not acted on.** `payments_enabled` — like `showBranding` and
@@ -170,7 +250,21 @@ full-cover redemption generally, not of trials. Recorded in
 `docs/payment-contact-studio.md`.
 
 ## 18. UX-60 remains STRUCTURALLY open — the chip is a warning, not a fix
-**PARKED.** BYO double-recording is caused by the Stripe API no longer letting an
+**DECIDED 2026-08-18 — guidance + detection; the structural fix is deliberately
+NOT built.** Franco rejected dedupe-by-heuristic (a wrong match silently deletes
+a real second payment) and rejected giving the rail credentials (avoiding them is
+what BYO is for). Shipped: the setup guidance corrected — `docs/payment-contact-studio.md`
+was itself telling studios to subscribe to `invoice.payment_succeeded`, so the
+documented setup produced the defect — and the dialog note promoted from a
+footnote to a callout; plus **detection, which turned out to be exact rather than
+heuristic**: `raw_status` stores the literal event type that wrote each row, so
+"this endpoint delivered both families" is a stored fact. `detectByoStripeDoubleRecording`
+(shared, unit-tested) counts families over a 90-day window — self-clearing, and
+it never pairs two rows — and Settings → Payments warns the owner with the fix.
+Nothing mutates a row. `docs/open-defects.md` entry 1 records this; the entry
+stays open because the duplication itself is unchanged.
+
+**Original note.** BYO double-recording is caused by the Stripe API no longer letting an
 `invoice.*` payload name its PaymentIntent (or vice versa), with no credentials on
 that rail to bridge them. Today's work makes the suspect rows *visible* and tells
 the studio which events to subscribe to; it does not stop the duplication. The
@@ -215,7 +309,24 @@ by a concurrent lane. Its natural destination is `/schedule` ("See these classes
 on the calendar").
 
 ## 25. `multiple_managers` is flagged at studio but ships at coach (UX-42)
-**PARKED — a one-line contradiction, either way is cheap.** `PLAN_FEATURES` puts
+**DECIDED 2026-08-18 — the flag is right; the invite moved to Studio.** Both
+surfaces now READ `multiple_managers` instead of naming a tier, so they cannot
+drift apart again. The removal speaks in the UX-42 `PlanUpgradeNotice` shape
+(names the tier, carries the upgrade control) rather than hiding the button, and
+the coaches page's dead-end refusal was converted to the same shape. **The gate
+is on ADDING, never on being**: `requireExtraUserPlan` guards every
+server seam that can create a seat (`sendTeamInvitation`, `acceptTeamInvitation`
+— an invitation lives 7 days and the plan can change under it — and
+`manageTeamMember` action `'add'`, which has no UI at all), while `remove`,
+`updateRole` and `setCoach` stay open, nothing deletes a member on downgrade, and
+a team that already has somebody in the Coach role keeps the roles editor
+whatever its plan. **`firestore.rules` was TIGHTENED too** (not loosened): the
+`team_members` write rule let an owner create somebody else's membership doc
+straight from a client on any plan above Free — a seam no callable can defend —
+and now names the same tiers, pinned to `PLAN_FEATURES` by
+`packages/functions/src/teams/seatGate.test.ts`. **Deploy rules with the code.**
+
+**Original note.** `PLAN_FEATURES` puts
 `multiple_managers` at **studio**, while `/settings/members` unlocks invites at
 **coach**. The roles page was gated at `coach` to match the behaviour the product
 actually ships, rather than the flag. Decide which is true and make the other

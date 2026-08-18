@@ -195,6 +195,18 @@ export {
 // assertOrgAdmin against org_members — never hasTeamRole (UX-75, UX-34).
 export { addOrgMember, updateOrgMemberRole, removeOrgMember } from './orgs/members'
 
+// Org MEMBER invitations — a PERSON is invited to help run the organisation and
+// accepts for themselves, which is the only door open to an address that has no
+// Linyup account yet (decision 12). NOT the org_invitations rail above, which
+// invites a whole STUDIO and moves its billing; see orgs/memberInvitations.ts.
+export {
+  inviteOrgMember,
+  getOrgMemberInvitation,
+  acceptOrgMemberInvitation,
+  declineOrgMemberInvitation,
+  revokeOrgMemberInvitation,
+} from './orgs/memberInvitations'
+
 // An org's OWN Linyup billing. Separate from the team callables below because
 // the payer is authorized through org_members, not team_members (UX-75).
 export {

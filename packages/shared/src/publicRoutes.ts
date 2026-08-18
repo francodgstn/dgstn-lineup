@@ -255,6 +255,51 @@ export function localizedPublicSubUrl<R extends PublicRoutable>(
   return `${origin}${publicLocalePrefix(locale)}${publicSubPath(slug, route, sub, params)}`
 }
 
+// ─── Locale-prefixed APP routes ──────────────────────────────────────────────
+//
+// Not every emailed link is a tenant route. An invitation to help run an
+// ORGANISATION belongs to no studio, so it has no `{slug}` and cannot go
+// through `publicPath` — but it has exactly the same locale problem, and
+// solving it a second way is how the two halves drift.
+//
+// So: one prefix rule (`publicLocalePrefix`), two path shapes.
+
+/**
+ * `{origin}{/de|/fr|/it|''}{path}` for an authenticated-app route.
+ *
+ * `path` must start with `/` and must NOT already carry a locale prefix — this
+ * function is the ONE place that decides the prefix. Use it instead of
+ * `${getHostingUrl()}/some/route`, which is the unprefixed form that hands a
+ * German reader an English page (and, with `localePrefix: 'as-needed'`, an
+ * `/en/…` link costs a 302 on every click).
+ */
+export function localizedAppUrl(
+  origin: string,
+  locale: string | null | undefined,
+  path: string
+): string {
+  return `${origin}${publicLocalePrefix(locale)}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/**
+ * `/org-member-invite/{orgId}/{token}` — where a person invited to help run an
+ * ORGANISATION lands.
+ *
+ * Deliberately NOT `/org-invite/{orgId}/{invId}`, which is the other
+ * relationship entirely: that page asks a studio OWNER to enrol their studio
+ * and move its billing onto the org plan. An org admin who clicks "you've been
+ * invited" must never arrive there. See the naming rule beside
+ * `ORG_INVITATIONS_SUBCOLLECTION` in paths.ts.
+ *
+ * The token is the only secret in the URL; the orgId is there so the server can
+ * resolve the invitation with a collection-scope query instead of a
+ * collection-group one (no index to forget, and the emulator hides a missing
+ * one).
+ */
+export function orgMemberInvitePath(orgId: string, token: string): string {
+  return `/org-member-invite/${encodeURIComponent(orgId)}/${encodeURIComponent(token)}`
+}
+
 /**
  * Structured form of `SYSTEM_LINK_META[t].route` (types/team.ts), which is a
  * pre-baked string that may carry a query (`'shop?tab=subscriptions'`).

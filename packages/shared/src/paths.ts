@@ -48,7 +48,24 @@ export const PLATFORM_METRICS_COLLECTION = 'platform_metrics'
 export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'
 export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'
+// THE TWO ORG INVITATIONS ARE DIFFERENT RELATIONSHIPS. The naming rule that
+// tells them apart: AN INVITATION IS NAMED AFTER THE COLLECTION IT GRANTS INTO.
+//
+//   org_invitations         → org_teams    a whole STUDIO joins the org. Accepted
+//                                          by that studio's OWNER; it moves the
+//                                          studio's billing onto the org plan.
+//   org_member_invitations  → org_members  a PERSON joins the org's staff as
+//                                          org_admin / org_viewer. Accepted by
+//                                          that person; it grants no studio
+//                                          anything and touches no billing.
+//
+// `org_invitations` predates the rule and is misnamed by it (`org_team_invitations`
+// is what it would be called today); it is shipped data behind a live route
+// (/org-invite/{orgId}/{invId}), so it keeps its name and the rule is enforced
+// on everything after it. Never conflate the two — an org admin who receives
+// "you've been invited" must not land on a screen that enrols their studio.
 export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
+export const ORG_MEMBER_INVITATIONS_SUBCOLLECTION = 'org_member_invitations'
 export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
 export const ORG_AFFILIATION_STATUSES_SUBCOLLECTION = 'affiliation_statuses'
 export const ORG_PLACES_SUBCOLLECTION = 'org_places'

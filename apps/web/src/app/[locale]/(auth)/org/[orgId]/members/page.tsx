@@ -38,15 +38,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { UserPlus, Trash2 } from 'lucide-react'
+import { UserPlus, Trash2, MailX, Clock } from 'lucide-react'
 import { useParams } from 'next/navigation'
-import { ORGANIZATIONS_COLLECTION, ORG_MEMBERS_SUBCOLLECTION } from '@linyup/shared'
-import type { OrgMember, OrgRole } from '@linyup/shared'
+import { useLocale } from 'next-intl'
+import {
+  ORGANIZATIONS_COLLECTION,
+  ORG_MEMBERS_SUBCOLLECTION,
+  ORG_MEMBER_INVITATIONS_SUBCOLLECTION,
+} from '@linyup/shared'
+import type { OrgMember, OrgMemberInvitation, OrgRole } from '@linyup/shared'
 
 interface OrgMemberRow extends OrgMember {
   id: string
   displayName?: string
   email?: string
+}
+
+interface OrgInvitationRow extends OrgMemberInvitation {
+  id: string
 }
 
 function useOrgMembers(orgId: string) {
@@ -61,9 +70,29 @@ function useOrgMembers(orgId: string) {
   })
 }
 
-// ─── AddMemberDialog ──────────────────────────────────────────────────────────
+// ─── invitations ──────────────────────────────────────────────────────────────
 
-function AddMemberDialog({
+/** Pending + recently-closed invitations, read straight from Firestore. The rule
+ *  (org_member_invitations) allows org_admin only — an org_viewer would be
+ *  refused, so the query is mounted behind `isAdmin`. */
+function useOrgInvitations(orgId: string, enabled: boolean) {
+  return useQuery<OrgInvitationRow[]>({
+    queryKey: ['org-member-invitations', orgId],
+    enabled,
+    queryFn: async () => {
+      const snap = await getDocs(
+        firestoreQuery(
+          collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_MEMBER_INVITATIONS_SUBCOLLECTION)
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as OrgInvitationRow)
+    },
+  })
+}
+
+// ─── InviteMemberDialog ───────────────────────────────────────────────────────
+
+function InviteMemberDialog({
   open,
   orgId,
   onClose,
@@ -75,6 +104,7 @@ function AddMemberDialog({
   onSuccess: () => void
 }) {
   const t = useTranslations('OrgMembers')
+  const locale = useLocale()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<OrgRole>('org_admin')
   const [loading, setLoading] = useState(false)
@@ -86,27 +116,30 @@ function AddMemberDialog({
     setLoading(true)
     setError(null)
     try {
-      // addOrgMember / updateOrgMemberRole / removeOrgMember live in
-      // packages/functions/src/orgs/members.ts and are authorized by
-      // assertOrgAdmin against org_members (UX-75's shape). Until UX-34 they did
-      // not exist at all and every submit here came back "internal".
-      const fn = httpsCallable(functions, 'addOrgMember')
-      await fn({ orgId, email: email.trim(), role })
+      // AN INVITATION, not a grant. `addOrgMember` (UX-34) could only ever add
+      // an address that ALREADY had a Linyup account and refused every other
+      // one with "no_account" — a dead end with nothing on the other side of
+      // it. `inviteOrgMember` (packages/functions/src/orgs/memberInvitations.ts)
+      // works either way: the person accepts for themselves, creating an account
+      // on the way in if they need one.
+      //
+      // `locale` only pins the language of the emailed link (the studio's admin
+      // is the best signal we have for the invitee's); the server validates it.
+      const fn = httpsCallable(functions, 'inviteOrgMember')
+      await fn({ orgId, email: email.trim(), role, locale })
       setEmail('')
       onSuccess()
       onClose()
     } catch (err: unknown) {
-      // The one refusal an org admin will actually meet: the address has no
-      // Linyup account. Say what to do about it rather than echoing the server's
-      // sentence — this is a grant, not an invitation, and the person has to
-      // exist first (see the module header on orgs/members.ts).
       const code = (err as { code?: string } | null)?.code ?? ''
       setError(
-        code === 'functions/not-found'
-          ? t('addNoAccount')
-          : err instanceof Error
-            ? err.message
-            : 'Unknown error'
+        code === 'functions/already-exists'
+          ? t('inviteAlreadyMember')
+          : code === 'functions/invalid-argument'
+            ? t('inviteBadEmail')
+            : err instanceof Error
+              ? err.message
+              : 'Unknown error'
       )
     } finally {
       setLoading(false)
@@ -117,8 +150,8 @@ function AddMemberDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('addTitle')}</DialogTitle>
-          <DialogDescription>{t('addDescription')}</DialogDescription>
+          <DialogTitle>{t('inviteTitle')}</DialogTitle>
+          <DialogDescription>{t('inviteDescription')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-1.5">
@@ -150,7 +183,7 @@ function AddMemberDialog({
               {t('cancel')}
             </Button>
             <Button type="submit" disabled={loading || !email.trim()}>
-              {loading ? t('sending') : t('addSubmit')}
+              {loading ? t('sending') : t('inviteSubmit')}
             </Button>
           </DialogFooter>
         </form>
@@ -168,9 +201,11 @@ export default function OrgMembersPage() {
   const { isAdmin } = useOrg()
   const qc = useQueryClient()
   const { data: members, isLoading } = useOrgMembers(orgId)
+  const { data: invitations } = useOrgInvitations(orgId, isAdmin)
 
   const [addOpen, setAddOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<OrgMemberRow | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<OrgInvitationRow | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -181,6 +216,33 @@ export default function OrgMembersPage() {
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['org-members', orgId] })
+    qc.invalidateQueries({ queryKey: ['org-member-invitations', orgId] })
+  }
+
+  // Only PENDING rows are shown. An expired one is swept to 'expired' by
+  // expireOrgMemberInvitations (a daily task) — but the deadline is also
+  // compared here, so a row whose sweep has not run yet is not offered as live.
+  // Nothing on this page depends on the sweep having happened.
+  const pendingInvitations = (invitations ?? []).filter(
+    (i) =>
+      i.status === 'pending' &&
+      (!i.expires_at || (i.expires_at as unknown as { seconds: number }).seconds * 1000 > Date.now())
+  )
+
+  async function handleRevoke() {
+    if (!revokeTarget) return
+    setActionLoading(true)
+    try {
+      const fn = httpsCallable(functions, 'revokeOrgMemberInvitation')
+      await fn({ orgId, invitationId: revokeTarget.id })
+      showToast(t('inviteRevoked'))
+      invalidate()
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setActionLoading(false)
+      setRevokeTarget(null)
+    }
   }
 
   async function handleRoleChange(m: OrgMemberRow, role: OrgRole) {
@@ -248,7 +310,7 @@ export default function OrgMembersPage() {
         {isAdmin && (
           <Button onClick={() => setAddOpen(true)} size="sm">
             <UserPlus className="h-4 w-4 mr-1.5" />
-            {t('addButton')}
+            {t('inviteButton')}
           </Button>
         )}
       </div>
@@ -329,12 +391,68 @@ export default function OrgMembersPage() {
         )}
       </div>
 
-      <AddMemberDialog
+      {/* Pending invitations — people who have been asked but have not accepted
+          yet. Deliberately a SEPARATE list from the members table: an invitation
+          is not a membership, and showing the two together is how a list starts
+          claiming an organisation has an admin it does not have. */}
+      {isAdmin && pendingInvitations.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            {t('pendingTitle')}
+          </h3>
+          <div className="rounded-md border divide-y">
+            {pendingInvitations.map((inv) => (
+              <div key={inv.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-sm truncate">{inv.email}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t('pendingExpires', { date: formatDate(inv.expires_at as unknown as { seconds: number }) })}
+                  </div>
+                </div>
+                <Badge variant="secondary">{roleLabel(inv.role)}</Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => setRevokeTarget(inv)}
+                  title={t('inviteRevoke')}
+                >
+                  <MailX className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <InviteMemberDialog
         open={addOpen}
         orgId={orgId}
         onClose={() => setAddOpen(false)}
-        onSuccess={() => { invalidate(); showToast(t('addSuccess')) }}
+        onSuccess={() => { invalidate(); showToast(t('inviteSuccess')) }}
       />
+
+      <AlertDialog open={!!revokeTarget} onOpenChange={(v) => !v && setRevokeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('confirmRevokeTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('confirmRevokeMessage', { email: revokeTarget?.email ?? '' })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevoke}
+              disabled={actionLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {actionLoading ? t('processing') : t('inviteRevoke')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>
         <AlertDialogContent>

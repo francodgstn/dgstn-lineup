@@ -6,6 +6,7 @@ import { sendBookingReminders } from './sendBookingReminders'
 import { runScheduledRules } from './runScheduledRules'
 import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
+import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
 import { rollSessionSeries } from './rollSessionSeries'
@@ -59,6 +60,11 @@ export const dailyTasks = onSchedule(
       { name: 'runScheduledRules', handler: runScheduledRules },
       { name: 'expireAffiliations', handler: expireAffiliations },
       { name: 'expirePendingBookings', handler: expirePendingBookings },
+      // Org member invitations past their deadline. Bookkeeping ONLY — accepting
+      // already refuses on the deadline itself, so this sweep can never grant
+      // anything and its failure is a stale row, not an open door. See the
+      // module header for why it earns a place the waiver work gave nothing.
+      { name: 'expireOrgMemberInvitations', handler: expireOrgMemberInvitations },
       { name: 'purgeProvisionalContacts', handler: purgeProvisionalContacts },
       // The rolling 6-month horizon for recurring classes. Without it a series
       // simply stops at whatever was materialised the day it was created, and

@@ -13,9 +13,24 @@ export interface PublicAppSettings {
 // Doc id = normalizeEmail(email). Persistent — the operator removes entries.
 export interface SignupAllowlistEntry {
   email: string
-  added_by: string // operator email
+  added_by: string // operator email — or, when `source` says so, a Cloud Function
   added_at: Timestamp
   note?: string
+  /** WHO PUT THIS HERE. Absent = the operator console, which is where every
+   *  entry came from until organisations could invite their own admins.
+   *
+   *  'org_member_invitation' means `inviteOrgMember` added it so the invitee can
+   *  create the account the invitation is waiting for — without it the whole
+   *  rail is dead while public signup is closed (beforeSignup fails closed).
+   *  It is a permission to CREATE AN ACCOUNT and nothing more: the org role is
+   *  granted only by accepting the invitation, which separately requires the
+   *  signed-in address to be the invited one. Recorded rather than silent so an
+   *  operator reviewing the allowlist can see which entries a customer added
+   *  and which they did. */
+  source?: 'operator' | 'org_member_invitation'
+  /** Set with `source: 'org_member_invitation'` — the organisation whose admin
+   *  caused the entry. Attribution only; nothing reads it as state. */
+  org_id?: string
 }
 
 // Write-to-send queue: creating one of these triggers the invite email
