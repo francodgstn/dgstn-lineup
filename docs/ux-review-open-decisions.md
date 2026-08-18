@@ -29,8 +29,9 @@ before launch.
 customer-specific plugin sits in the generic catalogue. Not a defect; a product
 question about what belongs in a white-label catalogue.
 
-## 4. Automation delays: build them, or admit they don't exist (UX-85)
-**PARKED — the only genuinely blocking one so far.** Ten triggers store a
+## 4. Automation delays (UX-85)
+**ANSWERED 2026-08-18 — Franco: build them for real.** Pre-launch, no productive
+data, so the migration concern below is moot. Original note kept for the record: Ten triggers store a
 `delayMinutes` that nothing reads; only `session_ended` is really deferred. Two
 non-equivalent fixes: route event rules through the Cloud Tasks path (a real
 feature — needs a queue handler and a decision about what a delayed rule does if
