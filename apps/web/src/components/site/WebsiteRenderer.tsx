@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useLocale } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { Globe, Menu, X } from 'lucide-react'
 import type { SiteMeta, WebsiteSection, OrgSiteSection, OrgSiteTeamRef, SocialLink } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
@@ -57,6 +57,7 @@ export default function WebsiteRenderer({
   paymentsEnabled?: boolean
 }) {
   const locale = useLocale()
+  const t = useTranslations('Site')
   const [systemDark, setSystemDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -90,7 +91,7 @@ export default function WebsiteRenderer({
   const navItems = site.meta.header.showNav
     ? site.sections
         .filter((s) => s.type !== 'hero' && s.showInNav !== false)
-        .map((s) => ({ id: s.id, label: sectionNavLabel(s) }))
+        .map((s) => ({ id: s.id, label: sectionNavLabel(s, t) }))
         .filter((n) => n.label)
     : []
   const hasMenu = navItems.length > 0 || !!site.meta.header.ctaLabel
@@ -293,7 +294,7 @@ export default function WebsiteRenderer({
           <p className="text-sm" style={{ color: palette.muted }}>© {year} {site.name}</p>
           {site.showBranding && (
             <p className="text-xs" style={{ color: palette.muted }}>
-              Powered by{' '}
+              {t('poweredBy')}{' '}
               <a
                 href={preview ? undefined : 'https://linyup.com'}
                 onClick={preview ? inert : undefined}

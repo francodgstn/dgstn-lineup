@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
@@ -72,6 +73,7 @@ interface ClubEntry {
 }
 
 function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, locale, preview, orgTeams } = ctx
   const [clubs, setClubs] = useState<ClubEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,7 +132,7 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Our clubs'} palette={palette} />
+        <Heading text={section.heading ?? t('headingClubs')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -139,11 +141,11 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : clubs.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No clubs yet.
+              {t('emptyClubs')}
             </p>
           ) : (
             clubs.map((c) => (
@@ -208,6 +210,7 @@ function mapsHref(address?: string, mapsLink?: string): string | undefined {
 }
 
 function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, preview, orgTeams } = ctx
   const [locations, setLocations] = useState<LocationEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -265,7 +268,7 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
   return (
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Find us'} palette={palette} />
+        <Heading text={section.heading ?? t('headingPlaces')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -274,11 +277,11 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : locations.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No locations yet.
+              {t('emptyLocations')}
             </p>
           ) : (
             locations.map((l) => {
@@ -311,7 +314,7 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
                       className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                       style={{ color: palette.accent }}
                     >
-                      Open in maps
+                      {t('openInMaps')}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   )}
@@ -335,6 +338,7 @@ interface CoachEntry {
 }
 
 function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, orgTeams } = ctx
   const [coaches, setCoaches] = useState<CoachEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -380,7 +384,7 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Our coaches'} palette={palette} />
+        <Heading text={section.heading ?? t('headingCoaches')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -389,11 +393,11 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : coaches.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No coaches yet.
+              {t('emptyCoaches')}
             </p>
           ) : (
             coaches.map((c, i) => (

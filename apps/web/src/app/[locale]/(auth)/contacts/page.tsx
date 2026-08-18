@@ -477,8 +477,8 @@ function OverviewPanel({
         <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform duration-150 ${open ? 'rotate-90' : ''}`} />
         {!open && !loading && contacts.length > 0 && (
           <div className="flex items-center gap-3 ml-1 text-xs text-muted-foreground/60">
-            <span>{contacts.length} contacts</span>
-            {activeCount > 0 && <span>{activeCount} active</span>}
+            <span>{t('statsContactsCount', { count: contacts.length })}</span>
+            {activeCount > 0 && <span>{t('statsActiveCount', { count: activeCount })}</span>}
             {trialBookedCount > 0 && <span>{trialBookedCount} {t('statsTrialBooked').toLowerCase()}</span>}
           </div>
         )}
@@ -512,13 +512,28 @@ const EMPTY_FILTERS = EMPTY_CONTACT_FILTER
 
 interface SavedQuery { id: string; name: string; filters: Filters; pinned?: boolean }
 
-const FILTER_PRESETS: SavedQuery[] = [
-  { id: 'p-active', name: 'Affiliated',       filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
-  { id: 'p-nosub',  name: 'No subscription', filters: { ...EMPTY_FILTERS, subscriptions: ['none'] } },
-  { id: 'p-trials', name: 'Trials',          filters: { ...EMPTY_FILTERS, stages: ['trial_booked', 'trial_attended'] } },
-  { id: 'p-alerts', name: 'Has alerts',      filters: { ...EMPTY_FILTERS, hasAlerts: true } },
-  { id: 'p-pending-signup', name: 'Pending signup', filters: { ...EMPTY_FILTERS, pendingSignup: true } },
+/** A built-in preset. It carries a message KEY, not a name: a saved query is the
+ *  studio's own words and stays verbatim, but a preset is Linyup's copy and has
+ *  to arrive in the reader's language like every other label on this bar. */
+interface FilterPreset { id: string; nameKey: string; filters: Filters }
+
+const FILTER_PRESETS: FilterPreset[] = [
+  { id: 'p-active', nameKey: 'filterAffiliationActive', filters: { ...EMPTY_FILTERS, statuses: ['active'] } },
+  { id: 'p-nosub',  nameKey: 'filterSubscriptionNone',  filters: { ...EMPTY_FILTERS, subscriptions: ['none'] } },
+  { id: 'p-trials', nameKey: 'presetTrials',            filters: { ...EMPTY_FILTERS, stages: ['trial_booked', 'trial_attended'] } },
+  { id: 'p-alerts', nameKey: 'presetHasAlerts',         filters: { ...EMPTY_FILTERS, hasAlerts: true } },
+  { id: 'p-pending-signup', nameKey: 'filterPendingSignup', filters: { ...EMPTY_FILTERS, pendingSignup: true } },
 ]
+
+/** The presets as ordinary saved queries, named in the reader's language. */
+function usePresets(): SavedQuery[] {
+  const t = useTranslations('Contacts')
+  return FILTER_PRESETS.map((p) => ({
+    id: p.id,
+    name: t(p.nameKey as Parameters<typeof t>[0]),
+    filters: p.filters,
+  }))
+}
 
 function useScrollLockOnOpen() {
   const [open, setOpen] = useState(false)
@@ -571,6 +586,7 @@ function FilterChip({ label, activeLabel, isActive, onClear, openOnMount, childr
   openOnMount?: boolean
   children: React.ReactNode
 }) {
+  const t = useTranslations('Contacts')
   const { open, onOpenChange } = useScrollLockOnOpen()
   const autoOpened = useRef(false)
   useEffect(() => {
@@ -587,7 +603,7 @@ function FilterChip({ label, activeLabel, isActive, onClear, openOnMount, childr
         <span>{isActive && activeLabel ? activeLabel : label}</span>
         <ChevronDown className="h-3 w-3 opacity-40" />
         {onClear && (
-          <span role="button" aria-label="Remove filter"
+          <span role="button" aria-label={t('removeFilter')}
             onClick={(e) => { e.stopPropagation(); onClear() }}
             className={`rounded-full p-0.5 transition-colors -mr-0.5 ${isActive ? 'hover:bg-primary/20' : 'hover:bg-muted'}`}
           ><X className="h-3 w-3" /></span>
@@ -605,6 +621,7 @@ function ToggleChip({ label, icon: Icon, isActive, onToggle, onRemove }: {
   label: string; icon: React.ElementType; isActive: boolean
   onToggle: () => void; onRemove: () => void
 }) {
+  const t = useTranslations('Contacts')
   return (
     <button type="button" onClick={onToggle}
       className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
@@ -614,7 +631,7 @@ function ToggleChip({ label, icon: Icon, isActive, onToggle, onRemove }: {
       }`}>
       <Icon className="h-3 w-3" />
       {label}
-      <span role="button" aria-label="Remove filter"
+      <span role="button" aria-label={t('removeFilter')}
         onClick={(e) => { e.stopPropagation(); onRemove() }}
         className={`rounded-full p-0.5 -mr-0.5 transition-colors ${isActive ? 'hover:bg-primary/20' : 'hover:bg-muted'}`}
       ><X className="h-3 w-3" /></span>
@@ -685,6 +702,7 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
   onSaveAsGroup?: () => void
 }) {
   const t = useTranslations('Contacts')
+  const presets = usePresets()
   const { open, onOpenChange } = useScrollLockOnOpen()
   const [saveName, setSaveName] = useState('')
   const hasActive = countActiveFilters(filters) > 0
@@ -697,12 +715,12 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-border/60 text-muted-foreground hover:text-foreground hover:border-border outline-none transition-colors">
         <Bookmark className="h-3 w-3" />
-        Saved
+        {t('savedMenu')}
         <ChevronDown className="h-3 w-3 opacity-40" />
       </PopoverTrigger>
       <PopoverContent align="end" side="bottom" className="w-52 p-1.5">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pt-1 pb-0.5">Presets</p>
-        {FILTER_PRESETS.map((q) => {
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pt-1 pb-0.5">{t('savedPresetsHeading')}</p>
+        {presets.map((q) => {
           const isPinned = pinnedPresets.includes(q.id)
           return (
             <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
@@ -721,7 +739,7 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
         {saved.length > 0 && (
           <>
             <div className="my-1 border-t mx-1" />
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-0.5">Saved</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-0.5">{t('savedYoursHeading')}</p>
             {saved.map((q) => (
               <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
                 <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
@@ -742,7 +760,7 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
             <div className="flex items-center gap-1.5 px-1 py-1">
               <Input value={saveName} onChange={(e) => setSaveName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && saveName.trim()) { save(saveName.trim(), filters); setSaveName(''); onOpenChange(false) } }}
-                placeholder="Save as…" className="h-7 text-xs"
+                placeholder={t('savedSaveAsPlaceholder')} className="h-7 text-xs"
               />
               <button type="button" disabled={!saveName.trim()}
                 onClick={() => { if (saveName.trim()) { save(saveName.trim(), filters); setSaveName(''); onOpenChange(false) } }}
@@ -1122,8 +1140,9 @@ function FilterChips({
   // Waivers namespace.
   const tWaivers = useTranslations('Waivers')
   const { saved, save, remove, togglePin, pinnedPresets, togglePresetPin } = useSavedQueries(teamId)
+  const presets = usePresets()
   const pinnedQueries = [
-    ...FILTER_PRESETS.filter((q) => pinnedPresets.includes(q.id)),
+    ...presets.filter((q) => pinnedPresets.includes(q.id)),
     ...saved.filter((q) => q.pinned),
   ]
 
@@ -1167,8 +1186,8 @@ function FilterChips({
       clear: (f) => ({ ...f, stages: [], sources: [] }),
       activeLabel: (f) => {
         const parts: string[] = []
-        if (f.stages.length) parts.push(chip(f.stages, STAGE_OPTS, 'stages'))
-        if (f.sources.length) parts.push(chip(f.sources, SOURCE_OPTS, 'sources'))
+        if (f.stages.length) parts.push(chip(f.stages, STAGE_OPTS, t('filterStagesNoun')))
+        if (f.sources.length) parts.push(chip(f.sources, SOURCE_OPTS, t('filterSourcesNoun')))
         return parts.join(' · ')
       },
       render: (f, set) => (
@@ -1189,7 +1208,7 @@ function FilterChips({
       available: true,
       isActive: (f) => f.statuses.length > 0,
       clear: (f) => ({ ...f, statuses: [] }),
-      activeLabel: (f) => chip(f.statuses, AFFIL_OPTS, 'statuses'),
+      activeLabel: (f) => chip(f.statuses, AFFIL_OPTS, t('filterAffiliationsNoun')),
       render: (f, set) => AFFIL_OPTS.map((o) => (
         <CheckOption key={o.value} label={o.label} checked={f.statuses.includes(o.value)}
           onToggle={() => set({ ...f, statuses: toggle(f.statuses, o.value) })} />
@@ -1211,11 +1230,11 @@ function FilterChips({
           const [systemId, levels] = active[0]
           const sys = rankingSystems.find((s) => s.id === systemId)
           if (sys && levels.length === 1)
-            return sys.levels.find((l) => l.value === levels[0])?.label ?? '1 rank'
+            return sys.levels.find((l) => l.value === levels[0])?.label ?? t('filterRanksCount', { count: 1 })
           const prefix = rankingSystems.length > 1 ? `${sys?.name ?? ''}: ` : ''
-          return `${prefix}${levels.length} ranks`
+          return `${prefix}${t('filterRanksCount', { count: levels.length })}`
         }
-        return `${total} ranks`
+        return t('filterRanksCount', { count: total })
       },
       render: (f, set) => (
         <RankFilterContent rankingSystems={rankingSystems} rankFilter={f.rankFilter}
@@ -1228,7 +1247,7 @@ function FilterChips({
       available: true,
       isActive: (f) => f.subscriptions.length > 0,
       clear: (f) => ({ ...f, subscriptions: [] }),
-      activeLabel: (f) => chip(f.subscriptions, SUB_OPTS, 'subscriptions'),
+      activeLabel: (f) => chip(f.subscriptions, SUB_OPTS, t('filterSubscriptionsNoun')),
       render: (f, set) => SUB_OPTS.map((o) => (
         <CheckOption key={o.value} label={o.label} checked={f.subscriptions.includes(o.value)}
           onToggle={() => set({ ...f, subscriptions: toggle(f.subscriptions, o.value) })} />
@@ -1240,7 +1259,7 @@ function FilterChips({
       available: !!contactGroups && contactGroups.length > 0,
       isActive: (f) => f.groups.length > 0,
       clear: (f) => ({ ...f, groups: [] }),
-      activeLabel: (f) => chip(f.groups, (contactGroups ?? []).map((g) => ({ value: g.id, label: g.name })), 'groups'),
+      activeLabel: (f) => chip(f.groups, (contactGroups ?? []).map((g) => ({ value: g.id, label: g.name })), t('filterGroupsNoun')),
       render: (f, set) => flattenGroupTree(contactGroups ?? []).map(({ group, depth }) => (
         <div key={group.id} style={{ paddingLeft: `${depth * 14}px` }}>
           <CheckOption
@@ -1277,7 +1296,7 @@ function FilterChips({
       available: allTags.length > 0,
       isActive: (f) => f.tags.length > 0,
       clear: (f) => ({ ...f, tags: [] }),
-      activeLabel: (f) => chip(f.tags, allTags.map((tg) => ({ value: tg, label: tg })), 'tags'),
+      activeLabel: (f) => chip(f.tags, allTags.map((tg) => ({ value: tg, label: tg })), t('filterTagsNoun')),
       render: (f, set) => (
         <div className="max-h-64 overflow-y-auto">
           {allTags.map((tg) => (
@@ -1296,9 +1315,9 @@ function FilterChips({
       activeLabel: (f) => {
         const parts: string[] = []
         if (f.inactivity) parts.push(INACTIVITY_OPTS.find((o) => o.value === f.inactivity)?.label ?? '')
-        if (f.sessionsMin != null && f.sessionsMax != null) parts.push(`${f.sessionsMin}–${f.sessionsMax} sessions`)
-        else if (f.sessionsMin != null) parts.push(`${f.sessionsMin}+ sessions`)
-        else if (f.sessionsMax != null) parts.push(`≤${f.sessionsMax} sessions`)
+        if (f.sessionsMin != null && f.sessionsMax != null) parts.push(t('filterSessionsRange', { min: f.sessionsMin, max: f.sessionsMax }))
+        else if (f.sessionsMin != null) parts.push(t('filterSessionsMinOnly', { min: f.sessionsMin }))
+        else if (f.sessionsMax != null) parts.push(t('filterSessionsMaxOnly', { max: f.sessionsMax }))
         return parts.join(' · ')
       },
       render: (f, set) => (
@@ -1337,7 +1356,7 @@ function FilterChips({
       available: true,
       isActive: (f) => f.engagement.length > 0,
       clear: (f) => ({ ...f, engagement: [] }),
-      activeLabel: (f) => chip(f.engagement, ENGAGEMENT_OPTS, 'bands'),
+      activeLabel: (f) => chip(f.engagement, ENGAGEMENT_OPTS, t('filterEngagementNoun')),
       render: (f, set) => ENGAGEMENT_OPTS.map((o) => (
         <CheckOption key={o.value} label={o.label} dot={o.dot} checked={f.engagement.includes(o.value)}
           onToggle={() => set({ ...f, engagement: toggle(f.engagement, o.value) })} />
@@ -1458,7 +1477,7 @@ function FilterChips({
             <Eye className="h-3 w-3 opacity-50 shrink-0" />
             {q.name}
             {isActive && (
-              <span role="button" aria-label="Clear"
+              <span role="button" aria-label={t('clearFilters')}
                 onClick={(e) => { e.stopPropagation(); clearAll() }}
                 className="rounded-full p-0.5 hover:bg-primary/20 -mr-0.5"
               ><X className="h-3 w-3" /></span>

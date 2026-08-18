@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   collectionGroup,
   query,
@@ -73,6 +74,31 @@ import type { BookIntent } from '@/components/booking/BookingOverlay'
 import { usePlaces } from '@/hooks/usePlaces'
 import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
 import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
+
+/**
+ * THE CHROME IS TRANSLATED; THE STUDIO'S CONTENT NEVER IS.
+ *
+ * This renderer draws two kinds of text and they are governed differently:
+ *
+ *   1. The studio's own words — headings, subheadings, body copy, activity
+ *      names and descriptions, plan names, place names. These are read from
+ *      Firestore verbatim and rendered verbatim, in whatever language the
+ *      studio wrote them. Machine-translating them is NOT a feature: tenant
+ *      content translation is a findability concern, there is no per-locale
+ *      authoring UI, and a mistranslated class description is the studio's
+ *      words put in their mouth.
+ *   2. Linyup's chrome — "Book", "Loading…", "Free trial", "/mo", the empty
+ *      states, the heading FALLBACKS used when a studio left one blank. None
+ *      of it is the studio's words, and every bit of it used to arrive in
+ *      English on a German site. It lives in the `Site` message namespace and
+ *      follows the visitor's locale like the rest of the app.
+ *
+ * The precedent for the split is IntroOfferLine: this block's chrome was not
+ * translated, but the intro-offer sentence was, "because it is a price promise
+ * and a mistranslated one is a lie". Every money term here is a price promise,
+ * so they all moved.
+ */
+export type SiteT = ReturnType<typeof useTranslations>
 
 export interface RenderCtx {
   palette: SitePalette
@@ -350,6 +376,7 @@ function ContentText({ section, palette }: { section: ContentSection; palette: S
 // ─── Gallery ────────────────────────────────────────────────────────────────
 
 function GalleryBlock({ section, ctx }: { section: GallerySection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette } = ctx
   const cols =
     section.columns === 2
@@ -384,7 +411,7 @@ function GalleryBlock({ section, ctx }: { section: GallerySection; ctx: RenderCt
           ))}
           {!section.images.length && (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No photos yet.
+              {t('emptyPhotos')}
             </p>
           )}
         </div>
@@ -422,27 +449,25 @@ interface ActivityEntry {
   memberBenefit?: ActivityMemberBenefit
 }
 
-// Public website chip labels are hardcoded English, matching this renderer's
-// existing convention (it isn't i18n-aware — see the other literal strings in
-// this block, e.g. "Free trial", "Book"). Benefit chips stay GENERIC (no plan
-// names — the website has no subscription-type list loaded).
+// Benefit chips stay GENERIC (no plan names — the website has no
+// subscription-type list loaded).
 //
 // MONEY TERMS ONLY. Its one caller (payPerVisitLine) filters to price / dropIn /
 // benefit*, so a 'gate' or 'trial' term never arrives here; access is said in
 // full on the activity CARD, not compressed into a chip on the pricing block.
 // A gate arm lived here until 2026-08 and was unreachable the whole time.
-function activityTermLabel(term: ActivityTerm, currency: string): string | null {
+function activityTermLabel(term: ActivityTerm, currency: string, t: SiteT): string | null {
   switch (term.kind) {
     case 'dropIn':
-      return `Drop-in ${formatCurrency(term.amount ?? 0, currency)}`
+      return t('termPerClass', { price: formatCurrency(term.amount ?? 0, currency) })
     case 'price':
       return term.min === term.max
-        ? `From ${formatCurrency(term.min ?? 0, currency)}`
+        ? t('termFrom', { price: formatCurrency(term.min ?? 0, currency) })
         : `${formatCurrency(term.min ?? 0, currency)}–${formatCurrency(term.max ?? 0, currency)}`
     case 'benefitIncluded':
-      return 'Included with subscription'
+      return t('termIncludedWithSubscription')
     case 'benefitDiscount':
-      return `−${term.percent ?? 0}% for members`
+      return t('termMemberDiscount', { percent: term.percent ?? 0 })
     default:
       return null
   }
@@ -462,7 +487,7 @@ function activityHasMoneyStory(a: ActivityEntry): boolean {
 // One activity's money terms as a "·"-joined line (price / drop-in / member
 // benefit) for the Pricing block's pay-per-visit card. Generic labels — the
 // website has no subscription-type list, same convention as the chips.
-function payPerVisitLine(a: ActivityEntry, currency: string): string {
+function payPerVisitLine(a: ActivityEntry, currency: string, t: SiteT): string {
   return resolveActivityTerms({
     type: a.activityType,
     dropIn: a.dropIn,
@@ -473,12 +498,13 @@ function payPerVisitLine(a: ActivityEntry, currency: string): string {
     .filter(
       (term) => term.kind === 'price' || term.kind === 'dropIn' || term.kind.startsWith('benefit')
     )
-    .map((term) => activityTermLabel(term, currency))
+    .map((term) => activityTermLabel(term, currency, t))
     .filter((l): l is string => !!l)
     .join(' · ')
 }
 
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   // slug/locale/preview are read from `ctx` by activityBookHref and bookProps —
   // not needed directly here.
   const { palette, teamId } = ctx
@@ -499,11 +525,11 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
         id: p.id,
         name: p.name,
         priceLabel: price
-          ? `${formatCurrency(price.amount, currency)}${RECURRENCE_SUFFIX[price.recurrence] ?? ''}`
+          ? `${formatCurrency(price.amount, currency)}${recurrenceSuffix(price.recurrence, t)}`
           : null,
       }
     }
-  }, [subPlans, currency])
+  }, [subPlans, currency, t])
 
   useEffect(() => {
     let alive = true
@@ -584,7 +610,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'What we offer'} palette={palette} />
+        <Heading text={section.heading ?? t('headingActivities')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -593,11 +619,11 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
         <div className={containerClass}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : activities.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No activities yet.
+              {t('emptyActivities')}
             </p>
           ) : (
             activities.map((a) => {
@@ -618,21 +644,26 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               // prospect reaches earliest. It gets a line now, and the line names
               // the gate that is enforced (being signed up) rather than a plan
               // price nobody has to pay to book it. See `signedUpOnly`.
-              if (d.signedUpOnly) pricingLines.push('Members only — signing up is free')
+              if (d.signedUpOnly) pricingLines.push(t('signedUpOnlyLine'))
               for (const s of d.includedWith)
-                pricingLines.push(s.priceLabel ? `Included with ${s.name} — ${s.priceLabel}` : `Included with ${s.name}`)
-              for (const s of d.discountWith) pricingLines.push(`Discount with ${s.name} — ${s.percent}%`)
+                pricingLines.push(
+                  s.priceLabel
+                    ? t('includedWithSubPriced', { name: s.name, price: s.priceLabel })
+                    : t('includedWithSub', { name: s.name })
+                )
+              for (const s of d.discountWith)
+                pricingLines.push(t('discountWithSub', { name: s.name, percent: s.percent }))
               // A price is only advertised where somebody could pay it. `false`
               // is a resolved "this studio has no chargeable account"; undefined
               // is "not resolved here" (builder / org site / embed) and keeps
               // the previous behaviour. See RenderCtx.paymentsEnabled.
               const showPrices = ctx.paymentsEnabled !== false
               if (d.dropInAmount != null && showPrices)
-                pricingLines.push(`Drop-in ${formatCurrency(d.dropInAmount, currency)}`)
+                pricingLines.push(t('termPerClass', { price: formatCurrency(d.dropInAmount, currency) }))
               if (d.appointmentPrice && showPrices)
                 pricingLines.push(
                   d.appointmentPrice.min === d.appointmentPrice.max
-                    ? `From ${formatCurrency(d.appointmentPrice.min, currency)}`
+                    ? t('termFrom', { price: formatCurrency(d.appointmentPrice.min, currency) })
                     : `${formatCurrency(d.appointmentPrice.min, currency)}–${formatCurrency(d.appointmentPrice.max, currency)}`
                 )
               return (
@@ -668,8 +699,8 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         style={{ background: palette.accent, color: palette.onAccent }}
                       >
                         {d.trial.priceAmount != null
-                          ? `Trial ${formatCurrency(d.trial.priceAmount, currency)}`
-                          : 'Free trial'}
+                          ? t('trialPriced', { price: formatCurrency(d.trial.priceAmount, currency) })
+                          : t('trialFree')}
                       </span>
                     )}
                   </div>
@@ -683,7 +714,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         className="rounded-full border px-2 py-0.5 text-xs"
                         style={{ borderColor: palette.border, color: palette.muted }}
                       >
-                        {d.type === 'appointment' ? 'Appointment' : 'Class'}
+                        {d.type === 'appointment' ? t('typeAppointment') : t('typeClass')}
                       </span>
                     </div>
                     {a.description && (
@@ -716,7 +747,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                         style={{ color: palette.accent }}
                       >
-                        Book
+                        {t('book')}
                         <ArrowRight className="h-4 w-4" />
                       </a>
                     )}
@@ -752,17 +783,24 @@ interface PlanEntry {
   prices?: PlanPrice[]
 }
 
-// Short, public-facing recurrence suffixes (this renderer is not i18n-aware).
-const RECURRENCE_SUFFIX: Record<string, string> = {
-  per_class: '/class',
-  weekly: '/week',
-  biweekly: '/2 weeks',
-  monthly: '/mo',
-  quarterly: '/quarter',
-  annual: '/yr',
+/** Short, public-facing recurrence suffixes ("/mo", "/yr"). An unknown
+ *  recurrence renders nothing rather than a raw key. */
+const RECURRENCE_KEYS: Record<string, string> = {
+  per_class: 'recurrencePerClass',
+  weekly: 'recurrenceWeekly',
+  biweekly: 'recurrenceBiweekly',
+  monthly: 'recurrenceMonthly',
+  quarterly: 'recurrenceQuarterly',
+  annual: 'recurrenceAnnual',
+}
+
+function recurrenceSuffix(recurrence: string, t: SiteT): string {
+  const key = RECURRENCE_KEYS[recurrence]
+  return key ? t(key) : ''
 }
 
 function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, slug, locale, teamId, preview } = ctx
   const [plans, setPlans] = useState<PlanEntry[]>([])
   // Pay-per-visit activities (priced drop-ins + priced appointments) — the same
@@ -831,7 +869,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Pricing'} palette={palette} />
+        <Heading text={section.heading ?? t('headingPricing')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -840,11 +878,11 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
         <div className="mt-10 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @5xl:grid-cols-3">
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : plans.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No plans available yet.
+              {t('emptyPlans')}
             </p>
           ) : (
             plans.map((p) => (
@@ -867,14 +905,15 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                               {formatCurrency(pr.amount, currency)}
                             </span>
                             <span className="text-sm" style={{ color: palette.muted }}>
-                              {RECURRENCE_SUFFIX[pr.recurrence] ?? ''}
+                              {recurrenceSuffix(pr.recurrence, t)}
                               {pr.label ? ` · ${pr.label}` : ''}
                             </span>
                           </div>
                           {/* The offer, stated on the card the visitor decides
-                              from. This block's own chrome is deliberately not
-                              translated; the intro sentence IS, because it is a
-                              price promise and a mistranslated one is a lie. */}
+                              from — a price promise, and a mistranslated one is
+                              a lie, which is why this sentence was the first
+                              thing here to be translated (see the module
+                              header). */}
                           {intro && (
                             <p className="mt-1 text-sm font-semibold" style={{ color: palette.accent }}>
                               <IntroOfferLine
@@ -905,7 +944,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                   className="mt-5 inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
                   style={{ background: palette.accent, color: palette.onAccent }}
                 >
-                  {section.ctaLabel ?? 'Join now'}
+                  {section.ctaLabel ?? t('joinNow')}
                 </a>
               </div>
             ))
@@ -921,14 +960,14 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             style={{ borderColor: palette.border, background: palette.surface }}
           >
             <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
-              Pay per visit
+              {t('payPerVisitTitle')}
             </h3>
             <p className="mt-1 text-sm" style={{ color: palette.muted }}>
-              Book single classes and appointments — no subscription needed.
+              {t('payPerVisitSubtitle')}
             </p>
             <div className="mt-4 space-y-3">
               {ppvActivities.map((a) => {
-                const line = payPerVisitLine(a, currency)
+                const line = payPerVisitLine(a, currency, t)
                 const href = activityBookHref(ctx, a, true)
                 return (
                   <div
@@ -951,7 +990,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                       className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-transform hover:scale-[1.02]"
                       style={{ background: palette.accent, color: palette.onAccent }}
                     >
-                      Book
+                      {t('book')}
                     </a>
                   </div>
                 )
@@ -970,7 +1009,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
               className="text-sm font-medium underline-offset-4 hover:underline"
               style={{ color: palette.muted }}
             >
-              View all options →
+              {t('viewAllOptions')} →
             </a>
           </div>
         )}
@@ -1061,6 +1100,7 @@ const isPastSession = (s: SessionEntry) =>
   (s.end ?? s.start).toDate().getTime() < Date.now()
 
 function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, slug, locale, teamId, preview } = ctx
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -1246,7 +1286,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
                 style={active ? undefined : { color: palette.muted }}
               >
                 {isToday(g.date)
-                  ? 'Today'
+                  ? t('today')
                   : g.date.toLocaleDateString(undefined, { weekday: 'short' })}
               </span>
               <span className="text-base font-bold tabular-nums">{g.date.getDate()}</span>
@@ -1275,7 +1315,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
               />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: palette.text }}>
-                  {s.activityName ?? 'Session'}
+                  {s.activityName ?? t('sessionFallback')}
                   {s.providerName ? ` · ${s.providerName}` : ''}
                 </p>
                 {s.location && (
@@ -1328,15 +1368,15 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
       {/* Calendar view needs room for the 7-day grid; list view stays a tidy reading width. */}
       <div className={`mx-auto px-6 ${view === 'calendar' ? 'max-w-5xl' : 'max-w-3xl'}`}>
-        <Heading text={section.heading ?? 'Schedule'} palette={palette} />
+        <Heading text={section.heading ?? t('headingSchedule')} palette={palette} />
 
         <div className="mt-4 flex justify-center">
           <div
             className="inline-flex items-center gap-1 rounded-full border p-1"
             style={{ borderColor: palette.border }}
           >
-            <ToggleButton mode="list" icon={List} label="Daily list" />
-            <ToggleButton mode="calendar" icon={CalendarRange} label="Calendar" />
+            <ToggleButton mode="list" icon={List} label={t('viewDailyList')} />
+            <ToggleButton mode="calendar" icon={CalendarRange} label={t('viewCalendar')} />
           </div>
         </div>
 
@@ -1357,14 +1397,16 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
                     type="button"
                     onClick={() => setKind(k)}
                     aria-pressed={active}
-                    className="rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors"
+                    className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
                     style={
                       active
                         ? { background: palette.accent, color: palette.onAccent }
                         : { color: palette.muted }
                     }
                   >
-                    {k}
+                    {t(
+                      k === 'all' ? 'kindAll' : k === 'classes' ? 'kindClasses' : 'kindAppointments'
+                    )}
                   </button>
                 )
               })}
@@ -1375,11 +1417,11 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
         <div className="mt-8">
           {loading ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : sessions.length === 0 ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
-              No upcoming sessions.
+              {t('emptySessions')}
             </p>
           ) : view === 'calendar' ? (
             // WeeklyCalendar is shared with the kiosk and styles its chrome with
@@ -1462,7 +1504,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
             style={{ background: palette.accent, color: palette.onAccent }}
           >
             <CalendarDays className="h-4 w-4" />
-            Book a session
+            {t('bookASession')}
           </a>
         </div>
       </div>
@@ -1486,6 +1528,7 @@ function SessionDetailModal({
   onBookClick: () => void
   onClose: () => void
 }) {
+  const t = useTranslations('Site')
   const start = s.start.toDate()
   const end = s.end?.toDate()
   return (
@@ -1504,7 +1547,7 @@ function SessionDetailModal({
             style={{ background: s.activityColor || palette.accent }}
           />
           <div className="min-w-0 flex-1">
-            <h3 className="text-xl font-bold">{s.activityName ?? 'Session'}</h3>
+            <h3 className="text-xl font-bold">{s.activityName ?? t('sessionFallback')}</h3>
             <p className="mt-1 text-sm capitalize" style={{ color: palette.muted }}>
               {start.toLocaleDateString(undefined, {
                 weekday: 'long',
@@ -1516,7 +1559,7 @@ function SessionDetailModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('close')}
             className="shrink-0 rounded-lg p-1.5 transition-opacity hover:opacity-70"
             style={{ color: palette.muted }}
           >
@@ -1556,7 +1599,7 @@ function SessionDetailModal({
             style={{ background: palette.accent, color: palette.onAccent }}
           >
             <CalendarPlus className="h-4 w-4" />
-            Book
+            {t('book')}
           </a>
         )}
       </div>
@@ -1567,6 +1610,7 @@ function SessionDetailModal({
 // ─── Contact ──────────────────────────────────────────────────────────────────
 
 function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, preview, socialLinks } = ctx
   const socials = (socialLinks ?? []).filter((s) => s.url)
   const rows: { icon: React.FC<{ className?: string }>; value?: string }[] = [
@@ -1579,7 +1623,7 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Get in touch'} palette={palette} />
+        <Heading text={section.heading ?? t('headingContact')} palette={palette} />
         <div
           className={`mt-10 grid gap-8 ${section.mapQuery ? '@3xl:grid-cols-2' : 'max-w-md mx-auto'}`}
         >
@@ -1642,6 +1686,7 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
 // Selected places as simple cards (no map). Published sites carry an embedded
 // `places` snapshot; the builder preview resolves the selected ids live.
 function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, preview, teamId } = ctx
   // PlacesBlock only ever renders inside a team site (org sites have no
   // 'places' section type), so teamId is always defined here.
@@ -1663,7 +1708,7 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Find us'} palette={palette} />
+        <Heading text={section.heading ?? t('headingPlaces')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -1672,7 +1717,7 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {places.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No places selected.
+              {t('emptyPlaces')}
             </p>
           ) : (
             places.map((p) => (
@@ -1703,7 +1748,7 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
                     className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                     style={{ color: palette.accent }}
                   >
-                    Open in maps
+                    {t('openInMaps')}
                     <ArrowRight className="h-4 w-4" />
                   </a>
                 )}
@@ -1754,34 +1799,35 @@ export function SectionBlock({
   }
 }
 
-/** Nav-menu label for a section: an explicit `menuLabel` wins, otherwise fall
- *  back to the section heading (or a type default). Keeps the menu terse while
+/** Nav-menu label for a section: an explicit `menuLabel` wins, then the section
+ *  heading — both the studio's own words, returned verbatim — and only the
+ *  last-resort type default is ours to translate. Keeps the menu terse while
  *  the on-page title can stay long. */
-export function sectionNavLabel(section: WebsiteSection | OrgSiteSection): string {
+export function sectionNavLabel(section: WebsiteSection | OrgSiteSection, t: SiteT): string {
   const menuLabel = (section as { menuLabel?: string }).menuLabel?.trim()
   if (menuLabel) return menuLabel
   switch (section.type) {
     case 'content':
     case 'about':
-      return section.heading || 'Content'
+      return section.heading || t('navContent')
     case 'gallery':
-      return section.heading || 'Gallery'
+      return section.heading || t('navGallery')
     case 'activities':
-      return section.heading || 'Activities'
+      return section.heading || t('navActivities')
     case 'pricing':
-      return section.heading || 'Pricing'
+      return section.heading || t('navPricing')
     case 'schedule':
-      return section.heading || 'Schedule'
+      return section.heading || t('navSchedule')
     case 'contact':
-      return section.heading || 'Contact'
+      return section.heading || t('navContact')
     case 'places':
-      return section.heading || 'Locations'
+      return section.heading || t('navLocations')
     case 'clubs':
-      return section.heading || 'Clubs'
+      return section.heading || t('navClubs')
     case 'locations':
-      return section.heading || 'Locations'
+      return section.heading || t('navLocations')
     case 'coaches':
-      return section.heading || 'Coaches'
+      return section.heading || t('navCoaches')
     default:
       return ''
   }
