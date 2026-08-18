@@ -82,7 +82,7 @@ function resolveSecretKey(project: string | undefined): string {
 
   if (!project) {
     console.error(
-      'STRIPE_SECRET_KEY is required (or pass --project to read it from that project’s Secret Manager).',
+      'STRIPE_SECRET_KEY is required (or pass --project to read it from that project’s Secret Manager).'
     )
     process.exit(1)
   }
@@ -91,8 +91,15 @@ function resolveSecretKey(project: string | undefined): string {
 
   try {
     const key = gcloud(
-      ['secrets', 'versions', 'access', 'latest', '--secret=stripe-secret-key', `--project=${project}`],
-      { capture: true },
+      [
+        'secrets',
+        'versions',
+        'access',
+        'latest',
+        '--secret=stripe-secret-key',
+        `--project=${project}`,
+      ],
+      { capture: true }
     ).trim()
     if (!key) throw new Error('gcloud returned an empty value')
     console.log(`Using stripe-secret-key from ${project}’s Secret Manager.`)
@@ -104,7 +111,14 @@ function resolveSecretKey(project: string | undefined): string {
     const e = err as { stderr?: string | Buffer; message?: string }
     const detail = String(e.stderr ?? e.message ?? '').trim()
     console.error(`Could not read stripe-secret-key from ${project}.`)
-    if (detail) console.error(detail.split('\n').slice(0, 4).map((l) => `  ${l}`).join('\n'))
+    if (detail)
+      console.error(
+        detail
+          .split('\n')
+          .slice(0, 4)
+          .map((l) => `  ${l}`)
+          .join('\n')
+      )
     console.error('  Set STRIPE_SECRET_KEY to bypass Secret Manager.')
     process.exit(1)
   }
@@ -121,7 +135,7 @@ function assertModeMatchesProject(key: string, project: string) {
   console.error(
     `\nMode mismatch: ${isLiveKey ? 'a LIVE key' : 'a TEST key'} was given for ${project}.\n` +
       `  ${PROD_PROJECT} needs sk_live_…; every other project needs sk_test_….\n` +
-      `  Pass --force if this is deliberate.`,
+      `  Pass --force if this is deliberate.`
   )
   if (!process.argv.includes('--force')) process.exit(1)
   console.error('  --force given — continuing anyway.\n')
@@ -132,7 +146,12 @@ function assertModeMatchesProject(key: string, project: string) {
 // the instance type has to come from the constructor.
 let stripe: InstanceType<typeof Stripe>
 
-interface CatalogEntry { kind: 'plan' | 'addon'; name: string; lookupKey: string; chf: number }
+interface CatalogEntry {
+  kind: 'plan' | 'addon'
+  name: string
+  lookupKey: string
+  chf: number
+}
 
 // Stripe Product names are customer-facing (Checkout, invoices, customer portal).
 // Plan IDs are stable machine identifiers; marketing names can change.
@@ -148,18 +167,22 @@ const catalog: CatalogEntry[] = [
   // Plans without a lookup key (free) are never billed and have no Stripe price.
   ...Object.entries(PLAN_PRICING)
     .filter(([, p]) => p.stripeLookupKey != null)
-    .map(([plan, p]): CatalogEntry => ({
-      kind: 'plan',
-      name: `Linyup ${PLAN_DISPLAY_NAMES[plan] ?? plan}`,
-      lookupKey: p.stripeLookupKey!,
-      chf: p.baseMonthly,
-    })),
-  ...Object.entries(PLUGIN_ADDONS).map(([id, a]): CatalogEntry => ({
-    kind: 'addon',
-    name: `Linyup add-on: ${id}`,
-    lookupKey: a.stripeLookupKey,
-    chf: a.coachPriceMonthly,
-  })),
+    .map(
+      ([plan, p]): CatalogEntry => ({
+        kind: 'plan',
+        name: `Linyup ${PLAN_DISPLAY_NAMES[plan] ?? plan}`,
+        lookupKey: p.stripeLookupKey!,
+        chf: p.baseMonthly,
+      })
+    ),
+  ...Object.entries(PLUGIN_ADDONS).map(
+    ([id, a]): CatalogEntry => ({
+      kind: 'addon',
+      name: `Linyup add-on: ${id}`,
+      lookupKey: a.stripeLookupKey,
+      chf: a.coachPriceMonthly,
+    })
+  ),
   // Studio contact add-on block — flat +N contacts, bought in blocks (no
   // per-head metering). Quantity = number of blocks the team has added.
   {
@@ -221,7 +244,9 @@ async function syncEntry(entry: CatalogEntry) {
   }
 
   if (!REPRICE) {
-    console.log(`! drift    ${entry.lookupKey}  live=${current.unit_amount} repo=${unitAmount}  (kept — pass --reprice to change)`)
+    console.log(
+      `! drift    ${entry.lookupKey}  live=${current.unit_amount} repo=${unitAmount}  (kept — pass --reprice to change)`
+    )
     return
   }
 
@@ -374,7 +399,31 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
 
   for (const spec of WEBHOOKS) {
     const url = `https://${FUNCTIONS_REGION}-${project}.cloudfunctions.net/${spec.fn}`
-    const live = existing.data.find((e) => endpointMatches(e.url, spec.fn))
+
+    // `endpointMatches` keys on the FUNCTION NAME, never the project — it has to,
+    // because a gen2 function answers on two addresses. But sandbox and staging
+    // share ONE Stripe test account, so a single function name can match several
+    // endpoints belonging to DIFFERENT projects. Taking the first match (what this
+    // used to do) meant `--project linyup-sandbox` silently reported, and with
+    // --apply would have MUTATED, staging's endpoint while claiming to describe
+    // sandbox's. That produced a confidently wrong conclusion once already.
+    //
+    // So: match them all, prefer the one that actually belongs to this project,
+    // and say out loud when others exist.
+    const matches = existing.data.filter((e) => endpointMatches(e.url, spec.fn))
+    const live =
+      matches.find((e) => e.url === url) ??
+      matches.find((e) => e.url.includes(`-${project}.`)) ??
+      matches[0]
+    if (matches.length > 1) {
+      console.log(
+        `  ! ${matches.length} endpoints match ${spec.fn} on this Stripe account — ` +
+          `acting on the one for ${project}. Others:`
+      )
+      for (const other of matches.filter((e) => e !== live)) {
+        console.log(`      ${other.url}`)
+      }
+    }
     const scope = spec.connect ? 'connect' : 'account'
 
     if (!live) {
@@ -405,8 +454,23 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
     }
 
     // Endpoint exists — report drift rather than mutating silently.
+    //
+    // A differing URL means one of two very different things, and conflating them
+    // is how a shared Stripe account gets misread: either the SAME function is
+    // registered under its other address form (harmless), or the endpoint belongs
+    // to ANOTHER PROJECT entirely (not harmless — this project has no endpoint of
+    // its own, and events for it are being delivered somewhere else).
     if (live.url !== url) {
-      console.log(`  (registered as ${live.url} — the Cloud Run address of the same function)`)
+      const belongsElsewhere = /cloudfunctions\.net$/.test(new URL(live.url).hostname)
+      if (belongsElsewhere) {
+        console.log(
+          `  ! ${spec.fn} has NO endpoint for ${project}. Reporting the one registered at`
+        )
+        console.log(`      ${live.url}`)
+        console.log(`      — events for ${project} are delivered THERE, not here.`)
+      } else {
+        console.log(`  (registered as ${live.url} — the Cloud Run address of the same function)`)
+      }
     }
     if (live.status !== 'enabled') {
       console.log(`! disabled ${spec.fn}  (status=${live.status}) — enable it in Stripe`)
@@ -426,7 +490,9 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
     // accounts, so this can't be verified after the fact — only set correctly at
     // creation. If Connect events never arrive, suspect this first.
     if (spec.connect) {
-      console.log(`           connect scope not reported by the API — verify in Stripe if events don't arrive`)
+      console.log(
+        `           connect scope not reported by the API — verify in Stripe if events don't arrive`
+      )
     }
     const liveEvents = new Set(live.enabled_events)
     const missing = spec.events.filter((e) => !liveEvents.has(e) && !liveEvents.has('*'))
@@ -459,14 +525,16 @@ async function main() {
     const secretProject = process.argv.includes('--store-secrets') ? project : undefined
     console.log(
       `Stripe webhook sync for ${project} (${APPLY ? 'APPLY' : 'dry-run'}` +
-        `${secretProject ? ', storing secrets' : ''})\n`,
+        `${secretProject ? ', storing secrets' : ''})\n`
     )
     await syncWebhooks(project, secretProject)
     console.log(`\nDone.${APPLY ? '' : ' Re-run with --apply to write changes.'}`)
     return
   }
 
-  console.log(`Stripe catalog sync (${APPLY ? 'APPLY' : 'dry-run'}${REPRICE ? ', reprice ON' : ''})\n`)
+  console.log(
+    `Stripe catalog sync (${APPLY ? 'APPLY' : 'dry-run'}${REPRICE ? ', reprice ON' : ''})\n`
+  )
   for (const entry of catalog) {
     await syncEntry(entry)
   }
