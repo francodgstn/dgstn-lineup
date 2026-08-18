@@ -362,7 +362,7 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
     // more. If that answer is wrong it is wrong for both tiers — change it in
     // one place, not here alone.
     if (entityType === 'team' && update.status === 'cancelled') {
-      await downgradeTeamToFree(entityId, { fromTrial: false })
+      await downgradeTeamToFree(entityId, { fromTrial: false, courseMirrors: 'tear_down' })
     } else if (entityType === 'org') {
       await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
       if (update.status === 'cancelled') {
@@ -816,7 +816,7 @@ export const handleTrialLifecycle = onSchedule(
         continue
       }
       try {
-        await downgradeTeamToFree(teamId, { fromTrial: true })
+        await downgradeTeamToFree(teamId, { fromTrial: true, courseMirrors: 'tear_down' })
         await sendTrialExpiredEmail(teamId, doc.data()).catch((e) =>
           console.error(`[trial] email failed ${teamId}:`, e)
         )
@@ -871,7 +871,7 @@ export const handleTrialLifecycle = onSchedule(
       .get()
     for (const doc of legacy.docs) {
       try {
-        await downgradeTeamToFree(doc.id, { fromTrial: true })
+        await downgradeTeamToFree(doc.id, { fromTrial: true, courseMirrors: 'tear_down' })
         console.log(`[trial] converted legacy expired team ${doc.id} to free`)
       } catch (err) {
         console.error(`[trial] legacy conversion failed ${doc.id}:`, err)

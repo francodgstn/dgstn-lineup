@@ -104,4 +104,23 @@ export interface InstalledPlugin {
   status: 'active' | 'disabled'
   updated_at?: Timestamp
   updatedBy?: string
+  /**
+   * `online-courses` only, and server-written only. Set on the write that
+   * deactivates the install, it tells `onInstalledPluginStatusChange` whether to
+   * delete this team's `courses/{id}/public_profile/{id}` mirrors — the only
+   * thing that keeps a bought course openable. `true` on an ORGANISATION lapse
+   * (the studio's member paid for a course and a third party stopped paying),
+   * absent/false everywhere else. Written by `downgradeTeamToFree`, which is the
+   * only writer of an inactive install; see its comment for why it cannot go
+   * stale. Use `KEEP_COURSE_MIRRORS_FIELD` rather than the literal.
+   */
+  keep_course_mirrors?: boolean
 }
+
+/**
+ * The field name above, so the writer (`downgradeTeamToFree`) and the reader
+ * (`onInstalledPluginStatusChange`) cannot drift apart silently — a typo on
+ * either side would delete the mirrors a paying member's course lives behind,
+ * with nothing to notice it.
+ */
+export const KEEP_COURSE_MIRRORS_FIELD = 'keep_course_mirrors' as const

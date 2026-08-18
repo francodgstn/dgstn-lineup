@@ -53,7 +53,8 @@ export type OrgLapseReason = 'trial_lapsed' | 'subscription_cancelled'
  *
  *   1. org-level plugin installs → inactive
  *   2. the org's public site → unpublished (draft kept)
- *   3. every active member studio → Free, via the ONE `downgradeTeamToFree`
+ *   3. every active member studio → Free, via the ONE `downgradeTeamToFree`,
+ *      but keeping its course mirrors (see the call site)
  *   4. every member studio → severed from the org (see the header)
  *   5. (trial only) the org's own status → 'expired', then the admins are told
  *
@@ -114,7 +115,15 @@ export async function lapseOrganization(
         // copy says "your trial has ended"). True on the trial rail, where that
         // sentence is what happened; false when the ORGANISATION cancelled a
         // paid subscription, where it would be a lie.
-        await downgradeTeamToFree(teamId, { fromTrial })
+        // `courseMirrors: 'keep_for_buyers'` is the ONE thing an org lapse does
+        // differently from a team's own (UX-16 follow-up). A team that stops
+        // paying loses its course listings; here the studio did not stop paying
+        // and neither did the member who BOUGHT a course — the organisation
+        // above them did. Deleting `courses/{id}/public_profile/{id}` would take
+        // that course away from the buyer (the entitlement survives, the surface
+        // the Space resolves it through does not) and nothing rewrites a mirror
+        // on reinstall, so it would not come back when the org pays again.
+        await downgradeTeamToFree(teamId, { fromTrial, courseMirrors: 'keep_for_buyers' })
         // The studio owner is told on BOTH rails, because on neither one did
         // they do anything — the organisation did. A silent drop to a 15-contact
         // plan is the thing nobody finds out about until it refuses a signup.

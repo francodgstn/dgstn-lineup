@@ -113,6 +113,12 @@ export async function unpublishSiteForOrg(orgId: string): Promise<void> {
  * belonging to the team, effectively unpublishing all course listings.
  * Mirrors what syncCoursePublicProfile does for a single course on delete/
  * unpublish, applied to all courses of the team at once.
+ *
+ * ONE-WAY: nothing rewrites a mirror on reinstall (syncCoursePublicProfile fires
+ * on a `courses/{id}` write only), and a contact who BOUGHT a course reaches it
+ * through this mirror — so whether it runs at all is a decision, not a detail.
+ * Both callers take it from `CourseMirrorDisposition` (saas-billing/downgrade.ts),
+ * which is where that decision is written down.
  */
 export async function deleteAllCoursePublicProfiles(teamId: string): Promise<void> {
   const db = admin.firestore()

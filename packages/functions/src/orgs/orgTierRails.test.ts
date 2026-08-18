@@ -268,7 +268,7 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
   it('ONE writer of the downgrade — the org path calls the team’s, never a copy', () => {
     assert.ok(lifecycle.includes("import { downgradeTeamToFree } from '../saas-billing/downgrade'"))
     assert.ok(
-      lifecycle.includes('await downgradeTeamToFree(teamId, { fromTrial })'),
+      /await downgradeTeamToFree\(teamId, \{ fromTrial[,)]/.test(lifecycle),
       'every member studio goes to Free through the SHARED path',
     )
     assert.ok(
@@ -342,5 +342,135 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
     const pastDue = branch.split("update.status === 'past_due'")[1]
     assert.ok(!pastDue.includes('lapseOrganization('), 'past_due must not wind an organisation down')
     assert.ok(pastDue.includes('plan_status: update.status'), 'past_due still propagates the status')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UX-16 follow-up — an org lapse must not take away a course somebody BOUGHT
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The `purchases/{contactId}` entitlement always survives a downgrade; the
+// `courses/{id}/public_profile/{id}` mirror is what the Space resolves a course
+// slug through, so deleting it is what actually takes the course away. Nothing
+// rewrites a mirror on reinstall, so the deletion is one-way.
+//
+// The claim under test spans TWO files and is false unless both hold: sparing
+// the mirrors in the downgrade is undone by `onInstalledPluginStatusChange` —
+// which the downgrade itself triggers, by deactivating the install — unless that
+// trigger reads the same instruction. Only the source can settle it.
+
+describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up)', () => {
+  const downgrade = read('saas-billing/downgrade.ts')
+  const lifecycle = read('orgs/lifecycle.ts')
+  const trigger = read('sync/onInstalledPluginStatusChange.ts')
+
+  /** The options object of every `downgradeTeamToFree(...)` CALL in the tree. */
+  function downgradeCalls(): Array<{ file: string; opts: string }> {
+    const out: Array<{ file: string; opts: string }> = []
+    for (const f of sourceFiles()) {
+      if (f === 'saas-billing/downgrade.ts' || f.endsWith('.test.ts')) continue
+      for (const m of code(read(f)).matchAll(/downgradeTeamToFree\([^,]+,\s*(\{[^}]*\})/g)) {
+        out.push({ file: f, opts: m[1] })
+      }
+    }
+    return out
+  }
+
+  it('every caller STATES its disposition, and only the org rail keeps the mirrors', () => {
+    const calls = downgradeCalls()
+    assert.ok(calls.length >= 2, 'found no downgrade calls to check — did the call shape change?')
+    for (const { file, opts } of calls) {
+      assert.match(
+        opts,
+        /courseMirrors: '(tear_down|keep_for_buyers)'/,
+        `${file} calls downgradeTeamToFree without saying what happens to the course mirrors`,
+      )
+      const keeps = opts.includes("courseMirrors: 'keep_for_buyers'")
+      assert.equal(
+        keeps,
+        file === 'orgs/lifecycle.ts',
+        keeps
+          ? `${file} keeps course mirrors — only the ORG lapse may, because only there is the payer ` +
+              'who stopped a third party'
+          : `${file} tears course mirrors down and is not a team rail — was this meant to keep them?`,
+      )
+    }
+  })
+
+  it('the TEAM lapse is untouched — it still tears its own mirrors down', () => {
+    const billing = code(read('saas-billing/index.ts'))
+    assert.ok(
+      !billing.includes('keep_for_buyers'),
+      "a team that stops paying loses its listings; that was not the decision under review",
+    )
+    assert.ok(
+      /activePluginIds\.includes\('online-courses'\) && !keepCourseMirrors/.test(code(downgrade)),
+      'the synchronous teardown must still run for every caller that did not ask to keep the mirrors',
+    )
+  })
+
+  it('the disposition is REQUIRED — no default decides it for a new caller', () => {
+    const sig = code(downgrade).split('export async function downgradeTeamToFree(')[1].split('):')[0]
+    assert.ok(sig.includes('courseMirrors: CourseMirrorDisposition'), 'the option is missing')
+    assert.ok(
+      !/courseMirrors\?:/.test(sig) && !/courseMirrors[^,]*=/.test(sig),
+      'an optional or defaulted disposition means a future caller silently inherits one of two ' +
+        'opposite behaviours — make it choose',
+    )
+  })
+
+  it('the trigger obeys it — otherwise the downgrade sparing the mirrors is undone a beat later', () => {
+    // Deactivating the install IS a write to teams/{id}/installed_plugins/{id},
+    // so onInstalledPluginStatusChange fires on every downgrade.
+    const arm = trigger.split("pluginId === 'online-courses'")[1].split('\n    }')[0]
+    const guardAt = arm.indexOf('KEEP_COURSE_MIRRORS_FIELD')
+    const deleteAt = arm.indexOf('deleteAllCoursePublicProfiles')
+    assert.ok(guardAt >= 0, 'the trigger deletes course mirrors without ever asking to keep them')
+    assert.ok(
+      deleteAt >= 0 && guardAt < deleteAt,
+      'the keep check must come BEFORE the batch delete',
+    )
+  })
+
+  it('writer and reader share ONE field name, from @linyup/shared', () => {
+    for (const [name, src] of [
+      ['saas-billing/downgrade.ts', downgrade],
+      ['sync/onInstalledPluginStatusChange.ts', trigger],
+    ] as const) {
+      assert.ok(
+        /KEEP_COURSE_MIRRORS_FIELD/.test(code(src)) &&
+          /from '@linyup\/shared'/.test(code(src)),
+        `${name} must use the shared constant — a typo on either side of this pair silently ` +
+          'deletes the mirrors a bought course lives behind',
+      )
+      assert.ok(
+        !/'keep_course_mirrors'/.test(code(src)),
+        `${name} hardcodes the field name instead of importing it`,
+      )
+    }
+  })
+
+  it('the marker cannot go stale: ONE writer of an inactive team install', () => {
+    // The marker is only ever honoured on an active → inactive transition, and
+    // the write that performs that transition is the write that states it. That
+    // holds only while `downgradeTeamToFree` is the sole producer of an inactive
+    // install: every OTHER end-of-install path deletes the document, and a
+    // deleted document carries no marker, so the teardown runs.
+    for (const f of sourceFiles()) {
+      if (f.endsWith('.test.ts')) continue
+      const src = code(read(f))
+      if (!/installed_plugins|INSTALLED_PLUGINS_SUBCOLLECTION|ORG_INSTALLED_PLUGINS/.test(src)) continue
+      if (!/status:\s*'inactive'/.test(src)) continue
+      assert.ok(
+        f === 'saas-billing/downgrade.ts' || f === 'orgs/lifecycle.ts',
+        `${f} deactivates a plugin install without stating a course-mirror disposition — either ` +
+          'route it through downgradeTeamToFree or stamp the field yourself',
+      )
+    }
+    assert.ok(
+      /status: 'inactive'/.test(code(lifecycle)),
+      'expected the org-level install deactivation to still be here (it has no trigger, so it ' +
+        'needs no marker) — if it moved, re-check the list above',
+    )
   })
 })
