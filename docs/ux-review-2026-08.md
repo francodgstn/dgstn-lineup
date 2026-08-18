@@ -104,8 +104,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 25 | blocks | at-setup | A discount cannot be applied to a membership — the highest-value thing in the shop | M5 | functions + web | ✅ Fixed |
 | 26 | confuses | every-session | Public copy leaks back-office vocabulary: 8 `activity` + 4 `drop-in` hits | C1–C4 | web | ▶ Open |
 | 27 | blocks | at-setup | The checklist's "subscriptions" step lands on a page that cannot create one | M2×M5 | web | ✅ Fixed |
-| 28 | slows | weekly | Nine public surfaces managed from six route prefixes across three partial maps | M11×M7×M5×M8 | web | ▶ Open |
-| 29 | slows | every-session | Find "Schedule" only after scanning past five less-used items — a regression from `6d94638` | M1 | web | ▶ Open |
+| 28 | slows | weekly | Nine public surfaces managed from six route prefixes across three partial maps | M11×M7×M5×M8 | web | ✅ Fixed |
+| 29 | slows | every-session | Find "Schedule" only after scanning past five less-used items — a regression from `6d94638` | M1 | web | ✅ Fixed |
 | 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ▶ Open |
 | 31 | confuses | every-session | The bio-link — the one artifact meant to be shared — previews as "Linyup" | C1 | web | ▶ Open |
 | 32 | costs-money | weekly | Cancelling from the emailed link answers in English and says nothing about money | C2 | web | ✅ Fixed |
@@ -137,13 +137,13 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 58 | confuses | weekly | Two competing sign-in UIs fire off the same state on gated forms | C3 | web | ▶ Open |
 | 59 | slows | weekly | A settled-in-cash appointment whose payment link went unpaid has no action at all | M6 | web + functions | ✅ Fixed |
 | 60 | confuses | weekly | A BYO studio's doubled revenue rows are indistinguishable from two real payments | M6 | web | ✅ Fixed |
-| 61 | slows | weekly | Public pages is the only settings section that isn't a settings panel | M7×M11 | web | ▶ Open |
+| 61 | slows | weekly | Public pages is the only settings section that isn't a settings panel | M7×M11 | web | ✅ Fixed |
 | 62 | slows | weekly | Contacts cannot be filtered by coach, or by "in no group" | M4 | functions + web | ▶ Open |
 | 63 | slows | every-session | A booking row hides its own contact and session behind an action menu | M3×M4 | web | ✅ Fixed |
 | 64 | slows | weekly | The schedule cannot show a season, only a three-month window | M3 | web | ▶ Open |
 | 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ▶ Open |
 | 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ✅ Fixed |
-| 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ▶ Open |
+| 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ✅ Fixed |
 | 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
 | 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ✅ Fixed |
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |

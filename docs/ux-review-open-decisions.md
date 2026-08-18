@@ -171,3 +171,15 @@ session. *Meanwhile:* active contacts only, matching every list page's default t
 remembered-destination store on the day UX-23 reduced three overlapping ones to
 clearly-named distinct concepts. Say if you want it; it should reuse the Open-tabs
 store rather than adding another.
+
+## 21. The public-pages hub is missing the appointment picker (UX-28)
+**PARKED, small.** `/public/{slug}/appointments` is a genuine public surface — the
+How-to list treats it as one — and the hub's census omits it. Not added because
+`usePublicSurfaces` has no `appointmentsLive` flag and the live signal comes from
+`active_public_surfaces` in `packages/functions` (reserved that round). **A row
+with a guessed live state would be worse than an absent one.**
+
+## 22. "Scheduling" in the settings rail is now two rows (UX-67)
+**NOTED.** Event types and Booking page remain there. Only Places was used
+mid-task while scheduling, so only Places moved — but a two-row group is worth a
+second look.
