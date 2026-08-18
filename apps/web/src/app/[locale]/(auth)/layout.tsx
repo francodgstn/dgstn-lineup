@@ -1014,26 +1014,41 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 // down its left edge, spanning the group heading, both runs and the empty-state
 // hint.
 //
-// IT MUST NOT CONSUME LAYOUT WIDTH. The original marker was a `before:`
-// pseudo-element on a `pl-3` wrapper, which is the half of it that had to go: the
-// padding it needed pushed every shortcut row 12px right of every other nav row.
-// This is an absolutely-positioned sibling instead, so the rows keep the exact
-// left edge and padding of a Features row — both `<a>` boxes start at the nav's
-// content edge, 8px in, with the same px-3 inside. Verified by the box model:
-// neither chain adds horizontal padding between `nav.px-2` and the row link.
+// IT MUST NOT CONSUME LAYOUT WIDTH, and it must not push the rows. The original
+// marker was a `before:` pseudo-element on a `pl-3` wrapper, which is the half of
+// it that had to go: the padding it needed pushed every shortcut row 12px right
+// of every other nav row. This is an absolutely-positioned sibling instead, so
+// every nav link in the sidebar — shortcuts and features alike — reports the same
+// 8px left offset (measured live, 19 rows, one value).
+//
+// THE GAP COMES OUT OF THE GUTTER, NEVER OUT OF THE ROWS. An active or hovered
+// row paints a background from its own left edge, which is the nav's CONTENT edge
+// at 8px — the same place the rule sat, so the two touched. Indenting the rows to
+// separate them would undo the paragraph above, so the rule moves the other way
+// instead: `-left-1` puts it at 4px, inside `nav`'s own `px-2` padding, ~3px clear
+// of any row background and ~4px clear of the sidebar edge — near enough centred
+// in the gutter.
+//
+// That negative offset is SAFE against the scroll container, which is the thing to
+// check rather than assume: `nav` is `overflow-y-auto`, so its other axis computes
+// non-visible too, and it clips at its PADDING box — x ≥ 0. The rule lives at
+// x = 4–5, inside that padding, so it is neither clipped nor scrollable-overflow,
+// and contributes no horizontal scrollbar. Anything that moves it further left
+// than -8px (`-left-2`) crosses the padding box and WILL be clipped.
 //
 // `z-10` because a row wrapper is `relative`, so its hover background would
 // otherwise paint over a rule that is merely earlier in the DOM.
 //
-// FLAT — no gradient, no ramp. A tint that faded along its length was tried here
-// (as a left-edge rule, then as a horizontal background wash across the whole
-// area) and rejected both times: the wash grew with the list and read as a
-// highlight rather than a boundary. primary/70 measures 2.94:1 against the light
-// sidebar and 3.97:1 against the dark one — present at a glance in both, without
-// the shout of full strength (4.88:1 / 6.89:1) beside rows that are deliberately
-// muted. Drop dark to /60 (3.24:1) if it ever reads hot.
+// FLAT AND FULL STRENGTH — no gradient, no ramp, no alpha. A tint that faded along
+// its length was tried here (as a left-edge rule, then as a horizontal background
+// wash across the whole area) and rejected both times: the wash grew with the list
+// and read as a highlight rather than a boundary. The alpha went with the width:
+// at 2px, primary/70 (2.94:1 light / 3.97:1 dark against the sidebar) held it back
+// from shouting; at 1px there is half the ink to begin with, so full primary
+// (4.88:1 / 6.89:1) is what keeps a hairline present at a glance — and it still
+// lays down less violet than the 2px line it replaces.
 const SHORTCUTS_RULE =
-  'pointer-events-none absolute inset-y-0 left-0 z-10 w-0.5 rounded-full bg-primary/70'
+  'pointer-events-none absolute inset-y-0 -left-1 z-10 w-px rounded-full bg-primary'
 
 // How many recently-visited items the Shortcuts group keeps, in addition to the
 // pinned ones.
@@ -1173,7 +1188,7 @@ function ShortcutsNav({
 
   return (
     <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'relative mt-3 py-1'}>
-      {/* Expanded only: 2px of rule beside a 40px icon rail marks nothing. */}
+      {/* Expanded only: a hairline beside a 40px icon rail marks nothing. */}
       {!collapsed && <div aria-hidden className={SHORTCUTS_RULE} />}
       {/* Header row: the group label, with "clear all" pushed to the right.
           Confirmed, because the pinned rows are hand-curated and drag-ordered —

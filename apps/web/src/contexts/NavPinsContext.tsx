@@ -41,11 +41,16 @@
  *    this pass. The original was a `before:` pseudo-element on a padded wrapper:
  *    it reserved layout width, so every shortcut row sat 12px right of every other
  *    nav row, and it carried a vertical gradient that read as noise. The
- *    replacement is absolutely positioned and flat — same signal, no indent, no
- *    ramp. (A horizontal background wash over the whole area was tried in between
- *    and rejected: it grew with the list and read as a highlight rather than a
- *    boundary.) If anything here is ever re-styled, THAT is the constraint to
- *    preserve: the marker must not consume width.
+ *    replacement is absolutely positioned, flat and a hairline wide — same signal,
+ *    no indent, no ramp. (A horizontal background wash over the whole area was
+ *    tried in between and rejected: it grew with the list and read as a highlight
+ *    rather than a boundary.) It sits in `nav`'s own left padding, NOT at the
+ *    content edge the rows start from, so an active row's background has a few px
+ *    of air rather than butting against it. If anything here is ever re-styled,
+ *    THOSE are the two constraints to preserve: the marker must not consume width,
+ *    and any breathing room it needs comes out of the gutter, never out of the
+ *    rows — which is also the only thing keeping every nav link in the sidebar on
+ *    one 8px left offset (verified live across all 19).
  *
  *    What carries the split now that no line does — all three already existed:
  *      1. ORDER. Pinned first, always.
@@ -69,7 +74,7 @@
  *        applied to the STORED list, so a pinned destination that is currently
  *        gated off (and therefore not rendered) survives it.
  *      · The collapsed icon rail is unchanged: the same rows in the same order,
- *        no rule (2px beside a 40px column marks nothing) and no eraser.
+ *        no rule (a hairline beside a 40px column marks nothing) and no eraser.
  *    Rendered by `ShortcutsNav` in `app/[locale]/(auth)/layout.tsx`; the rule's
  *    measured contrast values, per theme, are on `SHORTCUTS_RULE` there.
  *
