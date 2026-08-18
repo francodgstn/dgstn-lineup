@@ -34,6 +34,19 @@ const HMD_BELT_LEVELS = [
 
 // Ranking systems to write to organizations/hmd — hardcoded because hmd-lineup
 // never persisted these to Firestore; they lived only in the JS app config.
+/**
+ * The members the `hmd` plugin container is expected to materialize at
+ * `organizations/hmd/installed_plugins/*`.
+ *
+ * A COPY of `PLUGIN_BUNDLES.hmd` (@linyup/shared), and deliberately so: the
+ * migration scripts run under tsconfig.scripts.json, which cannot import the
+ * shared package — the same reason the path constants above are re-declared.
+ * It is used only to CHECK the reconciler's work, never to write anything, so
+ * drifting out of date makes the migration warn about a member that no longer
+ * exists rather than write a wrong document.
+ */
+export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup'] as const
+
 export const HMD_ORG_RANKING_SYSTEMS = [
   { id: RANKING_HMD, name: 'Hwal Moo Do',    is_primary: true,  levels: HMD_BELT_LEVELS },
   { id: RANKING_KD,  name: 'Korean Dragon',  is_primary: false, levels: HMD_BELT_LEVELS },

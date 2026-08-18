@@ -1,5 +1,5 @@
 import type { Timestamp } from './common'
-import type { SaasStatus, RankingSystem } from './team'
+import type { SaasStatus, RankingSystem, TenantFlags } from './team'
 import type { Sha256Hex } from '../utils/identity'
 import { normalizeEmail } from '../utils/normalizeEmail'
 
@@ -22,12 +22,10 @@ export interface Organization {
    *  (lapseOrganization). Nothing reads it as state — the status does that; it
    *  is the "when" for support. */
   downgraded_from_trial_at?: Timestamp
-  /** Operational flags — same meaning and same exemption as `Team.flags`: an
-   *  internal or pilot organisation is never auto-lapsed by the trial sweep. */
-  flags?: {
-    internal?: boolean
-    pilot?: boolean
-  }
+  /** Operational flags — the SAME type and the same exemption as `Team.flags`:
+   *  an internal, pilot or comped organisation is never auto-lapsed by the trial
+   *  sweep (`tenantExemptFromTrialSweep`). */
+  flags?: TenantFlags
   stripe_customer_id?: string
   // Ranking systems shared across all teams in the org.
   // When set, overrides individual team ranking_systems for all linked teams.

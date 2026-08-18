@@ -18,6 +18,17 @@ export interface AccountMetricInput {
   trialEndsAtMs: number | null
   /** Active contacts (teams only); null for orgs (they aggregate their teams). */
   contactCount: number | null
+  /**
+   * A REAL customer the platform bills nothing (`TenantFlags.comped`).
+   *
+   * COUNTED in every account, contact and signup figure — that is the whole
+   * point of the flag, and hiding them (as `internal` does) would understate the
+   * platform at exactly the moment its largest tenant arrives. But EXCLUDED from
+   * MRR: a comped org sits on `plan_status: 'active'` with no Stripe
+   * subscription, so charging it the plan's list price to the revenue line would
+   * invent money that no invoice exists for.
+   */
+  comped?: boolean
 }
 
 export interface PlatformMetrics {
@@ -27,6 +38,10 @@ export interface PlatformMetrics {
     orgs: number
     byStatus: Record<SaasStatus, number>
     byPlan: Record<SaasPlan, number>
+    /** Of `total`, how many are comped — real usage that bills nothing. Reported
+     *  separately so "active accounts" and "paying accounts" stop being read as
+     *  the same number. */
+    comped: number
   }
   /** Indicative MRR in CHF from active subscriptions (Stripe is authoritative). */
   mrr: { estimatedChf: number; byPlan: Record<SaasPlan, number> }
@@ -60,6 +75,7 @@ export function computePlatformMetrics(
   let trialsExpiring7d = 0
   let last7d = 0
   let last30d = 0
+  let comped = 0
 
   for (const a of accounts) {
     if (a.type === 'org') orgs += 1
@@ -67,6 +83,7 @@ export function computePlatformMetrics(
     if (a.status) byStatus[a.status] += 1
     if (a.plan) byPlan[a.plan] += 1
     if (a.contactCount) totalActive += a.contactCount
+    if (a.comped) comped += 1
 
     const age = nowMs - a.createdMs
     if (age <= SEVEN_DAYS_MS) last7d += 1
@@ -81,7 +98,8 @@ export function computePlatformMetrics(
 
     // MRR: only paying (active) subscriptions count. Flat per-plan base — there
     // is no per-contact overage (caps are enforced by upgrade/blocks, not metering).
-    if (a.status === 'active' && a.plan) {
+    // A COMPED account is 'active' and has a plan, and pays nothing for it.
+    if (a.status === 'active' && a.plan && !a.comped) {
       const amount = PLAN_PRICING[a.plan].baseMonthly
       estimatedChf += amount
       mrrByPlan[a.plan] += amount
@@ -89,7 +107,7 @@ export function computePlatformMetrics(
   }
 
   return {
-    accounts: { total: accounts.length, teams, orgs, byStatus, byPlan },
+    accounts: { total: accounts.length, teams, orgs, byStatus, byPlan, comped },
     mrr: { estimatedChf, byPlan: mrrByPlan },
     contacts: { totalActive },
     trials: { active: trialsActive, expiring7d: trialsExpiring7d },
@@ -110,6 +128,7 @@ export interface PlatformMetricsDoc {
     orgs: number
     by_status: Record<SaasStatus, number>
     by_plan: Record<SaasPlan, number>
+    comped: number
   }
   mrr: { estimated_chf: number; by_plan: Record<SaasPlan, number> }
   contacts: { total_active: number }
@@ -126,6 +145,7 @@ export function platformMetricsToDoc(date: string, m: PlatformMetrics): Platform
       orgs: m.accounts.orgs,
       by_status: m.accounts.byStatus,
       by_plan: m.accounts.byPlan,
+      comped: m.accounts.comped,
     },
     mrr: { estimated_chf: m.mrr.estimatedChf, by_plan: m.mrr.byPlan },
     contacts: { total_active: m.contacts.totalActive },

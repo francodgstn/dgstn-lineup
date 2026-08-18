@@ -20,10 +20,29 @@ and the [data-safety checklist](./data-safety-checklist.md) §1 (backups) is don
 | **Per-team promote tool** (sandbox → prod, idempotent + verified) | ✅ built — `pnpm promote:team` (`scripts/promote-team.ts`), manifest-driven |
 | External provider teardown in `purgeTeam` (Stripe cancel/disconnect) | ⏳ **TODO** — do manually for now |
 
-> **Flag semantics:** `flags.internal` → excluded from platform metrics **and**
-> exempt from trial auto-downgrade (for the prod smoke-test studio). `flags.pilot`
-> → exempt from trial auto-downgrade only (a founder is a real customer, still
-> counted in metrics). The promote tool sets `flags.pilot` on the target team.
+> **Flag semantics** (`TenantFlags`, `packages/shared/src/types/team.ts` — the same
+> type on a team and on an organisation):
+>
+> | Flag | Trial sweep | Platform metrics | MRR | Meaning |
+> |---|---|---|---|---|
+> | `internal` | exempt | **excluded** | — | Linyup-internal / synthetic tenant (the prod smoke-test studio). |
+> | `pilot` | exempt | counted | counted | Founder mid-validation. **Temporary by construction.** The promote tool sets this on the target team. |
+> | `comped` | exempt | counted | **excluded** | A real customer billed nothing, indefinitely. Sits on `plan_status: 'active'` with no Stripe subscription. |
+>
+> All three are read for the sweep through the ONE predicate
+> `tenantExemptFromTrialSweep(flags)` — never spelled out at a call site, so a team
+> and an org cannot answer it differently. `comped` is deliberately not `pilot`:
+> a pilot ends, a comped arrangement does not, and overloading the flag would make
+> "how many pilots do we have" unanswerable. It is deliberately not `internal`
+> either — a comped customer's usage is real and belongs in every platform figure;
+> only the revenue line excludes them, since no invoice exists.
+>
+> `comped_reason` and `comped_since` record *why* there is no subscription. Without
+> them the first billing reconciliation reports the tenant as broken rather than as
+> a decision somebody made. Operator-set only; never client-writable.
+>
+> `lapseOrganization` refuses outright on any exempt org, so a hand-run script
+> cannot tear down a comped customer's site and studios.
 
 ---
 

@@ -2553,7 +2553,14 @@
     "recommendedWhy": "Recommended by Linyup as a common starting point — it is not based on your data.",
     "suggestionIncluded": "Included in your plan",
     "suggestionNeedsPlan": "Needs the {plan} plan",
-    "suggestionOpenCatalogue": "Click to open it in the plugin catalogue"
+    "suggestionOpenCatalogue": "Click to open it in the plugin catalogue",
+    "hmdName": "HMD",
+    "hmdDescription": "Everything HMD runs on: the Fighting Cup, and the organisation's own events, rules and templates.",
+    "bundleModulesTitle": "Modules",
+    "bundleModulesHint": "Turn individual features on or off. Changes apply within a few seconds.",
+    "bundleModulesError": "Could not change that module. Please try again.",
+    "bundleModulesOrgManaged": "These modules are managed by the organisation.",
+    "removeConfirmBodyBundle": "This also removes the features it installed. Your data is kept, and reinstalling brings them back."
   },
   "AiAssistant": {
     "launcherLabel": "AI assistant",

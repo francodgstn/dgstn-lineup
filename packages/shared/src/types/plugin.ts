@@ -1,5 +1,6 @@
 import type { Timestamp } from './common'
 import type { SaasPlan } from './team'
+import { isBundleMember } from './plugin-bundles'
 
 export type PluginId = string
 // Consolidated, user-facing buckets (kept deliberately few + meaningful):
@@ -113,6 +114,14 @@ export interface PluginAudience {
  *  - `org/{orgId}/plugins` — the org catalogue, which passes the ROUTE's org id
  *    rather than the signed-in team's.
  *
+ * BUNDLE MEMBERSHIP IS A SECOND, ORTHOGONAL REASON A PLUGIN IS NOT OFFERED, and
+ * it is not this function's. `pluginIsInstallable` (below) hides a member of a
+ * container from the surfaces above that OFFER AN INSTALL — the marketplace grid,
+ * its `?plugin=` deep link, `DiscoverPanel` and the org catalogue — because the
+ * container is the card a tenant installs. `settings/event-types` calls THIS
+ * function and not that one on purpose: it offers no install, so it keeps showing
+ * a member's event type and simply attributes it to the container.
+ *
  * ONE surface deliberately does not call it: the sidebar's plugin suggestion in
  * `(auth)/layout.tsx`, which is unreachable for a restricted plugin by
  * construction — it takes only manifests that are `recommended` AND contribute
@@ -134,6 +143,26 @@ export function pluginVisibleToTenant(
   if (tenant.teamId && audience.teamIds?.includes(tenant.teamId)) return true
   if (tenant.orgId && audience.orgIds?.includes(tenant.orgId)) return true
   return false
+}
+
+/**
+ * Whether `manifest` may be offered as an INSTALLABLE CARD.
+ *
+ * False for a bundle member: its container is the thing a tenant installs, and
+ * showing both would offer two doors to one feature — with the member's door
+ * writing a document the reconciler then owns and may later delete.
+ *
+ * DELIBERATELY NOT folded into `pluginVisibleToTenant`. That function answers
+ * "may this tenant see this?" from `audience`, and its answer depends on the
+ * tenant; this one answers "is this a thing anybody installs directly?" from the
+ * bundle map, and its answer does not. Fusing them would overload a function
+ * whose doc comment carefully promises that an absent audience means PUBLIC.
+ *
+ * A surface that DESCRIBES a member's feature without offering an install —
+ * `settings/event-types` — calls the other one and not this.
+ */
+export function pluginIsInstallable(manifest: { id: PluginId }): boolean {
+  return !isBundleMember(manifest.id)
 }
 
 export interface PluginManifest {
@@ -195,6 +224,22 @@ export interface InstalledPlugin {
   updated_at?: Timestamp
   updatedBy?: string
   /**
+   * Written ONLY by the bundle reconciler
+   * (`packages/functions/src/plugins/bundleReconcile.ts`), naming the CONTAINER
+   * whose install materialized this document.
+   *
+   * It is what makes removal safe. Uninstalling a container deletes the member
+   * documents it created and nothing else — so a studio that had installed the
+   * same plugin standalone BEFORE the container arrived keeps it, and keeps its
+   * config. Without the stamp the reconciler could not tell the two apart and
+   * would take away a feature the tenant chose for itself.
+   *
+   * Use `INSTALLED_BY_BUNDLE_FIELD` rather than the literal: the writer and the
+   * reader are in different packages, and a typo on either side silently changes
+   * which installs are considered the container's.
+   */
+  installedByBundle?: PluginId
+  /**
    * `online-courses` only, and server-written only. Set on the write that
    * deactivates the install, it tells `onInstalledPluginStatusChange` whether to
    * delete this team's `courses/{id}/public_profile/{id}` mirrors — the only
@@ -214,3 +259,10 @@ export interface InstalledPlugin {
  * with nothing to notice it.
  */
 export const KEEP_COURSE_MIRRORS_FIELD = 'keep_course_mirrors' as const
+
+/**
+ * The field name above — same reason as `KEEP_COURSE_MIRRORS_FIELD` next door:
+ * the writer (`bundleReconcile`) and the readers live in different packages, so
+ * a literal on either side is a typo waiting to orphan a member install.
+ */
+export const INSTALLED_BY_BUNDLE_FIELD = 'installedByBundle' as const

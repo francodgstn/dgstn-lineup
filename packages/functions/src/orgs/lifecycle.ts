@@ -35,7 +35,10 @@ import {
   ORG_TEAMS_SUBCOLLECTION,
   ORG_INSTALLED_PLUGINS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  tenantExemptFromTrialSweep,
+  trialSweepExemption,
 } from '@linyup/shared'
+import type { TenantFlags } from '@linyup/shared'
 import { downgradeTeamToFree } from '../saas-billing/downgrade'
 import { unpublishSiteForOrg } from '../utils/plugins'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
@@ -82,6 +85,21 @@ export async function lapseOrganization(
   const db = admin.firestore()
   const fromTrial = opts.reason === 'trial_lapsed'
   const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(orgId)
+
+  // ── 0: an exempt organisation is never wound down ──────────────────────────
+  // The daily sweep already skips these (`tenantExemptFromTrialSweep`), so this
+  // is belt-and-braces against the OTHER callers: a hand-run script, an operator
+  // console action, or a future webhook branch. A comped tenant has no Stripe
+  // subscription at all, so nothing upstream can ever legitimately conclude that
+  // it stopped paying — and this teardown unpublishes their site and drops every
+  // member studio to Free, which is not a mistake anyone can quietly undo.
+  const orgFlags = (await orgRef.get()).data()?.flags as TenantFlags | undefined
+  if (tenantExemptFromTrialSweep(orgFlags)) {
+    console.log(
+      `[orgs] refused to lapse ${trialSweepExemption(orgFlags)} org ${orgId} (reason: ${opts.reason})`
+    )
+    return
+  }
 
   // ── 1 + 2: the org's own paid surface ──────────────────────────────────────
   const installs = await orgRef

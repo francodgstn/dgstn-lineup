@@ -18,7 +18,9 @@ import {
 } from '@linyup/shared'
 import type { PluginManifest, InstalledPlugin, PluginCategory, PluginAccess } from '@linyup/shared'
 import { pluginAccessForPlan } from '@linyup/shared'
-import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { installableManifests } from '@/plugins/registry'
+import { PluginIcon } from '@/plugins/icons'
+import { pluginSlot } from '@/plugins/slots'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Button } from '@/components/ui/button'
@@ -34,48 +36,22 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+// Plugin icons resolve through @/plugins/icons; only this page's own chrome
+// icons are imported here.
 import {
-  Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift,
-  GraduationCap, Trophy, FolderTree, Search, Tag, ListPlus, ClipboardList,
-  ImageIcon, FileText, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
-  ChevronDown, Monitor,
-  Calculator,
+  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
+  ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
   Tooltip as UITooltip, TooltipTrigger, TooltipContent, TooltipProvider,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { ConfigPanel as AiInsightsConfigPanel } from '@/plugins/ai-insights/ConfigPanel'
-import { ConfigPanel as WhatsappConfigPanel } from '@/plugins/whatsapp/ConfigPanel'
-import { ConfigPanel as WebsiteConfigPanel } from '@/plugins/website/ConfigPanel'
-import { ConfigPanel as KioskConfigPanel } from '@/plugins/kiosk/ConfigPanel'
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
-const ICON_MAP: Record<string, LucideIcon> = {
-  Calculator,
-  Sparkles,
-  MessageCircle,
-  Globe,
-  Zap,
-  Puzzle,
-  Settings2,
-  Gift,
-  GraduationCap,
-  Trophy,
-  FolderTree,
-  Tag,
-  ListPlus,
-  ClipboardList,
-  FileText,
-  Monitor,
-}
-
-function PluginIcon({ name, className }: { name: string; className?: string }) {
-  const Icon = ICON_MAP[name] ?? Puzzle
-  return <Icon className={className} />
-}
+// Icon resolution lives in @/plugins/icons — one map, because three had already
+// drifted apart (see that file's header).
 
 // ─── What removal actually does ───────────────────────────────────────────────
 
@@ -92,7 +68,14 @@ function PluginIcon({ name, className }: { name: string; className?: string }) {
  * document a booking gate pointed at). So the default copy may promise the data
  * is kept, and the copy for anything named below must NOT.
  */
-const REMOVE_EFFECT_KEY: Record<string, 'removeConfirmBodyWebsite' | 'removeConfirmBodyCourses'> = {
+const REMOVE_EFFECT_KEY: Record<
+  string,
+  'removeConfirmBodyWebsite' | 'removeConfirmBodyCourses' | 'removeConfirmBodyBundle'
+> = {
+  // A CONTAINER's removal also removes the members the reconciler installed for
+  // it, so the default copy ("your data is kept") is true of the data but not of
+  // the features. Say both.
+  hmd: 'removeConfirmBodyBundle',
   // unpublishSiteForTeam: deletes site_published/{teamId}, flags the draft disabled.
   website: 'removeConfirmBodyWebsite',
   // deleteAllCoursePublicProfiles: batch-deletes every course public_profile
@@ -606,13 +589,11 @@ function PluginConfigDialog({
 
   if (!manifest) return null
 
-  const CONFIG_PANELS: Record<string, React.ComponentType> = {
-    'ai-insights': AiInsightsConfigPanel,
-    'whatsapp':    WhatsappConfigPanel,
-    'website':     WebsiteConfigPanel,
-    'kiosk':       KioskConfigPanel,
-  }
-  const ConfigPanel = CONFIG_PANELS[manifest.id] ?? null
+  // Resolved by convention from the plugin's own folder — a plugin that ships a
+  // ConfigPanel.tsx gets a panel with nothing central to edit. This was a
+  // hardcoded map of four, which is the sort of list a fifth plugin silently
+  // fails to join.
+  const ConfigPanel = manifest.hasOwnerConfig ? pluginSlot(manifest.id, 'ConfigPanel') : null
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
@@ -777,7 +758,11 @@ export default function PluginsPage() {
     if (!pluginParam) return
     // Only auto-open once per distinct param value.
     if (lastAutoOpenedRef.current === pluginParam) return
-    const manifest = PLUGIN_REGISTRY.find((m) => m.id === pluginParam)
+    // `installableManifests()`, not the whole registry: a bundle member's id is
+    // treated exactly like an unknown one, so ?plugin=<member> opens nothing.
+    // The container is the card, and the modal would otherwise name and describe
+    // a plugin nobody can install on its own.
+    const manifest = installableManifests().find((m) => m.id === pluginParam)
     if (!manifest) return
     // A guessed ?plugin= is discovery too — the detail modal names and describes
     // the plugin. Treat an out-of-audience id exactly like an unknown one.
@@ -884,7 +869,7 @@ export default function PluginsPage() {
   }
 
   const search = searchTerm.trim().toLowerCase()
-  const filteredPlugins = PLUGIN_REGISTRY
+  const filteredPlugins = installableManifests()
     // Discovery allow-list (see PluginAudience). A tenant-specific plugin is
     // invisible to everyone it does not name — EXCEPT to a tenant already
     // running it, which keeps its card (and its Configure/Remove controls) in

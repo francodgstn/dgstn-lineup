@@ -17,8 +17,13 @@ import {
   billingPortalUrlFor,
   invoicesFor,
 } from './actions'
-import { readGatewayData, legacyGatewayDataFields } from '@linyup/shared'
-import type { SaasPlan } from '@linyup/shared'
+import {
+  readGatewayData,
+  legacyGatewayDataFields,
+  tenantExemptFromTrialSweep,
+  trialSweepExemption,
+} from '@linyup/shared'
+import type { SaasPlan, TenantFlags } from '@linyup/shared'
 import {
   PLUGIN_ADDONS,
   pluginIdForAddonLookupKey,
@@ -722,11 +727,13 @@ export const handleTrialLifecycle = onSchedule(
       .get()
     for (const doc of expiring.docs) {
       const teamId = doc.id
-      // Internal/pilot teams never auto-downgrade — an internal smoke-test studio
-      // or a founder mid-validation must not lapse to Free (see docs/launch/).
-      const flags = doc.data().flags as { internal?: boolean; pilot?: boolean } | undefined
-      if (flags?.internal || flags?.pilot) {
-        console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} team ${teamId}`)
+      // Exempt teams never auto-downgrade — an internal smoke-test studio, a
+      // founder mid-validation, or a customer the platform bills nothing must not
+      // lapse to Free (see docs/launch/). The predicate is shared with the org
+      // phase below so the two tiers cannot answer this differently.
+      const flags = doc.data().flags as TenantFlags | undefined
+      if (tenantExemptFromTrialSweep(flags)) {
+        console.log(`[trial] skipped ${trialSweepExemption(flags)} team ${teamId}`)
         continue
       }
       // A TEAM INSIDE AN ORGANISATION DOES NOT OWN ITS OWN BILLING (UX-35).
@@ -769,8 +776,8 @@ export const handleTrialLifecycle = onSchedule(
     //
     // Same shape as phase 1, same exemptions, and the deadline is READ from the
     // document rather than derived from `created`: extending a hand-onboarded
-    // customer's trial is editing `trial_ends_at`, and `flags.internal` /
-    // `flags.pilot` opt an org out of the sweep altogether.
+    // customer's trial is editing `trial_ends_at`, and `tenantExemptFromTrialSweep`
+    // (internal / pilot / comped) opts an org out of the sweep altogether.
     const expiringOrgs = await db
       .collection(ORGANIZATIONS_COLLECTION)
       .where('plan_status', '==', 'trial')
@@ -779,9 +786,9 @@ export const handleTrialLifecycle = onSchedule(
       .get()
     for (const doc of expiringOrgs.docs) {
       const orgId = doc.id
-      const flags = doc.data().flags as { internal?: boolean; pilot?: boolean } | undefined
-      if (flags?.internal || flags?.pilot) {
-        console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} org ${orgId}`)
+      const flags = doc.data().flags as TenantFlags | undefined
+      if (tenantExemptFromTrialSweep(flags)) {
+        console.log(`[trial] skipped ${trialSweepExemption(flags)} org ${orgId}`)
         continue
       }
       try {

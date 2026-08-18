@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import type { MigrationConfig } from '../config'
-import { sourceDb, targetDb, ORG_ID, ORG_NAME, HMD_ORG_RANKING_SYSTEMS } from '../config'
+import { sourceDb, targetDb, ORG_ID, ORG_NAME, HMD_ORG_RANKING_SYSTEMS, EXPECTED_HMD_MODULES } from '../config'
 
 // Path constants + default statuses mirror @linyup/shared (not importable under
 // tsconfig.scripts.json). The org-level 'club' affiliation type + the reused org
@@ -90,20 +90,74 @@ export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
     }
   }
 
-  // Pre-install the HMD Fighting Cup plugin at org level (idempotent)
-  const fightingCupPluginId = 'hmd-fighting-cup'
-  const pluginRef = orgRef.collection('installed_plugins').doc(fightingCupPluginId)
+  // Pre-install the HMD plugin CONTAINER at org level (idempotent).
+  //
+  // The container ONLY. Its members (today: hmd-fighting-cup) are materialized
+  // by the `onOrgBundleInstallChange` trigger from `config.modules` — writing
+  // them here would make this script a second writer of member installs, which
+  // the bundle census test forbids and which would drift from the reconciler's
+  // idea of what the container owns (no `installedByBundle` stamp, so the
+  // reconciler would never clean them up).
+  const containerPluginId = 'hmd'
+  const pluginRef = orgRef.collection('installed_plugins').doc(containerPluginId)
   const pluginSnap = await pluginRef.get()
   if (pluginSnap.exists) {
-    console.log(`  installed_plugins/${fightingCupPluginId} already exists — skipping`)
+    console.log(`  installed_plugins/${containerPluginId} already exists — skipping`)
   } else {
     await pluginRef.set({
-      pluginId:    fightingCupPluginId,
+      pluginId:    containerPluginId,
       orgId:       ORG_ID,
       installedAt: FieldValue.serverTimestamp(),
       installedBy: 'migration',
       status:      'active',
+      // Empty: an absent module reads as ON, so every member ships enabled and a
+      // module added later reaches this org without a data edit.
+      config:      {},
     })
-    console.log(`  created installed_plugins/${fightingCupPluginId} (org-level, migration)`)
+    console.log(`  created installed_plugins/${containerPluginId} (org-level container, migration)`)
   }
+
+  // The members are the reconciler's job, and it only runs if the functions are
+  // deployed against this target. Say so loudly rather than leaving a migration
+  // that looks like it worked and left HMD without its Fighting Cup.
+  await assertBundleMembersMaterialized(orgRef, containerPluginId, EXPECTED_HMD_MODULES)
+}
+
+/**
+ * Wait briefly for the bundle reconciler to materialize a container's members,
+ * and WARN clearly if it does not.
+ *
+ * Deliberately a warning and not a throw: the emulator target frequently runs
+ * without the functions emulator, and failing a two-hour data migration over a
+ * document that one deploy will create is the wrong trade. But saying nothing is
+ * worse — the container looks installed while the feature it packages is absent.
+ */
+async function assertBundleMembersMaterialized(
+  orgRef: FirebaseFirestore.DocumentReference,
+  containerId: string,
+  expected: readonly string[],
+): Promise<void> {
+  const deadline = Date.now() + 15_000
+  let missing: string[] = []
+  do {
+    const snaps = await Promise.all(
+      expected.map((id) => orgRef.collection('installed_plugins').doc(id).get()),
+    )
+    missing = expected.filter((_, i) => !snaps[i].exists)
+    if (missing.length === 0) {
+      console.log(`  bundle '${containerId}' reconciled — members: ${expected.join(', ')}`)
+      return
+    }
+    await new Promise((r) => setTimeout(r, 1500))
+  } while (Date.now() < deadline)
+
+  console.warn(
+    `  WARN: bundle '${containerId}' has not materialized ${missing.join(', ')}.
+` +
+    `        The onOrgBundleInstallChange trigger is what creates these. Deploy the
+` +
+    `        Cloud Functions against this target (or start the functions emulator) and
+` +
+    `        re-run this pass — the container install alone gives HMD nothing.`,
+  )
 }

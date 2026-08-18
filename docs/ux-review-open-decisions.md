@@ -51,9 +51,15 @@ per-render read before the first one works, and a globally-readable
 exists to hide. `locked` + `unlockPlugin` remains the no-deploy escape hatch
 and composes with this.
 
-**Not renamed**, per Franco: the rename comes with the widening to HMD's full
-org customization bundle, and doing it now would migrate every
-`installed_plugins` doc and `event.type` value twice. Stated in the manifest.
+**Not renamed — and now never needs to be. RESOLVED 2026-08-19.** The widening
+happened by ADDITION: a new `hmd` container plugin was added beside
+`hmd-fighting-cup`, which became its first member (`PLUGIN_BUNDLES` in
+`@linyup/shared`). A member is an ordinary plugin with an ordinary install
+document, so it keeps its id, its `hmd_fighting_cup` event-type value and its
+folder — nothing migrated, and the double migration this decision was deferring
+never had to happen. The container is what a tenant now discovers and installs;
+`pluginIsInstallable` is the only predicate that treats a member differently.
+See `docs/plugins.md`.
 
 ## 4. Automation delays (UX-85)
 **ANSWERED 2026-08-18 — Franco: build them for real.** Pre-launch, no productive

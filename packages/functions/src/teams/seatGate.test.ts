@@ -21,13 +21,25 @@ import {
 
 const SRC = path.join(__dirname, '..')
 
+/**
+ * Line endings normalised. The working tree is checked out LF on CI and CRLF on
+ * Windows, and the assertions below slice source on newline markers: without
+ * this, indexOf of a newline-brace-newline sequence returns -1 against a CRLF
+ * file, the slice silently collapses to two characters, and the gate assertion
+ * fails on Windows while passing on CI. Same guard, same reason, as
+ * connect/commitSites.test.ts.
+ */
+function readSource(full: string): string {
+  return fs.readFileSync(full, 'utf8').replace(/\r\n/g, '\n')
+}
+
 function readTs(dir: string): Array<{ file: string; text: string }> {
   const out: Array<{ file: string; text: string }> = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) out.push(...readTs(full))
     else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-      out.push({ file: path.relative(SRC, full).replace(/\\/g, '/'), text: fs.readFileSync(full, 'utf8') })
+      out.push({ file: path.relative(SRC, full).replace(/\\/g, '/'), text: readSource(full) })
     }
   }
   return out
@@ -102,7 +114,7 @@ describe('a second team user is a plan feature — the server seams', () => {
     // `team_members` doc for somebody else straight from the client. The rules
     // cannot import PLAN_FEATURES, so the tier list is a literal — which is
     // exactly why it is pinned here.
-    const rules = fs.readFileSync(path.join(SRC, '../../../firestore.rules'), 'utf8')
+    const rules = readSource(path.join(SRC, '../../../firestore.rules'))
     const block = rules.slice(rules.indexOf('match /team_members/{memberId}'))
     const write = block.slice(block.indexOf('allow write:'))
     const clause = write.slice(0, write.indexOf(';') + 1)

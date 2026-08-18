@@ -35,6 +35,9 @@ export interface AccountRow {
   createdMs: number
   /** Connect (member → studio) onboarding status. Teams only; null for orgs. */
   paymentsStatus: PaymentsStatus | null
+  /** A real customer the platform bills nothing (`TenantFlags.comped`). Counted
+   *  everywhere except MRR — see AccountMetricInput.comped. */
+  comped: boolean
 }
 
 /** Derive the compact Connect status from the team's payments mirror. */
@@ -119,6 +122,7 @@ async function loadAccounts(): Promise<LoadResult> {
       ownerEmail: ownerEmail.get(team.createdBy) ?? null,
       createdMs: team.created?.toMillis?.() ?? 0,
       paymentsStatus: teamPaymentsStatus(team),
+      comped: team.flags?.comped === true,
     })
   }
 
@@ -139,6 +143,7 @@ async function loadAccounts(): Promise<LoadResult> {
       ownerEmail: ownerEmail.get(org.createdBy) ?? null,
       createdMs: org.created?.toMillis?.() ?? 0,
       paymentsStatus: null,
+      comped: org.flags?.comped === true,
     })
   }
 
@@ -175,6 +180,7 @@ function toMetricInput(r: AccountRow): AccountMetricInput {
     createdMs: r.createdMs,
     trialEndsAtMs: r.trialEndsAtMs,
     contactCount: r.contactCount,
+    comped: r.comped,
   }
 }
 
