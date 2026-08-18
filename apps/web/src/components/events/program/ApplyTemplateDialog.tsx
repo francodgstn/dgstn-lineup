@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AlertTriangle, Building2, LayoutTemplate } from 'lucide-react'
 import {
@@ -17,6 +17,7 @@ import type {
   Event, EventProgramConfig, MaterialisedItem, ProgramTemplate,
 } from '@linyup/shared'
 import { useProgramTemplates } from './useProgramTemplates'
+import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 
 // Applying a template REPLACES the programme rather than merging into it —
 // merging two multi-track schedules has no sane automatic answer, so the
@@ -56,12 +57,11 @@ export function ApplyTemplateDialog({
   const [startDate, setStartDate] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open) return
+  useResetOnOpen(open, () => {
     setSelectedId(null)
     setError(null)
     setStartDate(isoDateOf(event.start) ?? toISODate(new Date()))
-  }, [open, event.start])
+  })
 
   const selected = templates.find((tpl) => tpl.id === selectedId) ?? null
 

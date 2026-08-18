@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { CalendarPlus, GripVertical, Plus, Trash2, Wand2 } from 'lucide-react'
 import {
@@ -15,7 +15,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { SortableItem, SortableList } from '@/components/ui/sortable'
-import { addDaysISO, daysBetweenISO, toISODate } from '@linyup/shared'
+import { useResetOnOpen } from '@/hooks/useResetOnOpen'
+import { addDaysISO, daysBetweenISO, sortedDays, sortedTracks, toISODate } from '@linyup/shared'
 import type {
   Event, EventProgramConfig, EventProgramItem, ProgramDay, ProgramTrack,
 } from '@linyup/shared'
@@ -57,20 +58,19 @@ export function ProgramStructureDialog({
   open, onOpenChange, event, config, items, onSave, onDeleteDay, onDeleteTrack, saving,
 }: ProgramStructureDialogProps) {
   const t = useTranslations('EventProgram')
-  const [days, setDays] = useState<ProgramDay[]>(config.days)
-  const [tracks, setTracks] = useState<ProgramTrack[]>(config.tracks)
+  const [days, setDays] = useState<ProgramDay[]>(() => sortedDays(config))
+  const [tracks, setTracks] = useState<ProgramTrack[]>(() => sortedTracks(config))
   const [timezoneLabel, setTimezoneLabel] = useState(config.timezoneLabel ?? '')
   const [note, setNote] = useState(config.note ?? '')
   const [confirmDay, setConfirmDay] = useState<ProgramDay | null>(null)
   const [confirmTrack, setConfirmTrack] = useState<ProgramTrack | null>(null)
 
-  useEffect(() => {
-    if (!open) return
-    setDays(config.days)
-    setTracks(config.tracks)
+  useResetOnOpen(open, () => {
+    setDays(sortedDays(config))
+    setTracks(sortedTracks(config))
     setTimezoneLabel(config.timezoneLabel ?? '')
     setNote(config.note ?? '')
-  }, [open, config])
+  })
 
   const itemCountForDay = (dayId: string) => items.filter((i) => i.dayId === dayId).length
   const itemCountForTrack = (trackId: string) => items.filter((i) => i.trackId === trackId).length

@@ -194,9 +194,19 @@ export function useDeleteProgramTrack(eventId: string) {
   })
 }
 
-/** Replace the whole program with a materialised template: writes the new
- *  config and items and deletes whatever was there before, in one batch so the
- *  agenda is never left half-replaced. */
+/** Firestore caps a write batch at 500 operations. Replacing a programme costs
+ *  `deletes + writes + 1`, which at the 300-item cap reaches 601 — so a single
+ *  batch is not merely inelegant, it FAILS outright on a large programme. */
+const BATCH_LIMIT = 500
+
+/** Replace the whole program with a materialised template: writes the new config
+ *  and deletes whatever was there before.
+ *
+ *  Ordering matters, because this cannot be one atomic batch (see BATCH_LIMIT).
+ *  The old items are removed FIRST and the config written LAST, so an
+ *  interruption leaves a programme that is missing rows — visibly incomplete,
+ *  and fixed by applying the template again — rather than one showing two
+ *  templates' items merged together, which looks correct and is not. */
 export function useReplaceProgram(eventId: string, tenant: ProgramTenant) {
   const qc = useQueryClient()
   return useMutation({
@@ -212,19 +222,32 @@ export function useReplaceProgram(eventId: string, tenant: ProgramTenant) {
       if (items.length > MAX_PROGRAM_ITEMS) {
         throw new Error(`A program can hold at most ${MAX_PROGRAM_ITEMS} items.`)
       }
-      const batch = writeBatch(db)
-      for (const item of existing) batch.delete(doc(itemsCollection(eventId), item.id))
-      for (const item of items) {
-        batch.set(doc(itemsCollection(eventId)), {
-          ...item,
-          eventId,
-          ...tenant,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp(),
-        })
+
+      // Every write, in the order it must happen, then committed in chunks that
+      // respect the batch limit.
+      const ops: Array<(b: ReturnType<typeof writeBatch>) => void> = [
+        ...existing.map((item) => (b: ReturnType<typeof writeBatch>) => {
+          b.delete(doc(itemsCollection(eventId), item.id))
+        }),
+        ...items.map((item) => (b: ReturnType<typeof writeBatch>) => {
+          b.set(doc(itemsCollection(eventId)), {
+            ...item,
+            eventId,
+            ...tenant,
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp(),
+          })
+        }),
+        (b: ReturnType<typeof writeBatch>) => {
+          b.update(doc(db, EVENTS_COLLECTION, eventId), { program: config })
+        },
+      ]
+
+      for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
+        const batch = writeBatch(db)
+        for (const apply of ops.slice(i, i + BATCH_LIMIT)) apply(batch)
+        await batch.commit()
       }
-      batch.update(doc(db, EVENTS_COLLECTION, eventId), { program: config })
-      await batch.commit()
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: programQueryKey(eventId) })

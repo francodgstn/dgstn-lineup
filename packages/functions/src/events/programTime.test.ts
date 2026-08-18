@@ -8,8 +8,10 @@ import {
   formatHHMM,
   groupItemsByDay,
   itemDurationMinutes,
+  isoDateInTimezone,
   itemsForTrack,
   materialiseTemplate,
+  nextItemOrder,
   parseHHMM,
   shiftProgramDays,
   type EventProgramConfig,
@@ -110,6 +112,76 @@ describe('calendar-date helpers', () => {
     assert.equal(daysBetweenISO('2026-07-01', '2026-07-06'), 5)
     assert.equal(daysBetweenISO('2026-07-06', '2026-07-01'), -5)
     assert.equal(daysBetweenISO('2026-07-01', '2026-07-01'), 0)
+  })
+})
+
+describe('nextItemOrder', () => {
+  const item = (dayId: string, order: number) => ({ dayId, order })
+
+  it('starts at 0 for an empty day', () => {
+    assert.equal(nextItemOrder([], 'd1'), 0)
+    assert.equal(nextItemOrder([item('d2', 7)], 'd1'), 0)
+  })
+
+  it('is MAX + 1, not the count — the bug a delete used to cause', () => {
+    // Three items were created (orders 0,1,2) and the middle one deleted.
+    // Counting would return 2, which item 'c' already holds; two items sharing a
+    // start time would then order unpredictably.
+    const afterDelete = [item('d1', 0), item('d1', 2)]
+    assert.equal(nextItemOrder(afterDelete, 'd1'), 3)
+  })
+
+  it('is scoped to the day asked about, not the whole programme', () => {
+    // The Day picker lets an item be filed under a day other than the one on
+    // screen, so the answer must come from the destination day.
+    const items = [item('d1', 0), item('d1', 1), item('d2', 9)]
+    assert.equal(nextItemOrder(items, 'd1'), 2)
+    assert.equal(nextItemOrder(items, 'd2'), 10)
+    assert.equal(nextItemOrder(items, 'd3'), 0)
+  })
+
+  it('tolerates an item with no order at all', () => {
+    assert.equal(nextItemOrder([{ dayId: 'd1' }], 'd1'), 1)
+  })
+
+  it('never returns a value already in use', () => {
+    const items = [item('d1', 0), item('d1', 5), item('d1', 3)]
+    const next = nextItemOrder(items, 'd1')
+    assert.ok(!items.some((i) => i.order === next), `${next} is already taken`)
+  })
+})
+
+describe('isoDateInTimezone', () => {
+  it('reads the calendar date at the venue, not at the server', () => {
+    // 2026-07-31 22:30 UTC is already 2026-08-01 in Zurich (CEST, +2). Cloud
+    // Functions run in UTC, so reading the date off the Date directly answers
+    // '2026-07-31' — a full day out, which used to shift a duplicated camp's
+    // whole programme by one day.
+    const justAfterMidnightInZurich = new Date('2026-07-31T22:30:00Z')
+    assert.equal(isoDateInTimezone(justAfterMidnightInZurich, 'Europe/Zurich'), '2026-08-01')
+    assert.equal(isoDateInTimezone(justAfterMidnightInZurich, 'UTC'), '2026-07-31')
+  })
+
+  it('handles the winter offset too', () => {
+    // CET (+1): 23:30 UTC on the 31st is 00:30 on the 1st in Zurich.
+    const d = new Date('2026-01-31T23:30:00Z')
+    assert.equal(isoDateInTimezone(d, 'Europe/Zurich'), '2026-02-01')
+  })
+
+  it('always returns the YYYY-MM-DD shape a ProgramDay stores', () => {
+    const d = new Date('2026-03-05T12:00:00Z')
+    assert.match(isoDateInTimezone(d, 'Europe/Zurich'), /^\d{4}-\d{2}-\d{2}$/)
+    assert.equal(isoDateInTimezone(d, 'Europe/Zurich'), '2026-03-05')
+  })
+
+  it('composes with the calendar helpers it feeds', () => {
+    // The duplicate path is exactly this: read both endpoints in the venue's
+    // timezone, diff them, shift the programme by that many days.
+    const from = isoDateInTimezone(new Date('2026-07-31T22:30:00Z'), 'Europe/Zurich')
+    const to = isoDateInTimezone(new Date('2027-06-13T23:00:00Z'), 'Europe/Zurich')
+    assert.equal(from, '2026-08-01')
+    assert.equal(to, '2027-06-14')
+    assert.equal(addDaysISO(from, daysBetweenISO(from, to)), to)
   })
 })
 

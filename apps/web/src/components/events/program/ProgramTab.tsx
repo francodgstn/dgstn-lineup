@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { MAX_PROGRAM_ITEMS, sortedDays } from '@linyup/shared'
+import { MAX_PROGRAM_ITEMS, nextItemOrder, sortedDays } from '@linyup/shared'
 import type { Event, EventProgramConfig, EventProgramItem } from '@linyup/shared'
 import { ProgramTimeline } from './ProgramTimeline'
 import { ProgramItemDialog } from './ProgramItemDialog'
@@ -79,7 +79,8 @@ export function ProgramTab({ event, canEdit = true, parentOrgId }: ProgramTabPro
   const currentDayId = days.some((d) => d.id === activeDayId) ? activeDayId : days[0]?.id ?? null
 
   const atCap = items.length >= MAX_PROGRAM_ITEMS
-  const nextOrder = currentDayId ? items.filter((i) => i.dayId === currentDayId).length : 0
+
+  const nextOrderFor = (dayId: string) => nextItemOrder(items, dayId)
 
   function openNewItem() {
     setEditing(null)
@@ -265,7 +266,7 @@ export function ProgramTab({ event, canEdit = true, parentOrgId }: ProgramTabPro
             config={config}
             defaultDayId={currentDayId ?? undefined}
             item={editing}
-            nextOrder={nextOrder}
+            nextOrderFor={nextOrderFor}
             saving={createItem.isPending || updateItem.isPending || deleteItem.isPending}
             onSubmit={submitItem}
             onDelete={editing ? removeItem : undefined}
