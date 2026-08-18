@@ -118,12 +118,12 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 39 | confuses | at-setup | Ranks taxes every studio that does not award them | M7×M4×M2 | web | ✅ Fixed |
 | 40 | slows | at-setup | Adding one class means meeting 23 fields, one of them required | M2×M5 | web | ✅ Fixed |
 | 41 | slows | at-setup | Turning on public booking asks 11 questions, at least 3 with a right answer | M7×C2 | web | ✅ Fixed |
-| 42 | confuses | at-setup | Above-tier settings behave three inconsistent ways; only one reads as "upgrade" | M7 | web | ▶ Open |
+| 42 | confuses | at-setup | Above-tier settings behave three inconsistent ways; only one reads as "upgrade" | M7 | web | ✅ Fixed |
 | 43 | slows | at-setup | Discount campaigns are findable only by browsing the plugin catalogue | M8×M5 | web | ✅ Fixed |
 | 44 | slows | every-session | Contacts sorts by surname and cannot answer "who needs me today" | M4 | functions + web | ▶ Open |
-| 45 | confuses | at-setup | Setup is presented three times, three ways, with three dismissals and no finish line | M2 | web | ▶ Open |
-| 46 | confuses | at-setup | Day one shows 18 dashboard cards, 17 of them empty | M2 | web | ▶ Open |
-| 47 | confuses | once | The product tour never mentions activities, sessions, bookings, contacts or money | M2 | web | ▶ Open |
+| 45 | confuses | at-setup | Setup is presented three times, three ways, with three dismissals and no finish line | M2 | web | ✅ Fixed |
+| 46 | confuses | at-setup | Day one shows 18 dashboard cards, 17 of them empty | M2 | web | ✅ Fixed |
+| 47 | confuses | once | The product tour never mentions activities, sessions, bookings, contacts or money | M2 | web | ✅ Fixed |
 | 48 | slows | weekly | `automation_logs` is written by every trigger path and read by nothing | M9 | web | ✅ Fixed |
 | 49 | confuses | weekly | Unpublishing a surface leaves the bio-link pointing at a dead page | M11 | web + functions | ✅ Fixed |
 | 50 | slows | weekly | "Take it off the internet" is one unconfirmed click, next to Publish | M11 | web | ✅ Fixed |

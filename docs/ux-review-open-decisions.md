@@ -196,3 +196,17 @@ shared with public routes that have no app header.
 plans and availability, but it got none of its own because the file was reserved
 by a concurrent lane. Its natural destination is `/schedule` ("See these classes
 on the calendar").
+
+## 25. `multiple_managers` is flagged at studio but ships at coach (UX-42)
+**PARKED — a one-line contradiction, either way is cheap.** `PLAN_FEATURES` puts
+`multiple_managers` at **studio**, while `/settings/members` unlocks invites at
+**coach**. The roles page was gated at `coach` to match the behaviour the product
+actually ships, rather than the flag. Decide which is true and make the other
+agree.
+
+## 26. Two dashboard cards draw a chart on zero rows (UX-46)
+**FOLLOW-UP, small.** `ContactsSummaryCard` and `BookingsTrendCard` have no empty
+state — they render axes and a flat line, which reads as a broken chart rather
+than a new studio. Day one no longer shows them (the dashboard collapses to three
+cards until the team has a contact or a session), so the case is now rare rather
+than universal — but a studio that deletes its data still meets it.
