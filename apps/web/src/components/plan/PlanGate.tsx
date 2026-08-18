@@ -1,9 +1,7 @@
 'use client'
 
-import { Lock } from 'lucide-react'
-import { useTranslations } from 'next-intl'
 import { usePlan } from '@/hooks/usePlan'
-import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import type { SaasPlan, PlanFeature } from '@linyup/shared'
 import { PLAN_ORDER } from '@linyup/shared'
 
@@ -18,25 +16,8 @@ interface PlanGateProps {
   fallback?: React.ReactNode
 }
 
-function UpgradePrompt({ minPlan, feature }: { minPlan: SaasPlan; feature?: PlanFeature }) {
-  const t = useTranslations('PlanGate')
-  const { openUpgradeModal } = useUpgradeModal()
-  return (
-    <div className="rounded-lg border border-dashed p-6 text-center">
-      <Lock className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
-      <p className="text-sm font-medium text-foreground">
-        {t('requiresHigherPlan')}
-      </p>
-      <button
-        onClick={() => openUpgradeModal({ minPlan, feature })}
-        className="mt-2 text-xs text-primary hover:underline"
-      >
-        {t('seeUpgradeOptions')}
-      </button>
-    </div>
-  )
-}
-
+// The default refusal is the shared one (UX-42) — it names the plan and carries
+// the control that changes the answer. Never re-inline a lock panel here.
 export function PlanGate({ minPlan, feature, children, fallback }: PlanGateProps) {
   const { plan, isLoading, hasAccess, isAtLeast, hasFeature, minimumPlanFor } = usePlan()
 
@@ -46,7 +27,7 @@ export function PlanGate({ minPlan, feature, children, fallback }: PlanGateProps
     minPlan ?? (feature ? minimumPlanFor(feature) : PLAN_ORDER[0])
 
   if (!plan || !hasAccess) {
-    return <>{fallback ?? <UpgradePrompt minPlan={requiredPlan} feature={feature} />}</>
+    return <>{fallback ?? <PlanUpgradeNotice minPlan={requiredPlan} feature={feature} />}</>
   }
 
   const allowed =
@@ -54,7 +35,7 @@ export function PlanGate({ minPlan, feature, children, fallback }: PlanGateProps
     (feature ? hasFeature(feature) : true)
 
   if (!allowed) {
-    return <>{fallback ?? <UpgradePrompt minPlan={requiredPlan} feature={feature} />}</>
+    return <>{fallback ?? <PlanUpgradeNotice minPlan={requiredPlan} feature={feature} />}</>
   }
 
   return <>{children}</>

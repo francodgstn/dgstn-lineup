@@ -358,7 +358,19 @@
     "demoAgeAdults": "Adulti (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "demoViewLevel": "Grado",
-    "demoEmptyLevel": "Nessun contatto con grado impostato"
+    "demoEmptyLevel": "Nessun contatto con grado impostato",
+    "firstRunTitle": "La tua dashboard si riempie da sola",
+    "firstRunBody": "Non è ancora successo nulla, quindi non c'è nulla da contare. Ecco cosa comparirà — e cosa deve succedere prima.",
+    "firstRun_agenda_title": "L'agenda di oggi",
+    "firstRun_agenda_body": "appena una sessione è in calendario.",
+    "firstRun_figures_title": "I tuoi numeri",
+    "firstRun_figures_body": "presenze, prenotazioni e abbonamenti, quando avrai dei contatti.",
+    "firstRun_money_title": "I soldi",
+    "firstRun_money_body": "incassi e pagamenti recenti, dal primo incasso.",
+    "firstRun_trends_title": "Tendenze settimanali",
+    "firstRun_trends_body": "dopo qualche settimana di sessioni — una tendenza ha bisogno di un passato.",
+    "trendsNoHistoryTitle": "Non c'è ancora uno storico da rappresentare",
+    "trendsNoHistoryBody": "Le tendenze confrontano settimana per settimana. Dopo qualche sessione, i grafici compariranno qui da soli."
   },
   "Contacts": {
     "reqEmpty": "Nessuna richiesta in sospeso.",
@@ -1212,7 +1224,9 @@
     "scopedHint": "Vale solo per le proprie schede",
     "save": "Salva modifiche",
     "saving": "Salvataggio…",
-    "saved": "Salvato"
+    "saved": "Salvato",
+    "planLockedTitle": "I permessi coach richiedono un piano a pagamento",
+    "planLockedBody": "Il piano Gratuito è per una sola persona, quindi nessuno può ancora avere il ruolo coach. Puoi vedere cosa fa il ruolo — gli interruttori si attivano quando potrai invitare altre persone."
   },
   "Capabilities": {
     "contacts_view": "Vedi contatti",
@@ -3004,7 +3018,19 @@
       "howToBody": "Guide passo passo e aiuto alla configurazione sono qui quando ti servono.",
       "next": "Avanti",
       "prev": "Indietro",
-      "done": "Capito"
+      "done": "Capito",
+      "activitiesTitle": "1. Attività — ciò che insegni",
+      "activitiesBody": "Un'attività è una cosa che offri: yoga base, judo per bambini, una sessione privata. Contiene il prezzo, la capienza e chi può prenotare. Tutto il resto in Linyup parte da qui.",
+      "sessionsTitle": "2. Sessioni — quando si svolgono",
+      "sessionsBody": "Una sessione è un'attività in un orario. Mettila in calendario una volta e falla ripetere ogni settimana — oppure pubblica le tue disponibilità per gli appuntamenti individuali.",
+      "bookingsTitle": "3. Prenotazioni — chi viene",
+      "bookingsBody": "Le persone prenotano dalla tua pagina pubblica e ogni posto arriva qui — con lista d'attesa, check-in e l'elenco del giorno. Iscrivere qualcuno a mano funziona allo stesso modo.",
+      "paymentsTitle": "4. Pagamenti — farsi pagare",
+      "paymentsBody": "Abbonamenti, ingressi singoli, corsi e prodotti si chiudono qui. Contanti e bonifici si registrano a mano; collega Stripe per accettare le carte online.",
+      "checklistTitle": "La tua lista di configurazione",
+      "helpTitle": "Bloccato? Cerca il punto interrogativo",
+      "helpBody": "Il punto interrogativo in alto nella barra laterale apre la guida: come si incastrano i pezzi, quanto costa cosa e questo tour quando vuoi.",
+      "checklistBody": "Lo stesso percorso, con i tuoi dati. Si spunta da sola e resta in cima alla dashboard finché non sei operativo."
     },
     "setup": {
       "title": "Configurazione",
@@ -3038,7 +3064,11 @@
           "label": "Configura i gradi",
           "desc": "Configura un sistema di gradi se ne usi uno."
         }
-      }
+      },
+      "doneTitle": "Il tuo studio è pronto",
+      "doneBody": "Tutti i passaggi di configurazione sono completati — le persone possono trovarti e prenotare.",
+      "doneAction": "Vedi le tue pagine pubbliche",
+      "doneDismiss": "Chiudi"
     }
   },
   "SubscriptionCancellation": {
@@ -4891,7 +4921,8 @@
   },
   "PlanGate": {
     "requiresHigherPlan": "Questa funzionalità richiede un piano superiore",
-    "seeUpgradeOptions": "Vedi le opzioni di upgrade"
+    "seeUpgradeOptions": "Vedi le opzioni di upgrade",
+    "availableOnPlan": "Disponibile con {plan}"
   },
   "Automations": {
     "systemEmails": {
@@ -5774,7 +5805,10 @@
       "checklist": {
         "title": "Checklist di configurazione",
         "body": "L'avanzamento della configurazione del tuo studio, letto dai tuoi dati reali.",
-        "allDone": "Tutto pronto — il tuo studio è operativo."
+        "allDone": "Tutto pronto — il tuo studio è operativo.",
+        "open": "Apri la lista",
+        "restore": "Mostrala di nuovo nella dashboard",
+        "hiddenNote": "Nascosta nella dashboard — il titolare dello studio può ripristinarla."
       },
       "tips": {
         "title": "Suggerimenti & trucchi"

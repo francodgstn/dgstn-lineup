@@ -86,9 +86,9 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Lock,
 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { PaymentModesCard } from '@/components/payments/PaymentModesCard'
 import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
@@ -1873,13 +1873,14 @@ function EmailSenderForm({
           </p>
 
           {!isPaidPlan ? (
-            <div className="rounded-lg border border-dashed px-4 py-4 flex items-start gap-3">
-              <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium">{t('byoUpsellTitle')}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('byoUpsellDescription')}</p>
-              </div>
-            </div>
+            /* UX-42: this used to be a lock icon, upsell copy and nothing to
+               click — a refusal with no way out. It speaks through the one
+               shared notice now, which names the plan and opens the modal. */
+            <PlanUpgradeNotice
+              minPlan="coach"
+              title={t('byoUpsellTitle')}
+              description={t('byoUpsellDescription')}
+            />
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-2">

@@ -2,22 +2,33 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { useRouter } from '@/i18n/navigation'
-import { doc, updateDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { Check, ChevronRight, X, Rocket, AlertTriangle } from 'lucide-react'
+import { Check, ChevronRight, X, Rocket, AlertTriangle, PartyPopper } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
+import { setSetupDismissed } from '@/lib/onboarding'
 import { useSetupChecklist, type SetupStepKey } from '@/hooks/useSetupChecklist'
 import { Card, CardContent } from '@/components/ui/card'
 
 /**
- * Phase 5 (activation) of the onboarding initiative: a data-driven setup
- * checklist shown at the top of the dashboard. Each step auto-completes from
- * real data; the card hides once every required step is done, or when an owner
- * dismisses it (persisted on the team doc so co-managers don't see it again).
+ * THE SETUP SURFACE (UX-45). A data-driven checklist at the top of the
+ * dashboard; each step auto-completes from real data (`useSetupChecklist`).
+ *
+ * It is the only place the steps are rendered, and `teams/{id}.setup_dismissed`
+ * (via `setSetupDismissed`) is the only thing that hides them. Setup used to be
+ * presented in several places, each with its own dismissal model, so a studio
+ * could dismiss it and still meet it two screens later:
+ *
+ *  - the Discover panel's "Setup" tab re-listed the same steps behind a
+ *    per-BROWSER localStorage flag — deleted (the panel keeps Tips + Plugins);
+ *  - the How-to page's "Setup checklist" card rendered a third copy that could
+ *    never be dismissed — it is now a POINTER at this card, and the place where
+ *    a dismissal can be undone.
+ *
+ * There is also a finish line: when every required step is done the card says
+ * so once, with a control that closes it — it does not simply vanish, because a
+ * surface that disappears silently never told anybody they had finished.
  */
 export function SetupChecklist() {
   const t = useTranslations('Onboarding')
@@ -38,27 +49,58 @@ export function SetupChecklist() {
 
   const dismissed = team?.setup_dismissed === true || localDismissed
 
-  // Hide until loaded, once everything required is done, or when dismissed —
-  // UNLESS the "done" sessions step is lying (UX-2 interim): existence-only
-  // completion can report every required step done for a class nobody can
-  // book, and that is exactly the case this warning exists to surface, so the
-  // card must not disappear out from under it.
-  if (loading || (allRequiredDone && !sessionsNotActuallyBookable) || dismissed) return null
-
   async function handleDismiss() {
     setLocalDismissed(true)
     // Only owners may update the team doc (Firestore rules); persist for them.
     if (currentTeamId && can('team.settings')) {
       try {
-        await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), { setup_dismissed: true })
+        await setSetupDismissed(currentTeamId, true)
       } catch {
         /* non-fatal: card already hidden locally */
       }
     }
   }
 
+  if (loading || dismissed) return null
+
+  // The finish line. Everything required is done and nobody has closed the card
+  // yet, so say it — once, with a way to put it away. The exception is UX-2's
+  // interim warning: the "sessions" step completes on existence alone, so it
+  // can report done for a class nobody can book. That is not a finish, and the
+  // full checklist below must stay up to say why.
+  if (allRequiredDone && !sessionsNotActuallyBookable) {
+    return (
+      <Card data-tour="setup-checklist" className="border-primary/30 bg-primary/[0.03]">
+        <CardContent className="flex flex-wrap items-center gap-3 p-5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <PartyPopper className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold leading-tight">{t('setup.doneTitle')}</p>
+            <p className="text-sm text-muted-foreground">{t('setup.doneBody')}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={'/public-page' as Route}
+              className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              {t('setup.doneAction')}
+            </Link>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {t('setup.doneDismiss')}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
-    <Card className="border-primary/30 bg-primary/[0.03]">
+    <Card data-tour="setup-checklist" className="border-primary/30 bg-primary/[0.03]">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">

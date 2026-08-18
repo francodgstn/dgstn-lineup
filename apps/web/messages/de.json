@@ -358,7 +358,19 @@
     "demoAgeAdults": "Erwachsene (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "demoViewLevel": "Stufe",
-    "demoEmptyLevel": "Keine Kontakte mit gesetztem Rang"
+    "demoEmptyLevel": "Keine Kontakte mit gesetztem Rang",
+    "firstRunTitle": "Dein Dashboard füllt sich von selbst",
+    "firstRunBody": "Bisher ist nichts passiert, also gibt es nichts zu zählen. Das hier erscheint — und das muss zuerst passieren.",
+    "firstRun_agenda_title": "Tagesagenda",
+    "firstRun_agenda_body": "sobald eine Session im Kalender steht.",
+    "firstRun_figures_title": "Deine Zahlen",
+    "firstRun_figures_body": "Teilnahme, Buchungen und Abos, sobald du Kontakte hast.",
+    "firstRun_money_title": "Geld",
+    "firstRun_money_body": "Einnahmen und letzte Zahlungen, ab der ersten Zahlung.",
+    "firstRun_trends_title": "Wochentrends",
+    "firstRun_trends_body": "nach einigen Wochen mit Sessions — ein Trend braucht Vergangenheit.",
+    "trendsNoHistoryTitle": "Noch keine Historie für Diagramme",
+    "trendsNoHistoryBody": "Trends vergleichen Woche für Woche. Sobald ein paar Sessions gelaufen sind, erscheinen die Diagramme hier von selbst."
   },
   "Contacts": {
     "reqEmpty": "Keine offenen Anfragen.",
@@ -1212,7 +1224,9 @@
     "scopedHint": "Gilt nur für eigene Datensätze",
     "save": "Änderungen speichern",
     "saving": "Speichern…",
-    "saved": "Gespeichert"
+    "saved": "Gespeichert",
+    "planLockedTitle": "Coach-Berechtigungen erfordern einen kostenpflichtigen Plan",
+    "planLockedBody": "Der Gratis-Plan ist für eine Person, daher kann die Coach-Rolle noch niemand haben. Du siehst hier, was die Rolle kann — die Schalter werden aktiv, sobald du Personen einladen kannst."
   },
   "Capabilities": {
     "contacts_view": "Kontakte ansehen",
@@ -3004,7 +3018,19 @@
       "howToBody": "Schritt-für-Schritt-Anleitungen und Einrichtungshilfe findest du hier, wann immer du sie brauchst.",
       "next": "Weiter",
       "prev": "Zurück",
-      "done": "Verstanden"
+      "done": "Verstanden",
+      "activitiesTitle": "1. Aktivitäten — was du unterrichtest",
+      "activitiesBody": "Eine Aktivität ist ein Angebot: Yoga Basics, Kinder-Judo, ein Einzeltraining. Sie trägt Preis, Kapazität und die Frage, wer buchen darf. Alles andere in Linyup beginnt hier.",
+      "sessionsTitle": "2. Sessions — wann sie stattfinden",
+      "sessionsBody": "Eine Session ist eine Aktivität zu einer Zeit. Einmal in den Kalender legen und wöchentlich wiederholen lassen — oder Verfügbarkeiten veröffentlichen und Termine buchen lassen.",
+      "bookingsTitle": "3. Buchungen — wer kommt",
+      "bookingsBody": "Gebucht wird über deine öffentliche Seite, und jeder Platz landet hier — mit Warteliste, Check-in und Tagesliste. Manuelles Eintragen funktioniert gleich.",
+      "paymentsTitle": "4. Zahlungen — bezahlt werden",
+      "paymentsBody": "Abos, Einzeleintritte, Kurse und Produkte laufen hier zusammen. Bargeld und Überweisungen kannst du manuell erfassen; verbinde Stripe, wenn du online Karten akzeptieren willst.",
+      "checklistTitle": "Deine Einrichtungs-Checkliste",
+      "helpTitle": "Nicht weiter? Achte auf das Fragezeichen",
+      "helpBody": "Das Fragezeichen oben in der Seitenleiste öffnet die Anleitung: wie alles zusammenspielt, was was kostet — und diese Tour, wann immer du willst.",
+      "checklistBody": "Derselbe Weg, mit deinen eigenen Daten. Sie hakt sich selbst ab und steht oben im Dashboard, bis du startklar bist."
     },
     "setup": {
       "title": "Einrichtung",
@@ -3038,7 +3064,11 @@
           "label": "Ränge einrichten",
           "desc": "Richte ein Rangsystem ein, falls du eines nutzt."
         }
-      }
+      },
+      "doneTitle": "Dein Studio ist bereit",
+      "doneBody": "Alle Einrichtungsschritte sind erledigt — Leute finden dich und können buchen.",
+      "doneAction": "Öffentliche Seiten ansehen",
+      "doneDismiss": "Schliessen"
     }
   },
   "SubscriptionCancellation": {
@@ -4891,7 +4921,8 @@
   },
   "PlanGate": {
     "requiresHigherPlan": "Diese Funktion erfordert einen höheren Plan",
-    "seeUpgradeOptions": "Upgrade-Optionen ansehen"
+    "seeUpgradeOptions": "Upgrade-Optionen ansehen",
+    "availableOnPlan": "Verfügbar ab {plan}"
   },
   "Automations": {
     "systemEmails": {
@@ -5774,7 +5805,10 @@
       "checklist": {
         "title": "Einrichtungs-Checkliste",
         "body": "Der Einrichtungsfortschritt deines Studios, gelesen aus deinen echten Daten.",
-        "allDone": "Alles bereit — dein Studio ist startklar."
+        "allDone": "Alles bereit — dein Studio ist startklar.",
+        "open": "Checkliste öffnen",
+        "restore": "Wieder im Dashboard anzeigen",
+        "hiddenNote": "Im Dashboard ausgeblendet — die Studio-Inhaberin kann sie zurückholen."
       },
       "tips": {
         "title": "Tipps & Tricks"

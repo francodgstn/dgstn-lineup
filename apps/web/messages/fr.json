@@ -358,7 +358,19 @@
     "demoAgeAdults": "Adultes (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "demoViewLevel": "Niveau",
-    "demoEmptyLevel": "Aucun contact avec un classement défini"
+    "demoEmptyLevel": "Aucun contact avec un classement défini",
+    "firstRunTitle": "Votre tableau de bord se remplit tout seul",
+    "firstRunBody": "Rien ne s'est encore passé, il n'y a donc rien à compter. Voici ce qui apparaîtra — et ce qui doit arriver d'abord.",
+    "firstRun_agenda_title": "L'agenda du jour",
+    "firstRun_agenda_body": "dès qu'une séance est au calendrier.",
+    "firstRun_figures_title": "Vos chiffres",
+    "firstRun_figures_body": "présence, réservations et abonnements, dès que vous aurez des contacts.",
+    "firstRun_money_title": "L'argent",
+    "firstRun_money_body": "recettes et paiements récents, dès le premier encaissement.",
+    "firstRun_trends_title": "Tendances hebdomadaires",
+    "firstRun_trends_body": "après quelques semaines de séances — une tendance a besoin de passé.",
+    "trendsNoHistoryTitle": "Pas encore d'historique à représenter",
+    "trendsNoHistoryBody": "Les tendances comparent les semaines entre elles. Après quelques séances, les graphiques apparaîtront ici d'eux-mêmes."
   },
   "Contacts": {
     "reqEmpty": "Aucune demande en attente.",
@@ -1212,7 +1224,9 @@
     "scopedHint": "S’applique uniquement à ses propres fiches",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
-    "saved": "Enregistré"
+    "saved": "Enregistré",
+    "planLockedTitle": "Les autorisations coach nécessitent un forfait payant",
+    "planLockedBody": "Le forfait Gratuit est prévu pour une seule personne : personne ne peut donc encore avoir le rôle coach. Vous pouvez voir ce que fait ce rôle — les commutateurs s'activeront dès que vous pourrez inviter des personnes."
   },
   "Capabilities": {
     "contacts_view": "Voir les contacts",
@@ -3004,7 +3018,19 @@
       "howToBody": "Des guides pas à pas et de l'aide à la configuration vous attendent ici dès que besoin.",
       "next": "Suivant",
       "prev": "Retour",
-      "done": "Compris"
+      "done": "Compris",
+      "activitiesTitle": "1. Activités — ce que vous enseignez",
+      "activitiesBody": "Une activité, c'est une chose que vous proposez : yoga débutant, judo enfants, une séance privée. Elle porte le prix, la capacité et qui peut réserver. Tout le reste dans Linyup part de là.",
+      "sessionsTitle": "2. Séances — quand elles ont lieu",
+      "sessionsBody": "Une séance, c'est une activité à un moment donné. Mettez-la au calendrier une fois et laissez-la se répéter chaque semaine — ou publiez vos disponibilités pour des rendez-vous individuels.",
+      "bookingsTitle": "3. Réservations — qui vient",
+      "bookingsBody": "Les gens réservent depuis votre page publique et chaque place arrive ici — avec la liste d'attente, le check-in et la liste du jour. Inscrire quelqu'un à la main fonctionne pareil.",
+      "paymentsTitle": "4. Paiements — être payé",
+      "paymentsBody": "Abonnements, entrées à l'unité, cours et produits se règlent ici. L'espèce et les virements s'enregistrent à la main ; connectez Stripe pour accepter les cartes en ligne.",
+      "checklistTitle": "Votre liste de configuration",
+      "helpTitle": "Bloqué ? Cherchez le point d'interrogation",
+      "helpBody": "Le point d'interrogation en haut de la barre latérale ouvre le guide : comment tout s'articule, ce que coûte quoi, et cette visite à tout moment.",
+      "checklistBody": "Le même parcours, avec vos données. Elle se coche toute seule et reste en haut du tableau de bord jusqu'à ce que vous soyez prêt."
     },
     "setup": {
       "title": "Configuration",
@@ -3038,7 +3064,11 @@
           "label": "Configurer les rangs",
           "desc": "Configurez un système de rangs si vous en utilisez un."
         }
-      }
+      },
+      "doneTitle": "Votre studio est prêt",
+      "doneBody": "Toutes les étapes de configuration sont faites — on peut vous trouver et réserver.",
+      "doneAction": "Voir vos pages publiques",
+      "doneDismiss": "Fermer"
     }
   },
   "SubscriptionCancellation": {
@@ -4891,7 +4921,8 @@
   },
   "PlanGate": {
     "requiresHigherPlan": "Cette fonctionnalité nécessite une offre supérieure",
-    "seeUpgradeOptions": "Voir les options de mise à niveau"
+    "seeUpgradeOptions": "Voir les options de mise à niveau",
+    "availableOnPlan": "Disponible avec {plan}"
   },
   "Automations": {
     "systemEmails": {
@@ -5774,7 +5805,10 @@
       "checklist": {
         "title": "Checklist d'installation",
         "body": "L'avancement de la configuration de votre studio, lu depuis vos données réelles.",
-        "allDone": "Tout est prêt — votre studio est opérationnel."
+        "allDone": "Tout est prêt — votre studio est opérationnel.",
+        "open": "Ouvrir la liste",
+        "restore": "L'afficher à nouveau sur le tableau de bord",
+        "hiddenNote": "Masquée sur le tableau de bord — le propriétaire du studio peut la réafficher."
       },
       "tips": {
         "title": "Trucs & astuces"

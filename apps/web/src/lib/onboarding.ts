@@ -1,5 +1,6 @@
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from './firebase'
+import { TEAMS_COLLECTION } from '@linyup/shared'
 
 /**
  * Helpers for reading/writing per-user onboarding progress
@@ -21,6 +22,20 @@ export async function markTourDone(uid: string): Promise<void> {
     { onboarding: { tourDone: true, tourDoneAt: serverTimestamp() } },
     { merge: true }
   )
+}
+
+/**
+ * THE setup-checklist dismissal (UX-45). One flag, on the team doc, written
+ * only here: `teams/{teamId}.setup_dismissed`. It is team-wide on purpose — a
+ * studio finishes setting up once, not once per manager per browser.
+ *
+ * Writing it needs the `team.settings` capability (owner), which the callers
+ * check; a manager's dismissal is local to their session and the card is back
+ * on the next load. Reversible from How-to → "Setup checklist", which is the
+ * only reason this is exported rather than inlined in the card.
+ */
+export async function setSetupDismissed(teamId: string, dismissed: boolean): Promise<void> {
+  await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { setup_dismissed: dismissed })
 }
 
 /** Re-arm the product tour so it shows again (e.g. "Restart tour" in settings). */

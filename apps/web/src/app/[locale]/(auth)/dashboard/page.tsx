@@ -17,7 +17,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PlanGate } from '@/components/plan/PlanGate'
-import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import {
   Users,
   TrendingUp,
@@ -27,12 +26,10 @@ import {
   UserPlus,
   ArrowRight,
   Clock,
-  Lock,
   ChevronDown,
   Zap,
   ChevronLeft,
   ChevronRight,
-  Banknote,
   Globe,
 } from 'lucide-react'
 import {
@@ -73,6 +70,9 @@ import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinance
 // import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
 import { DiscoverPanel } from '@/components/dashboard/DiscoverPanel'
 import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotificationsBanner'
+import { FirstRunCard } from '@/components/dashboard/FirstRunCard'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
+import { useSetupChecklist } from '@/hooks/useSetupChecklist'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -601,43 +601,30 @@ function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
   )
 }
 
-// ─── trends upsell (Coach plan) ──────────────────────────────────────────────
+// ─── above-tier sections ─────────────────────────────────────────────────────
+// Both used to hand-roll a dashed panel with a hardcoded English "See upgrade
+// options" link and no plan name. They speak through the one shared notice now
+// (UX-42) — it names the tier and opens the upgrade modal.
 
 function TrendsUpsell() {
   const t = useTranslations('Dashboard')
-  const { openUpgradeModal } = useUpgradeModal()
   return (
-    <div className="rounded-xl border border-dashed p-8 text-center space-y-3">
-      <TrendingUp className="h-8 w-8 mx-auto text-muted-foreground/40" />
-      <p className="text-sm font-medium">{t('sectionTrends')}</p>
-      <p className="text-xs text-muted-foreground max-w-xs mx-auto">{t('trendsUpsell')}</p>
-      <button
-        onClick={() => openUpgradeModal({ minPlan: 'studio' })}
-        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-      >
-        <Lock className="h-3 w-3" />
-        See upgrade options
-      </button>
-    </div>
+    <PlanUpgradeNotice
+      minPlan="studio"
+      title={t('sectionTrends')}
+      description={t('trendsUpsell')}
+    />
   )
 }
 
 function FinanceUpsell() {
   const t = useTranslations('Dashboard')
-  const { openUpgradeModal } = useUpgradeModal()
   return (
-    <div className="rounded-xl border border-dashed p-8 text-center space-y-3">
-      <Banknote className="h-8 w-8 mx-auto text-muted-foreground/40" />
-      <p className="text-sm font-medium">{t('sectionFinance')}</p>
-      <p className="text-xs text-muted-foreground max-w-xs mx-auto">{t('financeUpsell')}</p>
-      <button
-        onClick={() => openUpgradeModal({ minPlan: 'studio' })}
-        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-      >
-        <Lock className="h-3 w-3" />
-        See upgrade options
-      </button>
-    </div>
+    <PlanUpgradeNotice
+      minPlan="studio"
+      title={t('sectionFinance')}
+      description={t('financeUpsell')}
+    />
   )
 }
 
@@ -650,9 +637,29 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
   const [trendsWeeks, setTrendsWeeks] = useState<number>(13)
   const [compareWith, setCompareWith] = useState<CompareWith>('none')
 
+  const t = useTranslations('Dashboard')
   const data = useDashboardData(teamId, trendsWeeks, compareWith)
 
   const sharedProps = { trendsWeeks, compareWith }
+
+  // UX-46: two of these charts have no empty state at all — with nothing to
+  // plot they draw axes and a flat line, which reads as a broken chart rather
+  // than a young studio. A trend needs history; say so once instead of drawing
+  // five of them. (Deliberately NOT gated on the period selector: no reports
+  // and no sessions means no history at any width.)
+  const noHistory =
+    !data.isLoading && data.weeklyReports.length === 0 && data.sessions.length === 0
+  if (noHistory) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
+          <TrendingUp className="h-7 w-7 text-muted-foreground/40" />
+          <p className="text-sm font-medium">{t('trendsNoHistoryTitle')}</p>
+          <p className="max-w-sm text-xs text-muted-foreground">{t('trendsNoHistoryBody')}</p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -769,6 +776,18 @@ export default function DashboardPage() {
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
   const { data: sessions, isLoading: sessionsLoading } = useUpcomingSessions(currentTeamId)
   const { data: subTypes = [] } = useSubscriptionTypes(currentTeamId)
+  // Shared cache with the setup checklist card — no extra reads.
+  const { steps: setupSteps, loading: setupLoading } = useSetupChecklist(currentTeamId)
+
+  // UX-46: a studio with no contacts and no sessions has nothing for any of the
+  // data cards to say, so it doesn't get them. `sessions` here is the checklist
+  // probe (ANY session ever), not the upcoming-sessions query — a studio that
+  // ran classes last month and has none booked ahead is not a new studio.
+  const stepDone = (key: string) => setupSteps.find((s) => s.key === key)?.done ?? false
+  const resolvingFirstRun = setupLoading || contactsLoading
+  const isFirstRun = !resolvingFirstRun && !stepDone('contacts') && !stepDone('sessions')
+  /** The data half of the dashboard: agenda, figures, money, roster, trends. */
+  const showData = !resolvingFirstRun && !isFirstRun
 
   const activeMembers =
     contacts?.filter((c) => c.affiliation_summary?.has_active && !c.archived_at).length ?? null
@@ -803,7 +822,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* ── 0. Setup checklist (new teams only; auto-hides when done/dismissed) ── */}
+      {/* ── 0. Setup checklist — THE setup surface (UX-45). Auto-completes from
+             real data, says so when it's finished, hides when dismissed. ── */}
       <SetupChecklist />
 
       {/* ── 0b. Team notifications (org access requests, etc.) ── */}
@@ -821,20 +841,36 @@ export default function DashboardPage() {
         {/* ── 2. Quick actions (single dropdown chip on very small screens) ── */}
         <QuickActions teamSlug={teamSlug} />
 
-        {/* ── 3. Agenda + discovery panel ── */}
-        {/* min-h gives the row a floor: both cards stretch (h-full), so without
+        {/* While we're still deciding whether it IS day one. The wait used to
+            be paid in a screenful of skeletons; it's one now. */}
+        {resolvingFirstRun && <Skeleton className="h-64 w-full rounded-xl" />}
+
+        {isFirstRun && (
+          <div className="grid grid-cols-1 gap-6 lg:min-h-[380px] lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <FirstRunCard steps={setupSteps} />
+            </div>
+            <DiscoverPanel />
+          </div>
+        )}
+
+        {/* ── 3. Agenda + discovery panel ──
+            min-h gives the row a floor: both cards stretch (h-full), so without
             it the height collapses to whatever the discovery panel happens to
             need — around 275px on a quiet day, which reads as cramped. Desktop
             only; on mobile the cards stack and a floor would just add dead
             space. The agenda's own max-h (440px) is the ceiling above this. */}
-        <div className="grid grid-cols-1 gap-6 lg:min-h-[380px] lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <AgendaCard teamId={currentTeamId} />
+        {showData && (
+          <div className="grid grid-cols-1 gap-6 lg:min-h-[380px] lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <AgendaCard teamId={currentTeamId} />
+            </div>
+            <DiscoverPanel />
           </div>
-          <DiscoverPanel />
-        </div>
+        )}
 
         {/* ── 4. Highlights ── */}
+        {showData && (
         <StatsStrip>
           <StatCard
             title={t('statEngaged')}
@@ -880,36 +916,41 @@ export default function DashboardPage() {
             href="/contacts"
           />
         </StatsStrip>
+        )}
       </section>
 
-      {/* ── 3. Finance (Studio+ only) ── Money sits directly under the
-          highlights: it's the question an owner opens the dashboard to answer,
-          so it outranks the roster breakdown below it. */}
-      <section className="space-y-5">
-        <SectionHeading>{t('sectionFinance')}</SectionHeading>
-        <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
-          <DashboardFinanceSection teamId={currentTeamId} />
-        </PlanGate>
-      </section>
+      {showData && (
+        <>
+          {/* ── 3. Finance (Studio+ only) ── Money sits directly under the
+              highlights: it's the question an owner opens the dashboard to answer,
+              so it outranks the roster breakdown below it. */}
+          <section className="space-y-5">
+            <SectionHeading>{t('sectionFinance')}</SectionHeading>
+            <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
+              <DashboardFinanceSection teamId={currentTeamId} />
+            </PlanGate>
+          </section>
 
-      {/* ── 4. Contacts snapshot ── */}
-      <section className="space-y-5">
-        <SectionHeading>{t('sectionContactsSnapshot')}</SectionHeading>
-        <ContactsSnapshot
-          contacts={contacts}
-          loading={contactsLoading}
-          rankingSystems={team?.ranking_systems}
-          engagementThresholds={team?.engagement_thresholds}
-        />
-      </section>
+          {/* ── 4. Contacts snapshot ── */}
+          <section className="space-y-5">
+            <SectionHeading>{t('sectionContactsSnapshot')}</SectionHeading>
+            <ContactsSnapshot
+              contacts={contacts}
+              loading={contactsLoading}
+              rankingSystems={team?.ranking_systems}
+              engagementThresholds={team?.engagement_thresholds}
+            />
+          </section>
 
-      {/* ── 5. Trends (Studio+ only) ── */}
-      <section className="space-y-5">
-        <SectionHeading>{t('sectionTrends')}</SectionHeading>
-        <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
-          <TrendsSection teamId={currentTeamId} />
-        </PlanGate>
-      </section>
+          {/* ── 5. Trends (Studio+ only) ── */}
+          <section className="space-y-5">
+            <SectionHeading>{t('sectionTrends')}</SectionHeading>
+            <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
+              <TrendsSection teamId={currentTeamId} />
+            </PlanGate>
+          </section>
+        </>
+      )}
     </div>
   )
 }

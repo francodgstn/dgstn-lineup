@@ -358,7 +358,19 @@
     "demoAgeAdults": "Adults (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "demoViewLevel": "Level",
-    "demoEmptyLevel": "No contacts with rank set"
+    "demoEmptyLevel": "No contacts with rank set",
+    "firstRunTitle": "Your dashboard fills itself in",
+    "firstRunBody": "Nothing has happened yet, so there is nothing to count. Here is what appears — and what has to happen first.",
+    "firstRun_agenda_title": "Today's agenda",
+    "firstRun_agenda_body": "as soon as a session is on the calendar.",
+    "firstRun_figures_title": "Your figures",
+    "firstRun_figures_body": "attendance, bookings and subscriptions, once you have contacts.",
+    "firstRun_money_title": "Money",
+    "firstRun_money_body": "takings and recent payments, from the first one you take.",
+    "firstRun_trends_title": "Weekly trends",
+    "firstRun_trends_body": "after a few weeks of sessions — a trend needs a past.",
+    "trendsNoHistoryTitle": "No history to chart yet",
+    "trendsNoHistoryBody": "Trends compare week against week. Once you have run a few sessions, the charts appear here on their own."
   },
   "Contacts": {
     "reqEmpty": "No pending requests.",
@@ -1212,7 +1224,9 @@
     "scopedHint": "Applies only to their own records",
     "save": "Save changes",
     "saving": "Saving…",
-    "saved": "Saved"
+    "saved": "Saved",
+    "planLockedTitle": "Coach permissions need a paid plan",
+    "planLockedBody": "The Free plan is for one person, so nobody can hold the Coach role yet. You can see what the role does — the switches turn on once you can invite people."
   },
   "Capabilities": {
     "contacts_view": "View contacts",
@@ -3004,7 +3018,19 @@
       "howToBody": "Step-by-step guides and setup help live here whenever you need a hand.",
       "next": "Next",
       "prev": "Back",
-      "done": "Got it"
+      "done": "Got it",
+      "activitiesTitle": "1. Activities — what you teach",
+      "activitiesBody": "An activity is one thing you offer: Yoga Basics, Kids Judo, a private session. It carries the price, the capacity and who is allowed to book. Everything else in Linyup starts here.",
+      "sessionsTitle": "2. Sessions — when it happens",
+      "sessionsBody": "A session is one activity at one time. Put it on the calendar once and let it repeat weekly — or publish your availability and let people pick a slot for a one-to-one appointment.",
+      "bookingsTitle": "3. Bookings — who's coming",
+      "bookingsBody": "People book from your public page, and every seat lands here — with the waiting list, check-in and the day's roster. Booking someone in by hand works the same way.",
+      "paymentsTitle": "4. Payments — getting paid",
+      "paymentsBody": "Subscriptions, drop-ins, courses and products all settle here. Cash and bank transfers can be recorded by hand; connect Stripe when you want to take cards online.",
+      "checklistTitle": "Your setup checklist",
+      "helpTitle": "Stuck? Look for the question mark",
+      "helpBody": "The question-mark icon at the top of the sidebar opens How-to: how the pieces fit together, what everything costs, and this tour again whenever you want it.",
+      "checklistBody": "That same path, with your own data filled in. It ticks itself off as you go and lives at the top of the dashboard until you're open for business."
     },
     "setup": {
       "title": "Get set up",
@@ -3038,7 +3064,11 @@
           "label": "Set up ranks",
           "desc": "Configure a ranking system if you use one."
         }
-      }
+      },
+      "doneTitle": "Your studio is ready",
+      "doneBody": "Every setup step is done — people can find you and book.",
+      "doneAction": "See your public pages",
+      "doneDismiss": "Close"
     }
   },
   "SubscriptionCancellation": {
@@ -4891,7 +4921,8 @@
   },
   "PlanGate": {
     "requiresHigherPlan": "This feature requires a higher plan",
-    "seeUpgradeOptions": "See upgrade options"
+    "seeUpgradeOptions": "See upgrade options",
+    "availableOnPlan": "Available on {plan}"
   },
   "Automations": {
     "systemEmails": {
@@ -5774,7 +5805,10 @@
       "checklist": {
         "title": "Setup checklist",
         "body": "Your studio's setup progress, read from your live data.",
-        "allDone": "All set — your studio is ready."
+        "allDone": "All set — your studio is ready.",
+        "open": "Open the checklist",
+        "restore": "Show it on the dashboard again",
+        "hiddenNote": "Hidden on the dashboard — the studio owner can bring it back."
       },
       "tips": {
         "title": "Tips & tricks"

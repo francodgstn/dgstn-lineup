@@ -7,6 +7,8 @@ import { useTranslations } from 'next-intl'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
+import { usePlan } from '@/hooks/usePlan'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import {
   TEAMS_COLLECTION,
   ROLE_CONFIG_SUBCOLLECTION,
@@ -34,8 +36,15 @@ export default function RolePermissionsPage() {
   const tc = useTranslations('Capabilities')
   const { currentTeamId, user } = useAuth()
   const { can } = useCapabilities()
+  const { isAtLeast } = usePlan()
   const qc = useQueryClient()
-  const canEdit = can('members.manage')
+  // UX-42: this page had NO plan awareness at all — a complete, saveable Coach
+  // permission editor on the Free plan, where a second user cannot exist, so
+  // nobody can ever hold the role being configured. It stays visible (the
+  // studio should be able to see what the role does before paying for it) and
+  // says why it can't be used, which is the same gate the invite button uses.
+  const planAllows = isAtLeast('coach')
+  const canEdit = can('members.manage') && planAllows
 
   const { data: stored, isLoading } = useQuery({
     queryKey: ['role-config', currentTeamId, 'coach'],
@@ -110,6 +119,15 @@ export default function RolePermissionsPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">{t('coachAssignHint')}</p>
+
+      {!planAllows && (
+        <PlanUpgradeNotice
+          minPlan="coach"
+          variant="inline"
+          title={t('planLockedTitle')}
+          description={t('planLockedBody')}
+        />
+      )}
 
       <Card>
         <CardHeader>
