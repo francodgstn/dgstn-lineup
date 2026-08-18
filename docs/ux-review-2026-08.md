@@ -91,7 +91,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 12 | costs-money | weekly | Payment corrections make the data worse than the mistake did | M6 | functions + web | ✅ Fixed |
 | 13 | costs-money | weekly | Automations can email the whole list with no preview, and "Run Now" re-sends | M9 | web | ✅ Fixed |
 | 14 | costs-money | every-session | A visitor commits without seeing cancellation terms or the no-show fee | C2 | web + functions | ✅ Fixed |
-| 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ▶ Open |
+| 15 | costs-money | weekly | Bulk plan changes keep the old plan's price | M4 | web | ✅ Fixed |
 | 16 | costs-money | once | Plugin removal is one unconfirmed click, including paid add-ons | M8 | web | ✅ Fixed |
 | 17 | costs-money | at-setup | Two things called Stripe on one screen; the record-only one says "Enabled" | M6 | web | ✅ Fixed |
 | 18 | slows | every-session | Confirming a booking writes different data depending on which page you used | M3×M4×M1 | web/functions | ▶ Open |
@@ -108,7 +108,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 29 | slows | every-session | Find "Schedule" only after scanning past five less-used items — a regression from `6d94638` | M1 | web | ▶ Open |
 | 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ▶ Open |
 | 31 | confuses | every-session | The bio-link — the one artifact meant to be shared — previews as "Linyup" | C1 | web | ▶ Open |
-| 32 | costs-money | weekly | Cancelling from the emailed link answers in English and says nothing about money | C2 | web | ▶ Open |
+| 32 | costs-money | weekly | Cancelling from the emailed link answers in English and says nothing about money | C2 | web | ✅ Fixed |
 | 33 | blocks | at-setup | A studio that cannot take money still advertises priced doors | C2×M6 | web + functions | ▶ Open |
 | 34 | blocks | at-setup | The org Members tab is a fully-styled form whose callables do not exist | M10 | functions + web | ▶ Open |
 | 35 | costs-money | weekly | Org plugin installs hand affiliated studios plan-gated features for free | M10 | web | ▶ Open |
@@ -132,7 +132,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 53 | slows | weekly | Class bookings send no calendar invite; the manage link exists only in the email | C2 | functions + web | ▶ Open |
 | 54 | confuses | every-session | Filtering contacts in German reads English — 15 hardcoded strings | M4 | web | ▶ Open |
 | 55 | slows | every-session | The member portal links to the shop four ways and to booking not at all | C4 | web | ▶ Open |
-| 56 | confuses | weekly | Cancelling a class says nothing about the credit, and offers "try again" for a permanent refusal | C4 | web | ▶ Open |
+| 56 | confuses | weekly | Cancelling a class says nothing about the credit, and offers "try again" for a permanent refusal | C4 | web | ✅ Fixed |
 | 57 | confuses | every-session | A prospect on the Shop has no path to the studio's terms | C3 | web | ▶ Open |
 | 58 | confuses | weekly | Two competing sign-in UIs fire off the same state on gated forms | C3 | web | ▶ Open |
 | 59 | slows | weekly | A settled-in-cash appointment whose payment link went unpaid has no action at all | M6 | web + functions | ▶ Open |
@@ -154,8 +154,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 75 | blocks | weekly | An org admin cannot cancel, reactivate or pay for her own organisation | M10×M6 | functions | ✅ Fixed |
 | 76 | costs-money | every-session | A paid drop-in confirms nothing — no email, and no route to what you bought | C2×C4 | functions + web | ✅ Fixed |
 | 77 | costs-money | weekly | Three more paid rails confirm nothing, and a fourth confirms behind a switch | C2×C3×M6 | functions | ✅ Fixed |
-| 79 | slows | weekly | A studio sells a product and the product knows nothing about handing it over | C3×M5 | shared + web | ▶ Open |
-| 80 | costs-money | weekly | Everything sold at the desk still confirms nothing | M6×C4 | functions | ▶ Open |
+| 79 | slows | weekly | A studio sells a product and the product knows nothing about handing it over | C3×M5 | shared + web | ✅ Fixed |
+| 80 | costs-money | weekly | Everything sold at the desk still confirms nothing | M6×C4 | functions | ✅ Fixed |
 | 81 | confuses | every-session | Every email's plain-text half runs its headings into the following sentence | C2×M9 | functions | ✅ Fixed |
 | 78 | confuses | every-session | A contact's pending-booking counter moves only if a mail is switched on | M4×M3 | functions | ✅ Fixed |
 | 82 | blocks | weekly | A member can buy a plan and still be locked out, with no self-serve way back | M5×M8 | functions | ✅ Fixed |
@@ -173,6 +173,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 94 | slows | weekly | The website's activity cards cannot control how pricing is shown | M7 | web | ▶ Open |
 | 95 | slows | weekly | The website has no pricing TABLE - activities as rows, plans as columns | M7 | web | ▶ Open |
 | 96 | slows | weekly | Contact notes cannot be colour-tagged | M2 | web | ▶ Open |
+| 97 | confuses | weekly | Nine emailed links still drop the locale, so the page answers in English | C2xM9 | functions | ▶ Open |
 
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
@@ -1210,6 +1211,35 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-97 — Nine emailed links still drop the locale
+`confuses` · weekly · traced · C2×M9 · *found 2026-08-18 while fixing UX-32*
+
+**Now.** UX-32 fixed the booking→cancel chain and added localized URL builders to
+`packages/shared/src/publicRoutes.ts`. Nine call sites still use the unprefixed
+`publicUrl(getHostingUrl(), ...)`, so the mail is localised into `Team.language` and the page
+it opens answers in English — `localePrefix: 'as-needed'` falls through to cookie →
+Accept-Language → `en`, and public surfaces never write that cookie.
+
+The remaining sites, by file: **`booking/waitlist/notify.ts`** (three), **`sessions/index.ts`**
+(two), **`waivers/request.ts`**, **`referrals/index.ts`**, **`connect/webhook.ts`**,
+**`connect/purchaseReceipts.ts`**. The last two were reserved by a parallel lane at the time and
+are the sharper pair: `webhook.ts` builds an `appointments/cancel` link — the same defect UX-32
+just fixed one file over.
+
+`grep -rn "publicUrl(getHostingUrl()" packages/functions/src` finds them all, which is the
+census to work from rather than this list.
+
+**Cost.** Small each, universal in aggregate, and it lands on the two mails a member is most
+likely to act on — a waitlist offer with a deadline, and a purchase receipt.
+
+**Fix.** Swap each for `localizedPublicUrl` / `localizedPublicSubUrl` with the recipient's
+language, exactly as the booking chain now does. The default locale stays unprefixed, so an
+English link is byte-identical and no existing URL breaks — pinned by a test.
+**Build:** S. **Owner:** functions-agent.
+**Verify:** set a team to German, trigger a waitlist offer, open the link.
 
 ---
 
