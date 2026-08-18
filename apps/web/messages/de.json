@@ -167,7 +167,8 @@
     "navSearchHintShortcut": "Verknüpfung hinzufügen",
     "navSearchKeepTyping": "Weitertippen, um Kontakte, Abos und Aktivitäten zu durchsuchen",
     "navShortcutsClearExplain": "Damit werden die immer angezeigten Seiten und die zuletzt besuchten entfernt. Das lässt sich nicht rückgängig machen; immer angezeigte Seiten behalten ihre Reihenfolge, bis du sie entfernst.",
-    "navSearchArchivedBadge": "Archiviert"
+    "navSearchArchivedBadge": "Archiviert",
+    "navRecentContactsGroup": "Zuletzt angesehene Kontakte"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -2648,7 +2649,20 @@
     "roleChange": "Rolle ändern",
     "roleChangedSuccess": "Rolle aktualisiert",
     "addNoAccount": "Für diese E-Mail-Adresse wurde kein Linyup-Konto gefunden. Die Person muss sich zuerst registrieren, danach kannst du sie hier hinzufügen.",
-    "lastAdminBlocked": "Eine Organisation muss mindestens einen Admin behalten."
+    "lastAdminBlocked": "Eine Organisation muss mindestens einen Admin behalten.",
+    "inviteButton": "Mitglied einladen",
+    "inviteTitle": "Mitglied einladen",
+    "inviteDescription": "Die Person erhält eine E-Mail und nimmt selbst an. Wer noch kein Linyup-Konto hat, kann dabei eines erstellen.",
+    "inviteSubmit": "Einladung senden",
+    "inviteSuccess": "Einladung gesendet",
+    "inviteAlreadyMember": "Diese Person ist bereits Mitglied dieser Organisation.",
+    "inviteBadEmail": "Gib eine gültige E-Mail-Adresse ein.",
+    "pendingTitle": "Offene Einladungen",
+    "pendingExpires": "Läuft am {date} ab",
+    "inviteRevoke": "Zurückziehen",
+    "inviteRevoked": "Einladung zurückgezogen",
+    "confirmRevokeTitle": "Diese Einladung zurückziehen?",
+    "confirmRevokeMessage": "Der an {email} gesendete Link funktioniert sofort nicht mehr. Du kannst dieselbe Adresse jederzeit erneut einladen."
   },
   "OrgBilling": {
     "title": "Abrechnung",
@@ -6354,5 +6368,40 @@
     "tableAnyPlanNote": "Mit jeder Mitgliedschaft — die Registrierung ist kostenlos",
     "tableOpenNote": "Für alle offen",
     "tableFreeNote": "Kostenlos buchbar"
+  },
+  "OrgMemberInvite": {
+    "title": "Einladung zur Organisation",
+    "intro": "Du wurdest eingeladen, <strong>{org}</strong> als <strong>{role}</strong> mitzuverwalten.",
+    "introBy": "<strong>{who}</strong> hat dich eingeladen, <strong>{org}</strong> als <strong>{role}</strong> mitzuverwalten.",
+    "scopeNote": "Diese Einladung gilt dir persönlich. Sie ändert nichts an einem Studio, das du führst, und wirkt sich nicht auf die Abrechnung aus.",
+    "emailLabel": "Einladung gesendet an",
+    "roleAdmin": "Administrator",
+    "roleViewer": "Betrachter",
+    "accept": "Annehmen",
+    "decline": "Ablehnen",
+    "processing": "Wird ausgeführt...",
+    "signInPrompt": "Melde dich mit dieser Adresse an, um anzunehmen.",
+    "createAccountPrompt": "Erstelle dein Linyup-Konto, um anzunehmen. Deine Adresse ist bereits festgelegt.",
+    "nameLabel": "Dein Name",
+    "passwordLabel": "Passwort",
+    "confirmLabel": "Passwort bestätigen",
+    "createAccountAndJoin": "Konto erstellen und beitreten",
+    "signInAndJoin": "Anmelden und beitreten",
+    "forgotPassword": "Link zum Zurücksetzen des Passworts senden",
+    "resetSent": "Prüfe dein Postfach auf den Link zum Zurücksetzen.",
+    "acceptedTitle": "Du gehörst jetzt zu {org}.",
+    "goToOrg": "Zur Organisation",
+    "declinedTitle": "Einladung abgelehnt. Es wurde nichts geändert.",
+    "mismatchTitle": "Diese Einladung gilt für eine andere E-Mail-Adresse",
+    "mismatchBody": "Sie wurde an {invited} gesendet, du bist aber als {current} angemeldet. Melde dich ab und fahre mit {invited} fort, oder bitte einen Organisationsadministrator, stattdessen {current} einzuladen.",
+    "signOutAndSwitch": "Abmelden und die eingeladene Adresse verwenden",
+    "errorNotFound": "Dieser Einladungslink ist ungültig. Möglicherweise wurde er zurückgezogen oder durch einen neueren ersetzt.",
+    "errorExpired": "Diese Einladung ist abgelaufen. Bitte einen Organisationsadministrator um eine neue.",
+    "errorAlreadyHandled": "Diese Einladung wurde bereits bearbeitet.",
+    "errorGeneric": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "errorPasswordShort": "Verwende mindestens 8 Zeichen.",
+    "errorPasswordMismatch": "Die beiden Passwörter stimmen nicht überein.",
+    "errorEmailInUse": "Für diese Adresse gibt es bereits ein Konto. Melde dich stattdessen an.",
+    "errorWrongPassword": "Das Passwort war nicht korrekt. Versuche es erneut oder setze es zurück."
   }
 }

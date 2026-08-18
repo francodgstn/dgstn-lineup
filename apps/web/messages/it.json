@@ -167,7 +167,8 @@
     "navSearchHintShortcut": "aggiungi scorciatoia",
     "navSearchKeepTyping": "Continua a digitare per cercare contatti, abbonamenti e attività",
     "navShortcutsClearExplain": "Rimuove le pagine sempre visibili e quelle visitate di recente. L’azione non è reversibile; le pagine sempre visibili mantengono il loro ordine finché non le cancelli.",
-    "navSearchArchivedBadge": "Archiviato"
+    "navSearchArchivedBadge": "Archiviato",
+    "navRecentContactsGroup": "Contatti visti di recente"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -2648,7 +2649,20 @@
     "roleChange": "Cambia ruolo",
     "roleChangedSuccess": "Ruolo aggiornato",
     "addNoAccount": "Nessun account Linyup trovato per questo indirizzo e-mail. La persona deve prima registrarsi, poi potrai aggiungerla qui.",
-    "lastAdminBlocked": "Un'organizzazione deve mantenere almeno un amministratore."
+    "lastAdminBlocked": "Un'organizzazione deve mantenere almeno un amministratore.",
+    "inviteButton": "Invita un membro",
+    "inviteTitle": "Invita un membro",
+    "inviteDescription": "La persona riceve un'e-mail e accetta di persona. Chi non ha ancora un account Linyup può crearne uno strada facendo.",
+    "inviteSubmit": "Invia invito",
+    "inviteSuccess": "Invito inviato",
+    "inviteAlreadyMember": "Questa persona fa già parte di questa organizzazione.",
+    "inviteBadEmail": "Inserisci un indirizzo e-mail valido.",
+    "pendingTitle": "Inviti in sospeso",
+    "pendingExpires": "Scade il {date}",
+    "inviteRevoke": "Revoca",
+    "inviteRevoked": "Invito revocato",
+    "confirmRevokeTitle": "Revocare questo invito?",
+    "confirmRevokeMessage": "Il link inviato a {email} smette subito di funzionare. Puoi invitare di nuovo lo stesso indirizzo in qualsiasi momento."
   },
   "OrgBilling": {
     "title": "Fatturazione",
@@ -6354,5 +6368,40 @@
     "tableAnyPlanNote": "Con qualsiasi abbonamento — la registrazione è gratuita",
     "tableOpenNote": "Aperto a tutti",
     "tableFreeNote": "Prenotazione gratuita"
+  },
+  "OrgMemberInvite": {
+    "title": "Invito all'organizzazione",
+    "intro": "Sei stato invitato a contribuire alla gestione di <strong>{org}</strong> come <strong>{role}</strong>.",
+    "introBy": "<strong>{who}</strong> ti ha invitato a contribuire alla gestione di <strong>{org}</strong> come <strong>{role}</strong>.",
+    "scopeNote": "Questo invito riguarda te personalmente. Non cambia nulla per uno studio che gestisci e non incide sulla fatturazione.",
+    "emailLabel": "Invito inviato a",
+    "roleAdmin": "amministratore",
+    "roleViewer": "osservatore",
+    "accept": "Accetta",
+    "decline": "Rifiuta",
+    "processing": "In corso...",
+    "signInPrompt": "Accedi con questo indirizzo per accettare.",
+    "createAccountPrompt": "Crea il tuo account Linyup per accettare. Il tuo indirizzo è già impostato.",
+    "nameLabel": "Il tuo nome",
+    "passwordLabel": "Password",
+    "confirmLabel": "Conferma la password",
+    "createAccountAndJoin": "Crea l'account e unisciti",
+    "signInAndJoin": "Accedi e unisciti",
+    "forgotPassword": "Inviami un link per reimpostare la password",
+    "resetSent": "Controlla la posta in arrivo per il link di reimpostazione.",
+    "acceptedTitle": "Ora fai parte di {org}.",
+    "goToOrg": "Vai all'organizzazione",
+    "declinedTitle": "Invito rifiutato. Non è stato modificato nulla.",
+    "mismatchTitle": "Questo invito è per un altro indirizzo e-mail",
+    "mismatchBody": "È stato inviato a {invited} e hai effettuato l'accesso come {current}. Esci e continua con {invited}, oppure chiedi a un amministratore dell'organizzazione di invitare {current}.",
+    "signOutAndSwitch": "Esci e usa l'indirizzo invitato",
+    "errorNotFound": "Questo link di invito non è valido. Potrebbe essere stato revocato o sostituito da uno più recente.",
+    "errorExpired": "Questo invito è scaduto. Chiedi a un amministratore dell'organizzazione di inviarne uno nuovo.",
+    "errorAlreadyHandled": "Questo invito è già stato gestito.",
+    "errorGeneric": "Qualcosa è andato storto. Riprova.",
+    "errorPasswordShort": "Usa almeno 8 caratteri.",
+    "errorPasswordMismatch": "Le due password non coincidono.",
+    "errorEmailInUse": "Esiste già un account per questo indirizzo. Accedi invece.",
+    "errorWrongPassword": "La password non è corretta. Riprova o reimpostala."
   }
 }

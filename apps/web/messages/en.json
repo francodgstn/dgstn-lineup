@@ -167,7 +167,8 @@
     "navSearchHintShortcut": "add shortcut",
     "navSearchKeepTyping": "Keep typing to search contacts, plans and activities",
     "navShortcutsClearExplain": "This removes the pages you always show and the ones you recently visited. It can't be undone, and always-shown pages keep their order until you clear them.",
-    "navSearchArchivedBadge": "Archived"
+    "navSearchArchivedBadge": "Archived",
+    "navRecentContactsGroup": "Recently viewed contacts"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -2648,7 +2649,20 @@
     "roleChange": "Change role",
     "roleChangedSuccess": "Role updated",
     "addNoAccount": "No Linyup account was found for that email address. They need to sign up first, then you can add them here.",
-    "lastAdminBlocked": "An organisation must keep at least one admin."
+    "lastAdminBlocked": "An organisation must keep at least one admin.",
+    "inviteButton": "Invite member",
+    "inviteTitle": "Invite a member",
+    "inviteDescription": "They get an email and accept for themselves. If they do not have a Linyup account yet, they can create one on the way in.",
+    "inviteSubmit": "Send invitation",
+    "inviteSuccess": "Invitation sent",
+    "inviteAlreadyMember": "That person is already a member of this organisation.",
+    "inviteBadEmail": "Enter a valid email address.",
+    "pendingTitle": "Pending invitations",
+    "pendingExpires": "Expires {date}",
+    "inviteRevoke": "Revoke",
+    "inviteRevoked": "Invitation revoked",
+    "confirmRevokeTitle": "Revoke this invitation?",
+    "confirmRevokeMessage": "The link sent to {email} stops working immediately. You can invite the same address again at any time."
   },
   "OrgBilling": {
     "title": "Billing",
@@ -6354,5 +6368,40 @@
     "tableAnyPlanNote": "With any membership — signing up is free",
     "tableOpenNote": "Open to everyone",
     "tableFreeNote": "Free to book"
+  },
+  "OrgMemberInvite": {
+    "title": "Organisation invitation",
+    "intro": "You have been invited to help run <strong>{org}</strong> as an <strong>{role}</strong>.",
+    "introBy": "<strong>{who}</strong> has invited you to help run <strong>{org}</strong> as an <strong>{role}</strong>.",
+    "scopeNote": "This invitation is for you personally. It does not change anything about a studio you may run, and it does not affect billing.",
+    "emailLabel": "Invitation sent to",
+    "roleAdmin": "administrator",
+    "roleViewer": "viewer",
+    "accept": "Accept",
+    "decline": "Decline",
+    "processing": "Working...",
+    "signInPrompt": "Sign in with this address to accept.",
+    "createAccountPrompt": "Create your Linyup account to accept. Your address is already set.",
+    "nameLabel": "Your name",
+    "passwordLabel": "Password",
+    "confirmLabel": "Confirm password",
+    "createAccountAndJoin": "Create account and join",
+    "signInAndJoin": "Sign in and join",
+    "forgotPassword": "Send me a password reset link",
+    "resetSent": "Check your inbox for the reset link.",
+    "acceptedTitle": "You are now part of {org}.",
+    "goToOrg": "Go to the organisation",
+    "declinedTitle": "Invitation declined. Nothing was changed.",
+    "mismatchTitle": "This invitation is for a different email address",
+    "mismatchBody": "It was sent to {invited}, and you are signed in as {current}. Sign out and continue with {invited}, or ask an organisation admin to invite {current} instead.",
+    "signOutAndSwitch": "Sign out and use the invited address",
+    "errorNotFound": "This invitation link is not valid. It may have been revoked or replaced by a newer one.",
+    "errorExpired": "This invitation has expired. Ask an organisation admin to send a new one.",
+    "errorAlreadyHandled": "This invitation has already been dealt with.",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "errorPasswordShort": "Use at least 8 characters.",
+    "errorPasswordMismatch": "The two passwords do not match.",
+    "errorEmailInUse": "An account already exists for this address. Sign in instead.",
+    "errorWrongPassword": "That password did not work. Try again or reset it."
   }
 }

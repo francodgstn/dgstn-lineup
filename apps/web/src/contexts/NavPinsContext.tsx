@@ -34,6 +34,21 @@
  *    localStorage), which may be shown as a chip in the filter bar. It used to
  *    say "Pin to filter bar"; it now says "Show in filter bar".
  *
+ * 4. RECENTLY VIEWED CONTACTS — `contexts/RecentContactsContext.tsx`. The last
+ *    few PEOPLE whose detail page you opened, ids only, per TEAM, in
+ *    localStorage. Surfaced in exactly one place: the sidebar search panel
+ *    BEFORE anything is typed (typing replaces it with results). A third
+ *    question again — Shortcuts answers "where do I go often", Open tabs "what
+ *    am I in the middle of", this one "who was I just looking at" — and neither
+ *    of the other two can answer it: a contact page records the "contacts" PAGE
+ *    into Shortcuts' recents, and Open tabs rewrites its active tab in place (so
+ *    ten contacts leave one tab) and only when the strip is switched on. Names
+ *    are resolved live from the roster query, never stored; an id that no longer
+ *    resolves is dropped from the rendering, not from storage. UI label:
+ *    "Recently viewed contacts". No verb and no control: it fills itself.
+ *    VOCABULARY: in code it is `recentContact*`, never `recent*` bare — that
+ *    word is spent on the recents half of Shortcuts above (item 1).
+ *
  * STORED NAMES KEEP THE OLD WORD, deliberately — same policy as plan IDs vs
  * plan display names (see CLAUDE.md): `linyup_nav_pins`, `linyup_settings_pins`
  * and `TeamNavDefaults.defaultNavPins` are machine identifiers written by

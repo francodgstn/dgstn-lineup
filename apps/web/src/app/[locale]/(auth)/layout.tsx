@@ -65,6 +65,7 @@ import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
 import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
+import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
@@ -1264,6 +1265,9 @@ function NavSearch({
   const router = useRouter()
   const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
   const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
+  // The people you just had open — the panel's empty state, replaced by results
+  // the moment anything is typed. See the nav-memory census in NavPinsContext.
+  const { recentContactIds } = useRecentContacts()
   const { currentTeamId, user } = useAuth()
   const { ownScoped } = useCapabilities()
   const [query, setQuery] = useState('')
@@ -1304,8 +1308,16 @@ function NavSearch({
   // fail silently and make search look empty for a whole role.
   const scopeUid = ownScoped ? (user?.uid ?? null) : null
   const entityTeamId = armed ? currentTeamId : null
+  // The recently-viewed rows are stored as IDS, so the roster is what turns them
+  // into names — which means the CONTACT lists (and only those: not the
+  // subscription types, not the activities) also arm when the panel opens with a
+  // history to show. It is the same one-per-session read typing would trigger a
+  // moment later, on the same shared cache entry, and the alternative — storing
+  // names — is stale the first time somebody is renamed.
+  const contactsTeamId =
+    armed || (expanded && recentContactIds.length > 0) ? currentTeamId : null
   const { data: contacts = [], isFetching: contactsFetching } = useActiveContacts(
-    entityTeamId,
+    contactsTeamId,
     scopeUid
   )
   // ARCHIVED TOO — a former member is exactly who you look up when they come
@@ -1324,7 +1336,7 @@ function NavSearch({
   // them by the rules (see the hook), so `null` here is the same answer the
   // contacts page gives by hiding the tab.
   const { data: archivedContacts = [], isFetching: archivedFetching } = useArchivedContacts(
-    scopeUid ? null : entityTeamId
+    scopeUid ? null : contactsTeamId
   )
   const { data: subscriptionTypes = [], isFetching: subsFetching } =
     useSubscriptionTypes(entityTeamId)
@@ -1383,6 +1395,23 @@ function NavSearch({
           .map((c) => contactRow(c, t('navSearchArchivedBadge'))),
       ]
     : []
+  // RECENTLY VIEWED CONTACTS — the empty state, resolved from the same two
+  // rosters the results use, through the same `contactRow`, so an archived
+  // person carries the SAME amber badge here as they do in a result. Two
+  // renderings of one fact that disagreed would be worse than not showing it.
+  //
+  // AN ID THAT DOES NOT RESOLVE IS DROPPED, silently and only from the display:
+  // a deleted contact leaves no blank row, and a roster still in flight simply
+  // shows fewer rows for a moment rather than pruning a list it cannot yet see.
+  const recentContactRows: SearchEntry[] = recentContactIds
+    .map((id) => {
+      const activeMatch = contacts.find((c) => c.id === id)
+      if (activeMatch) return contactRow(activeMatch)
+      const archivedMatch = archivedContacts.find((c) => c.id === id)
+      return archivedMatch ? contactRow(archivedMatch, t('navSearchArchivedBadge')) : null
+    })
+    .filter((row): row is SearchEntry => !!row)
+
   const subscriptionResults: SearchEntry[] = q
     ? subscriptionTypes
         .filter((st) => matches(st.name, st.description))
@@ -1412,13 +1441,18 @@ function NavSearch({
   // Two different things, no longer fused: the PANEL is open because the user
   // asked for it, and the RESULT LIST appears once there is something to match.
   const showResults = expanded && q.length > 0
-  const open = showResults
 
   // Keyboard selection indexes the FLATTENED result order, so it keeps working
   // when later providers append their own groups — the visual grouping and the
   // arrow-key order must not diverge.
-  const flat = groups.flatMap((g) => g.results)
+  //
+  // Before anything is typed the recently-viewed rows ARE that list: ⌘K, ↓, ↵
+  // reaches the person you just had open without touching the mouse, which is
+  // most of the point of remembering them at all.
+  const flat = showResults ? groups.flatMap((g) => g.results) : recentContactRows
   const active = flat[activeIndex]
+  // One selectable list, whichever of the two is on screen.
+  const listOpen = showResults || recentContactRows.length > 0
 
   // A new query is a new result set; an index carried over from the old one
   // would highlight an unrelated row (or nothing).
@@ -1428,15 +1462,15 @@ function NavSearch({
 
   // Keep the highlighted row visible in the scrollable dropdown.
   useEffect(() => {
-    if (!open) return
+    if (!listOpen) return
     listRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: 'nearest' })
-  }, [open, activeIndex])
+  }, [listOpen, activeIndex])
 
   // Close when clicking anywhere outside the panel. Keyed on `expanded`, not on
-  // `open`: the panel is dismissible while it is still empty, which is exactly
-  // when a user who opened it by accident wants out.
+  // `listOpen`: the panel is dismissible while it is still empty, which is
+  // exactly when a user who opened it by accident wants out.
   useEffect(() => {
     if (!expanded) return
     const onDown = (ev: MouseEvent) => {
@@ -1483,6 +1517,64 @@ function NavSearch({
     if (!tabsEnabled) return openEntry(entry)
     openInNewTab(entry.href, entry.label)
     close()
+  }
+
+  // ONE row renderer for both lists — the typed results and the recently-viewed
+  // empty state. Kept as a single function on purpose: the archived badge is the
+  // marker that stops somebody messaging a former member by mistake, and two
+  // copies of this markup would eventually disagree about it.
+  const renderEntry = (entry: SearchEntry) => {
+    const Icon = entry.icon
+    const isActive = active?.id === entry.id
+    const row = (
+      <Link
+        href={entry.href as Route}
+        id={`nav-search-opt-${entry.id}`}
+        role="option"
+        aria-selected={isActive}
+        data-active={isActive}
+        // Pointer and keyboard drive ONE selection, so hovering
+        // moves the highlight instead of fighting it.
+        onMouseEnter={() => setActiveIndex(flat.indexOf(entry))}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            openEntryAsTab(entry)
+            return
+          }
+          close()
+          onNavigate?.()
+        }}
+        className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground ${
+          isActive ? 'bg-accent text-foreground' : 'text-muted-foreground'
+        } ${entry.canShortcut ? 'pr-8' : ''}`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{entry.label}</span>
+        {entry.badge && (
+          <span className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            {entry.badge}
+          </span>
+        )}
+        {entry.sublabel && (
+          <span className="truncate text-xs font-normal text-muted-foreground/70">
+            {entry.sublabel}
+          </span>
+        )}
+        {isAlwaysShown(entry.id) && (
+          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
+            {t('navSearchInShortcuts')}
+          </span>
+        )}
+      </Link>
+    )
+    if (!entry.canShortcut) return <div key={entry.id}>{row}</div>
+    return (
+      <div key={entry.id} className="group relative">
+        {row}
+        <ShortcutButton id={entry.id} addOnly />
+      </div>
+    )
   }
 
   // The trigger — a MINI-INPUT, not a bare icon.
@@ -1556,12 +1648,12 @@ function NavSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         role="combobox"
-        aria-expanded={open}
+        aria-expanded={listOpen}
         aria-controls="nav-search-results"
-        aria-activedescendant={open && active ? `nav-search-opt-${active.id}` : undefined}
+        aria-activedescendant={listOpen && active ? `nav-search-opt-${active.id}` : undefined}
         onKeyDown={(e) => {
           if (e.key === 'Escape') return close()
-          if (!open || flat.length === 0) return
+          if (!listOpen || flat.length === 0) return
           if (e.key === 'ArrowDown') {
             e.preventDefault()
             setActiveIndex((i) => (i + 1) % flat.length)
@@ -1591,16 +1683,39 @@ function NavSearch({
           a void under it, which reads as broken rather than ready. One quiet row,
           shaped like the result rows it will be replaced by. */}
       {!showResults && (
-        <div className="mt-1.5 flex items-center gap-2 rounded-md px-2 py-3 text-sm text-muted-foreground">
-          {/* No icon — the field above already has one, and repeating it made
-              the row read as a result rather than a prompt. The shortcut IS
-              here, though: this is the moment the user is looking at the panel
-              and can learn how to reach it without the mouse next time. */}
-          <span className="min-w-0 leading-snug">{t('navSearchPromptAll')}</span>
-          <kbd className="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground/70">
-            {modKeyLabel()}K
-          </kbd>
-        </div>
+        <>
+          <div className="mt-1.5 flex items-center gap-2 rounded-md px-2 py-3 text-sm text-muted-foreground">
+            {/* No icon — the field above already has one, and repeating it made
+                the row read as a result rather than a prompt. The shortcut IS
+                here, though: this is the moment the user is looking at the panel
+                and can learn how to reach it without the mouse next time. */}
+            <span className="min-w-0 leading-snug">{t('navSearchPromptAll')}</span>
+            <kbd className="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground/70">
+              {modKeyLabel()}K
+            </kbd>
+          </div>
+          {/* WHO WAS I JUST LOOKING AT — the panel's answer before a question is
+              asked. Contacts only: nav destinations are already the Shortcuts
+              group in the sidebar, and this is the one thing neither that nor
+              the tab strip can tell you (see the census in NavPinsContext).
+              Rendered under the prompt, so the field → "type to search" reading
+              of the panel is unchanged and this is an addition beneath it. It
+              takes the same listbox id as the results — only ever one of the two
+              is on screen, and the arrow keys drive whichever it is. */}
+          {recentContactRows.length > 0 && (
+            <div
+              ref={listRef}
+              id="nav-search-results"
+              role="listbox"
+              className="max-h-[50vh] overflow-y-auto border-t pt-1.5"
+            >
+              <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
+                {t('navRecentContactsGroup')}
+              </p>
+              <div className="space-y-0.5">{recentContactRows.map(renderEntry)}</div>
+            </div>
+          )}
+        </>
       )}
       {showResults && (
         <div
@@ -1631,61 +1746,7 @@ function NavSearch({
                     <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
                       {group.label}
                     </p>
-                    <div className="space-y-0.5">
-                      {group.results.map((entry) => {
-                        const Icon = entry.icon
-                        const isActive = active?.id === entry.id
-                        const row = (
-                          <Link
-                            href={entry.href as Route}
-                            id={`nav-search-opt-${entry.id}`}
-                            role="option"
-                            aria-selected={isActive}
-                            data-active={isActive}
-                            // Pointer and keyboard drive ONE selection, so hovering
-                            // moves the highlight instead of fighting it.
-                            onMouseEnter={() => setActiveIndex(flat.indexOf(entry))}
-                            onClick={(e) => {
-                              if (e.metaKey || e.ctrlKey) {
-                                e.preventDefault()
-                                openEntryAsTab(entry)
-                                return
-                              }
-                              close()
-                              onNavigate?.()
-                            }}
-                            className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground ${
-                              isActive ? 'bg-accent text-foreground' : 'text-muted-foreground'
-                            } ${entry.canShortcut ? 'pr-8' : ''}`}
-                          >
-                            <Icon className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{entry.label}</span>
-                            {entry.badge && (
-                              <span className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                                {entry.badge}
-                              </span>
-                            )}
-                            {entry.sublabel && (
-                              <span className="truncate text-xs font-normal text-muted-foreground/70">
-                                {entry.sublabel}
-                              </span>
-                            )}
-                            {isAlwaysShown(entry.id) && (
-                              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
-                                {t('navSearchInShortcuts')}
-                              </span>
-                            )}
-                          </Link>
-                        )
-                        if (!entry.canShortcut) return <div key={entry.id}>{row}</div>
-                        return (
-                          <div key={entry.id} className="group relative">
-                            {row}
-                            <ShortcutButton id={entry.id} addOnly />
-                          </div>
-                        )
-                      })}
-                    </div>
+                    <div className="space-y-0.5">{group.results.map(renderEntry)}</div>
                   </div>
                 )
               )}
@@ -2160,6 +2221,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <NavPinsProvider>
       <UpgradeModalProvider>
+        <RecentContactsProvider>
         <OpenTabsProvider>
         <ProductTour />
         {/* Owns every floating control's position — page FABs and shell overlays
@@ -2210,6 +2272,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
         </FloatingDock>
         </OpenTabsProvider>
+        </RecentContactsProvider>
       </UpgradeModalProvider>
     </NavPinsProvider>
   )

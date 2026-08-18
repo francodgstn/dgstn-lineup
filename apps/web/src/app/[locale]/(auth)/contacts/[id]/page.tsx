@@ -2,6 +2,7 @@
 
 import { useState, use, useMemo, useEffect } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
+import { useRecentContacts } from '@/contexts/RecentContactsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
@@ -5050,6 +5051,19 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     entityKind: 'contact',
     enabled: !!contact,
   })
+
+  // Record the visit for "recently viewed contacts" in the sidebar search panel
+  // (see the nav-memory census in contexts/NavPinsContext.tsx — this is a
+  // different mechanism from the tab above, deliberately).
+  //
+  // ON LOAD, NOT ON ROUTE: it fires once the document has actually come back, so
+  // a mistyped, deleted or forbidden id never enters the list; and it carries
+  // the contact's OWN teamId, so an org admin reading another team's contact
+  // records it there rather than into the team they are currently in.
+  const { recordContactVisit } = useRecentContacts()
+  useEffect(() => {
+    if (contact?.id && contact.teamId) recordContactVisit(contact.id, contact.teamId)
+  }, [contact?.id, contact?.teamId, recordContactVisit])
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })
