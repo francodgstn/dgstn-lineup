@@ -57,6 +57,13 @@ export const syncProductsToPublicProfile = onDocumentWritten(
       priceAmount: number
       variantLabel?: string
       variants?: PublicVariant[]
+      // How the buyer gets it (UX-79). Only the product's OWN note travels here;
+      // the team default is mirrored separately by syncTeamPublicProfile, and
+      // the shop resolves the pair with resolveProductCollectionNote. Resolving
+      // it HERE would look tidier and be wrong: this trigger fires on a PRODUCT
+      // write, so a studio editing only the team default would leave every
+      // already-synced product carrying the old sentence.
+      collectionNote?: string
     }
 
     const publicProducts: PublicProduct[] = docsSorted
@@ -76,6 +83,9 @@ export const syncProductsToPublicProfile = onDocumentWritten(
         }
         if (typeof data.variantLabel === 'string' && data.variantLabel) {
           entry.variantLabel = data.variantLabel
+        }
+        if (typeof data.collectionNote === 'string' && data.collectionNote.trim()) {
+          entry.collectionNote = data.collectionNote.trim()
         }
         const variants: PublicVariant[] = (Array.isArray(data.variants) ? data.variants : [])
           .filter(

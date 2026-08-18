@@ -2,10 +2,11 @@
 
 // Read-only schedule board — the simple stacked List view plus the shared
 // WeeklyCalendar (time-grid planner). Tapping any session opens a detail modal.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Clock, MapPin, User, X } from 'lucide-react'
 import { WeeklyCalendar, type PlannerSession } from '@/components/schedule/WeeklyCalendar'
+import { useKioskAvailability } from './useKioskAvailability'
 import type { KioskSession } from './useKioskSessions'
 
 interface DayGroup {
@@ -36,11 +37,47 @@ interface Props {
   sessions: KioskSession[]
   loading: boolean
   view: 'calendar' | 'list'
+  /** Team id — enables the optional appointment-availability overlay. */
+  teamId?: string
+  /** Set when the session feed failed — see the empty state below. */
+  error?: unknown
+  /** True once the feed has successfully loaded at least once — which is what
+   *  makes an empty board a fact rather than a failure. See the empty state. */
+  loaded?: boolean
 }
 
-export default function KioskSchedule({ sessions, loading, view }: Props) {
+/**
+ * How long the availability overlay stays on before switching itself back off.
+ *
+ * The kiosk is a SHARED tablet: whatever the last person left it showing is what
+ * the next person sees. A filter that HIDES classes would be dangerous here, so
+ * availability is additive (classes never disappear) and it still reverts, so the
+ * display always settles back to the plain schedule.
+ */
+const AVAILABILITY_AUTO_OFF_MS = 60_000
+
+export default function KioskSchedule({ sessions, loading, view, teamId, error, loaded }: Props) {
   const t = useTranslations('Kiosk')
   const [selected, setSelected] = useState<PlannerSession | null>(null)
+  const [showAvailability, setShowAvailability] = useState(false)
+  const availability = useKioskAvailability(teamId ?? '', showAvailability)
+
+  // Timed reset — see AVAILABILITY_AUTO_OFF_MS. Re-armed on every toggle-on.
+  useEffect(() => {
+    if (!showAvailability) return
+    const id = setTimeout(() => setShowAvailability(false), AVAILABILITY_AUTO_OFF_MS)
+    return () => clearTimeout(id)
+  }, [showAvailability])
+
+  // ADDITIVE, never exclusive: availability is layered ON TOP of the real
+  // schedule so the classes are always there behind it.
+  const entries: (KioskSession & { variant?: 'availability' })[] = showAvailability
+    ? [...sessions, ...availability]
+        .sort((a, b) => a.start.toMillis() - b.start.toMillis())
+        // The calendar draws 'availability' as a dashed outline rather than a
+        // solid block, so a window never looks like a scheduled class.
+        .map((s) => (s.type === 'availability' ? { ...s, variant: 'availability' as const } : s))
+    : sessions
 
   if (loading) {
     return (
@@ -53,19 +90,49 @@ export default function KioskSchedule({ sessions, loading, view }: Props) {
   }
 
   if (sessions.length === 0) {
+    // Two different facts, two different sentences. "No classes today" closes the
+    // desk; "we couldn't load the schedule" tells the front desk to check, and is
+    // the only one we can honestly say when the feed failed and left us nothing.
+    //
+    // "LEFT US NOTHING" IS THE WHOLE TEST, and `error != null` is not it. The feed
+    // keeps its last good result across a failed refresh, and on a genuinely quiet
+    // day that result is an empty list — so a board correctly reading "no classes"
+    // flipped to "couldn't load the schedule" the first time a five-minute refresh
+    // blipped, and stayed there, unattended, asserting a fault over a day that
+    // simply had nothing on it. A feed that has loaded ONCE has an answer; only
+    // one that never has is unavailable.
+    const neverLoaded = error != null && loaded !== true
     return (
       <div className="flex h-full items-center justify-center py-10 text-center">
-        <p className="text-muted-foreground">{t('noSessions')}</p>
+        <p className="text-muted-foreground">
+          {neverLoaded ? t('sessionsUnavailable') : t('noSessions')}
+        </p>
       </div>
     )
   }
 
   return (
     <>
+      {teamId && (
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowAvailability((v) => !v)}
+            aria-pressed={showAvailability}
+            className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+              showAvailability
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('showAvailability')}
+          </button>
+        </div>
+      )}
       {view === 'list' ? (
-        <DayList sessions={sessions} onSelect={setSelected} />
+        <DayList sessions={entries} onSelect={setSelected} />
       ) : (
-        <WeeklyCalendar sessions={sessions} onSelect={setSelected} />
+        <WeeklyCalendar sessions={entries} onSelect={setSelected} />
       )}
       {selected && (
         <SessionModal s={selected} onClose={() => setSelected(null)} closeLabel={t('close')} />

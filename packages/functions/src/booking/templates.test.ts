@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
-import { buildBookingConfirmationEmail, instructionsBox } from './templates'
+import {
+  buildBookingConfirmationEmail,
+  buildClassBookingConfirmationMail,
+  instructionsBox,
+} from './templates'
 
 describe('instructionsBox', () => {
   it('escapes studio-authored HTML', () => {
@@ -51,5 +55,77 @@ describe('buildBookingConfirmationEmail', () => {
     // The "Important" heading only appears when a non-blank note is set.
     assert.ok(!without.includes('>Important<'))
     assert.ok(!blank.includes('>Important<'))
+  })
+
+  it('names the amount only when the booking was paid for', () => {
+    assert.ok(!buildBookingConfirmationEmail(base).html.includes('Paid:'))
+    const paid = buildBookingConfirmationEmail({
+      ...base,
+      paid: { amount: 25, currency: 'chf' },
+    }).html
+    assert.ok(paid.includes('<strong>Paid:</strong> CHF 25.00'))
+  })
+
+  it('invites the booker into the Space when a link is given', () => {
+    assert.ok(!buildBookingConfirmationEmail(base).html.includes('member area'))
+    const html = buildBookingConfirmationEmail({
+      ...base,
+      spaceUrl: 'https://linyup.com/public/swimli/space',
+    }).html
+    assert.ok(html.includes('href="https://linyup.com/public/swimli/space"'))
+  })
+
+  it('only claims an attached invite when one is attached', () => {
+    assert.ok(!buildBookingConfirmationEmail(base).html.includes('.ics'))
+    assert.ok(
+      buildBookingConfirmationEmail({ ...base, calendarAttached: true }).html.includes('.ics')
+    )
+  })
+})
+
+describe('buildClassBookingConfirmationMail', () => {
+  const base = {
+    firstname: 'Priya',
+    lastname: 'Menon',
+    teamName: 'SWIMLI',
+    activityName: 'Beginners Squad',
+    sessionStart: new Date('2026-07-15T17:30:00Z'),
+    sessionEnd: new Date('2026-07-15T18:15:00Z'),
+    locationName: 'Schwamendingen Pool',
+    bookingId: 'sess1-contact1',
+    attendeeName: 'Priya Menon',
+    attendeeEmail: 'priya@example.com',
+  }
+
+  it('attaches a calendar invite — the class rail had none on either path', () => {
+    const mail = buildClassBookingConfirmationMail(base)
+    assert.equal(mail.attachments.length, 1)
+    assert.equal(mail.attachments[0].filename, 'booking.ics')
+    assert.match(mail.attachments[0].contentType, /^text\/calendar/)
+    const ics = mail.attachments[0].content
+    assert.ok(ics.startsWith('BEGIN:VCALENDAR'))
+    assert.ok(ics.includes('SUMMARY:Beginners Squad'))
+    assert.ok(ics.includes('DTSTART:20260715T173000Z'))
+    // Stable per booking, so a re-sent invite updates one calendar entry.
+    assert.ok(ics.includes('UID:booking-sess1-contact1@linyup.com'))
+    assert.ok(ics.includes('ATTENDEE;CN="Priya Menon";RSVP=FALSE:mailto:priya@example.com'))
+  })
+
+  it('falls back to a Linyup organizer when the studio published no address', () => {
+    const ics = buildClassBookingConfirmationMail(base).attachments[0].content
+    assert.ok(ics.includes('ORGANIZER;CN="SWIMLI":mailto:noreply@linyup.com'))
+    const own = buildClassBookingConfirmationMail({
+      ...base,
+      organizerEmail: 'hello@swimli.ch',
+    }).attachments[0].content
+    assert.ok(own.includes('mailto:hello@swimli.ch'))
+  })
+
+  it('subjects the mail identically whatever the tender was', () => {
+    assert.equal(
+      buildClassBookingConfirmationMail(base).subject,
+      buildClassBookingConfirmationMail({ ...base, paid: { amount: 25, currency: 'CHF' } }).subject
+    )
+    assert.equal(buildClassBookingConfirmationMail(base).subject, 'Booking Confirmed – Beginners Squad')
   })
 })

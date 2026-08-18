@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import type { TeamPublicProfile } from '@linyup/shared'
 
 // Resolved team public_profile summary (world-readable). Carries the bio-link
@@ -62,7 +63,12 @@ export function PublicTeamProvider({ slug, children }: Props) {
         setTeam(docSnap.data() as PublicTeamData)
         setStatus('found')
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // 'notfound' is the right SCREEN — there is nothing to render either way
+        // — but it is the wrong DIAGNOSIS: a rules or index regression on this
+        // lookup takes down every public surface of every tenant and looks
+        // exactly like a mistyped slug. Log it so it is at least findable.
+        reportPublicLoadFailure('team/resolve-slug', err)
         if (!cancelled) setStatus('notfound')
       })
     return () => {

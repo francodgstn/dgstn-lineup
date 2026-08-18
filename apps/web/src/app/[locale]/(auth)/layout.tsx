@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useTranslations, useMessages } from 'next-intl'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useLocale, useTranslations, useMessages } from 'next-intl'
 import { Link, useRouter, usePathname } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrackNavigationDepth } from '@/hooks/useBackNavigation'
@@ -10,17 +14,18 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { UserMenu } from '@/components/layout/UserMenu'
+import { TeamQrButton } from '@/components/layout/TeamQrButton'
 import {
   LayoutDashboard,
   Users,
   Calendar,
   ClipboardList,
+  ClipboardCheck,
   Trophy,
   Globe,
   Wallet,
   ChevronLeft,
   ChevronRight,
-  ChevronsRight,
   ChevronDown,
   Lock,
   Puzzle,
@@ -29,7 +34,8 @@ import {
   Gift,
   GraduationCap,
   FolderTree,
-  SlidersHorizontal,
+  Settings,
+  HelpCircle,
   X,
   Workflow,
   Zap,
@@ -39,24 +45,36 @@ import {
   ShoppingBag,
   DoorOpen,
   UserCog,
+  Star,
   Pin,
   Activity,
   Tag,
   TrendingUp,
   Search,
   Calculator,
-  Compass,
+  Ticket,
+  MapPin,
+  LayoutTemplate,
 } from 'lucide-react'
+import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
-import { planSupportsAffiliations, type SaasPlan } from '@linyup/shared'
+import { pluginAccessForPlan, type Contact, type PluginAccess, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
-import { OpenTabsProvider } from '@/contexts/OpenTabsContext'
+import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
+import { normalizeTabPath } from '@/lib/tab-routes'
+import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { useArchivedContacts } from '@/hooks/useArchivedContacts'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useActivities } from '@/hooks/useActivities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useHasByoGateway } from '@/hooks/useConnect'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
@@ -67,6 +85,7 @@ import { ProductTour } from '@/components/onboarding/ProductTour'
 import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
 import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
+import { FloatingDock } from '@/components/layout/FloatingDock'
 
 // Icons referenced by string name in plugin manifest navContributions
 const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
@@ -115,11 +134,34 @@ const DASHBOARD_ITEM: NavItem = {
   labelKey: 'dashboard',
   icon: LayoutDashboard,
 }
+// A second, from-scratch dashboard, sitting beside the incumbent so the two can
+// be compared on the same data rather than described to each other. Temporary by
+// intent: when one wins, this entry and the losing route go together. It is a
+// plain nav item rather than an experimental-features entry because the point is
+// to meet it without opting in — an experiment you have to switch on is one you
+// forget to compare.
+const DASHBOARD_PREVIEW_ITEM: NavItem = {
+  id: 'dashboardPreview',
+  href: '/dashboard/preview',
+  labelKey: 'dashboardPreview',
+  icon: LayoutTemplate,
+}
+// Plugin catalogue. Was a text link at the FOOT of the features group, which put
+// discovery of most of the product below everything already installed — the one
+// place a new studio, whose nav is nearly empty, is least likely to look. Now an
+// icon button in the utility row at the top, first of the three.
+const EXPLORE_PLUGINS_ITEM: NavItem = {
+  id: 'explorePlugins',
+  href: '/settings/plugins',
+  labelKey: 'explorePlugins',
+  icon: Puzzle,
+  exact: true,
+}
 const ALL_SETTINGS_ITEM: NavItem = {
   id: 'allSettings',
   href: '/settings',
   labelKey: 'allSettings',
-  icon: SlidersHorizontal,
+  icon: Settings, // cog — the settings hub
   exact: true,
 }
 // How-to — high-level product guides + onboarding workflow. A general utility
@@ -128,18 +170,33 @@ const HOW_TO_ITEM: NavItem = {
   id: 'howTo',
   href: '/how-to',
   labelKey: 'howTo',
-  icon: Compass,
+  icon: HelpCircle, // question mark — help
 }
 
 // Action-oriented sidebar sections for high-frequency destinations. Lower-frequency
 // configuration lives behind "All settings" (the /settings hub) + whatever the user
 // pins to the Pinned block — see src/lib/settings-nav.ts.
+//
+// ORDER WITHIN A SECTION IS FREQUENCY OF USE, MOST-USED FIRST, and it is the
+// order that renders — see the render in SidebarContent, which deliberately does
+// NOT sort. It was sorted alphabetically by translated label for one day
+// (6d94638f); the effect was that Schedule — the destination a studio opens every
+// single session — fell to the BOTTOM of Run, behind every row used less often,
+// and in German/French/Italian it landed somewhere else again, so nothing about
+// the list could be learned once (UX-29). Alphabetical is the right answer
+// only for a list nobody can rank; these are ranked, so declaration order wins.
+// Plugin-contributed rows still sort alphabetically: they arrive from a registry
+// in an order the studio did not author and cannot be ranked here.
 const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionRun',
     icon: Activity,
     items: [
       { id: 'calendar', href: '/schedule', labelKey: 'calendar', icon: Calendar },
+      // The printable day sheet — what a coach carries to the door. Sits next
+      // to the calendar because it answers the same question ("what's on
+      // today?") for the one context the calendar can't serve: paper.
+      { id: 'manifest', href: '/manifest', labelKey: 'manifest', icon: ClipboardCheck },
       { id: 'bookings', href: '/bookings', labelKey: 'bookings', icon: ClipboardList },
       { id: 'contacts', href: '/contacts', labelKey: 'contacts', icon: Users },
       // Coaches (team staff) — studio/org only; the coach plan is single-person.
@@ -156,6 +213,15 @@ const NAV_SECTIONS: NavSection[] = [
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
       { id: 'automations', href: '/automations', labelKey: 'automations', icon: Workflow },
+      // Places — the studio's locations and rooms. A SCHEDULING reference, not a
+      // preference: it is read by the session/event forms' place picker and by the
+      // website's places section, and it is edited when the schedule needs a room
+      // that doesn't exist yet. It sat in Settings → Scheduling, which meant
+      // leaving the calendar entirely to add one (UX-67). LAST in Run: everything
+      // above it is opened during a working day, this is opened while setting one
+      // up. The page is a sibling of the calendar at /schedule/places, beside
+      // /schedule/availability.
+      { id: 'places', href: '/schedule/places', labelKey: 'places', icon: MapPin },
     ],
   },
   {
@@ -173,6 +239,21 @@ const NAV_SECTIONS: NavSection[] = [
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
       { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
+      // Promo codes — a plugin as of Wave 3.5, so the item appears only once
+      // installed, exactly like Courses and Products above and below it. The
+      // plan requirement lives in the manifest (`minPlan: 'studio'`) and the
+      // marketplace card is where a studio discovers it, which is why hiding
+      // the nav item here no longer hides the feature's existence.
+      //
+      // The server gate is assertPluginInstalled on createPromoCode ONLY, so a
+      // studio that uninstalls keeps its live codes redeemable and manageable.
+      {
+        id: 'promoCodes',
+        href: '/offer/promo-codes',
+        labelKey: 'promoCodes',
+        icon: Ticket,
+        requiresPlugin: 'promo-codes',
+      },
       {
         id: 'onlineCourses',
         href: '/offer/online-courses',
@@ -187,12 +268,16 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Package,
         requiresPlugin: 'products',
       },
+      // Documents is a DEFAULT FEATURE on every plan — no `requiresPlugin`, no
+      // `minPlan`. It was never monetised (the retired manifest declared
+      // minPlan 'free' with no add-on), and its install gate was actively
+      // harmful under a waiver gate: deactivating it deleted every public
+      // document mirror the team had.
       {
         id: 'documents',
-        href: '/plugins/documents',
+        href: '/documents',
         labelKey: 'documents',
         icon: FileText,
-        requiresPlugin: 'documents',
       },
       // The public storefront that aggregates subscriptions, products and courses.
       // Managed at its /public-page/shop detail page; shown once a sellable channel
@@ -210,11 +295,21 @@ const NAV_SECTIONS: NavSection[] = [
     // Audience + engagement surfaces. Bio-link is the acquisition funnel; Space is
     // the members' area where contacts stay engaged (needs the online-courses
     // plugin); Website + Forms + Gamification join as engagement plugins
-    // (section: 'engage'). The public-surface overview hub now lives under Settings
-    // ("Public pages"), so individual surfaces live in their natural sections.
+    // (section: 'engage').
     labelKey: 'sectionGrow',
     icon: TrendingUp,
     items: [
+      // THE MAP OF EVERYTHING PUBLIC, first in the section. The public surfaces
+      // are managed from route prefixes that have nothing in common — bio-link
+      // under /team, website/kiosk/forms under /plugins, shop and space under
+      // /public-page, the booking page under /settings, signup under /offer,
+      // documents at its own root — and nobody holds that spread in their head.
+      // The one page that does hold it (its `surfaces` array is the census) was
+      // reachable only from the Settings rail (UX-28). Same id as the Settings
+      // row, deliberately: ONE destination, one shortcut star, one search result.
+      // Listing it here is what makes it findable from where public surfaces are
+      // actually worked on.
+      { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, exact: true },
       { id: 'bioLink', href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
       // Space is the contacts' personal portal (membership, bookings, profile, their
       // courses) — a base surface, not tied to the online-courses plugin.
@@ -225,33 +320,46 @@ const NAV_SECTIONS: NavSection[] = [
 
 // ─── nav link ─────────────────────────────────────────────────────────────────
 
-// Small hover-reveal pin control on the right of a pinnable nav row (needs a
-// `group` ancestor). Clicking pins/unpins without navigating. Unpinning is
-// managed from the Shortcuts group only: menu rows and search results use
-// `pinOnly`, which hides the button once the item is pinned instead of offering
-// an unpin toggle there.
-function PinButton({ id, pinOnly }: { id: string; pinOnly?: boolean }) {
+// Small hover-reveal "always show" control on the right of a shortcut-able nav
+// row (needs a `group` ancestor). Clicking adds/removes the destination from the
+// always-shown half of Shortcuts without navigating. Turning it back OFF is
+// managed from the Shortcuts group only: menu rows and search results pass
+// `addOnly`, which hides the button once the destination is already always
+// shown instead of offering a remove toggle there.
+//
+// A STAR, not a pin: "pin" is reserved for the open-tabs strip, which is a
+// different mechanism (see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx).
+function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
   const t = useTranslations('Nav')
-  const { isPinned, togglePin } = useNavPins()
-  const pinned = isPinned(id)
-  if (pinOnly && pinned) return null
+  const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
+  const shown = isAlwaysShown(id)
+  if (addOnly && shown) return null
   return (
     <button
       type="button"
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
-        togglePin(id)
+        toggleAlwaysShown(id)
       }}
-      title={pinned ? t('unpinFromSidebar') : t('pinToSidebar')}
-      aria-pressed={pinned}
+      title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+      aria-pressed={shown}
       className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
-        pinned
+        shown
           ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
           : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
       }`}
     >
-      <Pin className="h-3.5 w-3.5" />
+      {/* Filled while ON — an icon that only changes opacity reads as "hovered",
+          not as "this is switched on", which is the state that matters here.
+          A PIN, deliberately, and NOT the star used a few hundred lines below for
+          "recommended by Linyup": one glyph cannot carry an endorsement and a
+          personal choice. UX-23 moved away from "pin" when the word meant THREE
+          things — shortcuts, open tabs, and a saved filter "pinned to the filter
+          bar". That third is now "show in filter bar", so what remains is one
+          mental model (keep this within reach) over two different objects on two
+          different surfaces, which is what a pin means everywhere else. */}
+      <Pin className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
     </button>
   )
 }
@@ -260,14 +368,14 @@ function NavLink({
   item,
   collapsed,
   onClick,
-  pinId,
+  shortcutId,
 }: {
   item: NavItem
   collapsed: boolean
   onClick?: () => void
-  // When set (and the sidebar is expanded), a hover pin toggle is shown that
-  // pins/unpins this destination under Dashboard.
-  pinId?: string
+  // When set (and the sidebar is expanded), a hover "always show" toggle is
+  // shown that adds this destination to the Shortcuts group.
+  shortcutId?: string
 }) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
@@ -319,22 +427,49 @@ function NavLink({
         isActive
           ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
           : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : ''} ${pinId && !collapsed ? 'pr-8' : ''}`}
+      } ${collapsed ? 'justify-center px-2' : ''} ${shortcutId && !collapsed ? 'pr-8' : ''}`}
     >
       <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
       {!collapsed && <span>{label}</span>}
     </Link>
   )
 
-  if (pinId && !collapsed) {
+  if (shortcutId && !collapsed) {
     return (
       <div className="group relative">
         {link}
-        <PinButton id={pinId} pinOnly />
+        <ShortcutButton id={shortcutId} addOnly />
       </div>
     )
   }
   return link
+}
+
+// A compact icon-only link for the utility destinations (plugins, settings,
+// how-to) that sit in their own row under the search bar rather than in the nav
+// list. Always shows its label as a tooltip, since there's no text beside the
+// icon.
+function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
+  const pathname = usePathname()
+  const t = useTranslations('Nav')
+  const Icon = item.icon
+  const label = t(item.labelKey as Parameters<typeof t>[0])
+  const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+  return (
+    <Link
+      href={item.href as Route}
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+        isActive
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+    </Link>
+  )
 }
 
 // ─── flyout submenu ───────────────────────────────────────────────────────────
@@ -449,6 +584,10 @@ type PluginNavEntry = {
   category: string
   installed: boolean
   section?: string
+  // Suggestions only — what the hover card needs to make the suggestion
+  // EVALUABLE (UX-65): what the plugin does, and what it would cost here.
+  descriptionKey?: string
+  access?: PluginAccess
 }
 
 // Maps PluginNavContribution.section values to built-in NAV_SECTIONS labelKeys.
@@ -520,12 +659,34 @@ function useAccordionSection() {
   return { open, toggle }
 }
 
+// HOW MANY SUGGESTIONS THE SIDEBAR MAY SHOW AT ONCE (UX-65).
+//
+// The muted discovery rows are opt-in advertising inside the studio's own menu,
+// and the flag that produces them (`recommended` in a manifest) is set by us, not
+// earned by anything the studio did. Uncapped, that stacked up: seven manifests
+// carry the flag today and four of them contribute nav, three of those into a
+// single section — so a new studio's "Grow" section was half real destinations
+// and half things to buy, and the ratio got worse with every plugin shipped.
+//
+// So the cap is structural rather than a rule anyone has to remember:
+//   • at most ONE per section — no section can ever read as a shop shelf;
+//   • at most TWO in the whole sidebar.
+// Dismissing one (the × on hover) promotes the next in line, so nothing becomes
+// undiscoverable — it becomes SEQUENTIAL. The full catalogue stays one click away
+// at the top of the sidebar (EXPLORE_PLUGINS_ITEM) and on the dashboard's Discover
+// panel, which is the surface `recommended` mainly exists to feed: promo-codes was
+// flagged for that panel and contributes no nav entry at all, so the flag's active
+// use is untouched by this cap.
+const MAX_NAV_SUGGESTIONS = 2
+const MAX_NAV_SUGGESTIONS_PER_SECTION = 1
+
 /** All plugin nav entries: installed (real links) + recommended-not-installed
  *  (muted discovery nudges, minus any the user has hidden), plus a `dismiss` to
  *  hide a suggestion. Installed sort before muted. */
 function usePluginNavEntries(): { entries: PluginNavEntry[]; dismiss: (id: string) => void } {
   const { plugins, isInstalled, isLoading } = useInstalledPlugins()
   const { hidden, dismiss } = useHiddenSuggestions()
+  const { plan } = usePlan()
 
   // Engagement-category plugins default into the "Engage" section unless the
   // manifest pins an explicit section.
@@ -539,23 +700,46 @@ function usePluginNavEntries(): { entries: PluginNavEntry[]; dismiss: (id: strin
     }))
   )
 
-  const discovery: PluginNavEntry[] = isLoading
+  // Candidates, best-first: something the current plan can actually run before
+  // something that needs an upgrade (a locked row the studio can't act on is the
+  // least useful thing to spend one of the two slots on), then registry order —
+  // authored, stable, and not a ranking the studio would have to re-learn.
+  // `coming_soon` never appears: there is nothing to install.
+  const accessRank = (a: PluginAccess) => (a.kind === 'upgrade' ? 1 : 0)
+  const candidates = isLoading
     ? []
     : PLUGIN_REGISTRY.filter(
         (m) =>
           m.recommended &&
+          m.status !== 'coming_soon' &&
           (m.navContributions?.length ?? 0) > 0 &&
           !isInstalled(m.id) &&
           !hidden.includes(m.id)
-      ).flatMap((m) =>
-        (m.navContributions ?? []).map((nav) => ({
-          ...nav,
-          section: nav.section ?? (m.category === 'engagement' ? 'engage' : undefined),
-          pluginId: m.id,
-          category: m.category,
-          installed: false,
-        }))
       )
+        .map((m) => ({ m, access: pluginAccessForPlan(m, plan) }))
+        .sort((a, b) => accessRank(a.access) - accessRank(b.access))
+
+  // Apply the caps on the PLUGIN, not on its nav rows: a plugin contributing two
+  // rows would otherwise spend both slots advertising itself.
+  const perSection = new Map<string, number>()
+  const discovery: PluginNavEntry[] = []
+  for (const { m, access } of candidates) {
+    if (discovery.length >= MAX_NAV_SUGGESTIONS) break
+    const rows = (m.navContributions ?? []).map((nav) => ({
+      ...nav,
+      section: nav.section ?? (m.category === 'engagement' ? 'engage' : undefined),
+      pluginId: m.id,
+      category: m.category,
+      installed: false,
+      descriptionKey: m.descriptionKey,
+      access,
+    }))
+    // A plugin lands in exactly one place, so one row decides its section.
+    const sectionKey = rows[0]?.section ?? '_unsectioned'
+    if ((perSection.get(sectionKey) ?? 0) >= MAX_NAV_SUGGESTIONS_PER_SECTION) continue
+    perSection.set(sectionKey, (perSection.get(sectionKey) ?? 0) + 1)
+    discovery.push(...rows.slice(0, 1))
+  }
 
   return { entries: [...installed, ...discovery], dismiss }
 }
@@ -574,13 +758,32 @@ function PluginNavItem({
   const pathname = usePathname()
   const router = useRouter()
   const t = useTranslations('Plugins')
+  const planName = usePlanName()
   const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
   const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
 
   // Recommended but not installed → muted discovery item. Clicking opens the
   // plugin's detail modal on the marketplace (deep-linked via ?plugin=). Hover
   // reveals a × to hide the suggestion (browser-only).
+  //
+  // A SUGGESTION HAS TO BE EVALUABLE FROM WHERE IT SITS (UX-65). It used to say
+  // only "Recommended — add this plugin", which asks the studio to judge a word
+  // it has no way to interpret: recommended by whom, on what evidence, and at
+  // what price? Three of those four are answerable for free — what the plugin
+  // does (its own one-line description), what it would cost on THIS plan, and
+  // the honest provenance of the flag: it is a manifest boolean we set, not
+  // anything derived from the studio's data. Saying so is the difference between
+  // a suggestion and an advert that won't admit what it is.
   if (!nav.installed) {
+    const access = nav.access
+    const accessLine =
+      access?.kind === 'included'
+        ? t('suggestionIncluded')
+        : access?.kind === 'addon'
+          ? t('addonPrice', { price: access.priceMonthly })
+          : access?.kind === 'upgrade'
+            ? t('suggestionNeedsPlan', { plan: planName(access.minPlan) })
+            : null
     return (
       <div className="group/suggestion relative">
         <TooltipProvider delay={300}>
@@ -596,9 +799,30 @@ function PluginNavItem({
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="flex-1 text-left">{linkLabel}</span>}
             </TooltipTrigger>
-            <TooltipContent side="right">{t('discoverTooltip')}</TooltipContent>
+            <TooltipContent side="right" className="max-w-64 flex-col items-start gap-1 text-left">
+              {nav.descriptionKey && (
+                // Clamped: a manifest description is written for a marketplace
+                // card, and a few of them run to three sentences.
+                <span className="line-clamp-3 block">
+                  {t(nav.descriptionKey as Parameters<typeof t>[0])}
+                </span>
+              )}
+              {accessLine && <span className="block font-medium">{accessLine}</span>}
+              <span className="block opacity-70">{t('recommendedWhy')}</span>
+              {/* Replaces the old `discoverTooltip` ("Recommended — add this
+                  plugin"), which said the word "Recommended" a second time right
+                  under the line that finally explains it, and promised an install
+                  the click doesn't perform — it opens the catalogue entry. */}
+              <span className="block opacity-70">{t('suggestionOpenCatalogue')}</span>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        {/* Marks the row as a suggestion rather than a destination, in the same
+            vocabulary the marketplace uses for `recommended` (an amber star).
+            Swaps to the × on hover — one slot, two states. */}
+        {!collapsed && (
+          <Star className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 fill-amber-500/30 text-amber-500/50 transition-opacity group-hover/suggestion:opacity-0" />
+        )}
         {!collapsed && onDismiss && (
           <button
             type="button"
@@ -618,7 +842,7 @@ function PluginNavItem({
   }
 
   const isActive = pathname.startsWith(nav.href)
-  const pinId = `plugin:${nav.pluginId}:${nav.href}`
+  const shortcutId = `plugin:${nav.pluginId}:${nav.href}`
   const link = (
     <Link
       href={nav.href as Route}
@@ -638,7 +862,7 @@ function PluginNavItem({
   return (
     <div className="group relative">
       {link}
-      <PinButton id={pinId} pinOnly />
+      <ShortcutButton id={shortcutId} addOnly />
     </div>
   )
 }
@@ -771,8 +995,8 @@ function ShortcutRow({
   return (
     <div className={`group relative ${dragging ? 'opacity-40' : ''}`} {...dragProps}>
       {link}
-      {/* Remove from Shortcuts entirely — the pin only promotes/demotes
-          (Firebase-style: unpinning keeps the item listed as a recent). */}
+      {/* Remove from Shortcuts entirely — the star only promotes/demotes
+          (turning "always show" off keeps the row listed as a recent). */}
       <button
         type="button"
         onClick={(e) => {
@@ -786,7 +1010,7 @@ function ShortcutRow({
       >
         <X className="h-3.5 w-3.5" />
       </button>
-      <PinButton id={entry.id} />
+      <ShortcutButton id={entry.id} />
     </div>
   )
 }
@@ -799,26 +1023,86 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
-// Expanded-sidebar wrapper for the Shortcuts group — a very light brand-violet
-// gradient panel that gives the section a subtle lift over the flat sidebar
-// (the icon rail keeps the plain hairline divider instead).
-const SHORTCUTS_PANEL =
-  'mt-3 rounded-xl bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent pt-3 pb-1.5'
+// Marks the whole Shortcuts area as a region: a thin, flat, brand-violet rule
+// down its left edge, spanning the group heading, both runs and the empty-state
+// hint.
+//
+// IT MUST NOT CONSUME LAYOUT WIDTH, and it must not push the rows. The original
+// marker was a `before:` pseudo-element on a `pl-3` wrapper, which is the half of
+// it that had to go: the padding it needed pushed every shortcut row 12px right
+// of every other nav row. This is an absolutely-positioned sibling instead, so
+// every nav link in the sidebar — shortcuts and features alike — reports the same
+// 8px left offset (measured live, 19 rows, one value).
+//
+// THE GAP COMES OUT OF THE GUTTER, NEVER OUT OF THE ROWS. An active or hovered
+// row paints a background from its own left edge, which is the nav's CONTENT edge
+// at 8px — the same place the rule sat, so the two touched. Indenting the rows to
+// separate them would undo the paragraph above, so the rule moves the other way
+// instead: `-left-1` puts it at 4px, inside `nav`'s own `px-2` padding, ~3px clear
+// of any row background and ~4px clear of the sidebar edge — near enough centred
+// in the gutter.
+//
+// That negative offset is SAFE against the scroll container, which is the thing to
+// check rather than assume: `nav` is `overflow-y-auto`, so its other axis computes
+// non-visible too, and it clips at its PADDING box — x ≥ 0. The rule lives at
+// x = 4–5, inside that padding, so it is neither clipped nor scrollable-overflow,
+// and contributes no horizontal scrollbar. Anything that moves it further left
+// than -8px (`-left-2`) crosses the padding box and WILL be clipped.
+//
+// `z-10` because a row wrapper is `relative`, so its hover background would
+// otherwise paint over a rule that is merely earlier in the DOM.
+//
+// FLAT AND FULL STRENGTH — no gradient, no ramp, no alpha. A tint that faded along
+// its length was tried here (as a left-edge rule, then as a horizontal background
+// wash across the whole area) and rejected both times: the wash grew with the list
+// and read as a highlight rather than a boundary. The alpha went with the width:
+// at 2px, primary/70 (2.94:1 light / 3.97:1 dark against the sidebar) held it back
+// from shouting; at 1px there is half the ink to begin with, so full primary
+// (4.88:1 / 6.89:1) is what keeps a hairline present at a glance — and it still
+// lays down less violet than the 2px line it replaces.
+const SHORTCUTS_RULE =
+  'pointer-events-none absolute inset-y-0 -left-1 z-10 w-px rounded-full bg-primary'
 
-// How many recently-visited (unpinned) items the Shortcuts group keeps, in
-// addition to the pinned ones.
+// How many recently-visited items the Shortcuts group keeps, in addition to the
+// pinned ones.
 const MAX_RECENT_SHORTCUTS = 5
-// Rows shown before "Show more" — pinned rows are never truncated, so the
-// effective cap is max(this, pinned count).
+// Rows the group aims to show before "Show more". Pinned rows are never
+// truncated, so the budget is spent on them first and whatever is left goes to
+// the recent run.
 const SHORTCUTS_VISIBLE_MIN = 5
+// ...but the recent run never drops below this while it has rows. A heavy pinner
+// would otherwise spend the whole budget and push recents to zero, leaving "Show
+// more" as the only evidence that half exists — and with no divider drawn any
+// more, a run that renders nothing is a run that is simply gone.
+const RECENT_VISIBLE_MIN = 2
 
-// The "Shortcuts" macro group — Firebase-style: a rolling history of the user's
-// recently-opened destinations, with pinned ones promoted to the top and kept
-// permanently. The pin toggle on each row promotes a recent to pinned (and back —
-// unpinning keeps it listed as a recent); the X removes it from the group; drag
-// a row to reorder (manual placement pins it). Items can also be pinned from the
-// menu rows and the search dropdown. Hidden entirely when there's nothing to
-// show. Per-browser (NavPinsContext).
+// The "Shortcuts" macro group — Firebase-style: the destinations a studio keeps
+// within reach, held as TWO RUNS of ONE mechanism (item 1 of THE NAV-MEMORY
+// CENSUS in contexts/NavPinsContext.tsx):
+//   · pinned — hand-curated, drag-orderable, never truncated, never ages out.
+//   · recent — the rolling visit history, truncated behind "Show more".
+// The pin on a row PROMOTES a recent into the pinned run (and, turned off,
+// demotes it back); the X removes the row from the group entirely.
+//
+// NOTHING HARD SEPARATES THE TWO RUNS — no headings, no divider. Three signals
+// carry it instead, and every one of them was already there:
+//   1. ORDER. Pinned first, always. `entries` arrives pre-merged that way.
+//   2. THE PIN ITSELF. A pinned row's pin is filled and visible at rest; a recent
+//      row's only appears on hover. Two adjacent rows are tellable apart without
+//      reading anything.
+//   3. THE MOVE. Pinning re-renders the row at the end of the pinned run, so a
+//      promotion is seen happening. With no line to cross, that motion is now the
+//      whole story — which is why `pinned`/`recents` must stay derived from
+//      `alwaysShownIds` on every render rather than snapshotted.
+// A divider and two labels were both tried here first (2026-08-18) and both lost
+// to the same objection: they restate what the rows already say, and they compete
+// with the left rule for the one job of marking this area out.
+//
+// SHORTCUTS_RULE marks the region instead — see its comment for why it is
+// absolutely positioned and for the measured values. It covers the whole group,
+// empty state included: a region that stopped being marked exactly when the hint
+// explaining it appears would be marking the wrong thing. Expanded sidebar only.
+// Hidden entirely when there is nothing at all. Per-browser (NavPinsContext).
 function ShortcutsNav({
   entries,
   collapsed,
@@ -829,10 +1113,11 @@ function ShortcutsNav({
   onLinkClick?: () => void
 }) {
   const t = useTranslations('Nav')
-  const { pinnedIds, setPinOrder } = useNavPins()
+  const { alwaysShownIds, setShortcutOrder, clearShortcuts } = useNavPins()
   const [expanded, setExpanded] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
-  // Insertion index (in the displayed list) the dragged row would drop into.
+  // Insertion index (within the PINNED list) the dragged row would drop into.
   const [dropAt, setDropAt] = useState<number | null>(null)
 
   // Keep the group visible even when empty (expanded sidebar only) — a short
@@ -840,45 +1125,128 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div data-tour="nav-shortcuts" className={SHORTCUTS_PANEL}>
+      <div data-tour="nav-shortcuts" className="relative mt-3 py-1">
+        <div aria-hidden className={SHORTCUTS_RULE} />
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
-        <p className="px-3 py-1 text-xs leading-relaxed text-muted-foreground/60">
+        <p className="px-3 py-1 pr-2 text-xs leading-relaxed text-muted-foreground/60">
           {t('navShortcutsEmpty')}
         </p>
       </div>
     )
   }
 
-  const pinnedCount = entries.filter((e) => pinnedIds.includes(e.id)).length
-  const visibleCount = Math.max(SHORTCUTS_VISIBLE_MIN, pinnedCount)
-  const shown = expanded ? entries : entries.slice(0, visibleCount)
-  const hasMore = entries.length > visibleCount
+  // `entries` arrives merged (pinned first, then recents) — split it back into
+  // the two runs it was built from, DERIVED every render so a pin moves the row
+  // immediately (see signal 3 above). The icon rail renders the same rows in the
+  // same order.
+  const pinned = entries.filter((e) => alwaysShownIds.includes(e.id))
+  const recents = entries.filter((e) => !alwaysShownIds.includes(e.id))
+  const recentVisible = Math.max(RECENT_VISIBLE_MIN, SHORTCUTS_VISIBLE_MIN - pinned.length)
+  const shownRecents = expanded ? recents : recents.slice(0, recentVisible)
+  const hasMore = recents.length > recentVisible
 
-  // Drop = manual curation: the dragged row becomes (or stays) pinned, and the
-  // pin order becomes the displayed order filtered to pinned rows. Untouched
-  // recents keep flowing chronologically below the pins.
+  // Drag is PINNED-ONLY, deliberately, and it now only ever REORDERS:
+  //  · Recent is ordered by when you were last there. A manual placement inside
+  //    it cannot be stored and would be undone by the next navigation — a drag
+  //    that silently does nothing, which is worse than one that isn't offered.
+  //  · Dragging ACROSS the boundary to promote is not offered either. Promotion
+  //    has one affordance — the pin: hoverable, labelled, keyboard-reachable and
+  //    reversible. A second, invisible path that promotes on an accidental drop
+  //    adds no discoverability and one more way to be surprised.
   const commitDrop = () => {
     if (dragId != null && dropAt != null) {
-      const ids = entries.map((e) => e.id)
-      const from = ids.indexOf(dragId)
-      if (from !== -1) {
-        const next = ids.filter((id) => id !== dragId)
-        next.splice(dropAt > from ? dropAt - 1 : dropAt, 0, dragId)
-        const pinnedSet = new Set([...pinnedIds, dragId])
-        setPinOrder(next.filter((id) => pinnedSet.has(id)))
+      const visible = pinned.map((e) => e.id)
+      const from = visible.indexOf(dragId)
+      // dropAt === from | from + 1 is a drop onto itself: nothing moves.
+      if (from !== -1 && dropAt !== from && dropAt !== from + 1) {
+        // Reorder inside the STORED list, not the displayed one: a pinned id
+        // whose destination is currently gated off is invisible here and must
+        // survive the reorder rather than be silently dropped from storage.
+        const rest = alwaysShownIds.filter((id) => id !== dragId)
+        const anchor = visible[dropAt]
+        const at = anchor
+          ? rest.indexOf(anchor) // insert BEFORE the row dropped onto…
+          : rest.indexOf(visible[visible.length - 1]) + 1 // …or after the last one
+        rest.splice(at < 0 ? rest.length : at, 0, dragId)
+        setShortcutOrder(rest)
       }
     }
     setDragId(null)
     setDropAt(null)
   }
 
+  const dragPropsFor = (entry: ResolvedNavEntry, idx: number): ShortcutDragProps => ({
+    draggable: true,
+    onDragStart: (e) => {
+      e.dataTransfer.effectAllowed = 'move'
+      setDragId(entry.id)
+    },
+    onDragOver: (e) => {
+      if (dragId == null) return
+      e.preventDefault()
+      const rect = e.currentTarget.getBoundingClientRect()
+      setDropAt(e.clientY < rect.top + rect.height / 2 ? idx : idx + 1)
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      commitDrop()
+    },
+    onDragEnd: () => {
+      setDragId(null)
+      setDropAt(null)
+    },
+  })
+
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : SHORTCUTS_PANEL}>
-      {!collapsed && <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>}
+    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'relative mt-3 py-1'}>
+      {/* Expanded only: a hairline beside a 40px icon rail marks nothing. */}
+      {!collapsed && <div aria-hidden className={SHORTCUTS_RULE} />}
+      {/* Header row: the group label, with "clear all" pushed to the right.
+          Confirmed, because the pinned rows are hand-curated and drag-ordered —
+          rebuilding them is minutes of fiddling, and there is no undo. It clears
+          BOTH runs, which is why it hangs off the group heading — there is no
+          second heading for it to belong to, and that is deliberate. */}
+      {!collapsed && (
+        <div className="flex items-center pb-1">
+          <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
+            {t('navGroupShortcuts')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setClearOpen(true)}
+            title={t('navShortcutsClear')}
+            aria-label={t('navShortcutsClear')}
+            className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Eraser className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {!collapsed && (
+        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('navShortcutsClearTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('navShortcutsClearExplain')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('navShortcutsClearCancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  clearShortcuts()
+                  setClearOpen(false)
+                }}
+              >
+                {t('navShortcutsClear')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       <div className="space-y-0.5">
-        {shown.map((entry, idx) => (
+        {pinned.map((entry, idx) => (
           <div key={entry.id}>
             {!collapsed && dragId != null && dropAt === idx && dropLine}
             <ShortcutRow
@@ -886,48 +1254,28 @@ function ShortcutsNav({
               collapsed={collapsed}
               onClick={onLinkClick}
               dragging={dragId === entry.id}
-              dragProps={
-                collapsed
-                  ? undefined
-                  : {
-                      draggable: true,
-                      onDragStart: (e) => {
-                        e.dataTransfer.effectAllowed = 'move'
-                        setDragId(entry.id)
-                      },
-                      onDragOver: (e) => {
-                        if (dragId == null) return
-                        e.preventDefault()
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        setDropAt(e.clientY < rect.top + rect.height / 2 ? idx : idx + 1)
-                      },
-                      onDrop: (e) => {
-                        e.preventDefault()
-                        commitDrop()
-                      },
-                      onDragEnd: () => {
-                        setDragId(null)
-                        setDropAt(null)
-                      },
-                    }
-              }
+              dragProps={collapsed ? undefined : dragPropsFor(entry, idx)}
             />
           </div>
         ))}
-        {!collapsed && dragId != null && dropAt === shown.length && dropLine}
+        {!collapsed && dragId != null && dropAt === pinned.length && dropLine}
+        {shownRecents.map((entry) => (
+          <ShortcutRow key={entry.id} entry={entry} collapsed={collapsed} onClick={onLinkClick} />
+        ))}
+        {/* Show more belongs to Recent — it is the only half that truncates. */}
+        {!collapsed && hasMore && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+            <span>{expanded ? t('navShowLess') : t('navShowMore')}</span>
+          </button>
+        )}
       </div>
-      {!collapsed && hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          />
-          <span>{expanded ? t('navShowLess') : t('navShowMore')}</span>
-        </button>
-      )}
     </div>
   )
 }
@@ -942,113 +1290,640 @@ function normalizeSearch(s: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+// What a result IS. A studio looks up two different kinds of thing by name —
+// where to go (a page, a settings screen) and a record it works on (a person, a
+// plan, an activity) — and a flat list of both reads as neither. The kind picks
+// the group heading; it is also why settings destinations are no longer listed
+// as ordinary pages (UX-90).
+type SearchKind = 'page' | 'settings' | 'contact' | 'subscription' | 'activity'
+
 // A searchable destination: the localized label plus curated keyword synonyms
 // from the `Nav.searchKeywords` i18n map (what a user might type instead of the
-// label — "members" for Contacts — maintained per locale).
-type SearchEntry = ResolvedNavEntry & { keywords: string; pinnable: boolean }
+// label — "members" for Contacts — maintained per locale). Entity results share
+// the shape (no keywords, never shortcut-able) so ONE flattened list still
+// drives the keyboard selection.
+type SearchEntry = ResolvedNavEntry & {
+  keywords: string
+  canShortcut: boolean
+  kind: SearchKind
+  // Second line on an entity row — an email, a price, a level. Never matched
+  // against blindly: only the fields the provider chose to search are.
+  sublabel?: string
+  // A STATE the row's record is in, not a category: "Archived". Rendered as a
+  // chip because the difference has to survive a glance — a result you can open
+  // but must not book or message reads identically to any other without it.
+  badge?: string
+}
 
-// Sidebar quick-search (Firebase-style). Phase 1 searches nav destinations only,
-// but results are already grouped so later search providers (contacts, products,
-// courses… — async, Zoho-Books-style) can append their own result groups.
-function NavSearch({ entries, onNavigate }: { entries: SearchEntry[]; onNavigate?: () => void }) {
+// ⌘ on Apple, Ctrl elsewhere. Deliberately NOT translated — these are key CAPS,
+// the same glyph on a German keyboard as on an English one. Guards `navigator`
+// so it is safe during SSR, where it resolves to the Ctrl form and is corrected
+// on hydration (the hint is decorative; the handler accepts either modifier).
+function modKeyLabel(): string {
+  if (typeof navigator === 'undefined') return 'Ctrl+'
+  return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl+'
+}
+
+// Sidebar quick-search (Firebase-style). It searches nav destinations AND the
+// three things a studio looks up by name all day — a contact, a subscription
+// type, an activity (UX-90) — each in its own group.
+//
+// HOW THE ENTITY LISTS ARE FETCHED, deliberately: not per keystroke. Firestore
+// has no substring search, so a query-per-keystroke design would cost a read
+// round-trip per letter and STILL only match prefixes. Instead each list is
+// pulled ONCE per panel session through the SAME hook its own page uses — so
+// the cache is shared, and the contacts list keeps its (lastname, firstname)
+// ordering, which is the composite index a real project requires — and filtered
+// in memory, exactly like every list page's search field. It arms on the second
+// typed character, so opening the panel by accident (or with ⌘K and closing
+// again) reads nothing; closing disarms it, so the next session sees anything
+// created meanwhile.
+function NavSearch({
+  entries,
+  onNavigate,
+  collapsed,
+}: {
+  entries: SearchEntry[]
+  onNavigate?: () => void
+  collapsed?: boolean
+}) {
   const t = useTranslations('Nav')
   const router = useRouter()
+  const { tabs, newTab, switchTab, enabled: tabsEnabled } = useOpenTabs()
+  const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
+  // The people you just had open — the panel's empty state, replaced by results
+  // the moment anything is typed. See the nav-memory census in NavPinsContext.
+  const { recentContactIds } = useRecentContacts()
+  const { currentTeamId, user } = useAuth()
+  const { ownScoped } = useCapabilities()
   const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Where the panel opens: measured from the trigger at click time, so it grows
+  // out of the control the user actually pressed rather than appearing in the
+  // corner of the window. Falls back to the sidebar's top-left for ⌘K, which
+  // has no click to measure.
+  const [anchor, setAnchor] = useState<{ left: number; top: number }>({ left: 8, top: 8 })
+
+  const openPanel = () => {
+    const r = triggerRef.current?.getBoundingClientRect()
+    // Offset right of the trigger on desktop so the panel is visibly detached
+    // from the window edge rather than pinned to it. Not on narrow viewports,
+    // where every pixel of width counts more than the gap.
+    const nudge = typeof window !== 'undefined' && window.innerWidth >= 768 ? 8 : 0
+    if (r) setAnchor({ left: r.left + nudge, top: r.top })
+    setExpanded(true)
+  }
 
   const q = normalizeSearch(query.trim())
-  const results = q
-    ? entries
-        .filter(
-          (e) => normalizeSearch(e.label).includes(q) || normalizeSearch(e.keywords).includes(q)
-        )
-        .slice(0, 8)
-    : []
-  // Future providers append their groups here (each may resolve asynchronously).
-  const groups = [{ label: t('navSearchGroupPages'), results }]
-  const open = focused && q.length > 0
 
-  // Close when clicking anywhere outside the search box + dropdown.
+  // Armed = the entity lists may be fetched. Latched: once a real query has been
+  // typed it stays armed for the rest of the panel session, so deleting back to
+  // one character and typing again does not re-run three queries.
+  const [armed, setArmed] = useState(false)
   useEffect(() => {
-    if (!open) return
+    if (expanded && q.length >= 2) setArmed(true)
+  }, [expanded, q])
+
+  // Own-scoped members (coaches) may only READ their assigned contacts — the
+  // broad roster query is denied for them by the rules — so the search runs the
+  // same scoped variant the contacts page does rather than a query that would
+  // fail silently and make search look empty for a whole role.
+  const scopeUid = ownScoped ? (user?.uid ?? null) : null
+  const entityTeamId = armed ? currentTeamId : null
+  // The recently-viewed rows are stored as IDS, so the roster is what turns them
+  // into names — which means the CONTACT lists (and only those: not the
+  // subscription types, not the activities) also arm when the panel opens with a
+  // history to show. It is the same one-per-session read typing would trigger a
+  // moment later, on the same shared cache entry, and the alternative — storing
+  // names — is stale the first time somebody is renamed.
+  const contactsTeamId =
+    armed || (expanded && recentContactIds.length > 0) ? currentTeamId : null
+  const { data: contacts = [], isFetching: contactsFetching } = useActiveContacts(
+    contactsTeamId,
+    scopeUid
+  )
+  // ARCHIVED TOO — a former member is exactly who you look up when they come
+  // back or ask about an old payment, and until now searching for them returned
+  // nothing at all (UX-21). It is a SECOND query, not a widened first one: the
+  // pickers, the roster and the dashboard all read `useActiveContacts` for its
+  // meaning. One extra read per panel session, on the same latch as the others,
+  // and it shares its cache entry with the contacts page's Archived tab.
+  //
+  // DELETED CONTACTS ARE NOT SEARCHED, and that is the decision rather than an
+  // omission: someone asked to be removed, and a search box that still finds
+  // them works against the request. They remain reachable from the Contacts
+  // page's own Deleted tab, where restoring is the deliberate act it should be.
+  //
+  // Own-scoped coaches get no archived results — the broad query is denied for
+  // them by the rules (see the hook), so `null` here is the same answer the
+  // contacts page gives by hiding the tab.
+  const { data: archivedContacts = [], isFetching: archivedFetching } = useArchivedContacts(
+    scopeUid ? null : contactsTeamId
+  )
+  const { data: subscriptionTypes = [], isFetching: subsFetching } =
+    useSubscriptionTypes(entityTeamId)
+  const { data: activities = [], isFetching: activitiesFetching } = useActivities(entityTeamId)
+  const entitiesFetching =
+    contactsFetching || archivedFetching || subsFetching || activitiesFetching
+
+  const matches = (...fields: (string | null | undefined)[]) =>
+    fields.some((f) => f && normalizeSearch(f).includes(q))
+
+  const navResults = (kind: SearchKind, limit: number) =>
+    q
+      ? entries
+          .filter((e) => e.kind === kind)
+          .filter((e) => matches(e.label, e.keywords))
+          .slice(0, limit)
+      : []
+
+  const entityRow = (
+    id: string,
+    href: string,
+    label: string,
+    icon: React.ElementType,
+    kind: SearchKind,
+    sublabel?: string,
+    badge?: string
+  ): SearchEntry => ({
+    id, href, label, icon, keywords: '', canShortcut: false, kind, sublabel, badge,
+  })
+
+  // A contact has a record of its own to open. A subscription type and an
+  // activity do not — they are edited in a dialog on the page that lists them —
+  // so those results land on that page rather than inventing a route.
+  const contactMatches = (c: Contact) =>
+    matches(`${c.firstname ?? ''} ${c.lastname ?? ''}`, c.email, c.phone)
+  const contactRow = (c: Contact, badge?: string) =>
+    entityRow(
+      `contact:${c.id}`,
+      `/contacts/${c.id}`,
+      `${c.firstname ?? ''} ${c.lastname ?? ''}`.trim() || (c.email ?? c.id),
+      Users,
+      'contact',
+      c.email ?? undefined,
+      badge
+    )
+  // Active first and archived after, each capped separately rather than sharing
+  // one cap: a studio with six matching current members would otherwise never
+  // see the former one they are actually looking for. The archived rows carry a
+  // badge — an unmarked result is one somebody messages or books by mistake.
+  const contactResults: SearchEntry[] = q
+    ? [
+        ...contacts.filter(contactMatches).slice(0, 6).map((c) => contactRow(c)),
+        ...archivedContacts
+          .filter(contactMatches)
+          .slice(0, 3)
+          .map((c) => contactRow(c, t('navSearchArchivedBadge'))),
+      ]
+    : []
+  // RECENTLY VIEWED CONTACTS — the empty state, resolved from the same two
+  // rosters the results use, through the same `contactRow`, so an archived
+  // person carries the SAME amber badge here as they do in a result. Two
+  // renderings of one fact that disagreed would be worse than not showing it.
+  //
+  // AN ID THAT DOES NOT RESOLVE IS DROPPED, silently and only from the display:
+  // a deleted contact leaves no blank row, and a roster still in flight simply
+  // shows fewer rows for a moment rather than pruning a list it cannot yet see.
+  const recentContactRows: SearchEntry[] = recentContactIds
+    .map((id) => {
+      const activeMatch = contacts.find((c) => c.id === id)
+      if (activeMatch) return contactRow(activeMatch)
+      const archivedMatch = archivedContacts.find((c) => c.id === id)
+      return archivedMatch ? contactRow(archivedMatch, t('navSearchArchivedBadge')) : null
+    })
+    .filter((row): row is SearchEntry => !!row)
+
+  const subscriptionResults: SearchEntry[] = q
+    ? subscriptionTypes
+        .filter((st) => matches(st.name, st.description))
+        .slice(0, 4)
+        .map((st) => entityRow(`subscription:${st.id}`, '/offer/plans', st.name, IdCard, 'subscription'))
+    : []
+  const activityResults: SearchEntry[] = q
+    ? activities
+        .filter((a) => matches(a.name, a.description))
+        .slice(0, 4)
+        .map((a) => entityRow(`activity:${a.id}`, '/offer/activities', a.name, Zap, 'activity'))
+    : []
+
+  // Order = how a studio reads the panel: where-to-go first (few, precise
+  // matches), then the records, contacts first because they are the volume case.
+  const groups: { key: string; label: string; results: SearchEntry[] }[] = [
+    { key: 'pages', label: t('navSearchGroupPages'), results: navResults('page', 8) },
+    { key: 'settings', label: t('navSearchGroupSettings'), results: navResults('settings', 5) },
+    { key: 'contacts', label: t('navSearchGroupContacts'), results: contactResults },
+    {
+      key: 'subscriptions',
+      label: t('navSearchGroupSubscriptions'),
+      results: subscriptionResults,
+    },
+    { key: 'activities', label: t('navSearchGroupActivities'), results: activityResults },
+  ]
+  // Two different things, no longer fused: the PANEL is open because the user
+  // asked for it, and the RESULT LIST appears once there is something to match.
+  const showResults = expanded && q.length > 0
+
+  // Keyboard selection indexes the FLATTENED result order, so it keeps working
+  // when later providers append their own groups — the visual grouping and the
+  // arrow-key order must not diverge.
+  //
+  // Before anything is typed the recently-viewed rows ARE that list: ⌘K, ↓, ↵
+  // reaches the person you just had open without touching the mouse, which is
+  // most of the point of remembering them at all.
+  const flat = showResults ? groups.flatMap((g) => g.results) : recentContactRows
+  const active = flat[activeIndex]
+  // One selectable list, whichever of the two is on screen.
+  const listOpen = showResults || recentContactRows.length > 0
+
+  // A new query is a new result set; an index carried over from the old one
+  // would highlight an unrelated row (or nothing).
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [q])
+
+  // Keep the highlighted row visible in the scrollable dropdown.
+  useEffect(() => {
+    if (!listOpen) return
+    listRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [listOpen, activeIndex])
+
+  // Close when clicking anywhere outside the panel. Keyed on `expanded`, not on
+  // `listOpen`: the panel is dismissible while it is still empty, which is
+  // exactly when a user who opened it by accident wants out.
+  useEffect(() => {
+    if (!expanded) return
     const onDown = (ev: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) setFocused(false)
+      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) close()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+  }, [expanded])
+
+  // ⌘K / Ctrl+K. Behind an icon, search loses the discoverability a permanent
+  // field had; the shortcut is the standard compensation, and the placeholder
+  // spells it out for anyone who opens the panel by mouse.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'k' || ev.key === 'K')) {
+        ev.preventDefault()
+        openPanel()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const close = () => {
     setQuery('')
-    setFocused(false)
+    setExpanded(false)
+    setActiveIndex(0)
+    // Disarm: the next panel session re-reads the entity lists, so a contact
+    // added a minute ago is findable without a page reload.
+    setArmed(false)
   }
 
+  const openEntry = (entry: SearchEntry) => {
+    router.push(entry.href as Route)
+    close()
+    onNavigate?.()
+  }
+
+  // Opens the entry in a tab AND GOES THERE — deliberately not the background
+  // ctrl/⌘-click convention OpenTabsContext documents for links. A search result
+  // is a destination the user just asked for by name; collecting it silently
+  // behind the current page is the browser's answer to a different question.
+  //
+  // `newTab` activates but does not navigate (the strip only navigates on an
+  // explicit click), so the push is required — without it the tab would be
+  // active while the page stayed put. And `newTab` does not dedupe the way
+  // `openInNewTab` does, so an entry already open is focused rather than
+  // duplicated; otherwise searching twice for the same page would stack tabs.
+  //
+  // With the strip switched off (Settings → General) there is nowhere to put a
+  // tab, so fall back to opening normally rather than no-op — a shortcut that
+  // silently does nothing reads as broken.
+  const openEntryAsTab = (entry: SearchEntry) => {
+    if (!tabsEnabled) return openEntry(entry)
+    const existing = tabs.find((tb) => normalizeTabPath(tb.href) === normalizeTabPath(entry.href))
+    if (existing) switchTab(existing.tabId)
+    else newTab(entry.href, entry.label)
+    router.push(entry.href as Route)
+    close()
+    onNavigate?.()
+  }
+
+  // ONE row renderer for both lists — the typed results and the recently-viewed
+  // empty state. Kept as a single function on purpose: the archived badge is the
+  // marker that stops somebody messaging a former member by mistake, and two
+  // copies of this markup would eventually disagree about it.
+  const renderEntry = (entry: SearchEntry) => {
+    const Icon = entry.icon
+    const isActive = active?.id === entry.id
+    const row = (
+      <Link
+        href={entry.href as Route}
+        id={`nav-search-opt-${entry.id}`}
+        role="option"
+        aria-selected={isActive}
+        data-active={isActive}
+        // Pointer and keyboard drive ONE selection, so hovering
+        // moves the highlight instead of fighting it.
+        onMouseEnter={() => setActiveIndex(flat.indexOf(entry))}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            openEntryAsTab(entry)
+            return
+          }
+          close()
+          onNavigate?.()
+        }}
+        className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground ${
+          isActive ? 'bg-accent text-foreground' : 'text-muted-foreground'
+        } ${entry.canShortcut ? 'pr-8' : ''}`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{entry.label}</span>
+        {entry.badge && (
+          <span className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            {entry.badge}
+          </span>
+        )}
+        {entry.sublabel && (
+          <span className="truncate text-xs font-normal text-muted-foreground/70">
+            {entry.sublabel}
+          </span>
+        )}
+        {isAlwaysShown(entry.id) && (
+          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
+            {t('navSearchInShortcuts')}
+          </span>
+        )}
+      </Link>
+    )
+    if (!entry.canShortcut) return <div key={entry.id}>{row}</div>
+    return (
+      <div key={entry.id} className="group relative">
+        {row}
+        <ShortcutButton id={entry.id} addOnly />
+      </div>
+    )
+  }
+
+  // The trigger — a MINI-INPUT, not a bare icon.
+  //
+  // It reads as a field so it says "you can search here", while costing a share
+  // of one row instead of a whole one — which is what freed the space the studio
+  // name now uses in the header. Clicking it opens the real input in an overlay;
+  // because the two look alike, that reads as the field growing rather than a
+  // different thing appearing.
+  //
+  // THE BOX IS BORROWED FROM `components/ui/input.tsx`, not invented: same h-8,
+  // same rounded-lg, same `border-input`, same `dark:bg-input/30` fill, same
+  // `focus-visible` ring. The panel animates OUT OF this trigger, so a shape of
+  // its own would break the one illusion the whole control depends on. Before
+  // this it wore a transparent bottom border that only appeared on hover — at
+  // rest there was no box at all, and nothing said it was a place you can type.
+  //
+  // IT IS FILLED IN LIGHT MODE, which is the one place it departs from Input, and
+  // the numbers say why. Against the sidebar (--sidebar, #f5f5fa) the shared
+  // `border-input` measures 1.23:1 — WCAG 1.4.11 asks 3:1 of a component boundary,
+  // and no tasteful fill can close that gap either: an OPAQUE `bg-muted` is
+  // 1.05:1 and opaque `bg-accent` 1.09:1, so 3:1 would take a violet block. The
+  // boundary is not where this control's identity lives, though — its icon is
+  // 4.88:1 against the sidebar and its label 5.57:1, both well past 3:1, and the
+  // focus ring is 4.88:1. So the fix here is perceptual, not compliance, and it
+  // goes the other way: `bg-card` is pure white, 1.085:1 and ΔL* +3.3 ABOVE the
+  // sidebar rather than below it. A white field on a tinted sidebar is the oldest
+  // search pattern there is, it lifts the label to 6.04:1, and — because the
+  // panel's own input sits on white `--popover` — the trigger is now literally the
+  // same surface as the thing it grows into. Dark keeps `bg-input/30` (1.10:1,
+  // already a legible plate) because there `bg-card` would be weaker at 1.05:1.
+  //
+  // It stays a <button>. The panel owns the real field; a second focusable input
+  // in the sidebar would be two things that look typeable and one that is not.
+  //
+  // It takes the row's spare width (`flex-1`) and pushes the true icon buttons
+  // right, which is also what keeps THEM reading as secondary.
+  //
+  // Collapsed sidebar: no room for text, so it falls back to the icon alone.
+  // The trigger stays MOUNTED while the panel is open. Unmounting it collapsed
+  // the row and slid the icons beside it left — and, because the panel anchors
+  // to the trigger's measured position, an unmounted trigger also loses the ref
+  // any reposition would need.
   return (
-    <div ref={wrapRef} data-tour="nav-search" className="relative">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        data-tour="nav-search"
+        onClick={openPanel}
+        title={`${t('navSearchPlaceholder')} (${modKeyLabel()}K)`}
+        aria-label={t('navSearchPlaceholder')}
+        className={
+          collapsed
+            ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+            : // Hover lifts the border towards the ring colour rather than filling the
+              // box — the fill is reserved for focus, which is the state a keyboard
+              // user has to be able to find. focus-visible copies Input's ring
+              // exactly (the old trigger had NO focus style at all: tabbing to it
+              // showed nothing, because its only border was a hover border).
+              'flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 text-muted-foreground outline-none transition-colors hover:border-ring/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
+        }
+      >
+        {/* Primary, not inherited muted: search is the fastest route to anything
+            in the app and the row is otherwise the quietest thing in the header.
+            Deliberately NOT hover-linked — the colour is the prominence, so it
+            holds at rest; the label beside it still lifts on hover. The colour
+            token is theme-aware (the dark palette lightens --primary for exactly
+            this), so it holds against both backgrounds. */}
+        <Search className="h-4 w-4 shrink-0 text-primary" />
+        {/* Placeholder only — still no ⌘K badge, but for a MEASURED reason now
+            that this is a real box: it does not fit. The expanded sidebar is
+            w-60; minus the row's mx-2 and the three 32px icon buttons beside it,
+            this field is ~116px, and minus px-2.5 + the 16px icon + its gap the
+            label gets ~74px. "Search…" clears that; "Rechercher…", "Suchen…" and
+            "Cerca…" do not once a badge takes ~17px more, so three locales out of
+            four would ship a truncated placeholder to buy a hint that is already
+            in the tooltip. Revisit if the sidebar ever widens. */}
+        {!collapsed && <span className="truncate text-xs">{t('navSearchPlaceholder')}</span>}
+      </button>
+
+      {/* PORTALLED TO document.body. `fixed` is only viewport-relative while no
+          ancestor creates a containing block, and the sidebar sits inside a
+          sticky/width-transitioning tree — on the settings page the overlay
+          rendered BEHIND the page content because of it. A portal removes the
+          whole class of bug rather than chasing z-index. */}
+      {expanded &&
+        createPortal(
+    <>
+      {/* Dim the page behind the panel — enough to actually read as a mode the
+          app is in, not a translucent box floating over live content. */}
+      <div aria-hidden className="fixed inset-0 z-40 animate-in fade-in-0 duration-150 bg-background/80" />
+      <div
+        ref={wrapRef}
+        data-tour="nav-search"
+        // Grows out of the trigger, spilling a little into the content area.
+        // Capped so it never runs off a narrow viewport.
+        style={{ left: anchor.left, top: anchor.top }}
+        // Grows out of the trigger: fades and scales up from 95%, sliding a few
+        // pixels right so it reads as the mini-input opening rather than a
+        // separate panel blinking into existence on top of it.
+        className="fixed z-50 w-[min(22rem,calc(100vw-1rem))] origin-top-left animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-150 rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-lg"
+      >
+      <div className="relative">
+      {/* Full strength, not held back: a primary leading icon can read as a focus
+          state on an idle field, but this field is never idle — the panel mounts
+          it autoFocused and closes when it loses the mode, so "focused" is the
+          only state it is ever seen in. Matches the trigger icon it grows out of. */}
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
       <Input
+        // autoFocus, NOT a ref: the shared Input is a plain function component
+        // with no forwardRef, so a ref on it is silently null and the panel
+        // opened with nothing focused. The input mounts with the panel, so
+        // autoFocus is both correct and simpler.
+        autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => setFocused(true)}
+        role="combobox"
+        aria-expanded={listOpen}
+        aria-controls="nav-search-results"
+        aria-activedescendant={listOpen && active ? `nav-search-opt-${active.id}` : undefined}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') close()
-          if (e.key === 'Enter' && results[0]) {
+          if (e.key === 'Escape') return close()
+          if (!listOpen || flat.length === 0) return
+          if (e.key === 'ArrowDown') {
             e.preventDefault()
-            router.push(results[0].href as Route)
-            close()
-            onNavigate?.()
+            setActiveIndex((i) => (i + 1) % flat.length)
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActiveIndex((i) => (i - 1 + flat.length) % flat.length)
+            // Home/End are deliberately NOT bound: this is a text input the
+            // visitor is still typing in, and there they move the caret. Arrows
+            // are the list-navigation convention precisely because they are the
+            // keys a text field does not need.
+          } else if (e.key === 'Enter' && active) {
+            e.preventDefault()
+            if (e.metaKey || e.ctrlKey) openEntryAsTab(active)
+            else openEntry(active)
+          } else if ((e.key === 's' || e.key === 'S') && e.altKey && active?.canShortcut) {
+            // Alt rather than ⌘/Ctrl: ⌘S is Save in every browser.
+            e.preventDefault()
+            toggleAlwaysShown(active.id)
           }
         }}
         placeholder={t('navSearchPlaceholder')}
         aria-label={t('navSearchPlaceholder')}
         className="h-8 pl-8 text-sm"
       />
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-md">
-          {results.length === 0 ? (
-            <p className="px-2 py-2 text-sm text-muted-foreground">{t('navSearchNoResults')}</p>
+      </div>
+      {/* Before anything is typed the panel would otherwise be a bare field with
+          a void under it, which reads as broken rather than ready. One quiet row,
+          shaped like the result rows it will be replaced by. */}
+      {!showResults && (
+        <>
+          <div className="mt-1.5 flex items-center gap-2 rounded-md px-2 py-3 text-sm text-muted-foreground">
+            {/* No icon — the field above already has one, and repeating it made
+                the row read as a result rather than a prompt. The shortcut IS
+                here, though: this is the moment the user is looking at the panel
+                and can learn how to reach it without the mouse next time. */}
+            <span className="min-w-0 leading-snug">{t('navSearchPromptAll')}</span>
+            <kbd className="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground/70">
+              {modKeyLabel()}K
+            </kbd>
+          </div>
+          {/* WHO WAS I JUST LOOKING AT — the panel's answer before a question is
+              asked. Contacts only: nav destinations are already the Shortcuts
+              group in the sidebar, and this is the one thing neither that nor
+              the tab strip can tell you (see the census in NavPinsContext).
+              Rendered under the prompt, so the field → "type to search" reading
+              of the panel is unchanged and this is an addition beneath it. It
+              takes the same listbox id as the results — only ever one of the two
+              is on screen, and the arrow keys drive whichever it is. */}
+          {recentContactRows.length > 0 && (
+            <div
+              ref={listRef}
+              id="nav-search-results"
+              role="listbox"
+              className="max-h-[50vh] overflow-y-auto border-t pt-1.5"
+            >
+              <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
+                {t('navRecentContactsGroup')}
+              </p>
+              <div className="space-y-0.5">{recentContactRows.map(renderEntry)}</div>
+            </div>
+          )}
+        </>
+      )}
+      {showResults && (
+        <div
+          ref={listRef}
+          id="nav-search-results"
+          role="listbox"
+          className="mt-1.5 max-h-[60vh] overflow-y-auto"
+        >
+          {flat.length === 0 ? (
+            <p className="px-2 py-2 text-sm text-muted-foreground">
+              {/* Nav destinations match instantly; the entity lists may still be
+                  in flight, and "no results" shown over a pending fetch is a
+                  wrong answer stated confidently. Same for the FIRST character:
+                  the entity lists arm at two, so a one-letter query has not
+                  looked at a single contact yet and must not claim it has
+                  (UX-21 — this panel is now the way to reach a person). */}
+              {q.length < 2
+                ? t('navSearchKeepTyping')
+                : entitiesFetching
+                  ? t('navSearchSearching')
+                  : t('navSearchNoMatches')}
+            </p>
           ) : (
-            groups.map((group) =>
-              group.results.length === 0 ? null : (
-                <div key={group.label}>
-                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
-                    {group.label}
-                  </p>
-                  <div className="space-y-0.5">
-                    {group.results.map((entry) => {
-                      const Icon = entry.icon
-                      const row = (
-                        <Link
-                          href={entry.href as Route}
-                          onClick={() => {
-                            close()
-                            onNavigate?.()
-                          }}
-                          className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
-                            entry.pinnable ? 'pr-8' : ''
-                          }`}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{entry.label}</span>
-                        </Link>
-                      )
-                      if (!entry.pinnable) return <div key={entry.id}>{row}</div>
-                      return (
-                        <div key={entry.id} className="group relative">
-                          {row}
-                          <PinButton id={entry.id} pinOnly />
-                        </div>
-                      )
-                    })}
+            <>
+              {groups.map((group) =>
+                group.results.length === 0 ? null : (
+                  <div key={group.key}>
+                    <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
+                      {group.label}
+                    </p>
+                    <div className="space-y-0.5">{group.results.map(renderEntry)}</div>
                   </div>
-                </div>
-              )
-            )
+                )
+              )}
+              {/* Shortcuts are invisible without a hint, and an undiscoverable
+                  shortcut is the same as an absent one. */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t px-2 pb-0.5 pt-1.5 text-[10px] text-muted-foreground/70">
+                <span>
+                  <kbd className="font-sans">↑↓</kbd> {t('navSearchHintNavigate')}
+                </span>
+                <span>
+                  <kbd className="font-sans">↵</kbd> {t('navSearchHintOpen')}
+                </span>
+                {tabsEnabled && (
+                  <span>
+                    <kbd className="font-sans">{modKeyLabel()}↵</kbd> {t('navSearchHintTab')}
+                  </span>
+                )}
+                {active?.canShortcut && (
+                  <span>
+                    <kbd className="font-sans">Alt+S</kbd> {t('navSearchHintShortcut')}
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>,
+          document.body
+        )}
+    </>
   )
 }
 
@@ -1066,8 +1941,10 @@ function SidebarContent({
   const pathname = usePathname()
   const { team, currentTeamId } = useAuth()
   const { isInstalled } = useInstalledPlugins()
-  const { isAtLeast, plan } = usePlan()
-  const { pinnedIds, recentIds, recordVisit } = useNavPins()
+  const { isAtLeast } = usePlan()
+  // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
+  const canEditTeamSettings = useCapabilities().can('team.settings')
+  const { alwaysShownIds, recentIds, recordVisit } = useNavPins()
   // Raw message tree — used to read the per-locale `Nav.searchKeywords` synonym
   // map without a t() call per id (ids without keywords are simply label-only).
   const messages = useMessages() as unknown as {
@@ -1095,10 +1972,11 @@ function SidebarContent({
   const unsectionedEntries = pluginEntries.filter(
     (e) => !(e.section && PLUGIN_SECTION_TO_LABEL_KEY[e.section])
   )
+  const locale = useLocale()
   const { open: openSection, toggle: toggleSection } = useAccordionSection()
 
   // Whether a main-nav item passes its plan/plugin/org/shop gates — shared by the
-  // section render and the pinnable catalogue so the two never disagree.
+  // section render and the shortcut-able catalogue so the two never disagree.
   const mainItemVisible = (item: NavItem) =>
     (!item.requiresOrg || inOrg) &&
     (!item.requiresConnect || connectOn) &&
@@ -1106,15 +1984,17 @@ function SidebarContent({
     (!item.requiresPlugin || isInstalled(item.requiresPlugin)) &&
     (!item.requiresPlan || isAtLeast(item.requiresPlan))
 
+  // Mirrors SettingsRail's gateOk — the sidebar's shortcut-able catalogue and the rail
+  // must never disagree about what exists.
   const settingsItemVisible = (item: SettingsNavItem) => {
-    if (item.gate === 'affiliations') return planSupportsAffiliations(plan)
+    if (item.gate === 'ownerOnly') return canEditTeamSettings
     if (item.gate === 'customFields') return isInstalled('custom-fields')
     return true
   }
 
-  // Resolve every currently-visible pinnable destination by id (main nav +
-  // settings + installed plugin items), then pick the pinned ones in pin order.
-  // Ids that aren't currently available (gated off) are silently skipped.
+  // Resolve every currently-visible shortcut-able destination by id (main nav +
+  // settings + installed plugin items), then pick the always-shown ones in their
+  // stored order. Ids that aren't currently available (gated off) are skipped.
   const catalogue = new Map<string, ResolvedNavEntry>()
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
@@ -1148,34 +2028,40 @@ function SidebarContent({
       icon: PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle,
     })
   }
-  // Shortcuts = pinned (permanent, pin order) + recently visited (rolling history,
-  // newest first, excluding already-pinned) — Firebase-style.
-  const pinnedEntries = pinnedIds
+  // Shortcuts = always shown (permanent, stored order) + recently visited
+  // (rolling history, newest first, minus anything already always shown).
+  const alwaysShownEntries = alwaysShownIds
     .map((id) => catalogue.get(id))
     .filter((e): e is ResolvedNavEntry => !!e)
   const recentEntries = recentIds
-    .filter((id) => !pinnedIds.includes(id))
+    .filter((id) => !alwaysShownIds.includes(id))
     .map((id) => catalogue.get(id))
     .filter((e): e is ResolvedNavEntry => !!e)
     .slice(0, MAX_RECENT_SHORTCUTS)
-  const shortcutEntries = [...pinnedEntries, ...recentEntries]
+  const shortcutEntries = [...alwaysShownEntries, ...recentEntries]
 
-  // The search index: everything in the catalogue plus the two fixed General
-  // items (searchable but not pinnable — they're always visible anyway).
+  // The search index: everything in the catalogue plus the three fixed General
+  // items (searchable but not shortcut-able — they're always visible anyway).
+  // A settings destination is tagged as such rather than listed among ordinary
+  // pages (UX-90) — including the /settings hub itself, which IS the settings
+  // answer to "where do I change this".
+  const settingsIds = new Set(SETTINGS_ITEMS.map((i) => i.id))
   const searchEntries: SearchEntry[] = [
-    ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
+    ...[DASHBOARD_ITEM, DASHBOARD_PREVIEW_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
       href: item.href,
       label: t(item.labelKey as Parameters<typeof t>[0]),
       icon: item.icon,
       exact: item.exact,
       keywords: kwOf(item.id),
-      pinnable: false,
+      canShortcut: false,
+      kind: (item.id === ALL_SETTINGS_ITEM.id ? 'settings' : 'page') as SearchKind,
     })),
     ...Array.from(catalogue.values()).map((e) => ({
       ...e,
       keywords: kwOf(e.id),
-      pinnable: true,
+      canShortcut: true,
+      kind: (settingsIds.has(e.id) ? 'settings' : 'page') as SearchKind,
     })),
   ]
 
@@ -1201,7 +2087,9 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Logo + collapse toggle */}
+      {/* Logo + collapse toggle. The PRODUCT's identity, and nothing else — the
+          studio's name gets its own row below rather than sitting under the
+          Linyup mark, where the two read as one lockup. */}
       <div
         className={`flex items-center border-b h-14 shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
       >
@@ -1220,24 +2108,63 @@ function SidebarContent({
         )}
       </div>
 
-      {/* Quick search — pages now, entity providers later (hidden in icon mode) */}
-      {!collapsed && (
-        <div className="px-2 pt-2 shrink-0">
-          <NavSearch entries={searchEntries} onNavigate={onLinkClick} />
+      {/* WHICH STUDIO — its own row, with the QR beside it. The QR belongs here
+          rather than with the utility icons: it encodes THIS studio's public
+          links, so it is a property of the name it sits next to, not another
+          place to navigate to. (It used to live beside the user avatar, inside
+          the account cluster, which was the wrong grouping in a third way.)
+
+          Orientation, not a control: there is no team switcher — a user's
+          `currentTeam` is a single value on their profile. Hidden when collapsed,
+          like every other piece of text in the sidebar. */}
+      {!collapsed && team?.name && (
+        <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
+          <Link
+            href={'/dashboard' as Route}
+            onClick={onLinkClick}
+            className="min-w-0 flex-1 truncate rounded px-1 text-xs font-medium transition-colors hover:text-primary"
+          >
+            {team.name}
+          </Link>
+          <TeamQrButton />
         </div>
       )}
 
+      {/* Utility row — search, then plugins / settings / how-to. Occasional,
+          deliberate destinations, so icons rather than rows competing with the
+          working areas below.
+
+          Search is a mini-input rather than the full-width field it used to be a
+          row above: the field cost a whole row for something used in bursts, and
+          collapsing it is what freed the space the studio name now has. It opens
+          as an overlay anchored to itself, and ⌘K/Ctrl+K opens it too — behind an
+          icon it would otherwise lose the discoverability a permanent field had.
+
+          Closed by a rule that separates it from Dashboard, the first working
+          row. In icon-only mode they stack as centred icons. */}
+      <div
+        // No bottom rule: the row already reads as part of the header block
+        // above it, and a second line so close to the studio row's was clutter.
+        // The padding stays, so the spacing below is unchanged.
+        className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 ${
+          collapsed ? 'flex-col items-center' : 'items-center'
+        }`}
+      >
+        <NavSearch entries={searchEntries} onNavigate={onLinkClick} collapsed={collapsed} />
+        {collapsed && <TeamQrButton collapsed />}
+        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
+        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
+        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
+      </div>
+
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* General — Dashboard + the settings hub */}
-        <div>
-          {!collapsed && <GroupLabel>{t('navGroupGeneral')}</GroupLabel>}
-          <div className="space-y-0.5">
-            <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-            <NavLink item={ALL_SETTINGS_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-            <NavLink item={HOW_TO_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-          </div>
-        </div>
+        {/* Dashboard — a full menu row of its own, directly under the utility
+            icons. It used to share the toolbar with them and wear their quiet
+            active style; it is a working destination people return to daily, not
+            a utility, so it now reads like every other nav row. */}
+        <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+        <NavLink item={DASHBOARD_PREVIEW_ITEM} collapsed={collapsed} onClick={onLinkClick} />
 
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
@@ -1249,10 +2176,25 @@ function SidebarContent({
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
+              // DECLARATION ORDER — which is frequency of use, most-used first
+              // (see NAV_SECTIONS). Deliberately NOT sorted: alphabetical by
+              // translated label put Schedule last in Run, behind five items a
+              // studio opens far less often, and put it somewhere different again
+              // in each locale (UX-29).
+              const byLabel = (a: string, b: string) => a.localeCompare(b, locale)
               const items = section.items.filter(mainItemVisible)
-              const secPlugins = sectionedEntries.filter(
-                (e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey
-              )
+              // Plugin rows keep the alphabetical sort: they come from a registry
+              // in an order the studio did not author, so there is no ranking to
+              // preserve — only a stable, readable one to impose.
+              const secPlugins = sectionedEntries
+                .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
+                .slice()
+                .sort((a, b) =>
+                  byLabel(
+                    tp(a.labelKey as Parameters<typeof tp>[0]),
+                    tp(b.labelKey as Parameters<typeof tp>[0])
+                  )
+                )
               if (items.length === 0 && secPlugins.length === 0) return null
               const SectionIcon = section.icon
               const label = t(section.labelKey as Parameters<typeof t>[0])
@@ -1267,7 +2209,7 @@ function SidebarContent({
                       item={item}
                       collapsed={false}
                       onClick={onLinkClick}
-                      pinId={item.id}
+                      shortcutId={item.id}
                     />
                   ))}
                   {secPlugins.map((nav) => (
@@ -1316,11 +2258,11 @@ function SidebarContent({
                 <button
                   type="button"
                   onClick={() => toggleSection(section.labelKey)}
-                  className="flex w-full items-center justify-between rounded px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                  className="flex w-full items-center justify-between rounded px-2 pb-1 text-xs font-bold uppercase tracking-wider text-foreground/75 transition-colors hover:text-foreground"
                 >
                   <span>{label}</span>
                   <ChevronDown
-                    className={`h-3 w-3 shrink-0 transition-transform ${secCollapsed ? '-rotate-90' : ''}`}
+                    className={`h-3.5 w-3.5 shrink-0 transition-transform ${secCollapsed ? '-rotate-90' : ''}`}
                   />
                 </button>
               )
@@ -1345,29 +2287,11 @@ function SidebarContent({
               )
             })}
 
-            {/* Subtle discovery link to the plugin catalogue. Most features are
-                off by default (kept lightweight on purpose, even on Studio), so
-                nudge users to explore without bloating the nav. */}
-            {collapsed ? (
-              <Link
-                href={'/settings/plugins' as Route}
-                onClick={onLinkClick}
-                title={t('explorePlugins')}
-                className="flex items-center justify-center rounded-lg px-2 py-2 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Puzzle className="h-4 w-4 shrink-0" />
-              </Link>
-            ) : (
-              <Link
-                href={'/settings/plugins' as Route}
-                onClick={onLinkClick}
-                className="group/exp mt-1 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground/60 transition-colors hover:text-primary"
-              >
-                <Puzzle className="h-3.5 w-3.5 shrink-0" />
-                <span>{t('explorePlugins')}</span>
-                <ChevronsRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover/exp:translate-x-0.5" />
-              </Link>
-            )}
+            {/* The plugin-catalogue link that used to sit here moved to the
+                utility icon row at the top (EXPLORE_PLUGINS_ITEM). At the foot of
+                the features group it was below everything already installed —
+                the least visible spot for the thing that reveals the rest of the
+                product. */}
           </div>
         </div>
 
@@ -1443,8 +2367,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <NavPinsProvider>
       <UpgradeModalProvider>
+        <RecentContactsProvider>
         <OpenTabsProvider>
         <ProductTour />
+        {/* Owns every floating control's position — page FABs and shell overlays
+            declare a lane instead of hardcoding a corner (see FloatingDock). */}
+        <FloatingDock>
         <div className="flex bg-background">
           {/* Desktop sidebar — fixed to viewport height, nav scrolls internally */}
           <aside
@@ -1488,7 +2416,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* In-app feedback — self-gates on the ops-controlled global flag. */}
           <FeedbackLauncher />
         </div>
+        </FloatingDock>
         </OpenTabsProvider>
+        </RecentContactsProvider>
       </UpgradeModalProvider>
     </NavPinsProvider>
   )

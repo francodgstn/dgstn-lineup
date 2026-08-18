@@ -1,7 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, updateDoc, where, orderBy,
@@ -27,6 +30,21 @@ import { Gift, RefreshCw, Info } from 'lucide-react'
 import {
   TEAMS_COLLECTION, CONTACTS_COLLECTION, REFERRALS_COLLECTION,
 } from '@linyup/shared'
+
+/**
+ * A referral names two people, and both ids are on the row — so both are links
+ * to their records, the same fix UX-63 made on /bookings. A row whose id never
+ * resolved to a name still links (the id IS the record); one with no id at all
+ * stays plain text rather than linking to nothing.
+ */
+function ReferralPersonCell({ contactId, name }: { contactId?: string; name: string }) {
+  if (!contactId) return <>{name}</>
+  return (
+    <Link href={`/contacts/${contactId}` as Route} className="hover:underline">
+      {name}
+    </Link>
+  )
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -401,8 +419,18 @@ function ReferralsTab({
                 const action = getActionForStatus(r.status)
                 return (
                   <TableRow key={r.id}>
-                    <TableCell>{contactNames[r.referrer_contact_id] ?? r.referrer_contact_id}</TableCell>
-                    <TableCell>{contactNames[r.referred_contact_id] ?? r.referred_contact_id}</TableCell>
+                    <TableCell>
+                      <ReferralPersonCell
+                        contactId={r.referrer_contact_id}
+                        name={contactNames[r.referrer_contact_id] ?? r.referrer_contact_id}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <ReferralPersonCell
+                        contactId={r.referred_contact_id}
+                        name={contactNames[r.referred_contact_id] ?? r.referred_contact_id}
+                      />
+                    </TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                     <TableCell>{formatDate(r.created_at)}</TableCell>
                     <TableCell>
@@ -474,11 +502,13 @@ function ReferralsTab({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const REFERRAL_TABS = ['settings', 'referrals'] as const
+
 export default function ReferralsPluginPage() {
   const { currentTeamId } = useAuth()
   const queryClient = useQueryClient()
   const t = useTranslations('Referrals')
-  const [activeTab, setActiveTab] = useState<'settings' | 'referrals'>('referrals')
+  const [activeTab, setActiveTab] = useTabParam(REFERRAL_TABS, 'referrals')
 
   const { data: team, isLoading } = useQuery({
     queryKey: ['team-referral-settings', currentTeamId],

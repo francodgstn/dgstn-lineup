@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl'
 import { Delete } from 'lucide-react'
 import { auth } from '@/lib/firebase-auth'
 import { functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import type { KioskPublicLock } from '@linyup/shared'
 
 interface Props {
@@ -50,7 +51,10 @@ export default function KioskLock({ slug, teamId, lock, children }: Props) {
         const claims = result.claims as { kioskTeam?: string; kioskEpoch?: number }
         const matches = claims.kioskTeam === teamId && Number(claims.kioskEpoch) === lock.epoch
         setStatus(matches ? 'unlocked' : 'locked')
-      } catch {
+      } catch (err: unknown) {
+        // Fail CLOSED, and say why in the log: locking is the safe outcome, but
+        // "the kiosk keeps asking for the PIN" is undiagnosable without this.
+        reportPublicLoadFailure('kiosk/lock-claims', err)
         setStatus('locked')
       }
     },

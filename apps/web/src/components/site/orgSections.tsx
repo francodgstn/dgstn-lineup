@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { MapPin, ArrowRight } from 'lucide-react'
 import type { ClubsSection, LocationsSection, CoachesSection, TeamPublicProfile } from '@linyup/shared'
 import type { SitePalette } from './theme'
+import { publicHrefLocalized } from '@/lib/publicRoutes'
 // Type-only — avoids a real runtime circular import (sections.tsx imports the
 // blocks below as values).
 import type { RenderCtx } from './sections'
@@ -70,7 +73,8 @@ interface ClubEntry {
 }
 
 function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx }) {
-  const { palette, preview, orgTeams } = ctx
+  const t = useTranslations('Site')
+  const { palette, locale, preview, orgTeams } = ctx
   const [clubs, setClubs] = useState<ClubEntry[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -95,7 +99,11 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
             accentColor: data?.bioLinkAccentColor || undefined,
             address: data?.mainAddress?.address || undefined,
           }
-        } catch {
+        } catch (err: unknown) {
+          // Per-club degradation: the org page still lists this club, just
+          // without its profile. Logged so a rules change is not mistaken for
+          // clubs that never filled their profile in.
+          reportPublicLoadFailure('org-site/club-profile', err)
           return { teamId: t.teamId, slug: t.slug, name: t.name }
         }
       })
@@ -103,7 +111,12 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
       .then((list) => {
         if (alive) setClubs(list)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // Belt-and-braces: the per-club mapper above already catches, so nothing
+        // should reach here. `catch {}` is still not how you say that — an outer
+        // handler that fires unexpectedly and empties the section in silence is
+        // the same defect one level up.
+        reportPublicLoadFailure('org-site/clubs', err)
         if (alive) setClubs([])
       })
       .finally(() => {
@@ -119,7 +132,7 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Our clubs'} palette={palette} />
+        <Heading text={section.heading ?? t('headingClubs')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -128,17 +141,19 @@ function ClubsBlock({ section, ctx }: { section: ClubsSection; ctx: RenderCtx })
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : clubs.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No clubs yet.
+              {t('emptyClubs')}
             </p>
           ) : (
             clubs.map((c) => (
+              // Cross-tenant: the org site links each member club to its own
+              // tenant root. Locale-prefixed like every other raw <a> here.
               <a
                 key={c.teamId}
-                {...linkProps(`/public/${c.slug}`, preview)}
+                {...linkProps(publicHrefLocalized(locale, c.slug), preview)}
                 className="flex flex-col overflow-hidden rounded-2xl border transition-transform hover:scale-[1.01]"
                 style={{ borderColor: palette.border, background: palette.surface }}
               >
@@ -195,6 +210,7 @@ function mapsHref(address?: string, mapsLink?: string): string | undefined {
 }
 
 function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, preview, orgTeams } = ctx
   const [locations, setLocations] = useState<LocationEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,7 +232,8 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
             address: main.address,
             mapsLink: main.mapsLink,
           }
-        } catch {
+        } catch (err: unknown) {
+          reportPublicLoadFailure('org-site/club-location', err)
           return null
         }
       })
@@ -234,7 +251,8 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
           ...extraLocations,
         ])
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('org-site/locations', err)
         if (alive) setLocations([])
       })
       .finally(() => {
@@ -250,7 +268,7 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
   return (
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Find us'} palette={palette} />
+        <Heading text={section.heading ?? t('headingPlaces')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -259,11 +277,11 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : locations.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No locations yet.
+              {t('emptyLocations')}
             </p>
           ) : (
             locations.map((l) => {
@@ -296,7 +314,7 @@ function LocationsBlock({ section, ctx }: { section: LocationsSection; ctx: Rend
                       className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                       style={{ color: palette.accent }}
                     >
-                      Open in maps
+                      {t('openInMaps')}
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   )}
@@ -320,6 +338,7 @@ interface CoachEntry {
 }
 
 function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, orgTeams } = ctx
   const [coaches, setCoaches] = useState<CoachEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -339,7 +358,8 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
           const data = snap.data() as TeamPublicProfile | undefined
           const clubName = data?.name || t.name
           return (data?.coaches ?? []).map((c) => ({ ...c, clubName }))
-        } catch {
+        } catch (err: unknown) {
+          reportPublicLoadFailure('org-site/club-coaches', err)
           return []
         }
       })
@@ -347,7 +367,8 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
       .then((lists) => {
         if (alive) setCoaches(lists.flat())
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('org-site/coaches', err)
         if (alive) setCoaches([])
       })
       .finally(() => {
@@ -363,7 +384,7 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Our coaches'} palette={palette} />
+        <Heading text={section.heading ?? t('headingCoaches')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -372,11 +393,11 @@ function CoachesBlock({ section, ctx }: { section: CoachesSection; ctx: RenderCt
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : coaches.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No coaches yet.
+              {t('emptyCoaches')}
             </p>
           ) : (
             coaches.map((c, i) => (

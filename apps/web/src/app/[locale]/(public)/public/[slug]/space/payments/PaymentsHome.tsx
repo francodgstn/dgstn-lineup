@@ -5,7 +5,10 @@ import { useTranslations, useLocale } from 'next-intl'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { formatCurrency } from '@/lib/format'
-import { CreditCard, Receipt, ExternalLink, LogIn, Loader2 } from 'lucide-react'
+import { CreditCard, Receipt, ExternalLink, Loader2 } from 'lucide-react'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
+import SpaceSignInWall from '../SpaceSignInWall'
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 import { usePublicTeam } from '../../PublicTeamProvider'
@@ -19,29 +22,19 @@ function formatDate(ms: number | null): string {
 export default function PaymentsHome() {
   const t = useTranslations('Space')
   const locale = useLocale()
-  const { slug, isAuthenticated, openSignIn } = useSpaceAuth()
+  const { slug, isAuthenticated } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
   const currency = team?.default_currency ?? 'CHF'
-  const { data, isLoading } = useSpacePayments()
+  // A failed MONEY read must never render as "No payments yet": that tells
+  // somebody who paid that there is no record of it.
+  const { data, isLoading, isError, error, refetch } = useSpacePayments()
   const [portalLoading, setPortalLoading] = useState(false)
 
   const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
 
   if (!isAuthenticated) {
-    return (
-      <div className="mt-10 rounded-2xl p-8 text-center" style={cardStyle}>
-        <LogIn className="mx-auto h-7 w-7" style={{ color: accent }} />
-        <p className="mt-3 text-sm" style={{ color: textMuted }}>{t('accountSignInPrompt')}</p>
-        <button
-          onClick={() => openSignIn()}
-          className="mt-4 text-sm font-medium px-4 py-2 rounded-full"
-          style={{ background: accent, color: '#fff' }}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-    )
+    return <SpaceSignInWall prompt={t('accountSignInPrompt')} />
   }
 
   async function openBillingPortal() {
@@ -54,8 +47,11 @@ export default function PaymentsHome() {
       const res = await fn({ slug, locale, origin: window.location.origin })
       if (res.data?.url) window.location.href = res.data.url
       else setPortalLoading(false)
-    } catch {
-      // Portal not configured / no customer — leave the button and stop the spinner.
+    } catch (err: unknown) {
+      // Portal not configured / no customer — leave the button and stop the
+      // spinner. Silent to the visitor by design, but never silent in the log:
+      // a button that does nothing on click has to be diagnosable.
+      reportPublicLoadFailure('space/billing-portal', err)
       setPortalLoading(false)
     }
   }
@@ -99,6 +95,13 @@ export default function PaymentsHome() {
               style={{ borderColor: accent, borderTopColor: 'transparent' }}
             />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            onRetry={() => void refetch()}
+            title={t('paymentsLoadFailed')}
+            detail={loadFailureDetail(error)}
+            theme={{ textMain, textMuted, accent, border: cardBorder }}
+          />
         ) : payments.length === 0 ? (
           <p className="text-sm py-4" style={{ color: textMuted }}>{t('paymentsEmpty')}</p>
         ) : (
@@ -110,7 +113,10 @@ export default function PaymentsHome() {
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: textMain }}>{p.label}</p>
-                    <p className="text-xs" style={{ color: textMuted }}>{formatDate(p.createdAt)}</p>
+                    <p className="text-xs" style={{ color: textMuted }}>
+                      {formatDate(p.createdAt)}
+                      {p.promoCode ? ` · ${t('paymentPromoCode', { code: p.promoCode })}` : ''}
+                    </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p

@@ -12,6 +12,12 @@
 // Account names are seeded in the TEAM's locale and stored as plain editable
 // strings (user data — they don't follow later UI-language switches).
 //
+// Gift cards map to a REVENUE account, not a deferred-income liability, because
+// this ledger is cash-basis by decision (docs/accounting.md): entries mirror
+// money events, and the money event is the sale. The bucket's running balance
+// (sold − redeemed, once redemptions post their zero-sum reclass pair) is the
+// cash-basis shadow of the liability an accrual ledger would carry.
+//
 // ⚠ Marked `beta` deliberately: the seeds and the posting map need a fiscal
 // advisor's review per market before real customers rely on them.
 
@@ -71,6 +77,7 @@ const CH_KMU: ChartTemplate = {
     a('3401', 'revenue', { de: 'Ertrag Einzeleintritte', fr: 'Produits des entrées uniques', it: 'Ricavi ingressi singoli', en: 'Drop-in revenue' }),
     a('3402', 'revenue', { de: 'Ertrag Kurse', fr: 'Produits des cours', it: 'Ricavi corsi', en: 'Course revenue' }),
     a('3403', 'revenue', { de: 'Ertrag Produkteverkauf', fr: 'Produits de la vente de produits', it: 'Ricavi vendita prodotti', en: 'Product sales revenue' }),
+    a('3404', 'revenue', { de: 'Ertrag Geschenkkarten', fr: 'Produits des cartes-cadeaux', it: 'Ricavi carte regalo', en: 'Gift card revenue' }),
     a('3409', 'revenue', { de: 'Übriger Ertrag', fr: 'Autres produits', it: 'Altri ricavi', en: 'Other revenue' }),
     a('3901', 'revenue', { de: 'Rückbuchungen (Chargebacks)', fr: 'Rétrofacturations (chargebacks)', it: 'Storni (chargeback)', en: 'Chargebacks (contra revenue)' }),
     // Expenses
@@ -93,6 +100,7 @@ const CH_KMU: ChartTemplate = {
       drop_in: '3401',
       course: '3402',
       product: '3403',
+      gift_card: '3404',
       other: '3409',
     },
     clearing_by_source: {
@@ -136,6 +144,7 @@ const DE_SKR04: ChartTemplate = {
     a('4401', 'revenue', { de: 'Erlöse Einzeleintritte', en: 'Drop-in revenue' }),
     a('4402', 'revenue', { de: 'Erlöse Kurse', en: 'Course revenue' }),
     a('4403', 'revenue', { de: 'Erlöse Warenverkauf', en: 'Product sales revenue' }),
+    a('4404', 'revenue', { de: 'Erlöse Gutscheine', en: 'Gift card revenue' }),
     a('4409', 'revenue', { de: 'Sonstige Erlöse', en: 'Other revenue' }),
     a('4700', 'revenue', { de: 'Erlösschmälerungen (Chargebacks)', en: 'Chargebacks (contra revenue)' }),
     // Expenses
@@ -158,6 +167,7 @@ const DE_SKR04: ChartTemplate = {
       drop_in: '4401',
       course: '4402',
       product: '4403',
+      gift_card: '4404',
       other: '4409',
     },
     clearing_by_source: {
@@ -201,6 +211,7 @@ const IT_STANDARD: ChartTemplate = {
     a('3001', 'revenue', { it: 'Ricavi ingressi singoli', en: 'Drop-in revenue' }),
     a('3002', 'revenue', { it: 'Ricavi corsi', en: 'Course revenue' }),
     a('3003', 'revenue', { it: 'Ricavi vendita prodotti', en: 'Product sales revenue' }),
+    a('3004', 'revenue', { it: 'Ricavi carte regalo', en: 'Gift card revenue' }),
     a('3009', 'revenue', { it: 'Altri ricavi', en: 'Other revenue' }),
     a('3100', 'revenue', { it: 'Resi e storni (chargeback)', en: 'Chargebacks (contra revenue)' }),
     // Expenses
@@ -223,6 +234,7 @@ const IT_STANDARD: ChartTemplate = {
       drop_in: '3001',
       course: '3002',
       product: '3003',
+      gift_card: '3004',
       other: '3009',
     },
     clearing_by_source: {

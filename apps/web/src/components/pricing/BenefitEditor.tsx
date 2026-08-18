@@ -11,14 +11,28 @@
 
 import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { Input } from '@/components/ui/input'
-import { normalizeBenefit, type ActivityMemberBenefit, type Benefit, type BenefitEffect } from '@linyup/shared'
+import { buttonVariants } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
+import { normalizeBenefit, type ActivityMemberBenefit, type Benefit } from '@linyup/shared'
 
 export type BenefitEditorContext = 'appointment' | 'class' | 'course'
 
 /** Effects offered per context — coverage (free/credits) is the accessRule's
- *  job on classes, so a class benefit is a price-modifying MEMBER RATE only. */
-const CONTEXT_EFFECTS: Record<BenefitEditorContext, readonly BenefitEffect[]> = {
+ *  job on classes, so a class benefit is a price-modifying MEMBER RATE only.
+ *
+ *  Exported because a second surface edits the same field from the other side:
+ *  the "Activities this subscription unlocks" picker in
+ *  components/subscriptions/SubscriptionTypesManager.tsx writes an appointment's
+ *  `memberBenefit` (UX-69). It must offer the SAME set — a shorter list there
+ *  would silently rewrite an effect this editor can save (e.g. hydrate a
+ *  `fixed_price` rule, then persist it as `included`). */
+export const BENEFIT_CONTEXT_EFFECTS: Record<
+  BenefitEditorContext,
+  readonly BenefitEditorEffect[]
+> = {
   appointment: ['included', 'percent_off', 'fixed_price'],
   class: ['percent_off', 'fixed_price'],
   course: ['included', 'percent_off', 'fixed_price'],
@@ -105,7 +119,7 @@ export function BenefitEditor({
   amountError,
 }: BenefitEditorProps) {
   const t = useTranslations('Benefit')
-  const effects = CONTEXT_EFFECTS[context]
+  const effects = BENEFIT_CONTEXT_EFFECTS[context]
 
   // Correct an incompatible effect carried over from another context (e.g. the
   // activities form shares one `memberBenefit` field between the class and
@@ -127,7 +141,20 @@ export function BenefitEditor({
 
       <div className="space-y-1.5 rounded-md border p-3">
         {subscriptionTypes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('noSubs')}</p>
+          /* A benefit is held BY a subscription type, so with none there is
+             nothing to build one from. The sentence named the destination and
+             linked nothing (UX-99) — and this editor is reached from inside the
+             appointment activity form, two steps into the flow UX-92 repaired. */
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t('noSubs')}</p>
+            <Link
+              href={'/offer/plans' as Route}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t('noSubsAction')}
+            </Link>
+          </div>
         ) : (
           subscriptionTypes.map((s) => (
             <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">

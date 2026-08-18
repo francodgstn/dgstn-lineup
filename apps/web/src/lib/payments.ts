@@ -21,12 +21,38 @@ export interface UnifiedPaymentRow {
   email: string | null
   amount: number // minor units (Rappen/cents)
   currency: string
-  /** Raw status; Connect = MemberPaymentStatus, BYO = 'paid'. */
+  /** Raw status; Connect = MemberPaymentStatus, BYO = 'paid' | 'voided'. */
   status: string
+  /** The record was un-recorded (manual rows only). The row is inert: it counts
+   *  toward no total, offers no action, and renders struck through. */
+  voided: boolean
+  /** Can a manager void this row? Manual rows only, and only once — the BYO
+   *  gateway rails carry money we do not control, so their ledger row may not be
+   *  contradicted here (enforced server-side by voidManualPayment). */
+  voidable: boolean
   /** Explicit free-text comment, if set. */
   comment: string | null
   /** Structured link (BYO/manual), for the assign dialog. Connect rows leave it null. */
   lineItem: PaymentLineItem | null
+  /** The promo code this sale was discounted with, or null. Read off the line
+   * item on BOTH rails — the Connect webhook stamps it from checkout metadata,
+   * and a manual row can carry one only if a manager's row already had it (it is
+   * never client-writable). This is the only place a discount is visible on the
+   * money side: a promo writes no journal row and no CSV column. */
+  promoCode: string | null
+  /** This drop-in charge was somebody's PAID TRIAL (`PaymentLineItem.trial`, a
+   *  system stamp written by the Connect webhook). The only place a trial and
+   *  the money it earned meet: the payment row said `drop_in` and the contact
+   *  said `trial_used_at`, and neither named the other. Never a category — the
+   *  charge is booked as the drop-in sale it is. */
+  trial: boolean
+  /** The BYO row is keyed on something other than the payment
+   *  (`ExternalPayment.gateway_ref_kind === 'fallback'`), so a sibling webhook
+   *  event about the SAME money would have written a second row that this one
+   *  cannot dedupe against. See `handleTeamStripeWebhook` — a studio subscribed
+   *  to both an invoice event and a payment event gets one payment twice, and
+   *  this is the only thing in the data that says which rows are exposed to it. */
+  refKindFallback: boolean
   /** Studio-configured mode for manual payments (Cash / TWINT / …); null otherwise. */
   paymentMode: string | null
   /** Derived "what was paid" label, used when comment is empty. */
@@ -126,8 +152,21 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     amount: p.amount ?? 0,
     currency: p.currency ?? 'chf',
     status: p.status,
+    // A Connect charge is never voided — its correction is a refund, which moves
+    // real money and has its own row status.
+    voided: false,
+    voidable: false,
     comment: p.comment ?? null,
     lineItem: connectLineItem(p),
+    // From the stored line item only — connectLineItem's legacy fallbacks are
+    // synthesised from kind/names and can never carry a code.
+    promoCode: p.line_item?.promoCode ?? null,
+    // Same source and the same reason as promoCode: the stored line item only.
+    trial: p.line_item?.trial === true,
+    // Connect rows converge on the PaymentIntent by construction — the fallback
+    // key exists only on the BYO rail, which cannot bridge an invoice event to
+    // its payment.
+    refKindFallback: false,
     paymentMode: null,
     defaultLabel: connectDefaultLabel(p),
     createdAt: (p.created_at as unknown as { toDate?: () => Date }) ?? null,
@@ -139,32 +178,47 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
 }
 
 export function byoToUnified(events: Array<ExternalPayment & { id: string }>): UnifiedPaymentRow[] {
-  return events.map((e) => ({
-    key: `byo:${e.id}`,
-    source: 'byo' as const,
-    paymentId: e.id,
-    gateway: e.gateway, // 'payrexx' | 'stripe'
-    contactId: e.contact_id ?? null,
-    assigned: (e.assignment_status ?? (e.contact_id ? 'assigned' : 'unassigned')) === 'assigned',
-    email: e.email ?? null,
-    amount: e.amount ?? 0,
-    currency: e.currency ?? 'CHF',
-    status: 'paid',
-    comment: e.comment ?? null,
-    lineItem: e.line_item ?? null,
-    paymentMode: e.payment_mode ?? null,
-    defaultLabel:
-      e.gateway === 'payrexx'
-        ? 'Payrexx payment'
-        : e.gateway === 'manual'
-          ? 'Manual payment'
-          : 'Stripe payment',
-    createdAt: (e.processed_at as unknown as { toDate?: () => Date }) ?? null,
-    feeAmount: 0, // BYO has no platform fee — money never touches Linyup
-    refundable: false, // BYO is record-only — refunds happen in the studio's own gateway
-    disputed: false,
-    amountRefunded: 0,
-  }))
+  return events.map((e) => {
+    // The rail's ONE status. It used to be hardcoded 'paid' because a BYO row
+    // exists only because money arrived — true of the gateway rails still, and
+    // no longer true of a manual row a manager has voided.
+    const voided = !!e.voided_at
+    return {
+      key: `byo:${e.id}`,
+      source: 'byo' as const,
+      paymentId: e.id,
+      gateway: e.gateway, // 'payrexx' | 'stripe' | 'manual'
+      contactId: e.contact_id ?? null,
+      assigned: (e.assignment_status ?? (e.contact_id ? 'assigned' : 'unassigned')) === 'assigned',
+      email: e.email ?? null,
+      amount: e.amount ?? 0,
+      currency: e.currency ?? 'CHF',
+      status: voided ? 'voided' : 'paid',
+      voided,
+      voidable: e.gateway === 'manual' && !voided,
+      comment: e.comment ?? null,
+      lineItem: e.line_item ?? null,
+      promoCode: e.line_item?.promoCode ?? null,
+      trial: e.line_item?.trial === true,
+      // ABSENT means 'payment' — the field post-dates the rail, and every rail
+      // but BYO Stripe keys on the payment by construction. Only an explicit
+      // 'fallback' is a warning, so an older row is never accused of a
+      // duplication it is not exposed to.
+      refKindFallback: e.gateway_ref_kind === 'fallback',
+      paymentMode: e.payment_mode ?? null,
+      defaultLabel:
+        e.gateway === 'payrexx'
+          ? 'Payrexx payment'
+          : e.gateway === 'manual'
+            ? 'Manual payment'
+            : 'Stripe payment',
+      createdAt: (e.processed_at as unknown as { toDate?: () => Date }) ?? null,
+      feeAmount: 0, // BYO has no platform fee — money never touches Linyup
+      refundable: false, // BYO is record-only — refunds happen in the studio's own gateway
+      disputed: false,
+      amountRefunded: 0,
+    }
+  })
 }
 
 /** Merge + sort newest-first across both rails. */

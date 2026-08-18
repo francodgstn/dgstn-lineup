@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
+import { addMonths } from 'date-fns'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -18,10 +19,15 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
+import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { SESSIONS_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
-import { Loader2, Repeat2 } from 'lucide-react'
+import { Loader2, Repeat2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 // ─── shared helpers (single source of truth for session forms) ─────────────────
 
@@ -139,9 +145,21 @@ interface RecurrencePattern {
   maxOccurrences: number
 }
 
-const DEFAULT_RECURRENCE: RecurrencePattern = {
-  frequency: 'weekly', interval: 1, daysOfWeek: [],
-  endCondition: 'never', endDate: null, maxOccurrences: 10,
+// How far ahead the backend actually materialises a series — SERIES_HORIZON_MONTHS
+// in packages/functions/src/sessions/series.ts. The daily `rollSessionSeries`
+// task keeps an open-ended series topped up to this horizon, so "never" is now a
+// truthful option; it is nonetheless not the DEFAULT, because a timetable that
+// runs for ever is a decision, and the form should not make it silently on a
+// studio's behalf. Defaulting to a visible date six months out states the
+// horizon the product has and leaves "never" one click away.
+const RECURRENCE_HORIZON_MONTHS = 6
+
+function defaultRecurrence(from: Date = new Date()): RecurrencePattern {
+  return {
+    frequency: 'weekly', interval: 1, daysOfWeek: [],
+    endCondition: 'date', endDate: addMonths(from, RECURRENCE_HORIZON_MONTHS),
+    maxOccurrences: 10,
+  }
 }
 
 function getPreviewDates(pattern: RecurrencePattern, startDate: Date, count = 5): Date[] {
@@ -195,6 +213,8 @@ const sessionSchema = z.object({
   // Optional cap; kept as text and coerced to a number on save (empty ⇒ no cap).
   maxParticipants: z.string().max(6).optional(),
   notes:           z.string().max(2000).optional(),
+  headline:        z.string().max(200).optional(),
+  headlinePublic:  z.boolean().optional(),
   allowBooking:    z.boolean().optional(),
   bookingMandatory: z.boolean().optional(),
 })
@@ -345,12 +365,30 @@ function ResponsiveModal({ open, onOpenChange, title, children }: {
 
 // ─── session form dialog ───────────────────────────────────────────────────────
 
+/** A copy lands one WEEK later — same weekday, same time. It is the intent
+ *  behind almost every "run this again", and it is the only default that cannot
+ *  quietly create a second session in a slot that already has one. */
+const COPY_OFFSET_DAYS = 7
+
+function copyStart(source: Session): Date {
+  const d = source.start?.toDate() ?? new Date()
+  return new Date(d.getTime() + COPY_OFFSET_DAYS * 86400000)
+}
+
 export function SessionFormDialog({
-  open, onOpenChange, editing, activities, teamId, userId, onSaved,
+  open, onOpenChange, editing, duplicating, activities, teamId, userId, onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   editing: Session | null
+  /**
+   * The session a NEW one is being copied from. `editing` stays null, so the
+   * submit runs the CREATE path: a fresh doc, `participants_count: 0`, no
+   * bookings, no waitlist, no attendance, no `seriesId` (a copy of one
+   * occurrence is a standalone session — it can be made recurring in its own
+   * right, since the recurrence controls are shown for a create).
+   */
+  duplicating?: Session | null
   activities: Activity[]
   teamId: string
   userId: string
@@ -359,10 +397,11 @@ export function SessionFormDialog({
   const t = useTranslations('Sessions')
   const tCommon = useTranslations('Common')
 
+  const seed = editing ?? duplicating ?? null
   const isSeries = !!editing?.seriesId
 
   const [isRecurring, setIsRecurring] = useState(false)
-  const [recurrence, setRecurrence] = useState<RecurrencePattern>({ ...DEFAULT_RECURRENCE })
+  const [recurrence, setRecurrence] = useState<RecurrencePattern>(() => defaultRecurrence())
   const [busyMsg, setBusyMsg] = useState<string | null>(null)
   // Edit-scope chooser shown when saving a session that belongs to a series.
   const [scopeStep, setScopeStep] = useState(false)
@@ -373,18 +412,22 @@ export function SessionFormDialog({
     useForm<SessionFormValues>({
       resolver: zodResolver(sessionSchema),
       defaultValues: {
-        activityId:      editing?.activityId ?? '',
-        start:           editing?.start?.toDate() ?? defaultStart(),
-        duration:        deriveDefaultDuration(editing),
-        location:        editing?.location ?? '',
-        placeId:         editing?.placeId ?? '',
-        roomId:          editing?.roomId ?? '',
-        providerId:      editing?.providerId ?? '',
-        providerName:    editing?.providerName ?? '',
-        maxParticipants: editing?.max_participants != null ? String(editing.max_participants) : '',
-        notes:           editing?.notes ?? '',
-        allowBooking:    editing?.allowBooking ?? false,
-        bookingMandatory: editing?.bookingMandatory ?? false,
+        activityId:      seed?.activityId ?? '',
+        start:           duplicating
+          ? copyStart(duplicating)
+          : (editing?.start?.toDate() ?? defaultStart()),
+        duration:        deriveDefaultDuration(seed),
+        location:        seed?.location ?? '',
+        placeId:         seed?.placeId ?? '',
+        roomId:          seed?.roomId ?? '',
+        providerId:      seed?.providerId ?? '',
+        providerName:    seed?.providerName ?? '',
+        maxParticipants: seed?.max_participants != null ? String(seed.max_participants) : '',
+        notes:           seed?.notes ?? '',
+        headline:        seed?.headline ?? '',
+        headlinePublic:  seed?.headlinePublic ?? false,
+        allowBooking:    seed?.allowBooking ?? false,
+        bookingMandatory: seed?.bookingMandatory ?? false,
       },
     })
 
@@ -419,9 +462,17 @@ export function SessionFormDialog({
 
   function handleRecurringToggle(on: boolean) {
     setIsRecurring(on)
-    if (on && recurrence.daysOfWeek.length === 0 && watchedStart) {
-      setRecurrence(p => ({ ...p, daysOfWeek: [watchedStart.getDay()] }))
-    }
+    if (!on) return
+    setRecurrence(p => ({
+      ...p,
+      daysOfWeek: p.daysOfWeek.length === 0 && watchedStart ? [watchedStart.getDay()] : p.daysOfWeek,
+      // Anchor the default end date on the session's own start rather than on
+      // whenever the dialog happened to open.
+      endDate:
+        p.endCondition === 'date' && watchedStart
+          ? (p.endDate ?? addMonths(watchedStart, RECURRENCE_HORIZON_MONTHS))
+          : p.endDate,
+    }))
   }
 
   function close() {
@@ -451,6 +502,8 @@ export function SessionFormDialog({
       providerName:   values.providerName || null,
       max_participants: values.maxParticipants ? Number(values.maxParticipants) : null,
       notes:          values.notes || null,
+      headline:       values.headline || null,
+      headlinePublic: (values.headline ?? '').trim() ? (values.headlinePublic ?? false) : false,
       allowBooking:   values.allowBooking ?? false,
       bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
       duration_minutes: values.duration,
@@ -477,6 +530,8 @@ export function SessionFormDialog({
             placeId: values.placeId || null,
             roomId: values.roomId || null,
             tags: [], notes: values.notes || '',
+            headline: values.headline || null,
+            headlinePublic: (values.headline ?? '').trim() ? (values.headlinePublic ?? false) : false,
             duration: values.duration,
             allowBooking: values.allowBooking ?? false,
             bookingMandatory: (values.allowBooking ?? false) ? (values.bookingMandatory ?? false) : false,
@@ -597,7 +652,7 @@ export function SessionFormDialog({
     await runSeriesEdit(pendingValues, editScope)
   }
 
-  const title = editing ? t('editSession') : t('newSession')
+  const title = editing ? t('editSession') : duplicating ? tCommon('duplicate') : t('newSession')
 
   return (
     <ResponsiveModal open={open} onOpenChange={(v) => { if (!v) close() }} title={title}>
@@ -644,9 +699,13 @@ export function SessionFormDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
             {isSeries && (
-              <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
                 <Repeat2 className="h-3.5 w-3.5 shrink-0" />
-                {t('partOfSeries')}
+                <span>{t('partOfSeries')}</span>
+                {/* When it stops. Recurrence itself is still create-only, but a
+                    manager editing an occurrence can at least SEE the pattern
+                    and its end date instead of guessing. */}
+                <SeriesSummary seriesId={editing!.seriesId!} className="text-primary/80" />
               </div>
             )}
 
@@ -670,6 +729,26 @@ export function SessionFormDialog({
                     </SelectContent>
                   </Select>
                 )} />
+                {/* A team with no class activity finds an empty picker and no
+                    way out of it: the thing a session is scheduled FROM is
+                    created on another page, and this dialog never said where.
+                    So say it, and link there. (Sibling of the availability
+                    dialog's empty state, which creates one inline — a class
+                    activity carries a name, a level and an access rule that
+                    nobody can invent on the studio's behalf, so this one
+                    navigates instead.) */}
+                {classActivities.length === 0 && (
+                  <div className="rounded-md border border-dashed p-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">{t('noClassActivitiesHint')}</p>
+                    <Link
+                      href={'/offer/activities' as Route}
+                      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t('createActivityAction')}
+                    </Link>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -862,6 +941,19 @@ export function SessionFormDialog({
                 </label>
                 <textarea {...register('notes')} rows={2}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  {t('fieldHeadline')}
+                  <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                </label>
+                <input type="text" {...register('headline')} placeholder={t('headlinePlaceholder')}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" {...register('headlinePublic')} className="rounded border-input" />
+                  {t('headlinePublicLabel')}
+                </label>
               </div>
             </section>
           </div>

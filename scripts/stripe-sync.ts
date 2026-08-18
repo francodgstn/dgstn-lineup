@@ -251,8 +251,26 @@ async function syncEntry(entry: CatalogEntry) {
 // The signing secret is returned ONLY at creation. `--store-secrets` writes it
 // straight to Secret Manager so it can't be lost between the two steps; without
 // it the secret is printed for manual entry (ops console → Settings → Payments).
+//
+// THE PAYLOAD SHAPE IS PART OF THE DESIRED STATE TOO. An endpoint created without
+// `api_version` follows the ACCOUNT's default version, which drifts on Stripe's
+// schedule rather than ours — that is why the three live endpoints were found
+// disagreeing (one pinned, two following the account) while the handlers assumed
+// one shape. So creation pins the endpoint to the version the installed SDK
+// talks, and the handlers read fields through utils/stripe/objectShape.ts, whose
+// compile-time guard fails the build if those two ever part company.
+//
+// Stripe does NOT allow api_version to be changed after creation, so an existing
+// endpoint on the wrong version can only be reported — and fixed by recreating it.
 
 const FUNCTIONS_REGION = 'europe-west6'
+
+/**
+ * The wire version to pin new endpoints to: whatever the installed SDK talks, so
+ * deliveries match the SDK the functions are deployed with. Read from the SDK,
+ * never hand-written — a hand-written copy is the drift it exists to prevent.
+ */
+const ENDPOINT_API_VERSION = Stripe.API_VERSION
 
 // Derive the event union from the SDK instance rather than naming a types
 // namespace — the namespace path moves between stripe major versions, this
@@ -362,12 +380,14 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
     if (!live) {
       console.log(`+ create   ${spec.fn}  (${scope}, ${spec.events.length} events)`)
       console.log(`           ${url}`)
+      console.log(`           api_version ${ENDPOINT_API_VERSION} (from the installed SDK)`)
       if (!APPLY) continue
       const created = await stripe.webhookEndpoints.create({
         url,
         enabled_events: spec.events,
         connect: spec.connect,
         description: spec.description,
+        api_version: ENDPOINT_API_VERSION as CreateParams['api_version'],
       })
       // Returned once, at creation, and never again.
       const secret = created.secret
@@ -390,6 +410,17 @@ async function syncWebhooks(project: string, secretProject: string | undefined) 
     }
     if (live.status !== 'enabled') {
       console.log(`! disabled ${spec.fn}  (status=${live.status}) — enable it in Stripe`)
+    }
+    // Reported, never mutated: api_version is create-only in Stripe's API. A
+    // mismatch means this endpoint delivers a different object shape than the
+    // deployed SDK reads — the exact condition behind the Basil→Dahlia field
+    // migration (packages/functions/src/utils/stripe/objectShape.ts).
+    if (live.api_version !== ENDPOINT_API_VERSION) {
+      console.log(
+        `! version  ${spec.fn}  delivers ${live.api_version ?? 'the account default'}, ` +
+          `SDK talks ${ENDPOINT_API_VERSION}`
+      )
+      console.log(`           api_version cannot be updated — recreate the endpoint to change it`)
     }
     // The API does not report whether an existing endpoint listens to CONNECTED
     // accounts, so this can't be verified after the fact — only set correctly at

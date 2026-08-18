@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
@@ -9,6 +9,13 @@ import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlanName } from '@/hooks/usePlanName'
+import {
+  useCancelSaasSubscription,
+  useCreateSaasCheckoutSession,
+  useOpenBillingPortal,
+  useReactivateSaasSubscription,
+} from '@/hooks/useSaasBilling'
+import { QueryErrorState } from '@/components/ui/query-error'
 import { PlanComparison } from '@/components/plan/PlanComparison'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -24,7 +31,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { TEAMS_COLLECTION, PLAN_ORDER, PLAN_PRICING, orgPriceFrom } from '@linyup/shared'
+import {
+  TEAMS_COLLECTION,
+  PLAN_ORDER,
+  PLAN_PRICING,
+  orgPriceFrom,
+  subscriptionEndsAt,
+  subscriptionIsCancelling,
+} from '@linyup/shared'
 import type { SaasSubscription, SaasPlan, Team } from '@linyup/shared'
 import {
   CreditCard,
@@ -34,6 +48,7 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react'
+import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -133,6 +148,26 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   return 'outline'
 }
 
+/**
+ * The stored `status`, or null when the document simply has not got one.
+ *
+ * NOT defensive padding. `SaasSubscription.status` is declared non-optional, so
+ * TypeScript believes this can never be missing — and docs without it exist:
+ * the SaaS webhook's `subscription.updated` branch writes no status and persists
+ * with `set(…, {merge:true})`, so an `updated` that arrives before its `created`
+ * (Stripe guarantees no ordering between them) CREATES the doc without one. A
+ * real one, field for field, is reproduced in
+ * functions/src/utils/stripe/subscriptionLifecycle.test.ts ("THE REAL DOC").
+ *
+ * On such a doc this page called `sub.status.replace(…)` and threw, taking the
+ * whole billing page down for the one owner who most needed it — the state that
+ * shape carries is a cancellation.
+ */
+function storedStatus(sub: SaasSubscription | null): string | null {
+  const raw = sub?.status as string | undefined | null
+  return typeof raw === 'string' && raw ? raw : null
+}
+
 function StatusIcon({ status }: { status: string }) {
   if (status === 'active') return <CheckCircle2 className="h-4 w-4 text-green-600" />
   if (status === 'trial') return <Clock className="h-4 w-4 text-amber-500" />
@@ -182,96 +217,73 @@ function SubscriptionCard({
   const t = useTranslations('Billing')
   const tp = useTranslations('Pricing')
   const planName = usePlanName()
-  const queryClient = useQueryClient()
 
-  const [cancelling, setCancelling] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
-  const [reactivating, setReactivating] = useState(false)
-  const [paymentLoading, setPaymentLoading] = useState(false)
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+
+  // UX-5: the four billing callables are hook-defined mutations now, so every
+  // refusal reaches a toast from ONE place (hooks/useSaasBilling.ts). They used
+  // to be inline `httpsCallable` calls that console.error'd and returned.
+  const checkout = useCreateSaasCheckoutSession()
+  const cancel = useCancelSaasSubscription()
+  const reactivate = useReactivateSaasSubscription()
+  const billingPortal = useOpenBillingPortal()
+
+  // Which plan tile is spinning — the mutation's own in-flight variables, so
+  // there is no second copy of "is this pending" to fall out of step.
+  const checkoutLoading = checkout.isPending ? (checkout.variables?.plan ?? null) : null
 
   const plans = ['free', 'coach', 'studio', 'organization'] as const
+  const status = storedStatus(sub)
   // Free teams have no subscription doc (or a cancelled one) — current-plan
   // detection for Free must come from the team doc, not the sub.
-  const onFreePlan = team?.plan === 'free' && (!sub || sub.status === 'cancelled')
+  const onFreePlan = team?.plan === 'free' && (!sub || status === 'cancelled')
+  // UX-7 interim: self-service signup provisions `teams/{id}.plan` +
+  // `.plan_status: 'trial'` directly and never creates a saas_subscriptions
+  // doc for it (lib/provisioning.ts) — until the trial converts (or the daily
+  // downgrade sweep drops it to Free), `sub` is null here even though the
+  // team is genuinely on a paid-tier trial. Fall back to the team doc so this
+  // card states the real plan instead of "No subscription", and so the plan
+  // grid below marks the right tile current.
+  const teamTrialFallback =
+    !sub && !!team?.plan && team.plan !== 'free' && team.plan_status === 'trial'
+  const teamTrialEndMs = teamTrialFallback ? toTs(team?.trial_ends_at) : null
+  const teamTrialEndDate = teamTrialEndMs ? new Date(teamTrialEndMs) : null
   const currentPlanRank =
-    sub && sub.status !== 'cancelled' && sub.plan
+    sub && status !== 'cancelled' && sub.plan
       ? planRank(sub.plan)
-      : onFreePlan
-        ? planRank('free')
-        : -1
+      : teamTrialFallback && team?.plan
+        ? planRank(team.plan)
+        : onFreePlan
+          ? planRank('free')
+          : -1
   const currentPlanId: SaasPlan | null =
-    sub && sub.status !== 'cancelled' && sub.plan ? sub.plan : onFreePlan ? 'free' : null
+    sub && status !== 'cancelled' && sub.plan
+      ? sub.plan
+      : teamTrialFallback && team?.plan
+        ? team.plan
+        : onFreePlan
+          ? 'free'
+          : null
 
-  async function handleUpgrade(plan: string) {
-    setCheckoutLoading(plan)
-    try {
-      const createCheckout = httpsCallable<{ teamId: string; plan: string }, { url: string }>(
-        functions,
-        'createCheckoutSession'
-      )
-      const result = await createCheckout({ teamId, plan })
-      const url = result.data.url
-      if (
-        !url.startsWith('https://checkout.stripe.com/') &&
-        !url.startsWith('https://billing.stripe.com/')
-      ) {
-        throw new Error('Unexpected checkout URL')
-      }
-      window.location.href = url
-    } catch (err) {
-      console.error('Checkout failed:', err)
-    } finally {
-      setCheckoutLoading(null)
-    }
+  function handleUpgrade(plan: SaasPlan) {
+    checkout.mutate({ teamId, plan })
   }
 
-  async function handleCancel() {
-    setCancelling(true)
-    try {
-      const cancelFn = httpsCallable<{ teamId: string }>(functions, 'cancelSaasSubscription')
-      await cancelFn({ teamId })
-      setConfirmCancel(false)
-      await queryClient.invalidateQueries({ queryKey: ['saas-subscription', teamId] })
-    } catch (err) {
-      console.error('Cancel failed:', err)
-    } finally {
-      setCancelling(false)
-    }
+  function handleCancel() {
+    // `AlertDialogAction` is a plain Button here (see components/ui/alert-dialog.tsx
+    // — it is not the primitive's own close control), so the dialog closes only
+    // where we close it: on SUCCESS. A failed cancel leaves the confirmation
+    // standing behind its toast instead of dismissing as if it had worked.
+    // The hook toasts and invalidates the subscription query.
+    cancel.mutate(teamId, { onSuccess: () => setConfirmCancel(false) })
   }
 
-  async function handleReactivate() {
-    setReactivating(true)
-    try {
-      const reactivateFn = httpsCallable<{ teamId: string }>(
-        functions,
-        'reactivateSaasSubscription'
-      )
-      await reactivateFn({ teamId })
-      await queryClient.invalidateQueries({ queryKey: ['saas-subscription', teamId] })
-    } catch (err) {
-      console.error('Reactivate failed:', err)
-    } finally {
-      setReactivating(false)
-    }
+  function handleReactivate() {
+    reactivate.mutate(teamId)
   }
 
-  async function handleUpdatePayment() {
-    setPaymentLoading(true)
-    try {
-      const fn = httpsCallable<{ teamId: string; returnUrl: string }, { url: string }>(
-        functions,
-        'getBillingPortalUrl'
-      )
-      const result = await fn({ teamId, returnUrl: window.location.href })
-      const url = result.data.url
-      if (!url.startsWith('https://billing.stripe.com/')) throw new Error('Unexpected URL')
-      window.location.href = url
-    } catch (err) {
-      console.error('Payment update failed:', err)
-    } finally {
-      setPaymentLoading(false)
-    }
+  function handleUpdatePayment() {
+    billingPortal.mutate({ id: teamId, returnUrl: window.location.href })
   }
 
   const periodEndMs = toTs(sub?.current_period_end)
@@ -281,6 +293,28 @@ function SubscriptionCard({
   const periodEndDate = periodEndMs ? new Date(periodEndMs) : null
   const periodStartDate = periodStartMs ? new Date(periodStartMs) : null
   const trialEndDate = trialEndMs ? new Date(trialEndMs) : null
+
+  // ── WHETHER it is winding down, asked apart from WHEN ───────────────────────
+  // The ONE shared predicate — the same one org/[orgId]/billing, the contact
+  // PaymentsTab and the operator console ask, and the one the member's Space
+  // gets through its `Contact.active_subscriptions` mirror. This page was the
+  // last surface still asking the RAW `cancel_at_period_end` at its three
+  // DECISION points, and that boolean is FALSE for every cancellation made in
+  // the Stripe billing portal (which states a `cancel_at` timestamp instead). A
+  // studio that cancelled there got no "cancels at period end" badge, no
+  // Reactivate button, and a "Cancel subscription" link it had already used.
+  // (The end-date line below was already asking the predicate; the actions were
+  // not, which is the half that actually strands someone.)
+  //
+  // Not `subscriptionEndsAt(sub) !== null` either: that additionally demands a
+  // DATE, and a cancelling doc from the pre-fix window carries no date at all
+  // (see shared/utils/subscriptionLifecycle.ts). The date is shown when we have
+  // one and simply omitted when we do not.
+  const isCancelling = subscriptionIsCancelling(sub)
+  // When it actually stops. Prefers Stripe's own `cancel_at` over the period
+  // end — see shared/utils/subscriptionLifecycle.ts.
+  const endsAtMs = toTs(subscriptionEndsAt(sub))
+  const endsAtDate = endsAtMs ? new Date(endsAtMs) : null
 
   return (
     <>
@@ -295,14 +329,18 @@ function SubscriptionCard({
         <CardContent>
           {sub ? (
             <div className="space-y-4">
-              {/* Plan name + status */}
+              {/* Plan name + status. A doc with no stored status shows no status
+                  chip rather than an invented one — but everything below it,
+                  the cancellation badge included, still renders. */}
               <div className="flex items-center gap-3 flex-wrap">
-                <StatusIcon status={sub.status} />
+                {status && <StatusIcon status={status} />}
                 <span className="font-semibold">{planName(sub.plan)} plan</span>
-                <Badge variant={statusVariant(sub.status)} className="capitalize">
-                  {sub.status.replace('_', ' ')}
-                </Badge>
-                {sub.cancel_at_period_end && (
+                {status && (
+                  <Badge variant={statusVariant(status)} className="capitalize">
+                    {status.replace('_', ' ')}
+                  </Badge>
+                )}
+                {isCancelling && (
                   <Badge variant="outline" className="text-amber-600 border-amber-300">
                     {t('cancelAtPeriodEnd')}
                   </Badge>
@@ -313,7 +351,7 @@ function SubscriptionCard({
               {onFreePlan && <p className="text-sm text-muted-foreground">{t('onFreePlan', { count: PLAN_PRICING.free.includedContacts ?? 0 })}</p>}
 
               {/* Billing period */}
-              {sub.status !== 'trial' && periodStartDate && periodEndDate && (
+              {status !== 'trial' && periodStartDate && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
                   {t('periodLabel')}: {periodStartDate.toLocaleDateString()} –{' '}
                   {periodEndDate.toLocaleDateString()}
@@ -321,23 +359,37 @@ function SubscriptionCard({
               )}
 
               {/* Trial end */}
-              {sub.status === 'trial' && trialEndDate && (
+              {status === 'trial' && trialEndDate && (
                 <p className="text-sm text-muted-foreground">
                   {t('trialEnds', { date: trialEndDate.toLocaleDateString() })}
                 </p>
               )}
 
-              {/* Renewal / access-until (when period start not available) */}
-              {sub.status !== 'trial' && !periodStartDate && periodEndDate && (
+              {/* Winding down: say WHEN, always — not only when the period start
+                  happens to be missing. This is the line a studio that cancelled
+                  in the Stripe portal was never shown. */}
+              {endsAtDate && (
+                <p className="text-sm text-amber-600">
+                  {t('accessUntil', { date: endsAtDate.toLocaleDateString() })}
+                </p>
+              )}
+
+              {/* …and WHY. `audience="self"` because the studio wrote its own
+                  churn survey and does not need it read back — but "payment
+                  failed" is the studio's own card, and it is the difference
+                  between a decision and an accident. */}
+              <SubscriptionCancellationNote subscription={sub} audience="self" />
+
+
+              {/* Renewal (when period start not available) */}
+              {status !== 'trial' && !endsAtDate && !periodStartDate && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
-                  {sub.cancel_at_period_end
-                    ? t('accessUntil', { date: periodEndDate.toLocaleDateString() })
-                    : t('nextBilling', { date: periodEndDate.toLocaleDateString() })}
+                  {t('nextBilling', { date: periodEndDate.toLocaleDateString() })}
                 </p>
               )}
 
               {/* Past due warning */}
-              {sub.status === 'past_due' && (
+              {status === 'past_due' && (
                 <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2.5 flex items-start gap-2 text-sm text-destructive">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   {t('pastDueWarning')}
@@ -346,29 +398,36 @@ function SubscriptionCard({
 
               {/* Actions */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {sub.cancel_at_period_end && sub.status === 'active' && (
+                {/* Reactivate is gated on the LIFECYCLE STATE alone, exactly as
+                    on org/[orgId]/billing. It used to also demand
+                    `status === 'active'`, which hid it from the two populations
+                    that need it most: a doc with no stored status at all, and a
+                    past-due subscription that is also winding down. The
+                    predicate already refuses every ENDED status, so nothing is
+                    offered a reactivation it cannot have. */}
+                {isCancelling && (
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={handleReactivate}
-                    disabled={reactivating}
+                    disabled={reactivate.isPending}
                   >
-                    {reactivating ? t('reactivating') : t('reactivate')}
+                    {reactivate.isPending ? t('reactivating') : t('reactivate')}
                   </Button>
                 )}
-                {(sub.status === 'active' || sub.status === 'past_due') &&
+                {(status === 'active' || status === 'past_due') &&
                   sub.gateway_type === 'stripe' && (
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={handleUpdatePayment}
-                      disabled={paymentLoading}
+                      disabled={billingPortal.isPending}
                     >
                       <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                      {paymentLoading ? t('updatingPayment') : t('updatePayment')}
+                      {billingPortal.isPending ? t('updatingPayment') : t('updatePayment')}
                     </Button>
                   )}
-                {sub.status === 'active' && !sub.cancel_at_period_end && (
+                {status === 'active' && !isCancelling && (
                   <button
                     className="text-xs text-muted-foreground hover:text-destructive underline ml-auto"
                     onClick={() => setConfirmCancel(true)}
@@ -377,6 +436,22 @@ function SubscriptionCard({
                   </button>
                 )}
               </div>
+            </div>
+          ) : teamTrialFallback && team?.plan ? (
+            // UX-7 interim: no saas_subscriptions doc yet, but the team doc says
+            // this is a genuine paid-tier trial — say so instead of "No
+            // subscription" (see the derivation above for why sub can be null here).
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <StatusIcon status="trial" />
+                <span className="font-semibold">{planName(team.plan)} plan</span>
+                <Badge variant={statusVariant('trial')}>{t('trialStatusBadge')}</Badge>
+              </div>
+              {teamTrialEndDate && (
+                <p className="text-sm text-muted-foreground">
+                  {t('trialEnds', { date: teamTrialEndDate.toLocaleDateString() })}
+                </p>
+              )}
             </div>
           ) : onFreePlan ? (
             <div className="flex items-center gap-3 flex-wrap">
@@ -399,7 +474,11 @@ function SubscriptionCard({
           <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
               const isCurrent =
-                plan === 'free' ? onFreePlan : sub?.plan === plan && sub.status !== 'cancelled'
+                plan === 'free'
+                  ? onFreePlan
+                  : teamTrialFallback
+                    ? team?.plan === plan
+                    : sub?.plan === plan && status !== 'cancelled'
               const isDowngrade = !isCurrent && currentPlanRank > planRank(plan)
               // Free is never "selected" via checkout — you land on it by
               // cancelling (or letting the trial lapse).
@@ -522,9 +601,9 @@ function SubscriptionCard({
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleCancel}
-              disabled={cancelling}
+              disabled={cancel.isPending}
             >
-              {cancelling ? t('cancelling') : t('cancelSubscription')}
+              {cancel.isPending ? t('cancelling') : t('cancelSubscription')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -537,7 +616,11 @@ function SubscriptionCard({
 
 function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: boolean }) {
   const t = useTranslations('Billing')
-  const { data: invoices = [], isLoading } = useInvoices(teamId, hasGateway)
+  // UX-5/UX-6: `getSaasInvoices` throws `internal` when the Stripe fetch fails,
+  // and this list used to fall through to "No invoices yet" — an owner who was
+  // billed last month would be told she never was. A failed fetch is not an
+  // empty result; say so, and offer the retry.
+  const { data: invoices = [], isLoading, isError, error, refetch } = useInvoices(teamId, hasGateway)
 
   if (!hasGateway) return null
 
@@ -556,6 +639,12 @@ function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: b
               <Skeleton key={i} className="h-10 rounded" />
             ))}
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            title={t('invoicesError')}
+            detail={error instanceof Error ? error.message : null}
+            onRetry={() => void refetch()}
+          />
         ) : invoices.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">{t('noInvoices')}</p>
         ) : (

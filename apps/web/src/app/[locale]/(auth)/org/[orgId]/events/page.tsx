@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, query, where, orderBy, getDocs, addDoc,
@@ -217,6 +218,8 @@ function OrgEventDialog({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+const ORG_EVENT_TABS = ['upcoming', 'past'] as const
+
 export default function OrgEventsPage() {
   const t = useTranslations('OrgEvents')
   const { orgId } = useParams<{ orgId: string }>()
@@ -224,7 +227,7 @@ export default function OrgEventsPage() {
   const { isAdmin } = useOrg()
   const qc = useQueryClient()
 
-  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
+  const [tab, setTab] = useTabParam(ORG_EVENT_TABS, 'upcoming')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Event | null>(null)
   const [deleting, setDeleting] = useState<Event | null>(null)

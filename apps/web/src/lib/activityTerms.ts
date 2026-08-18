@@ -17,6 +17,7 @@
 
 import {
   resolveActivityAccessRule,
+  resolveDurationSale,
   normalizeBenefit,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
@@ -73,8 +74,9 @@ export interface ActivityTermsInput {
   accessRule?: ActivityAccessRule | null
   /** CLASS-ONLY. */
   dropIn?: { enabled?: boolean; priceAmount?: number | null } | null
-  /** APPOINTMENT-ONLY. */
-  durations?: Array<{ minutes: number; priceAmount?: number | null }> | null
+  /** APPOINTMENT-ONLY. `benefitOnly` lengths carry no individual price and are
+   *  excluded from the price chip — see `resolveDurationSale` (UX-70). */
+  durations?: Array<{ minutes: number; priceAmount?: number | null; benefitOnly?: boolean }> | null
   /** APPOINTMENT-ONLY (as a money term here — classes also carry a
    *  `memberBenefit` now, a drop-in member rate, but it isn't surfaced as a
    *  term/chip by this resolver; see the class branch below). Accepts the
@@ -92,8 +94,11 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
   const terms: ActivityTerm[] = []
 
   if (a.type === 'appointment') {
+    // Through the shared reader: a length sold only through the member benefit
+    // has NO price to advertise, and a stale `priceAmount` beside it must never
+    // become a "from CHF …" on a public card (UX-70).
     const priced = (a.durations ?? [])
-      .map((d) => d.priceAmount)
+      .map((d) => resolveDurationSale(d).priceAmount)
       .filter((p): p is number => typeof p === 'number')
     if (priced.length > 0) {
       terms.push({ kind: 'price', min: Math.min(...priced), max: Math.max(...priced) })
@@ -158,6 +163,8 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
 // simply omits that line — never a generic "Subscription required".
 
 export interface ResolvedSub {
+  /** Subscription type id — lets a surface deep-link /shop?type={id}. */
+  id: string
   name: string
   /** e.g. "CHF 89 / mo" — the surface formats it; null when the sub has no price. */
   priceLabel: string | null
@@ -169,9 +176,49 @@ export interface ActivityPricingDisplay {
   /** null ⇒ no trial offered. `{ priceAmount: null }` ⇒ FREE trial (today's
    *  behaviour). `{ priceAmount: 15 }` ⇒ a paid trial at that price. */
   trial: { priceAmount: number | null } | null
-  /** "Included with {name} — {priceLabel}" — a subscription-gated class OR an
-   *  appointment's INCLUDED member benefit. One per resolvable subscription. */
+  /** "Included with {name} — {priceLabel}" — a class gated at the 'subscription'
+   *  tier OR an appointment's INCLUDED member benefit. One per resolvable
+   *  subscription. ALWAYS EMPTY for a 'members'-tier class, and that is load
+   *  bearing — see `signedUpOnly`. */
   includedWith: ResolvedSub[]
+  /** TRUE for a class gated at the 'members' tier.
+   *
+   *  THE TIER IS NOT ABOUT MONEY. `members` gates on `acquisition_stage ===
+   *  'joined'` (`resolveClassCoverage`, `shared/utils/paymentOptions.ts`), i.e.
+   *  on being SIGNED UP with the studio — which the public signup form grants
+   *  for free, with no plan and no payment (`completeSignup` is the only writer
+   *  of 'joined', and it charges nothing). A contact with no subscription at all
+   *  books these classes.
+   *
+   *  So a surface must NOT name subscription plans or quote a price here: the
+   *  true answer to "what do I have to buy?" is NOTHING, and a price would send
+   *  a prospect to the shop for something they do not need. It points at the
+   *  signup surface instead. This resolver takes no plan catalogue for exactly
+   *  that reason — the wrong line is not merely discouraged, it is
+   *  unrepresentable.
+   *
+   *  Contrast 'subscription' (`includedWith`), where the named plans genuinely
+   *  ARE the key and their prices are the right thing to show. Never merge the
+   *  two tiers. */
+  signedUpOnly: boolean
+  /** TRUE for a 'subscription'-tier class whose gate names NO plan this surface
+   *  can resolve — either the rule lists no ids at all, or every id it lists is
+   *  missing from the public plan catalogue (a legacy plan the studio no longer
+   *  sells still gates its classes, and `public: false` hides it from the
+   *  lookup).
+   *
+   *  HIDING A PRICE MUST NEVER HIDE A GATE. Before this flag existed the
+   *  unresolvable ids were simply dropped and the card rendered NO access line
+   *  whatever — so a gated class looked open, and the visitor met the refusal
+   *  after clicking Book. A surface renders a generic "requires a plan"
+   *  sentence off this flag: the class does require one, and that is true
+   *  without naming which.
+   *
+   *  Mutually exclusive with `signedUpOnly` (the tiers are exclusive) and never
+   *  set together with a non-empty `includedWith` from the gate. It is NOT the
+   *  'members' sentence: that tier costs nothing and points at signup, this one
+   *  requires a plan and points at the shop. */
+  planRequired: boolean
   /** "Discount with {name} — {percent}%" — an appointment's DISCOUNT benefit. */
   discountWith: Array<{ name: string; percent: number }>
   /** Class drop-in price (major units), or null. */
@@ -188,6 +235,12 @@ export function resolveActivityPricingDisplay(
   const type: 'class' | 'appointment' = a.type === 'appointment' ? 'appointment' : 'class'
 
   const includedIds = new Set<string>()
+  // The gate's OWN ids, kept apart from `includedIds` (which an appointment's
+  // benefit also feeds) so `planRequired` can ask "did the GATE resolve to
+  // anything?" rather than "is the merged list empty?".
+  const gateIds: string[] = []
+  let subscriptionGated = false
+  let signedUpOnly = false
   let discount: { percent: number; ids: string[] } | null = null
   let dropInAmount: number | null = null
   let appointmentPrice: { min: number; max: number } | null = null
@@ -197,8 +250,14 @@ export function resolveActivityPricingDisplay(
     if (term.kind === 'trial') trial = { priceAmount: term.amount ?? null }
     else if (term.kind === 'dropIn') dropInAmount = term.amount ?? null
     else if (term.kind === 'price') appointmentPrice = { min: term.min ?? 0, max: term.max ?? 0 }
-    else if (term.kind === 'gate' && term.tier === 'subscription')
-      (term.subscriptionTypeIds ?? []).forEach((id) => includedIds.add(id))
+    else if (term.kind === 'gate' && term.tier === 'subscription') {
+      subscriptionGated = true
+      ;(term.subscriptionTypeIds ?? []).forEach((id) => {
+        includedIds.add(id)
+        gateIds.push(id)
+      })
+    }
+    else if (term.kind === 'gate' && term.tier === 'members') signedUpOnly = true
     else if (term.kind === 'benefitIncluded')
       (term.subscriptionTypeIds ?? []).forEach((id) => includedIds.add(id))
     else if (term.kind === 'benefitDiscount')
@@ -216,6 +275,17 @@ export function resolveActivityPricingDisplay(
         })
         .filter((x): x is { name: string; percent: number } => !!x)
     : []
+  // Silence would read as "open". See `planRequired`.
+  const planRequired = subscriptionGated && !gateIds.some((id) => !!subLookup(id))
 
-  return { type, trial, includedWith, discountWith, dropInAmount, appointmentPrice }
+  return {
+    type,
+    trial,
+    includedWith,
+    signedUpOnly,
+    planRequired,
+    discountWith,
+    dropInAmount,
+    appointmentPrice,
+  }
 }

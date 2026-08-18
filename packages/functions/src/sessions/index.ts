@@ -8,9 +8,28 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
+import { closeSessionWaitlist } from '../booking/waitlist/teardown'
+import {
+  DISPOSED_BOOKING_STATUSES,
+  replacedBookingWasCounted,
+  type ReplacedBookingShape,
+} from '../booking'
+import { enforceWaiverGate } from '../waivers/gate'
+import {
+  bookingWasPaidFor,
+  confirmClearedHoldFields,
+  buildParticipantDoc,
+  localizedPublicUrl,
+  type SeatHold,
+} from '@linyup/shared'
+import {
+  SESSION_SERIES_COLLECTION,
+  SESSIONS_COLLECTION,
+  SERIES_HORIZON_MONTHS,
+  materializeOccurrences,
+  seriesHorizonUpdate,
+} from './series'
 
-const SESSION_SERIES_COLLECTION = 'session_series'
-const SESSIONS_COLLECTION = 'sessions'
 const TEAMS_COLLECTION = 'teams'
 const ACTIVITIES_COLLECTION = 'activities'
 
@@ -35,7 +54,6 @@ export const generateRecurringSessions = onCall(async (request) => {
     throw new HttpsError('not-found', `Recurrence series ${seriesId} not found`)
 
   const seriesData = seriesDoc.data()!
-  const teamId = (seriesData.teamId || seriesData.teacher) as string
 
   if (seriesData.teacher !== request.auth.uid) {
     throw new HttpsError(
@@ -54,66 +72,16 @@ export const generateRecurringSessions = onCall(async (request) => {
 
   const now = new Date()
   const generationStart = fromDate ? new Date(fromDate) : now
-  const generationEnd = toDate ? new Date(toDate) : addMonths(now, 6)
+  const generationEnd = toDate ? new Date(toDate) : addMonths(now, SERIES_HORIZON_MONTHS)
 
   const occurrences = calculateOccurrences(seriesData.recurrence, generationStart, generationEnd)
   console.log(`Calculated ${occurrences.length} occurrences for series ${seriesId}`)
 
-  let generatedCount = 0
-  const BATCH_SIZE = 500
+  // Shape + dedupe both live in ./series — the same code the daily roller runs,
+  // so creating a series and extending it can never drift apart again.
+  const generatedCount = await materializeOccurrences(db, seriesId, seriesData, occurrences)
 
-  for (let i = 0; i < occurrences.length; i += BATCH_SIZE) {
-    const batchOccurrences = occurrences.slice(i, i + BATCH_SIZE)
-    const batch = db.batch()
-
-    for (const occurrence of batchOccurrences) {
-      const [existErr, existSnap] = await to(
-        db
-          .collection(SESSIONS_COLLECTION)
-          .where('seriesId', '==', seriesId)
-          .where('instanceDate', '==', Timestamp.fromDate(occurrence.start))
-          .limit(1)
-          .get()
-      )
-      if (!existErr && existSnap && !existSnap.empty) continue
-
-      const sessionRef = db.collection(SESSIONS_COLLECTION).doc()
-      batch.set(sessionRef, {
-        seriesId,
-        instanceDate: Timestamp.fromDate(occurrence.start),
-        start: Timestamp.fromDate(occurrence.start),
-        end: Timestamp.fromDate(occurrence.end),
-        activityId: seriesData.template?.activityId ?? null,
-        activityName: seriesData.template?.activityName ?? null,
-        activityType: seriesData.template?.activityType ?? null,
-        location: seriesData.template?.location ?? null,
-        tags: seriesData.template?.tags ?? [],
-        notes: seriesData.template?.notes ?? '',
-        allowBooking: seriesData.template?.allowBooking ?? false,
-        providerName: seriesData.template?.providerName ?? null,
-        providerId: seriesData.template?.providerId ?? null,
-        max_participants: seriesData.template?.max_participants ?? null,
-        bookingMandatory: seriesData.template?.bookingMandatory ?? false,
-        teamId,
-        teacher: seriesData.teacher,
-        createdBy: seriesData.createdBy || seriesData.teacher,
-        participants_count: 0,
-        isException: false,
-        exceptionType: null,
-      })
-      generatedCount++
-    }
-
-    if (generatedCount > 0) await batch.commit()
-  }
-
-  await to(
-    seriesRef.update({
-      lastGeneratedUntil: Timestamp.fromDate(generationEnd),
-      totalOccurrences: FieldValue.increment(generatedCount),
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-  )
+  await to(seriesRef.update(seriesHorizonUpdate(generationEnd, generatedCount)))
 
   return {
     success: true,
@@ -176,21 +144,131 @@ async function cancelSingleSession(
   let sent = 0
   let failed = 0
 
-  const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
-  let bookingsToNotify = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
-
-  // Member cancellation notices are per-team toggleable (Automations → System emails).
-  const cancellationTeamId = (sessionData.teamId || sessionData.teacher) as string | undefined
-  if (
-    bookingsToNotify.length > 0 &&
-    cancellationTeamId &&
-    !(await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
-  ) {
-    console.log(`cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId}`) // eslint-disable-line no-console
-    bookingsToNotify = []
+  // THE SESSION IS MARKED CALLED-OFF FIRST, before anything touches the queue.
+  // Closing the queue releases claim holds, and every release writes
+  // `bookings_count` — which is precisely the `seatFreedEdge` that
+  // `promoteWaitlistOnSeatFreed` watches. With the marker not yet written the
+  // promoter re-reads a session that still looks bookable and cheerfully mails
+  // "A place has opened up" for a class being called off as it does so; a join
+  // landing mid-teardown survives it for the same reason. `joinWaitlist` and the
+  // promoter both refuse on `isSessionCancelled` / `allowBooking`, so the marker
+  // is all the ordering constraint they need.
+  if (markAsException) {
+    // The exception pair IS the cancellation record for an occurrence of a
+    // series (status and allowBooking are deliberately left alone — see
+    // isSessionCancelled). Unguarded on purpose: if this write fails the class
+    // is NOT cancelled, and mailing everyone that it was would be the worse
+    // outcome.
+    await sessionRef.update({
+      isException: true,
+      exceptionType: 'cancelled',
+      cancelled_at: FieldValue.serverTimestamp(),
+    })
+  } else {
+    // The delete branch has no marker to write — the document is going away at
+    // the end of this function — so it borrows the one every waitlist path
+    // already tests. Best-effort: the session is about to be deleted, and a
+    // cancellation must complete even if this does not.
+    const [markErr] = await to(sessionRef.update({ allowBooking: false }))
+    if (markErr) {
+      console.error(`cancelSingleSession: could not close bookings on ${sessionId}:`, markErr) // eslint-disable-line no-console
+    }
   }
 
-  if (bookingsToNotify.length > 0) {
+  // BEFORE the bookings are read, because closing the queue deletes the claim
+  // holds it owns: a hold is an ordinary `pending` booking, so a teardown that
+  // ran afterwards would decrement `pending_bookings_count` twice for the same
+  // person (once here, once inside the release). That constraint is about the
+  // BOOKINGS READ below, not about the marker above — the two orderings are
+  // independent and both hold. The people whose offer was withdrawn come back as
+  // `offerHolders` and are mailed alongside the real bookings below — they are
+  // the ones who believed they had a seat.
+  const offerHolders = await closeSessionWaitlist(sessionRef)
+
+  const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
+  const bookings = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
+
+  // ── THE COUNTER IS A FACT ABOUT THE BOOKING; THE MAIL IS A MESSAGE ABOUT IT ──
+  // `pending_bookings_count` used to be decremented INSIDE the notification loop
+  // below, so a studio that switched `session_cancellation` off cancelled classes
+  // without anybody's counter moving — and the contacts list went on saying those
+  // people needed chasing for a session that no longer exists. (UX-76 then made
+  // paid bookings notify regardless, which left free and paid decrementing
+  // differently: an improvement and an inconsistency.) It is settled here, once
+  // per booking, before a single mail is built: no toggle, no delivery outcome
+  // and no missing email address can reach it.
+  //
+  // WHICH documents own a count — decided by the ledger's existing seams, never a
+  // fresh expression of the question (booking/index.ts, shape table in
+  // docs/waitlist.md, fixtures in booking/pendingBookingsCount.test.ts):
+  //  • a DISPOSED booking (cancelled / no_show / rebooked) owns none — whoever
+  //    disposed of it already gave the count back, and these documents are still
+  //    sitting in the subcollection this read just returned.
+  //  • a PLAIN drop-in payment hold (`payment_status: 'required'` without
+  //    `waitlist_claim`) is uncounted for its whole life — `replacedBookingWasCounted`
+  //    is the one predicate that knows that, and decrementing it here drove a real
+  //    person's counter negative, which is the failure somebody notices.
+  // A CLAIM hold that was still unclaimed never reaches this read at all:
+  // `closeSessionWaitlist` above deleted it and gave its count back, which is
+  // exactly why that call has to come first.
+  //
+  // `increment(-1)`, deliberately, and against the standing preference for an
+  // absolute value: this counter is per CONTACT and spans every session they hold
+  // a seat in, so this function's read set (one session's bookings) cannot
+  // produce the true total, and nothing recounts it. Every writer of the field
+  // moves it the same way — see the ledger note in booking/index.ts, which owns
+  // that rule (`bookings_count`, which IS recountable, is the one that must be
+  // written absolute, and this function does not touch it). Best-effort per
+  // contact rather than batched: a purged provisional contact makes `update`
+  // throw, and one missing document must not stop the rest of the roster moving.
+  for (const bookingDoc of bookings) {
+    const booking = bookingDoc.data()
+    if (!booking.contact) continue
+    if (booking.status && DISPOSED_BOOKING_STATUSES.has(booking.status as string)) continue
+    if (!replacedBookingWasCounted(booking as ReplacedBookingShape)) continue
+    const [countErr] = await to(
+      db
+        .collection('contacts')
+        .doc(booking.contact as string)
+        .update({ pending_bookings_count: FieldValue.increment(-1) })
+    )
+    if (countErr) {
+      console.error( // eslint-disable-line no-console
+        `cancelSingleSession: pending_bookings_count decrement failed for contact ${booking.contact}:`,
+        countErr
+      )
+    }
+  }
+
+  let bookingsToNotify = bookings
+
+  // Member cancellation notices are per-team toggleable (Automations → System
+  // emails) — EXCEPT for someone who paid.
+  //
+  // Same test as the paid booking's receipt (booking/paidConfirmation.ts) and as
+  // the waitlist offer (booking/waitlist/notify.ts): does switching it off
+  // quieten the feature, or break it? For a FREE booking it quietens a courtesy
+  // — the person loses nothing but news. For a PAID one it breaks it: they have
+  // been charged for a class the studio has just called off, and silence means
+  // they travel to a locked door and only then start asking for their money
+  // back. So a paid seat is notified whatever the toggle says, and the toggle
+  // keeps its meaning for everybody else.
+  const cancellationTeamId = (sessionData.teamId || sessionData.teacher) as string | undefined
+  const cancellationEmailsEnabled =
+    bookingsToNotify.length > 0 || offerHolders.length > 0
+      ? !!cancellationTeamId &&
+        (await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
+      : false
+  if (bookingsToNotify.length > 0 && !cancellationEmailsEnabled) {
+    const paidOnly = bookingsToNotify.filter((d) => bookingWasPaidFor(d.data() as SeatHold))
+    console.log( // eslint-disable-line no-console
+      `cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId} — ` +
+        `notifying ${paidOnly.length} of ${bookingsToNotify.length} booking(s) anyway (they paid)`
+    )
+    bookingsToNotify = paidOnly
+  }
+
+  if (bookingsToNotify.length > 0 || (offerHolders.length > 0 && cancellationEmailsEnabled)) {
     let activityName = 'Session'
     if (sessionData.activityId) {
       const [actErr, actDoc] = await to(
@@ -203,9 +281,13 @@ async function cancelSingleSession(
         activityName = (actDoc.data()?.name as string) || 'Session'
     }
 
+    // Locale-pinned on the team's language: the cancellation mail below is
+    // written in it, so the booking page this opens must answer in it too.
     const rebookUrl =
       teamData.slug && sessionData.activityId
-        ? `${getHostingUrl()}/public/${teamData.slug}/booking?activity=${sessionData.activityId}`
+        ? localizedPublicUrl(getHostingUrl(), teamData.language, teamData.slug, 'booking', {
+            activity: sessionData.activityId,
+          })
         : null
 
     for (const bookingDoc of bookingsToNotify) {
@@ -227,31 +309,51 @@ async function cancelSingleSession(
           html: email.html,
           text: email.text,
         })
-        if (booking.contact) {
-          await to(
-            db
-              .collection('contacts')
-              .doc(booking.contact as string)
-              .update({
-                pending_bookings_count: FieldValue.increment(-1),
-              })
-          )
-        }
+        // No counter write here — it was settled above, for every booking this
+        // cancellation resolves, whether or not this mail goes out or lands.
         sent++
       } catch (err) {
         console.error(`Error sending cancellation to ${booking.email}:`, err)
         failed++
       }
     }
+
+    // The withdrawn offers. Same class, same story — but their seat was a hold
+    // this function already gave back, so the loop above cannot reach them, and
+    // being told nothing is the one outcome they would notice: a claim link that
+    // silently stops working reads as a bug. No counter to move here; the
+    // release decremented it when it deleted the hold.
+    if (cancellationEmailsEnabled) {
+      for (const holder of offerHolders) {
+        if (!holder.email) continue
+        try {
+          const email = buildCancellationEmail({
+            firstname: holder.firstname,
+            teamName: teamData.name,
+            activityName,
+            sessionStart: (sessionData.start as Timestamp).toDate(),
+            sessionEnd: (sessionData.end as Timestamp).toDate(),
+            rebookUrl,
+          })
+          await sendEmail({
+            to: holder.email,
+            teamId: (sessionData.teamId || sessionData.teacher) as string,
+            subject: email.subject,
+            html: email.html,
+            text: email.text,
+          })
+          sent++
+        } catch (err) {
+          console.error(`Error sending cancellation to waitlist offer ${holder.email}:`, err)
+          failed++
+        }
+      }
+    }
   }
 
-  if (markAsException) {
-    await sessionRef.update({
-      isException: true,
-      exceptionType: 'cancelled',
-      cancelled_at: FieldValue.serverTimestamp(),
-    })
-  } else {
+  // The exception marker was written at the top of this function; only the
+  // delete branch has work left.
+  if (!markAsException) {
     // Delete bookings subcollection
     const [allBookErr, allBookSnap] = await to(sessionRef.collection('bookings').get())
     if (!allBookErr && allBookSnap && !allBookSnap.empty) {
@@ -266,6 +368,9 @@ async function cancelSingleSession(
       partSnap.docs.forEach((d) => bk.delete(d.ref))
       await bk.commit()
     }
+    // The queue's own documents are removed by the session-delete trigger
+    // (`teardownWaitlistOnSessionDeleted`), which owns that job because a
+    // standalone session is deleted client-side and never reaches this function.
     await sessionRef.delete()
   }
 
@@ -374,7 +479,6 @@ export const updateRecurringSession = onCall(async (request) => {
     throw new HttpsError('not-found', 'Session not found')
 
   const session = sessionDoc.data()!
-  const teamId = (session.teamId || session.teacher) as string
 
   if (session.teacher !== request.auth.uid) {
     throw new HttpsError('permission-denied', 'You do not have permission to update this session')
@@ -394,6 +498,8 @@ export const updateRecurringSession = onCall(async (request) => {
     'maxParticipants',
     'type',
     'notes',
+    'headline',
+    'headlinePublic',
     'recurrence',
     'activityId',
     'activityName',
@@ -507,10 +613,17 @@ export const updateRecurringSession = onCall(async (request) => {
     batch.update(doc.ref, perDoc)
   }
 
-  const generationEnd = addMonths(new Date(), 6)
+  const generationEnd = addMonths(new Date(), SERIES_HORIZON_MONTHS)
+  // NO `lastGeneratedUntil` HERE. This used to bump the stored horizon to
+  // now + 6 months on every "this and following" edit while generating nothing,
+  // so the field claimed sessions that did not exist. That is not a cosmetic
+  // lie: `rollSessionSeries` reads it to decide whether a series still has
+  // runway, so a false horizon parks the roller for three months on precisely
+  // the series a manager just touched. The field is now written only where
+  // sessions were actually materialised to that instant — the regeneration
+  // branch at the end of this function, and nowhere else in here.
   const seriesUpdates: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
-    lastGeneratedUntil: Timestamp.fromDate(generationEnd),
   }
   if (updates.activityId !== undefined) seriesUpdates['template.activityId'] = updates.activityId
   if (updates.activityName !== undefined)
@@ -520,6 +633,9 @@ export const updateRecurringSession = onCall(async (request) => {
   if (location !== undefined) seriesUpdates['template.location'] = location
   if (tags !== undefined) seriesUpdates['template.tags'] = tags
   if (updates.notes !== undefined) seriesUpdates['template.notes'] = updates.notes
+  if (updates.headline !== undefined) seriesUpdates['template.headline'] = updates.headline
+  if (updates.headlinePublic !== undefined)
+    seriesUpdates['template.headlinePublic'] = updates.headlinePublic
   if (updates.allowBooking !== undefined)
     seriesUpdates['template.allowBooking'] = updates.allowBooking
   if (updates.providerName !== undefined)
@@ -639,7 +755,12 @@ export const updateRecurringSession = onCall(async (request) => {
     )
     if (toCreate.length > 0) {
       const seriesData = seriesDoc.data()!
+      // The template as it stands AFTER this edit. Fields this callable cannot
+      // change (placeId, roomId, autoConfirm) are carried through untouched so
+      // the regenerated sessions keep the shape `buildSeriesSessionDoc` writes
+      // everywhere else.
       const tpl = {
+        ...(seriesData.template ?? {}),
         activityId:
           ((seriesUpdates['template.activityId'] ?? seriesData.template?.activityId) as
             | string
@@ -658,6 +779,13 @@ export const updateRecurringSession = onCall(async (request) => {
             | null) ?? null,
         tags: ((seriesUpdates['template.tags'] ?? seriesData.template?.tags) as string[]) ?? [],
         notes: ((seriesUpdates['template.notes'] ?? seriesData.template?.notes) as string) ?? '',
+        headline:
+          ((seriesUpdates['template.headline'] ?? seriesData.template?.headline) as
+            | string
+            | null) ?? null,
+        headlinePublic:
+          ((seriesUpdates['template.headlinePublic'] ??
+            seriesData.template?.headlinePublic) as boolean) ?? false,
         allowBooking:
           ((seriesUpdates['template.allowBooking'] ??
             seriesData.template?.allowBooking) as boolean) ?? false,
@@ -676,26 +804,19 @@ export const updateRecurringSession = onCall(async (request) => {
           ((seriesUpdates['template.bookingMandatory'] ??
             seriesData.template?.bookingMandatory) as boolean) ?? false,
       }
-      const createBatch = db.batch()
-      for (const occ of toCreate) {
-        const ref = db.collection(SESSIONS_COLLECTION).doc()
-        createBatch.set(ref, {
-          seriesId: session.seriesId,
-          instanceDate: Timestamp.fromDate(occ.start),
-          start: Timestamp.fromDate(occ.start),
-          end: Timestamp.fromDate(occ.end),
-          ...tpl,
-          teamId,
-          teacher: seriesData.teacher,
-          createdBy: seriesData.createdBy || seriesData.teacher,
-          participants_count: 0,
-          isException: false,
-          exceptionType: null,
-        })
-      }
-      await createBatch.commit()
-      generatedCount = toCreate.length
+      generatedCount = await materializeOccurrences(
+        db,
+        session.seriesId as string,
+        { ...seriesData, template: tpl },
+        toCreate
+      )
     }
+
+    // Written HERE and only here: these sessions now exist up to generationEnd,
+    // so the horizon is a fact rather than a claim. (`buildSeriesSessionDoc` is
+    // referenced through materializeOccurrences — same shape as the callable and
+    // the daily roller.)
+    await to(seriesRef.update(seriesHorizonUpdate(generationEnd, generatedCount)))
   }
 
   return {
@@ -846,19 +967,85 @@ export const selfCheckIn = onCall(async (request) => {
     }
   }
 
-  const participantData = {
-    contact: contactId,
-    session: resolvedSessionId,
-    fullname: `${(contact.lastname as string) || ''} ${(contact.firstname as string) || ''}`.trim(),
-    firstname: (contact.firstname as string) || '',
-    lastname: (contact.lastname as string) || '',
-    avatar_url: (contact.avatar_url as string) || null,
-    checkedInAt: FieldValue.serverTimestamp(),
+  // ONE builder — shared with `checkInContact` and both staff confirm surfaces in
+  // the web app, so the same act cannot produce four document shapes. It also
+  // pins the invariant every reader relies on: the DOCUMENT ID IS THE CONTACT ID.
+  const participantData = buildParticipantDoc({
+    contactId,
+    sessionId: resolvedSessionId,
+    who: {
+      firstname: contact.firstname as string | undefined,
+      lastname: contact.lastname as string | undefined,
+      avatar_url: contact.avatar_url as string | undefined,
+    },
     checkedInBy: 'self-scan',
-  }
+    checkedInAt: FieldValue.serverTimestamp(),
+  })
 
   const bookingRef = sessionRef.collection('bookings').doc(contactId)
   const [bErr, bookingDoc] = await to(bookingRef.get())
+
+  // ── The waiver gate — REFUSE ONLY ──────────────────────────────────────────
+  // This callable writes `participants` with NO booking required and none looked
+  // for (the booking read above only CONFIRMS an existing one; its absence is
+  // not an error). Left ungated, a member who never signed — or whose signature
+  // a `require_resign` publish superseded — walks up, scans the kiosk QR, and is
+  // written into the room. They attend unsigned and the studio's evidence is
+  // nothing at all.
+  //
+  // It is gated because it CAN be: it is a callable, the contactId is on the
+  // contact-session token, and the cost is the same one policy read plus a
+  // signer read per applicable waiver every other rail pays.
+  //
+  // It writes NO acceptance, because a check-in collects no tick — there is no
+  // consent step on a QR scan and inventing one would record a signature nobody
+  // gave.
+  //
+  // ── THE REFUSAL CARRIES ITS OWN WAY OUT, and it has to come from HERE ──────
+  // The mobile app is the surface that raises this refusal most, and it cannot
+  // build the link itself: the web origin lives in a server-side env param
+  // (`HOSTING_URL`), the app has no equivalent, and a client that guessed one
+  // would send a member at a door to a hostname that may not exist. So the
+  // server — which holds both the origin and the team slug the QR carried —
+  // attaches `signUrl` to the refusal, pointing at the member's own Space, the
+  // one surface a person standing at a door can complete on their phone.
+  try {
+    await enforceWaiverGate({
+      teamId,
+      activityId: (session.activityId as string | undefined) ?? null,
+      subject: {
+        contactId,
+        name: `${(contact.firstname as string) ?? ''} ${(contact.lastname as string) ?? ''}`.trim(),
+        email: (contact.email as string) ?? null,
+      },
+      submissions: [],
+      source: 'kiosk',
+      signerEmailVerifiedBy: 'session',
+      ip: request.rawRequest?.ip ?? null,
+      userAgent: null,
+      locale: null,
+      nowMs: Date.now(),
+    })
+  } catch (err) {
+    const e = err as HttpsError & { details?: { reason?: string } }
+    const reason = e?.details?.reason
+    if (typeof reason === 'string' && reason.startsWith('waiver_')) {
+      throw new HttpsError(e.code ?? 'failed-precondition', e.message, {
+        ...(e.details as Record<string, unknown>),
+        // Locale-pinned on the team's language — this URL is shown on the
+        // studio's own door device and opened on the member's phone, and
+        // nothing in the request carries a locale (the gate is called with
+        // `locale: null`).
+        signUrl: localizedPublicUrl(
+          getHostingUrl(),
+          (teamSnap.data()?.language as string | undefined) ?? null,
+          teamSlug,
+          'space'
+        ),
+      })
+    }
+    throw err
+  }
 
   const batch = db.batch()
   batch.set(participantRef, participantData)
@@ -866,9 +1053,25 @@ export const selfCheckIn = onCall(async (request) => {
   if (!bErr && bookingDoc && bookingDoc.exists) {
     const bStatus = bookingDoc.data()?.status as string | undefined
     if (!bStatus || bStatus === 'pending') {
-      batch.update(bookingRef, { status: 'confirmed', confirmed_at: FieldValue.serverTimestamp() })
+      batch.update(bookingRef, {
+        status: 'confirmed',
+        confirmed_at: FieldValue.serverTimestamp(),
+        // A confirmed seat is an ordinary booking — the hold markers go with the
+        // same write. The claim flag is not an oversell any more
+        // (bookingHoldsSeat no longer expires a SETTLED claim), but it still
+        // hides this person from `sendBookingReminders` forever; and a claim
+        // that was mid-payment also carries `payment_status: 'required'` +
+        // `expires_at`, which DO still cost the seat (freed at the deadline by
+        // the recount, then hard-deleted at 02:00 by
+        // releaseExpiredBookingHolds). `confirmClearedHoldFields` is the one
+        // patch every confirm surface applies; absent fields are a no-op.
+        ...confirmClearedHoldFields(bookingDoc.data() as SeatHold, FieldValue.delete()),
+      })
+      // No `bookings_count` here: a confirmed booking still HOLDS its seat
+      // (bookingHoldsSeat), so decrementing on check-in was a leftover from the
+      // pre-merge counter model — it put the class one seat under for whoever
+      // won the race with trackBookings' recount of this same status flip.
       batch.update(sessionRef, {
-        bookings_count: FieldValue.increment(-1),
         conversions_count: FieldValue.increment(1),
       })
       batch.update(db.collection('contacts').doc(contactId), {

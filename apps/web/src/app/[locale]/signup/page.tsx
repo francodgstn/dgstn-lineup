@@ -6,10 +6,12 @@ import { Link, useRouter } from '@/i18n/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { TRIAL_DAYS } from '@linyup/shared'
 import { signUp } from '@/lib/auth'
 import { provisionTeam, userHasTeam } from '@/lib/provisioning'
 import { usePublicSignupEnabled, isSignupClosedError } from '@/lib/signupGate'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlanName } from '@/hooks/usePlanName'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -186,6 +188,7 @@ const SPORT_TYPES = [
 function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const t = useTranslations('Signup')
+  const planName = usePlanName()
   const {
     register,
     handleSubmit,
@@ -239,6 +242,13 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
           {error}
         </p>
       )}
+
+      {/* UX-7 interim: self-service signup silently provisions a 30-day trial
+          (lib/provisioning.ts) and never said so anywhere. State it once,
+          here, before the studio is created. */}
+      <p className="text-center text-xs text-muted-foreground">
+        {t('trialNotice', { plan: planName('studio'), days: TRIAL_DAYS })}
+      </p>
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? t('creatingTeam') : t('createTeam')}

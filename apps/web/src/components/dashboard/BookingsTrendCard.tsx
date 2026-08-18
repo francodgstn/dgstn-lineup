@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
+import { CalendarDays } from 'lucide-react'
 import {
   AreaChart,
   Area,
@@ -25,6 +27,7 @@ import {
   formatAxisWeek,
   dateToIsoWeek,
 } from '@/lib/isoWeek'
+import { ChartEmptyState } from './ChartEmptyState'
 import type { SessionDoc, BookingDoc, WeeklyReport } from '@/hooks/useDashboardData'
 
 const SOURCE_OPTIONS = [
@@ -166,6 +169,7 @@ function BookingsTooltip({
   option: (typeof SOURCE_OPTIONS)[0]
   compareWith?: string
 }) {
+  const td = useTranslations('Dashboard')
   if (!active || !payload?.length || !label) return null
   const isRate = option.value === 'engagement_rate' || option.value === 'no_show_rate'
   const fmt = (v: number) => (isRate ? `${v}%` : String(v))
@@ -179,7 +183,7 @@ function BookingsTooltip({
       </p>
       {compareWith && compareWith !== 'none' && compVal !== undefined && (
         <p className="text-muted-foreground mt-0.5">
-          {compareWith === 'last_year' ? 'Last year' : 'Prev. period'}:{' '}
+          {compareWith === 'last_year' ? td('legendLastYear') : td('legendPrevPeriod')}:{' '}
           <strong>{fmt(compVal)}</strong>
         </p>
       )}
@@ -214,6 +218,7 @@ export function BookingsTrendCard({
   comparisonNewContactBookings = [],
   title,
 }: Props) {
+  const td = useTranslations('Dashboard')
   const [source, setSource] = useState('checkins')
   const selectedOption = SOURCE_OPTIONS.find((o) => o.value === source)!
   const comparisonOffset = compareWith === 'last_year' ? 52 : trendsWeeks
@@ -269,7 +274,7 @@ export function BookingsTrendCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <CardTitle className="flex-1">{title || 'Sessions'}</CardTitle>
+          <CardTitle className="flex-1">{title || td('chartTitleSessions')}</CardTitle>
           <Select
             value={source}
             onValueChange={(v) => {
@@ -291,9 +296,11 @@ export function BookingsTrendCard({
       </CardHeader>
       <CardContent className="flex-1 flex flex-col pb-4 pt-3">
         {!hasData ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">No data for this period</p>
-          </div>
+          <ChartEmptyState
+            icon={CalendarDays}
+            title={td('chartEmptyTitle')}
+            hint={td('chartEmptySessions')}
+          />
         ) : (
           <div className="mt-auto">
             <ResponsiveContainer width="100%" height={220}>
@@ -354,7 +361,9 @@ export function BookingsTrendCard({
               <div className="flex items-center gap-4 justify-end mt-1.5">
                 <div className="flex items-center gap-1">
                   <div className="w-5 h-0.5 rounded" style={{ background: color }} />
-                  <span className="text-xs text-muted-foreground">Current</span>
+                  <span className="text-xs text-muted-foreground">
+                    {td('legendCurrent')}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div
@@ -362,7 +371,7 @@ export function BookingsTrendCard({
                     style={{ borderTop: `2px dashed ${color}`, opacity: 0.45 }}
                   />
                   <span className="text-xs text-muted-foreground">
-                    {compareWith === 'last_year' ? 'Last year' : 'Prev. period'}
+                    {compareWith === 'last_year' ? td('legendLastYear') : td('legendPrevPeriod')}
                   </span>
                 </div>
               </div>

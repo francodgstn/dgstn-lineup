@@ -19,6 +19,23 @@ export function activityGradient(name: string): string {
   return `linear-gradient(135deg, ${colors[i]}, ${colors[(i + 2) % colors.length]})`
 }
 
+/**
+ * How much vertical room the bar needs. FlowShell reserves this as bottom padding
+ * on the page variant; it used to be duplicated as a local constant in both flows.
+ */
+export const STICKY_H = 100
+
+/**
+ * Where the bar anchors.
+ *  - 'viewport'  — fixed to the bottom of the window (full-page flows)
+ *  - 'container' — sticky inside its scroll parent (inside a dialog/sheet, where
+ *                  a viewport-fixed z-[100] bar would escape the panel)
+ *
+ * Required on purpose: there are exactly two call sites, and a forgotten default
+ * is precisely how a bar ends up floating over a modal it doesn't belong to.
+ */
+export type StickyBarPosition = 'viewport' | 'container'
+
 export interface StickyBarProps {
   title: string
   /** Activity image; a name-derived gradient is used when absent. */
@@ -29,8 +46,16 @@ export interface StickyBarProps {
   dateTimeLabel?: string | null
   location?: string | null
   accentColor?: string | null
+  position: StickyBarPosition
   showConfirm: boolean
   submitting: boolean
+  /**
+   * Greys the Confirm without hiding it — the state the consent step needs: a
+   * visitor who has not ticked yet must see the control they are working
+   * towards, and must not be able to submit a booking with nothing signed.
+   * Hiding it instead would read as "there is nothing more to do here".
+   */
+  confirmDisabled?: boolean
   confirmLabel: string
   submittingLabel: string
   onConfirm: () => void
@@ -43,17 +68,25 @@ export function StickyBar({
   dateTimeLabel,
   location,
   accentColor,
+  position,
   showConfirm,
   submitting,
+  confirmDisabled,
   confirmLabel,
   submittingLabel,
   onConfirm,
 }: StickyBarProps) {
   const bg = imageUrl ? `url("${imageUrl}")` : activityGradient(title)
+  const anchor =
+    position === 'viewport'
+      ? 'fixed bottom-0 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-2xl z-[100] rounded-t-2xl border-b-0'
+      : // Inside a panel the bar is part of the flex column: full width, no
+        // transform, and a low z so it can't paint over the dialog's own chrome.
+        'sticky bottom-0 w-full z-10 border-x-0 border-b-0'
 
   return (
     <div
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-2xl z-[100] flex items-center gap-3 p-3 sm:p-4 rounded-t-2xl border border-b-0 bg-background/95 backdrop-blur-md"
+      className={`${anchor} flex items-center gap-3 p-3 sm:p-4 border bg-background/95 backdrop-blur-md`}
       style={{
         boxShadow: '0 -8px 32px rgba(0,0,0,0.10), 0 -2px 8px rgba(0,0,0,0.06)',
         animation: 'slideUpBar 0.35s cubic-bezier(0.34,1.56,0.64,1)',
@@ -124,7 +157,7 @@ export function StickyBar({
       {showConfirm && (
         <button
           onClick={onConfirm}
-          disabled={submitting}
+          disabled={submitting || confirmDisabled === true}
           style={accentColor ? { backgroundColor: accentColor } : undefined}
           className="shrink-0 rounded-xl bg-primary text-primary-foreground font-semibold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
         >

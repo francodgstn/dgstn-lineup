@@ -6,14 +6,25 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
-import { unpublishSiteForTeam, deleteAllCoursePublicProfiles } from '../utils/plugins'
+import { downgradeTeamToFree } from './downgrade'
+import { lapseOrganization } from '../orgs/lifecycle'
 import { StripeAdapter } from '../utils/gateway/stripe'
+import {
+  getPlatformStripeAdapter,
+  cancelSubscriptionFor,
+  reactivateSubscriptionFor,
+  billingPortalUrlFor,
+  invoicesFor,
+} from './actions'
+import { readGatewayData, legacyGatewayDataFields } from '@linyup/shared'
 import type { SaasPlan } from '@linyup/shared'
 import {
   PLUGIN_ADDONS,
   pluginIdForAddonLookupKey,
   TEAMS_COLLECTION,
+  ORGANIZATIONS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
+  PLAN_PRICING,
   TENANT_DATA_COLLECTIONS,
   TENANT_TEAM_DOC_COLLECTION,
   tenantStoragePrefix,
@@ -28,18 +39,15 @@ const VALID_PLANS: SaasPlan[] = ['coach', 'studio']
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Returns a StripeAdapter using Linyup's platform Stripe secret key.
- * SaaS billing always uses Linyup's own Stripe account — never a team-level
- * payment gateway integration (those are for teams charging their own clients).
+ * TEAM ownership, and only that — a read of `teams/{teamId}/team_members/{uid}`.
+ *
+ * Every callable in this file is therefore TEAM-ONLY. An organisation pays for
+ * itself through the sibling rail in `../orgs/billing.ts`, guarded by
+ * `assertOrgAdmin` against `organizations/{orgId}/org_members/{uid}`; the two
+ * share their Stripe work via `./actions.ts` and nothing else. Passing an org id
+ * here fails closed (an organisation has no `team_members`), which is the
+ * behaviour that made UX-75 look like a permissions problem for a year.
  */
-async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
-  const secretKey = await getSecret('stripe-secret-key')
-  return StripeAdapter.withSecretKey(
-    { type: 'stripe', publishable_key: '', currency: 'chf' },
-    secretKey
-  )
-}
-
 async function assertOwner(uid: string, teamId: string): Promise<void> {
   const isOwner = await hasTeamRole(uid, teamId, 'owner')
   if (!isOwner) throw new HttpsError('permission-denied', 'Owner access required')
@@ -202,10 +210,13 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
   const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
 
   try {
-    // Idempotency check
+    // Idempotency check — through readGatewayData, because a doc written before
+    // the dotted-key fix keeps `last_event_id` as a literal field. Reading only
+    // the nested map returned undefined for every such doc, so this check never
+    // matched and a Stripe retry was processed a second time.
     const existing = await subRef.get()
     if (existing.exists) {
-      const lastEventId = existing.data()?.gateway_data?.last_event_id
+      const lastEventId = readGatewayData(existing.data()).last_event_id
       if (lastEventId === event.eventId) {
         console.log(`Webhook event ${event.eventId} already processed — skipping`)
         res.status(200).send('ok')
@@ -223,29 +234,40 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
       }))
       .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
 
-    // Map event to saas_subscriptions fields
+    // Map event to saas_subscriptions fields.
+    //
+    // `gateway_data` is built as a NESTED object and never as dotted keys: this
+    // handler persists with `set(…, { merge: true })`, and `set()` takes a
+    // dotted key literally — only `update()` reads it as a field path. Written
+    // the old way, every one of these became a top-level field *named*
+    // "gateway_data.subscription_id" and the map the readers want was never
+    // created. `set` with merge still deep-merges a nested map, so writing only
+    // the keys this event carries leaves the rest of gateway_data standing.
+    const gatewayData: Record<string, unknown> = { last_event_id: event.eventId }
     const update: Record<string, unknown> = {
       entity_type: entityType,
       entity_id: entityId,
       teamId: entityId, // kept for backwards compatibility
       updated_at: now,
-      'gateway_data.last_event_id': event.eventId,
       gateway_type: 'stripe',
     }
 
     switch (event.type) {
       case 'subscription.created':
         update.status = 'active'
-        update['gateway_data.subscription_id'] = event.subscriptionId
-        update['gateway_data.customer_id'] = event.customerId
+        gatewayData.subscription_id = event.subscriptionId
+        gatewayData.customer_id = event.customerId
         if (event.plan) update.plan = event.plan
         if (event.currentPeriodStart)
           update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
         if (event.currentPeriodEnd)
           update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
         update.cancel_at_period_end = false
+        update.cancel_at = null
+        update.canceled_at = null
+        update.cancellation_details = null
         update.trial_ends_at = null
-        update['gateway_data.activeAddOns'] = addonActive
+        gatewayData.activeAddOns = addonActive
         if (!existing.exists) {
           update.created_at = now
         }
@@ -257,30 +279,61 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
           update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
         if (event.currentPeriodEnd)
           update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-        if (event.cancelAtPeriodEnd !== undefined)
+        if (event.cancelAtPeriodEnd !== undefined) {
           update.cancel_at_period_end = event.cancelAtPeriodEnd
-        if (event.subscriptionId) update['gateway_data.subscription_id'] = event.subscriptionId
-        if (event.customerId) update['gateway_data.customer_id'] = event.customerId
-        update['gateway_data.activeAddOns'] = addonActive
+          // The WHOLE record, written on every subscription.updated with nulls
+          // included: a reactivation is exactly the event that must ERASE a
+          // previous end date and reason, and an omitted key on a merge would
+          // leave them standing. `cancellation_details` is set whole or nulled —
+          // Firestore deep-merges a nested map, so a partial write would keep
+          // the old cancellation's feedback behind the new reason.
+          update.cancel_at = event.cancelAt ? Timestamp.fromDate(event.cancelAt) : null
+          update.canceled_at = event.canceledAt ? Timestamp.fromDate(event.canceledAt) : null
+          update.cancellation_details = event.cancellationDetails ?? null
+        }
+        if (event.subscriptionId) gatewayData.subscription_id = event.subscriptionId
+        if (event.customerId) gatewayData.customer_id = event.customerId
+        gatewayData.activeAddOns = addonActive
         break
 
       case 'subscription.cancelled':
         update.status = 'cancelled'
+        // It has ENDED — there is no longer a future end to announce.
         update.cancel_at_period_end = false
+        update.cancel_at = null
+        // …but WHEN and WHY it was cancelled are KEPT, and this is the event that
+        // carries them most reliably. Only overwritten when the payload actually
+        // says something: a `deleted` event with no cancellation_details must not
+        // erase the reason an earlier `updated` already recorded.
+        if (event.canceledAt) update.canceled_at = Timestamp.fromDate(event.canceledAt)
+        if (event.cancellationDetails) update.cancellation_details = event.cancellationDetails
         break
 
       case 'payment.succeeded':
         update.status = 'active'
-        update['gateway_data.last_invoice_id'] = event.lastInvoiceId
-        update['gateway_data.last_payment_status'] = 'succeeded'
+        gatewayData.last_invoice_id = event.lastInvoiceId
+        gatewayData.last_payment_status = 'succeeded'
         break
 
       case 'payment.failed':
         update.status = 'past_due'
-        update['gateway_data.last_invoice_id'] = event.lastInvoiceId
-        update['gateway_data.last_payment_status'] = 'failed'
+        gatewayData.last_invoice_id = event.lastInvoiceId
+        gatewayData.last_payment_status = 'failed'
         break
     }
+
+    // Heal a doc still carrying the legacy dotted-literal fields: copy anything
+    // this event is NOT itself writing into the nested map, then delete the
+    // literal. The carry-over is not belt-and-braces — a `payment.succeeded`
+    // event knows no subscription id, so deleting that literal without copying
+    // it first would destroy the only copy on the document. Doing it here means
+    // a doc converges on its next event whether or not the backfill has run.
+    for (const field of legacyGatewayDataFields(existing.data())) {
+      const key = field.slice('gateway_data.'.length)
+      if (!(key in gatewayData)) gatewayData[key] = existing.data()![field]
+      update[field] = FieldValue.delete()
+    }
+    update.gateway_data = gatewayData
 
     await subRef.set(update, { merge: true })
 
@@ -294,15 +347,28 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
       entityUpdate.purge_at = FieldValue.delete()
     }
 
-    // A cancelled team subscription lands the team on the Free plan (the sub
-    // doc keeps status 'cancelled' for billing history). Orgs keep the
-    // legacy mirror + propagation below.
+    // A cancelled subscription lands the payer on what it now pays for, and the
+    // TWO TIERS FOLLOW THE SAME RULE (UX-10) — a team lands on Free; an
+    // organisation winds down through `lapseOrganization`, which puts each of
+    // its studios on Free through this very same `downgradeTeamToFree`.
+    //
+    // `past_due` deliberately does NOT tear anything down, on either tier. It is
+    // Stripe's dunning window — a card that failed on the first retry and
+    // recovers two days later — and the teardown is partly ONE-WAY (course
+    // public_profile mirrors are deleted and nothing rewrites them on
+    // re-activation, UX-16). A team on past_due keeps its plan and its installs
+    // and is refused server-side by `requirePlan` ('plan_inactive'); an org now
+    // does exactly the same, propagating the status to its studios and nothing
+    // more. If that answer is wrong it is wrong for both tiers — change it in
+    // one place, not here alone.
     if (entityType === 'team' && update.status === 'cancelled') {
-      await downgradeTeamToFree(entityId, { fromTrial: false })
+      await downgradeTeamToFree(entityId, { fromTrial: false, courseMirrors: 'tear_down' })
     } else if (entityType === 'org') {
       await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
-      // When org subscription lapses, propagate to linked teams
-      if (update.status === 'cancelled' || update.status === 'past_due') {
+      if (update.status === 'cancelled') {
+        await lapseOrganization(entityId, { reason: 'subscription_cancelled' })
+      } else if (update.status === 'past_due') {
+        // Propagate the status to linked studios so their own gates refuse.
         const orgTeamsSnap = await admin
           .firestore()
           .collection('organizations')
@@ -369,9 +435,13 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// cancelSaasSubscription — marks subscription to cancel at period end
+// The four TEAM billing callables. Each is one line of authorization plus the
+// shared action from ./actions.ts; the organisation's four are in
+// ../orgs/billing.ts and differ only in their guard. `teamId` on the wire is
+// now TRUE of all four — an org id never reaches here (UX-75).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// cancelSaasSubscription — marks subscription to cancel at period end
 export const cancelSaasSubscription = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -379,38 +449,12 @@ export const cancelSaasSubscription = onCall(async (request) => {
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   await assertOwner(request.auth.uid, data.teamId)
-
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) throw new HttpsError('not-found', 'No active subscription found')
-
-  const subData = subDoc.data()!
-  const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
-  if (!subscriptionId)
-    throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
-
-  const adapter = await getPlatformStripeAdapter()
-
-  try {
-    await adapter.cancelSubscription({ subscriptionId })
-  } catch (err) {
-    console.error('cancelSubscription failed:', err)
-    throw new HttpsError('internal', 'Failed to cancel subscription')
-  }
-
-  // Webhook will update cancel_at_period_end when Stripe fires the event.
-  // Optimistically set it here so the UI updates immediately.
-  await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
-    cancel_at_period_end: true,
-    updated_at: FieldValue.serverTimestamp(),
-  })
+  await cancelSubscriptionFor(data.teamId)
 
   return { success: true }
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
 // reactivateSaasSubscription — removes cancel_at_period_end flag
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const reactivateSaasSubscription = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -418,36 +462,12 @@ export const reactivateSaasSubscription = onCall(async (request) => {
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   await assertOwner(request.auth.uid, data.teamId)
-
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
-
-  const subData = subDoc.data()!
-  const subscriptionId = subData.gateway_data?.subscription_id as string | undefined
-  if (!subscriptionId)
-    throw new HttpsError('failed-precondition', 'Subscription ID not found — contact support')
-
-  const adapter = await getPlatformStripeAdapter()
-
-  try {
-    await adapter.reactivateSubscription({ subscriptionId })
-  } catch (err) {
-    console.error('reactivateSubscription failed:', err)
-    throw new HttpsError('internal', 'Failed to reactivate subscription')
-  }
-
-  await admin.firestore().collection('saas_subscriptions').doc(data.teamId).update({
-    cancel_at_period_end: false,
-    updated_at: FieldValue.serverTimestamp(),
-  })
+  await reactivateSubscriptionFor(data.teamId)
 
   return { success: true }
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
-// getBillingPortalUrl — creates a Stripe billing portal session for payment management
-// ─────────────────────────────────────────────────────────────────────────────
-
+// getBillingPortalUrl — Stripe billing portal session (payment method, receipts)
 export const getBillingPortalUrl = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -456,36 +476,11 @@ export const getBillingPortalUrl = onCall(async (request) => {
 
   await assertOwner(request.auth.uid, data.teamId)
 
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) throw new HttpsError('not-found', 'No subscription found')
-
-  const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
-  if (!customerId)
-    throw new HttpsError('failed-precondition', 'No Stripe customer found — contact support')
-
-  const adapter = await getPlatformStripeAdapter()
-  const hostingUrl = getHostingUrl()
-  const returnUrl = data.returnUrl ?? `${hostingUrl}/billing`
-
-  let session: { url: string }
-  try {
-    session = await adapter.createBillingPortalSession({ customerId, returnUrl })
-  } catch (err) {
-    console.error('createBillingPortalSession failed:', err)
-    throw new HttpsError('internal', 'Failed to open billing portal')
-  }
-
-  if (!session.url.startsWith('https://billing.stripe.com/')) {
-    throw new HttpsError('internal', 'Unexpected billing portal URL')
-  }
-
-  return { url: session.url }
+  const returnUrl = data.returnUrl ?? `${getHostingUrl()}/billing`
+  return { url: await billingPortalUrlFor(data.teamId, returnUrl) }
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
 // getSaasInvoices — fetches invoice list live from Stripe (not stored in Firestore)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export const getSaasInvoices = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -493,22 +488,7 @@ export const getSaasInvoices = onCall(async (request) => {
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
 
   await assertOwner(request.auth.uid, data.teamId)
-
-  const subDoc = await admin.firestore().collection('saas_subscriptions').doc(data.teamId).get()
-  if (!subDoc.exists) return { invoices: [] }
-
-  const customerId = subDoc.data()?.gateway_data?.customer_id as string | undefined
-  if (!customerId) return { invoices: [] }
-
-  const adapter = await getPlatformStripeAdapter()
-
-  try {
-    const invoices = await adapter.fetchInvoices({ customerId, limit: data.limit ?? 10 })
-    return { invoices }
-  } catch (err) {
-    console.error('getSaasInvoices failed:', err)
-    throw new HttpsError('internal', 'Failed to fetch invoices')
-  }
+  return invoicesFor(data.teamId, data.limit ?? 10)
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -550,7 +530,7 @@ export const activatePluginAddon = onCall(async (request) => {
 
   const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
   const sub = subSnap.exists ? subSnap.data()! : null
-  const subscriptionId = sub?.gateway_data?.subscription_id as string | undefined
+  const subscriptionId = readGatewayData(sub).subscription_id
   const status = sub?.status as string | undefined
   const isPaid = !!subscriptionId && (status === 'active' || status === 'past_due')
 
@@ -568,7 +548,7 @@ export const activatePluginAddon = onCall(async (request) => {
       throw new HttpsError('internal', 'Failed to add the add-on to your subscription')
     }
     const current = (
-      (sub?.gateway_data?.activeAddOns ?? []) as Array<{ pluginId: string; itemId: string }>
+      readGatewayData(sub).activeAddOns ?? []
     ).filter((a) => a.pluginId !== pluginId)
     await admin
       .firestore()
@@ -646,7 +626,7 @@ export const deactivatePluginAddon = onCall(async (request) => {
     }
     const subSnap = await admin.firestore().collection('saas_subscriptions').doc(teamId).get()
     const current = (
-      (subSnap.data()?.gateway_data?.activeAddOns ?? []) as Array<{
+      (readGatewayData(subSnap.data()).activeAddOns ?? []) as Array<{
         pluginId: string
         itemId: string
       }>
@@ -676,53 +656,11 @@ export const deactivatePluginAddon = onCall(async (request) => {
 // scheduled job. The old wall + 90-day purge are retired.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Move a team onto the Free plan (trial lapsed or paid subscription cancelled).
- * Clears the legacy wall/purge markers and deactivates plugin installs — Free
- * has no plugin access; install config is preserved so a later upgrade can
- * reactivate without losing settings.
- */
-async function downgradeTeamToFree(teamId: string, opts: { fromTrial: boolean }): Promise<void> {
-  const db = admin.firestore()
-  const update: Record<string, unknown> = {
-    plan: 'free',
-    plan_status: 'active',
-    suspended_at: FieldValue.delete(),
-    purge_at: FieldValue.delete(),
-    updated_at: FieldValue.serverTimestamp(),
-  }
-  if (opts.fromTrial) update.downgraded_from_trial_at = FieldValue.serverTimestamp()
-  await db.collection(TEAMS_COLLECTION).doc(teamId).update(update)
-
-  const installs = await db
-    .collection(TEAMS_COLLECTION)
-    .doc(teamId)
-    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
-    .where('status', '==', 'active')
-    .get()
-
-  const activePluginIds = installs.docs.map((d) => d.id)
-
-  for (const d of installs.docs) {
-    await d.ref.set(
-      { status: 'inactive', updated_at: FieldValue.serverTimestamp() },
-      { merge: true }
-    )
-  }
-
-  // Tear down plugin-specific public artefacts that would otherwise remain
-  // visible after a downgrade (the plugin-status trigger only fires on
-  // installed_plugins writes; it runs in parallel with this path so we also
-  // tear down here to guarantee the artefacts are removed synchronously).
-  const teardowns: Promise<void>[] = []
-  if (activePluginIds.includes('website')) {
-    teardowns.push(unpublishSiteForTeam(teamId))
-  }
-  if (activePluginIds.includes('online-courses')) {
-    teardowns.push(deleteAllCoursePublicProfiles(teamId))
-  }
-  await Promise.all(teardowns)
-}
+// `downgradeTeamToFree` — THE one writer — now lives in ./downgrade.ts, imported
+// above. It moved out of this file so `orgs/lifecycle.ts` can call the SAME
+// function for every studio a lapsed organisation was paying for, without
+// importing a module whose top level registers every billing function. There is
+// one downgrade path for both tiers; do not write a second one.
 
 /**
  * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
@@ -829,7 +767,8 @@ async function sendTrialExpiredEmail(
     title: 'Your Linyup trial has ended',
     body:
       `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended, and your ` +
-      `account is now on the <strong>Free plan</strong> — up to 10 active contacts, single user. ` +
+      `account is now on the <strong>Free plan</strong> — up to ` +
+      `${PLAN_PRICING.free.includedContacts} active contacts, single user. ` +
       `All your data is kept and everything keeps working within those limits. ` +
       `Upgrade any time to lift them.<br><br><a href="${billingUrl}">See plans &amp; upgrade</a>`,
   })
@@ -858,14 +797,67 @@ export const handleTrialLifecycle = onSchedule(
         console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} team ${teamId}`)
         continue
       }
+      // A TEAM INSIDE AN ORGANISATION DOES NOT OWN ITS OWN BILLING (UX-35).
+      // `acceptOrgInvitation` sets org_id together with plan 'organization' and
+      // copies the ORG's plan_status onto the team — so a member studio of an
+      // org that is itself on trial matches this query, on the strength of a
+      // `trial_ends_at` left over from its own signup months earlier, and used
+      // to be reset to Free: plugins deactivated, website unpublished, course
+      // mirrors deleted. Meanwhile `useInstalledPlugins` keeps merging the ORG's
+      // plugin installs in (org_id is still set), which is exactly the
+      // "affiliated studio holding features its plan does not include" state
+      // UX-35 reports — reached from the opposite direction.
+      //
+      // The org's own subscription is the one that governs these teams, and the
+      // webhook already propagates a lapse to every active org_team. Nothing
+      // here may downgrade one.
+      if (doc.data().org_id) {
+        console.log(`[trial] skipped org-affiliated team ${teamId} (org ${doc.data().org_id} bills it)`)
+        continue
+      }
       try {
-        await downgradeTeamToFree(teamId, { fromTrial: true })
+        await downgradeTeamToFree(teamId, { fromTrial: true, courseMirrors: 'tear_down' })
         await sendTrialExpiredEmail(teamId, doc.data()).catch((e) =>
           console.error(`[trial] email failed ${teamId}:`, e)
         )
         console.log(`[trial] downgraded lapsed trial ${teamId} to free`)
       } catch (err) {
         console.error(`[trial] downgrade failed ${teamId}:`, err)
+      }
+    }
+
+    // Phase 2 — lapsed ORGANISATION trials (UX-9).
+    //
+    // This sweep reads `organizations`, and it has to: phase 1 above cannot see
+    // an org's trial, and it is forbidden from touching an org's studios (UX-35),
+    // so before this block existed NOTHING ended an org trial. An unpaid
+    // organisation — and every studio it billed — sat on the top tier forever.
+    //
+    // Same shape as phase 1, same exemptions, and the deadline is READ from the
+    // document rather than derived from `created`: extending a hand-onboarded
+    // customer's trial is editing `trial_ends_at`, and `flags.internal` /
+    // `flags.pilot` opt an org out of the sweep altogether.
+    const expiringOrgs = await db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .where('plan_status', '==', 'trial')
+      .where('trial_ends_at', '<=', nowTs)
+      .limit(200)
+      .get()
+    for (const doc of expiringOrgs.docs) {
+      const orgId = doc.id
+      const flags = doc.data().flags as { internal?: boolean; pilot?: boolean } | undefined
+      if (flags?.internal || flags?.pilot) {
+        console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} org ${orgId}`)
+        continue
+      }
+      try {
+        // The ONE org wind-down: org installs off, org site unpublished, every
+        // member studio moved to Free through `downgradeTeamToFree` and unlinked.
+        // Idempotent and resumable — see orgs/lifecycle.ts.
+        await lapseOrganization(orgId, { reason: 'trial_lapsed' })
+        console.log(`[trial] lapsed org trial ${orgId}`)
+      } catch (err) {
+        console.error(`[trial] org lapse failed ${orgId}:`, err)
       }
     }
 
@@ -879,7 +871,7 @@ export const handleTrialLifecycle = onSchedule(
       .get()
     for (const doc of legacy.docs) {
       try {
-        await downgradeTeamToFree(doc.id, { fromTrial: true })
+        await downgradeTeamToFree(doc.id, { fromTrial: true, courseMirrors: 'tear_down' })
         console.log(`[trial] converted legacy expired team ${doc.id} to free`)
       } catch (err) {
         console.error(`[trial] legacy conversion failed ${doc.id}:`, err)

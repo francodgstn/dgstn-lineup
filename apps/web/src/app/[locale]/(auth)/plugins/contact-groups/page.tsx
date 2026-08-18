@@ -9,7 +9,7 @@ import {
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useRouter } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { CONTACTS_COLLECTION } from '@linyup/shared'
 import type { Contact, ContactGroup } from '@linyup/shared'
@@ -21,14 +21,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from 'sonner'
 import {
   FolderTree, Plus, ChevronRight, MoreHorizontal, Pencil, Trash2, FolderPlus,
-  Users, Search, X, Check, FolderOpen,
+  Users, Search, X, Check, FolderOpen, Zap,
 } from 'lucide-react'
 import { GroupPickerPopover } from '@/plugins/contact-groups/GroupPickerPopover'
 import {
   useContactGroups, useInvalidateContactGroups, buildGroupTree, groupWithDescendantIds,
-  createGroup, updateGroup, deleteGroup,
+  createGroup, updateGroup, deleteGroup, freezeGroupToManual,
+  contactMatchesGroup, groupsForContact, isDynamicGroup, useContactFilterContext,
 } from '@/plugins/contact-groups/hooks'
 import type { GroupTreeNode } from '@/plugins/contact-groups/hooks'
+import { GroupRuleDialog, stashRuleForContactsPage } from '@/plugins/contact-groups/GroupRuleDialog'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -237,7 +239,7 @@ function AddMembersDialog({
 
 function GroupRow({
   node, selectedId, expanded, onToggleExpand, onSelect, directCounts, totalCounts,
-  onAddSub, onRename, onDelete,
+  onAddSub, onRename, onDelete, onViewRule,
 }: {
   node: GroupTreeNode
   selectedId: string | null
@@ -249,6 +251,7 @@ function GroupRow({
   onAddSub: (g: ContactGroup) => void
   onRename: (g: ContactGroup) => void
   onDelete: (g: ContactGroup) => void
+  onViewRule: (g: ContactGroup) => void
 }) {
   const t = useTranslations('ContactGroups')
   const { group, children, depth } = node
@@ -279,6 +282,11 @@ function GroupRow({
           <span className="h-2.5 w-2.5 rounded-full shrink-0 border border-border/40"
             style={{ background: group.color ?? 'transparent' }} />
           <span className={`text-sm truncate ${isSelected ? 'font-semibold' : 'font-medium'}`}>{group.name}</span>
+          {/* Derived membership, marked in the tree so a manual and a dynamic
+              group are never mistaken for each other at a glance. */}
+          {isDynamicGroup(group) && (
+            <Zap className="h-3 w-3 shrink-0 text-violet-500" aria-label={t('dynamicBadge')} />
+          )}
           <span className="text-xs text-muted-foreground tabular-nums shrink-0">
             {total > direct ? `${direct} · ${total}` : direct}
           </span>
@@ -295,6 +303,12 @@ function GroupRow({
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-left">
               <FolderPlus className="h-4 w-4 shrink-0 text-muted-foreground" />{t('addSubgroup')}
             </button>
+            {isDynamicGroup(group) && (
+              <button type="button" onClick={() => onViewRule(group)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-left">
+                <Zap className="h-4 w-4 shrink-0 text-violet-500" />{t('viewRule')}
+              </button>
+            )}
             <button type="button" onClick={() => onRename(group)}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-left">
               <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />{t('editGroup')}
@@ -310,7 +324,7 @@ function GroupRow({
         <GroupRow key={child.group.id} node={child} selectedId={selectedId} expanded={expanded}
           onToggleExpand={onToggleExpand} onSelect={onSelect}
           directCounts={directCounts} totalCounts={totalCounts}
-          onAddSub={onAddSub} onRename={onRename} onDelete={onDelete} />
+          onAddSub={onAddSub} onRename={onRename} onDelete={onDelete} onViewRule={onViewRule} />
       ))}
     </>
   )
@@ -341,31 +355,36 @@ export default function ContactGroupsPage() {
   const [addMembersOpen, setAddMembersOpen] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [includeSubgroups, setIncludeSubgroups] = useState(false)
+  const [ruleGroup, setRuleGroup] = useState<ContactGroup | null>(null)
 
+  const filterCtx = useContactFilterContext(groups)
   const tree = useMemo(() => buildGroupTree(groups), [groups])
   const selectedGroup = groups.find((g) => g.id === selectedId) ?? null
   // The "Ungrouped" bucket isn't a group — it's the absence of one, so it can't
   // live in the tree (no id, no parent, nothing to rename or delete). It's a
   // sentinel selection instead, which keeps `groups` honestly the real groups.
   const ungroupedSelected = selectedId === UNGROUPED_ID
+  // "In no group" must account for dynamic groups too — someone matched by a
+  // rule is filed, even though nothing was written to their group_ids.
   const ungrouped = useMemo(
-    () => contacts.filter((c) => (c.group_ids ?? []).length === 0),
-    [contacts]
+    () => contacts.filter((c) => groupsForContact(c, groups, filterCtx).length === 0),
+    [contacts, groups, filterCtx]
   )
 
-  // member counts: direct, and including descendants
+  // Member counts, direct and including descendants. Both go through
+  // contactMatchesGroup so a MANUAL group counts its group_ids and a DYNAMIC one
+  // resolves its rule — the caller never branches on which kind it is.
   const { directCounts, totalCounts } = useMemo(() => {
     const direct = new Map<string, number>()
-    for (const c of contacts) {
-      for (const gid of c.group_ids ?? []) direct.set(gid, (direct.get(gid) ?? 0) + 1)
-    }
     const total = new Map<string, number>()
     for (const g of groups) {
+      direct.set(g.id, contacts.filter((c) => contactMatchesGroup(c, g, filterCtx)).length)
       const ids = groupWithDescendantIds(groups, g.id)
-      total.set(g.id, contacts.filter((c) => (c.group_ids ?? []).some((gid) => ids.has(gid))).length)
+      const targets = groups.filter((x) => ids.has(x.id))
+      total.set(g.id, contacts.filter((c) => targets.some((x) => contactMatchesGroup(c, x, filterCtx))).length)
     }
     return { directCounts: direct, totalCounts: total }
-  }, [contacts, groups])
+  }, [contacts, groups, filterCtx])
 
   const members = useMemo(() => {
     const sq = memberSearch.trim().toLowerCase()
@@ -376,10 +395,11 @@ export default function ContactGroupsPage() {
     const ids = includeSubgroups
       ? groupWithDescendantIds(groups, selectedGroup.id)
       : new Set([selectedGroup.id])
+    const targets = groups.filter((g) => ids.has(g.id))
     return contacts
-      .filter((c) => (c.group_ids ?? []).some((gid) => ids.has(gid)))
+      .filter((c) => targets.some((g) => contactMatchesGroup(c, g, filterCtx)))
       .filter(bySearch)
-  }, [contacts, groups, selectedGroup, includeSubgroups, memberSearch, ungroupedSelected, ungrouped])
+  }, [contacts, groups, selectedGroup, includeSubgroups, memberSearch, ungroupedSelected, ungrouped, filterCtx])
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -399,7 +419,7 @@ export default function ContactGroupsPage() {
         if (formMode.parent) setExpanded((prev) => new Set(prev).add(formMode.parent!.id))
         setSelectedId(id)
       } else {
-        await updateGroup(currentTeamId, formMode.group.id, { name, color: color ?? null } as Partial<ContactGroup>)
+        await updateGroup(currentTeamId, formMode.group.id, { name, color: color ?? null } as Partial<ContactGroup>, groups)
       }
       invalidateGroups()
     } catch {
@@ -419,6 +439,21 @@ export default function ContactGroupsPage() {
       toast.error(t('errorSave'))
     } finally {
       setConfirmDelete(null)
+    }
+  }
+
+  // Freeze a dynamic group. One atomic batch where it fits, so the group can
+  // never be left carrying BOTH a rule and stored membership — see
+  // freezeGroupToManual.
+  const handleConvertToManual = async (memberIds: string[]) => {
+    if (!currentTeamId || !ruleGroup) return
+    try {
+      await freezeGroupToManual(currentTeamId, ruleGroup.id, memberIds)
+      invalidateGroups()
+      invalidateContacts()
+      toast.success(t('convertedToast', { name: ruleGroup.name }))
+    } catch {
+      toast.error(t('errorSave'))
     }
   }
 
@@ -480,7 +515,8 @@ export default function ContactGroupsPage() {
               directCounts={directCounts} totalCounts={totalCounts}
               onAddSub={(g) => setFormMode({ kind: 'create', parent: g })}
               onRename={(g) => setFormMode({ kind: 'edit', group: g })}
-              onDelete={(g) => setConfirmDelete(g)} />
+              onDelete={(g) => setConfirmDelete(g)}
+              onViewRule={(g) => setRuleGroup(g)} />
           ))}
           {/* Ungrouped — below a divider because it is NOT a group: it can't be
               renamed, nested, deleted or added to, and it's the one bucket that
@@ -527,6 +563,11 @@ export default function ContactGroupsPage() {
                 <Badge variant="secondary" className="text-xs tabular-nums">{members.length}</Badge>
                 {/* Subgroups and bulk-add are group-only: "ungrouped" has no
                     children, and you file people OUT of it, not into it. */}
+                {!ungroupedSelected && isDynamicGroup(selectedGroup) && (
+                  <Badge variant="outline" className="gap-1 text-[10px] border-violet-500/40 text-violet-600 dark:text-violet-400">
+                    <Zap className="h-2.5 w-2.5" />{t('dynamicBadge')}
+                  </Badge>
+                )}
                 {!ungroupedSelected && (
                   <>
                     <label className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto cursor-pointer">
@@ -535,10 +576,19 @@ export default function ContactGroupsPage() {
                         className="h-3.5 w-3.5 rounded border-border" />
                       {t('includeSubgroups')}
                     </label>
-                    <button type="button" onClick={() => setAddMembersOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors">
-                      <Plus className="h-3.5 w-3.5" />{t('addMembers')}
-                    </button>
+                    {/* A dynamic group has no membership to add to — the rule is
+                        the membership. Offer the rule instead of a member picker. */}
+                    {isDynamicGroup(selectedGroup) ? (
+                      <button type="button" onClick={() => setRuleGroup(selectedGroup)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors">
+                        <Zap className="h-3.5 w-3.5" />{t('viewRule')}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setAddMembersOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors">
+                        <Plus className="h-3.5 w-3.5" />{t('addMembers')}
+                      </button>
+                    )}
                   </>
                 )}
                 {ungroupedSelected && (
@@ -562,10 +612,17 @@ export default function ContactGroupsPage() {
                   <p className="text-sm text-muted-foreground text-center py-10">{t('noMembers')}</p>
                 )}
                 {!contactsLoading && members.map((c) => {
-                  const isDirect = !ungroupedSelected && (c.group_ids ?? []).includes(selectedGroup!.id)
+                  const isDirect = !ungroupedSelected && contactMatchesGroup(c, selectedGroup!, filterCtx)
+                  // Derived membership can't be removed by hand — you change the
+                  // rule, not the person.
+                  const removable = isDirect && !isDynamicGroup(selectedGroup)
                   return (
                     <div key={c.id} className="flex items-center gap-3 px-4 py-2 border-b last:border-0 hover:bg-muted/40 transition-colors group">
-                      <button type="button" onClick={() => router.push(`/contacts/${c.id}` as Route)}
+                      {/* A real href, not a router.push on a button (UX-98):
+                          middle-click, open-in-new-tab and hover preview all
+                          work, and reviewing a group is exactly when you want
+                          to open a few records side by side. */}
+                      <Link href={`/contacts/${c.id}` as Route}
                         className="flex-1 flex items-center gap-3 text-left min-w-0">
                         <span className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-xs font-semibold">
                           {initials(c)}
@@ -574,7 +631,7 @@ export default function ContactGroupsPage() {
                         {!isDirect && !ungroupedSelected && (
                           <Badge variant="outline" className="text-[10px] shrink-0">{t('viaSubgroup')}</Badge>
                         )}
-                      </button>
+                      </Link>
                       {/* Quick-assign: file someone into another group without
                           leaving the one you're reviewing. Same picker as the
                           contact detail header. Always available — it's the only
@@ -589,7 +646,7 @@ export default function ContactGroupsPage() {
                       >
                         <FolderPlus className="h-4 w-4" />
                       </GroupPickerPopover>
-                      {isDirect && (
+                      {removable && (
                         <button type="button" onClick={() => removeMember(c.id)}
                           className="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
                           title={t('removeMember')}>
@@ -619,8 +676,9 @@ export default function ContactGroupsPage() {
         onSubmit={handleFormSubmit}
       />
 
-      {/* Add members dialog */}
-      {selectedGroup && (
+      {/* Add members dialog — manual groups only; a dynamic group's membership
+          is its rule, so there is nothing to add someone to. */}
+      {selectedGroup && !isDynamicGroup(selectedGroup) && (
         <AddMembersDialog
           open={addMembersOpen}
           onOpenChange={setAddMembersOpen}
@@ -629,6 +687,20 @@ export default function ContactGroupsPage() {
           onAdded={invalidateContacts}
         />
       )}
+
+      {/* Dynamic rule: read it, freeze it, or hand it back to the contacts page */}
+      <GroupRuleDialog
+        open={!!ruleGroup}
+        onOpenChange={(v) => { if (!v) setRuleGroup(null) }}
+        group={ruleGroup}
+        contacts={contacts}
+        filterContext={filterCtx}
+        onConvertToManual={handleConvertToManual}
+        onEditInContacts={() => {
+          if (ruleGroup) stashRuleForContactsPage(ruleGroup)
+          router.push('/contacts' as Route)
+        }}
+      />
 
       {/* Delete confirm */}
       <Dialog open={!!confirmDelete} onOpenChange={(v) => { if (!v) setConfirmDelete(null) }}>

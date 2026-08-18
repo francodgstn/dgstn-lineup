@@ -22,25 +22,40 @@ import {
   CONNECT_WEBHOOK_EVENTS_COLLECTION,
   CONTACTS_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
-  COURSES_COLLECTION,
-  COURSE_PURCHASES_SUBCOLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  WAITLIST_SUBCOLLECTION,
   buildConnectChargeTxn,
   buildConnectRefundTxn,
   buildDisputeTxn,
   buildPayoutTxn,
+  appointmentChargeIsDuplicate,
+  countHoldingSeats,
   financeTxnId,
   isExpiredAppointmentHold,
   mapCategory,
+  seatsFree,
+  toMinorUnits,
   type ConnectOnboardingModel,
   type FinanceCategory,
   type SaasPlan,
+  localizedPublicUrl,
 } from '@linyup/shared'
+import { releaseWaitlistOffer } from '../booking/waitlist/release'
+// The paid CLASS booking's receipt — always on, deliberately outside the
+// `booking_confirmation` toggle. See that module's header.
+import { sendPaidBookingConfirmation } from '../booking/paidConfirmation'
+// The SHOP purchase receipts — credit pack/membership, course, product. Same
+// posture, one module over. See that module's header.
+import {
+  sendCoursePurchaseReceipt,
+  sendMembershipPurchaseReceipt,
+  sendProductPurchaseReceipt,
+} from './purchaseReceipts'
 import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
-import { generateSecureToken } from '../utils/crypto'
+import { generateBookingReference, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { buildEmailTemplate, sendEmail } from '../utils/email'
 import {
@@ -51,15 +66,23 @@ import {
 } from '../utils/connect/client'
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
-import { writeContactSubscriptionFields } from '../payments/effects'
+import { grantCourseEntitlement, writeContactSubscriptionFields } from '../payments/effects'
 import {
-  commitGiftCardHold,
+  commitGiftCardDrawdown,
+  giftCardCurrency,
   mintGiftCard,
   releaseGiftCardHold,
-  restoreGiftCardDrawdown,
+  reverseGiftCardDrawdown,
+  voidGiftCardValue,
 } from './giftCards'
+// The promo lifecycle's two webhook entry points. Both are best-effort and
+// carry their own try/catch: a promo commit that throws must not stop a booking
+// from confirming — the customer paid the discounted price, and owning the seat
+// matters more than the count.
+import { commitPromoFromMetadata, releasePromoFromMetadata } from './promoCodes'
 import { markPolicyFeePaid } from '../booking/policyFees'
 import { asLang, runAppointmentSlotTransaction } from '../appointments/booking'
+import { releaseAppointmentHold } from '../appointments/holdRelease'
 import { sendAppointmentBookingEmails } from '../appointments/emails'
 import {
   linkFinanceTxnContact,
@@ -68,6 +91,23 @@ import {
   retrieveChargeFees,
   upgradeChargeFeesIfDegraded,
 } from '../finance/journal'
+// Stripe moved several of the fields this file reads (Basil → Dahlia). Every one
+// of those reads goes through objectShape.ts, which knows the modern location,
+// keeps a narrow legacy fallback, and says out loud when a field is in neither.
+// Never re-inline one of these reads — see that module for what it cost last
+// time.
+import {
+  INVOICE_PAYMENTS_EXPAND,
+  SUBSCRIPTION_LATEST_INVOICE_PAYMENTS_EXPAND,
+  invoiceBillsSubscription,
+  readInvoicePaymentIntentId,
+  readInvoiceSubscriptionId,
+  readInvoiceSubscriptionMetadata,
+  readOrReport,
+  readSubscriptionCancellation,
+  readSubscriptionPeriod,
+  reportStripeShape,
+} from '../utils/stripe/objectShape'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
 // Covers classic Connect account events and v2 thin account events.
@@ -197,6 +237,13 @@ async function applyCreditGrant(
         expires_at: months > 0 ? addMonths(months) : null,
         source: 'stripe',
         payment_intent_id: paymentIntentId,
+        // Same value as payment_intent_id on this rail, under the name the
+        // shared grantPaymentCredits uses. Provenance has to read the same on
+        // every rail: a reversal that looked for `payment_ref` alone would
+        // silently miss every Connect credit pack. (The reversal keys off the
+        // DOC ID, not either field — but a field that disagrees between rails
+        // is an invitation to key off the field.)
+        payment_ref: paymentIntentId,
         created_at: FieldValue.serverTimestamp(),
       })
     console.log(
@@ -216,7 +263,13 @@ async function writeContactMembership(
   teamId: string,
   contactId: string,
   md: Record<string, string>,
-  opts: { amountRappen: number; membershipExpiration: Timestamp | null }
+  opts: {
+    amountRappen: number
+    membershipExpiration: Timestamp | null
+    /** The one-off charge these fields were written for, or null on a RECURRING
+     *  renewal (handleSubscription), where no single payment owns them. */
+    paymentIntentId?: string | null
+  }
 ): Promise<void> {
   const db = admin.firestore()
   // Subscription-axis fields via the shared writer (single source of the field list).
@@ -228,6 +281,10 @@ async function writeContactMembership(
     priceId: md.priceId ?? null,
     recurrence: md.recurrence ?? null,
     amountMajor: Math.round(opts.amountRappen) / 100, // contact stores major units
+    // NULL on a renewal is load-bearing, not a gap: it OVERWRITES the ref of any
+    // earlier one-off purchase, so refunding that old charge can no longer clear
+    // a membership this renewal is paying for.
+    sourcePaymentRef: opts.paymentIntentId ?? null,
   })
   await db
     .collection(CONTACTS_COLLECTION)
@@ -237,6 +294,9 @@ async function writeContactMembership(
       type: 'payment_received',
       source: 'stripe_connect',
       message: `Membership payment received${md.subscriptionTypeName ? ` · ${md.subscriptionTypeName}` : ''}`,
+      // Every applyPaymentEffects entry carries this; this one used to omit it,
+      // so the contact timeline could not link back to the exact payment.
+      ...(opts.paymentIntentId ? { payment_id: opts.paymentIntentId } : {}),
       timestamp: FieldValue.serverTimestamp(),
     })
 }
@@ -390,14 +450,44 @@ async function stampFinanceContact(teamId: string, piId: string, contactId: stri
  * mirroring the BYO rail's ExternalPayment.line_item (kind 'membership' maps to
  * the line-item spelling 'subscription'). Built from checkout metadata; renewal
  * invoices get theirs stamped by handleInvoice from the subscription doc.
+ *
+ * The promo code is attached ONCE, by the wrapper below, rather than in each
+ * branch. A promo can ride `drop_in`, `appointment`, `product` and `course` —
+ * and repeating the same spread in every branch that could ever carry one is a
+ * place to forget it every time a branch is added here or a rail is added to
+ * `PROMO_TARGETS`. One wrapper cannot be forgotten in a branch it wraps.
  */
-function lineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
+/**
+ * The intro offer the checkout was created with, off the session metadata.
+ *
+ * Written by `introCheckoutMetadata` (connect/introOffer.ts) from an offer that
+ * `resolveIntroOffer` had already accepted — so this only has to survive junk,
+ * not re-decide validity. Returns null when the checkout carried no offer.
+ */
+function readIntroMetadata(md: Record<string, string>): { periods: number; amount: number } | null {
+  if (!md.introPeriods) return null
+  const periods = Number(md.introPeriods)
+  const amount = Number(md.introAmount)
+  if (!Number.isInteger(periods) || periods < 1) return null
+  if (!Number.isFinite(amount) || amount < 0) return null
+  return { periods, amount }
+}
+
+function baseLineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
   if (md.kind === 'membership' && md.subscriptionTypeId) {
+    // The intro offer, if the checkout carried one. Same class of stamp as
+    // `promoCode` below (system-written, never client-supplied) and, for the
+    // same reason, it writes NO finance journal row: a discount is not a money
+    // event on a cash basis — the smaller charge is. It rides the membership
+    // branch rather than the wrapper because an intro offer belongs to a PLAN
+    // and cannot appear on any other kind.
+    const intro = readIntroMetadata(md)
     return {
       kind: 'subscription',
       subscriptionTypeId: md.subscriptionTypeId,
       priceId: md.priceId ?? null,
       label: md.subscriptionTypeName ?? null,
+      ...(intro ? { introOffer: { periods: intro.periods, amount: intro.amount } } : {}),
     }
   }
   if (md.kind === 'product' && md.productId) {
@@ -412,18 +502,60 @@ function lineItemFromMetadata(md: Record<string, string>): Record<string, unknow
     return { kind: 'course', courseId: md.courseId, label: md.courseTitle ?? null }
   }
   if (md.kind === 'drop_in') {
-    return { kind: 'drop_in', label: md.activityName ?? null }
+    // A PAID TRIAL is a drop-in charge whose metadata says it was somebody's
+    // first class (`createDropInCheckout({ trial: true })`). Stamped here, on the
+    // money row, because until this the money and the trial had no field in
+    // common: the payment said `drop_in` and the contact said `trial_used_at`,
+    // and neither named the other. Same class of stamp as `promoCode` below —
+    // system-written, never client-supplied — and, like it, NOT a journal
+    // category: the charge is already booked as the drop-in sale it is.
+    return {
+      kind: 'drop_in',
+      label: md.activityName ?? null,
+      ...(md.trial === 'true' ? { trial: true } : {}),
+    }
   }
   if (md.kind === 'appointment') {
     return { kind: 'appointment', label: md.activityName ?? null }
   }
   if (md.kind === 'gift_card') {
-    return { kind: 'other', label: 'Gift card' }
+    // Its own kind, not 'other': the manual rail derives the journal category
+    // straight from line_item.kind (buildExternalPaymentTxn → mapCategory), so
+    // spelling it 'other' here would leave the two rails disagreeing about what
+    // a gift-card sale is. Effect-less on both — see applyPaymentEffects.
+    return { kind: 'gift_card', label: 'Gift card' }
   }
   if (md.kind === 'policy_fee') {
     return { kind: 'other', label: 'No-show fee' }
   }
   return null
+}
+
+/**
+ * …and the promo stamp on top of it. `md.promoCode` is written by
+ * `promoCheckoutMetadata` (connect/promoCodes.ts) onto every promo-carrying
+ * Checkout Session. It reaches the PaymentIntent because
+ * `createOneOffCheckoutSession` (utils/connect/client.ts) passes THE SAME
+ * metadata object twice — once as the session's `metadata` and once as
+ * `payment_intent_data.metadata`. Stripe copies nothing between the two, so a
+ * key added to only one of those two spreads is missing on whichever handler
+ * reads the other.
+ *
+ * This is the payment row's ONLY record of a discount, and it is deliberate: a
+ * promo writes no finance journal row and adds no CSV column (docs/promo-codes.md
+ * → "Finance"), because a discount is not a money event on a cash basis. So
+ * `financeDescription` below is left alone on purpose — a journal row must never
+ * mention the code.
+ *
+ * A promo only ever rides a kind that yields a line item, so there is no case
+ * where a code is stamped and the row is null. If that ever stops being true,
+ * the code is lost silently — which is why the promo rails are enumerated in
+ * `PROMO_TARGETS` (shared/utils/paymentOptions.ts) rather than inferred here.
+ */
+function lineItemFromMetadata(md: Record<string, string>): Record<string, unknown> | null {
+  const base = baseLineItemFromMetadata(md)
+  if (!base) return null
+  return md.promoCode ? { ...base, promoCode: md.promoCode } : base
 }
 
 /** Human "what was paid" label for the finance journal, from checkout metadata. */
@@ -449,13 +581,38 @@ async function handlePaymentIntent(
 ): Promise<void> {
   const md = (pi.metadata ?? {}) as Record<string, string>
   const now = FieldValue.serverTimestamp()
+
+  // ── WHAT THE OTHER HANDLER MAY ALREADY KNOW ────────────────────────────────
+  // An invoice-generated PaymentIntent — every subscription charge — carries NO
+  // metadata of its own. So on that rail this handler knows the money and
+  // `handleCheckoutCompleted` knows the buyer, and which of them runs first is up
+  // to Stripe: event order is explicitly not guaranteed, and on the live test
+  // account the two are 1–4 seconds apart (on one one-off checkout, the same
+  // second). Every field this handler writes from `md` therefore has to be safe
+  // in BOTH orders — a `merge` that writes a default over a resolved value is
+  // still a write.
+  //
+  // One read, answering that for `contactId` and `purpose` (the two fields the
+  // "unassigned subscription payment" symptom was actually made of) and for the
+  // finance journal row further down.
+  const prior = (await memberPaymentRef(team.teamId, pi.id).get()).data()
+  const knownContactId = md.contactId ?? (prior?.contactId as string | undefined) ?? null
+
   await memberPaymentRef(team.teamId, pi.id).set(
     {
       teamId: team.teamId,
       paymentIntentId: pi.id,
       chargeId: typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null),
-      contactId: md.contactId ?? null,
-      purpose: md.purpose ?? 'payment',
+      // OMITTED, never nulled — the same rule handleSubscription already applies
+      // to its own identity fields. `contactId: md.contactId ?? null` merged an
+      // unconditional null straight over the contact the checkout handler had
+      // just resolved.
+      ...(knownContactId ? { contactId: knownContactId } : {}),
+      // `purpose` has a DEFAULT, so unlike contactId it cannot simply be omitted
+      // (a row with no purpose is worse than a stale one). Metadata first, then
+      // whatever is already recorded, then the default — so the checkout
+      // handler's 'membership' is never overwritten with 'payment'.
+      purpose: md.purpose ?? (prior?.purpose as string | undefined) ?? 'payment',
       // Product sales (kind === 'product') carry the catalogue reference so the
       // payments dashboard can show what was bought + which variant.
       ...(md.kind === 'product'
@@ -540,6 +697,14 @@ async function handlePaymentIntent(
       const chargeId =
         typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null)
       const fees = accountId && chargeId ? await retrieveChargeFees(accountId, chargeId) : null
+      // THE OTHER HALF OF THE ORDERING FIX, using the same `knownContactId`
+      // resolved at the top. `stampFinanceContact` covers the order we actually
+      // observe (payment_intent.succeeded first, then checkout.session.completed):
+      // the journal row exists by then, and the checkout handler stamps the
+      // contact onto it. In the REVERSE order that stamp silently no-ops —
+      // `linkFinanceTxnContact` swallows NOT_FOUND — and this create would write
+      // the row with contact_id null and leave it there until someone ran
+      // `pnpm backfill:finance`.
       await recordFinanceTransaction(
         buildConnectChargeTxn({
           teamId: team.teamId,
@@ -549,7 +714,7 @@ async function handlePaymentIntent(
           applicationFeeAmount: (pi.application_fee_amount as number) ?? 0,
           fees,
           kind: md.kind ?? null,
-          contactId: md.contactId ?? null,
+          contactId: knownContactId,
           description: financeDescription(md),
           occurredAtMs: typeof pi.created === 'number' ? pi.created * 1000 : Date.now(),
           eventId,
@@ -669,6 +834,28 @@ async function handleDispute(
     },
     { merge: true }
   )
+
+  // A disputed GIFT-CARD PURCHASE: kill the card the moment the chargeback
+  // opens. Buying a card with a stolen card, redeeming it in full (which needs
+  // no Stripe charge at all) and then charging back is otherwise a clean
+  // laundering path — and since the guest purchase flow attaches no identity,
+  // the code is the only thing left to stop. Best-effort: a failure here must
+  // not cost us the dispute record above.
+  if (phase === 'created') {
+    try {
+      const pay = (await memberPaymentRef(team.teamId, piId).get()).data()
+      const soldCode = pay?.giftCardCode as string | undefined
+      if (soldCode) {
+        await voidGiftCardValue({
+          teamId: team.teamId,
+          code: soldCode,
+          reason: `chargeback on ${piId}`,
+        })
+      }
+    } catch (err) {
+      console.error(`[connect] gift card void on dispute failed (pi=${piId}):`, err)
+    }
+  }
 
   // Finance journal. Funds movement comes from the dispute's balance transactions
   // (an inquiry/early-warning dispute has none — nothing to journal then):
@@ -792,6 +979,21 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
   const md = (sub.metadata ?? {}) as Record<string, string>
   const item = sub.items?.data?.[0]
   const now = FieldValue.serverTimestamp()
+
+  // The billing period moved onto the subscription ITEM, and a billing-portal
+  // cancellation is expressed as a `cancel_at` TIMESTAMP with the boolean left
+  // false. Both were read from their old homes here and came back
+  // undefined/false — the second and third symptoms of the Basil→Dahlia field
+  // migration (utils/stripe/objectShape.ts).
+  const period = readSubscriptionPeriod(sub)
+  // A subscription that has ENDED has no current period, so a missing one there
+  // is the truth rather than a shape surprise — `customer.subscription.deleted`
+  // must not cry wolf on every cancellation.
+  if (sub.status !== 'canceled' && sub.status !== 'incomplete_expired') {
+    reportStripeShape('subscription.current_period_end', sub.id, period.source, `event ${eventId}`)
+  }
+  const periodEnd = period.end === null ? null : Timestamp.fromMillis(period.end * 1000)
+  const cancellation = readSubscriptionCancellation(sub)
   await memberSubscriptionRef(team.teamId, sub.id).set(
     {
       teamId: team.teamId,
@@ -814,10 +1016,24 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       status: sub.status ?? 'incomplete',
       // Billing freeze (summer break / injury). When set, the rollup → 'paused'.
       pause_collection: sub.pause_collection ?? null,
-      current_period_end: sub.current_period_end
-        ? Timestamp.fromMillis((sub.current_period_end as number) * 1000)
-        : null,
-      cancel_at_period_end: sub.cancel_at_period_end ?? false,
+      current_period_end: periodEnd,
+      cancel_at_period_end: cancellation.cancelsAtPeriodEnd,
+      // THE WHOLE CANCELLATION RECORD, and every field written on every event —
+      // never omitted, never merged key-by-key. A REACTIVATION clears all of
+      // these on Stripe's side, and a merge that skipped the nulls would leave a
+      // dead end-date and a dead reason standing on a subscription that is
+      // renewing again. `cancellation_details` in particular is set whole or
+      // nulled, because Firestore DEEP-merges a nested map: writing just
+      // `{reason}` over an older cancellation keeps that one's `feedback`.
+      cancel_at:
+        cancellation.cancelAt === null
+          ? null
+          : Timestamp.fromMillis(cancellation.cancelAt * 1000),
+      canceled_at:
+        cancellation.canceledAt === null
+          ? null
+          : Timestamp.fromMillis(cancellation.canceledAt * 1000),
+      cancellation_details: cancellation.details,
       last_event_id: eventId,
       updated_at: now,
       created_at: now,
@@ -830,25 +1046,64 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
   if (sub.status === 'active' || sub.status === 'trialing') {
     await applyMembership(team.teamId, md, {
       amountRappen: item?.price?.unit_amount ?? 0,
-      membershipExpiration: sub.current_period_end
-        ? Timestamp.fromMillis((sub.current_period_end as number) * 1000)
-        : null,
+      membershipExpiration: periodEnd,
     })
   }
 }
 
+/**
+ * invoice.paid / invoice.payment_failed — the RENEWAL path.
+ *
+ * Every read in here used to miss: `invoice.subscription` was removed, so the
+ * guard below returned on every delivery and the whole handler was dead. What
+ * that silently cost is the contact stamp on every renewal charge — which is why
+ * the "unassigned subscription payment" symptom would have recurred monthly even
+ * after the checkout path was fixed.
+ *
+ * It did NOT cost a status: this handler does not own `status` and no longer
+ * writes one. See the note at the write below.
+ */
 async function handleInvoice(
   team: TeamRef,
   invoice: any,
   status: 'paid' | 'failed',
-  eventId: string
+  eventId: string,
+  accountId?: string
 ): Promise<void> {
-  const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+  // A one-off invoice has no subscription by design and leaves quietly; an
+  // invoice that SAYS it bills one and cannot name it is the shape surprise.
+  const subRead = readInvoiceSubscriptionId(invoice)
+  const subId = invoiceBillsSubscription(invoice)
+    ? readOrReport(subRead, 'invoice.subscription', invoice.id, `event ${eventId}`)
+    : subRead.value
   if (!subId) return
   const subRef = memberSubscriptionRef(team.teamId, subId)
+  // ── WHO OWNS `status`: customer.subscription.*, and ONLY that handler ────────
+  //
+  // This path deliberately does NOT write `status`, and must not start. It used
+  // to derive one from the invoice outcome (paid → 'active', failed →
+  // 'past_due') — harmless only for as long as the whole handler was dead. Now
+  // that it runs, that write FIGHTS handleSubscription, which stores the status
+  // off the subscription object itself.
+  //
+  // Stripe gives no delivery-order guarantee between the two, so a late or
+  // retried `invoice.paid` landing after `customer.subscription.deleted` would
+  // flip a cancelled subscription back to 'active' — resurrecting a membership
+  // nobody is paying for, and re-granting the entitlement behind it.
+  //
+  // Nothing is lost by staying out of it: the status an invoice implies is
+  // carried by a `customer.subscription.updated` of its own, which is the event
+  // this handler's counterpart already consumes. Observed once, on a live Stripe
+  // test account (test clock, declining card, 2026-04-22.dahlia): a failed
+  // renewal emitted `customer.subscription.updated` with `status: 'past_due'`,
+  // in that trace ahead of `invoice.payment_failed`. ONE trace shows the event
+  // exists, not an ordering — Stripe promises none, which is the whole reason
+  // this handler must not write a status of its own.
+  //
+  // What the invoice IS authoritative for is the payment outcome, so that is all
+  // it writes here.
   await subRef.set(
     {
-      status: status === 'paid' ? 'active' : 'past_due',
       last_invoice_id: invoice.id ?? null,
       last_payment_status: status,
       last_event_id: eventId,
@@ -860,24 +1115,73 @@ async function handleInvoice(
   // Link + label the invoice's charge: invoice-generated PaymentIntents carry no
   // metadata, so handlePaymentIntent records them as bare unassigned 'payment' rows.
   // The member_subscriptions doc holds the contact + type name — stamp them on.
-  const piId =
-    typeof invoice.payment_intent === 'string' ? invoice.payment_intent : invoice.payment_intent?.id
+  //
+  // The invoice→payment link now lives at `payments.data[].payment.payment_intent`,
+  // and that list is EXPAND-ONLY: it is not in the delivered payload, so this
+  // costs one retrieve. A failed invoice has no payment to link, so it does not
+  // pay that cost (and must not report a missing field it never expected).
+  let piId = readInvoicePaymentIntentId(invoice).value
+  if (!piId && status === 'paid' && accountId && typeof invoice.id === 'string') {
+    try {
+      const stripe = await getConnectStripe()
+      const full: any = await stripe.invoices.retrieve(
+        invoice.id,
+        { expand: [INVOICE_PAYMENTS_EXPAND] },
+        { stripeAccount: accountId }
+      )
+      piId = readOrReport(
+        readInvoicePaymentIntentId(full),
+        'invoice.payment_intent',
+        invoice.id,
+        'after expand: payments'
+      )
+    } catch (err) {
+      console.error(`[connect] invoice payments expand failed (in=${invoice.id}):`, err)
+    }
+  }
   if (piId) {
     const subSnap = await subRef.get()
     const s = subSnap.data()
+
+    // THE STORED DOC FIRST, THE INVOICE'S OWN METADATA SECOND.
+    //
+    // `parent.subscription_details.metadata` is the subscription's metadata
+    // riding along on the invoice, which is how a RENEWAL invoice can still say
+    // what was bought. It matters because Stripe gives no ordering guarantee: an
+    // `invoice.paid` that lands before the `customer.subscription.*` event which
+    // stamps these fields finds a member_subscriptions doc that does not carry
+    // them yet, and the payment row is then labelled from nothing.
+    //
+    // LABELS ONLY, deliberately. `contactId` is NOT taken from here even though
+    // the metadata carries one: metadata is client-supplied at checkout creation,
+    // and attributing a journal row to another team's contact is a tenant leak.
+    // The checkout path re-verifies it through `verifiedMetadataContact` before
+    // trusting it; a renewal has no reason to re-open that question, so this
+    // keeps contact assignment on the stored-doc path exactly as it was.
+    const md = readInvoiceSubscriptionMetadata(invoice)
+    const typeId = (s?.subscriptionTypeId as string | undefined) || md.subscriptionTypeId || null
+    const typeName =
+      (s?.subscriptionTypeName as string | undefined) || md.subscriptionTypeName || null
+    const priceId = (s?.priceId as string | undefined) || md.priceId || null
+
     await memberPaymentRef(team.teamId, piId).set(
       {
         ...(s?.contactId ? { contactId: s.contactId } : {}),
         kind: 'membership',
-        subscriptionTypeName: (s?.subscriptionTypeName as string | undefined) ?? null,
+        // OMITTED, not nulled, when unknown — the same rule `contactId` above
+        // follows and for the same reason. This row is written with
+        // `{merge: true}` on a document the checkout path may already have
+        // labelled correctly, so an unconditional `?? null` is not "no opinion",
+        // it is an opinion that overwrites a resolved value with nothing.
+        ...(typeName ? { subscriptionTypeName: typeName } : {}),
         purpose: 'membership',
-        ...(s?.subscriptionTypeId
+        ...(typeId
           ? {
               line_item: {
                 kind: 'subscription',
-                subscriptionTypeId: s.subscriptionTypeId,
-                priceId: (s.priceId as string | undefined) ?? null,
-                label: (s.subscriptionTypeName as string | undefined) ?? null,
+                subscriptionTypeId: typeId,
+                priceId,
+                label: typeName,
               },
             }
           : {}),
@@ -913,11 +1217,34 @@ async function handleCheckoutCompleted(
   if (md.giftCardCode && md.giftCardHold) {
     const fallback = Number(md.giftCardDrawdown)
     try {
-      await commitGiftCardHold({
+      await commitGiftCardDrawdown({
         teamId: team.teamId,
         code: md.giftCardCode,
         holdKey: md.giftCardHold,
         fallbackAmountMajor: Number.isFinite(fallback) ? fallback : undefined,
+        // md.kind is the same field the dispatch below switches on, so the
+        // reclassified revenue always lands in the category that was bought.
+        targetCategory: mapCategory(md.kind),
+        // Re-verified rather than trusted: metadata is client-supplied at
+        // checkout creation, and a journal row attributed to another team's
+        // contact is a tenant leak that no later step would catch.
+        contactId: await verifiedMetadataContact(team.teamId, md),
+        // `session.payment_intent` is ALWAYS null on a mode:'subscription'
+        // session — but that is not a hole here, because no subscription
+        // checkout ever carries a gift card: exactly three rails set
+        // `giftCardHold` — drop-in (booking/dropIn.ts), product and course
+        // (connect/payments.ts) — and all three are mode:'payment'.
+        // `createAppointmentCheckout` is NOT one of them: it takes no
+        // `giftCardCode` at all, so an appointment never reaches this block.
+        // Should a gift card ever be accepted for a
+        // MEMBERSHIP, this null stops the redemption being stamped onto the
+        // payment row — and that stamp is what lets a refund restore the card's
+        // value (connect/giftCards.ts, commitGiftCardDrawdown). Resolve the
+        // intent through the session's `invoice` before adding that rail.
+        paymentIntentId:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : ((session.payment_intent?.id as string | undefined) ?? null),
       })
     } catch (err) {
       console.error(`[connect] gift card hold commit failed (code=${md.giftCardCode}):`, err)
@@ -992,7 +1319,36 @@ async function handleCheckoutCompleted(
   }
 
   const amountRappen = (session.amount_total as number | undefined) ?? 0
+  const sessionCurrency = ((session.currency as string | undefined) ?? 'CHF').toUpperCase()
+  // ── WHAT WAS CHARGED vs WHAT THE MEMBERSHIP COSTS ─────────────────────────
+  // `amount_total` is the DISCOUNTED first invoice when the plan carries an
+  // intro offer, and that is the right number for the receipt — it is what the
+  // member paid. It is the WRONG number for the contact's stored subscription
+  // amount: an intro offer is a temporary discount on invoices, not a different
+  // membership, and the plan still costs the plan price.
+  //
+  // Without this split the two handlers disagree — `handleSubscription` writes
+  // the recurring `unit_amount` (79.00) and this one wrote `amount_total`
+  // (1.00) — so the contact record showed whichever Stripe happened to deliver
+  // last, and settled only at the first renewal. `fullAmount` is stamped by
+  // `introCheckoutMetadata` for exactly this.
+  const introFullMajor = Number(md.fullAmount)
+  const membershipAmountRappen =
+    readIntroMetadata(md) && Number.isFinite(introFullMajor) && introFullMajor > 0
+      ? toMinorUnits(introFullMajor)
+      : amountRappen
   let membershipExpiration: Timestamp | null = null
+  // THE SESSION's OWN PaymentIntent. Stripe's semantics do the case split for
+  // us: it is present on a one-off ('payment' mode) checkout and ALWAYS null on
+  // a 'subscription' mode session, which puts the first charge on the invoice
+  // instead. Hoisted out of the one-off branch below because the
+  // writeContactMembership call at the end of this function needs it — see the
+  // comment there for why passing the wrong one of these two is a real bug in
+  // both directions.
+  const sessionPaymentIntentId: string | null =
+    (typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : (session.payment_intent?.id as string | undefined)) ?? null
 
   if (session.mode === 'subscription' && session.subscription) {
     const subId =
@@ -1006,15 +1362,40 @@ async function handleCheckoutCompleted(
           { metadata: { ...md, contactId } },
           { stripeAccount: accountId }
         )
+        // `latest_invoice.payment_intent` no longer exists as an expand path, and
+        // Stripe SILENTLY IGNORES an unknown expand rather than erroring — so the
+        // old call succeeded and handed back two undefineds. The invoice's
+        // payments list is the modern route to the first charge.
         const sub: any = await stripe.subscriptions.retrieve(
           subId,
-          { expand: ['latest_invoice.payment_intent'] },
+          { expand: [SUBSCRIPTION_LATEST_INVOICE_PAYMENTS_EXPAND] },
           { stripeAccount: accountId }
         )
-        const cpe = sub.current_period_end as number | undefined
-        membershipExpiration = cpe ? Timestamp.fromMillis(cpe * 1000) : null
-        const pi = sub.latest_invoice?.payment_intent
-        latestPaymentIntentId = typeof pi === 'string' ? pi : (pi?.id ?? null)
+        const period = readSubscriptionPeriod(sub)
+        reportStripeShape('subscription.current_period_end', subId, period.source, 'checkout')
+        membershipExpiration = period.end === null ? null : Timestamp.fromMillis(period.end * 1000)
+        latestPaymentIntentId = readInvoicePaymentIntentId(sub.latest_invoice).value
+
+        // Fallback: the session names its own invoice (`payment_intent` is always
+        // null on a mode:'subscription' session), so a subscription that came back
+        // without an expandable latest_invoice is still reachable from here.
+        if (!latestPaymentIntentId) {
+          const invoiceId =
+            typeof session.invoice === 'string' ? session.invoice : (session.invoice?.id ?? null)
+          if (invoiceId) {
+            const full: any = await stripe.invoices.retrieve(
+              invoiceId,
+              { expand: [INVOICE_PAYMENTS_EXPAND] },
+              { stripeAccount: accountId }
+            )
+            latestPaymentIntentId = readOrReport(
+              readInvoicePaymentIntentId(full),
+              'invoice.payment_intent',
+              invoiceId,
+              'checkout first charge'
+            )
+          }
+        }
       } catch (err) {
         console.error('[connect] subscription backfill/retrieve failed:', err)
       }
@@ -1043,6 +1424,16 @@ async function handleCheckoutCompleted(
               reason: 'duplicate',
               idempotencyKey: `dup-refund:${subId}`,
             })
+          } else {
+            // Money, not display: the subscription IS cancelled above, so a
+            // charge we cannot name is a charge nobody gives back. This branch
+            // ran silently for every duplicate while the PaymentIntent was
+            // unreachable — never let it be quiet again.
+            console.error(
+              `[connect] duplicate subscription ${subId} cancelled but its charge could NOT be ` +
+                `resolved — the member has paid and has NOT been refunded. Refund by hand ` +
+                `(team=${team.teamId}, contact=${contactId}).`
+            )
           }
         } catch (err) {
           console.error('[connect] duplicate subscription cancel/refund failed:', err)
@@ -1052,10 +1443,20 @@ async function handleCheckoutCompleted(
         { status: 'canceled', duplicate: true, updated_at: FieldValue.serverTimestamp() },
         { merge: true }
       )
+      // Say which of the two actually happened. The refund is CONDITIONAL — it
+      // is skipped whenever the PaymentIntent could not be resolved, and the
+      // branch above logs an error saying the member has NOT been refunded. A
+      // success line that claims "cancelled + refunded" regardless contradicts
+      // that error five lines up, and the cheerful line is the one a reader
+      // believes.
       console.log(
-        `[connect] duplicate same-type subscription ${subId} (type=${md.subscriptionTypeId}, contact=${contactId}) — cancelled + refunded`
+        `[connect] duplicate same-type subscription ${subId} (type=${md.subscriptionTypeId}, ` +
+          `contact=${contactId}) — cancelled, ` +
+          (latestPaymentIntentId
+            ? `refunded (pi=${latestPaymentIntentId})`
+            : `NOT refunded (charge unresolved — needs a manual refund)`)
       )
-      return // do NOT snapshot the refunded duplicate onto the contact
+      return // do NOT snapshot the duplicate onto the contact
     }
 
     // Link + label the FIRST charge: the invoice-generated PaymentIntent carries no
@@ -1079,10 +1480,7 @@ async function handleCheckoutCompleted(
   } else {
     const months = md.includedMonths ? parseInt(md.includedMonths, 10) : 0
     membershipExpiration = months > 0 ? addMonths(months) : null
-    const piId =
-      typeof session.payment_intent === 'string'
-        ? session.payment_intent
-        : session.payment_intent?.id
+    const piId = sessionPaymentIntentId
     if (piId) {
       await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
       await stampFinanceContact(team.teamId, piId, contactId)
@@ -1092,7 +1490,124 @@ async function handleCheckoutCompleted(
     }
   }
 
-  await writeContactMembership(team.teamId, contactId, md, { amountRappen, membershipExpiration })
+  await writeContactMembership(team.teamId, contactId, md, {
+    // The PLAN's price, not the discounted first invoice — see the split above.
+    amountRappen: membershipAmountRappen,
+    membershipExpiration,
+    // TWO CASES, and confusing them breaks the OPPOSITE one — state which is
+    // which, or the next reader "fixes" one by reintroducing the other:
+    //
+    //  • ONE-OFF ('payment' mode) — a PaymentIntent EXISTS, and this charge is
+    //    what set the membership up, so it owns the fields and refunding it may
+    //    clear them. This call used to pass nothing here, because `piId` was
+    //    scoped to the branch above; that wrote `subscription_source_ref: null`
+    //    and raced handlePaymentIntent, overwriting the correct ref. Every
+    //    refund of a one-off membership or credit pack then answered
+    //    `skipped_not_owner` and revoked nothing — on the main rail.
+    //
+    //  • RECURRING ('subscription' mode) — `session.payment_intent` is ALWAYS
+    //    null (the first charge sits on the invoice, governed by handleInvoice /
+    //    handleSubscription, which write null on every renewal). Null is the
+    //    truthful answer here, and it is load-bearing: it overwrites the ref of
+    //    any earlier one-off purchase, so refunding that old charge cannot clear
+    //    a membership this subscription is paying for.
+    //
+    // One expression covers both, because Stripe's own semantics make the split.
+    paymentIntentId: sessionPaymentIntentId,
+  })
+
+  // THE RECEIPT (UX-77) — ALWAYS ON, and see connect/purchaseReceipts.ts for
+  // why it consults no `SystemEmailKey`. A credit pack is the reason it exists:
+  // someone buys ten classes and, until now, the number ten lived only inside a
+  // member area they were never told about.
+  //
+  // WHERE IT SITS. Unlike `handleDropInCheckout`, this handler has no
+  // short-circuiting redelivery guard — every step above is a merge, an
+  // absolute write or a keyed `create()` (applyCreditGrant swallows
+  // ALREADY_EXISTS and returns, it does not stop the handler), so a redelivery
+  // re-runs all of it and reaches here. Nothing can strand the receipt by
+  // throwing earlier, which is why this can sit at the end and describe the
+  // FINAL state rather than having to go first.
+  //
+  // Both `return`s above skip it correctly: no contact means nobody to write to,
+  // and a duplicate same-type subscription has just been cancelled and refunded
+  // — announcing that one would be a receipt for money that has gone back.
+  await sendMembershipPurchaseReceipt({
+    teamId: team.teamId,
+    contactId,
+    // A 'subscription' mode session carries no PaymentIntent of its own (the
+    // first charge is on the invoice), so the Checkout Session id is the tender
+    // for keying purposes there.
+    tenderRef: sessionPaymentIntentId ?? `cs:${session?.id ?? 'unknown'}`,
+    // The grant `applyCreditGrant` just wrote, under the id it used. Null on the
+    // recurring rail, where a credit pack cannot exist (credits ride a one_time
+    // price only) — the receipt then takes its membership shape.
+    creditGrantId: session.mode === 'subscription' ? null : sessionPaymentIntentId,
+    planName: md.subscriptionTypeName ?? 'Membership',
+    recurring: session.mode === 'subscription',
+    // Only the ONE-OFF rail: there `membershipExpiration` is the run of months
+    // the payment included. On the recurring rail the same variable holds the
+    // period end, which is a renewal date, not an "included until" — labelling
+    // one as the other is exactly the confusion this receipt should not add.
+    validUntil:
+      session.mode === 'subscription' ? null : (membershipExpiration?.toDate() ?? null),
+    paid: amountRappen > 0 ? { amount: amountRappen / 100, currency: sessionCurrency } : null,
+    // WHAT THE MEMBER IS TOLD HAS TO MATCH WHAT THEY WERE CHARGED. The pricing
+    // card promised "CHF 1 for the first 3 months, then CHF 79/month" before
+    // purchase, so the receipt must restate the whole schedule — a receipt that
+    // shows only the small figure reads as the new price, which is exactly the
+    // confusion a coupon exists to avoid.
+    //
+    // `session.amount_total` is the DISCOUNTED first-invoice total, so it is
+    // also the check: `introReceiptTerms` refuses to restate an offer the charge
+    // does not corroborate, and says so loudly instead of printing a promise
+    // Stripe did not keep.
+    intro: introReceiptTerms(md, amountRappen, sessionCurrency, session?.id),
+    fallbackEmail: email || null,
+  })
+}
+
+/**
+ * The intro terms to print on the receipt — CHECKED against the money that
+ * actually moved, not merely copied from the metadata.
+ *
+ * Returns null when there was no offer, and null-with-an-error when there was
+ * one and the first charge does not match it. Both produce the ordinary
+ * membership receipt; only the second is a defect, and it must never be silent:
+ * the alternative is a mail asserting a discount the member did not receive.
+ */
+function introReceiptTerms(
+  md: Record<string, string>,
+  chargedMinor: number,
+  currency: string,
+  sessionId: string | undefined
+): {
+  periods: number
+  amount: number
+  fullAmount: number
+  recurrence: string
+  currency: string
+} | null {
+  const intro = readIntroMetadata(md)
+  if (!intro) return null
+  const fullAmount = Number(md.fullAmount)
+  if (!Number.isFinite(fullAmount) || fullAmount <= 0) return null
+  if (toMinorUnits(intro.amount) !== chargedMinor) {
+    console.error(
+      `[connect] intro offer MISMATCH on session ${sessionId ?? 'unknown'}: promised ` +
+        `${intro.amount} (${toMinorUnits(intro.amount)} minor) for the first ${intro.periods} ` +
+        `period(s), charged ${chargedMinor} minor. The coupon did not apply as stated — the ` +
+        `receipt omits the offer rather than claiming it.`
+    )
+    return null
+  }
+  return {
+    periods: intro.periods,
+    amount: intro.amount,
+    fullAmount,
+    recurrence: md.recurrence ?? '',
+    currency,
+  }
 }
 
 /**
@@ -1108,6 +1623,19 @@ async function handleProductCheckout(
   session: any,
   md: Record<string, string>
 ): Promise<void> {
+  // The promo commit sits at the TOP of this handler rather than after the
+  // contact work, and that is deliberate: this handler never refunds, and its
+  // two early `return`s (no email to link the sale to, contact cap reached)
+  // leave the payment standing. The sale happened, so the use IS consumed —
+  // and identity comes from the reservation, so the commit needs nothing the
+  // early returns are missing.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'product',
+    checkoutSessionId: session?.id ?? null,
+  })
+
   // Login-first checkouts carry the buyer's exact contact in metadata (e.g. the
   // child a parent selected at sign-in) — prefer it over email matching, which
   // would land on the wrong family member. Email resolution stays as the safety
@@ -1139,6 +1667,33 @@ async function handleProductCheckout(
   }
 
   const label = md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? 'Product')
+
+  // THE RECEIPT (UX-77) — ALWAYS ON; see connect/purchaseReceipts.ts. It names
+  // what was bought and says what happens next, which for a product is "the
+  // studio arranges handover" — the truth, because nothing in the product model
+  // carries fulfilment or collection terms and the checkout collects no address.
+  //
+  // WHERE IT SITS: after the payment stamps and before the activity-log tail.
+  // This handler has no short-circuiting redelivery guard (its two early
+  // `return`s are "nobody to link the sale to", both above), so a throw below
+  // re-runs everything and the ledger key is what stops a second mail.
+  await sendProductPurchaseReceipt({
+    teamId: team.teamId,
+    contactId,
+    itemLabel: label,
+    // Which product, so the receipt can read its collection note (UX-79).
+    productId: md.productId ?? null,
+    tenderRef: piId ?? `cs:${session?.id ?? 'unknown'}`,
+    paid:
+      typeof session.amount_total === 'number' && session.amount_total > 0
+        ? {
+            amount: (session.amount_total as number) / 100,
+            currency: (session.currency as string | undefined) ?? 'CHF',
+          }
+        : null,
+    fallbackEmail: (session.customer_details?.email as string | undefined) ?? null,
+  })
+
   await admin
     .firestore()
     .collection(CONTACTS_COLLECTION)
@@ -1166,6 +1721,15 @@ async function handleCourseCheckout(
   md: Record<string, string>
 ): Promise<void> {
   if (!md.courseId) return
+  // Same placement and the same reason as handleProductCheckout above: no
+  // refund branch, and the early returns leave the payment standing.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'course',
+    checkoutSessionId: session?.id ?? null,
+  })
+
   // Login-first: grant the entitlement to the EXACT contact from metadata (the one
   // the buyer was signed in as); email matching only for legacy sessions.
   let contactId = await verifiedMetadataContact(team.teamId, md)
@@ -1195,24 +1759,45 @@ async function handleCourseCheckout(
   }
 
   // Grant the lifetime entitlement. Doc id = contactId → idempotent on redelivery.
-  await admin
-    .firestore()
-    .collection(COURSES_COLLECTION)
-    .doc(md.courseId)
-    .collection(COURSE_PURCHASES_SUBCOLLECTION)
-    .doc(contactId)
-    .set(
-      {
-        courseId: md.courseId,
-        teamId: team.teamId,
-        contactId,
-        paymentIntentId: piId ?? null,
-        amount: (session.amount_total as number | undefined) ?? null,
-        currency: (session.currency as string | undefined) ?? null,
-        purchasedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+  // Through the SHARED writer, not hand-rolled: this is the rail that actually
+  // sells courses, and while it wrote its own version it stamped only
+  // `paymentIntentId` — so the entitlement a reversal is most likely to meet was
+  // the one carrying no `payment_ref` to check ownership against.
+  await grantCourseEntitlement(admin.firestore(), {
+    teamId: team.teamId,
+    courseId: md.courseId,
+    contactId,
+    amount: (session.amount_total as number | undefined) ?? null,
+    currency: (session.currency as string | undefined) ?? null,
+    source: 'stripe_connect',
+    paymentRef: piId ?? null,
+    paymentIntentId: piId ?? null,
+  })
+
+  // THE RECEIPT (UX-77) — ALWAYS ON; see connect/purchaseReceipts.ts. It tells
+  // the buyer WHERE TO WATCH the thing they bought, which is the Space, and that
+  // the entitlement is lifetime. Stripe's own receipt names a charge.
+  //
+  // WHERE IT SITS: immediately after the grant it announces (never promise
+  // access that was not written) and before the remaining effects. This handler
+  // has no short-circuiting redelivery guard — the grant is doc-id idempotent
+  // and the promo commit is keyed — so a throw in the tail below re-runs the
+  // whole handler; the ledger key stops that mailing twice.
+  await sendCoursePurchaseReceipt({
+    teamId: team.teamId,
+    contactId,
+    courseId: md.courseId,
+    courseTitle: md.courseTitle ?? null,
+    tenderRef: piId ?? `cs:${session?.id ?? 'unknown'}`,
+    paid:
+      typeof session.amount_total === 'number' && session.amount_total > 0
+        ? {
+            amount: (session.amount_total as number) / 100,
+            currency: (session.currency as string | undefined) ?? 'CHF',
+          }
+        : null,
+    fallbackEmail: (session.customer_details?.email as string | undefined) ?? null,
+  })
 
   await admin
     .firestore()
@@ -1234,6 +1819,22 @@ async function handleCourseCheckout(
  * confirm here; the card itself IS the product. Best-effort: a mail failure
  * never blocks the mint (the card exists regardless — a manager can look up
  * the code in the dashboard if the email bounced).
+ *
+ * A GUEST buyer is deliberately NOT turned into a Contact, which is why this
+ * handler calls neither resolveOrCreateContact nor confirmProvisionalContact
+ * while the membership, product and course handlers all call both. Two reasons,
+ * and the next reader should not "fix" the asymmetry:
+ *   1. Creating a contact exists to hang a per-person effect off it (a course
+ *      entitlement, membership fields, credits). A gift card has none — the
+ *      entitlement travels with the code, to whoever the buyer hands it to.
+ *   2. The Free plan's 15-contact cap is HARD, and provisional contacts are
+ *      deliberately excluded from it (utils/contactCap.ts). A studio selling
+ *      twenty Christmas cards would otherwise fill its own allowance with
+ *      people who are not its customers, and confirming a provisional buyer
+ *      would flip an excluded contact into one that consumes a slot.
+ * The lead is not lost: purchaserEmail is stored on the card and reaches
+ * member_payments via customer_details, and a unique active match is LINKED
+ * below, which costs no slot.
  */
 async function handleGiftCardCheckout(
   team: TeamRef,
@@ -1247,17 +1848,32 @@ async function handleGiftCardCheckout(
   const amountMajor = md.amount
     ? Number(md.amount)
     : Math.round(((session.amount_total as number | undefined) ?? 0)) / 100
-  const contactId = md.contactId ?? null
   const purchaserEmail =
     md.purchaserEmail ?? (session.customer_details?.email as string | undefined) ?? null
+
+  // Identity, in the order that never costs a contact slot: the checkout's own
+  // session (re-verified against the team), else a UNIQUE active contact with
+  // the same address. resolveSingleContact returns null on ambiguity rather
+  // than guessing — email is not a unique key here, and mis-attributing a
+  // purchase to a sibling is worse than leaving it unattributed.
+  let contactId = await verifiedMetadataContact(team.teamId, md)
+  if (!contactId && purchaserEmail) {
+    const { contactId: match } = await resolveSingleContact(team.teamId, purchaserEmail)
+    contactId = match
+  }
 
   const card = await mintGiftCard({
     teamId: team.teamId,
     amount: amountMajor,
-    currency: 'CHF',
+    // The card is denominated in what Stripe ACTUALLY charged, read off the
+    // session — not a literal and not the team's configured default, either of
+    // which can drift from the rail and leave the card unredeemable. giftCardCurrency
+    // is the same value by construction; this is just the closer source.
+    currency: ((session.currency as string | undefined) ?? giftCardCurrency(null)).toUpperCase(),
     purchaserContactId: contactId,
     purchaserEmail,
     paymentIntentId: piId,
+    issueKind: 'purchase',
   })
 
   await memberPaymentRef(team.teamId, piId).set(
@@ -1274,7 +1890,7 @@ async function handleGiftCardCheckout(
       title: 'Your gift card',
       body: `<p>Thank you for your purchase. Here is your gift card code for ${teamName}:</p>
 <p style="font-size:22px;font-weight:600;letter-spacing:1px;">${card.code}</p>
-<p>Value: CHF ${amountMajor.toFixed(2)}</p>
+<p>Value: ${card.currency} ${amountMajor.toFixed(2)}</p>
 <p>Share this code with whoever will redeem it. It can be applied toward any purchase at ${teamName}.</p>`,
     })
     await sendEmail({
@@ -1341,12 +1957,34 @@ async function handleDropInCheckout(
   const piId =
     typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
 
-  // Already confirmed: an idempotent redelivery of the SAME charge, OR a second
-  // (duplicate) charge for a booking that's already paid — refund the duplicate so
-  // the buyer is never charged twice for one seat.
-  if (bSnap.exists && bSnap.data()?.status === 'confirmed') {
+  // ── Does the seat still AWAIT this charge? ──────────────────────────────────
+  // `payment_status: 'required'` — not `status` — is what says "this money still
+  // buys something". createDropInCheckout writes it on the hold and only a
+  // webhook clears it, so a booking that no longer carries it has been settled
+  // some other way and this charge buys the person a seat they already have:
+  //
+  //  • confirmed + paid → an idempotent redelivery of the SAME charge (same
+  //    payment intent: nothing to do), or a SECOND charge for one seat (two
+  //    tabs) — refund it;
+  //  • booked for FREE in the meantime → bookSession's duplicate guards let a
+  //    re-book land on top of a `pending` booking, and its `tx.set` is a FULL
+  //    REPLACE that wipes `payment_status` and `expires_at` off a hold whose
+  //    Stripe session is still open. A guest who opens a drop-in checkout, goes
+  //    back, takes the free trial door and then finishes the stale Stripe page
+  //    gets charged for a seat they now hold for nothing. The old test
+  //    (`status === 'confirmed'` AND a different payment_intent_id) caught
+  //    neither shape of it: a free booking carries no payment intent at all,
+  //    and one on a class that doesn't auto-confirm isn't 'confirmed' either —
+  //    that one fell through and was confirmed as paid.
+  //
+  // The one confirmed booking that must NOT refund is the hold itself: a coach
+  // who confirmed a pending drop-in at the door has not paid for it, and
+  // check-in/confirm are `update`s that leave `payment_status: 'required'`
+  // standing. That falls through and settles below, exactly as it would have if
+  // nobody had touched it.
+  if (bSnap.exists && bSnap.data()?.payment_status !== 'required') {
     const existingPi = (bSnap.data()?.payment_intent_id as string | undefined) ?? null
-    if (piId && existingPi && existingPi !== piId && accountId) {
+    if (piId && existingPi !== piId && accountId) {
       try {
         await refundDirectCharge({
           accountId,
@@ -1360,19 +1998,31 @@ async function handleDropInCheckout(
         )
         // A duplicate that redeemed a gift card had its drawdown committed
         // before dispatch — restore it, or the buyer loses stored value with
-        // nothing delivered.
-        const dupDrawdown = Number(md.giftCardDrawdown)
-        if (md.giftCardCode && Number.isFinite(dupDrawdown) && dupDrawdown > 0) {
-          await restoreGiftCardDrawdown({
+        // nothing delivered. The card's own marker says how much moved, so the
+        // metadata drawdown (the RESERVED amount, which the balance floor can
+        // have shrunk) is no longer trusted for the amount.
+        if (md.giftCardCode && md.giftCardHold) {
+          const { restoredMajor } = await reverseGiftCardDrawdown({
             teamId: team.teamId,
             code: md.giftCardCode,
-            amountMajor: dupDrawdown,
+            holdKey: md.giftCardHold,
+            targetCategory: 'drop_in',
+            contactId,
+            description: `Duplicate charge refunded · ${md.giftCardCode}`,
           })
-          console.log(
-            `[connect] drop-in duplicate: restored gift-card drawdown ${dupDrawdown} to ${md.giftCardCode}`
-          )
+          if (restoredMajor > 0) {
+            console.log(
+              `[connect] drop-in duplicate: restored gift-card drawdown ${restoredMajor} to ${md.giftCardCode}`
+            )
+          }
         }
-        console.log(`[connect] drop-in duplicate charge ${piId} refunded (booking already confirmed)`)
+        const settled = bSnap.data()
+        console.log(
+          `[connect] drop-in charge ${piId} refunded — the seat was already settled ` +
+            `without it (session=${sessionId} contact=${contactId} ` +
+            `status=${settled?.status ?? 'pending'} ` +
+            `payment_status=${settled?.payment_status ?? 'none'})`
+        )
       } catch (err) {
         console.error('[connect] drop-in duplicate refund failed:', err)
       }
@@ -1380,42 +2030,193 @@ async function handleDropInCheckout(
     return
   }
 
-  // Confirm the pending hold — or recreate the booking from metadata if the hold was
-  // already swept before payment landed (a paid charge must never be lost).
-  const isNew = !bSnap.exists
-  await bookingRef.set(
-    {
-      firstname: (contact.firstname as string) ?? '',
-      lastname: (contact.lastname as string) ?? '',
-      email: (contact.email as string) ?? '',
-      phone: (contact.phone as string) ?? null,
-      contact: contactId,
-      session: sessionId,
-      teamId: team.teamId,
-      status: 'confirmed',
-      payment_status: 'paid',
-      payment_intent_id: piId ?? null,
-      expires_at: FieldValue.delete(),
-      updated_at: FieldValue.serverTimestamp(),
-      ...(isNew
-        ? { joinedAt: FieldValue.serverTimestamp(), fromBioLink: true, is_new_contact: false }
-        : {}),
-    },
-    { merge: true }
-  )
+  // Confirm the pending hold — or recreate the booking from metadata if the hold
+  // was already swept before payment landed (a paid charge must never be lost).
+  //
+  // That resurrection is exactly why capacity is re-checked here. The hold this
+  // charge paid for may no longer hold a seat: swept, or lapsed while someone
+  // else took the last place. Confirming blindly then oversells the class and
+  // hands the buyer a seat that does not exist. So: everyone ELSE holding a seat
+  // is counted (the payer's own hold never counts against them — it was held FOR
+  // them, and if it survived there is no capacity question at all), and if the
+  // class is full without them the honest answer is a refund, not a seat.
+  //
+  // One transaction: the session doc is the same lock createDropInCheckout and
+  // bookSession take, and `bookings_count` is written as an absolute from the
+  // read set. The old `increment(1)` here landed ON TOP of trackBookings'
+  // recount of the hold, so a filling class read one seat over and refused the
+  // next real customer.
+  const sessionRef = db.collection('sessions').doc(sessionId)
+  // A waitlist claim being paid for. The entry flips in the SAME transaction
+  // that confirms the booking, so the state "the booking is paid but the queue
+  // still thinks the offer is outstanding" never exists for a sweep to act on.
+  const waitlistEntryRef = md.waitlistEntry
+    ? sessionRef.collection(WAITLIST_SUBCOLLECTION).doc(md.waitlistEntry)
+    : null
+  const oversold = await db.runTransaction(async (tx) => {
+    const bookingsSnap = await tx.get(sessionRef.collection('bookings'))
+    const sSnap = await tx.get(sessionRef)
+    // Read rather than blind-update: an entry that was purged (a deleted queue,
+    // a wiped session) would make `tx.update` throw, and a paid charge must
+    // never be lost to a bookkeeping document.
+    const entrySnap = waitlistEntryRef ? await tx.get(waitlistEntryRef) : null
+    const others = countHoldingSeats(bookingsSnap.docs, Date.now(), contactId)
+    if (seatsFree(sSnap.data()?.max_participants as number | undefined, others) <= 0) return true
 
-  // Now that it's paid, count it toward the session's bookings.
-  await db
-    .collection('sessions')
-    .doc(sessionId)
-    .set(
+    const existing = bookingsSnap.docs.find((d) => d.id === contactId)?.data()
+    const isNew = !existing
+    // THE MANAGE-BOOKING CREDENTIAL. `createDropInCheckout` minted one onto the
+    // hold, and the merge below preserves it — but the hold may have been swept
+    // before this payment landed (the resurrection case this whole block exists
+    // for), and then there is nothing to preserve. A confirmation carrying no
+    // manage link is a booking the buyer cannot cancel, and `cancelBooking`
+    // finds a booking ONLY by this token.
+    const bookingToken = (existing?.booking_token as string | undefined) ?? generateSecureToken()
+    const bookingReference =
+      (existing?.booking_reference as string | undefined) ?? generateBookingReference()
+    tx.set(
+      bookingRef,
+      {
+        booking_token: bookingToken,
+        booking_reference: bookingReference,
+        firstname: (contact.firstname as string) ?? '',
+        lastname: (contact.lastname as string) ?? '',
+        email: (contact.email as string) ?? '',
+        phone: (contact.phone as string) ?? null,
+        contact: contactId,
+        session: sessionId,
+        teamId: team.teamId,
+        status: 'confirmed',
+        payment_status: 'paid',
+        payment_intent_id: piId ?? null,
+        expires_at: FieldValue.delete(),
+        // A paid seat is an ordinary booking from here on. Both claim fields
+        // MUST go: a confirmed booking still carrying `waitlist_claim` stops
+        // holding its seat the moment `claim_expires_at` passes
+        // (bookingHoldsSeat → isExpiredWaitlistClaim), which would hand a seat
+        // somebody just paid for to the next person in the queue.
+        waitlist_claim: FieldValue.delete(),
+        claim_expires_at: FieldValue.delete(),
+        ...(waitlistEntryRef ? { claimed_from_waitlist: true } : {}),
+        updated_at: FieldValue.serverTimestamp(),
+        ...(isNew
+          ? { joinedAt: FieldValue.serverTimestamp(), fromBioLink: true, is_new_contact: false }
+          : {}),
+      },
+      { merge: true }
+    )
+    if (waitlistEntryRef && entrySnap?.exists) {
+      tx.update(waitlistEntryRef, {
+        status: 'claimed',
+        claimed_at: FieldValue.serverTimestamp(),
+        // Single use — the credential dies with the offer it belonged to.
+        offer_token: FieldValue.delete(),
+      })
+    }
+    tx.set(
+      sessionRef,
       {
         has_bookings: true,
-        bookings_count: FieldValue.increment(1),
+        bookings_count: others + 1,
         last_booking_at: FieldValue.serverTimestamp(),
       },
       { merge: true }
     )
+    return false
+  })
+
+  if (oversold) {
+    // No seat to give: refund and undo the stored value, mirroring the duplicate
+    // branch above. The hold (if one is still there) is left to
+    // expirePendingBookings — it holds nothing.
+    if (piId && accountId) {
+      try {
+        await refundDirectCharge({
+          accountId,
+          paymentIntentId: piId,
+          reason: 'requested_by_customer',
+          idempotencyKey: `dropin-full:${piId}`,
+        })
+        await memberPaymentRef(team.teamId, piId).set(
+          { contactId, status: 'refunded', updated_at: FieldValue.serverTimestamp() },
+          { merge: true }
+        )
+        if (md.giftCardCode && md.giftCardHold) {
+          const { restoredMajor } = await reverseGiftCardDrawdown({
+            teamId: team.teamId,
+            code: md.giftCardCode,
+            holdKey: md.giftCardHold,
+            targetCategory: 'drop_in',
+            contactId,
+            description: `Class full, charge refunded · ${md.giftCardCode}`,
+          })
+          if (restoredMajor > 0) {
+            console.log(
+              `[connect] drop-in oversell: restored gift-card drawdown ${restoredMajor} to ${md.giftCardCode}`
+            )
+          }
+        }
+      } catch (err) {
+        console.error(`[connect] drop-in full-class refund failed (pi=${piId}):`, err)
+      }
+    }
+    // The claim died with the seat: the money went back, so the hold goes back
+    // to the queue rather than sitting 'offered' against a booking nobody can
+    // ever settle. The same guarded release the sweep runs — it will not touch
+    // the booking unless it is still an unclaimed hold, which is exactly the
+    // state a refunded claim leaves behind.
+    if (waitlistEntryRef) {
+      try {
+        await releaseWaitlistOffer({
+          entryRef: waitlistEntryRef,
+          terminalStatus: 'expired',
+          from: ['offered'],
+        })
+      } catch (err) {
+        console.error(`[connect] drop-in oversell: releasing waitlist claim failed:`, err)
+      }
+    }
+    console.log(
+      `[connect] drop-in payment could not be applied — session ${sessionId} is full (contact=${contactId})`
+    )
+    return
+  }
+
+  // THE RECEIPT (UX-76), and it goes FIRST of the post-confirm effects.
+  //
+  // ALWAYS ON — not behind the `booking_confirmation` toggle the FREE path
+  // honours; see the header of booking/paidConfirmation.ts for why the two
+  // differ on purpose. Past both refund branches above (duplicate charge, class
+  // full), which return before here, so it only ever announces a seat the buyer
+  // actually got.
+  //
+  // ORDER IS LOAD-BEARING. Every step below can throw, and this handler's
+  // redelivery guard is `payment_status !== 'required'` — so a throw after the
+  // seat is confirmed means the retry short-circuits at the top and whatever had
+  // not run yet NEVER runs. Sending here leaves no window: the mail itself never
+  // throws, and the `mail_sends` ledger key carries the PaymentIntent, so a
+  // redelivery cannot mail the buyer twice either.
+  await sendPaidBookingConfirmation({
+    teamId: team.teamId,
+    sessionId,
+    contactId,
+    tenderRef: piId ?? `session:${session?.id ?? 'unknown'}`,
+    // What STRIPE charged, read off the session — never recomputed. A gift card
+    // that covered part of the price is not added in: the card took its own
+    // share, and its own history is where that shows.
+    paid:
+      typeof session.amount_total === 'number'
+        ? {
+            amount: (session.amount_total as number) / 100,
+            currency: (session.currency as string | undefined) ?? 'CHF',
+          }
+        : null,
+    recipient: {
+      firstname: (contact.firstname as string) ?? '',
+      lastname: (contact.lastname as string) ?? '',
+      email: (contact.email as string) ?? '',
+    },
+  })
 
   if (piId) {
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
@@ -1429,6 +2230,23 @@ async function handleDropInCheckout(
   if (md.trial === 'true') {
     await cSnap.ref.update({ trial_used_at: FieldValue.serverTimestamp() })
   }
+
+  // THE PROMO COMMIT, at this handler's confirm point and NOT beside the
+  // gift-card commit above. A USE IS CONSUMED BY A COMPLETED SALE, NEVER BY AN
+  // ATTEMPT: the duplicate-charge and class-full branches above refund the whole
+  // charge and return before here, so on those the reservation simply lapses and
+  // the slot comes back. The gift card answers the same case with a compensating
+  // reversal twenty lines up; a promo reversal would be a SECOND writer of
+  // `usage_count`, which is the one thing this design forecloses.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'drop_in',
+    fallbackContactId: contactId,
+    // The STRIPE session, not `md.sessionId` (ours). The refusal logs are the
+    // only trace the accepted residual leaves, so they must name the payment.
+    checkoutSessionId: session?.id ?? null,
+  })
 
   await db
     .collection(CONTACTS_COLLECTION)
@@ -1496,7 +2314,21 @@ async function handleAppointmentCheckout(
   // duplicate so the buyer is never charged twice for one appointment.
   if (bSnap.exists && bSnap.data()?.status === 'confirmed') {
     const existingPi = (bSnap.data()?.payment_intent_id as string | undefined) ?? null
-    if (piId && existingPi && existingPi !== piId && accountId) {
+    // THE DESK-SETTLED CASE, and the reason this is not just an id comparison.
+    // `markAppointmentPaid` can settle a link-mode hold in CASH: it expires the
+    // Checkout Session first, but a close can fail (or the hold may predate the
+    // stored session id), and this booking then carries no `payment_intent_id`
+    // for the comparison below to work with. A confirmed, offline-settled seat
+    // meeting an online payment is a SECOND payment for one appointment by
+    // definition — whatever its id — so it refunds on the same terms as any
+    // other duplicate. See appointments/staffBooking.ts → markAppointmentPaid.
+    const settledOffline = bSnap.data()?.settled_offline === true
+    const isDuplicateCharge = appointmentChargeIsDuplicate({
+      payment_intent_id: existingPi,
+      settled_offline: settledOffline,
+      incomingPaymentIntentId: piId ?? null,
+    })
+    if (isDuplicateCharge && accountId) {
       try {
         await refundDirectCharge({
           accountId,
@@ -1508,7 +2340,10 @@ async function handleAppointmentCheckout(
           { contactId, status: 'refunded', updated_at: FieldValue.serverTimestamp() },
           { merge: true }
         )
-        console.log(`[connect] appointment duplicate charge ${piId} refunded (booking already confirmed)`)
+        console.log(
+          `[connect] appointment duplicate charge ${piId} refunded ` +
+            `(booking already confirmed${settledOffline ? ', settled at the desk' : ''})`
+        )
       } catch (err) {
         console.error('[connect] appointment duplicate refund failed:', err)
       }
@@ -1668,6 +2503,16 @@ async function handleAppointmentCheckout(
   if (!confirmed) return
 
   // ── post-confirm effects ──
+  // Past BOTH refund branches above (`apt-dup:` and `apt-refund:`), which return
+  // before here — a use is consumed by a completed sale, never by an attempt.
+  await commitPromoFromMetadata({
+    teamId: team.teamId,
+    md,
+    targetKind: 'appointment',
+    fallbackContactId: contactId,
+    // The STRIPE session, not `md.sessionId` (ours) — see handleDropInCheckout.
+    checkoutSessionId: session?.id ?? null,
+  })
   if (piId) {
     await stampFinanceContact(team.teamId, piId, contactId)
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
@@ -1704,9 +2549,14 @@ async function handleAppointmentCheckout(
     const td = teamSnap.data()
     if (sd) {
       const teamSlug = (td?.slug as string | undefined) ?? null
+      // Locale-pinned on the TEAM's language — the same rule the booking
+      // confirmation chain already follows. This mail is written in
+      // `td.language`; an unprefixed link would open an English cancel page.
       const cancelUrl =
         teamSlug && bookingToken
-          ? `${getHostingUrl()}/public/${teamSlug}/appointments/cancel?token=${bookingToken}`
+          ? localizedPublicUrl(getHostingUrl(), asLang(td?.language), teamSlug, 'appointments/cancel', {
+              token: bookingToken,
+            })
           : null
       await sendAppointmentBookingEmails({
         teamId: team.teamId,
@@ -1721,6 +2571,15 @@ async function handleAppointmentCheckout(
         onlineUrl: (sd.onlineUrl as string | undefined) ?? null,
         cancelUrl,
         bookingId: `${sessionId}-${contactId}`,
+        // PAID, by construction: this handler runs only on a completed Stripe
+        // checkout, and both branches that reach here stamp the booking
+        // `payment_status: 'paid'` (what `bookingWasPaidFor` reads). So the
+        // confirmation is a receipt and ignores the `booking_confirmation`
+        // toggle — the class rail's rule (booking/paidConfirmation.ts), applied
+        // to the appointment that used to sit behind the switch. Redelivery is
+        // already handled upstream: an already-confirmed booking short-circuits at
+        // case 1, so Stripe's retries cannot mail this twice.
+        wasPaidFor: true,
         client: {
           firstname: (contact.firstname as string) ?? '',
           lastname: (contact.lastname as string) ?? '',
@@ -1739,12 +2598,35 @@ async function handleAppointmentCheckout(
  *  • ANY kind carrying a gift-card hold (product/course/drop-in redemption
  *    with a partial gift-card drawdown) — releaseGiftCardHold, independent of
  *    the appointment logic below.
+ *  • ANY kind carrying a promo reservation — releasePromoFromMetadata,
+ *    instance-guarded.
  *  • kind === 'appointment' — prompt release at the Stripe-side expiry
- *    (~31 min) instead of waiting for the daily sweep. Only touches a
- *    STILL-pending hold — a session already confirmed by a race-won
- *    checkout.session.completed is left untouched. Session first, THEN the
- *    booking delete (mirrors dailyTasks/expirePendingBookings.ts): otherwise
- *    the delete's trackBookings recount would resurrect the slot as 'open'.
+ *    (~31 min for the public rail, up to 7 days for a staff payment link)
+ *    instead of waiting for the daily sweep.
+ *
+ * EVERY ONE OF THOSE IS OWNERSHIP-CHECKED, each by a different mechanism, and
+ * the appointment one was the last to get there:
+ *  • the GIFT-CARD hold is addressed by a key minted fresh per attempt, so a
+ *    superseded attempt's release can only ever reach its own hold — ownership
+ *    by construction, and the reason the promo (whose key is deterministic on
+ *    purpose) needs an explicit instance marker instead;
+ *  • the PROMO reservation compares that instance marker inside its transaction;
+ *  • the APPOINTMENT hold compares `booking_token` inside its transaction. It
+ *    used to cancel the session and delete the booking on PRESENCE alone, which
+ *    is unsound at a deterministic, SHARED session id: a retry by the same
+ *    contact rewrites the hold in place (`allowRewriteByHolder`), so an expiry
+ *    for the SUPERSEDED attempt cancelled the hold the retry's live, payable
+ *    session was guarding — the buyer pays for an appointment that has just been
+ *    cancelled out from under them.
+ *
+ * Phase 3 turned that from rare into likely: a promo refresh EXPIRES the
+ * superseded Checkout Session at Stripe before writing anything, so this event
+ * now arrives seconds after the retry rather than ~31 minutes later. Exactly the
+ * same shape as the promo release beside it, and the same fix — prove ownership
+ * inside the transaction that deletes. `releaseAppointmentHold`
+ * (appointments/holdRelease.ts) is that transaction, shared with the callable
+ * rollbacks; its module header carries the census of every release site and the
+ * proof each one rests on, and is the only place that list is written down.
  */
 async function handleCheckoutExpired(session: any): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
@@ -1757,21 +2639,44 @@ async function handleCheckoutExpired(session: any): Promise<void> {
     }
   }
 
+  // …and the promo reservation, for ANY kind, beside its gift-card neighbour.
+  //
+  // THIS IS THE PRIMARY RELEASE PATH FOR A PROMO SLOT, not a nicety on top of
+  // lazy expiry, and the distinction is the cap. This event is POSITIVE EVIDENCE
+  // that the session can never take money again — Stripe emits it (and retries
+  // it) at the session's own expiry — so a slot freed here is provably free. The
+  // reservation's own deadline sits an hour further out
+  // (PROMO_RESERVATION_BACKSTOP_MINUTES) precisely so that it does NOT decide
+  // this: a lease measured in minutes cannot outrun Stripe's delivery horizon,
+  // which is measured in hours, and a slot re-handed while a paid-but-undelivered
+  // session existed is exactly how the counters used to run past their caps.
+  //
+  // Instance-guarded, and this is the caller that check exists for: Stripe
+  // expires abandoned sessions on its own schedule, so an expiry for a session a
+  // live retry has already superseded routinely arrives afterwards.
+  await releasePromoFromMetadata(md)
+
   if (md.kind !== 'appointment') return
-  const { sessionId, contactId } = md
-  if (!sessionId || !contactId) return
-  const db = admin.firestore()
-  const sessionRef = db.collection('sessions').doc(sessionId)
-  const bookingRef = sessionRef.collection('bookings').doc(contactId)
+  const { sessionId, contactId, teamId } = md
+  if (!sessionId || !contactId || !teamId) return
 
-  const sSnap = await sessionRef.get()
-  if (!sSnap.exists || sSnap.data()?.status !== 'pending_payment') return
-  const bSnap = await bookingRef.get()
-  if (bSnap.exists && bSnap.data()?.status === 'confirmed') return
-
-  await sessionRef.set({ status: 'cancelled', hold_expires_at: FieldValue.delete() }, { merge: true })
-  if (bSnap.exists) await bookingRef.delete()
-  console.log(`[connect] appointment checkout expired — released hold (session=${sessionId})`)
+  // `md.bookingToken` is THIS session's proof that the hold at the shared
+  // `apt_{provider}_{start}` id is still the one it wrote. A session created
+  // before that key existed presents none, and is then judged on the named
+  // secondary proofs — a hold past its own deadline, or a document that STILL
+  // presents no deadline at all — never on presence. See
+  // appointments/holdRelease.ts, which owns that ladder and the argument for why
+  // presence is not on it.
+  const outcome = await releaseAppointmentHold({
+    teamId,
+    sessionId,
+    contactId,
+    bookingToken: md.bookingToken || null,
+    label: 'checkout.session.expired',
+  })
+  if (outcome === 'released') {
+    console.log(`[connect] appointment checkout expired — released hold (session=${sessionId})`)
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1883,10 +2788,10 @@ export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req,
           await handleSubscription(team, { ...obj, status: 'canceled' }, event.id)
           break
         case 'invoice.paid':
-          await handleInvoice(team, obj, 'paid', event.id)
+          await handleInvoice(team, obj, 'paid', event.id, accountId)
           break
         case 'invoice.payment_failed':
-          await handleInvoice(team, obj, 'failed', event.id)
+          await handleInvoice(team, obj, 'failed', event.id, accountId)
           break
         default:
           console.log(`[connect] unhandled event type ${event.type}`)

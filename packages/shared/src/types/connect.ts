@@ -18,6 +18,7 @@
 import type { Timestamp } from './common'
 import type { PaymentLineItem } from './payment'
 import type { SaasPlan } from './team'
+import type { SubscriptionCancellationDetails } from '../utils/subscriptionLifecycle'
 
 // ─── Onboarding model ───────────────────────────────────────────────────────────
 // Studio picks one. Both create an Accounts-v2 connected account with
@@ -185,8 +186,15 @@ export interface MemberPayment {
   /** Free-form purpose tag, e.g. 'drop_in' | 'belt_test' | 'shop'. */
   purpose: string
   /** Sale kind for display, denormalized from checkout metadata (absent on plain
-   *  manager-created charges). Drives the payments-dashboard row label. */
-  kind?: 'product' | 'course' | 'drop_in' | 'membership'
+   *  manager-created charges). Drives the payments-dashboard row label.
+   *
+   *  The union is DERIVED FROM ITS SINGLE WRITER — `handlePaymentIntent` in
+   *  `connect/webhook.ts`, which is the only code that ever sets this field.
+   *  It declared four members for a long time while the writer stamped seven;
+   *  `'appointment'`, `'gift_card'` and `'policy_fee'` were being written into a
+   *  type that said they could not exist. If you add a `kind` branch there, add
+   *  it here in the same edit — and check the writer, not this comment. */
+  kind?: 'product' | 'course' | 'drop_in' | 'membership' | 'appointment' | 'gift_card' | 'policy_fee'
   productName?: string | null
   variantLabel?: string | null
   courseName?: string | null
@@ -226,8 +234,45 @@ export interface MemberPayment {
   dispute_amount?: number | null
   /** Idempotency: last processed payment_intent/charge event id for this doc. */
   last_event_id?: string
+  /**
+   * What happened to the ACCESS this payment bought when it was refunded.
+   * Reporting, not correctness: the reversal itself is one transaction and does
+   * not read this back. It exists so a manager can see, on the row, that the
+   * money went back but the entitlement did not — the one failure mode a refund
+   * has that is otherwise completely silent.
+   */
+  effects_reversal?: MemberPaymentEffectsReversal | null
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+/** Per-target result of one reversal attempt. `skipped_not_owner` means the
+ *  thing is still there and SHOULD be: a later payment, a manual grant or a
+ *  gift-card purchase owns it. `absent` means there was nothing there. */
+export type ReversalTargetOutcome =
+  | 'left' // the plan said not to touch it
+  | 'absent'
+  | 'skipped_not_owner'
+  | 'cleared' // subscription fields
+  | 'reduced' // credit grant
+  | 'deleted' // course entitlement
+
+export interface MemberPaymentEffectsReversal {
+  /** 'done' — the transaction committed. 'failed' — the MONEY moved and this
+   *  did not; the studio has to take the access back by hand. */
+  state: 'done' | 'failed'
+  at: Timestamp
+  /** uid of the manager who asked for the refund. */
+  by?: string | null
+  /** Whether the refund that triggered it was full or partial (Rappen). */
+  refund_amount?: number | null
+  subscription?: ReversalTargetOutcome
+  credits?: ReversalTargetOutcome
+  /** Credits taken back by this reversal (0 when none were). */
+  credits_revoked?: number
+  course?: ReversalTargetOutcome
+  /** Present only when state === 'failed'. */
+  error?: string | null
 }
 
 // ─── Recurring memberships (subscription on the connected account) ────────────────
@@ -262,8 +307,54 @@ export interface MemberSubscription {
   /** Platform fee taken per invoice, as a percent (Stripe application_fee_percent). */
   application_fee_percent?: number
   status: MemberSubscriptionStatus
+  /**
+   * End of the current billing period. Sourced from the subscription ITEM
+   * (Stripe removed the subscription-level field in Basil) — see
+   * `readSubscriptionPeriod` in functions/src/utils/stripe/objectShape.ts.
+   */
   current_period_end: Timestamp | null
+  /**
+   * The subscription is scheduled to end rather than renew. TRUE for both ways
+   * Stripe expresses that: the `cancel_at_period_end` boolean (set when WE
+   * cancel through the API) and a `cancel_at` timestamp (how the BILLING PORTAL
+   * expresses it, leaving the boolean false). Never read the raw Stripe boolean
+   * in a handler — read it through `readSubscriptionCancellation`.
+   */
   cancel_at_period_end: boolean
+  /**
+   * WHEN it ends, when Stripe told us.
+   *
+   * Absent on DOCS WRITTEN BEFORE THIS FIELD EXISTED — the entire pre-Dahlia
+   * population, which stored the boolean and nothing else — so a reader wanting
+   * a date falls back to `current_period_end`. That fallback is exactly what
+   * `subscriptionEndsAt()` does; use it rather than repeating the choice.
+   *
+   * It is NOT absent on a cancellation made through our own API call. That was
+   * stated here and is wrong: on 2026-04-22.dahlia, verified against a live test
+   * account, `update{cancel_at_period_end: true}` comes back with `cancel_at`,
+   * `canceled_at` AND `cancellation_details` all set. Both cancellation paths
+   * carry a date today; only the BOOLEAN tells them apart (see the file header
+   * of shared/utils/subscriptionLifecycle.ts). A reader that treats a missing
+   * date as "cancelled by us" is reading a fact that has not been true since the
+   * Dahlia migration.
+   */
+  cancel_at?: Timestamp | null
+  /**
+   * WHEN the cancellation was requested — the start of the notice period, where
+   * `cancel_at` is the end of it. The gap between the two is the studio's
+   * win-back window, which is the only reason it is worth a field.
+   */
+  canceled_at?: Timestamp | null
+  /**
+   * WHY it is ending. Written WHOLE or set to null — never key-by-key; both
+   * writers merge, and Firestore deep-merges a nested map (see
+   * SubscriptionCancellationDetails in shared/utils/subscriptionLifecycle.ts).
+   *
+   * Read it through `subscriptionCancellation()`, which gates on the current
+   * lifecycle state rather than on the presence of these fields — so a stale
+   * record left behind by a reactivation is stale data, not a wrong screen.
+   */
+  cancellation_details?: SubscriptionCancellationDetails | null
   /**
    * Payment method used, e.g. 'card' | 'twint'. TWINT recurring has a hard
    * constraint: only ONE active TWINT mandate per studio↔member pair.

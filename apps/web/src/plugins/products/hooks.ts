@@ -38,7 +38,18 @@ export function useProducts(teamId: string | null) {
 
 export type ProductInput = Pick<
   Product,
-  'name' | 'description' | 'imageUrl' | 'priceAmount' | 'variantLabel' | 'variants' | 'active' | 'order'
+  | 'name'
+  | 'description'
+  | 'imageUrl'
+  | 'priceAmount'
+  | 'variantLabel'
+  | 'variants'
+  | 'active'
+  | 'order'
+  // How the buyer gets it (UX-79). Written as '' rather than dropped when the
+  // studio clears it, so an emptied field falls back to the TEAM default instead
+  // of keeping the stale per-product sentence — see resolveProductCollectionNote.
+  | 'collectionNote'
 >
 
 export async function createProduct(input: {

@@ -48,6 +48,138 @@ const baseStyles = `
   @media only screen and (max-width: 680px) { .container { margin: 0 12px; } }
 `
 
+// ─── HTML → text ──────────────────────────────────────────────────────────────
+//
+// THE PLAIN-TEXT HALF OF EVERY MAIL IS BUILT FROM THE HTML ONE, so it is built
+// here, next to the chrome that produced the HTML. Before UX-81 both callers
+// (`buildEmailTemplate`, `buildOutreachEmail`) flattened with the same two-step
+// `.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ')`, which deletes tags WITHOUT
+// leaving anything where they were and then collapses the newlines that were
+// holding the source apart. A titled box therefore came out as
+// `Cosa succede oraStudio organizza…` — the heading welded to the sentence after
+// it — and the whole mail arrived as one unbroken paragraph.
+//
+// The fix is structural, not cosmetic: a block-level tag is a BOUNDARY, so it
+// leaves the break behind when it goes. Two rules make that predictable:
+//
+//   1. SOURCE WHITESPACE IS FLATTENED FIRST. Newlines between tags are
+//      insignificant in HTML, so they are collapsed before any boundary is
+//      inserted. Every newline in the output is then one this function put
+//      there on purpose — which is what stops `</li>\n<li>` from acquiring a
+//      blank line the markup never asked for.
+//   2. A boundary is either PARAGRAPH-level (blank line: `<p>`, `<div>`,
+//      headings, tables, lists) or LINE-level (single newline: `<br>`, `<li>`,
+//      `</tr>`). A list therefore reads as a list rather than as five stanzas.
+//
+// Entities are decoded LAST, after every tag has been removed, so a decoded
+// `&lt;b&gt;` can never turn back into markup.
+
+const BLOCK_TAGS =
+  'address|article|aside|blockquote|div|dl|dd|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hgroup|main|nav|ol|p|pre|section|table|tbody|tfoot|thead|ul'
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  ensp: ' ',
+  emsp: ' ',
+  thinsp: ' ',
+  shy: '',
+  middot: '·',
+  bull: '•',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  laquo: '«',
+  raquo: '»',
+  euro: '€',
+  pound: '£',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  deg: '°',
+  times: '×',
+  szlig: 'ß',
+}
+
+/** Decodes the entity set our templates can emit (escapeHtml's five, plus the
+ *  typography the copy uses). One pass, so `&amp;lt;` decodes once. */
+function decodeEntities(input: string): string {
+  return input.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, ref: string) => {
+    if (ref[0] === '#') {
+      const code = ref[1] === 'x' || ref[1] === 'X' ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10)
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match
+    }
+    const named = NAMED_ENTITIES[ref.toLowerCase()]
+    return named === undefined ? match : named
+  })
+}
+
+/** The visible text of an anchor's label, for deciding whether its href would
+ *  merely repeat it. */
+function labelText(label: string): string {
+  return decodeEntities(label.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Flattens an email body's HTML to the `text/plain` part.
+ *
+ * - Paragraphs, `<div>`s, headings, boxes, lists and tables are separated by a
+ *   blank line; `<br>`, `<li>` and `</tr>` break a single line.
+ * - `<li>` keeps a `- ` bullet, table cells within a row are tab-separated.
+ * - A link keeps its label and gains its target — `label (https://…)` — unless
+ *   the label already IS the target. A plain-text CTA whose URL was stripped is
+ *   a dead end, which is the same defect one layer down.
+ * - Entities are decoded, and runs of blank lines collapse to one.
+ */
+export function htmlToPlainText(html: string): string {
+  if (!html) return ''
+  const PARA = '\n\n'
+  const LINE = '\n'
+  return decodeEntities(
+    html
+      // Comments and non-rendered elements go with their contents.
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<(script|style|head|title)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+      // RULE 1 — every newline from here on is one we chose.
+      .replace(/\s+/g, ' ')
+      // Links keep their label and gain their target.
+      .replace(/<a\b[^>]*?href=(["'])([\s\S]*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_m, _q, rawHref: string, label: string) => {
+        const href = decodeEntities(rawHref).trim()
+        const text = labelText(label)
+        if (!href || href.startsWith('#') || /^javascript:/i.test(href)) return text
+        const target = href.replace(/^mailto:/i, '')
+        const bare = (s: string) => s.replace(/^https?:\/\//i, '').replace(/\/$/, '').toLowerCase()
+        if (!text || bare(text) === bare(target)) return text || target
+        return `${text} (${target})`
+      })
+      // RULE 2a — line-level breaks.
+      .replace(/<br\s*\/?>/gi, LINE)
+      .replace(/<li\b[^>]*>/gi, `${LINE}- `)
+      .replace(/<\/li>/gi, '')
+      .replace(/<\/(td|th)>/gi, '\t')
+      .replace(/<\/tr>/gi, LINE)
+      // RULE 2b — paragraph-level breaks, open AND close.
+      .replace(/<hr\s*\/?>/gi, PARA)
+      .replace(new RegExp(`</?(?:${BLOCK_TAGS})\\b[^>]*>`, 'gi'), PARA)
+      // Whatever is left is inline (strong, em, span, td/tr openers…).
+      .replace(/<[^>]*>/g, ''),
+  )
+    .split('\n')
+    // Tidy each line: spaces collapse, cell tabs survive, edges go.
+    .map((line) => line.replace(/[^\S\t]+/g, ' ').replace(/ *\t+ */g, '\t').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /** Builds a bordered details box (used in notification emails). */
 export function detailsBox({ title, content, cancelled = false }: { title?: string; content: string; cancelled?: boolean }): string {
   const style = cancelled

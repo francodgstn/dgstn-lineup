@@ -13,14 +13,38 @@ export const START_TOUR_EVENT = 'linyup:start-tour'
 let autoStartedThisSession = false
 
 /**
- * Phase 3 of the onboarding initiative: a short guided tour anchored to the
- * sidebar nav. Auto-runs once for new users (no onboarding.tourDone), and can
- * be replayed via the START_TOUR_EVENT (account menu → "Replay tour").
+ * The first-run product tour.
  *
- * Mounted in the authenticated layout so the nav anchors exist on any page.
- * The tour highlights sidebar items, which are hidden below the md breakpoint,
- * so it only runs on wider viewports.
+ * WHAT IT TEACHES (UX-47). It used to spend its steps on the CHROME — theme and
+ * language, the nav container, the shortcuts block, quick search, How-to — and
+ * never once said the words activities, sessions, bookings or payments. A
+ * studio finished it knowing how to recolour the sidebar and nothing about the
+ * product. It now walks the path a studio actually walks:
+ *
+ *     activity → session → booking → payment
+ *
+ * and ends at the setup checklist, which is that same path with the studio's
+ * own data filled in.
+ *
+ * WHY THE ANCHORS ARE OPTIONAL. The nav's working areas are an ACCORDION — only
+ * one of Run / Offer / Grow is open at a time, and the closed ones sit inside a
+ * `grid-rows-[0fr]` panel, present in the DOM at zero height. Highlighting one
+ * of those would frame nothing, so each product step attaches to its nav row
+ * only when that row is actually visible, and otherwise runs as a centred card
+ * (driver.js renders a step with no `element` that way). The tour therefore
+ * says the same thing whatever the reader last had open — which is the property
+ * a first-run explanation needs most.
  */
+
+/** A step anchors to `selector` only if it is on screen — see the note above. */
+function anchor(selector: string): { element?: string } {
+  if (typeof document === 'undefined') return {}
+  const el = document.querySelector(selector)
+  if (!el) return {}
+  const rect = el.getBoundingClientRect()
+  return rect.height > 0 && rect.width > 0 ? { element: selector } : {}
+}
+
 export function ProductTour() {
   const t = useTranslations('Onboarding')
   const { user, profile, loading } = useAuth()
@@ -38,66 +62,82 @@ export function ProductTour() {
         if (loading || !profile) return
         if (autoStartedThisSession || profile.onboarding?.tourDone) return
       }
-      // Bail if the nav hasn't rendered yet.
-      if (!document.querySelector('[data-tour="nav-calendar"]')) return
+      // Bail if the app shell hasn't rendered yet. `nav-features` is the
+      // working-areas container itself — always present and always visible,
+      // unlike the individual rows inside it.
+      if (!document.querySelector('[data-tour="nav-features"]')) return
       autoStartedThisSession = true
 
       const { driver } = await import('driver.js')
       if (cancelled) return
+
+      const side = 'right' as const
+      const align = 'start' as const
 
       const driverObj = driver({
         showProgress: true,
         nextBtnText: t('tour.next'),
         prevBtnText: t('tour.prev'),
         doneBtnText: t('tour.done'),
-        // A short orientation tour: personalise (theme/language), the Features
-        // working areas, then the two power-nav aids (Shortcuts + search),
-        // ending at How-to for deeper guidance.
         steps: [
           { popover: { title: t('tour.welcomeTitle'), description: t('tour.welcomeBody') } },
           {
-            element: '[data-tour="theme-lang"]',
+            ...anchor('[data-tour="nav-activities"]'),
             popover: {
-              title: t('tour.themeLangTitle'),
-              description: t('tour.themeLangBody'),
-              side: 'right',
-              align: 'end',
+              title: t('tour.activitiesTitle'),
+              description: t('tour.activitiesBody'),
+              side,
+              align,
             },
           },
           {
-            element: '[data-tour="nav-features"]',
+            ...anchor('[data-tour="nav-calendar"]'),
             popover: {
-              title: t('tour.featuresTitle'),
-              description: t('tour.featuresBody'),
-              side: 'right',
-              align: 'start',
+              title: t('tour.sessionsTitle'),
+              description: t('tour.sessionsBody'),
+              side,
+              align,
             },
           },
           {
-            element: '[data-tour="nav-shortcuts"]',
+            ...anchor('[data-tour="nav-bookings"]'),
             popover: {
-              title: t('tour.shortcutsTitle'),
-              description: t('tour.shortcutsBody'),
-              side: 'right',
-              align: 'start',
+              title: t('tour.bookingsTitle'),
+              description: t('tour.bookingsBody'),
+              side,
+              align,
             },
           },
           {
-            element: '[data-tour="nav-search"]',
+            ...anchor('[data-tour="nav-payments"]'),
             popover: {
-              title: t('tour.searchTitle'),
-              description: t('tour.searchBody'),
-              side: 'right',
-              align: 'start',
+              title: t('tour.paymentsTitle'),
+              description: t('tour.paymentsBody'),
+              side,
+              align,
             },
           },
           {
-            element: '[data-tour="nav-howTo"]',
+            // The dashboard card — present on /dashboard until it's finished or
+            // dismissed; a centred card anywhere else.
+            ...anchor('[data-tour="setup-checklist"]'),
             popover: {
-              title: t('tour.howToTitle'),
-              description: t('tour.howToBody'),
-              side: 'right',
-              align: 'start',
+              title: t('tour.checklistTitle'),
+              description: t('tour.checklistBody'),
+              side: 'bottom',
+              align,
+            },
+          },
+          {
+            // `nav-howTo` has had no element since How-to moved into the
+            // utility icon row, so this step reads as a centred card and its
+            // copy names where the icon is rather than saying "here".
+            ...anchor('[data-tour="nav-howTo"]'),
+            popover: {
+              title: t('tour.helpTitle'),
+              description: t('tour.helpBody'),
+              side,
+              align,
             },
           },
         ],

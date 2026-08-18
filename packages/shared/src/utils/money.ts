@@ -34,3 +34,9 @@ export function isChargeableMinorAmount(amount: unknown): amount is number {
 export function round2Major(major: number): number {
   return Math.round(major * 100) / 100
 }
+
+// NO PRO-RATA HELPER LIVES HERE, and adding one is a product change, not a
+// utility. A used class pack is not refundable in the app at all (see
+// `payments/reversal.ts` and docs/payment-contact-studio.md), so nothing has a
+// part-of-a-pack figure to compute. One existed briefly to soften a refusal that
+// no longer needs softening.

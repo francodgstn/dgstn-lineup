@@ -409,11 +409,23 @@ service cloud.firestore {
         allow read: if isTeamMember(teamId) || memberId == request.auth.uid;
 
         // Only owners can add/remove/update team members, OR a user self-provisioning as owner on signup.
-        // The Free plan is single-user: an owner cannot create membership docs for OTHER users
-        // (invitation acceptance runs through Cloud Functions / Admin SDK and is gated there).
+        //
+        // A SECOND USER IS A STUDIO FEATURE (`multiple_managers` in PLAN_FEATURES).
+        // An owner may always write their OWN membership doc; writing SOMEBODY
+        // ELSE's is a seat-creating seam reachable straight from a client, so it
+        // refuses on exactly the tier the callables do
+        // (`requireExtraUserPlan`) — otherwise that gate is one Firestore write
+        // from being bypassed. This said `!= 'free'` until 2026-08-18, which was
+        // the same contradiction UX-42 settled everywhere else.
+        //
+        // Literals because rules cannot import the flag; `seatGate.test.ts` pins
+        // this list to PLAN_FEATURES so the two cannot drift.
+        //
+        // Invitation acceptance does NOT come through here — it runs on the
+        // Admin SDK and is gated in the callable.
         allow write: if (hasTeamRole(teamId, 'owner') &&
                        (memberId == request.auth.uid ||
-                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') != 'free')) ||
+                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') in ['studio', 'organization'])) ||
                        (isAuthed() && memberId == request.auth.uid &&
                         request.resource.data.role == 'owner' &&
                         request.resource.data.userId == request.auth.uid);
@@ -505,6 +517,23 @@ service cloud.firestore {
         allow read, write: if hasTeamRole(teamId, 'owner');
       }
 
+      // Per-team settings for features that are NOT plugins
+      // (teams/{teamId}/settings/{settingId}). This block previously did not
+      // exist at all — the `match /teams/{teamId}` block enumerates its
+      // subcollections one by one with no catch-all, and Firestore denies any
+      // path no rule matches — which was dormant only because nothing wrote
+      // there. It landed in the SAME commit as its first writer (the
+      // signup-consent selection, moved out of installed_plugins/documents when
+      // Documents stopped being a plugin): without it the studio's first save
+      // fails outright with a permission error.
+      //
+      // Owner-write, member-read, matching integrations/ next door: these are
+      // studio-wide configuration, not per-feature content.
+      match /settings/{settingId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if hasTeamRole(teamId, 'owner');
+      }
+
       // Installed plugins — teams enable/configure add-on plugins here.
       // All members can read (needed by automation UI and nav display).
       // Studio/Org owners install client-side (plugins are included). Coach plans
@@ -581,7 +610,18 @@ service cloud.firestore {
       }
 
       // Contact Groups plugin — nested member groups (parent_id hierarchy).
-      // Membership lives on contacts/{id}.group_ids, covered by the contacts rules.
+      //
+      // Two kinds of membership, with DELIBERATELY different permissions:
+      //  • MANUAL  — membership is contacts/{id}.group_ids, so filing a person
+      //    follows the CONTACT's write rule: anyone who may edit a contact may
+      //    file it (a coach can file their own students). The taxonomy itself —
+      //    creating, renaming, nesting, deleting — stays manager/owner. That
+      //    split is intentional, not an oversight; group membership is never an
+      //    input to any authorization decision, so a coach filing someone
+      //    grants no access.
+      //  • DYNAMIC — membership is the `rule` field on THIS doc and is never
+      //    written to any contact. Because the rule lives here, changing who is
+      //    in a dynamic group requires manager/owner, matching the taxonomy.
       match /contact_groups/{groupId} {
         allow read:  if isTeamMember(teamId);
         allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
@@ -629,6 +669,49 @@ service cloud.firestore {
       match /gift_cards/{code} {
         allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
         allow write: if false;
+      }
+
+      // Promo codes — the doc id IS the code. Unlike a gift card the CODE is not
+      // a secret (it is printed on a flyer), but the DOCUMENT is: it carries
+      // max_uses, usage_count, live reservations and internal labels, and the
+      // collection is a list of every code a scraper could harvest. So: manager
+      // read, no client write at all.
+      //
+      // Writes go through callables and NOT through per-field rules, and the
+      // argument is about WHERE the writers live, not how many there are.
+      // Every write to this document happens inside a Firestore transaction in
+      // connect/promoCodes.ts that read the document first: `usage_count` is
+      // written only by the commit transaction, as an absolute value from its
+      // own read set, and every `reservations` write is a compare-and-set
+      // against the entry it is about to replace or delete. That is a CLOSED
+      // SET of writers, all of which can see each other's work.
+      //
+      // A "these fields yes, that field no" rule would put a writer OUTSIDE
+      // that set — on a client, with no transaction, no read set and no
+      // ownership marker to compare — and the finite resources on this document
+      // (a capped counter, a capped live-reservation map) are exactly the kind
+      // that a blind write corrupts. gift_cards and referral_codes avoid the
+      // same shape for the same reason. Note this is a claim about writers, not
+      // a count of them: adding another transactional writer in that file
+      // changes nothing here; adding one anywhere else breaks the argument.
+      //
+      // The public never reads this collection DIRECTLY. Public traffic reaches
+      // it only through callables that read it with the Admin SDK — the
+      // previewPromoCode peek on its own rate-limit bucket, and the one-off
+      // checkout callables that load a typed code — and none of them ever
+      // returns the document.
+      match /promo_codes/{code} {
+        allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if false;
+
+        // The durable per-PERSON ledger, keyed by a HASH of the normalised
+        // email so the doc ids are not a harvestable list of customer
+        // addresses. Read for the admin list; cleared only by
+        // clearPromoRedemption.
+        match /redemptions/{identityKey} {
+          allow read:  if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+          allow write: if false;
+        }
       }
 
       // No-show policy fees — created by the policy engine when a contact's
@@ -697,6 +780,23 @@ service cloud.firestore {
         allow update: if hasTeamRole(teamId, 'owner')
           && request.resource.data.system == resource.data.system;
         allow delete: if hasTeamRole(teamId, 'owner') && resource.data.system != true;
+      }
+
+      // THE booking gate's authorization source: which waivers a booking here
+      // requires, and at what version floor. Server-written by
+      // publishDocumentVersion / setWaiverRequirement / archiveWaiver, each
+      // patching exactly the one entry for the document it is writing, inside
+      // the same transaction as that write.
+      //
+      // It exists because the DISPLAY mirror (TeamPublicProfile.required_waivers,
+      // and signup_documents beside it) fails OPEN — it skips any id whose public
+      // summary is missing. That is right for a list of consent links and
+      // catastrophic for an authorization gate, where "silently skipped" becomes
+      // "the required waiver vanished and the booking went through". This
+      // document fails CLOSED.
+      match /waiver_policy/{policyId} {
+        allow read:  if isTeamMember(teamId);
+        allow write: if false;
       }
 
       // Custom event types (team-level; org-level event types live under organizations/{orgId}/event_types)
@@ -1100,6 +1200,18 @@ service cloud.firestore {
         allow read: if isSelfContact(bookingId);
       }
 
+      // waitlist sub-collection (the queue for a full class; doc id = contactId)
+      match /waitlist/{entryId} {
+        allow read: if belongsToUserTeam(get(/databases/$(database)/documents/sessions/$(session))) || hasRole('admin');
+        // A contact reads their own place in the line.
+        allow read: if isSelfContact(entryId);
+        // NO client writes, deliberately unlike the bookings block above: every
+        // transition (join, offer, claim, leave, expire) moves a seat count or a
+        // claim hold inside a transaction. A schedule.manage holder writing an
+        // entry directly would bypass that and re-open the oversell.
+        allow write: if false;
+      }
+
       // public_profile sub-collection (for trial booking)
       match /public_profile/{publicProfileId} {
         allow read;  // Public read access
@@ -1195,6 +1307,55 @@ service cloud.firestore {
       );
     }
 
+    // waitlist (collection group)
+    //
+    // NO client reads this way today, deliberately named so nobody infers one:
+    // the day sheet and the session detail page each read ONE session's queue
+    // through the nested match above, and every collection-group query on
+    // `waitlist` in this repo runs in a callable over the Admin SDK, which
+    // bypasses rules entirely. This block is a defensive team-scoping grant for a
+    // future client-side collection-group read (the shape `listMyWaitlist`
+    // exists to avoid, since isSelfContact authorises a get and not a list). It
+    // widens nothing: a team member can already read every one of these
+    // documents individually, so it grants a query shape, not data.
+    match /{path=**}/waitlist/{entryId} {
+      allow read: if request.auth != null && (
+        resource.data.teamId != null && isTeamMember(resource.data.teamId)
+      );
+      allow write: if false;  // callables only — see the nested block above
+    }
+
+    // purchases (collection group) — a contact reading their OWN course entitlements.
+    //
+    // What this authorises, precisely: the query the Space ("My courses") and the
+    // shop ("Open" instead of "Buy") both issue —
+    //   collectionGroup('purchases').where('contactId','==',me).where('teamId','==',myTeam)
+    // The nested courses/{courseId}/purchases block (further down, under "Online
+    // Courses plugin") cannot serve it: a collection-group read is matched only
+    // by a `{path=**}` statement.
+    //
+    // A LIST is authorised from the QUERY, not from the documents it would
+    // return. Firestore admits the query only if its own constraints prove that
+    // every matching document satisfies the condition below, and both operands
+    // here are pinned to the caller's token — so BOTH `where` clauses are
+    // mandatory, and naming another contact, another team, or dropping either
+    // clause fails the whole query rather than silently filtering it. Staff read
+    // these documents through the nested block, one at a time.
+    //
+    // Verified 2026-08-16 against the emulator with a real contact-session token
+    // (uid `contact:{id}`, claims contactId/teamId/sessionExpires) over the
+    // Firestore REST API: the scoped query returns the caller's own row, while
+    // naming another contact, naming another team, or dropping either clause is
+    // refused. packages/functions/src/connect/coursePurchaseAccess.test.ts fails
+    // if this block or either of its two constraints goes missing.
+    match /{path=**}/purchases/{purchaseId} {
+      allow list: if request.auth != null
+                  && request.auth.token.contactId != null
+                  && resource.data.contactId == request.auth.token.contactId
+                  && isContactOfTeam(resource.data.teamId);
+      allow write: if false;  // Connect webhook (Admin SDK) only
+    }
+
     // public_profile (collection group for trial booking)
     match /{path=**}/public_profile/{publicProfileId} {
       allow read;  // Public read access for trial booking
@@ -1233,6 +1394,11 @@ service cloud.firestore {
       allow write: if false;
     }
     match /shop_registration_attempts/{bucketId} {
+      allow read: if false;
+      allow write: if false;
+    }
+    // Per-IP claims of a completed Stripe Checkout Session (claimCheckoutSession)
+    match /checkout_claim_attempts/{bucketId} {
       allow read: if false;
       allow write: if false;
     }
@@ -1307,12 +1473,30 @@ service cloud.firestore {
       }
 
       // Lifetime purchase entitlements. Granted only by the Connect webhook (admin SDK);
-      // clients never write. Read by the owning contact (Space unlock check) or staff.
-      // This block also governs the Space's `purchases` collection-group query.
+      // clients never write.
+      //
+      // This block covers reads AT THIS PATH ONLY — a staff member of the owning
+      // team, or the owning contact fetching their own entitlement document. It
+      // does NOT cover the Space/shop `purchases` collection-group query: a
+      // collection-group read is only ever matched by a `{path=**}` block, never
+      // by a nested match, so that query needs the `{path=**}/purchases` block
+      // in the "Group queries" section above. (This comment claimed the opposite until
+      // 2026-08-16, and the query 403'd with "No matching allow statements" for
+      // exactly as long as the claim stood.)
+      //
+      // The contact branch goes through `isContactOfTeam` for the same reason the
+      // collection-group block does: `request.auth.token.contactId` on its own is
+      // an identity, not a tenant boundary, and it carries no expiry. Checking it
+      // alone let an EXPIRED contact session — and a session minted for a
+      // different studio — fetch an entitlement document by id. Tightened
+      // 2026-08-16; no client reads this path (both the Space and the shop go
+      // through the collection group), and every server reader is the Admin SDK,
+      // so the narrowing takes nothing away from anyone.
       match /purchases/{contactId} {
         allow read: if (isAuthed()
             && isTeamMember(get(/databases/$(database)/documents/courses/$(courseId)).data.teamId))
-          || (request.auth != null && request.auth.token.contactId == resource.data.contactId);
+          || (isContactOfTeam(resource.data.teamId)
+            && request.auth.token.contactId == resource.data.contactId);
         allow write: if false;
       }
     }
@@ -1358,9 +1542,109 @@ service cloud.firestore {
       // `where('teamId','==', <team>)` and rejects any unscoped / cross-tenant list.
       // The public document page reads via public_profile (collection group), never this.
       allow list: if isAuthed() && isMemberOfResourceTeam(resource);
-      allow create: if hasTeamRole(request.resource.data.teamId, 'manager');
-      allow update, delete: if hasTeamRole(resource.data.teamId, 'manager');
 
+      // Waiver documents are CALLABLE-ONLY, exactly as promo codes are. Their
+      // content is somebody's evidence and their required-ness is an
+      // authorization fact; neither may be a client write. createWaiver /
+      // updateWaiver / publishDocumentVersion / setWaiverRequirement /
+      // archiveWaiver are the only writers.
+      //
+      // CREATE CONSTRAINS THE PUBLISH STATE TOO, WHICH IT USED TO LEAVE FREE.
+      // The clause below `kind` was the only one here, so `status`,
+      // `current_version` and `min_valid_version` were client-writable at
+      // creation on every kind — the one write that decides a document's whole
+      // starting state was the one write that constrained none of it. That
+      // breaks both invariants the update clause is built around: W3 says the
+      // two version pointers are unwritable by any client on any kind, and W29
+      // says a published document always has a version. A single client `setDoc`
+      // could arrive at `status: 'published'` with no snapshot behind it, or —
+      // worse — with a `current_version` pointing at a version document that
+      // does not exist, which is the state the acceptance ledger's central
+      // assumption (an acceptance names a version whose frozen text can be
+      // served) has no defence against. `createDocument` in
+      // apps/web/src/plugins/documents/hooks.ts already writes exactly this
+      // shape — status 'draft', neither pointer present — so no legitimate
+      // create changes.
+      allow create: if hasTeamRole(request.resource.data.teamId, 'manager')
+                    && request.resource.data.get('kind', 'other') != 'waiver'
+                    && request.resource.data.get('status', 'draft') != 'published'
+                    && request.resource.data.get('current_version', null) == null
+                    && request.resource.data.get('min_valid_version', null) == null;
+
+      // Publish state is minted by publishDocumentVersion only, on EVERY kind —
+      // a client can never move current_version or the supersession floor, and
+      // can never TRANSITION a document into 'published'.
+      //
+      // The status clause is what leaves exactly one publisher. Without it the
+      // editor's old client status flip and the callable could both publish, and
+      // only one of them mints the immutable snapshot every acceptance pins — so
+      // a client-published document would sit at status 'published' with no
+      // version, which is the state the backfill and the ledger verifier exist to
+      // keep empty. Note it forbids the TRANSITION, not the value: an ordinary
+      // edit to an already-published document carries status 'published' in
+      // request.resource and is still allowed, and UNpublishing (back to draft or
+      // archived) stays a client write.
+      allow update: if hasTeamRole(resource.data.teamId, 'manager')
+                    && resource.data.get('kind', 'other') != 'waiver'
+                    && request.resource.data.get('kind', 'other') != 'waiver'
+                    && request.resource.data.get('current_version', null) == resource.data.get('current_version', null)
+                    && request.resource.data.get('min_valid_version', null) == resource.data.get('min_valid_version', null)
+                    && (request.resource.data.get('status', 'draft') != 'published'
+                        || resource.data.get('status', 'draft') == 'published');
+
+      // A document that is published, or that has ever been published, cannot be
+      // deleted — its text may be somebody's evidence. An unpublished draft
+      // still can. BOTH clauses are needed: every document published before
+      // waivers existed has current_version == null, so the version clause alone
+      // would protect nothing that already carries acceptances, and the status
+      // clause makes the narrowing independent of whether
+      // scripts/backfill-document-versions.ts has run.
+      //
+      // AND THE KIND CLAUSE, WHICH THIS USED TO OMIT. Create and update already
+      // excluded `kind == 'waiver'`; delete did not, so a manager could hard-
+      // delete an UNPUBLISHED waiver from the client — and an unpublished waiver
+      // is not an empty one. `recordSignupConsent` writes under documents/{id},
+      // so a draft can already own acceptance events and signer rows; deleting
+      // the parent leaves every one
+      // of them addressable only by a path whose head is gone, which is precisely
+      // the orphaned-ledger state the version and status clauses above exist to
+      // prevent. Retiring a waiver is `archiveWaiver` — a callable that clears the
+      // policy entry in the same transaction. There is deliberately no waiver
+      // delete anywhere: the ledger outlives the document by design.
+      allow delete: if hasTeamRole(resource.data.teamId, 'manager')
+                    && resource.data.get('kind', 'other') != 'waiver'
+                    && resource.data.status != 'published'
+                    && resource.data.get('current_version', null) == null;
+
+      // IMMUTABLE published snapshots. The one place the exact accepted text
+      // lives, which is why an acceptance can store only its hash. The parent
+      // get() costs one document read per rule evaluation and is used ONLY here,
+      // because versions are listed rarely; the sibling subcollections below
+      // match on their own denormalised teamId instead.
+      match /versions/{versionId} {
+        allow read: if isAuthed()
+                    && isTeamMember(get(/databases/$(database)/documents/documents/$(documentId)).data.teamId);
+        allow write: if false;
+      }
+
+      // APPEND-ONLY acceptance/revocation events, the ONE mutable signer row,
+      // and the notice rows. All server-written: every public answer comes from
+      // a callable, so a contact session never reads any of them directly.
+      match /acceptances/{acceptanceId} {
+        allow read:  if isAuthed() && isTeamMember(resource.data.teamId);
+        allow write: if false;
+      }
+      // Declared with NO WRITER: the `notify` publish outcome is deferred to v2
+      // and the model stayed so adding it is an addition rather than a
+      // migration. See WaiverNoticeRow in @linyup/shared.
+      match /notices/{noticeId} {
+        allow read:  if isAuthed() && isTeamMember(resource.data.teamId);
+        allow write: if false;
+      }
+      match /signers/{contactId} {
+        allow read:  if isAuthed() && isTeamMember(resource.data.teamId);
+        allow write: if false;
+      }
       // documents/{id}/public_profile/{id} is world-readable via the global
       // /{path=**}/public_profile rule (drives the public document page + signup
       // consent links + website links) and written only by the sync — no block here.
@@ -1474,9 +1758,33 @@ service cloud.firestore {
         allow write: if false; // Cloud Functions only
       }
 
+      // A whole STUDIO invited into the org (accepted by that studio's owner;
+      // moves the studio's billing). NOT the same thing as
+      // org_member_invitations below — see the naming rule in shared/paths.ts.
       match /org_invitations/{invId} {
         allow read: if isOrgMember(orgId)
                     || (isAuthed() && resource.data.inviteeEmail == request.auth.token.email);
+        allow write: if false; // Cloud Functions only
+      }
+
+      // A PERSON invited to help run the organisation (org_admin / org_viewer).
+      // CLOSED: written only by Cloud Functions (inviteOrgMember / accept /
+      // decline / revoke / the daily expiry sweep) — a client write could mint a
+      // membership grant for any address.
+      //
+      // READ IS org_admin ONLY, deliberately narrower than org_invitations
+      // above, and for a reason that is not tidiness: a pending row carries
+      // `token`, which is a bearer credential, and rules cannot withhold one
+      // field. An org_viewer is a read-only role that has no business seeing an
+      // invitation at all; letting one read a token would let them create an
+      // account at the invited address and promote themselves to org_admin.
+      //
+      // The INVITEE never reads this document. They may have no account at all,
+      // so no rule could match them; they hold a token and go through the
+      // unauthenticated `getOrgMemberInvitation` callable, which returns only
+      // what the accept page must show.
+      match /org_member_invitations/{invitationId} {
+        allow read: if hasOrgRole(orgId, 'org_admin');
         allow write: if false; // Cloud Functions only
       }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -215,7 +216,7 @@ function sectionSummary(s: OrgSiteSection): string {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'sections' | 'appearance'
+const SITE_TABS = ['sections', 'appearance'] as const
 
 export default function OrgWebsiteBuilderPage() {
   const t = useTranslations('OrgWebsite')
@@ -229,11 +230,17 @@ export default function OrgWebsiteBuilderPage() {
 
   const [draft, setDraft] = useState<OrgSiteDraft | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [tab, setTab] = useState<Tab>('sections')
+  const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
   const [openId, setOpenId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  // Same act, same treatment as the team-tier website (UX-50/UX-100): taking a
+  // public site offline in one click. Fully REVERSIBLE and LOSSLESS —
+  // `unpublishOrgSite` deletes the published copy and merges `enabled: false`
+  // onto the draft, leaving its pages, wording and images alone — so the copy
+  // says so instead of implying destruction.
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
 
   // Initialise the working draft once data has settled.
   useEffect(() => {
@@ -385,7 +392,7 @@ export default function OrgWebsiteBuilderPage() {
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={handleUnpublish}
+              onClick={() => setConfirmUnpublish(true)}
               disabled={publishing}
             >
               {t('unpublish')}
@@ -559,6 +566,30 @@ export default function OrgWebsiteBuilderPage() {
           </div>
         </div>
       </div>
+
+      {/* Unpublish confirmation. States the consequence in the visitor's terms
+          — the site goes offline now — and then states, equally plainly, that
+          nothing is lost. NOT styled destructive: this deletes no work. */}
+      <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unpublishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unpublishConfirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={publishing}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={publishing}
+              onClick={() => {
+                setConfirmUnpublish(false)
+                void handleUnpublish()
+              }}
+            >
+              {t('unpublishConfirmAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete confirm */}
       <AlertDialog

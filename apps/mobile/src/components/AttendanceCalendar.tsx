@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
 import { Text, IconButton, useTheme, ActivityIndicator, Divider, Button } from 'react-native-paper';
 import { FirestoreService } from '../services/firestore';
 import { SessionPublicProfile, Contact } from '../types';
+import { waiverRefusal } from '../utils/waiverRefusal';
 
 interface AttendanceCalendarProps {
   contactId: string;
@@ -85,7 +86,24 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
       loadMonthData();
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'Failed to book session. Please try again.');
+      // The SECOND mobile booking rail, and it swallowed the same refusal. Both
+      // call `bookSession`, both are gated server-side, so both have to name the
+      // document rather than telling a member to retry something that cannot
+      // succeed until somebody signs. See utils/waiverRefusal.ts.
+      const waiver = waiverRefusal(error, 'booking');
+      if (!waiver) {
+        Alert.alert('Error', 'Failed to book session. Please try again.');
+        return;
+      }
+      if (waiver.signUrl) {
+        const url = waiver.signUrl;
+        Alert.alert('Signature needed', waiver.message, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open', onPress: () => { Linking.openURL(url).catch(() => undefined); } },
+        ]);
+        return;
+      }
+      Alert.alert('Signature needed', waiver.message);
     } finally {
       setLoadingSessionId(null);
     }

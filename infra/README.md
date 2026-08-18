@@ -197,8 +197,46 @@ npx firebase-tools apphosting:backends:create \\
 3. Authorize the Firebase GitHub App and select **francodgstn/dgstn-linyup**
 4. Set **Branch**: main, **Root directory**: apps/web
 
-Once connected, every push to main **auto-deploys** the web app -- no CI step required.
+Connecting the repo is what makes a backend *buildable*; whether a push actually
+ships it depends on the environment — see [What ships on what](#what-ships-on-what)
+below. **Staging** leaves App Hosting's automatic rollouts on, so every push to
+main deploys the web app with no CI step. **Sandbox and prod turn them off** and
+roll out explicitly from their workflows instead.
+
 The apps/web/apphosting.yaml file controls the Cloud Run instance (CPU, memory, scaling, env vars).
+
+### What ships on what
+
+One table, three environments. Backend = Cloud Functions + Firestore/Storage
+rules; web app = the App Hosting SSR backends (`linyup-web`, plus `linyup-admin`
+on staging and prod).
+
+| Env | Trigger | Backend | Web app | Approval |
+|---|---|---|---|---|
+| **staging** | push to `main` | `deploy.yml` | App Hosting auto-rollout, in parallel | none |
+| **sandbox** | push a `sandbox-*` tag | `deploy-sandbox.yml` | `apphosting:rollouts:create` in the same job, **after** the backend | required reviewer |
+| **prod** | push a `v*` tag | `deploy-prod.yml` | `apphosting:rollouts:create` in the same job, **after** the backend | required reviewer |
+
+Both tag-driven workflows keep `workflow_dispatch` as an escape hatch for
+re-running a half-failed deploy without minting a throwaway tag.
+
+Why sandbox and prod sequence the rollout rather than letting App Hosting fire:
+an automatic rollout races the backend deploy, so the frontend can go live ahead
+of the functions and rules it calls. Rolling out `--git-commit $GITHUB_SHA` from
+inside the job also pins the exact commit, so a concurrent merge to `main` can't
+slip into the release. Sandbox additionally hosts live prospect demos, so it must
+never change unattended — it is *expected* to drift behind `main`, and you tag it
+when you're ready:
+
+```bash
+# what hasn't shipped to sandbox yet
+git log --oneline $(git describe --tags --abbrev=0 --match 'sandbox-*')..origin/main
+git tag sandbox-$(date +%F) && git push origin sandbox-$(date +%F)
+```
+
+Turning automatic rollouts **off** is a Console setting, not a repo one — see the
+prerequisite note under [6. Enable CI](#6-enable-ci) below. It is written for prod
+but applies verbatim to the sandbox `linyup-web` backend, which also has them off.
 
 #### Grant the App Hosting backend access to secrets
 
@@ -218,8 +256,10 @@ new backend alongside the old one and cutting the custom domain over:
 2. **Connect the GitHub repo** to it (Console → Connect repository, branch `main`,
    root dir `apps/web`) and, for prod, set its **Environment name** to `prod`.
 3. **Grant secret access** (`apphosting:secrets:grantaccess …`) on the new backend.
-4. **Trigger a rollout** (push to main, or `apphosting:rollouts:create`) and verify
-   the `<backend>--<project>.<region>.hosted.app` URL serves correctly.
+4. **Trigger a rollout** — `apphosting:rollouts:create <backend> --project <alias>
+   --git-commit <sha>`, or a push to main if that backend still has automatic
+   rollouts on (staging only) — and verify the
+   `<backend>--<project>.<region>.hosted.app` URL serves correctly.
 5. **Cut the custom domain over**: remove it from the old backend, add it to the
    new one, update the DNS records it prints, and re-add it under Authentication →
    Authorized domains if it changed.
@@ -276,18 +316,32 @@ runs a keyless deploy of functions/rules/landing, and the **staging** App Hostin
 backends (web + admin) auto-roll out from `main` via their GitHub connection. Fast
 feedback; no gate.
 
+**Sandbox — tag when you're ready.** `deploy-sandbox.yml` fires on a `sandbox-*`
+tag (or a dispatch), waits on the `sandbox` environment's required reviewer, then
+deploys functions/rules and rolls out the `linyup-web` App Hosting backend at the
+tagged commit. Nothing lands on a merge to `main` — the environment hosts live
+prospect demos, so it drifts behind `main` by design. Demo *data* is only touched
+by a dispatch with the reseed box ticked, and even then `lead-*` tenants survive.
+
 **Production — one gated release, everything in lockstep.** `deploy-prod.yml`
 (manual `workflow_dispatch` or a `v*` tag, gated on the `production` GitHub
 environment's required reviewer) deploys functions/rules/landing **and** triggers
 the App Hosting rollout for web + admin (`apphosting:rollouts:create … --git-commit
 $GITHUB_SHA`). So the prod web app can never ship ahead of the backend it calls.
 
-> **Prerequisite — disable auto-rollout on the PROD App Hosting backends.** For
-> the gate to mean anything, the prod `linyup-web` and `linyup-admin` backends
-> must NOT auto-deploy on push. In **Console → App Hosting → backend → ⚙ Settings →
-> Deployment / rollouts**, turn **automatic rollouts off** (leave the GitHub repo
-> connected — manual rollouts still build from it). Leave staging backends on
-> auto-rollout. The prod deploy SA needs `firebaseapphosting.admin` **plus two
+> **Prerequisite — disable auto-rollout on the PROD *and SANDBOX* App Hosting
+> backends.** For the gate to mean anything, the prod `linyup-web` +
+> `linyup-admin` and the sandbox `linyup-web` backends must NOT auto-deploy on
+> push. In **Console → App Hosting → backend → ⚙ Settings → Deployment /
+> rollouts**, turn **automatic rollouts off** (leave the GitHub repo connected —
+> manual rollouts still build from it). Leave staging backends on auto-rollout.
+>
+> The setting is not exposed by the CLI or the App Hosting REST API — a backend
+> with rollouts disabled reads identically to one without — so verify it
+> empirically: push to `main` and confirm no new rollout appears under
+> `apphosting:rollouts:list` (or that the backend's `updateTime` stays put).
+>
+> The deploy SA needs `firebaseapphosting.admin` **plus two
 > Developer Connect roles** to create rollouts: `apphosting:rollouts:create …
 > --git-commit` resolves the commit through the git repository link
 > (`developerconnect.admin` → `gitRepositoryLinks.get` + `fetchGitRefs`) and
@@ -296,7 +350,9 @@ $GITHUB_SHA`). So the prod web app can never ship ahead of the backend it calls.
 > `firebaseapphosting.admin` covers neither, so without both it 403s — first on
 > `.get`, then on `:fetchReadToken`. All three roles are in the deploy SA's
 > `deploy_sa_roles` (`infra/modules/iam/variables.tf`) — run `terraform apply`
-> on prod after adding the Developer Connect roles.
+> on each project after adding the Developer Connect roles. (Sandbox already had
+> them at the time it went tag-driven, verified against the live IAM policy; no
+> apply was needed there.)
 
 ---
 
@@ -306,6 +362,21 @@ $GITHUB_SHA`). So the prod web app can never ship ahead of the backend it calls.
 six fully-seeded **Studio** demo tenants (sport + wellness) with one-click logins.
 It uses the same modules as staging — only `project_id`, hosting site IDs and the
 budget differ — plus two demo-specific switches.
+
+**It is not actually throwaway any more.** It also hosts `lead-*` tenants — real
+prospect demos we show to prospective customers — which is why it is deployed
+like prod rather than like staging: manual `sandbox-*` tags, an approval gate, and
+no automatic rollout. Two consequences worth internalising:
+
+- **`pnpm sandbox:reset` preserves `lead-*` tenants.** It wipes only the `/try`
+  playground. `--include-leads` overrides that; `--dry-run` previews the counts;
+  it asks for a typed confirmation (`--yes` in CI). To tear down ONE lead, use
+  `pnpm lead:seed --lead <id> --reset` instead.
+- **Lead *data* never flows through CI.** Lead profiles are gitignored (they hold
+  real prospect business data, and this repo is public), so seeding is local-only
+  from a machine with ADC. No tag or workflow can reseed a prospect demo.
+
+See `CLAUDE.md` → "Sandbox safety model" and `scripts/leads/README.md`.
 
 ```bash
 # 1. Provision the project (same flow as staging)
@@ -317,10 +388,12 @@ terraform apply        # re-run if Firebase resources fail once (async API enabl
 # Step 1 also creates the default Firebase Storage bucket (europe-west6) via the
 # storage module — no manual Console/curl step needed.
 
-# 1b. Deploy backend rules/indexes/functions (first time — afterwards this is
-#     automated by .github/workflows/deploy-sandbox.yml on push to main). A fresh
-#     Firestore DB ships locked (deny-all), so the client sees nothing until the
-#     repo rules are deployed:
+# 1b. Deploy backend rules/indexes/functions. This first one is by hand; from then
+#     on .github/workflows/deploy-sandbox.yml does it — but only when you push a
+#     `sandbox-*` tag and approve the run, NOT on a push to main (the sandbox
+#     hosts live prospect demos; see "What ships on what"). A fresh Firestore DB
+#     ships locked (deny-all), so the client sees nothing until the repo rules
+#     are deployed:
 firebase deploy --only firestore,storage,functions --project sandbox
 
 # 2. Secrets (same IDs as staging; demo can reuse test Stripe/SMTP keys)
@@ -342,8 +415,8 @@ npx firebase-tools apphosting:backends:create \
   --project linyup-sandbox --app <WEB_APP_ID> --backend linyup-web \
   --primary-region europe-west4 --root-dir apps/web --non-interactive
 
-# 5. Seed the six demo Studio tenants (ADC; idempotent — reset:sandbox to wipe first)
-pnpm seed:sandbox
+# 5. Seed the six demo Studio tenants (ADC; idempotent — sandbox:reset to wipe first)
+pnpm sandbox:seed
 
 # 6. Custom domain — the public demo lives at https://demo.linyup.com/try.
 #    a) Firebase Console → App Hosting → linyup-web (sandbox) → Custom domains →
@@ -361,7 +434,7 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
 `tennis@`, `yoga@`, `pilates@`, `dance@` `linyup.com`.
 
 > **Auto-reseed** (nightly wipe + reseed) is a deferred follow-up — for now reseed
-> manually with `pnpm reset:sandbox` then `pnpm seed:sandbox`.
+> manually with `pnpm sandbox:reset` then `pnpm sandbox:seed`.
 
 ---
 
@@ -374,6 +447,14 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
   Firebase CLI. **Not** Terraform.
 - **Add a Cloud Tasks queue** → write an `onTaskDispatched` function; Firebase
   creates the queue on deploy. **Not** Terraform.
+- **Ship to sandbox** → `git tag sandbox-$(date +%F) && git push origin sandbox-$(date +%F)`,
+  then approve the run in the Actions tab. Merging to `main` does nothing on its
+  own. Check what's pending first with
+  `git log --oneline $(git describe --tags --abbrev=0 --match 'sandbox-*')..origin/main`.
+- **Ship to prod** → push a `v*` tag (or dispatch `deploy-prod.yml`) and approve.
+- **Re-run a half-failed deploy** → dispatch the workflow from the Actions tab
+  rather than minting a throwaway tag. That is also where the sandbox reseed
+  checkbox lives.
 
 ---
 
@@ -381,7 +462,8 @@ Demo logins (all `linyup123`, plan `studio`/`active`): `grappling@`, `crossfit@`
 
 - Every `google_firebase_*` resource uses the **google-beta** provider.
 - **App Hosting region** is immutable after backend creation. Create new backends in **europe-west4** (nearest supported EU region; europe-west6 itself is still unsupported). The firebaseapphosting.googleapis.com API must be enabled (via terraform apply) before creating the backend. To relocate a backend that was created in `us-central1`, see "Moving an existing App Hosting backend to the EU" below.
-- **App Hosting vs Hosting**: apps/landing uses Firebase Hosting (static, deployed by CI); apps/web uses App Hosting (SSR, auto-deployed via GitHub integration on push to main).
+- **App Hosting vs Hosting**: apps/landing uses Firebase Hosting (static, deployed by CI); apps/web uses App Hosting (SSR, built from the connected GitHub repo). App Hosting's automatic rollout is ON for staging only — sandbox and prod have it off and roll out from their workflows instead ("What ships on what").
+- **Sandbox lags `main` on purpose.** It only ships when you push a `sandbox-*` tag and approve the run. If a demo is missing a fix that's already merged, that's why — tag it.
 - Firestore **location is immutable** — `europe-west6` is locked on first apply
   (`prevent_destroy` + `deletion_policy = ABANDON`). Choose deliberately.
 - Storage **bucket location is immutable** — same `europe-west6` lock + `prevent_destroy`.

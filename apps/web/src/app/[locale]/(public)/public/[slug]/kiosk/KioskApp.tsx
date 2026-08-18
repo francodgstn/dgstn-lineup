@@ -105,7 +105,7 @@ function KioskShell({
   standby,
 }: ShellProps) {
   const t = useTranslations('Kiosk')
-  const { sessions, loading } = useKioskSessions(teamId)
+  const { sessions, loading, error: sessionsError, loaded: sessionsLoaded } = useKioskSessions(teamId)
 
   // Standby idle detection — enabled only when the studio turned the feature on.
   const idle = useIdleTimer(Math.max(standby.idleSeconds, 5) * 1000, features.standby)
@@ -132,7 +132,14 @@ function KioskShell({
           <section className="flex min-h-0 flex-1 flex-col">
             <h2 className="mb-4 text-lg font-bold">{t('scheduleTitle')}</h2>
             <div className="min-h-0 flex-1">
-              <KioskSchedule sessions={sessions} loading={loading} view={scheduleView} />
+              <KioskSchedule
+                sessions={sessions}
+                loading={loading}
+                view={scheduleView}
+                teamId={teamId}
+                error={sessionsError}
+                loaded={sessionsLoaded}
+              />
             </div>
           </section>
         )}

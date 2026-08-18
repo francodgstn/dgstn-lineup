@@ -91,9 +91,13 @@ export function useMonthlyRevenue(teamId: string | null) {
         add(connectNet(p), p.created_at?.toDate?.(), p.currency)
       }
       for (const d of byoSnap.docs) {
-        // BYO rows are record-only: they exist because money arrived, so there is
-        // no status to filter on and refunds live in the studio's own gateway.
+        // BYO rows are record-only: they exist because money arrived, and a
+        // refund of one happens in the studio's own gateway and never reaches
+        // us — so `amount` is the whole story, with ONE exception. A manual row
+        // a manager VOIDED says the money never arrived at all (the record was
+        // wrong, not reversed), so it is not takings and must not be counted.
         const e = d.data() as ExternalPayment
+        if (e.voided_at) continue
         add(e.amount ?? 0, e.processed_at?.toDate?.(), e.currency)
       }
 

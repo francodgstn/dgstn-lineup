@@ -31,6 +31,13 @@ export interface PlannerSession {
   /** Per-session link target; takes precedence over the shared `bookingHref`
    *  (e.g. appointment slots link to the appointments page, classes to booking). */
   href?: string
+  /**
+   * 'availability' renders as an outlined block rather than a solid one: it is a
+   * window in which an appointment CAN be booked, not a scheduled event, and it
+   * must not compete visually with the actual classes on the grid.
+   * Absent ⇒ a normal session.
+   */
+  variant?: 'session' | 'availability'
 }
 
 const HOUR_PX = 48
@@ -280,13 +287,17 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
 
               {blocks.map(({ s, top, height, col, cols }) => {
                 const color = colorFor(s, accent)
+                const availability = s.variant === 'availability'
                 const style = {
                   top: top + 1,
                   height: height - 2,
                   left: `calc(${(col / cols) * 100}% + 2px)`,
                   width: `calc(${100 / cols}% - 4px)`,
-                  backgroundColor: `${color}1F`,
-                  borderLeftColor: color,
+                  // Availability is a lighter wash with a dashed outline all
+                  // round; a class keeps the solid fill and the left rule, so
+                  // the two never read as the same kind of thing.
+                  backgroundColor: availability ? `${color}0F` : `${color}1F`,
+                  ...(availability ? { borderColor: color } : { borderLeftColor: color }),
                 }
                 const name = s.activityName ?? 'Session'
                 // Provider in the title distinguishes parallel slots (e.g. three
@@ -308,7 +319,10 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
                     )}
                   </>
                 )
-                const cls = `absolute z-[5] overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left${ended ? ' opacity-45' : ''}`
+                const isAvailability = s.variant === 'availability'
+                const cls = `absolute z-[5] overflow-hidden rounded-md px-1.5 py-0.5 text-left${
+                  isAvailability ? ' border border-dashed' : ' border-l-2'
+                }${ended ? ' opacity-45' : ''}`
                 if (onSelect) {
                   return (
                     <button

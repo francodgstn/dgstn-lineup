@@ -12,7 +12,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { httpsCallable } from 'firebase/functions'
 import { toast } from 'sonner'
-import { Ban, Loader2, UserPlus, UserRound } from 'lucide-react'
+import { Ban, Loader2, Plus, UserPlus, UserRound } from 'lucide-react'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
+import { cn } from '@/lib/utils'
 import { functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/lib/format'
@@ -20,15 +23,15 @@ import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { ContactPicker } from '@/components/payments/ContactPicker'
 import { DateTimePicker } from '@/components/ui/date-picker'
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { DEFAULT_PAYMENT_MODES, resolveAppointmentDurations } from '@linyup/shared'
+import { DEFAULT_PAYMENT_MODES, resolveAppointmentDurations, resolveDurationSale } from '@linyup/shared'
 import type { Activity, ActivityDuration } from '@linyup/shared'
 import { coachLabel, type CoachOption } from '@/hooks/useCoaches'
 
@@ -173,7 +176,10 @@ export function AppointmentFormDialog({
 
   const selectedDuration: ActivityDuration | undefined =
     durations.find((d) => d.minutes === durationMinutes) ?? durations[0]
-  const basePrice = selectedDuration?.priceAmount ?? null
+  // Through the shared reader, so a length that is not sold individually
+  // (UX-70) suggests NO amount here — a staff booking may still be made, it
+  // just isn't priced from a number the studio removed from sale.
+  const basePrice = selectedDuration ? resolveDurationSale(selectedDuration).priceAmount : null
   const showPayment = clientMode !== 'blocked' && typeof basePrice === 'number' && basePrice > 0
 
   // Suggest the base price whenever the priced item changes; the manager can
@@ -276,13 +282,27 @@ export function AppointmentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) close() }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
 
+        <DialogBody>
         {appointmentActivities.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">{t('noAppointmentActivities')}</p>
+          /* An appointment is booked AGAINST an offering, so with none there is
+             nothing to fill this dialog with. It used to say "create one under
+             Offer -> Activities" and leave the manager to find it; it links
+             there now. */
+          <div className="rounded-md border border-dashed p-3 space-y-2">
+            <p className="text-sm text-muted-foreground">{t('noAppointmentActivitiesHint')}</p>
+            <Link
+              href={'/offer/activities' as Route}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t('createActivityAction')}
+            </Link>
+          </div>
         ) : (
           <div className="space-y-5 py-1">
             {/* Appointment — one param per row */}
@@ -344,9 +364,14 @@ export function AppointmentFormDialog({
                       >
                         {formatDuration(d.minutes)}
                         <span className="ml-1.5 opacity-80">
-                          {typeof d.priceAmount === 'number' && d.priceAmount > 0
-                            ? formatCurrency(d.priceAmount, currency, locale)
-                            : t('free')}
+                          {/* Three modes, not two: a length sold only through a
+                              plan is not free, and labelling it "Free" here is
+                              what would have a coach book it as one (UX-70). */}
+                          {resolveDurationSale(d).mode === 'benefit_only'
+                            ? t('durationBenefitOnly')
+                            : resolveDurationSale(d).priceAmount
+                              ? formatCurrency(resolveDurationSale(d).priceAmount as number, currency, locale)
+                              : t('free')}
                         </span>
                       </button>
                     ))}
@@ -473,6 +498,7 @@ export function AppointmentFormDialog({
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
         )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={close} disabled={submitting}>{t('cancel')}</Button>

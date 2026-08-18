@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { TEAMS_COLLECTION, appointmentPickerLive, routableSurfaces } from '@linyup/shared'
 import type { PublicSurface, SaasPlan, ActivePublicSurfaces } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
@@ -23,6 +23,13 @@ import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 export interface PublicSurfaceFlags {
   /** Stripe Connect on → memberships can be sold and checked out. */
   connectEnabled: boolean
+  /** CAN THE STUDIO ACTUALLY BE PAID? `TeamPublicProfile.payments_enabled` — the
+   *  SAME fact the public surfaces read, i.e. both halves the server enforces
+   *  (chargeable account AND operator kill-switch up), where `connectEnabled`
+   *  above sees only the account. Absent ⇒ false, like everywhere else.
+   *  It is what tells a shop that is a TILL from a shop that is a read-only
+   *  PRICE LIST — `shopLive` no longer answers that (see below). */
+  paymentsEnabled: boolean
   /** `products` plugin installed. */
   productsActive: boolean
   /** `online-courses` plugin installed. */
@@ -34,14 +41,22 @@ export interface PublicSurfaceFlags {
   /** The contacts' personal portal (membership, bookings, profile, their courses).
    *  A base surface, decoupled from the course catalogue — effectively always live. */
   spaceLive: boolean
-  /** A sellable channel is enabled — the /shop surface is live. */
+  /** The /shop surface is live. It ALWAYS is (`routableSurfaces`): with a
+   *  chargeable Connect account it is a till, without one it is a read-only
+   *  price list. `connectEnabled` above is the flag that tells the two apart —
+   *  this one only says the page is publishable. */
   shopLive: boolean
   /** Booking is a base feature — always live. */
   bookingLive: boolean
-  /** `documents` plugin installed. */
-  documentsActive: boolean
-  /** ≥1 published + public Document exists (plugin + content) — the /documents surface is live. */
+  /** ≥1 public document MIRROR exists — the /documents surface is live.
+   *  There is deliberately no `documentsActive` beside this: Documents is a
+   *  default feature on every plan, so there is no install to be "active", and
+   *  the two flags would only ever have disagreed by drifting. */
   documentsLive: boolean
+  /** ≥1 published event MIRROR exists — the /events surface is live. Events are
+   *  a base feature on every plan, and PRIVATE by default, so this stays false
+   *  until a studio explicitly publishes one. */
+  eventsLive: boolean
   /** `custom-forms` plugin installed. */
   formsActive: boolean
   /** ≥1 published form exists (plugin + content) — the /forms surface is live. */
@@ -49,6 +64,16 @@ export interface PublicSurfaceFlags {
   /** `kiosk` plugin installed — the /kiosk check-in surface is live (it reads the
    *  team's own sessions, so install is the only gate; no published content). */
   kioskActive: boolean
+  /** The studio's appointments TOGGLE (`bookingSettings.appointmentsEnabled`) —
+   *  an intention, not a fact. It is what distinguishes "not switched on" from
+   *  "switched on with nothing published", which are fixed in different places. */
+  appointmentsEnabled: boolean
+  /** The /appointments picker is live: the toggle above AND something bookable
+   *  behind it (`active_public_surfaces.appointments` — active hours linked to a
+   *  bookable appointment activity). Composed by `appointmentPickerLive`, which
+   *  is the ONLY place the two halves are combined — see its doc comment for why
+   *  the toggle is not stored inside the server flag. */
+  appointmentsLive: boolean
 }
 
 export interface UsePublicSurfacesResult {
@@ -72,16 +97,33 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
   // Live-surface signals live on the public_profile (world-readable), not the
-  // private team doc — read them once here, cached.
-  const { data: activeSurfaces } = useQuery<Partial<ActivePublicSurfaces>>({
+  // private team doc — read them once here, cached. `payments_enabled` comes
+  // off the same doc in the same read: the studio's own screens should ask the
+  // paid-ness question exactly the way its visitors' screens do.
+  const { data: publicProfile } = useQuery<{
+    active: Partial<ActivePublicSurfaces>
+    paymentsEnabled: boolean
+    appointmentsEnabled: boolean
+    appointmentsLive: boolean
+  }>({
     queryKey: ['public-surfaces', currentTeamId],
     enabled: !!currentTeamId,
     staleTime: 60_000,
     queryFn: async () => {
       const snap = await getDoc(doc(db, TEAMS_COLLECTION, currentTeamId!, 'public_profile', currentTeamId!))
-      return (snap.data()?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>
+      const profile = snap.data()
+      return {
+        active: (profile?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>,
+        paymentsEnabled: profile?.payments_enabled === true,
+        // The appointments toggle is written to THIS document by Settings →
+        // Booking, so it costs nothing extra here — which is exactly why the
+        // server flag does not store a copy of it (see appointmentPickerLive).
+        appointmentsEnabled: profile?.bookingSettings?.appointmentsEnabled === true,
+        appointmentsLive: appointmentPickerLive(profile),
+      }
     },
   })
+  const activeSurfaces = publicProfile?.active
 
   const publicUrl = useCallback(
     (subPath = '') => {
@@ -94,18 +136,21 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
 
   const flags: PublicSurfaceFlags = {
     connectEnabled: team?.payments?.connectStatus === 'enabled',
+    paymentsEnabled: publicProfile?.paymentsEnabled ?? false,
     productsActive: isInstalled('products'),
     coursesActive: isInstalled('online-courses'),
     websiteActive: isInstalled('website'),
     siteLive: activeSurfaces?.site ?? false,
     spaceLive: activeSurfaces?.space ?? false,
-    shopLive: activeSurfaces?.shop ?? false,
+    shopLive: routableSurfaces(activeSurfaces).shop ?? false,
     bookingLive: activeSurfaces?.booking ?? true,
-    documentsActive: isInstalled('documents'),
     documentsLive: activeSurfaces?.documents ?? false,
+    eventsLive: activeSurfaces?.events ?? false,
     formsActive: isInstalled('custom-forms'),
     formsLive: activeSurfaces?.forms ?? false,
     kioskActive: isInstalled('kiosk'),
+    appointmentsEnabled: publicProfile?.appointmentsEnabled ?? false,
+    appointmentsLive: publicProfile?.appointmentsLive ?? false,
   }
 
   const defaultSurface: PublicSurface = team?.default_public_surface ?? 'bio-link'

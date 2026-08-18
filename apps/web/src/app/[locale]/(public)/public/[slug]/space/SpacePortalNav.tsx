@@ -14,15 +14,34 @@ import { useSpacePayments } from './useSpacePayments'
 // payment history OR a Stripe billing account (hidden for cash / other payers).
 export default function SpacePortalNav() {
   const t = useTranslations('Space')
-  const { slug, isAuthenticated } = useSpaceAuth()
+  const { slug, isAuthenticated, isRestoring } = useSpaceAuth()
   const { accent, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const pathname = usePathname()
-  const { data: paymentsData } = useSpacePayments()
+  const { data: paymentsData, isError: paymentsFailed } = useSpacePayments()
 
+  // While a stored session is still being checked, keep the tab bar's SPACE
+  // rather than deleting it: the nav vanishing and reappearing on every load of
+  // her own portal is the same "you are not signed in" flicker as the wall
+  // below it (UX-37), just told with layout instead of words.
+  if (isRestoring) {
+    return (
+      <div className="pt-6">
+        <div
+          className="h-[52px] rounded-full animate-pulse"
+          style={{ background: cardBg, border: `1px solid ${cardBorder}` }}
+        />
+      </div>
+    )
+  }
   if (!isAuthenticated) return null
 
+  // On FAILURE the tab stays. Hiding it would delete the only surface that can
+  // explain the failure, and the deletion itself reads as an answer: "you have no
+  // payments here". An empty RESULT hides the tab; an unknown one must not.
   const hasPayments =
-    (paymentsData?.payments.length ?? 0) > 0 || paymentsData?.billingAvailable === true
+    paymentsFailed ||
+    (paymentsData?.payments.length ?? 0) > 0 ||
+    paymentsData?.billingAvailable === true
 
   const base = `/public/${slug}/space`
   const items = [

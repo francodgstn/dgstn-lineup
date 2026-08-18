@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -74,6 +75,23 @@ interface EventInvitation {
   sentAt?: Timestamp
   firstOpenedAt?: Timestamp
   respondedAt?: Timestamp
+}
+
+/**
+ * An attendee / invitee name, linked to the person's record — the same fix
+ * UX-63 made on /bookings and UX-91 on the session rosters. Both rows already
+ * hold the contact id; a row without one stays plain text rather than linking
+ * to nothing. (The org-scoped event page deliberately does NOT link: the person
+ * there belongs to a member team and /contacts/{id} resolves in the current
+ * tenant — see UX-98.)
+ */
+function EventPersonName({ contactId, children }: { contactId?: string; children: ReactNode }) {
+  if (!contactId) return <p className="text-sm font-medium">{children}</p>
+  return (
+    <Link href={`/contacts/${contactId}` as Route} className="text-sm font-medium hover:underline">
+      {children}
+    </Link>
+  )
 }
 
 // ─── edit schema ──────────────────────────────────────────────────────────────
@@ -392,7 +410,8 @@ function StatCard({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type DetailTab = 'overview' | 'program' | 'checkins' | 'categories' | 'attendees' | 'invitations'
+const DETAIL_TABS = ['overview', 'program', 'checkins', 'categories', 'attendees', 'invitations'] as const
+type DetailTab = (typeof DETAIL_TABS)[number]
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -405,7 +424,7 @@ export default function EventDetailPage() {
   const router = useRouter()
   const qc = useQueryClient()
 
-  const [tab, setTab] = useState<DetailTab>('overview')
+  const [tab, setTab] = useTabParam(DETAIL_TABS, 'overview')
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [duplicateOpen, setDuplicateOpen] = useState(false)
@@ -770,9 +789,9 @@ export default function EventDetailPage() {
           {!attendeesQ.isLoading && attendeesQ.data?.map((a) => (
             <div key={a.id} className="flex items-start gap-3 p-4 border-b last:border-0">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
+                <EventPersonName contactId={a.contactId}>
                   {[a.firstname, a.lastname].filter(Boolean).join(' ') || a.contactId}
-                </p>
+                </EventPersonName>
                 {a.email && (
                   <p className="text-xs text-muted-foreground mt-0.5">{a.email}</p>
                 )}
@@ -817,9 +836,9 @@ export default function EventDetailPage() {
           {!invitationsQ.isLoading && invitationsQ.data?.map((inv) => (
             <div key={inv.id} className="flex items-center gap-3 p-4 border-b last:border-0">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
+                <EventPersonName contactId={inv.contactId}>
                   {[inv.firstname, inv.lastname].filter(Boolean).join(' ') || inv.contactId}
-                </p>
+                </EventPersonName>
                 {inv.email && (
                   <p className="text-xs text-muted-foreground mt-0.5">{inv.email}</p>
                 )}

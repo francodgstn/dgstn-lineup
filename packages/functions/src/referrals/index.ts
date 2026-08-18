@@ -5,7 +5,9 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { isTeamMember, getTeam } from '../utils/teams'
 import { ensureReferralCode, updateReferralStatus } from '../utils/referrals'
+import { fireReferralRewarded } from './events'
 import { getHostingUrl } from '../utils/env'
+import { localizedPublicUrl } from '@linyup/shared'
 
 const BATCH_SIZE = 50
 
@@ -139,6 +141,18 @@ export const confirmReferral = onCall(async (request) => {
     reward_notes ?? null
   )
 
+  // The plugin's `referral_rewarded` trigger — fired only on the transition the
+  // manifest names, never on `confirm_membership`. See referrals/events.ts.
+  if (transition.to === 'rewarded') {
+    await fireReferralRewarded({
+      teamId,
+      referrerContactId: referralData.referrer_contact_id as string,
+      referredContactId: referralData.referred_contact_id as string,
+      referralId,
+      reward: reward ?? null,
+    })
+  }
+
   console.log(
     `Referral ${referralId} advanced from ${transition.from} to ${transition.to} by user ${userId}`
   )
@@ -171,8 +185,25 @@ export const getMyReferralCode = onCall(async (request) => {
   }
 
   const code = await ensureReferralCode(contactId, teamId)
+  // A team without a slug has no public surfaces at all, so there is no link to
+  // hand out. Previously this built `/public/undefined/booking?referral=…` and
+  // returned it as if it worked; fail loudly instead of shipping a dead link.
   const teamSlug = team?.slug
-  const referralUrl = `${getHostingUrl()}/public/${teamSlug}/booking?referral=${code}`
+  if (!teamSlug) {
+    throw new HttpsError('failed-precondition', 'Team has no public slug — no referral link exists.')
+  }
+  // Locale-pinned on the TEAM's language. This link is not emailed by us — the
+  // member shares it — so there is no recipient language to read; the studio's
+  // is the only fact available, and it is a strictly better default than the
+  // English the unprefixed form falls through to (`localePrefix: 'as-needed'`,
+  // and public surfaces never write the NEXT_LOCALE cookie).
+  const referralUrl = localizedPublicUrl(
+    getHostingUrl(),
+    (team?.language as string | undefined) ?? null,
+    teamSlug,
+    'booking',
+    { referral: code }
+  )
 
   console.log(`Referral code ${code} returned for contact ${contactId}`)
   return { code, referralUrl }

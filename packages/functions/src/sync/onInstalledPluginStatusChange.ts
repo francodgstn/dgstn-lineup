@@ -5,10 +5,10 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   unpublishSiteForTeam,
   deleteAllCoursePublicProfiles,
-  deleteAllDocumentPublicProfiles,
   touchTeamForSurfaceRecompute,
 } from '../utils/plugins'
 import { rebuildLedgerForTeam } from '../accounting/rebuild'
+import { KEEP_COURSE_MIRRORS_FIELD } from '@linyup/shared'
 
 export const onInstalledPluginStatusChange = onDocumentWritten(
   'teams/{teamId}/installed_plugins/{pluginId}',
@@ -58,12 +58,33 @@ export const onInstalledPluginStatusChange = onDocumentWritten(
       // Tear down published site: remove site_published/{teamId} + flag draft disabled.
       await unpublishSiteForTeam(teamId)
     } else if (pluginId === 'online-courses') {
+      // …UNLESS the write that deactivated this install said to keep them.
+      //
+      // The mirror is not decoration: the Space resolves a course by slug from
+      // it, so deleting it takes a course away from the contact who BOUGHT it
+      // (the `purchases/{contactId}` entitlement survives — the surface does
+      // not), and nothing rewrites a mirror on reinstall (UX-16). On an
+      // ORGANISATION lapse that would punish a member for a third party's
+      // unpaid bill, so `downgradeTeamToFree` stamps its disposition onto this
+      // very document and this arm obeys it. Without this check, sparing the
+      // mirrors over there is silently undone here a second later.
+      if (event.data?.after.data()?.[KEEP_COURSE_MIRRORS_FIELD] === true) {
+        console.log(
+          `[plugins] team ${teamId}: online-courses deactivated, course mirrors KEPT ` +
+            `(bought courses stay openable)`
+        )
+        return
+      }
       // Batch-delete all course/public_profile summaries for this team.
       await deleteAllCoursePublicProfiles(teamId)
-    } else if (pluginId === 'documents') {
-      // Batch-delete all document/public_profile summaries for this team.
-      await deleteAllDocumentPublicProfiles(teamId)
     }
+    // NOTE: 'documents' has NO teardown any more, because Documents is no longer
+    // a plugin — there is no install to deactivate. The arm that used to delete
+    // every document mirror is gone together with deleteAllDocumentPublicProfiles
+    // itself, which also settles a live asymmetry: downgradeTeamToFree tore down
+    // `website` and `online-courses` synchronously but left documents to this
+    // trigger. A waiver's text is somebody's evidence and its public copy is
+    // linked from a booking form; a plan change must not delete it.
     // NOTE: 'finance' intentionally has NO teardown — accounting/journal data
     // are financial records and persist across deactivation (a coach add-on
     // cancel deletes the install doc but never the data); reinstall re-seeds

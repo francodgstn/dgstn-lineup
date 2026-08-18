@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -140,7 +140,7 @@ export function WebhookEndpointsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Webhook className="h-4 w-4" />
@@ -148,6 +148,8 @@ export function WebhookEndpointsDialog({
           </DialogTitle>
         </DialogHeader>
 
+        {/* No footer here — the body scrolls so the title and close button stay put. */}
+        <DialogBody className="flex flex-col gap-6">
         <p className="text-xs text-muted-foreground">
           Each endpoint has a unique secret URL. POST JSON with an{' '}
           <code className="bg-muted px-1 rounded text-[11px]">email</code> field to trigger
@@ -267,6 +269,7 @@ Content-Type: application/json
             <em>Inbound webhook</em> trigger linked to this endpoint will fire.
           </p>
         </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )

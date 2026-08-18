@@ -1,5 +1,6 @@
 import type { Timestamp } from './common'
 import type { AffiliationSummary } from './affiliation'
+import type { ContactFilter } from '../utils/contactFilter'
 
 // ─── Acquisition axis (sticky, event-named funnel) ───────────────────────────
 // Single ordered, OPEN vocab. The stage is a high-water milestone: it advances on
@@ -25,7 +26,19 @@ export type AcquisitionStage = (typeof ACQUISITION_STAGES)[number]
 //    funnel; a purchase/lead-capture is not a funnel milestone):
 //      'shop'     → self-created by a public shop purchase (product / course / membership)
 //      'form'     → lead captured via a published Custom Form
-export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const
+//      'waitlist' → joined the queue for a full class. Off-funnel ON PURPOSE:
+//                   joining a queue is not a trial booking, and stamping
+//                   'trial_booked' on someone who may never get a seat would
+//                   corrupt the funnel. The stage is stamped when they CLAIM.
+//      'manual'   → created BY STAFF, not by the person (today: createStaffAppointment
+//                   booking an appointment for a new client). Off-funnel because
+//                   the trial funnel measures what a PROSPECT did, and a staff
+//                   member typing a name is not an act of the prospect. Listed
+//                   here because staffBooking has always written it: it was
+//                   absent from this union, so the contact detail page rendered
+//                   the raw key `Contacts.entry_manual` and the profile form's
+//                   z.enum rejected its own stored value, blocking submit.
+export const CONTACT_ENTRIES = ['booking', 'walk_in', 'signup', 'import', 'form', 'shop', 'waitlist', 'manual'] as const
 export type ContactEntry = (typeof CONTACT_ENTRIES)[number]
 
 // Source axis — marketing CHANNEL (attribution only), set once, never overwritten.
@@ -56,6 +69,30 @@ export interface ActiveSubscriptionSummary {
   recurrence: string | null
   amount: number // major units (CHF), per period
   status: SubscriptionRollupStatus
+  /**
+   * Epoch MILLISECONDS at which this subscription stops, when it is winding down
+   * (cancelled but still live) — otherwise absent. Computed by
+   * onMemberSubscriptionWrite via `subscriptionEndsAtMs`, the epoch-ms form of
+   * `subscriptionEndsAt`, so the member's Space and the studio's contact detail
+   * answer "when does this end" the same way.
+   *
+   * A plain number rather than a Timestamp on purpose: this is a denormalised
+   * display mirror living inside an array, and the trigger compares the whole
+   * array by JSON equality to stay idempotent.
+   */
+  cancels_at_ms?: number | null
+  /**
+   * WHETHER this subscription is winding down, asked apart from WHEN — via the
+   * shared `subscriptionIsCancelling`.
+   *
+   * `cancels_at_ms` alone could not carry the answer. A pre-migration
+   * member_subscriptions doc holds the cancellation boolean and NO dates (the
+   * period had moved onto the subscription item and the writer stored null), so
+   * its summary gets `cancels_at_ms: null` and a member's Space showed them
+   * nothing at all about a membership they had cancelled. Same population gap
+   * the operator console and the studio's contact detail both had to close.
+   */
+  cancelling?: boolean
 }
 
 export type ContactGender = 'M' | 'F' | 'other'
@@ -114,6 +151,28 @@ export interface Contact {
 
   // Emergency contacts (max 2)
   emergency_contacts?: EmergencyContact[]
+
+  /**
+   * @deprecated Superseded by the acceptance ledger
+   * (`documents/{documentId}/acceptances/*` + `signers/{contactId}`). Read
+   * NOTHING from this field.
+   *
+   * Declared here for the first time in order to mark it. It was written by
+   * `completeSignup` and existed on no type, was read by no code and rendered on
+   * no screen; the only client that filled it sent `version: ''` for every
+   * document, so it recorded that a checkbox was ticked and not what was ticked.
+   * `completeSignup` now writes real events against real immutable version
+   * snapshots (`waivers/signup.ts`) and keeps writing this blob for one release
+   * so nothing breaks mid-deploy.
+   *
+   * Two proofs of acceptance with different evidential weight and no marker
+   * saying which is which is the state to avoid — hence the marker. Removal is a
+   * follow-up once no reader remains.
+   */
+  consent?: {
+    privacyAcceptedAt?: Timestamp
+    documents?: Array<{ slug: string; kind: string | null; version: string | null }>
+  }
 
   // ─── Acquisition axis ──────────────────────────────────────────────────────
   // Sticky high-water funnel position (trial_booked → trial_attended → joined).
@@ -187,6 +246,14 @@ export interface Contact {
   subscription_price_id?: string // set only when the chosen type has prices
   subscription_amount?: number // amount snapshot at assignment time
   subscription_type_updated_at?: Timestamp
+  // PROVENANCE: the payment doc id that wrote the fields above, or null when no
+  // single payment owns them (a recurring Stripe renewal). Written on EVERY
+  // subscription-field write by writeContactSubscriptionFields — null included,
+  // never omitted — and read by exactly one thing: reversePaymentEffects, which
+  // clears the fields only when this matches the payment being reversed.
+  // Matching on subscription_type_id instead would strip a renewal of the same
+  // plan when an older payment for it is refunded.
+  subscription_source_ref?: string | null
   // Contact-level rollup of member_subscriptions Stripe status (webhook-maintained).
   // 'none' when the contact holds no live subscription. See SubscriptionRollupStatus.
   subscription_status?: SubscriptionRollupStatus
@@ -239,6 +306,12 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
+  // Marketing opt-out. Honoured by the automation engine and by outreach sends;
+  // DISTINCT from the ESP suppression list (mail_suppressions), which records
+  // bounces/blocks/spam reports and is applied inside the mail service.
+  // Transactional mail (bookings, codes, receipts) is unaffected.
+  email_unsubscribed?: boolean
+
   // Tags — free-form labels attached by automations or manually
   tags?: string[]
 
@@ -269,6 +342,13 @@ export interface ContactGroup {
   parent_id: string | null
   color?: string
   description?: string
+  // DYNAMIC group: membership is derived from this filter, evaluated lazily
+  // wherever it's needed, and NEVER materialized into Contact.group_ids.
+  // Absent ⇒ a manual group (membership is the stored group_ids array).
+  // The two sources are disjoint by design: a group is manual OR dynamic, which
+  // is what makes every mixed-mode question ("can I pin a manual member into a
+  // dynamic group?") unaskable rather than merely undefined.
+  rule?: ContactFilter
   created_at?: Timestamp
   created_by?: string
   updated_at?: Timestamp
@@ -353,13 +433,27 @@ export interface CreditGrant {
   subscription_type_id: string
   subscription_type_name?: string | null
   price_id?: string | null
+  // A reversal REDUCES credits_total to credits_used (absolute, never a
+  // decrement, never a delete) — so "no credits left" is expressed in the two
+  // numbers every reader already subtracts, and no reader needs a new filter.
   credits_total: number
   credits_used: number // 0..credits_total; only ever changed by Cloud Functions
   expires_at?: Timestamp | null // null = no expiry
   source: CreditGrantSource
   payment_intent_id?: string | null
+  // The payment doc id that produced this grant. Same value as the DOC ID —
+  // which is what a reversal keys off, because the field name differed by rail
+  // until Step 0 of the reversal work made every writer stamp both.
+  payment_ref?: string | null
   created_at?: Timestamp
   created_by?: string | null
+  // ─── reversal audit (written by reversePaymentEffects) ────────────────────
+  // Descriptive only. NOTHING reads these for a decision — remaining credits are
+  // credits_total - credits_used and nothing else.
+  reversed_at?: Timestamp | null
+  reversed_by_payment_ref?: string | null
+  /** Cumulative credits taken back by reversals of this grant. */
+  credits_revoked?: number
 }
 
 // Denormalised per-type balance on the contact doc (what lists, the access gate
@@ -396,6 +490,31 @@ export interface SubscriptionUsageLimit {
   per: UsageLimitPeriod
 }
 
+// ─── intro offer ("first 3 months at CHF 1, then the full price") ─────────────
+// A property of the PLAN, and — this is the load-bearing part — a property of
+// the CHECKOUT, never of a price. It is NOT an arm of resolvePaymentOptions:
+// that resolver returns ONE amount, and an intro offer is a SCHEDULE (an amount
+// AND how many periods it survives). The single-amount contract is exactly why
+// memberships were left out of the promo rails, and expressing this as a lower
+// `unit_amount` would make the reduced figure the RECURRING price — the member
+// would pay it forever. It is applied as a Stripe Coupon on the connected
+// account so the price returns to full on its own.
+//
+// Expressibility is constrained by Stripe: `duration: 'repeating'` is measured
+// in `duration_in_months` and nothing else, so "the first N periods" of a
+// WEEKLY plan cannot be stated. See shared/utils/introOffer.ts — the ONE
+// validator, shared by the editor, the public mirror, the pricing card and the
+// checkout callables.
+
+export interface SubscriptionIntroOffer {
+  /** Which of this type's own RECURRING prices the offer applies to. */
+  priceId: string
+  /** How many billing PERIODS of that price are discounted. 1 … INTRO_OFFER_MAX_PERIODS. */
+  periods: number
+  /** What the member pays PER PERIOD while it runs, MAJOR units. 0 = free. */
+  amount: number
+}
+
 export interface SubscriptionType {
   id: string
   name: string
@@ -417,6 +536,13 @@ export interface SubscriptionType {
   // studio per attended visit (major units, team currency). Drives the
   // partner_visits payout ledger — see Phase E1 of the pricing initiative.
   payoutPerVisit?: number
+  // ONE intro offer per plan, naming one of its own recurring prices. Absent /
+  // null = no offer. Never trusted as written: every reader resolves it through
+  // `resolveIntroOffer` (shared/utils/introOffer.ts), which returns null for
+  // anything Stripe cannot express — so an unsellable offer is invisible on the
+  // card AND unapplied at checkout, rather than promised in one place and
+  // charged in another.
+  introOffer?: SubscriptionIntroOffer | null
 }
 
 // ─── partner (aggregator) visit payout ledger ─────────────────────────────────

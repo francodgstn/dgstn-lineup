@@ -5,7 +5,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { assertOrgAdmin } from '../orgs'
+import { assertOrgAdmin, assertOrgSubscriptionLive } from '../orgs'
 import {
   asDict,
   clean,
@@ -128,6 +128,12 @@ export const publishOrgWebsite = onCall(async (request) => {
   if (!orgId) throw new HttpsError('invalid-argument', 'orgId is required')
 
   await assertOrgAdmin(uid, orgId)
+  // The org site is a surface of the organisation TIER, and a lapse takes it
+  // down (`lapseOrganization`). Without this the teardown is one click deep:
+  // the draft survives the unpublish by design, so an admin of an expired org
+  // could put the public site straight back up. Publishing asks; UNpublishing
+  // never does — taking your own page down is always allowed.
+  await assertOrgSubscriptionLive(orgId)
 
   const fs = admin.firestore()
 

@@ -22,7 +22,12 @@ if (
   !(globalThis as { _adminAuthEmu?: boolean })._adminAuthEmu
 ) {
   // Port overridable for parallel worktree dev (firebase.worktree.json).
+  // HOST follows the page, for the same reason apps/web does it (see
+  // emulatorHost there): `localhost` means "this device", so a hardcoded one
+  // sends a phone or a second machine to its own loopback and every auth call
+  // fails silently. Opened at localhost this is byte-identical to before.
   const authPort = process.env.NEXT_PUBLIC_AUTH_EMULATOR_PORT ?? '9099'
-  connectAuthEmulator(auth, `http://localhost:${authPort}`, { disableWarnings: true })
+  const authHost = window.location.hostname || 'localhost'
+  connectAuthEmulator(auth, `http://${authHost}:${authPort}`, { disableWarnings: true })
   ;(globalThis as { _adminAuthEmu?: boolean })._adminAuthEmu = true
 }

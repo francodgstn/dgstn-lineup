@@ -28,6 +28,24 @@
  *         (Premium/Elite only — e.g. contact 2, Premium annual)
  *       • "Strength & Conditioning for Fighters" → draft
  *     Published courses also get a courses/{id}/public_profile/{id} summary.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * PRICED SURFACES need a Stripe TEST connected account.
+ *
+ *   `TeamPublicProfile.payments_enabled` fails CLOSED (UX-33), so a seed with no
+ *   connected account behind it shows NO shop, NO drop-in price, NO priced trial
+ *   and NO priced appointment duration. That is the honest state, not a bug, and
+ *   it is what you get out of the box.
+ *
+ *   To get priced doors (and a checkout that actually completes), export an
+ *   already-onboarded Stripe TEST account id before seeding:
+ *
+ *     export STRIPE_CONNECT_TEST_ACCOUNT=acct_123        # → seed-team-studio
+ *     export STRIPE_CONNECT_TEST_ACCOUNT=acct_123,acct_456   # → studio, then org
+ *
+ *   ONE account backs exactly ONE team (see scripts/lib/connect.ts for why, and
+ *   for the one-time onboarding walk-through). Unset ⇒ silent skip: no error, one
+ *   warning line at the end of the run.
  */
 
 // emulator env vars must be set BEFORE admin.initializeApp().
@@ -37,7 +55,18 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ??= 'localhost:9099'
 process.env.FIRESTORE_EMULATOR_HOST ??= 'localhost:8080'
 
 import admin from 'firebase-admin'
-import { DEFAULT_PAYMENT_MODES, DEFAULT_KIOSK_CONFIG, toKioskPublicConfig } from '@linyup/shared'
+import {
+  DEFAULT_PAYMENT_MODES,
+  DEFAULT_KIOSK_CONFIG,
+  documentVersionId,
+  toKioskPublicConfig,
+} from '@linyup/shared'
+// The SAME sanitizer and the SAME hasher the publish callable uses — a seeded
+// version snapshot whose hash was computed by a second implementation would
+// make verify-waiver-ledger report a difference between two hashers rather than
+// a difference in the text.
+import { sanitizeRichHtml } from '../packages/functions/src/utils/sanitizeHtml'
+import { sha256Hex } from '../packages/functions/src/utils/crypto'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -58,6 +87,11 @@ import {
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import {
+  planSeedConnectAccounts,
+  linkSeedConnectAccount,
+  reportSeedConnectAccounts,
+} from './lib/connect'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -501,9 +535,10 @@ async function seedTeam(opts: {
   // Auth user
   await auth.createUser({ uid, email, password: 'linyup123', displayName, emailVerified: true })
 
-  // Booking settings — seeded to BOTH the public_profile (read by the public
-  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
-  // admin Settings → Booking form).
+  // Booking settings — ONE store, the team's public_profile: the public booking
+  // flow, the mobile app, the booking callables and the admin Settings → Booking
+  // form all read it there. (There used to be a team-doc mirror at
+  // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
   const bookingSettings = {
     flowType: 'activity-first',
     windowMonths: 2,
@@ -545,7 +580,6 @@ async function seedTeam(opts: {
       ranking_systems: rankingSystemDefs,
       settings: {
         gamification: gamificationSettings,
-        booking: bookingSettings,
         giftCards: giftCardSettings,
         noShowPolicy: noShowPolicySettings,
       },
@@ -1812,6 +1846,26 @@ async function seedTeam(opts: {
   // ── gift cards (E3) — one pre-minted active card, studio tier only ─────────
   // Mirrors what mintGiftCard writes on a real purchase, minus payment_intent_id
   // (there was no real Stripe checkout behind this one).
+  //
+  // The PLUGIN must be installed alongside the data (Wave 3.5): gift cards are
+  // install-gated now, and syncTeamPublicProfile refuses to mirror
+  // `giftCards.enabled` without it — so seeding the card without the plugin
+  // gives a demo tenant an invisible gift-card offer and an empty Payments tab.
+  if (plan === 'studio') {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('installed_plugins')
+      .doc('gift-cards')
+      .set({
+        pluginId: 'gift-cards',
+        teamId,
+        installedAt: ts(daysFromNow(-30)),
+        installedBy: uid,
+        status: 'active',
+        config: {},
+      })
+  }
   if (plan === 'studio') {
     await db
       .collection('teams')
@@ -1863,8 +1917,15 @@ async function seedTeam(opts: {
     await seedKiosk(teamId, uid)
   }
 
-  // ── documents plugin (free & up — all plans) ──────────────────────────────────
+  // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
+
+  // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
+  // Links a REAL onboarded test account when STRIPE_CONNECT_TEST_ACCOUNT names
+  // one for this team; silently leaves the team payment-less otherwise. Last,
+  // so it merges onto the public_profile written above rather than being
+  // overwritten by it. See scripts/lib/connect.ts for the one-time setup.
+  await linkSeedConnectAccount({ db, teamId })
 }
 
 // ── kiosk seed ──────────────────────────────────────────────────────────────────
@@ -2391,21 +2452,19 @@ async function seedDocuments(
   teamName: string,
   uid: string,
 ) {
-  // Install the Documents plugin (minPlan 'free' — available to every plan).
+  // NO PLUGIN INSTALL. Documents is a default feature on every plan; its
+  // signup-consent selection lives in teams/{teamId}/settings/documents, which is
+  // where the panel writes it and where syncTeamPublicProfile reads it (falling
+  // back to the retired plugin config only for teams the backfill has not
+  // reached — a fresh seed is never one of those).
   await db
     .collection('teams')
     .doc(teamId)
-    .collection('installed_plugins')
+    .collection('settings')
     .doc('documents')
     .set({
-      pluginId: 'documents',
-      teamId,
-      installedAt: ts(daysFromNow(-30)),
-      installedBy: uid,
-      status: 'active',
-      config: {
-        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      },
+      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      updated_at: ts(daysFromNow(-30)),
     })
 
   const docSeeds = [
@@ -2487,6 +2546,12 @@ async function seedDocuments(
   const now = ts(new Date())
   for (const doc of docSeeds) {
     const docRef = db.collection('documents').doc(doc.id)
+    // A PUBLISHED document has a VERSION. Seeding one without a version would
+    // reproduce, on every fresh emulator run, exactly the state
+    // scripts/backfill-document-versions.ts exists to clear — and
+    // scripts/verify-waiver-ledger.ts would fail on clean seed data, which is
+    // how a real alarm gets learned as noise.
+    const bodyHtml = sanitizeRichHtml(doc.body)
     await docRef.set({
       id: doc.id,
       teamId,
@@ -2499,10 +2564,32 @@ async function seedDocuments(
       status: 'published',
       isPublic: true,
       order: doc.order,
+      current_version: 1,
+      min_valid_version: null,
       created_at: ts(daysFromNow(-25)),
       updated_at: now,
       createdBy: uid,
       archived_at: null,
+    })
+
+    // The IMMUTABLE snapshot the mirror copies and an acceptance would pin.
+    await docRef.collection('versions').doc(documentVersionId(1)).set({
+      teamId,
+      documentId: doc.id,
+      version: 1,
+      kind: doc.kind,
+      title: doc.title,
+      bodyHtml,
+      bodyHash: sha256Hex(bodyHtml),
+      bodyChars: bodyHtml.length,
+      externalUrl: null,
+      mayIncludeMinors: null,
+      publish_outcome: 'silent',
+      supersedes: null,
+      published_at: now,
+      published_by: uid,
+      published_by_name: 'Seed',
+      backfilled_at: null,
     })
 
     // World-readable public_profile summary (what syncDocumentPublicProfile writes)
@@ -2514,7 +2601,9 @@ async function seedDocuments(
       kind: doc.kind,
       source: doc.source,
       summary: doc.summary,
-      bodyHtml: doc.body,
+      bodyHtml,
+      bodyHash: sha256Hex(bodyHtml),
+      version: 1,
       updated_at: now,
     })
   }
@@ -2905,6 +2994,7 @@ async function main() {
   console.log(
     `   ${'free'.padEnd(16)} →  http://localhost:3000/public/sunrise-yoga-studio  (shows "Powered by Linyup")`
   )
+  reportSeedConnectAccounts()
   console.log('')
 }
 

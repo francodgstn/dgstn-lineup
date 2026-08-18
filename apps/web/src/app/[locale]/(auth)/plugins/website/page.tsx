@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@/i18n/navigation'
@@ -11,6 +12,7 @@ import {
   Plus,
   GripVertical,
   Pencil,
+  Copy,
   Trash2,
   Eye,
   EyeOff,
@@ -51,6 +53,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DynamicIcon } from '@/components/ui/icon-picker'
+import { SurfaceLinksEditor } from './SurfaceLinksEditor'
 import { ColorPicker } from '@/components/ui/color-picker'
 import type { SiteDraft, SiteMeta, WebsiteSection, WebsiteSectionType } from '@linyup/shared'
 import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
@@ -58,7 +61,7 @@ import { sectionNavLabel } from '@/components/site/sections'
 import { SectionEditor } from '@/plugins/website/SectionEditor'
 import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugins/website/hooks'
 import { EmbedWidgets } from '@/plugins/website/EmbedWidgets'
-import { SECTION_LIBRARY, newSection, emptyDraft } from '@/plugins/website/defaults'
+import { SECTION_LIBRARY, newSection, newSectionId, emptyDraft } from '@/plugins/website/defaults'
 import { getWebsiteLimits } from '@/plugins/website/limits'
 
 const limits = getWebsiteLimits()
@@ -177,6 +180,28 @@ function AppearancePanel({
             />
           </div>
         )}
+
+        <div className="border-t pt-3">
+          <label className="flex items-center justify-between">
+            <span className="text-sm">Show member sign-in</span>
+            <Switch
+              checked={meta.header.showSignIn !== false}
+              onCheckedChange={(v) => setHeader({ showSignIn: v })}
+            />
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Lets a member sign in and reach their Space from your website.
+          </p>
+        </div>
+
+        {/* Links to the studio's other public pages. The list is derived from
+            what's actually live (shop, Space, documents), so a newly-enabled
+            plugin appears here without editing the site — these controls only
+            record the studio's deviations from that. */}
+        <SurfaceLinksEditor
+          links={meta.header.surfaceLinks}
+          onChange={(surfaceLinks) => setHeader({ surfaceLinks })}
+        />
       </div>
 
       <label className="flex items-center justify-between rounded-lg border p-3">
@@ -236,10 +261,14 @@ function sectionSummary(s: WebsiteSection): string {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'sections' | 'appearance' | 'embed'
+const SITE_TABS = ['sections', 'appearance', 'embed'] as const
 
 export default function WebsiteBuilderPage() {
   const t = useTranslations('Website')
+  // The published site's own chrome namespace — the builder shows the same
+  // last-resort nav labels a visitor would see when a section has no heading.
+  const tSite = useTranslations('Site')
+  const tCommon = useTranslations('Common')
   const { user, currentTeamId, team } = useAuth()
   const qc = useQueryClient()
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
@@ -248,11 +277,18 @@ export default function WebsiteBuilderPage() {
 
   const [draft, setDraft] = useState<SiteDraft | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [tab, setTab] = useState<Tab>('sections')
+  const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
   const [openId, setOpenId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  // Unpublishing is "take it off the internet" — it sat one unconfirmed click
+  // from Publish (UX-50). It is however fully REVERSIBLE and loses nothing
+  // (unpublishSiteForTeam deletes site_published/{teamId} and merges
+  // `enabled: false` onto the draft — the draft's pages, wording and images are
+  // untouched), so the copy says so. An overstated warning trains people to
+  // click through the next one.
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
 
   // Initialise the working draft once data has settled.
   useEffect(() => {
@@ -290,6 +326,33 @@ export default function WebsiteBuilderPage() {
     setOpenId(sec.id)
     setTab('sections')
   }
+  /**
+   * Copy a section, in place, right below the original.
+   *
+   * The ONLY thing reset is the `id` — and it has to be, because it is three
+   * things at once: the React key, the on-page anchor and the storage path
+   * segment new image uploads are written under. Everything else (including
+   * image URLs, which stay valid download links) is copied as-is. The copy
+   * lands in the DRAFT like every other edit here; the public site is untouched
+   * until Publish, which is already its own explicit step.
+   */
+  function duplicateSection(id: string) {
+    if (draft && draft.sections.length >= limits.maxSections) {
+      toast.error(t('limitSections', { max: limits.maxSections }))
+      return
+    }
+    const source = draft?.sections.find((s) => s.id === id)
+    if (!source) return
+    const copy = { ...source, id: newSectionId() } as WebsiteSection
+    mutate((d) => {
+      const at = d.sections.findIndex((s) => s.id === id)
+      const next = [...d.sections]
+      next.splice(at + 1, 0, copy)
+      return { ...d, sections: next }
+    })
+    setOpenId(copy.id)
+  }
+
   const removeSection = (id: string) =>
     mutate((d) => ({ ...d, sections: d.sections.filter((s) => s.id !== id) }))
   function reorderSections(from: number, to: number) {
@@ -426,7 +489,7 @@ export default function WebsiteBuilderPage() {
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={handleUnpublish}
+              onClick={() => setConfirmUnpublish(true)}
               disabled={publishing}
             >
               {t('unpublish')}
@@ -543,6 +606,14 @@ export default function WebsiteBuilderPage() {
                               </button>
                               <button
                                 type="button"
+                                onClick={() => duplicateSection(s.id)}
+                                title={tCommon('duplicate')}
+                                className="rounded p-1 hover:bg-muted"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setDeleteId(s.id)}
                                 className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                               >
@@ -574,7 +645,7 @@ export default function WebsiteBuilderPage() {
                                         onChange={(e) =>
                                           updateSection(s.id, { menuLabel: e.target.value || undefined })
                                         }
-                                        placeholder={sectionNavLabel(s)}
+                                        placeholder={sectionNavLabel(s, tSite)}
                                         maxLength={120}
                                         className="h-9"
                                       />
@@ -656,6 +727,33 @@ export default function WebsiteBuilderPage() {
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unpublish confirmation. States the consequence in the visitor's terms —
+          the site goes offline now, and any bio-link entry pointing at it stops
+          being offered (BioLinkHome filters page links through
+          `systemLinkIsLive`, UX-49) — and then states, equally plainly, that
+          nothing is lost and it can be published again. NOT styled destructive:
+          this deletes no work. */}
+      <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unpublishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unpublishConfirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={publishing}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={publishing}
+              onClick={() => {
+                setConfirmUnpublish(false)
+                void handleUnpublish()
+              }}
+            >
+              {t('unpublishConfirmAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -18,6 +18,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:merge": "node scripts/i18n-merge.mjs",
     "functions:build": "pnpm --filter @linyup/shared run build && pnpm --filter @linyup/functions run build",
     "functions:watch": "pnpm --filter @linyup/functions run watch",
     "emulators:start": "pnpm functions:build && firebase emulators:start --only auth,firestore,functions,storage --project demo-linyup",
@@ -37,9 +39,15 @@
     "staging:reset": "tsx scripts/reset-staging-db.ts --confirm",
     "lead:seed": "tsx scripts/seed-lead.ts",
     "sandbox:seed": "tsx scripts/seed-sandbox.ts",
-    "sandbox:reset": "tsx scripts/reset-sandbox-db.ts --confirm",
+    "sandbox:reset": "tsx scripts/reset-sandbox-db.ts",
     "messaging:policy": "tsx scripts/messaging-policy.ts",
-    "backfill:finance": "tsx scripts/backfill-finance-journal.ts"
+    "backfill:finance": "tsx scripts/backfill-finance-journal.ts",
+    "backfill:document-versions": "tsx scripts/backfill-document-versions.ts",
+    "audit:document-visibility": "tsx scripts/audit-document-visibility.ts",
+    "backfill:document-mirrors": "tsx scripts/backfill-document-mirrors.ts",
+    "backfill:subscription-lifecycle": "tsx scripts/backfill-subscription-lifecycle.ts",
+    "backfill:gateway-data": "tsx scripts/backfill-gateway-data.ts",
+    "verify:waiver-ledger": "tsx scripts/verify-waiver-ledger.ts"
   },
   "devDependencies": {
     "firebase-admin": "^13.0.0",

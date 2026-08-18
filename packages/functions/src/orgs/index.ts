@@ -2,27 +2,20 @@
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { getSecret } from '../utils/secrets'
 import { getHostingUrl, resolveBaseUrl } from '../utils/env'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { getTeam } from '../utils/teams'
-import { StripeAdapter } from '../utils/gateway/stripe'
+import { getPlatformStripeAdapter } from '../saas-billing/actions'
 import type { OrgRole } from '@linyup/shared'
-import { NOTIFICATIONS_SUBCOLLECTION } from '@linyup/shared'
+import { NOTIFICATIONS_SUBCOLLECTION, ORG_TRIAL_DAYS, TRIAL_DAYS } from '@linyup/shared'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-async function getPlatformStripeAdapter(): Promise<StripeAdapter> {
-  const secretKey = await getSecret('stripe-secret-key')
-  return StripeAdapter.withSecretKey(
-    { type: 'stripe', publishable_key: '', currency: 'chf' },
-    secretKey,
-  )
-}
-
-// Exported so other org-scoped callables (e.g. ../orgWebsite) reuse the exact
-// same org-admin gate instead of re-implementing the org_members role check.
+// Exported so other org-scoped callables (e.g. ../orgWebsite, ./billing) reuse
+// the exact same org-admin gate instead of re-implementing the org_members role
+// check. THIS is what authorizes an organisation's own billing — an org admin is
+// not a team owner and has no `team_members` document anywhere (UX-75).
 export async function assertOrgAdmin(uid: string, orgId: string): Promise<void> {
   const memberDoc = await admin.firestore()
     .collection('organizations').doc(orgId)
@@ -30,6 +23,33 @@ export async function assertOrgAdmin(uid: string, orgId: string): Promise<void> 
     .get()
   if (!memberDoc.exists || memberDoc.data()?.role !== 'org_admin') {
     throw new HttpsError('permission-denied', 'Organization admin access required')
+  }
+}
+
+/**
+ * "Is this organisation currently paying (or still inside its trial)?" — ONE
+ * definition, read off `saas_subscriptions/{orgId}.status`, which is the
+ * document both billing rails write and the org billing page reads.
+ *
+ * It exists because a lapse is now real (UX-9): `handleTrialLifecycle` phase 2
+ * rests a lapsed org on 'expired' and the webhook on 'cancelled'. Anything that
+ * would hand the ORGANISATION TIER back out from under a lapsed subscription
+ * asks this first. A missing subscription document reads as 'trial' — an org
+ * created before this rail existed is mid-trial, not lapsed.
+ *
+ * Callers: `acceptOrgInvitation` (accepting IS the grant of the tier to a
+ * studio) and `publishOrgWebsite` (the org's paid public surface, which the
+ * lapse takes down and a click would otherwise put straight back up).
+ */
+export async function assertOrgSubscriptionLive(orgId: string): Promise<void> {
+  const sub = await admin.firestore().collection('saas_subscriptions').doc(orgId).get()
+  const status = sub.exists ? ((sub.data()?.status as string | undefined) ?? 'trial') : 'trial'
+  if (status !== 'trial' && status !== 'active') {
+    throw new HttpsError(
+      'failed-precondition',
+      'This organization does not have an active subscription.',
+      { reason: 'org_subscription_inactive' }
+    )
   }
 }
 
@@ -65,7 +85,18 @@ export const createOrganization = onCall(async (request) => {
   }
 
   const now = FieldValue.serverTimestamp()
-  const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))
+  // A DEADLINE, not a countdown: `handleTrialLifecycle`'s org phase reads this
+  // stored value and never recomputes it, so a Linyup operator onboarding an
+  // organisation by hand extends its trial by editing this one field (or exempts
+  // it entirely with `flags.internal` / `flags.pilot`).
+  const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + ORG_TRIAL_DAYS * 24 * 60 * 60 * 1000))
+
+  // Display copy for the creator's own member row. The org Members list names
+  // people from the membership document — an org admin has no rule that lets
+  // them read `users/{uid}` — so a row written without these renders a raw uid.
+  const creatorDoc = await db.collection('users').doc(uid).get()
+  const creatorName = (creatorDoc.data()?.displayName as string | undefined) ?? ''
+  const creatorEmail = (creatorDoc.data()?.email as string | undefined) ?? ''
 
   const orgRef = db.collection('organizations').doc()
   const batch = db.batch()
@@ -89,6 +120,8 @@ export const createOrganization = onCall(async (request) => {
     role: 'org_admin',
     joined: now,
     addedBy: uid,
+    displayName: creatorName,
+    email: creatorEmail,
   })
 
   // Record orgId on the user profile so the sidebar can find it without a collectionGroup query
@@ -256,6 +289,21 @@ export const acceptOrgInvitation = onCall(async (request) => {
   const subDoc = await db.collection('saas_subscriptions').doc(orgId).get()
   const orgPlanStatus = subDoc.exists ? (subDoc.data()?.status ?? 'trial') : 'trial'
 
+  // ACCEPTING IS THE GRANT — this write is what puts a studio on the
+  // organisation plan (UX-35: `org_id` IS the grant), so an organisation that is
+  // no longer paying must not be able to issue it. Without this check the whole
+  // of UX-9 is undone by two clicks: the trial sweep lapses the org and unlinks
+  // its studios, and the org admin re-invites them straight back onto the top
+  // tier — with the org now on 'expired', so the sweep (which selects 'trial')
+  // can never fire again.
+  if (orgPlanStatus !== 'trial' && orgPlanStatus !== 'active') {
+    throw new HttpsError(
+      'failed-precondition',
+      'This organization does not have an active subscription. Ask an organization admin to subscribe, then accept again.',
+      { reason: 'org_subscription_inactive' }
+    )
+  }
+
   const now = FieldValue.serverTimestamp()
   const batch = db.batch()
 
@@ -274,11 +322,17 @@ export const acceptOrgInvitation = onCall(async (request) => {
     }
   )
 
-  // Link team to org and upgrade its plan
+  // Link team to org and upgrade its plan. `trial_ends_at` is CLEARED: the
+  // team's own trial is over as a fact — the organisation's subscription is what
+  // governs it now, and a leftover past date on a team whose status is 'trial'
+  // (which it is whenever the org is still trialing) is precisely what made
+  // handleTrialLifecycle reset member studios to Free (UX-35). One stale field,
+  // two systems disagreeing about who is paying.
   batch.update(db.collection('teams').doc(data.teamId), {
     org_id: orgId,
     plan: 'organization',
     plan_status: orgPlanStatus,
+    trial_ends_at: FieldValue.delete(),
     updated_at: now,
   })
 
@@ -336,14 +390,17 @@ export const removeTeamFromOrg = onCall(async (request) => {
   }
 
   const now = FieldValue.serverTimestamp()
-  const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))
+  const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000))
 
   const batch = db.batch()
 
   // Mark org_teams entry as removed
   batch.update(orgTeamRef, { status: 'removed', removed_at: now })
 
-  // Reset team to a 14-day grace trial so they can subscribe independently
+  // Reset team to a grace trial so they can subscribe independently. It is a
+  // TEAM trial, so it is TRIAL_DAYS long — the same one a self-service signup
+  // gets. (It was hard-coded to 14 from before the 2026-06 pricing overhaul
+  // moved a team trial to 30; nothing else in the product grants 14 any more.)
   batch.update(db.collection('teams').doc(data.teamId), {
     org_id: FieldValue.delete(),
     plan: 'studio',

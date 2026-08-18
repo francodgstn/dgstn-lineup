@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -28,6 +28,7 @@ import {
 } from '@linyup/shared'
 import type { EventTypeConfig, EventTypeField, EventTypeFieldType } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import { useTranslations } from 'next-intl'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -154,11 +155,11 @@ function EventTypeFormDialog({
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{initial ? t('form.editTitle') : t('form.newTitle')}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <DialogBody className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('form.name')}</Label>
@@ -180,7 +181,7 @@ function EventTypeFormDialog({
             </p>
             <FieldBuilder fields={fields} onChange={setFields} />
           </div>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>{t('form.cancel')}</Button>
           <Button onClick={handleSave} disabled={busy || !name.trim()}>
@@ -197,6 +198,7 @@ function EventTypeFormDialog({
 export default function EventTypesPage() {
   const t = useTranslations('EventTypesSettings')
   const { currentTeamId } = useAuth()
+  const { canDiscover } = usePluginDiscovery()
   const qc = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<EventTypeConfig | null>(null)
@@ -239,7 +241,13 @@ export default function EventTypesPage() {
     invalidate()
   }
 
-  const pluginTypes = PLUGIN_REGISTRY.filter((p) => p.eventType)
+  // This section names the plugin that provides each type ("Provided by
+  // hmd-fighting-cup"), so it is a discovery surface even though it installs
+  // nothing — it was the second place a customer's name reached every other
+  // tenant. Install state is deliberately NOT part of the filter: the list has
+  // always shown plugin types whether or not the team installed them, and
+  // narrowing that here would be a separate behaviour change.
+  const pluginTypes = PLUGIN_REGISTRY.filter((p) => p.eventType && canDiscover(p))
 
   return (
     <div className="space-y-6">

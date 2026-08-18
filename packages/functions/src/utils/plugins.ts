@@ -3,12 +3,15 @@
 // (saas-billing) so teardown logic is never duplicated.
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
+import { HttpsError } from 'firebase-functions/v2/https'
 import {
   TEAMS_COLLECTION,
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
+  ORG_SITE_PUBLISHED_COLLECTION,
+  ORG_SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
-  DOCUMENTS_COLLECTION,
+  INSTALLED_PLUGINS_SUBCOLLECTION,
 } from '@linyup/shared'
 
 /**
@@ -32,6 +35,46 @@ export async function touchTeamForSurfaceRecompute(teamId: string): Promise<void
     .set({ surfaces_updated_at: FieldValue.serverTimestamp() }, { merge: true })
 }
 
+/** Is a plugin installed AND active for this team? */
+export async function pluginIsActive(teamId: string, pluginId: string): Promise<boolean> {
+  const snap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+    .doc(pluginId)
+    .get()
+  return snap.exists && snap.data()?.status === 'active'
+}
+
+/**
+ * THE install gate for a plugin-delivered capability. One helper, so a new entry
+ * point is a one-line addition rather than a re-derivation of what "installed"
+ * means.
+ *
+ * ── WHERE IT BELONGS, AND WHERE IT MUST NOT GO ──────────────────────────────
+ * On CREATION — selling a gift card, minting one, creating a promo code. NEVER
+ * on consuming what already exists:
+ *
+ *   • An outstanding gift card is money the studio has ALREADY TAKEN. Refusing
+ *     to redeem it because somebody unticked a plugin would be the studio
+ *     keeping a customer's money and giving nothing back.
+ *   • A live promo code caught mid-checkout belongs to a visitor who did
+ *     nothing wrong. This matches the `requirePlan` gate it replaces, which was
+ *     creation-only for the same reason.
+ *
+ * `packages/functions/src/connect/pluginGate.test.ts` re-derives the call sites
+ * from the source, so a new creation path that forgets this fails the build,
+ * and a redemption path that adds it fails too.
+ */
+export async function assertPluginInstalled(teamId: string, pluginId: string): Promise<void> {
+  if (await pluginIsActive(teamId, pluginId)) return
+  throw new HttpsError('failed-precondition', `The ${pluginId} plugin is not installed`, {
+    reason: 'plugin_not_installed',
+    pluginId,
+  })
+}
+
 /**
  * Removes the public site snapshot and flags the site draft as disabled.
  * Mirrors the core of unpublishWebsite callable (website/index.ts) without
@@ -47,10 +90,35 @@ export async function unpublishSiteForTeam(teamId: string): Promise<void> {
 }
 
 /**
+ * The organisation-level counterpart: removes `org_site_published/{orgId}` and
+ * flags the org draft disabled. Mirrors the core of the unpublishOrgWebsite
+ * callable (orgWebsite/index.ts) without its auth guard.
+ *
+ * It exists because an org has NO `onInstalledPluginStatusChange` trigger — that
+ * trigger is bound to `teams/{teamId}/installed_plugins/{pluginId}` only — so
+ * deactivating an org's `website` install tears nothing down by itself. The org
+ * lapse path (orgs/lifecycle.ts) calls this explicitly.
+ */
+export async function unpublishSiteForOrg(orgId: string): Promise<void> {
+  const db = admin.firestore()
+  await db.doc(`${ORG_SITE_PUBLISHED_COLLECTION}/${orgId}`).delete()
+  await db.doc(`${ORG_SITE_DRAFTS_COLLECTION}/${orgId}`).set(
+    { enabled: false, updated_at: FieldValue.serverTimestamp() },
+    { merge: true }
+  )
+}
+
+/**
  * Batch-deletes every courses/{courseId}/public_profile/{courseId} summary
  * belonging to the team, effectively unpublishing all course listings.
  * Mirrors what syncCoursePublicProfile does for a single course on delete/
  * unpublish, applied to all courses of the team at once.
+ *
+ * ONE-WAY: nothing rewrites a mirror on reinstall (syncCoursePublicProfile fires
+ * on a `courses/{id}` write only), and a contact who BOUGHT a course reaches it
+ * through this mirror — so whether it runs at all is a decision, not a detail.
+ * Both callers take it from `CourseMirrorDisposition` (saas-billing/downgrade.ts),
+ * which is where that decision is written down.
  */
 export async function deleteAllCoursePublicProfiles(teamId: string): Promise<void> {
   const db = admin.firestore()
@@ -76,29 +144,14 @@ export async function deleteAllCoursePublicProfiles(teamId: string): Promise<voi
   }
 }
 
-/**
- * Batch-deletes every documents/{documentId}/public_profile/{documentId} summary
- * belonging to the team, effectively unpublishing all public documents. Mirrors
- * what syncDocumentPublicProfile does for a single document on delete/unpublish,
- * applied to all of the team's documents at once when the plugin is removed.
- */
-export async function deleteAllDocumentPublicProfiles(teamId: string): Promise<void> {
-  const db = admin.firestore()
-  const docsSnap = await db
-    .collection(DOCUMENTS_COLLECTION)
-    .where('teamId', '==', teamId)
-    .get()
-
-  if (docsSnap.empty) return
-
-  const BATCH_SIZE = 400
-  const docs = docsSnap.docs
-  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-    const batch = db.batch()
-    for (const docDoc of docs.slice(i, i + BATCH_SIZE)) {
-      const profileRef = docDoc.ref.collection('public_profile').doc(docDoc.id)
-      batch.delete(profileRef)
-    }
-    await batch.commit()
-  }
-}
+// There is deliberately NO deleteAllDocumentPublicProfiles here.
+//
+// It existed to tear down every document mirror when the Documents plugin was
+// deactivated — which `downgradeTeamToFree` triggers for every lapsed team.
+// Documents is now a default feature with no install to deactivate, and under a
+// waiver gate that teardown was actively dangerous: a downgrade would have
+// deleted the public copy of a document the booking gate points at, and emptied
+// `signup_documents` in the same beat. Retiring a plan must not delete evidence.
+//
+// If some future feature needs a bulk mirror teardown, write it for that feature
+// — do not resurrect this one.

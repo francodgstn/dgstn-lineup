@@ -1,5 +1,52 @@
 "use client"
 
+/**
+ * Dialog primitive.
+ *
+ * ── THE SCROLL RULE (read this before adding a long dialog) ──────────────────
+ *
+ * A dialog that can outgrow the viewport scrolls its BODY, never the popup.
+ * Scroll the popup and the footer scrolls with it, so the manager finishes a
+ * long form and then has to scroll back down to find Save — and on a short
+ * viewport she cannot see the primary action while touching the last field.
+ * The close button rides away with it too.
+ *
+ * So: never put `max-h-*` / `overflow-y-auto` on `DialogContent`. Wrap the
+ * scrollable part in `<DialogBody>` instead. Its presence is the opt-in — the
+ * popup then becomes a flex column with a viewport-bounded height, and the
+ * header and footer are fixed rows around the scrolling body.
+ *
+ *   <DialogContent className="sm:max-w-lg">
+ *     <DialogHeader>…</DialogHeader>
+ *     <DialogBody className="space-y-4">…fields…</DialogBody>
+ *     <DialogFooter>…</DialogFooter>
+ *   </DialogContent>
+ *
+ * If the footer lives INSIDE the form (so the submit button stays a plain
+ * `type="submit"`), the form is the row that has to grow, so it joins the flex
+ * chain and carries the spacing the body no longer inherits:
+ *
+ *   <DialogContent className="sm:max-w-lg">
+ *     <DialogHeader>…</DialogHeader>
+ *     <form onSubmit={…} className="flex min-h-0 flex-1 flex-col gap-4">
+ *       <DialogBody className="space-y-4">…fields…</DialogBody>
+ *       <DialogFooter>…</DialogFooter>
+ *     </form>
+ *   </DialogContent>
+ *
+ * `DialogBody` gives its children no spacing of its own — carry over whatever
+ * rhythm they had (the popup's own gap is `gap-6`).
+ *
+ * Short dialogs need no decision: a two-line confirm has no `DialogBody`, so
+ * nothing changes for it, and even one that opts in only shows the pin once the
+ * body actually overflows (`max-h` is a maximum, not a height). A form-level
+ * error belongs in the pinned footer, where it stays visible with the button
+ * it blocks.
+ *
+ * `AlertDialog` (./alert-dialog.tsx) deliberately does NOT share this — see the
+ * note there.
+ */
+
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
@@ -54,6 +101,10 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // A DialogBody anywhere inside turns the popup into a bounded flex
+          // column: the body scrolls, the header/footer/close button do not.
+          // Without one the popup is untouched — see THE SCROLL RULE above.
+          "has-data-[slot=dialog-body]:flex has-data-[slot=dialog-body]:max-h-[calc(100dvh-2rem)] has-data-[slot=dialog-body]:flex-col has-data-[slot=dialog-body]:overflow-hidden",
           className
         )}
         {...props}
@@ -84,7 +135,22 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex shrink-0 flex-col gap-2", className)}
+      {...props}
+    />
+  )
+}
+
+/**
+ * The scrolling middle row. Its presence is what switches `DialogContent` into
+ * a pinned header/footer layout — see THE SCROLL RULE at the top of this file.
+ * Carries no spacing of its own: pass the rhythm its children need.
+ */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
       {...props}
     />
   )
@@ -102,7 +168,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex shrink-0 flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -148,6 +214,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,

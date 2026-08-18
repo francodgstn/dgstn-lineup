@@ -121,18 +121,18 @@ export const onAffiliationWrite = onDocumentWritten(
     for (const key of addedKeys) {
       const delta: EventDelta = { affiliationTypeKey: key }
       console.log(`[onAffiliationWrite] contact=${contactId} team=${teamId} trigger=affiliation_added key=${key}`) // eslint-disable-line no-console
-      await fireEventRules(teamId, 'affiliation_added', [contact], undefined, delta)
+      await fireEventRules(teamId, 'affiliation_added', [contact], { eventId: event.id }, delta)
     }
     for (const key of removedKeys) {
       const delta: EventDelta = { affiliationTypeKey: key }
       console.log(`[onAffiliationWrite] contact=${contactId} team=${teamId} trigger=affiliation_removed key=${key}`) // eslint-disable-line no-console
-      await fireEventRules(teamId, 'affiliation_removed', [contact], undefined, delta)
+      await fireEventRules(teamId, 'affiliation_removed', [contact], { eventId: event.id }, delta)
     }
 
     // Legacy coarse trigger — fires whenever the summary changed (any add or remove),
     // so existing 'affiliation_changed' rules keep working without migration.
     if (summaryChanged) {
-      await fireEventRules(teamId, 'affiliation_changed', [contact])
+      await fireEventRules(teamId, 'affiliation_changed', [contact], { eventId: event.id })
     }
   },
 )

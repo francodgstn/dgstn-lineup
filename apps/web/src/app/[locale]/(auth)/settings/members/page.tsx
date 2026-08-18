@@ -18,13 +18,11 @@ import {
   Clock,
   CheckCircle2,
   X,
-  Lock,
   Copy,
   Check,
 } from 'lucide-react'
 import { usePlan } from '@/hooks/usePlan'
 import { useCapabilities } from '@/hooks/useCapabilities'
-import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,8 +51,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { TEAMS_COLLECTION, TEAM_INVITATIONS_SUBCOLLECTION } from '@linyup/shared'
+import {
+  MULTIPLE_USERS_PLAN_REFUSAL,
+  TEAMS_COLLECTION,
+  TEAM_INVITATIONS_SUBCOLLECTION,
+} from '@linyup/shared'
 import type { TeamInvitation, TeamRole } from '@linyup/shared'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 
 // ----- types ----------------------------------------------------------------
 
@@ -135,7 +138,10 @@ function InviteDialog({ open, onClose, onSuccess }: InviteDialogProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       // Backstop for the server-side gate (stable error code → localized copy).
-      setError(msg.includes('free-plan-single-user') ? t('inviteLockedFreeBody') : msg)
+      // The dialog is not reachable below the tier, so this fires only when the
+      // plan changed under an open dialog — or when the client gate is bypassed,
+      // which is exactly why the server has one (utils/teams.requireExtraUserPlan).
+      setError(msg.includes(MULTIPLE_USERS_PLAN_REFUSAL) ? t('inviteLockedBody') : msg)
     } finally {
       setLoading(false)
     }
@@ -345,12 +351,27 @@ export default function TeamMembersPage() {
   const t = useTranslations('TeamMembers')
   const { currentTeamId: teamId, user } = useAuth()
   const { can } = useCapabilities()
-  const { plan } = usePlan()
-  const { openUpgradeModal } = useUpgradeModal()
+  const { hasFeature, minimumPlanFor, isLoading: planLoading } = usePlan()
   const qc = useQueryClient()
 
-  // The Free plan is single-user — inviting opens the upgrade modal instead.
-  const inviteLocked = plan === 'free'
+  // A SECOND USER IS A STUDIO FEATURE (UX-42, decided 2026-08-18).
+  //
+  // `multiple_managers` has always been flagged at Studio in PLAN_FEATURES while
+  // this page unlocked invites at Coach; the flag was the true one, so the gate
+  // moved to it — and it now READS the flag rather than restating a tier, so the
+  // two can never disagree again.
+  //
+  // THE GATE IS ON ADDING, NOT ON BEING. Nothing here (and nothing in
+  // downgradeTeamToFree) touches team_members: a team that already has a second
+  // person keeps them, with their role and capabilities intact, and every member
+  // action below stays available. Only the invite goes.
+  //
+  // `hasFeature` answers false while the team doc is still loading, which would
+  // flash a refusal at a studio that has the feature — so neither side of the
+  // gate renders until the plan is known.
+  const canInvite = hasFeature('multiple_managers')
+  const inviteGateKnown = !planLoading
+  const invitePlan = minimumPlanFor('multiple_managers')
 
   // toast
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -502,16 +523,34 @@ export default function TeamMembersPage() {
         <div>
           <h1 className="text-2xl font-bold">{t('title')}</h1>
         </div>
-        {canManage && (
-          <Button
-            onClick={() => (inviteLocked ? openUpgradeModal({ minPlan: 'coach' }) : setInviteOpen(true))}
-            variant={inviteLocked ? 'outline' : 'default'}
-          >
-            {inviteLocked ? <Lock className="h-4 w-4 mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+        {canManage && inviteGateKnown && canInvite && (
+          <Button onClick={() => setInviteOpen(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
             {t('inviteButton')}
           </Button>
         )}
       </div>
+
+      {/* A BEHAVIOUR REMOVAL, so it speaks in the ONE shape UX-42 standardised:
+          it names the tier and carries the control that changes the answer. The
+          lock button it replaces did neither — it opened the upgrade modal
+          without ever saying which plan, which is a refusal the reader cannot
+          act on until after they click. */}
+      {canManage && inviteGateKnown && !canInvite && (
+        <PlanUpgradeNotice
+          minPlan={invitePlan}
+          feature="multiple_managers"
+          title={t('inviteLockedTitle')}
+          description={t('inviteLockedBody')}
+        />
+      )}
+
+      {/* Said only when it is TRUE of this team: somebody is already here who
+          could not be invited today. Without it the notice above reads as a
+          threat to the people on the list. */}
+      {canManage && inviteGateKnown && !canInvite && sortedMembers.length > 1 && (
+        <p className="text-xs text-muted-foreground">{t('existingMembersKeepAccess')}</p>
+      )}
 
       {/* Members list */}
       <div className="rounded-md border">

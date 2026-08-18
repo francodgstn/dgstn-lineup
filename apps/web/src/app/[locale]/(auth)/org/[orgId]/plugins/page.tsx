@@ -10,7 +10,7 @@ import {
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { ORGANIZATIONS_COLLECTION, ORG_INSTALLED_PLUGINS_SUBCOLLECTION } from '@linyup/shared'
+import { ORGANIZATIONS_COLLECTION, ORG_INSTALLED_PLUGINS_SUBCOLLECTION, pluginVisibleToTenant } from '@linyup/shared'
 import type { InstalledPlugin, PluginManifest, PluginCategory } from '@linyup/shared'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { Button } from '@/components/ui/button'
@@ -212,10 +212,16 @@ export default function OrgPluginsPage() {
     )
   }
 
-  // All available plugins, recommended first
-  const sortedRegistry = [...PLUGIN_REGISTRY].sort(
-    (a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false)
-  )
+  // All available plugins, recommended first. Discovery allow-list applied
+  // against THIS org (the route param), not against whatever team the admin
+  // happens to have selected — an org admin browsing the org catalogue is
+  // shopping for the org. `pluginVisibleToTenant` is called directly rather
+  // than through `usePluginDiscovery` for exactly that reason. An org already
+  // running a plugin keeps seeing it (with its Uninstall control) even if it is
+  // later dropped from the list: the gate is on discovery, not on running.
+  const sortedRegistry = [...PLUGIN_REGISTRY]
+    .filter((m) => pluginVisibleToTenant(m, { orgId }) || activeIds.has(m.id))
+    .sort((a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false))
 
   return (
     <div className="space-y-6">

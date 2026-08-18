@@ -23,6 +23,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -32,6 +33,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -47,6 +49,7 @@ import {
 } from '@/components/ui/select'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import {
   DropdownMenu,
@@ -66,6 +69,7 @@ import {
   CirclePlay,
   Clock,
   UserPlus,
+  TrendingUp,
   CheckCircle,
   XCircle,
   CalendarCheck,
@@ -79,17 +83,25 @@ import {
   Sparkles,
   BookOpen,
   Tag,
+  Users,
   Webhook,
+  History,
+  Copy,
 } from 'lucide-react'
-import { TEAMS_COLLECTION, SUBSCRIPTION_ROLLUP_STATUSES, CONTACT_SOURCES } from '@linyup/shared'
+import { toast } from 'sonner'
+import { TEAMS_COLLECTION, ALERT_PRESETS_SUBCOLLECTION, SUBSCRIPTION_ROLLUP_STATUSES, CONTACT_SOURCES } from '@linyup/shared'
 import type { SubscriptionType, CustomFieldDefinition, RankingSystem } from '@linyup/shared'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { LibraryDialog, installStarterBundle } from './LibraryDialog'
+import { starterBundleItemsForPlan } from './automationLibrary'
 import { WebhookEndpointsDialog, type WebhookEndpoint } from './WebhookEndpointsDialog'
+import { PreviewRunDialog } from './PreviewRunDialog'
+import { RunHistoryDialog } from './RunHistoryDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useContactGroups } from '@/plugins/contact-groups/hooks'
+import { useContactGroups, flattenGroupTree, isDynamicGroup } from '@/plugins/contact-groups/hooks'
+import type { ContactGroup } from '@linyup/shared'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -105,6 +117,7 @@ interface AutomationCondition {
   type: string
   value?: string
   field?: string // field_equals condition
+  group_id?: string // in_group condition
   delay_days?: number
 }
 
@@ -147,6 +160,16 @@ interface OutreachTemplate {
   system_key?: string // present on starter-kit templates — used to prevent duplicate seeding
 }
 
+/** teams/{teamId}/alert_presets — the reusable alert bodies a studio writes in
+ *  Settings → Team. `create_alert` mints a contact alert FROM one of these, so
+ *  the picker below is what makes the action selectable rather than decorative. */
+interface AlertPreset {
+  id: string
+  name: string
+  message: string
+  show_in_app?: boolean
+}
+
 // Form shapes
 interface FormCondition {
   type: string
@@ -156,6 +179,7 @@ interface FormCondition {
 interface FormAction {
   type: string
   templateId: string // send_email
+  presetId?: string // create_alert — which alert preset the alert is minted from
   field?: string // update_field — which contact field
   fieldValue?: string // update_field — the new value
   subject?: string // notify_team — email subject
@@ -174,9 +198,38 @@ interface FormAction {
 const TRIGGER_GROUP_ORDER = ['contact', 'booking', 'attendance', 'subscription', 'affiliation', 'general', 'plugins']
 const CONDITION_GROUP_ORDER = ['acquisition', 'subscription', 'affiliation', 'attendance', 'other']
 
+// supportsDelay says the DELAY IS HONOURED, not merely stored — which is what
+// it did not say until UX-85. A trigger marked true is deferred for real:
+// `session_ended` through onSessionWrite, every other event trigger through
+// fireEventRules -> executeDelayedRule. Do not flip one to true without a
+// matching arm in resolveEventDelayMinutes; automation/delayedRules.test.ts
+// reads BOTH files and fails the build on a disagreement.
+//
+// Marked false, and why — each is a decision, not an omission:
+//   schedule_daily, manual — not event triggers; there is nothing to defer from.
+//   inbound_webhook — a delayed run persists its payload in the Cloud Tasks
+//     queue, and that payload is the caller's raw POST body. The engine refuses
+//     a delay for ANY trigger carrying a payload (resolveEventDelayMinutes), so
+//     this must stay false or the field would lie again.
+//
+// The delay is capped at MAX_DELAY_MINUTES: Cloud Tasks will not schedule a task
+// more than 30 days out. Beyond that the engine clamps and logs.
+const MAX_DELAY_MINUTES = 30 * 24 * 60
+
 const TRIGGER_OPTIONS = [
   { value: 'schedule_daily', icon: Clock, supportsDelay: false, group: 'general' },
   { value: 'contact_created', icon: UserPlus, supportsDelay: true, group: 'contact' },
+  // Fires on a FORWARD move only (onContactWrite ranks the stage and ignores a
+  // backward correction), which is what makes "when someone joins" expressible:
+  // pair it with an `acquisition_stage = joined` condition. `contact_created`
+  // cannot answer that question — it fired when the lead booked a trial and
+  // never re-evaluates.
+  //
+  // supportsDelay flipped to TRUE (2026-08-18, UX-85): `fireEventRules` now
+  // defers any event rule carrying trigger.delayMinutes to the same Cloud Tasks
+  // handler `session_ended` uses. "Welcome them three days after they join" is
+  // the natural shape for this trigger and is what the delay was withheld from.
+  { value: 'acquisition_stage_changed', icon: TrendingUp, supportsDelay: true, group: 'contact' },
   { value: 'booking_confirmed', icon: CheckCircle, supportsDelay: true, group: 'booking' },
   { value: 'booking_no_show', icon: XCircle, supportsDelay: true, group: 'booking' },
   { value: 'booking_cancelled', icon: XCircle, supportsDelay: true, group: 'booking' },
@@ -196,7 +249,19 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'days_since_created', input: 'number', group: 'acquisition' },
   { value: 'subscription', input: 'subscription_select', group: 'subscription' },
   { value: 'subscription_status', input: 'subscription_status_select', group: 'subscription' },
-  { value: 'subscription_expires_in', input: 'number', group: 'subscription' },
+  // `subscription_expires_in` is NOT offered — it cannot fire, for two
+  // independent reasons, and an offered condition that silently matches nobody
+  // is the same defect as an action that is silently dropped (UX-51):
+  //   1. the engine tests `contact.membership_expiration`, and nothing writes
+  //      that field on a contact any more — the status-model refactor moved
+  //      expiry onto the affiliation axis, and the HMD migration deletes the
+  //      field outright (scripts/migration/transforms/contacts.ts);
+  //   2. the engine reads `cond.days`, while this editor's number mapping
+  //      writes `value` — so even with the field back, a rule built here would
+  //      compare against `undefined`.
+  // The replacement is the engine's own deferred `affiliation_expires_in`
+  // (see the NOTE in packages/functions/src/utils/automationEngine.ts). No
+  // stored rule, library entry or seed selects it, so nothing is orphaned.
   { value: 'has_affiliation', input: 'none', group: 'affiliation' },
   { value: 'affiliation_type', input: 'affiliation_type_select', group: 'affiliation' },
   { value: 'sessions_attended_min', input: 'number', group: 'attendance' },
@@ -204,10 +269,12 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'sessions_attended_exactly', input: 'number', group: 'attendance' },
   { value: 'inactivity_days', input: 'number', group: 'attendance' },
   { value: 'inactivity_days_max', input: 'number', group: 'attendance' },
-  { value: 'bio_link_booking_no_show', input: 'none', group: 'attendance' },
+  { value: 'bio_link_booking_no_show', input: 'no_show_days', group: 'attendance' },
   { value: 'tag', input: 'text', group: 'other' },
   { value: 'field_equals', input: 'field_equals', group: 'other' },
   { value: 'birthday_today', input: 'none', group: 'other' },
+  // Contact Groups plugin — filtered out below when it isn't installed.
+  { value: 'in_group', input: 'group_select', group: 'other' },
 ]
 
 // Render a flat option list as grouped <SelectGroup> sections with dividers, in the
@@ -261,9 +328,17 @@ const ACTION_TYPE_VALUES = [
   'create_alert',
 ] as const
 
+/** `actions.types.create_alert` still carries the pre-UX-51 "(coming soon)"
+ *  suffix in the shipped locale files; the action is real now, so the label is
+ *  read from its own key instead. (The old key is orphaned — delete it in a
+ *  copy pass, not from a parallel lane.) */
+function actionTypeLabelKey(v: string): string {
+  return v === 'create_alert' ? 'actions.createAlertLabel' : `actions.types.${v}`
+}
+
 function defaultActionTypeLabels(t: ReturnType<typeof useTranslations>): Record<string, string> {
   return Object.fromEntries(
-    ACTION_TYPE_VALUES.map((v) => [v, t(`actions.types.${v}` as Parameters<typeof t>[0])])
+    ACTION_TYPE_VALUES.map((v) => [v, t(actionTypeLabelKey(v) as Parameters<typeof t>[0])])
   )
 }
 
@@ -317,6 +392,8 @@ function conditionSummary(
   const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === c.type)
   if (!opt) return c.type
   const label = conditionTypeLabel(t, c.type)
+  if (c.type === 'bio_link_booking_no_show')
+    return t('conditions.summaryNoShowDays', { days: c.delay_days ?? 1 })
   if (opt.input === 'none') return label
   if (opt.input === 'number') return t('conditions.summaryNumber', { label, value: c.value ?? '' })
   if (c.type === 'field_equals')
@@ -331,13 +408,17 @@ function actionSummary(
   t: ReturnType<typeof useTranslations>,
   a: AutomationAction,
   templates: OutreachTemplate[],
-  pluginActionLabels?: Record<string, string>
+  pluginActionLabels?: Record<string, string>,
+  alertPresets?: AlertPreset[]
 ): string {
   if (a.type === 'send_email') {
     const tmpl = templates.find((tm) => tm.id === (a.templateId ?? ''))
     return t('actions.summarySendEmail', { name: tmpl?.name ?? a.templateId ?? '—' })
   }
-  if (a.type === 'create_alert') return t('actions.summaryCreateAlert')
+  if (a.type === 'create_alert') {
+    const preset = alertPresets?.find((p) => p.id === (a.presetId ?? ''))
+    return t('actions.summaryCreateAlertNamed', { name: preset?.name ?? a.presetId ?? '—' })
+  }
   if (a.type === 'update_field')
     return t('actions.summaryUpdateField', {
       field: updateFieldLabel(t, a.field ?? '—'),
@@ -430,6 +511,20 @@ function useTemplates(teamId: string | null) {
   })
 }
 
+function useAlertPresets(teamId: string | null) {
+  return useQuery<AlertPreset[]>({
+    queryKey: ['alert_presets', teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      if (!teamId) return []
+      const snap = await getDocs(
+        collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION)
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AlertPreset)
+    },
+  })
+}
+
 // ─── RuleCard ─────────────────────────────────────────────────────────────────
 
 function TriggerIcon({ type, className }: { type: string; className?: string }) {
@@ -440,35 +535,46 @@ function TriggerIcon({ type, className }: { type: string; className?: string }) 
 
 function RuleCard({
   rule,
+  teamId,
   templates,
+  alertPresets,
   subscriptionTypes,
   onEdit,
+  onDuplicate,
   onToggle,
   onRunNow,
   onDelete,
 }: {
   rule: AutomationRule
+  teamId: string
   templates: OutreachTemplate[]
+  alertPresets: AlertPreset[]
   subscriptionTypes: SubscriptionType[]
   onEdit: () => void
+  onDuplicate: () => void
   onToggle: () => void
-  onRunNow: () => void
+  onRunNow: () => Promise<void>
   onDelete: () => void
 }) {
   const t = useTranslations('Automations')
-  const [running, setRunning] = useState(false)
+  const tCommon = useTranslations('Common')
+  // Both entries into PreviewRunDialog: 'preview' is read-only and available on
+  // a PAUSED rule too (the moment before arming it is exactly when "who does
+  // this hit?" matters); 'run' is the confirmation that used to not exist.
+  const [previewMode, setPreviewMode] = useState<'preview' | 'run' | null>(null)
+  // The other half of the same question. Preview answers "who does this hit if it
+  // ran now"; history answers "did it run, when, and how many did it reach" —
+  // which for a DELAYED rule (fired from a Cloud Task hours or days later) is
+  // otherwise unanswerable from this page. See RunHistoryDialog (UX-48).
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Same rules-shaped gate as the page-level button — see AutomationsPage.
+  const canSeeHistory = useCapabilities().can('outreach.manage')
   const subName = (id: string) => subscriptionTypes.find((s) => s.id === id)?.name ?? id
 
-  async function handleRunNow() {
-    setRunning(true)
-    try {
-      await onRunNow()
-    } finally {
-      setRunning(false)
-    }
-  }
-
   const trigger = rule.trigger ?? { type: 'schedule_daily' }
+  // The same summaries the card's action line renders — the dialog answers
+  // "what will be sent" from this rather than re-deriving the copy.
+  const actionLabels = rule.actions.map((a) => actionSummary(t, a, templates, undefined, alertPresets))
 
   return (
     <div
@@ -498,6 +604,10 @@ function RuleCard({
                 <Pencil className="h-3.5 w-3.5 mr-2" />
                 {t('common.edit')}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDuplicate}>
+                <Copy className="h-3.5 w-3.5 mr-2" />
+                {tCommon('duplicate')}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={onToggle}>
                 {rule.active ? (
                   <>
@@ -511,10 +621,22 @@ function RuleCard({
                   </>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleRunNow} disabled={running}>
-                <Play className="h-3.5 w-3.5 mr-2" />
-                {running ? t('ruleCard.running') : t('ruleCard.runNow')}
+              <DropdownMenuItem onClick={() => setPreviewMode('preview')}>
+                <Users className="h-3.5 w-3.5 mr-2" />
+                {t('preview.previewAction')}
               </DropdownMenuItem>
+              {/* Opens the confirmation — the send itself is one dialog away,
+                  and that dialog states how many people it reaches. */}
+              <DropdownMenuItem onClick={() => setPreviewMode('run')}>
+                <Play className="h-3.5 w-3.5 mr-2" />
+                {t('ruleCard.runNow')}
+              </DropdownMenuItem>
+              {canSeeHistory && (
+                <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
+                  <History className="h-3.5 w-3.5 mr-2" />
+                  {t('history.ruleAction')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={onDelete}
                 className="text-destructive focus:text-destructive"
@@ -575,7 +697,7 @@ function RuleCard({
               {a.type === 'assign_tag' && <Tag className="h-3 w-3" />}
               {a.type === 'remove_tag' && <Tag className="h-3 w-3" />}
               {a.type === 'webhook' && <Webhook className="h-3 w-3" />}
-              {actionSummary(t, a, templates)}
+              {actionSummary(t, a, templates, undefined, alertPresets)}
             </span>
           ))}
         </div>
@@ -588,6 +710,27 @@ function RuleCard({
           {rule.last_run_sent != null && ` · ${t('ruleCard.sentCount', { count: rule.last_run_sent })}`}
         </p>
       )}
+
+      <PreviewRunDialog
+        open={previewMode !== null}
+        onOpenChange={(o) => !o && setPreviewMode(null)}
+        teamId={teamId}
+        ruleId={rule.id}
+        ruleName={rule.name || t('ruleCard.unnamed')}
+        ruleActive={rule.active}
+        mode={previewMode ?? 'preview'}
+        actionLabels={actionLabels}
+        onRun={onRunNow}
+      />
+      {canSeeHistory && (
+        <RunHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          teamId={teamId}
+          ruleId={rule.id}
+          ruleName={rule.name || t('ruleCard.unnamed')}
+        />
+      )}
     </div>
   )
 }
@@ -598,10 +741,12 @@ function ConditionEditor({
   conditions,
   onChange,
   subscriptionTypes,
+  contactGroups,
 }: {
   conditions: FormCondition[]
   onChange: (c: FormCondition[]) => void
   subscriptionTypes: SubscriptionType[]
+  contactGroups: ContactGroup[]
 }) {
   const t = useTranslations('Automations')
   const groupLabel = (g: string) => t(`groups.${g}` as Parameters<typeof t>[0])
@@ -612,10 +757,12 @@ function ConditionEditor({
     { value: 'none', label: t('conditions.subscriptionScope.none'), group: 'general' },
     ...subscriptionTypes.map((s) => ({ value: s.id, label: s.name, group: 'subscriptionTypes' })),
   ]
-  const resolvedConditionOptions = CONDITION_TYPE_OPTIONS.map((o) => ({
-    ...o,
-    label: conditionTypeLabel(t, o.value),
-  }))
+  const resolvedConditionOptions = CONDITION_TYPE_OPTIONS
+    .filter((o) => o.value !== 'in_group' || contactGroups.length > 0)
+    .map((o) => ({
+      ...o,
+      label: conditionTypeLabel(t, o.value),
+    }))
   function add() {
     onChange([...conditions, { type: 'acquisition_stage', value: 'trial_booked' }])
   }
@@ -652,11 +799,14 @@ function ConditionEditor({
                           ? 'any'
                           : next === 'subscription_status'
                             ? 'active'
-                            : next === 'bio_link_booking_no_show' || next === 'birthday_today'
-                              ? ''
+                            : next === 'bio_link_booking_no_show'
+                              ? '1'
+                              : next === 'birthday_today'
+                                ? ''
                               : next === 'has_affiliation'
                                 ? ''
-                                : next === 'tag' || next === 'field_equals' || next === 'affiliation_type'
+                                : next === 'tag' || next === 'field_equals'
+                                    || next === 'affiliation_type' || next === 'in_group'
                                   ? ''
                                   : '7'
                     update(i, { type: next, value: defaultVal, condField: undefined })
@@ -687,6 +837,28 @@ function ConditionEditor({
                           {ACQUISITION_STAGE_VALUES.map((s) => (
                             <SelectItem key={s} value={s} className="text-xs">
                               {acquisitionStageLabel(t, s)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {opt?.input === 'group_select' && (
+                      <Select value={cond.value} onValueChange={(v) => update(i, { value: v ?? '' })}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <span className="flex flex-1 text-left text-xs truncate">
+                            {contactGroups.find((g) => g.id === cond.value)?.name ?? (
+                              <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
+                            )}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {/* Dynamic groups belong here: READING a derived group
+                              is the whole point of in_group. Only WRITES exclude them. */}
+                          {flattenGroupTree(contactGroups).map(({ group, depth }) => (
+                            <SelectItem key={group.id} value={group.id} className="text-xs">
+                              <span style={{ paddingLeft: `${depth * 12}px` }}>
+                                {group.name}{isDynamicGroup(group) ? ' ⚡' : ''}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -743,6 +915,22 @@ function ConditionEditor({
                         value={cond.value}
                         onChange={(e) => update(i, { value: e.target.value })}
                       />
+                    )}
+                    {/* The no-show window, in days after the session. Stored as
+                        `delay_days` (not `value`) — see the save mapping. */}
+                    {opt?.input === 'no_show_days' && (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-8 text-xs"
+                          value={cond.value}
+                          onChange={(e) => update(i, { value: e.target.value })}
+                        />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {t('conditions.daysAfterSession')}
+                        </span>
+                      </div>
                     )}
                     {opt?.input === 'text' && (
                       <Input
@@ -848,6 +1036,7 @@ function rankSystemOption(r: RankingSystem): UpdateFieldOption {
 function ActionEditor({
   actions,
   templates,
+  alertPresets,
   onChange,
   actionTypeLabels: labelOverrides,
   contactGroups,
@@ -855,9 +1044,10 @@ function ActionEditor({
 }: {
   actions: FormAction[]
   templates: OutreachTemplate[]
+  alertPresets: AlertPreset[]
   onChange: (a: FormAction[]) => void
   actionTypeLabels?: Record<string, string>
-  contactGroups: { id: string; name: string }[]
+  contactGroups: ContactGroup[]
   groupsEnabled: boolean
 }) {
   const t = useTranslations('Automations')
@@ -909,6 +1099,7 @@ function ActionEditor({
                     tag: undefined,
                     url: undefined,
                     group_id: undefined,
+                    presetId: undefined,
                   })
                 }
               >
@@ -939,6 +1130,14 @@ function ActionEditor({
                   <SelectItem value="log_activity" className="text-xs">
                     {t('actions.types.log_activity')}
                   </SelectItem>
+                  {/* `archive_contact` was in the label map and in the engine (the
+                      'lib_trial_cleanup' library rule uses it) but was missing
+                      from this list — so a studio could READ a rule that archives
+                      and never write one, and changing that rule's action type
+                      was a one-way door. */}
+                  <SelectItem value="archive_contact" className="text-xs">
+                    {t('actions.types.archive_contact')}
+                  </SelectItem>
                   <SelectItem value="webhook" className="text-xs">
                     {t('actions.types.webhook')}
                   </SelectItem>
@@ -953,7 +1152,7 @@ function ActionEditor({
                     </>
                   )}
                   <SelectItem value="create_alert" className="text-xs">
-                    {t('actions.types.create_alert')}
+                    {t('actions.createAlertLabel')}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -987,11 +1186,38 @@ function ActionEditor({
                 </Select>
               )}
 
-              {/* create_alert placeholder */}
+              {/* Inline secondary for create_alert — the same shape as send_email's
+                  template picker. Until UX-51 this was a "coming soon" note while
+                  the ENGINE had executed the action all along (it resolves
+                  teams/{id}/alert_presets/{presetId} and writes the contact
+                  alert); the only thing missing was a way to name the preset,
+                  and the save then dropped the action entirely. */}
               {action.type === 'create_alert' && (
-                <p className="text-xs text-muted-foreground self-center">
-                  {t('actions.alertPresetsComingSoon')}
-                </p>
+                <Select
+                  value={action.presetId ?? ''}
+                  onValueChange={(v) => update(i, { presetId: v ?? '' })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {alertPresets.find((p) => p.id === action.presetId)?.name ?? (
+                        <span className="text-muted-foreground">{t('actions.selectPresetPlaceholder')}</span>
+                      )}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {alertPresets.length === 0 ? (
+                      <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
+                        {t('actions.noAlertPresets')}
+                      </SelectItem>
+                    ) : (
+                      alertPresets.map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 
@@ -1146,30 +1372,37 @@ function ActionEditor({
               />
             )}
 
-            {(action.type === 'add_to_group' || action.type === 'remove_from_group') && (
-              <Select value={action.group_id ?? ''} onValueChange={(v) => update(i, { group_id: v ?? '' })}>
-                <SelectTrigger className="h-8 text-xs">
-                  <span className="flex flex-1 text-left text-xs truncate">
-                    {contactGroups.find((g) => g.id === action.group_id)?.name ?? (
-                      <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
-                    )}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {contactGroups.length === 0 ? (
-                    <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
-                      {t('actions.noGroupsYet')}
-                    </SelectItem>
-                  ) : (
-                    contactGroups.map((g) => (
-                      <SelectItem key={g.id} value={g.id} className="text-xs">
-                        {g.name}
+            {(action.type === 'add_to_group' || action.type === 'remove_from_group') && (() => {
+              // Writable groups only. A DYNAMIC group's membership is its rule —
+              // writing group_ids for one would be a no-op the user can't see.
+              const writable = flattenGroupTree(contactGroups).filter(({ group }) => !isDynamicGroup(group))
+              return (
+                <Select value={action.group_id ?? ''} onValueChange={(v) => update(i, { group_id: v ?? '' })}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {contactGroups.find((g) => g.id === action.group_id)?.name ?? (
+                        <span className="text-muted-foreground">{t('actions.selectGroupPlaceholder')}</span>
+                      )}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {writable.length === 0 ? (
+                      <SelectItem value="__none" disabled className="text-xs text-muted-foreground">
+                        {t('actions.noGroupsYet')}
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            )}
+                    ) : (
+                      // Indented like every other group picker — the old flat list
+                      // hid the hierarchy the rest of the app shows.
+                      writable.map(({ group, depth }) => (
+                        <SelectItem key={group.id} value={group.id} className="text-xs">
+                          <span style={{ paddingLeft: `${depth * 12}px` }}>{group.name}</span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              )
+            })()}
           </div>
 
           <Button
@@ -1209,6 +1442,7 @@ function RuleDialog({
   onOpenChange,
   teamId,
   editing,
+  duplicating,
   templates,
   webhookEndpoints,
   onSaved,
@@ -1220,6 +1454,12 @@ function RuleDialog({
   onOpenChange: (v: boolean) => void
   teamId: string
   editing: AutomationRule | null
+  /** The rule a NEW one is being copied from. `editing` stays null, so the save
+   *  is an `addDoc` — a copy carries no `system_key` (that marks a starter-kit
+   *  rule and is what stops it being seeded twice), no run history, and starts
+   *  PAUSED: a rule that begins firing the moment it is saved is not a copy the
+   *  studio has had a chance to read. */
+  duplicating: AutomationRule | null
   templates: OutreachTemplate[]
   webhookEndpoints: WebhookEndpoint[]
   onSaved: () => void
@@ -1234,10 +1474,12 @@ function RuleDialog({
   prefill?: { triggerType?: string; subscriptionTypeId?: string }
 }) {
   const t = useTranslations('Automations')
+  const tCommon = useTranslations('Common')
   const groupLabel = (g: string) => t(`groups.${g}` as Parameters<typeof t>[0])
   const resolvedTriggerOptions =
     triggerOptionsProp ?? TRIGGER_OPTIONS.map((o) => ({ ...o, label: triggerTypeLabel(t, o.value) }))
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
+  const { data: alertPresets = [] } = useAlertPresets(teamId)
   const { isInstalled } = useInstalledPlugins()
   const groupsEnabled = isInstalled('contact-groups')
   const { data: contactGroups = [] } = useContactGroups(groupsEnabled ? teamId : null)
@@ -1277,27 +1519,34 @@ function RuleDialog({
         ? t('sections.conditionsHintDailyEmpty')
         : t('sections.conditionsHintEmpty')
 
-  // Populate form when editing
+  // Populate form when editing — or when copying, which fills the SAME form and
+  // then saves through the create branch below.
   useEffect(() => {
     if (!open) return
-    if (editing) {
+    const seed = editing ?? duplicating
+    if (seed) {
       reset({
-        name: editing.name,
-        trigger_type: editing.trigger.type,
-        delay_minutes: editing.trigger.delayMinutes ?? 0,
-        active: editing.active,
+        name: duplicating ? tCommon('copyName', { name: seed.name }) : seed.name,
+        trigger_type: seed.trigger.type,
+        delay_minutes: seed.trigger.delayMinutes ?? 0,
+        // A copy is PAUSED until the studio arms it.
+        active: duplicating ? false : seed.active,
       })
       setConditions(
-        editing.conditions.map((c) => ({
+        seed.conditions.map((c) => ({
           type: c.type,
-          value: c.value ?? (c.delay_days != null ? String(c.delay_days) : ''),
+          value:
+            (c as { group_id?: string }).group_id
+            ?? c.value
+            ?? (c.delay_days != null ? String(c.delay_days) : ''),
           condField: (c as { field?: string }).field,
         }))
       )
       setActions(
-        editing.actions.map((a) => ({
+        seed.actions.map((a) => ({
           type: a.type,
           templateId: a.templateId ?? '',
+          presetId: a.presetId,
           field: a.field,
           fieldValue: a.value != null ? String(a.value) : undefined,
           subject: a.subject,
@@ -1309,9 +1558,9 @@ function RuleDialog({
           group_id: (a as { group_id?: string }).group_id,
         }))
       )
-      setWebhookEndpointId(editing.trigger.webhook_endpoint_id ?? '')
-      setTriggerSubTypeId(editing.trigger.subscriptionTypeId ?? '')
-      setTriggerAffTypeKey(editing.trigger.affiliationTypeKey ?? '')
+      setWebhookEndpointId(seed.trigger.webhook_endpoint_id ?? '')
+      setTriggerSubTypeId(seed.trigger.subscriptionTypeId ?? '')
+      setTriggerAffTypeKey(seed.trigger.affiliationTypeKey ?? '')
     } else {
       reset({
         name: '',
@@ -1326,7 +1575,7 @@ function RuleDialog({
       setTriggerAffTypeKey('')
     }
     setSubmitError('')
-  }, [open, editing, reset, prefill])
+  }, [open, editing, duplicating, reset, prefill, tCommon])
 
   const onSubmit = async (values: RuleFormValues) => {
     setSubmitError('')
@@ -1341,14 +1590,47 @@ function RuleDialog({
       return
     }
 
+    // An in_group condition with no group picked would save happily and then
+    // match nobody, forever — the same silent-no-op trap the action list guards
+    // against. Say so instead.
+    if (conditions.some((c) => c.type === 'in_group' && !c.value)) {
+      setSubmitError(t('validation.groupRequired'))
+      return
+    }
+
+    // An action whose TARGET is missing is the same defect in the other half of
+    // the rule, and until UX-51 each was handled by quietly dropping or storing
+    // something inert: create_alert was filtered out of the payload entirely,
+    // add_to_group/remove_from_group with no group were filtered out, and
+    // send_email with no template saved a rule the engine then refuses to run
+    // ("template not found"). Nothing may leave this dialog unsaid.
+    if (actions.some((a) => a.type === 'send_email' && !a.templateId)) {
+      setSubmitError(t('validation.templateRequired'))
+      return
+    }
+    if (actions.some((a) => a.type === 'create_alert' && !a.presetId)) {
+      setSubmitError(t('validation.alertPresetRequired'))
+      return
+    }
+    if (
+      actions.some(
+        (a) => (a.type === 'add_to_group' || a.type === 'remove_from_group') && !a.group_id
+      )
+    ) {
+      setSubmitError(t('validation.groupRequiredAction'))
+      return
+    }
+
     try {
       const ruleData = {
         name: values.name.trim(),
         active: values.active,
         trigger: {
           type: values.trigger_type,
+          // Clamped to the Cloud Tasks ceiling here as well as in the engine,
+          // so the number the studio sees stored is the number that will run.
           ...(supportsDelay && values.delay_minutes && values.delay_minutes > 0
-            ? { delayMinutes: values.delay_minutes }
+            ? { delayMinutes: Math.min(Math.floor(values.delay_minutes), MAX_DELAY_MINUTES) }
             : {}),
           ...(values.trigger_type === 'inbound_webhook' && webhookEndpointId
             ? { webhook_endpoint_id: webhookEndpointId }
@@ -1367,19 +1649,23 @@ function RuleDialog({
         conditions: conditions.map((c) => {
           const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === c.type)
           if (opt?.input === 'number') return { type: c.type, value: Number(c.value) }
+          // The no-show window is `delay_days`, not `value`, and it was NOT
+          // round-tripping: the editor loaded it and the save wrote a bare
+          // `{ type }`, so opening a 5-day library rule and pressing Save reset
+          // it to the engine's 1-day default. It is an editable number now.
+          if (c.type === 'bio_link_booking_no_show')
+            return { type: c.type, delay_days: Math.max(1, Number(c.value) || 1) }
           if (opt?.input === 'none') return { type: c.type }
           if (c.type === 'field_equals')
             return { type: 'field_equals', field: c.condField ?? '', value: c.value }
+          if (c.type === 'in_group') return { type: 'in_group', group_id: c.value }
           return { type: c.type, value: c.value }
         }),
         actions: actions
-          .filter((a) => a.type !== 'create_alert') // skip placeholder
-          .filter(
-            (a) =>
-              !((a.type === 'add_to_group' || a.type === 'remove_from_group') && !a.group_id)
-          )
           .map((a) => {
             if (a.type === 'send_email') return { type: 'send_email', templateId: a.templateId }
+            if (a.type === 'create_alert')
+              return { type: 'create_alert', presetId: a.presetId ?? '' }
             if (a.type === 'add_note') return { type: 'add_note', note: a.note ?? '' }
             if (a.type === 'update_field')
               return { type: 'update_field', field: a.field ?? '', value: a.fieldValue ?? '' }
@@ -1413,12 +1699,19 @@ function RuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[680px] lg:max-w-[1100px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[680px] lg:max-w-[1100px]">
         <DialogHeader>
-          <DialogTitle>{editing ? t('dialogs.rule.editTitle') : t('common.newAutomation')}</DialogTitle>
+          <DialogTitle>
+            {editing
+              ? t('dialogs.rule.editTitle')
+              : duplicating
+                ? tCommon('duplicate')
+                : t('common.newAutomation')}
+          </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-5">
+          <DialogBody className="space-y-5">
           {/* Name + active */}
           <div className="flex gap-3 items-end">
             <div className="flex-1">
@@ -1487,6 +1780,7 @@ function RuleDialog({
                   <Input
                     type="number"
                     min={0}
+                    max={MAX_DELAY_MINUTES}
                     className="mt-1 h-8 text-xs"
                     {...register('delay_minutes')}
                     placeholder="0"
@@ -1582,6 +1876,7 @@ function RuleDialog({
                 conditions={conditions}
                 onChange={setConditions}
                 subscriptionTypes={subscriptionTypes}
+                contactGroups={contactGroups}
               />
             </div>
 
@@ -1595,6 +1890,7 @@ function RuleDialog({
               <ActionEditor
                 actions={actions}
                 templates={templates}
+                alertPresets={alertPresets}
                 onChange={setActions}
                 actionTypeLabels={actionTypeLabelsProp}
                 contactGroups={contactGroups}
@@ -1604,6 +1900,7 @@ function RuleDialog({
           </div>
 
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+          </DialogBody>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -1625,7 +1922,12 @@ export default function AutomationsPage() {
   const t = useTranslations('Automations')
   const planName = usePlanName()
   const { currentTeamId, user } = useAuth()
-  const { isAtLeast } = usePlan()
+  const { plan, isAtLeast } = usePlan()
+  // `automation_logs` is manager/owner-read in firestore.rules, so the history
+  // entry points are offered only to someone the rules would actually serve —
+  // an ungated button here would hand a coach a permission error instead of a
+  // dialog.
+  const canSeeHistory = useCapabilities().can('outreach.manage')
   // Automations are available on every tier; Studio/Org get the full suite while
   // Free/Coach are limited to the triggers/actions of their active modules and
   // installed add-ons (the builder only offers those). Show a note below Studio.
@@ -1671,6 +1973,7 @@ export default function AutomationsPage() {
   const { data: rules = [], isLoading: rulesLoading } = useRules(currentTeamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
   const { data: templates = [] } = useTemplates(currentTeamId)
+  const { data: alertPresets = [] } = useAlertPresets(currentTeamId)
   const { data: webhookEndpoints = [] } = useQuery<WebhookEndpoint[]>({
     queryKey: ['webhook_endpoints', currentTeamId],
     enabled: !!currentTeamId,
@@ -1687,12 +1990,17 @@ export default function AutomationsPage() {
   // panel isn't pushed below a long rule list.
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
+  const [duplicatingRule, setDuplicatingRule] = useState<AutomationRule | null>(null)
   const [prefill, setPrefill] = useState<
     { triggerType?: string; subscriptionTypeId?: string } | undefined
   >(undefined)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [webhooksOpen, setWebhooksOpen] = useState(false)
+  // Team-wide run history (UX-48) — the per-rule entry lives in each card's menu.
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [quickStarting, setQuickStarting] = useState(false)
+  // How many starter-kit rules this plan may actually install (UX-86).
+  const starterCount = starterBundleItemsForPlan(plan).length
 
   // Deep-link entry: ?editRule=<id> opens that rule; ?newTrigger=<type>&subType=<id>
   // opens a NEW rule prefilled (e.g. from the subscription editor). Params are cleared
@@ -1707,11 +2015,13 @@ export default function AutomationsPage() {
       const r = rules.find((x) => x.id === editRule)
       if (!r) return // rules not loaded yet — re-run when they are
       setPrefill(undefined)
+      setDuplicatingRule(null)
       setEditingRule(r)
       setRuleDialogOpen(true)
       router.replace('/automations' as Route)
     } else if (newTrigger) {
       setEditingRule(null)
+      setDuplicatingRule(null)
       setPrefill({ triggerType: newTrigger, subscriptionTypeId: subType ?? undefined })
       setRuleDialogOpen(true)
       router.replace('/automations' as Route)
@@ -1738,7 +2048,7 @@ export default function AutomationsPage() {
       )
       const allTmpl = snap.docs.map((d) => ({ ...d.data(), id: d.id }))
       const installedRuleKeys = new Set(rules.flatMap((r) => (r.system_key ? [r.system_key] : [])))
-      await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys)
+      await installStarterBundle(currentTeamId, allTmpl, installedRuleKeys, { plan })
       invalidateAll()
     } catch (err) {
       console.error('[QuickStart] failed:', err)
@@ -1761,10 +2071,28 @@ export default function AutomationsPage() {
     invalidateRules()
   }
 
+  // Called by PreviewRunDialog's confirm, never straight off the menu: the run
+  // is forced (it re-sends to people the dedup window would have skipped), so it
+  // gets a dialog that says so and names the number first.
   async function handleRunNow(rule: AutomationRule) {
     if (!currentTeamId) return
-    const fn = httpsCallable(functions, 'triggerAutomationRule')
-    await fn({ teamId: currentTeamId as string, ruleId: rule.id })
+    const fn = httpsCallable<
+      { teamId: string; ruleId: string },
+      { success: boolean; stats: { matched: number; executed: number; failed: number } }
+    >(functions, 'triggerAutomationRule')
+    try {
+      const res = await fn({ teamId: currentTeamId as string, ruleId: rule.id })
+      const stats = res.data?.stats
+      toast.success(t('preview.sentToast', { count: stats?.executed ?? 0 }))
+      if (stats?.failed) toast.error(t('preview.failedCount', { count: stats.failed }))
+    } catch (err) {
+      console.error('[Automations] run now failed:', err)
+      toast.error(t('preview.runFailed'))
+      invalidateRules()
+      // Rethrown so the confirmation stays OPEN on failure — closing it would
+      // leave the studio unsure whether anything went out.
+      throw err
+    }
     invalidateRules()
   }
 
@@ -1794,6 +2122,12 @@ export default function AutomationsPage() {
               <Mail className="h-4 w-4 mr-1.5" />
               {t('page.templatesButton')}
             </Link>
+            {canSeeHistory && (
+              <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+                <History className="h-4 w-4 mr-1.5" />
+                {t('history.pageButton')}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
               <BookOpen className="h-4 w-4 mr-1.5" />
               {t('page.libraryButton')}
@@ -1845,14 +2179,19 @@ export default function AutomationsPage() {
             <div>
               <p className="font-semibold">{t('page.emptyTitle')}</p>
               <p className="text-muted-foreground text-sm mt-1 max-w-xs">
-                {t('page.emptyBody')}
+                {starterCount > 0 ? t('page.emptyBody') : t('page.emptyBodyNoStarter')}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
+              {/* Offered only when it would install something. On a plan below
+                  the starter kit's items the button used to promise eight rules
+                  and quietly install none (UX-86). */}
+              {starterCount > 0 && (
               <Button variant="outline" onClick={handleQuickStart} disabled={quickStarting}>
                 <Sparkles className="h-4 w-4 mr-2" />
-                {quickStarting ? t('page.installing') : t('page.quickStart')}
+                {quickStarting ? t('page.installing') : t('page.quickStart', { count: starterCount })}
               </Button>
+              )}
               <Button onClick={() => setLibraryOpen(true)}>
                 <BookOpen className="h-4 w-4 mr-2" />
                 {t('page.browseLibrary')}
@@ -1872,10 +2211,18 @@ export default function AutomationsPage() {
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  teamId={currentTeamId ?? ''}
                   templates={templates}
+                  alertPresets={alertPresets}
                   subscriptionTypes={subscriptionTypes}
                   onEdit={() => {
+                    setDuplicatingRule(null)
                     setEditingRule(rule)
+                    setRuleDialogOpen(true)
+                  }}
+                  onDuplicate={() => {
+                    setEditingRule(null)
+                    setDuplicatingRule(rule)
                     setRuleDialogOpen(true)
                   }}
                   onToggle={() => handleToggle(rule)}
@@ -1898,10 +2245,18 @@ export default function AutomationsPage() {
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  teamId={currentTeamId ?? ''}
                   templates={templates}
+                  alertPresets={alertPresets}
                   subscriptionTypes={subscriptionTypes}
                   onEdit={() => {
+                    setDuplicatingRule(null)
                     setEditingRule(rule)
+                    setRuleDialogOpen(true)
+                  }}
+                  onDuplicate={() => {
+                    setEditingRule(null)
+                    setDuplicatingRule(rule)
                     setRuleDialogOpen(true)
                   }}
                   onToggle={() => handleToggle(rule)}
@@ -1914,27 +2269,34 @@ export default function AutomationsPage() {
         )}
 
         {/* Mobile FAB */}
-        <button
-          className="md:hidden fixed bottom-6 right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-          onClick={() => {
-            setEditingRule(null)
-            setRuleDialogOpen(true)
-          }}
-        >
-          <Plus className="h-6 w-6" />
-        </button>
+        <FloatingSlot lane="page-primary" className="md:hidden">
+          <button
+            className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            onClick={() => {
+              setEditingRule(null)
+              setRuleDialogOpen(true)
+            }}
+          >
+            <Plus className="h-6 w-6" />
+          </button>
+        </FloatingSlot>
       </div>
 
       {currentTeamId && (
         <>
           <RuleDialog
+            key={editingRule?.id ?? (duplicatingRule ? `copy-${duplicatingRule.id}` : 'new')}
             open={ruleDialogOpen}
             onOpenChange={(v) => {
               setRuleDialogOpen(v)
-              if (!v) setPrefill(undefined)
+              if (!v) {
+                setPrefill(undefined)
+                setDuplicatingRule(null)
+              }
             }}
             teamId={currentTeamId}
             editing={editingRule}
+            duplicating={duplicatingRule}
             templates={templates}
             webhookEndpoints={webhookEndpoints}
             onSaved={invalidateRules}
@@ -1954,6 +2316,13 @@ export default function AutomationsPage() {
             onOpenChange={setWebhooksOpen}
             teamId={currentTeamId}
           />
+          {canSeeHistory && (
+            <RunHistoryDialog
+              open={historyOpen}
+              onOpenChange={setHistoryOpen}
+              teamId={currentTeamId}
+            />
+          )}
         </>
       )}
     </>

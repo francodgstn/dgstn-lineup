@@ -1,5 +1,5 @@
 import type { Timestamp } from './common'
-import type { SocialLink } from './team'
+import type { PublicSurface, SocialLink } from './team'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Website plugin — studio site builder.
@@ -93,8 +93,43 @@ export interface ActivitiesSection extends SectionBase {
   subheading?: string
   source: 'activities'
   columns: 2 | 3 | 4
+  /**
+   * Card arrangement:
+   *  - 'grid' (default): image on top, content below, `columns` per row
+   *  - 'list': one full-width row per activity, image left / content right
+   *
+   * Absent ⇒ 'grid', so existing sites are unaffected. `columns` is ignored in
+   * list layout (a list is always one per row) but kept, so switching back to
+   * grid restores the studio's column choice.
+   */
+  layout?: 'grid' | 'list'
   /** Show a "Book" link on each card → /booking/[activitySlug]. */
   showBooking?: boolean
+  /**
+   * How much of the commercial story each card states.
+   *
+   *  - 'list' (default): every line, one per row — today's behaviour.
+   *  - 'compact': the money collapses behind one "Prices" control that reveals
+   *    the same lines on tap/hover.
+   *  - 'hidden': no amount is rendered at all.
+   *
+   * HIDING A PRICE MUST NEVER HIDE A GATE. Whatever this is set to, a card
+   * whose activity REFUSES a visitor keeps saying so — the members-tier line
+   * and the "included with {plan}" line of a subscription-gated class are
+   * requirements, not prices, and they render under every mode (the latter
+   * without its price under 'hidden'). What this option governs is the money a
+   * visitor could choose to spend: drop-in, appointment prices, member
+   * discounts, and a PAID trial badge (a free-trial badge quotes no amount and
+   * stays). Anything else would sell a click that ends in a refusal.
+   *
+   * Under 'compact' a gate line keeps its price inline rather than moving
+   * behind the control: splitting it would either duplicate the line or strip
+   * the one number that makes the requirement actionable ("Included with
+   * Premium" — at what?). It is the OPTIONAL spend that collapses.
+   *
+   * Absent ⇒ 'list', so existing sites are unaffected.
+   */
+  pricingDisplay?: 'list' | 'compact' | 'hidden'
 }
 
 /** Pulls live data from the team's public_profile.aggregator_subscription_types. */
@@ -104,6 +139,17 @@ export interface PricingSection extends SectionBase {
   subheading?: string
   source: 'subscriptions'
   ctaLabel?: string
+  /**
+   * How the plans are laid out:
+   *  - 'cards' (default): one card per plan — today's behaviour.
+   *  - 'table': the comparison a prospect actually makes — activities as ROWS,
+   *    plans as COLUMNS, each cell saying what that plan gets you for that
+   *    activity. No new data: it is the same activity mirrors + plan list the
+   *    cards already read, resolved through the same access rules.
+   *
+   * Absent ⇒ 'cards'.
+   */
+  layout?: 'cards' | 'table'
 }
 
 /** Pulls upcoming bookable sessions from the session public_profile mirrors. */
@@ -168,12 +214,78 @@ export interface SiteSeo {
   ogImageUrl?: string
 }
 
+/**
+ * A studio's OVERRIDE for one auto-derived cross-surface header link.
+ *
+ * The link list itself comes from `TeamPublicProfile.active_public_surfaces` at
+ * render time, not from here — so enabling the shop plugin surfaces a Shop link
+ * without the studio having to re-edit the website. This type only records the
+ * studio's deviations from that default.
+ *
+ * `surface` is the stable machine identifier (see PublicSurface); an entry
+ * naming a surface that isn't live is ignored rather than removed, so toggling a
+ * plugin off and on again doesn't lose the label the studio wrote.
+ */
+export interface SiteSurfaceLinkConfig {
+  surface: PublicSurface
+  /** Hide a link the studio doesn't want in the nav. Absent ⇒ visible. */
+  hidden?: boolean
+  /** Replaces the default localized name (the `PublicSurfaceLinks` messages). */
+  label?: string
+  /** Ascending. Unset entries sort after the configured ones, in their natural order. */
+  order?: number
+}
+
 export interface SiteHeader {
   /** Sticky top bar with in-page anchor nav. */
   showNav: boolean
   ctaLabel?: string
   ctaAction?: SiteCtaAction
   ctaUrl?: string
+  /**
+   * Show the member control ("Sign in" / "My space") in the header. Absent ⇒
+   * shown: a returning member on the website otherwise has no way into their
+   * Space, which is the gap this exists to close.
+   */
+  showSignIn?: boolean
+  /** Per-surface overrides for the auto-derived links. See SiteSurfaceLinkConfig. */
+  surfaceLinks?: SiteSurfaceLinkConfig[]
+}
+
+/**
+ * Which cross-surface links a website header shows, and in what order.
+ *
+ * The list is DERIVED from what's live and then adjusted by the studio's
+ * overrides — never stored wholesale. That ordering matters: a studio that
+ * enables the online-courses plugin should get a Shop link without editing the
+ * site, and a studio that disabled the shop shouldn't get a dead link back when
+ * they re-enable it.
+ *
+ * `defaultLabel` is injected by the caller (it's localized in the web app), so
+ * this stays framework- and locale-agnostic and can be unit-tested.
+ */
+export function resolveSiteSurfaceLinks(
+  header: SiteHeader | undefined,
+  liveSurfaces: readonly PublicSurface[],
+  defaultLabel: (surface: PublicSurface) => string
+): { surface: PublicSurface; label: string }[] {
+  const overrides = new Map(
+    (header?.surfaceLinks ?? []).map((c) => [c.surface, c] as const)
+  )
+  return liveSurfaces
+    .filter((s) => !overrides.get(s)?.hidden)
+    .map((surface, index) => {
+      const config = overrides.get(surface)
+      return {
+        surface,
+        label: config?.label?.trim() || defaultLabel(surface),
+        // Unconfigured links keep their natural order, after the configured ones.
+        order: config?.order ?? Number.MAX_SAFE_INTEGER,
+        index,
+      }
+    })
+    .sort((a, b) => a.order - b.order || a.index - b.index)
+    .map(({ surface, label }) => ({ surface, label }))
 }
 
 export interface SiteFooter {

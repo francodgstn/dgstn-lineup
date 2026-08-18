@@ -20,6 +20,10 @@ import { httpsCallable } from 'firebase/functions'
 import { useTranslations } from 'next-intl'
 import { X, ChevronLeft, UserPlus, CheckCircle2 } from 'lucide-react'
 import { functions } from '@/lib/firebase'
+import { WaiverStep } from '@/components/booking/WaiverStep'
+import { useWaiverGate } from '@/hooks/useWaiverGate'
+import { waiverErrorMessage } from '@/lib/waiver'
+import { usePublicTeam } from '../PublicTeamProvider'
 import type { KioskSession } from './useKioskSessions'
 
 const formSchema = z.object({
@@ -30,7 +34,20 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>
 
-type Step = 'select' | 'details' | 'confirmed'
+// 'waiver' sits between the details form and the booking call, inline and
+// scrollable — the walk-in is staff-supervised and the tablet is right there, so
+// the person at the desk reads and ticks on the spot.
+//
+// THIS SCREEN NO LONGER PROMISES ADMISSION IT CANNOT DELIVER. It used to carry
+// three banners about a minor — admitted-with-a-chip on a PIN-paired device,
+// "we have emailed the parent", or "type their address" — because the only way
+// past a guardian requirement was an emailed link and the tablet's idle timer
+// made waiting for one impossible. That machinery is gone: the consent step is
+// completable by whoever is standing here, so the walk-in either signs or is
+// refused, exactly like every other rail, and there is no copy to get wrong.
+// A `mayIncludeMinors` waiver simply shows its second question here too.
+//
+type Step = 'select' | 'details' | 'waiver' | 'confirmed'
 
 interface Props {
   teamId: string
@@ -62,11 +79,24 @@ function splitName(fullName: string): { firstname: string; lastname: string } {
 
 export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
   const t = useTranslations('Kiosk')
+  const tWaiver = useTranslations('Waiver')
+  const { team } = usePublicTeam()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('select')
   const [selected, setSelected] = useState<KioskSession | null>(null)
   const [confirmedActivity, setConfirmedActivity] = useState('')
   const [bookingError, setBookingError] = useState<string | null>(null)
+  const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
+  // The consent step's own submit does not go through `handleSubmit`, so
+  // react-hook-form's `isSubmitting` never flips for it — a separate flag, or
+  // the tablet shows a live button through the whole booking call and collects a
+  // second walk-in from an impatient second press.
+  const [busy, setBusy] = useState(false)
+  const waiverGate = useWaiverGate({
+    teamId,
+    requiredWaivers: team.required_waivers,
+    activityId: selected?.activityId ?? null,
+  })
 
   const {
     register,
@@ -111,6 +141,11 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
     setSelected(null)
     setConfirmedActivity('')
     setBookingError(null)
+    setPendingValues(null)
+    // PRIVACY: this overlay keeps nothing of its own, and a resolved waiver
+    // carries a name and an address. It is thrown away with the rest of the form
+    // state on every reset and on every standby.
+    waiverGate.reset()
     resetForm()
   }
 
@@ -120,10 +155,31 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
   }
 
   const onSubmit = async (values: FormValues) => {
-    if (!selected) return
+    if (!selected || busy) return
     setBookingError(null)
+    setBusy(true)
     try {
-      const { firstname, lastname } = splitName(values.name)
+      await runBooking(values)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runBooking = async (values: FormValues) => {
+    if (!selected) return
+    const { firstname, lastname } = splitName(values.name)
+
+    // THE ONE TERMINAL SUBMIT ON THIS SURFACE. The consent step is interposed
+    // here, before the call, on the first pass only.
+    if (waiverGate.applies && step !== 'waiver') {
+      const clear = await waiverGate.ensure({ email: values.email, firstname, lastname })
+      if (!clear) {
+        setPendingValues(values)
+        setStep('waiver')
+        return
+      }
+    }
+    try {
       const bookSession = httpsCallable(functions, 'bookSession')
       await bookSession({
         teamId,
@@ -134,12 +190,36 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
           email: values.email,
           phone: values.phone || null,
         },
+        // Taken at the door on the studio's own tablet — not a self-serve
+        // online booking. Server re-validates against the BookingSource union.
+        source: 'kiosk',
+        ...(waiverGate.acceptances.length ? { waiverAcceptances: waiverGate.acceptances } : {}),
       })
       setConfirmedActivity(selected.activityName || '')
       setStep('confirmed')
+      setPendingValues(null)
+      waiverGate.reset()
       resetForm()
-    } catch {
-      setBookingError(t('walkInError'))
+    } catch (err) {
+      // The one refusal a coach at the door can act on: a document nobody has
+      // signed. Every other failure keeps the generic string, which is this
+      // surface's deliberate posture — a doorway tablet is not a place to debug.
+      const waiverMsg = waiverErrorMessage(err, tWaiver)
+      if (waiverMsg) {
+        // …and "act on it" has to mean something. If the team's public mirror
+        // was stale-empty the step was never shown, so `ensure` above answered
+        // "clear" and this refusal would be a sentence on a tablet with no way
+        // forward and a walk-in standing at the desk. `recover` forces the
+        // resolve and puts the document on screen.
+        if (
+          await waiverGate.recover(err, { email: values.email, firstname, lastname })
+        ) {
+          setPendingValues(values)
+          setStep('waiver')
+          return
+        }
+      }
+      setBookingError(waiverMsg ?? t('walkInError'))
     }
   }
 
@@ -159,10 +239,13 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-background">
       <div className="flex shrink-0 items-center justify-between border-b px-6 py-4">
-        {step === 'details' ? (
+        {step === 'details' || step === 'waiver' ? (
           <button
             type="button"
-            onClick={() => setStep('select')}
+            onClick={() => {
+              if (step === 'waiver') waiverGate.dismiss()
+              setStep(step === 'waiver' ? 'details' : 'select')
+            }}
             className="flex items-center gap-1 text-muted-foreground transition-opacity hover:opacity-70"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -299,12 +382,43 @@ export default function WalkIn({ teamId, sessions, walkInActivityIds }: Props) {
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || busy}
                 className="w-full rounded-xl bg-primary py-3.5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                {isSubmitting ? t('walkInSubmitting') : t('walkInSubmit')}
+                {isSubmitting || busy ? t('walkInSubmitting') : t('walkInSubmit')}
               </button>
             </form>
+          </div>
+        )}
+
+        {step === 'waiver' && selected && (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold">{t('walkInTitle')}</h1>
+              <p className="mt-1 text-muted-foreground">
+                {selected.activityName ?? 'Session'} · {fmtDateTime(selected.start.toDate())}
+              </p>
+            </div>
+
+            <WaiverStep gate={waiverGate} teamName={team.name || ''} />
+
+            {bookingError && (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {bookingError}
+              </div>
+            )}
+
+            <button
+              type="button"
+              // `waiverGate.ready` and not a bare predicate over the item list:
+              // over the empty list a FAILED load leaves behind, that would be
+              // `true` — a live Register button on an error screen.
+              disabled={busy || !waiverGate.ready}
+              onClick={() => pendingValues && void onSubmit(pendingValues)}
+              className="w-full rounded-xl bg-primary py-3.5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {busy ? t('walkInSubmitting') : t('walkInSubmit')}
+            </button>
           </div>
         )}
 

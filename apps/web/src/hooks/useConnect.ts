@@ -5,10 +5,15 @@
 // from Firestore (function-written, rules allow manager/owner reads).
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
+import { usePaymentMutationErrorToast } from './usePaymentErrorToast'
 import {
+  detectByoStripeDoubleRecording,
+  type ByoStripeDoubleRecordingSignal,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   PARTNER_VISITS_SUBCOLLECTION,
@@ -18,6 +23,7 @@ import {
   type ConnectOnboardingModel,
   type ExternalPayment,
   type MemberPayment,
+  type MemberPaymentEffectsReversal,
   type MemberSubscription,
   type PartnerVisit,
   type PaymentLineItem,
@@ -54,6 +60,7 @@ export function useConnectStatus(teamId: string | null, enabled: boolean) {
 }
 
 export function useStartConnectOnboarding() {
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -66,10 +73,12 @@ export function useStartConnectOnboarding() {
       >(functions, 'startConnectOnboarding')
       return (await fn({ ...vars, origin: clientOrigin() })).data
     },
+    onError,
   })
 }
 
 export function useCreateMembershipPayment() {
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -85,6 +94,7 @@ export function useCreateMembershipPayment() {
       >(functions, 'createMembershipPayment')
       return (await fn({ ...vars, origin: clientOrigin() })).data
     },
+    onError,
   })
 }
 
@@ -150,10 +160,17 @@ export function useRefundMemberPayment() {
       amount?: number
       reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
     }) => {
-      const fn = httpsCallable<typeof vars, { refundId: string; status: string | null }>(
-        functions,
-        'refundMemberPayment'
-      )
+      const fn = httpsCallable<
+        typeof vars,
+        {
+          refundId: string
+          status: string | null
+          /** What happened to the ACCESS the payment bought. `state: 'failed'`
+           *  means the money went back and the entitlement did not — the caller
+           *  must surface it, because nothing else will. */
+          reversal: MemberPaymentEffectsReversal | null
+        }
+      >(functions, 'refundMemberPayment')
       return (await fn(vars)).data
     },
     onSuccess: (_data, vars) =>
@@ -176,6 +193,47 @@ export function usePaymentEvents(teamId: string | null, pageLimit = 100) {
         )
       )
       return snap.docs.map((d) => ({ ...(d.data() as ExternalPayment), id: d.id }))
+    },
+  })
+}
+
+/**
+ * Is the team's BYO Stripe endpoint delivering BOTH event families — i.e. is it
+ * recording every recurring payment twice?
+ *
+ * A READING, never a repair. `raw_status` on a recorded row is the literal
+ * Stripe event type that wrote it, so this is a stored fact rather than a
+ * guess; the resolver (`detectByoStripeDoubleRecording`, shared + unit-tested)
+ * counts families and deliberately never pairs two rows as "the same money".
+ * See docs/open-defects.md → "A BYO studio can double-count its own recurring
+ * revenue" for why merging them is refused rather than unimplemented.
+ *
+ * Same shape of read as `usePaymentEvents` (one ordered page, no composite
+ * index), under its own key so the two never fight over a cache entry.
+ */
+export function useByoStripeDoubleRecording(teamId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['byo-stripe-double-recording', teamId],
+    enabled: !!teamId && enabled,
+    queryFn: async (): Promise<ByoStripeDoubleRecordingSignal> => {
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, PAYMENT_EVENTS_SUBCOLLECTION),
+          orderBy('processed_at', 'desc'),
+          limit(200)
+        )
+      )
+      return detectByoStripeDoubleRecording(
+        snap.docs.map((d) => {
+          const row = d.data() as ExternalPayment
+          const at = row.processed_at as { toDate?: () => Date } | null | undefined
+          return {
+            gateway: row.gateway,
+            raw_status: row.raw_status,
+            processedAtMs: at?.toDate?.().getTime() ?? null,
+          }
+        })
+      )
     },
   })
 }
@@ -213,10 +271,23 @@ export function useContactPayments(teamId: string | null, contactId: string | nu
   })
 }
 
+/** Reasons `updatePaymentRecord` refuses that the CALLER is expected to render —
+ *  a rule the manager can act on, not a failure. The generic money-error toast
+ *  would bury each of them under "Something went wrong". */
+const REASSIGN_REFUSALS: Record<string, 'reassignConsumedPack' | 'reassignVoided' | 'reassignFailed'> =
+  {
+    consumed_pack_reassign: 'reassignConsumedPack',
+    payment_voided: 'reassignVoided',
+    reassign_reversal_failed: 'reassignFailed',
+    reassign_apply_failed: 'reassignFailed',
+  }
+
 /** (Re)assign the contact, edit the comment, and/or set the line-item on a
  * Connect or BYO payment. */
 export function useUpdatePaymentRecord() {
   const qc = useQueryClient()
+  const t = useTranslations('PaymentsDashboard')
+  const onPaymentError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -225,6 +296,8 @@ export function useUpdatePaymentRecord() {
       contactId?: string | null
       comment?: string | null
       lineItem?: PaymentLineItem | null
+      // Tell the buyer what they now hold (UX-80). Omitted ⇒ no mail.
+      sendReceipt?: boolean
     }) => {
       const fn = httpsCallable<typeof vars, { ok: boolean; contactId: string | null }>(
         functions,
@@ -237,6 +310,46 @@ export function useUpdatePaymentRecord() {
       qc.invalidateQueries({ queryKey: ['payment-events', vars.teamId] })
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })
+    },
+    onError: (err: unknown) => {
+      const details = (err as { details?: { reason?: string; unitsConsumed?: number } }).details
+      const key = details?.reason ? REASSIGN_REFUSALS[details.reason] : undefined
+      if (key) {
+        toast.error(t(key, { used: details?.unitsConsumed ?? 0 }))
+        return
+      }
+      onPaymentError(err)
+    },
+  })
+}
+
+/** Void a manual payment record ("this was recorded by mistake"). Takes back
+ *  what the record gave; moves no money. Manual rows only — enforced server-side
+ *  because the gateway rails' rows describe money we do not control. */
+export function useVoidManualPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (vars: { teamId: string; paymentId: string; reason?: string | null }) => {
+      const fn = httpsCallable<
+        typeof vars,
+        {
+          ok: boolean
+          /** What was taken back, or null when the row was unassigned. */
+          reversal: {
+            subscription: string
+            credits: string
+            creditsRevoked: number
+            course: string
+          } | null
+        }
+      >(functions, 'voidManualPayment')
+      return (await fn(vars)).data
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['payment-events', vars.teamId] })
+      qc.invalidateQueries({ queryKey: ['contact-payments'] })
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-monthly-revenue', vars.teamId] })
     },
   })
 }
@@ -268,6 +381,7 @@ export function usePartnerVisits(teamId: string | null) {
 /** Record a manual cash / bank-transfer payment into the unified ledger. */
 export function useRecordManualPayment() {
   const qc = useQueryClient()
+  const onError = usePaymentMutationErrorToast()
   return useMutation({
     mutationFn: async (vars: {
       teamId: string
@@ -278,6 +392,11 @@ export function useRecordManualPayment() {
       paymentMode?: string
       lineItem?: PaymentLineItem | null
       comment?: string | null
+      // Minted once per dialog opening, so a double-click writes ONE payment row
+      // (the server creates the doc under this key) and therefore mails once.
+      idempotencyKey?: string
+      // Tell the buyer what they now hold (UX-80). Omitted ⇒ no mail.
+      sendReceipt?: boolean
     }) => {
       const fn = httpsCallable<typeof vars, { id: string; duplicate?: boolean }>(
         functions,
@@ -290,5 +409,6 @@ export function useRecordManualPayment() {
       qc.invalidateQueries({ queryKey: ['contact-payments'] })
       qc.invalidateQueries({ queryKey: ['contacts'] })
     },
+    onError,
   })
 }

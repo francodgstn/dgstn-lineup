@@ -313,15 +313,105 @@
   z-index: 100000 !important;
 }
 
-/* ── Event programme print sheet ──────────────────────────────────────────────
-   The printable handout at /public/{slug}/events/{id}/print. Browser
-   "Save as PDF" over these rules produces the A4 handout, which is why there is
-   no jsPDF path — hand-laying a multi-day multi-track grid there would be far
-   more work for a worse result. */
+/* ─── Print: the manifest day sheet ─────────────────────────────────────────
+   The only printable surface in the app (/manifest). The dashboard chrome —
+   sidebar, top bar, toolbars, anything tagged `.no-print` — is dropped, and
+   what remains prints as plain paper: no card shadows, no coloured fills, and
+   a session block that is never split across two pages mid-roster.
+
+   Deliberately scoped by a `@media print` block rather than Tailwind `print:`
+   utilities for the chrome removal, because the elements being hidden live in
+   the auth layout, which knows nothing about this route. */
+@media print {
+  /* App chrome + anything a page explicitly marks as screen-only. */
+  aside,
+  nav,
+  header,
+  .no-print,
+  [data-slot='toaster'] {
+    display: none !important;
+  }
+
+  /* …but a session block titles itself with a semantic <header> (time,
+     activity, coach, booked count), which the blanket rule above ate — the
+     sheet printed rosters with no indication of which session they belonged
+     to. Re-show it explicitly.
+
+     Deliberately NOT solved with `header:not(.manifest-sheet *)`: that relies
+     on a Selectors-4 complex :not(), which this build's CSS pipeline drops on
+     the floor — the compiled stylesheet came out with the plain selector and
+     the bug survived a "fix" that looked right in source. Simple selectors
+     only here. */
+  .manifest-session > header {
+    display: flex !important;
+  }
+
+  /* The layout's scroll containers cap height and clip overflow on screen;
+     on paper that would print page one and silently drop the rest. */
+  html,
+  body,
+  main,
+  main > * {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .manifest-sheet {
+    max-width: none !important;
+  }
+
+  /* Flat on paper — borders survive as the only structure, since background
+     fills are dropped by most browsers' default "no background graphics". */
+  .manifest-session {
+    border: 1px solid #ccc !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
+
+/* ── Print: the event programme sheet ────────────────────────────────────────
+   The second printable surface (/public/{slug}/events/{id}/print). Browser
+   "Save as PDF" over these rules produces the A4 handout, which is why there
+   is no jsPDF path — hand-laying a multi-day multi-track grid there would be
+   far more work for a worse result.
+
+   NOTE the header re-show below. The manifest block above hides `header`
+   wholesale to drop the app chrome, and this sheet titles itself with one
+   (event name, dates, venue) — without this the handout printed with no
+   indication of WHICH event it was. Simple selector only, for the same
+   CSS-pipeline reason spelled out there. */
 @media print {
   .program-print {
     max-width: none;
     padding: 0;
+  }
+
+  .program-print header,
+  .program-print .program-day h3 {
+    display: block !important;
   }
 
   /* Each day starts a fresh page, and a day's block is never split mid-way. */
@@ -340,13 +430,8 @@
     display: grid !important;
   }
 
-  /* Flatten interactive chrome: borders stay (they carry the structure),
-     shadows and hover affordances do not. */
+  /* Flat on paper: borders carry the structure, shadows do not. */
   .program-print * {
     box-shadow: none !important;
-  }
-
-  a[href]::after {
-    content: none !important;
   }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { ImageIcon, X, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -45,6 +46,7 @@ function ImageField({
   onChange: (url: string | undefined) => void
   aspect?: 'wide' | 'square'
 }) {
+  const t = useTranslations('Website')
   const ref = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -52,7 +54,7 @@ function ImageField({
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > limits.maxImageSizeMB * 1024 * 1024) {
-      toast.error(`Image must be under ${limits.maxImageSizeMB} MB`)
+      toast.error(t('editorImageTooLarge', { mb: limits.maxImageSizeMB }))
       return
     }
     setUploading(true)
@@ -60,7 +62,7 @@ function ImageField({
       const u = await uploadSiteImage(teamId, sectionId, file)
       onChange(u)
     } catch {
-      toast.error('Upload failed')
+      toast.error(t('editorUploadFailed'))
     } finally {
       setUploading(false)
       if (ref.current) ref.current.value = ''
@@ -89,7 +91,7 @@ function ImageField({
           className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground disabled:opacity-50 ${aspect === 'wide' ? 'h-20 w-full' : 'h-20 w-20'}`}
         >
           <ImageIcon className="h-4 w-4" />
-          {uploading ? 'Uploading…' : 'Upload'}
+          {uploading ? t('editorUploading') : t('editorUpload')}
         </button>
       )}
       <input ref={ref} type="file" accept="image/*" onChange={handle} className="hidden" />
@@ -100,6 +102,7 @@ function ImageField({
 // ─── CTA editor ──────────────────────────────────────────────────────────────
 
 function CtaEditor({ cta, onChange }: { cta?: SiteCta; onChange: (cta: SiteCta | undefined) => void }) {
+  const t = useTranslations('Website')
   const value = cta ?? { label: '', action: 'booking' as const }
   const set = (patch: Partial<SiteCta>) => {
     const next = { ...value, ...patch }
@@ -107,22 +110,22 @@ function CtaEditor({ cta, onChange }: { cta?: SiteCta; onChange: (cta: SiteCta |
   }
   return (
     <div className="space-y-2 rounded-lg border p-3">
-      <p className="text-xs font-medium text-muted-foreground">Call-to-action button</p>
-      <Field label="Button label">
-        <Input value={value.label} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Book a trial" className="h-9" />
+      <p className="text-xs font-medium text-muted-foreground">{t('editorCtaTitle')}</p>
+      <Field label={t('editorCtaLabel')}>
+        <Input value={value.label} onChange={(e) => set({ label: e.target.value })} placeholder={t('editorCtaLabelPlaceholder')} className="h-9" />
       </Field>
-      <Field label="Action">
+      <Field label={t('editorCtaAction')}>
         <Select value={value.action} onValueChange={(v) => set({ action: v as SiteCta['action'] })}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="booking">Open booking</SelectItem>
-            <SelectItem value="signup">Sign-up</SelectItem>
-            <SelectItem value="url">External link</SelectItem>
+            <SelectItem value="booking">{t('editorCtaActionBooking')}</SelectItem>
+            <SelectItem value="signup">{t('editorCtaActionSignup')}</SelectItem>
+            <SelectItem value="url">{t('editorCtaActionUrl')}</SelectItem>
           </SelectContent>
         </Select>
       </Field>
       {value.action === 'url' && (
-        <Field label="URL">
+        <Field label={t('editorCtaUrl')}>
           <Input value={value.url ?? ''} onChange={(e) => set({ url: e.target.value })} placeholder="https://" className="h-9 font-mono text-xs" />
         </Field>
       )}
@@ -135,26 +138,27 @@ function CtaEditor({ cta, onChange }: { cta?: SiteCta; onChange: (cta: SiteCta |
 type Patch = Record<string, unknown>
 
 function HeroFields({ s, teamId, onChange }: { s: HeroSection; teamId: string; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
-      <Field label="Headline">
+      <Field label={t('editorHeadline')}>
         <Input value={s.headline} onChange={(e) => onChange({ headline: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Subheadline">
+      <Field label={t('editorSubheadline')}>
         <Textarea value={s.subheadline ?? ''} onChange={(e) => onChange({ subheadline: e.target.value })} rows={2} />
       </Field>
-      <ImageField label="Background image" url={s.bgImageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ bgImageUrl: u })} />
+      <ImageField label={t('editorBackgroundImage')} url={s.bgImageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ bgImageUrl: u })} />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Alignment">
+        <Field label={t('editorAlignment')}>
           <Select value={s.align} onValueChange={(v) => onChange({ align: v })}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="center">Center</SelectItem>
-              <SelectItem value="left">Left</SelectItem>
+              <SelectItem value="center">{t('editorCenter')}</SelectItem>
+              <SelectItem value="left">{t('editorLeft')}</SelectItem>
             </SelectContent>
           </Select>
         </Field>
-        <Field label={`Overlay (${s.overlay ?? 40}%)`}>
+        <Field label={t('editorOverlay', { percent: s.overlay ?? 40 })}>
           <input
             type="range" min={0} max={100} value={s.overlay ?? 40}
             onChange={(e) => onChange({ overlay: Number(e.target.value) })}
@@ -171,6 +175,7 @@ function ContentFields({ s, teamId, onChange }: { s: ContentSection; teamId: str
   // RichTextEditor is uncontrolled after mount and memoized: pass STABLE
   // callbacks (latest onChange via a ref) so typing never re-mounts it, and key
   // it by section id so switching sections loads the right body.
+  const t = useTranslations('Website')
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const handleBody = useCallback((html: string) => onChangeRef.current({ body: html }), [])
@@ -178,27 +183,27 @@ function ContentFields({ s, teamId, onChange }: { s: ContentSection; teamId: str
 
   return (
     <div className="space-y-3">
-      <Field label="Title (optional)">
+      <Field label={t('editorTitleOptional')}>
         <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Content">
+      <Field label={t('editorContent')}>
         <RichTextEditor
           key={s.id}
           value={s.body}
           onChange={handleBody}
           onUploadImage={handleUpload}
           minHeight={240}
-          placeholder="Write your content, or press “/” for formatting…"
+          placeholder={t('editorContentPlaceholder')}
         />
       </Field>
-      <ImageField label="Image (optional)" url={s.imageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ imageUrl: u })} />
+      <ImageField label={t('editorImageOptional')} url={s.imageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ imageUrl: u })} />
       {s.imageUrl && (
-        <Field label="Image side">
+        <Field label={t('editorImageSide')}>
           <Select value={s.imageSide} onValueChange={(v) => onChange({ imageSide: v })}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="left">Left</SelectItem>
-              <SelectItem value="right">Right</SelectItem>
+              <SelectItem value="left">{t('editorLeft')}</SelectItem>
+              <SelectItem value="right">{t('editorRight')}</SelectItem>
             </SelectContent>
           </Select>
         </Field>
@@ -208,6 +213,7 @@ function ContentFields({ s, teamId, onChange }: { s: ContentSection; teamId: str
 }
 
 function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: string; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   const addRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -215,11 +221,11 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
     const file = e.target.files?.[0]
     if (!file) return
     if (s.images.length >= limits.maxGalleryImages) {
-      toast.error(`Up to ${limits.maxGalleryImages} photos`)
+      toast.error(t('editorGalleryLimit', { count: limits.maxGalleryImages }))
       return
     }
     if (file.size > limits.maxImageSizeMB * 1024 * 1024) {
-      toast.error(`Image must be under ${limits.maxImageSizeMB} MB`)
+      toast.error(t('editorImageTooLarge', { mb: limits.maxImageSizeMB }))
       return
     }
     setUploading(true)
@@ -227,7 +233,7 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
       const url = await uploadSiteImage(teamId, s.id, file)
       onChange({ images: [...s.images, { url }] })
     } catch {
-      toast.error('Upload failed')
+      toast.error(t('editorUploadFailed'))
     } finally {
       setUploading(false)
       if (addRef.current) addRef.current.value = ''
@@ -236,10 +242,10 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
 
   return (
     <div className="space-y-3">
-      <Field label="Heading (optional)">
+      <Field label={t('editorHeadingOptional')}>
         <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Columns">
+      <Field label={t('editorColumns')}>
         <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -249,7 +255,7 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
           </SelectContent>
         </Select>
       </Field>
-      <Field label={`Photos (${s.images.length}/${limits.maxGalleryImages})`}>
+      <Field label={t('editorPhotos', { count: s.images.length, max: limits.maxGalleryImages })}>
         <div className="grid grid-cols-3 gap-2">
           {s.images.map((img, i) => (
             <div key={i} className="relative aspect-square overflow-hidden rounded-md border bg-muted">
@@ -271,7 +277,7 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
             className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            {uploading ? '…' : 'Add'}
+            {uploading ? '…' : t('editorAdd')}
           </button>
         </div>
         <input ref={addRef} type="file" accept="image/*" onChange={addImage} className="hidden" />
@@ -281,25 +287,60 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
 }
 
 function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-        Activity cards are pulled live from your activities. Edit those under Activities.
+        {t('editorActivitiesNote')}
       </p>
-      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="What we offer" className="h-9" /></Field>
-      <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
-      <Field label="Columns">
-        <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
-          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+      <Field label={t('editorHeading')}><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder={t('editorActivitiesHeadingPlaceholder')} className="h-9" /></Field>
+      <Field label={t('editorSubheading')}><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
+      <Field label={t('editorLayout')}>
+        <Select
+          value={s.layout ?? 'grid'}
+          onValueChange={(v) => onChange({ layout: v as ActivitiesSection['layout'] })}
+        >
+          <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="2">2</SelectItem>
-            <SelectItem value="3">3</SelectItem>
-            <SelectItem value="4">4</SelectItem>
+            <SelectItem value="grid">{t('editorLayoutGrid')}</SelectItem>
+            <SelectItem value="list">{t('editorLayoutList')}</SelectItem>
           </SelectContent>
         </Select>
       </Field>
+      {/* A stacked list is always one per row — the column count is meaningless
+          there. Hidden rather than reset, so switching back to grid restores
+          whatever the studio had picked. */}
+      {(s.layout ?? 'grid') === 'grid' && (
+        <Field label={t('editorColumns')}>
+          <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
+            <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2">2</SelectItem>
+              <SelectItem value="3">3</SelectItem>
+              <SelectItem value="4">4</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
+      <Field label={t('fieldPricingDisplay')}>
+        <Select
+          value={s.pricingDisplay ?? 'list'}
+          onValueChange={(v) => onChange({ pricingDisplay: v as ActivitiesSection['pricingDisplay'] })}
+        >
+          <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="list">{t('pricingDisplayList')}</SelectItem>
+            <SelectItem value="compact">{t('pricingDisplayCompact')}</SelectItem>
+            <SelectItem value="hidden">{t('pricingDisplayHidden')}</SelectItem>
+          </SelectContent>
+        </Select>
+        {/* Said on the control, not in a doc comment: a studio picking "Hidden"
+            is entitled to know what it does NOT hide, so it doesn't go looking
+            for the bug. */}
+        <p className="text-xs text-muted-foreground">{t('pricingDisplayHint')}</p>
+      </Field>
       <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">Show “Book” link on cards</span>
+        <span className="text-sm">{t('editorShowBookingOnCards')}</span>
         <Switch checked={s.showBooking ?? false} onCheckedChange={(v) => onChange({ showBooking: v })} />
       </label>
     </div>
@@ -307,42 +348,61 @@ function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p:
 }
 
 function PricingFields({ s, onChange }: { s: PricingSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
+      {/* The destination moved with the copy: these cards read the SUBSCRIPTION
+          PLANS, which live on the Plans page — the old line still sent studios to
+          "Contacts → membership types", a path that has not existed for two
+          reorganisations. */}
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-        Pricing cards are pulled live from your membership plans (Subscriptions). Edit those under Contacts → membership types.
+        {t('editorPricingNote')}
       </p>
-      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Membership" className="h-9" /></Field>
-      <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
-      <Field label="Button label"><Input value={s.ctaLabel ?? ''} onChange={(e) => onChange({ ctaLabel: e.target.value })} placeholder="Join now" className="h-9" /></Field>
+      <Field label={t('editorHeading')}><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder={t('editorPricingHeadingPlaceholder')} className="h-9" /></Field>
+      <Field label={t('editorSubheading')}><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
+      <Field label={t('editorCtaLabel')}><Input value={s.ctaLabel ?? ''} onChange={(e) => onChange({ ctaLabel: e.target.value })} placeholder={t('editorPricingCtaPlaceholder')} className="h-9" /></Field>
+      <Field label={t('fieldPricingLayout')}>
+        <Select
+          value={s.layout ?? 'cards'}
+          onValueChange={(v) => onChange({ layout: v as PricingSection['layout'] })}
+        >
+          <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cards">{t('pricingLayoutCards')}</SelectItem>
+            <SelectItem value="table">{t('pricingLayoutTable')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{t('pricingLayoutHint')}</p>
+      </Field>
     </div>
   )
 }
 
 function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-        The schedule is pulled live from your upcoming bookable sessions.
+        {t('editorScheduleNote')}
       </p>
-      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Schedule" className="h-9" /></Field>
+      <Field label={t('editorHeading')}><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder={t('editorScheduleHeadingPlaceholder')} className="h-9" /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Days ahead">
+        <Field label={t('editorDaysAhead')}>
           <Select value={String(s.windowDays ?? 7)} onValueChange={(v) => onChange({ windowDays: Number(v) })}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="7">7 days</SelectItem>
-              <SelectItem value="14">14 days</SelectItem>
-              <SelectItem value="30">30 days</SelectItem>
+              <SelectItem value="7">{t('editorDaysOption', { count: 7 })}</SelectItem>
+              <SelectItem value="14">{t('editorDaysOption', { count: 14 })}</SelectItem>
+              <SelectItem value="30">{t('editorDaysOption', { count: 30 })}</SelectItem>
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Max classes">
+        <Field label={t('editorMaxClasses')}>
           {/* 0 = no cap. Keeps a busy schedule from listing dozens of rows. */}
           <Select value={String(s.maxItems ?? 0)} onValueChange={(v) => onChange({ maxItems: Number(v) || undefined })}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="0">No limit</SelectItem>
+              <SelectItem value="0">{t('editorNoLimit')}</SelectItem>
               <SelectItem value="3">3</SelectItem>
               <SelectItem value="5">5</SelectItem>
               <SelectItem value="8">8</SelectItem>
@@ -353,18 +413,18 @@ function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Pat
           </Select>
         </Field>
       </div>
-      <Field label="Default view">
+      <Field label={t('editorDefaultView')}>
         {/* Visitors can still switch List ↔ Calendar on the live site; this sets the default. */}
         <Select value={s.displayMode ?? 'calendar'} onValueChange={(v) => onChange({ displayMode: v as ScheduleSection['displayMode'] })}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="list">List</SelectItem>
-            <SelectItem value="calendar">Calendar</SelectItem>
+            <SelectItem value="list">{t('editorViewList')}</SelectItem>
+            <SelectItem value="calendar">{t('editorViewCalendar')}</SelectItem>
           </SelectContent>
         </Select>
       </Field>
       <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">Show “Book” icon on each session</span>
+        <span className="text-sm">{t('editorShowBookingOnSessions')}</span>
         <Switch checked={s.showBooking ?? false} onCheckedChange={(v) => onChange({ showBooking: v })} />
       </label>
     </div>
@@ -372,18 +432,22 @@ function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Pat
 }
 
 function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
-      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Get in touch" className="h-9" /></Field>
-      <Field label="Address"><Textarea value={s.address ?? ''} onChange={(e) => onChange({ address: e.target.value })} rows={2} /></Field>
+      <Field label={t('editorHeading')}><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder={t('editorContactHeadingPlaceholder')} className="h-9" /></Field>
+      <Field label={t('editorAddress')}><Textarea value={s.address ?? ''} onChange={(e) => onChange({ address: e.target.value })} rows={2} /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Phone"><Input value={s.phone ?? ''} onChange={(e) => onChange({ phone: e.target.value })} className="h-9" /></Field>
-        <Field label="Email"><Input value={s.email ?? ''} onChange={(e) => onChange({ email: e.target.value })} className="h-9" /></Field>
+        <Field label={t('editorPhone')}><Input value={s.phone ?? ''} onChange={(e) => onChange({ phone: e.target.value })} className="h-9" /></Field>
+        <Field label={t('editorEmail')}><Input value={s.email ?? ''} onChange={(e) => onChange({ email: e.target.value })} className="h-9" /></Field>
       </div>
-      <Field label="Opening hours"><Textarea value={s.hours ?? ''} onChange={(e) => onChange({ hours: e.target.value })} rows={2} placeholder="Mon–Fri 9–18" /></Field>
-      <Field label="Map location (address or place)"><Input value={s.mapQuery ?? ''} onChange={(e) => onChange({ mapQuery: e.target.value })} className="h-9" placeholder="Bahnhofstrasse 1, Zürich" /></Field>
+      <Field label={t('editorHours')}><Textarea value={s.hours ?? ''} onChange={(e) => onChange({ hours: e.target.value })} rows={2} placeholder={t('editorHoursPlaceholder')} /></Field>
+      {/* The map placeholder stays a REAL Swiss address rather than becoming
+          "Street 1, City": it is an example of the format the lookup wants, and a
+          translated abstraction stops showing that. */}
+      <Field label={t('editorMapLocation')}><Input value={s.mapQuery ?? ''} onChange={(e) => onChange({ mapQuery: e.target.value })} className="h-9" placeholder={t('editorMapPlaceholder')} /></Field>
       <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">Show social links</span>
+        <span className="text-sm">{t('editorShowSocial')}</span>
         <Switch checked={s.showSocial ?? false} onCheckedChange={(v) => onChange({ showSocial: v })} />
       </label>
     </div>
@@ -391,6 +455,7 @@ function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p: Patch
 }
 
 function PlacesFields({ s, teamId, onChange }: { s: PlacesSection; teamId: string; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   const { team } = useAuth()
   const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
   const selected = new Set(s.placeIds ?? [])
@@ -402,9 +467,9 @@ function PlacesFields({ s, teamId, onChange }: { s: PlacesSection; teamId: strin
   }
   return (
     <div className="space-y-3">
-      <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Find us" className="h-9" /></Field>
-      <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
-      <Field label="Columns">
+      <Field label={t('editorHeading')}><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder={t('editorPlacesHeadingPlaceholder')} className="h-9" /></Field>
+      <Field label={t('editorSubheading')}><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
+      <Field label={t('editorColumns')}>
         <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
           <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -415,10 +480,12 @@ function PlacesFields({ s, teamId, onChange }: { s: PlacesSection; teamId: strin
         </Select>
       </Field>
       <div className="space-y-1.5">
-        <Label className="text-xs">Places to show</Label>
+        <Label className="text-xs">{t('editorPlacesToShow')}</Label>
         {places.length === 0 ? (
+          /* Places moved to the Schedule section (UX-67); the old copy still sent
+             studios to Settings. */
           <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-            No places yet — add them under Settings → Places.
+            {t('editorNoPlaces')}
           </p>
         ) : (
           <div className="space-y-1">
@@ -432,7 +499,9 @@ function PlacesFields({ s, teamId, onChange }: { s: PlacesSection; teamId: strin
                 />
                 <span className="flex-1 truncate">
                   {p.name}
-                  {p.scope === 'org' ? <span className="text-muted-foreground"> · org</span> : null}
+                  {p.scope === 'org' ? (
+                    <span className="text-muted-foreground"> · {t('editorPlaceOrgScope')}</span>
+                  ) : null}
                 </span>
               </label>
             ))}

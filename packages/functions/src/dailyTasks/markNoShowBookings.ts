@@ -43,10 +43,18 @@ export async function markNoShowBookings(): Promise<{
       continue
     }
 
-    // Include docs with no status field (treated as pending)
-    const pendingDocs = bookSnap!.docs.filter(
-      (d) => !d.data().status || d.data().status === 'pending'
-    )
+    // Include docs with no status field (treated as pending), but never an
+    // UNSETTLED HOLD. A hold is not an attendance record: an abandoned drop-in
+    // checkout (`payment_status: 'required'`) and a waitlist claim that was
+    // never taken up (`waitlist_claim`) are both `pending` with `fromBioLink`,
+    // so this job used to stamp "no_show" on a real person who never had a
+    // booking — and decrement a counter that was never incremented for them.
+    // expirePendingBookings owns those documents; it deletes them.
+    const pendingDocs = bookSnap!.docs.filter((d) => {
+      const b = d.data()
+      if (b.status && b.status !== 'pending') return false
+      return b.payment_status !== 'required' && b.waitlist_claim !== true
+    })
     if (pendingDocs.length === 0) continue
 
     try {
@@ -67,10 +75,10 @@ export async function markNoShowBookings(): Promise<{
         }
       }
 
-      batch.update(sessionDoc.ref, {
-        bookings_count: FieldValue.increment(-pendingDocs.length),
-      })
-
+      // No session counter write. `bookings_count` has one writing style —
+      // absolute, from a read set — and a batch has no conflict detection, so
+      // this `increment(-n)` could clobber (or be clobbered by) a concurrent
+      // booking's absolute write. trackBookings recounts on each 'no_show' flip.
       await batch.commit()
       stats.updated += pendingDocs.length
       console.log(

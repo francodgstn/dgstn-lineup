@@ -35,7 +35,18 @@
 //   • payout_id / contact_id — linkage metadata, not money
 //   • fee upgrade — fee fields + fee_source only, and only while
 //     fee_source !== 'balance_transaction' (backfill improving a degraded row)
-//   • status → 'corrected' + a compensating 'adjustment' row (`corrects`)
+//   • status → 'corrected'. TWO SHAPES, and mixing them invents money:
+//       – the AMOUNT was wrong → 'corrected' + a compensating 'adjustment' row
+//         (`corrects`) carrying the right figure, because the right figure needs
+//         somewhere to live;
+//       – the EVENT DID NOT HAPPEN (a manual payment a manager voided) →
+//         'corrected' ALONE, no second row. There is no right amount — the redo
+//         is a fresh payment, which writes its own row — so an adjustment here
+//         would be a phantom entry for money that never moved.
+//     Either way the status flip is the whole mechanism: computeMonthlyFinanceReport
+//     drops corrected rows (below), and onFinanceTransactionWrite posts the
+//     compensating double-entry reversal on the recorded → corrected edge.
+//     markFinanceTxnCorrected (functions/src/finance/journal.ts) is the writer.
 // Errors are fixed by new rows, never edits — this is what makes the journal
 // replayable into double-entry postings.
 //
@@ -56,6 +67,7 @@
 // | adjustment        | free-form balanced pair                        |                                 |
 
 import type { Timestamp } from './common'
+import { normalizeRedemptionCode } from '../utils/codes'
 
 // ─── Core enums ───────────────────────────────────────────────────────────────
 
@@ -69,7 +81,26 @@ export type FinanceTxnType =
   | 'payout'
   | 'adjustment'
 
-export type FinanceCategory = 'membership' | 'drop_in' | 'course' | 'product' | 'other'
+/**
+ * What was sold. 'gift_card' is stored value, not a service: the money event is
+ * the SALE, so — cash basis — that is where the revenue is recognised, in its
+ * own bucket rather than lumped in with no-show fees under 'other'.
+ *
+ * Why this cannot double-count: a redemption moves no money (no charge, no
+ * payout, no till), so it is not a journalable event and adds no positive row.
+ * The one row that exists is the sale, and it is counted once, in 'gift_card'.
+ * When the value is later spent, the ONLY permitted write is a signed pair that
+ * sums to zero (+d on the category consumed, −d on 'gift_card') — an attribution
+ * change, never a second recognition. A bare positive row on redemption would be
+ * the double count, and it is exactly what the pair exists to forbid.
+ */
+export type FinanceCategory =
+  | 'membership'
+  | 'drop_in'
+  | 'course'
+  | 'product'
+  | 'gift_card'
+  | 'other'
 
 /**
  * Where the fee breakdown came from:
@@ -194,6 +225,11 @@ export function mapCategory(kind?: string | null): FinanceCategory {
       return 'course'
     case 'product':
       return 'product'
+    case 'gift_card':
+      // Both rails already spell it this way — MemberPayment.kind on the Connect
+      // gift-card checkout, PaymentLineItem.kind on a manager-issued card — so
+      // this case only stops them falling through to 'other'.
+      return 'gift_card'
     default:
       return 'other'
   }
@@ -294,6 +330,7 @@ export const FINANCE_CATEGORIES: FinanceCategory[] = [
   'drop_in',
   'course',
   'product',
+  'gift_card',
   'other',
 ]
 export const FINANCE_SOURCES: FinanceTxnSource[] = ['connect', 'byo_stripe', 'payrexx', 'manual']
@@ -616,4 +653,99 @@ export function buildExternalPaymentTxn(params: {
   }
   assertFinanceInvariant(txn)
   return txn
+}
+
+/**
+ * Gift-card RECLASSIFICATION — the signed pair written when stored value is
+ * spent. Redeeming a card moves no money (the money moved when the card was
+ * SOLD, and that sale is already the one 'gift_card' charge row), so a
+ * redemption may never add a positive row: it only re-attributes value that is
+ * already in the books.
+ *
+ *   row A  category = what was bought   gross +d  net +d
+ *   row B  category = 'gift_card'       gross −d  net −d
+ *
+ * The pair therefore contributes exactly ZERO to totals, by_category, by_source
+ * and every fee bucket — only the counts move. What it changes is WHERE the
+ * lifetime revenue sits: a card sold in January and spent on a course in March
+ * reads `gift_card +100` in January and `course +100 / gift_card −100` in
+ * March, so lifetime shows `course 100, gift_card 0`. The running `gift_card`
+ * bucket is then sold-minus-redeemed — recognised-but-unconsumed stored value,
+ * which doubles as the cash-basis shadow of the liability this ledger is not
+ * allowed to accrue (docs/accounting.md: entries mirror money events).
+ *
+ * `reverse` flips every sign and suffixes the ids, for the paths that give the
+ * value back (a refunded booking, a duplicate charge). Same builder on purpose:
+ * a second builder is a second place for the signs to disagree.
+ *
+ * MUST be written as one batch — see recordGiftCardReclass. Half a pair leaves
+ * by_category permanently wrong and nothing detects it (reconciliationCheck
+ * counts only 'charge' rows).
+ */
+export function buildGiftCardReclassTxns(params: {
+  teamId: string
+  /** Canonical GC-XXXX-XXXX — part of the deterministic row id. */
+  code: string
+  /** The hold key the drawdown was committed under — makes the id unique per
+   *  redemption, so a card spent twice produces two distinct pairs. */
+  holdKey: string
+  /** MINOR units, positive — the value that actually moved off the card. */
+  drawdownMinor: number
+  /** The CARD's currency. Both rows must carry the same one, or the monthly
+   *  report buckets only the primary-currency row and the netting breaks. */
+  currency: string
+  /** What the redeemed value bought. */
+  targetCategory: FinanceCategory
+  contactId?: string | null
+  occurredAtMs: number
+  description?: string | null
+  reverse?: boolean
+}): [FinanceTransactionInput, FinanceTransactionInput] {
+  if (!Number.isInteger(params.drawdownMinor) || params.drawdownMinor <= 0) {
+    throw new Error(
+      `gift card reclass ${params.code}: drawdownMinor must be a positive integer minor-unit amount, got ${params.drawdownMinor}`
+    )
+  }
+  // The reclass pair's sourceRef must match the paymentRef the callables build
+  // for the same drawdown, character for character — one normaliser, no forks.
+  const code = normalizeRedemptionCode(params.code)
+  const sourceRef = `gift:${code}:${params.holdKey}`
+  const suffix = params.reverse ? ':rev' : ''
+  const sign = params.reverse ? -1 : 1
+  const d = params.drawdownMinor * sign
+  const shared = {
+    teamId: params.teamId,
+    type: 'adjustment' as const,
+    source: 'manual' as const,
+    source_ref: sourceRef,
+    source_doc: `teams/${params.teamId}/gift_cards/${code}`,
+    occurred_at_ms: params.occurredAtMs,
+    month: monthKey(params.occurredAtMs),
+    currency: normalizeCurrency(params.currency),
+    stripe_fee: 0,
+    platform_fee: 0,
+    fee_source: 'none' as const,
+    contact_id: params.contactId ?? null,
+    description:
+      params.description ??
+      (params.reverse ? `Gift card ${code} · redemption reversed` : `Gift card ${code} redeemed`),
+    tax_code: null,
+  }
+  const earn: FinanceTransactionInput = {
+    ...shared,
+    id: financeTxnId('manual', 'adjustment', `${sourceRef}:earn${suffix}`),
+    gross: d,
+    net: d,
+    category: params.targetCategory,
+  }
+  const redeem: FinanceTransactionInput = {
+    ...shared,
+    id: financeTxnId('manual', 'adjustment', `${sourceRef}:redeem${suffix}`),
+    gross: neg(d),
+    net: neg(d),
+    category: 'gift_card',
+  }
+  assertFinanceInvariant(earn)
+  assertFinanceInvariant(redeem)
+  return [earn, redeem]
 }

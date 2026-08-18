@@ -1,17 +1,24 @@
 'use client'
 
 // Booking page settings — how the public /public/{slug}/booking flow behaves.
-// Extracted out of the bio-link editor into its own "Configure" page. Saves the
-// BookingSettings to public_profile.bookingSettings (source of truth, team-member
-// writable) + mirrors to team.settings.booking (owner-only; re-hydrates this form).
+// Extracted out of the bio-link editor into its own "Configure" page.
+//
+// ONE store: `teams/{id}/public_profile/{id}.bookingSettings`. This form writes
+// it, this form re-hydrates from it, the public booking page reads it, the
+// mobile app reads it and every booking callable reads it
+// (packages/functions/src/booking/bookingSettings.ts). The team-doc mirror
+// (`settings.booking`) is gone — it was owner-only, so a manager's mirror write
+// was denied and the cutoff she had just set applied on the public page and
+// nowhere else, while the form showed her the old value (UX-6).
 
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslations } from 'next-intl'
@@ -22,7 +29,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, BookingSettings } from '@linyup/shared'
+import { MoreOptions } from '@/components/forms/MoreOptions'
 import { NoShowPolicyCard } from './NoShowPolicyCard'
+import { CancellationPolicyCard } from './CancellationPolicyCard'
 
 // ─── schema ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +52,12 @@ function createBookingSchema(t: ReturnType<typeof useTranslations>) {
     ctaUrl: createSafeUrlSchema(t),
     ctaLabel: z.string().optional(),
     appointmentsEnabled: z.boolean().optional(),
+    waitlistEnabled: z.boolean().optional(),
+    cutoffMinutes: z.number().int().min(0).max(10080),
+    // A MAXIMUM, not a guarantee: the claim window is also clamped by the
+    // cutoff above and by the session start, and an offer is simply not made
+    // when what survives that clamp is too short to reach checkout.
+    waitlistClaimMinutes: z.number().int().min(60).max(1440),
   })
 }
 
@@ -66,13 +81,20 @@ function useTeam(teamId: string | null) {
   })
 }
 
-function getDefaults(team: Team | null): FormData {
-  const rawBooking = ((team?.settings as Record<string, unknown> | undefined)?.booking ??
-    {}) as Record<string, unknown>
+function getDefaults(stored: Partial<BookingSettings> | undefined): FormData {
+  const rawBooking = (stored ?? {}) as Record<string, unknown>
   const rawMonths = Number(rawBooking.windowMonths)
   const windowMonths =
     Number.isInteger(rawMonths) && rawMonths >= 1 && rawMonths <= 6 ? rawMonths : 2
   const flowType = rawBooking.flowType === 'date-first' ? 'date-first' : 'activity-first'
+  const rawCutoff = Number(rawBooking.cutoffMinutes)
+  const cutoffMinutes = Number.isInteger(rawCutoff) && rawCutoff >= 0 && rawCutoff <= 10080 ? rawCutoff : 0
+  const rawClaim = Number(rawBooking.waitlistClaimMinutes)
+  // Absent falls back to the SAME default the promoter applies server-side
+  // (WAITLIST_DEFAULT_CLAIM_MINUTES) — showing a different number here than the
+  // one actually used is worse than showing none.
+  const waitlistClaimMinutes =
+    Number.isInteger(rawClaim) && rawClaim >= 60 && rawClaim <= 1440 ? rawClaim : 120
   return {
     booking: {
       flowType,
@@ -83,6 +105,9 @@ function getDefaults(team: Team | null): FormData {
       ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
       appointmentsEnabled: rawBooking.appointmentsEnabled === true,
+      waitlistEnabled: rawBooking.waitlistEnabled === true,
+      cutoffMinutes,
+      waitlistClaimMinutes,
     },
   }
 }
@@ -144,6 +169,57 @@ function FlowPreview({
   )
 }
 
+// One switch row. Extracted from the old inline map because the waitlist row
+// now nests a control inside itself, and two shapes of the same row rendered
+// two different ways is how they drift apart.
+function ToggleRow({
+  control,
+  name,
+  label,
+  desc,
+  children,
+}: {
+  control: ReturnType<typeof useForm<FormData>>['control']
+  name: 'booking.showPhone' | 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled' | 'booking.waitlistEnabled'
+  label: string
+  desc: string
+  /** Rendered under the row, inside its border — the settings this switch owns. */
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="rounded-lg border">
+      <div className="flex items-center justify-between gap-4 p-3">
+        <div>
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-xs text-muted-foreground">{desc}</p>
+        </div>
+        <Controller
+          control={control}
+          name={name}
+          render={({ field }) => (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={field.value}
+              onClick={() => field.onChange(!field.value)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                field.value ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                  field.value ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          )}
+        />
+      </div>
+      {children && <div className="border-t p-3">{children}</div>}
+    </div>
+  )
+}
+
 function BookingForm({
   control,
   register,
@@ -152,6 +228,9 @@ function BookingForm({
   register: ReturnType<typeof useForm<FormData>>['register']
 }) {
   const t = useTranslations('SettingsBooking')
+  // Subscribed, not read once: the claim window below appears the moment the
+  // queue is switched on, without a save in between.
+  const waitlistEnabled = useWatch({ control, name: 'booking.waitlistEnabled' })
   return (
     <div className="space-y-6">
       {/* Flow type */}
@@ -209,111 +288,176 @@ function BookingForm({
         />
       </div>
 
-      {/* Booking window */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">{t('windowTitle')}</p>
-        <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
-        <Controller
-          control={control}
-          name="booking.windowMonths"
-          render={({ field }) => (
-            <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-              <SelectTrigger className="h-9 w-36">
-                <span className="flex flex-1 text-left text-sm truncate">
-                  {t('windowMonths', { count: field.value })}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">{t('windowMonths', { count: 1 })}</SelectItem>
-                <SelectItem value="2">{t('windowMonths', { count: 2 })}</SelectItem>
-                <SelectItem value="3">{t('windowMonths', { count: 3 })}</SelectItem>
-                <SelectItem value="6">{t('windowMonths', { count: 6 })}</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
+      {/* ── What you offer ──────────────────────────────────────────────────
+          Two switches that decide what the public booking page CONTAINS.
+          Neither has a safe silent answer — turning appointments on publishes a
+          picker, turning the queue on changes what happens to the person who
+          finds a full class — so they stay in front of the studio rather than
+          behind the disclosure below. */}
+      <ToggleRow
+        control={control}
+        name="booking.appointmentsEnabled"
+        label={t('toggleAppointmentsEnabledLabel')}
+        desc={t('toggleAppointmentsEnabledDesc')}
+      />
 
-      {/* Toggles */}
-      {(
-        [
-          {
-            name: 'booking.showPhone' as const,
-            label: t('toggleShowPhoneLabel'),
-            desc: t('toggleShowPhoneDesc'),
-          },
-          {
-            name: 'booking.showActivityDescription' as const,
-            label: t('toggleShowActivityDescriptionLabel'),
-            desc: t('toggleShowActivityDescriptionDesc'),
-          },
-          {
-            name: 'booking.showFitnessAppField' as const,
-            label: t('toggleShowFitnessAppLabel'),
-            desc: t('toggleShowFitnessAppDesc'),
-          },
-          {
-            name: 'booking.appointmentsEnabled' as const,
-            label: t('toggleAppointmentsEnabledLabel'),
-            desc: t('toggleAppointmentsEnabledDesc'),
-          },
-        ] as const
-      ).map(({ name, label, desc }) => (
-        <div key={name} className="flex items-center justify-between rounded-lg border p-3">
-          <div>
-            <p className="text-sm font-medium">{label}</p>
-            <p className="text-xs text-muted-foreground">{desc}</p>
+      {/* The claim window is the waitlist's OWN setting, so it lives inside the
+          waitlist row and renders only once the queue is on. It used to sit
+          three rows further up as a peer of the cutoff, where a studio with no
+          waitlist at all met it as a question — and where the only thing it
+          could possibly do was make a queue that studio did not have worse
+          (UX-41). Its default, 120 minutes, is the SAME one the promoter
+          applies server-side (WAITLIST_DEFAULT_CLAIM_MINUTES), so a studio that
+          switches the queue on and never opens this gets exactly what the
+          server would have done anyway. Still a maximum: the cutoff above and
+          the session start both clamp it. */}
+      <ToggleRow
+        control={control}
+        name="booking.waitlistEnabled"
+        label={t('toggleWaitlistEnabledLabel')}
+        desc={t('toggleWaitlistEnabledDesc')}
+      >
+        {waitlistEnabled && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
+            <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
+            <Controller
+              control={control}
+              name="booking.waitlistClaimMinutes"
+              render={({ field }) => (
+                <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                  <SelectTrigger className="h-9 w-48">
+                    <span className="flex flex-1 text-left text-sm truncate">
+                      {t('waitlistClaimMinutesValue', { minutes: field.value })}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[60, 120, 240, 480, 1440].map((minutes) => (
+                      <SelectItem key={minutes} value={String(minutes)}>
+                        {t('waitlistClaimMinutesValue', { minutes })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
+        )}
+      </ToggleRow>
+
+      {/* ── Everything already answered ──────────────────────────────────────
+          Each of these is stored with a default that is right for a studio that
+          never opens this panel, so none of them is a question it has to answer
+          to go live:
+            • booking window   → 2 months ahead
+            • booking cutoff   → none, i.e. bookable up to the start. A
+              restriction that defaults OFF is the safe direction to demote: the
+              studio is never surprised by a booking the product refused on its
+              behalf.
+            • ask for a phone  → off (one less field on the public form)
+            • show description → on (what the studio wrote is what visitors see)
+            • fitness-app field→ off
+            • custom button    → empty, so no extra button is rendered
+          Nothing here changes what anybody is charged or who may book. */}
+      <MoreOptions label={t('moreOptionsLabel')} hint={t('moreOptionsHint')}>
+        {/* Booking window */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t('windowTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
           <Controller
             control={control}
-            name={name}
+            name="booking.windowMonths"
             render={({ field }) => (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={field.value}
-                onClick={() => field.onChange(!field.value)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                  field.value ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
-                    field.value ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-9 w-36">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {t('windowMonths', { count: field.value })}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">{t('windowMonths', { count: 1 })}</SelectItem>
+                  <SelectItem value="2">{t('windowMonths', { count: 2 })}</SelectItem>
+                  <SelectItem value="3">{t('windowMonths', { count: 3 })}</SelectItem>
+                  <SelectItem value="6">{t('windowMonths', { count: 6 })}</SelectItem>
+                </SelectContent>
+              </Select>
             )}
           />
         </div>
-      ))}
 
-      {/* CTA button */}
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-medium">{t('ctaTitle')}</p>
-          <p className="text-xs text-muted-foreground">{t('ctaSubtitle')}</p>
-        </div>
+        {/* Booking cutoff */}
         <div className="space-y-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t('ctaUrlLabel')}</label>
-            <Input
-              {...register('booking.ctaUrl')}
-              type="url"
-              placeholder={t('ctaUrlPlaceholder')}
-              className="h-9 text-sm font-mono"
-            />
+          <p className="text-sm font-medium">{t('cutoffTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('cutoffSubtitle')}</p>
+          <Controller
+            control={control}
+            name="booking.cutoffMinutes"
+            render={({ field }) => (
+              <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-9 w-48">
+                  <span className="flex flex-1 text-left text-sm truncate">
+                    {field.value === 0 ? t('cutoffNone') : t('cutoffMinutesBefore', { minutes: field.value })}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">{t('cutoffNone')}</SelectItem>
+                  <SelectItem value="15">{t('cutoffMinutesBefore', { minutes: 15 })}</SelectItem>
+                  <SelectItem value="30">{t('cutoffMinutesBefore', { minutes: 30 })}</SelectItem>
+                  <SelectItem value="60">{t('cutoffMinutesBefore', { minutes: 60 })}</SelectItem>
+                  <SelectItem value="120">{t('cutoffMinutesBefore', { minutes: 120 })}</SelectItem>
+                  <SelectItem value="1440">{t('cutoffMinutesBefore', { minutes: 1440 })}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <ToggleRow
+          control={control}
+          name="booking.showPhone"
+          label={t('toggleShowPhoneLabel')}
+          desc={t('toggleShowPhoneDesc')}
+        />
+        <ToggleRow
+          control={control}
+          name="booking.showActivityDescription"
+          label={t('toggleShowActivityDescriptionLabel')}
+          desc={t('toggleShowActivityDescriptionDesc')}
+        />
+        <ToggleRow
+          control={control}
+          name="booking.showFitnessAppField"
+          label={t('toggleShowFitnessAppLabel')}
+          desc={t('toggleShowFitnessAppDesc')}
+        />
+
+        {/* CTA button */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium">{t('ctaTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('ctaSubtitle')}</p>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t('ctaLabelLabel')}</label>
-            <Input
-              {...register('booking.ctaLabel')}
-              placeholder={t('ctaLabelPlaceholder')}
-              className="h-9 text-sm"
-            />
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">{t('ctaUrlLabel')}</label>
+              <Input
+                {...register('booking.ctaUrl')}
+                type="url"
+                placeholder={t('ctaUrlPlaceholder')}
+                className="h-9 text-sm font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">{t('ctaLabelLabel')}</label>
+              <Input
+                {...register('booking.ctaLabel')}
+                placeholder={t('ctaLabelPlaceholder')}
+                className="h-9 text-sm"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      </MoreOptions>
     </div>
   )
 }
@@ -322,7 +466,12 @@ function BookingForm({
 
 export default function BookingSettingsPage() {
   const { currentTeamId } = useAuth()
-  const { data: team, isLoading } = useTeam(currentTeamId)
+  // The team doc is still read for the slug + name copied onto the public
+  // profile below; the booking settings themselves come from that same public
+  // profile — the one store this form both reads and writes.
+  const { data: team, isLoading: teamLoading } = useTeam(currentTeamId)
+  const { data: stored, isLoading: settingsLoading } = useBookingSettings(currentTeamId)
+  const isLoading = teamLoading || settingsLoading
   const qc = useQueryClient()
   const t = useTranslations('SettingsBooking')
   const schema = useMemo(() => createSchema(t), [t])
@@ -335,12 +484,15 @@ export default function BookingSettingsPage() {
     formState: { isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: getDefaults(team ?? null),
+    defaultValues: getDefaults(stored),
   })
 
+  // Re-hydrate from the store whenever it (re)loads or the team changes —
+  // unless the studio has edits in flight, which a background refetch must
+  // never throw away.
   useEffect(() => {
-    if (team) reset(getDefaults(team))
-  }, [team?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (stored && !isDirty) reset(getDefaults(stored))
+  }, [currentTeamId, stored]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useSaveShortcut(() => {
     if (isDirty && !isSubmitting) handleSubmit(onSubmit)()
@@ -357,22 +509,24 @@ export default function BookingSettingsPage() {
       ctaUrl: data.booking.ctaUrl || null,
       ctaLabel: data.booking.ctaLabel || null,
       appointmentsEnabled: data.booking.appointmentsEnabled ?? false,
+      waitlistEnabled: data.booking.waitlistEnabled ?? false,
+      cutoffMinutes: data.booking.cutoffMinutes,
+      waitlistClaimMinutes: data.booking.waitlistClaimMinutes,
     }
     try {
-      // ① public_profile is the source of truth (team-member writable). Must succeed.
+      // ONE write, to the one store — team-member writable, world-readable, and
+      // what the booking callables read. There is no second write to fail
+      // silently behind it.
       const profileRef = doc(db, TEAMS_COLLECTION, currentTeamId, 'public_profile', currentTeamId)
       await setDoc(
         profileRef,
         { type: 'team', slug: team?.slug ?? '', name: team?.name ?? '', bookingSettings },
         { merge: true }
       )
-      // ② Mirror onto the team doc (owner-only; re-hydrates this form). Non-fatal.
-      updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
-        'settings.booking': bookingSettings,
-      }).catch((err) => {
-        console.warn('[booking save] team doc update failed (non-fatal):', err)
-      })
-      await qc.invalidateQueries({ queryKey: ['team', currentTeamId] })
+      // Saved state, from what was actually written — the form is clean again
+      // and the next background refetch has nothing to disagree with.
+      reset(getDefaults(bookingSettings))
+      await qc.invalidateQueries({ queryKey: ['booking-settings', currentTeamId] })
       toast.success(t('toastSaved'))
     } catch (err) {
       console.error('[booking save] failed:', err)
@@ -408,7 +562,8 @@ export default function BookingSettingsPage() {
         <BookingForm control={control} register={register} />
       </form>
 
-      <div className="max-w-2xl">
+      <div className="max-w-2xl space-y-4">
+        <CancellationPolicyCard />
         <NoShowPolicyCard />
       </div>
     </div>

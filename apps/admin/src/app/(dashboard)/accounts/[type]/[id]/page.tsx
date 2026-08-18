@@ -77,7 +77,52 @@ export default async function AccountDetailPage({
                 <Field label="Gateway" value={sub.gatewayType ?? 'manual'} />
                 <Field label="Current period" value={`${formatDate(sub.currentPeriodStartMs)} → ${formatDate(sub.currentPeriodEndMs)}`} />
                 <Field label="Trial ends" value={formatDate(sub.trialEndsAtMs)} />
-                <Field label="Cancels at period end" value={sub.cancelAtPeriodEnd ? 'Yes' : 'No'} />
+                {/* A DATE where we have one — a billing-portal cancellation
+                    leaves the boolean false, so this field used to read "No" for
+                    a studio that had already cancelled.
+
+                    But the date is NOT the signal. Docs written before the
+                    Dahlia field migration carry the cancellation with no
+                    `current_period_end` at all, so falling silent whenever the
+                    date is missing hides the entire pre-migration population
+                    from the operator. Say "cancelling" without the date rather
+                    than saying nothing. */}
+                <Field
+                  label="Cancels on"
+                  value={
+                    sub.endsAtMs
+                      ? formatDate(sub.endsAtMs)
+                      : sub.cancelling
+                        ? 'at period end (date not recorded)'
+                        : '—'
+                  }
+                />
+                <Field
+                  label="Cancellation"
+                  value={
+                    sub.cancelling || sub.canceledAtMs || sub.cancellationReason ? (
+                      <span className="text-sm">
+                        {/* A pre-migration doc has the cancellation and none of
+                            its detail. "Cancelling" is still the true and useful
+                            answer; an empty cell is not. */}
+                        {[
+                          sub.canceledAtMs ? `requested ${formatDate(sub.canceledAtMs)}` : null,
+                          sub.cancellationReason,
+                          sub.cancellationFeedback,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || 'cancelling — no reason recorded'}
+                        {sub.cancellationComment ? (
+                          <em className="block text-muted-foreground">
+                            “{sub.cancellationComment}”
+                          </em>
+                        ) : null}
+                      </span>
+                    ) : (
+                      '—'
+                    )
+                  }
+                />
                 <Field label="Last payment" value={sub.lastPaymentStatus ?? '—'} />
                 <Field label="Stripe customer" value={<code className="text-xs">{sub.customerId ?? '—'}</code>} />
                 <Field label="Stripe subscription" value={<code className="text-xs">{sub.subscriptionId ?? '—'}</code>} />

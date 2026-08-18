@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
@@ -44,6 +47,7 @@ import {
   X,
   Eye,
   EyeOff,
+  Share2,
 } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 
@@ -64,7 +68,7 @@ const linkSchema = z.object({
   iconName: z.string().optional(),
   // Set → this is a "page link" to one of the team's public surfaces.
   target: z
-    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site', 'documents'])
+    .enum(['booking', 'signup', 'shop', 'shop-subscriptions', 'shop-products', 'shop-courses', 'space', 'site', 'documents', 'events'])
     .optional(),
 })
 
@@ -352,6 +356,7 @@ function useTargetLabel() {
   const t = useTranslations('BioLink')
   const KEYS: Record<SystemLinkTarget, Parameters<typeof t>[0]> = {
     booking: 'bookingLink',
+    events: 'eventsLink',
     signup: 'membershipLink',
     shop: 'shopLink',
     'shop-subscriptions': 'subscriptionsLink',
@@ -610,7 +615,71 @@ function SocialTab({ register }: { register: ReturnType<typeof useForm<FormData>
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'appearance' | 'links' | 'social'
+const BIO_TABS = ['appearance', 'links', 'social'] as const
+type Tab = (typeof BIO_TABS)[number]
+
+// ─── share preview (UX-31) ───────────────────────────────────────────────────
+//
+// WHAT THE STUDIO IS ACTUALLY SHARING. The panel beside this one shows the PAGE;
+// this shows the LINK — the card WhatsApp, Instagram, LinkedIn and Slack build
+// from the metadata `(public)/public/[slug]/page.tsx` emits. The two are the
+// same three facts (cover image, name, description) on purpose: a preview that
+// does not look like what a visitor receives is not a preview.
+//
+// It is a faithful mock, not a live unfurl — nothing here fetches the page. It
+// reads the same fields the metadata reads, from the form the studio is editing,
+// so an image swapped a second ago is already reflected.
+function SharePreview({
+  url,
+  name,
+  description,
+  imageUrl,
+}: {
+  url: string
+  name: string
+  description?: string
+  imageUrl: string | null
+}) {
+  const t = useTranslations('BioLink')
+  const host = url.replace(/^https?:\/\//, '').split('/')[0]
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Share2 className="h-3.5 w-3.5" />
+        {t('sharePreview')}
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt="" className="h-32 w-full object-cover" />
+        ) : (
+          <div className="flex h-32 w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+            {t('sharePreviewNoImage')}
+          </div>
+        )}
+        <div className="space-y-0.5 p-3">
+          <p className="text-xs uppercase text-muted-foreground">{host}</p>
+          <p className="truncate text-sm font-semibold">{name}</p>
+          {description ? (
+            <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+          ) : (
+            // An empty description is the common case and it shows as a blank
+            // line in every chat app, so it is named here with the way to fix
+            // it rather than left as a gap the studio has to interpret.
+            <p className="text-xs text-muted-foreground">
+              {t('sharePreviewNoDescription')}{' '}
+              <Link href={'/settings/team' as Route} className="text-primary hover:underline">
+                {t('sharePreviewEditDescription')}
+              </Link>
+            </p>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{t('sharePreviewHint')}</p>
+    </div>
+  )
+}
 
 export default function TeamBioLinkEditorPage() {
   const { currentTeamId } = useAuth()
@@ -618,7 +687,7 @@ export default function TeamBioLinkEditorPage() {
   // Public-surface availability comes from the shared usePublicSurfaces hook so the
   // page-link picker and the "Public page" hub read identical state (no drift).
   const { flags } = usePublicSurfaces()
-  const { coursesActive, connectEnabled, productsActive, websiteActive, documentsLive } = flags
+  const { coursesActive, connectEnabled, productsActive, websiteActive, documentsLive, eventsLive } = flags
 
   // Page-link surfaces this team can offer (before subtracting already-added). The
   // generic `shop` target stays valid for back-compat but isn't suggested — the three
@@ -633,6 +702,7 @@ export default function TeamBioLinkEditorPage() {
     'space',
     'site',
     'documents',
+    'events',
   ]
   const availableTargets = offeredTargets.filter((tgt) => {
     if (tgt === 'shop-subscriptions') return connectEnabled
@@ -644,12 +714,16 @@ export default function TeamBioLinkEditorPage() {
     // public document exists — same "published content, not just plugin" gating
     // as site/space (activeSurfaces computed server-side by syncTeamPublicProfile).
     if (tgt === 'documents') return documentsLive
+    // Events are a base feature but PRIVATE by default, so the surface is live
+    // only once the studio has published one — same "published content, not just
+    // a feature" gating as documents.
+    if (tgt === 'events') return eventsLive
     return true // booking, signup
   })
   const qc = useQueryClient()
   const t = useTranslations('BioLink')
 
-  const [tab, setTab] = useState<Tab>('links')
+  const [tab, setTab] = useTabParam(BIO_TABS, 'links')
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null)
 
@@ -819,9 +893,12 @@ export default function TeamBioLinkEditorPage() {
           <Globe className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="font-medium">{t('noSlugTitle')}</p>
           <p className="text-sm text-muted-foreground">{t('noSlugDesc')}</p>
-          <a href="../settings" className="text-sm text-primary hover:underline">
+          {/* Was a raw <a href="../settings"> — a relative href that bypasses
+              @/i18n/navigation and resolves wrongly under a locale prefix
+              (UX-99). It now points at the page that actually holds the slug. */}
+          <Link href={'/settings/team' as Route} className="text-sm text-primary hover:underline">
             {t('goToSettings')} →
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -906,7 +983,16 @@ export default function TeamBioLinkEditorPage() {
         </div>
 
         {/* ── Right: sticky preview ── */}
-        <div className="lg:w-[400px] lg:flex-shrink-0 lg:sticky lg:top-6 lg:self-start space-y-2">
+        <div className="lg:w-[400px] lg:flex-shrink-0 lg:sticky lg:top-6 lg:self-start space-y-4">
+          {/* The LINK first, the PAGE below it: the card is what a prospect sees
+              before they decide whether to tap at all. */}
+          <SharePreview
+            url={bioLinkUrl}
+            name={team.name}
+            description={team.description}
+            imageUrl={heroImageUrl ?? profileImageUrl}
+          />
+          <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               <Eye className="h-3.5 w-3.5" />
@@ -925,6 +1011,7 @@ export default function TeamBioLinkEditorPage() {
           <div className="rounded-xl border overflow-hidden max-h-[calc(100vh-12rem)] overflow-y-auto shadow-sm">
             {/* Links are inert in the preview (onLinkClick prevents navigation). */}
             <BioLinkHome team={previewTeam} slug={team.slug} onLinkClick={() => {}} />
+          </div>
           </div>
         </div>
       </div>

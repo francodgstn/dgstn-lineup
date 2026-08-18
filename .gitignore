@@ -72,3 +72,11 @@ apps/mobile/dist/
 *.mobileprovision
 *.orig.*
 web-build/
+
+# Pre-teardown consent-ledger exports (Q13). They carry names, addresses and IP
+# addresses — an archive, not source.
+/exports/
+
+# Message fragments are a transient hand-off between a parallel lane and
+# `pnpm i18n:merge` — never committed. See apps/web/messages/_pending/README.md
+apps/web/messages/_pending/*.json

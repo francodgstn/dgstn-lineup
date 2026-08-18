@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
+import { cancelEffectKeys, cancelFailureKey } from '@/lib/bookingCancellation'
+import type { BookingCancelEffect, CancelBookingResult } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { CalendarX, Check, AlertCircle } from 'lucide-react'
 
@@ -14,11 +16,15 @@ type State = 'idle' | 'cancelling' | 'done' | 'error'
 
 export default function AppointmentCancelPage() {
   const t = useTranslations('AppointmentCancel')
+  const tCancel = useTranslations('BookingCancellation')
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
 
   const [state, setState] = useState<State>('idle')
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // A `BookingCancellation` key, resolved from the server's own refusal reason.
+  const [errorKey, setErrorKey] = useState<string | null>(null)
+  // What the cancellation gave back, for the confirmation screen.
+  const [returned, setReturned] = useState<BookingCancelEffect | null>(null)
 
   useEffect(() => {
     if (!token) setState('error')
@@ -30,14 +36,19 @@ export default function AppointmentCancelPage() {
     try {
       // Shared cancellation callable (there is no separate appointment one) —
       // token-based, releases the appointment slot and emails the confirmation.
-      const fn = httpsCallable(functions, 'cancelBooking')
-      await fn({ token })
+      const fn = httpsCallable<{ token: string }, CancelBookingResult>(functions, 'cancelBooking')
+      const res = await fn({ token })
+      setReturned(res.data?.returned ?? null)
       setState('done')
     } catch (err) {
-      const e = err as { code?: string }
-      if (e.code === 'not-found') setErrorMsg(t('errorNotFound'))
-      else if (e.code === 'failed-precondition') setErrorMsg(t('errorPastSlot'))
-      else setErrorMsg(t('errorGeneric'))
+      // The three branches this replaces compared `err.code` to `'not-found'`
+      // and `'failed-precondition'`. The Functions SDK namespaces its codes
+      // (`functions/not-found`), so NONE of them could ever match and every
+      // failure — including the two that were carefully worded — rendered the
+      // generic sentence. `cancelFailureKey` reads the server's own reason and
+      // strips the namespace in one place. See lib/bookingCancellation.ts.
+      console.error('[public/appointment-cancel] cancel failed:', err)
+      setErrorKey(cancelFailureKey(err))
       setState('error')
     }
   }
@@ -72,6 +83,14 @@ export default function AppointmentCancelPage() {
             </div>
             <h1 className="text-xl font-bold">{t('cancelledTitle')}</h1>
             <p className="text-sm text-muted-foreground">{t('cancelledMessage')}</p>
+            {/* An appointment is the rail most likely to have been PAID for, and
+                cancelling it returns no money — saying so here is the difference
+                between a member who asks the studio and one who waits. */}
+            {cancelEffectKeys(returned, 'did').map((key) => (
+              <p key={key} className="text-sm text-muted-foreground">
+                {tCancel(key)}
+              </p>
+            ))}
           </>
         )}
 
@@ -82,7 +101,7 @@ export default function AppointmentCancelPage() {
             </div>
             <h1 className="text-xl font-bold">{t('errorTitle')}</h1>
             <p className="text-sm text-muted-foreground">
-              {errorMsg || (token ? t('errorGeneric') : t('errorNoToken'))}
+              {errorKey ? tCancel(errorKey) : token ? t('errorGeneric') : t('errorNoToken')}
             </p>
           </>
         )}

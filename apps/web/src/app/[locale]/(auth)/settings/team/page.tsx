@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import {
   doc,
   getDoc,
@@ -18,6 +19,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { CustomFieldsTab } from '@/plugins/custom-fields/CustomFieldsTab'
 import { useForm, Controller } from 'react-hook-form'
@@ -41,6 +43,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -71,6 +74,7 @@ import type {
   PaymentGatewayType,
 } from '@linyup/shared'
 import {
+  AlertTriangle,
   CalendarDays,
   Timer,
   Plus,
@@ -83,8 +87,9 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Lock,
 } from 'lucide-react'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { PaymentModesCard } from '@/components/payments/PaymentModesCard'
 import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
@@ -92,6 +97,7 @@ import { RANK_PRESETS } from '@/lib/rank-presets'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useByoStripeDoubleRecording } from '@/hooks/useConnect'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 
@@ -162,6 +168,22 @@ const gatewaySchema = z.object({
 })
 type GatewayFormData = z.infer<typeof gatewaySchema>
 
+// ─── owner-only note ──────────────────────────────────────────────────────────
+// Everything on this page writes the team doc or one of its owner-only
+// subcollections (alert_presets, integrations — firestore.rules), so a
+// manager-role member can read it all and change none of it. `canEdit` is
+// derived ONCE on the page (useCapabilities().can('team.settings'), the
+// capability that is owner-only by definition) and threaded into each form,
+// which disables its inputs and its Save and renders this line — the same
+// one-line treatment CancellationPolicyCard and SystemEmailsCard already use.
+// The rail also hides the sections a non-owner can only look at; see
+// lib/settings-nav.ts.
+
+function OwnerOnlyNote() {
+  const t = useTranslations('TeamSettings')
+  return <p className="text-xs text-muted-foreground">{t('ownerOnly')}</p>
+}
+
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
 async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
@@ -196,10 +218,15 @@ function useAlertPresets(teamId: string | null) {
   })
 }
 
-function useGatewayIntegrations(teamId: string | null) {
+// teams/{id}/integrations is owner-only for READ as well as write
+// (firestore.rules), so for a manager this query REJECTS. Its consumer must
+// therefore branch on the capability before it branches on emptiness — "no
+// gateway configured" and "you are not allowed to see this" are different
+// facts, and only one of them is ever true for a non-owner.
+function useGatewayIntegrations(teamId: string | null, enabled: boolean) {
   return useQuery<TeamIntegration[]>({
     queryKey: ['gateway-integrations', teamId],
-    enabled: !!teamId,
+    enabled: !!teamId && enabled,
     queryFn: async () => {
       if (!teamId) return []
       const snap = await getDocs(
@@ -217,7 +244,15 @@ function useGatewayIntegrations(teamId: string | null) {
 // Day windows that drive the read-only engagement band shown on each contact.
 // The band itself is derived on render (never stored).
 
-function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string }) {
+function EngagementThresholdsForm({
+  team,
+  teamId,
+  canEdit,
+}: {
+  team: Team
+  teamId: string
+  canEdit: boolean
+}) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const current = team.engagement_thresholds ?? DEFAULT_ENGAGEMENT_THRESHOLDS
@@ -233,7 +268,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
   const valid = [a, l, r].every((n) => Number.isInteger(n) && n > 0) && a < l && l < r
 
   async function onSave() {
-    if (!valid) return
+    if (!valid || !canEdit) return
     setSaving(true)
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
@@ -246,6 +281,8 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
       await qc.invalidateQueries({ queryKey: ['team', teamId] })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
+    } catch {
+      toast.error(t('saveError'))
     } finally {
       setSaving(false)
     }
@@ -262,6 +299,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
       <div>
         <p className="text-sm font-medium">{t('engagementTitle')}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{t('engagementHelp')}</p>
+        {!canEdit && <OwnerOnlyNote />}
       </div>
       <div className="grid grid-cols-3 gap-3">
         {fields.map((f) => (
@@ -274,6 +312,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
               type="number"
               min={1}
               value={f.value}
+              disabled={!canEdit}
               onChange={(e) => f.set(e.target.value)}
             />
           </div>
@@ -282,7 +321,7 @@ function EngagementThresholdsForm({ team, teamId }: { team: Team; teamId: string
       <p className="text-xs text-muted-foreground">{t('engagementDaysHint')}</p>
       {!valid && <p className="text-xs text-destructive">{t('engagementInvalid')}</p>}
       <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onSave} disabled={saving || !valid}>
+        <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !valid}>
           {saving ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
@@ -312,7 +351,15 @@ function TabBarPreference() {
 
 // ─── general form ─────────────────────────────────────────────────────────────
 
-function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
+function GeneralForm({
+  team,
+  teamId,
+  canEdit,
+}: {
+  team: Team
+  teamId: string
+  canEdit: boolean
+}) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const [slugError, setSlugError] = useState<string | null>(null)
@@ -344,23 +391,29 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
   }
 
   async function onSubmit(data: GeneralData) {
-    if (slugError) return
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
-      name: data.name,
-      description: data.description ?? '',
-      sport_type: data.sport_type ?? '',
-      slug: data.slug,
-    })
-    await qc.invalidateQueries({ queryKey: ['team', teamId] })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    if (slugError || !canEdit) return
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
+        name: data.name,
+        description: data.description ?? '',
+        sport_type: data.sport_type ?? '',
+        slug: data.slug,
+      })
+      await qc.invalidateQueries({ queryKey: ['team', teamId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      toast.error(t('saveError'))
+    }
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {!canEdit && <OwnerOnlyNote />}
+
       <div className="space-y-1.5">
         <Label htmlFor="name">{t('teamName')}</Label>
-        <Input id="name" {...register('name')} />
+        <Input id="name" {...register('name')} disabled={!canEdit} />
         {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
       </div>
 
@@ -370,8 +423,9 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           id="description"
           {...register('description')}
           rows={3}
+          disabled={!canEdit}
           placeholder={t('descriptionPlaceholder')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none disabled:opacity-60"
         />
         {errors.description && (
           <p className="text-destructive text-xs">{errors.description.message}</p>
@@ -386,6 +440,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           render={({ field }) => (
             <Select
               value={field.value || '__none__'}
+              disabled={!canEdit}
               onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
             >
               <SelectTrigger className="w-full">
@@ -413,6 +468,7 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
           <Input
             id="slug"
             {...register('slug')}
+            disabled={!canEdit}
             onBlur={(e) => onSlugBlur(e.target.value)}
             placeholder="my-club"
             className="font-mono"
@@ -427,7 +483,10 @@ function GeneralForm({ team, teamId }: { team: Team; teamId: string }) {
       </div>
 
       <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" disabled={isSubmitting || !isDirty || !!slugError || slugChecking}>
+        <Button
+          type="submit"
+          disabled={!canEdit || isSubmitting || !isDirty || !!slugError || slugChecking}
+        >
           {isSubmitting ? t('saving') : t('save')}
         </Button>
         {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
@@ -483,20 +542,24 @@ function PresetDialog({
       message: data.message,
       show_in_app: data.show_in_app ?? false,
     }
-    if (editing) {
-      await updateDoc(
-        doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, editing.id),
-        payload
-      )
-    } else {
-      await addDoc(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION), {
-        ...payload,
-        created_at: serverTimestamp(),
-      })
+    try {
+      if (editing) {
+        await updateDoc(
+          doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, editing.id),
+          payload
+        )
+      } else {
+        await addDoc(collection(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION), {
+          ...payload,
+          created_at: serverTimestamp(),
+        })
+      }
+      onSaved()
+      reset()
+      onOpenChange(false)
+    } catch {
+      toast.error(t('saveError'))
     }
-    onSaved()
-    reset()
-    onOpenChange(false)
   }
 
   return (
@@ -588,7 +651,7 @@ function PresetDialog({
   )
 }
 
-function AlertPresetsTab({ teamId }: { teamId: string }) {
+function AlertPresetsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const { data: presets = [], isLoading } = useAlertPresets(teamId)
@@ -608,9 +671,15 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, id))
-    setDeleting(null)
-    invalidate()
+    if (!canEdit) return
+    try {
+      await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, ALERT_PRESETS_SUBCOLLECTION, id))
+      invalidate()
+    } catch {
+      toast.error(t('saveError'))
+    } finally {
+      setDeleting(null)
+    }
   }
 
   if (isLoading)
@@ -625,9 +694,10 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('presetsInfo')}</p>
+      {!canEdit && <OwnerOnlyNote />}
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={openAdd}>
+        <Button size="sm" onClick={openAdd} disabled={!canEdit}>
           <Plus className="h-4 w-4 mr-1.5" />
           {t('addAlertPreset')}
         </Button>
@@ -659,18 +729,22 @@ function AlertPresetsTab({ teamId }: { teamId: string }) {
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{p.message}</p>
               </div>
-              <button
-                onClick={() => openEdit(p)}
-                className="p-1.5 rounded hover:bg-muted transition-colors"
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => setDeleting(p.id)}
-                className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {canEdit && (
+                <>
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="p-1.5 rounded hover:bg-muted transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                  <button
+                    onClick={() => setDeleting(p.id)}
+                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -819,11 +893,11 @@ function RankSystemDialog({
   return (
     <>
       <Dialog open={open && !presetOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{isEdit ? t('editRankingSystem') : t('addRankingSystem')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-1">
+          <DialogBody className="space-y-4 py-1">
             {/* Preset picker button */}
             {!isEdit && (
               <button
@@ -907,7 +981,7 @@ function RankSystemDialog({
                 ))}
               </div>
             </div>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -965,7 +1039,15 @@ function RankSystemDialog({
   )
 }
 
-function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
+function RankingTab({
+  teamId,
+  team,
+  canEdit,
+}: {
+  teamId: string
+  team: Team
+  canEdit: boolean
+}) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -982,10 +1064,13 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
   const systems: RankingSystem[] = managedByOrg ? effectiveSystems : (team.ranking_systems ?? [])
 
   const saveToFirestore = async (next: RankingSystem[]) => {
+    if (!canEdit) return
     setSaving(true)
     try {
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { ranking_systems: next })
       qc.invalidateQueries({ queryKey: ['team', teamId] })
+    } catch {
+      toast.error(t('saveError'))
     } finally {
       setSaving(false)
     }
@@ -1035,6 +1120,11 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
     setDialogOpen(true)
   }
 
+  // Two independent reasons this list is read-only: the organization owns the
+  // systems, or the member is not the studio owner (the systems live on the team
+  // doc, which firestore.rules keeps owner-only). Each says so in its own words.
+  const canManage = !managedByOrg && canEdit
+
   return (
     <div className="space-y-4">
       {managedByOrg && orgId && (
@@ -1048,9 +1138,10 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
           </span>
         </div>
       )}
+      {!managedByOrg && !canEdit && <OwnerOnlyNote />}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{t('rankingSystems')}</p>
-        {!managedByOrg && (
+        {canManage && (
           <Button size="sm" onClick={openAdd} disabled={saving || rankLoading}>
             <Plus className="h-4 w-4 mr-1.5" />
             {t('addRankingSystem')}
@@ -1087,7 +1178,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                     {t('rankingSystemLevels', { count: s.levels.length })}
                   </p>
                 </div>
-                {!managedByOrg &&
+                {canManage &&
                   (s.is_primary ? (
                     <button
                       onClick={handleClearPrimary}
@@ -1105,7 +1196,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                       {t('rankingSystemSetPrimary')}
                     </button>
                   ))}
-                {!managedByOrg && (
+                {canManage && (
                   <button
                     onClick={() => openEdit(s)}
                     className="p-1.5 rounded hover:bg-muted transition-colors"
@@ -1113,7 +1204,7 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                 )}
-                {!managedByOrg && (
+                {canManage && (
                   <button
                     onClick={() => setDeleting(s.id)}
                     className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
@@ -1184,13 +1275,30 @@ function RankingTab({ teamId, team }: { teamId: string; team: Team }) {
 
 // ─── payments tab ─────────────────────────────────────────────────────────────
 
-function PaymentsTab({ teamId }: { teamId: string }) {
+function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) {
   const t = useTranslations('TeamSettings')
   const qc = useQueryClient()
-  const { user, team, teamRole } = useAuth()
-  const { data: integrations = [], isLoading } = useGatewayIntegrations(teamId)
+  const { user, team } = useAuth()
+  const {
+    data: integrations = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGatewayIntegrations(teamId, canEdit)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   const { data: gatewayCurrency } = useGatewayCurrency(teamId)
+
+  // WHAT THE ENDPOINT ACTUALLY SENT (docs/open-defects.md → "A BYO studio can
+  // double-count its own recurring revenue"). The guidance below the signing
+  // secret is the primary defence; this is the second half — when a studio
+  // subscribed to both Stripe event families anyway, the rail can SEE it in the
+  // rows it wrote, and the owner is the only person who can go and fix it.
+  //
+  // Read only when there IS a Stripe integration to accuse, and only for
+  // somebody who can act on it (a manager cannot even see this list).
+  const hasStripeGateway = integrations.some((i) => i.config.type === 'stripe')
+  const { data: doubleRecording } = useByoStripeDoubleRecording(teamId, canEdit && hasStripeGateway)
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1232,6 +1340,7 @@ function PaymentsTab({ teamId }: { teamId: string }) {
   }
 
   async function onSubmit(values: GatewayFormData) {
+    if (!canEdit) return
     setSaving(true)
     try {
       const config =
@@ -1276,24 +1385,36 @@ function PaymentsTab({ teamId }: { teamId: string }) {
       }
       await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
       setShowDialog(false)
+    } catch {
+      toast.error(t('saveError'))
     } finally {
       setSaving(false)
     }
   }
 
   async function handleToggleEnabled(item: TeamIntegration) {
-    await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', item.id), {
-      enabled: !item.enabled,
-      updated_at: serverTimestamp(),
-    })
-    await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    if (!canEdit) return
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', item.id), {
+        enabled: !item.enabled,
+        updated_at: serverTimestamp(),
+      })
+      await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    } catch {
+      toast.error(t('saveError'))
+    }
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return
-    await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', deleteTarget))
-    await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
-    setDeleteTarget(null)
+    if (!deleteTarget || !canEdit) return
+    try {
+      await deleteDoc(doc(db, TEAMS_COLLECTION, teamId, 'integrations', deleteTarget))
+      await qc.invalidateQueries({ queryKey: ['gateway-integrations', teamId] })
+    } catch {
+      toast.error(t('saveError'))
+    } finally {
+      setDeleteTarget(null)
+    }
   }
 
   if (isLoading)
@@ -1305,30 +1426,89 @@ function PaymentsTab({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* ── TWO THINGS CALLED STRIPE, AND ONLY ONE OF THEM TAKES MONEY ───────
+          This tab shows the Stripe Connect rail (members are charged inside
+          Linyup, money lands in the studio's own Stripe account) directly above
+          a BYO integration whose entire job is to RECORD payments the studio
+          collected somewhere else — and whose provider dropdown also says
+          "Stripe", defaults to it, and used to badge itself "Enabled" (UX-17).
+
+          The distinction is now structural, not just worded: everything that
+          takes money is above the record-only heading, everything that merely
+          writes down money already taken is below it. Keep it that way — a card
+          moved across that line silently reverses what its heading claims. */}
       {/* Accept payments with Linyup (Stripe Connect) — own card; renders only when enabled. */}
       <ConnectPaymentsCard teamId={teamId} />
+
+      {/* The currency the rail above charges in — money-side, so it stays above
+          the record-only heading. */}
+      <BillingCurrencyCard
+        teamId={teamId}
+        current={team?.default_currency}
+        gatewayCurrency={gatewayCurrency}
+        canEdit={canEdit}
+      />
+
+      <div className="space-y-3 pt-2">
+        <div className="border-t pt-4">
+          <p className="text-sm font-semibold">{t('paymentsRecordOnlyTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t('paymentsRecordOnlyDescription')}
+          </p>
+        </div>
 
       <Card>
         <CardContent className="pt-6 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-medium">{t('paymentsGateway')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsGatewayDescription')}</p>
+          {/* Superseded keys `paymentsGateway` / `paymentsGatewayDescription`
+              still exist in the locale files; they said "Payment gateway" and
+              "…to collect member payments", which is the claim this rail cannot
+              honour — it holds no credentials and makes no API call. */}
+          <p className="text-sm font-medium">{t('paymentsExternalTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsExternalDescription')}</p>
+          {/* No owner-only note here: the body below says the stronger thing —
+              a non-owner cannot even SEE this list — and saying both would be
+              two lines of the same sentence. */}
         </div>
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1" />
-          {t('paymentsAddGateway')}
-        </Button>
+        {canEdit && (
+          <Button size="sm" onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1" />
+            {t('paymentsAddExternal')}
+          </Button>
+        )}
       </div>
 
-      {integrations.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoGateway')}</p>
+      {/* ABSENT-BECAUSE-FORBIDDEN is not absent-because-none. A manager cannot
+          read teams/{id}/integrations at all, so she used to be told "No payment
+          gateway configured" about a studio that may well have one — a false
+          statement, and one that invites her to go and configure a second
+          (UX-6). She is told what is actually true instead: the list is the
+          owner's to see. An owner whose read genuinely FAILS gets the error
+          block with a retry, for the same reason. */}
+      {!canEdit ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">
+          {t('paymentsExternalHiddenOwnerOnly')}
+        </p>
+      ) : isError ? (
+        <QueryErrorState
+          onRetry={() => void refetch()}
+          detail={error instanceof Error ? error.message : null}
+        />
+      ) : integrations.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoExternal')}</p>
       ) : (
         <div className="divide-y border rounded-lg">
           {integrations.map((item) => {
             const cfg = item.config
             const label = cfg.type === 'stripe' ? 'Stripe' : 'Payrexx'
             const identifier = cfg.type === 'stripe' ? cfg.publishable_key : cfg.instance_name
+            // A BYO Stripe row with no signing secret records NOTHING:
+            // handleTeamStripeWebhook answers `no_signing_secret` and returns 400
+            // before it looks at the body. Payrexx is not the same case — a blank
+            // secret there skips signature verification but still records — so the
+            // stalled state is deliberately Stripe-only rather than symmetrical.
+            const stalled = item.enabled && cfg.type === 'stripe' && !cfg.webhook_signing_secret
             return (
               <div key={item.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
@@ -1337,9 +1517,18 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                     {identifier} · {cfg.currency}
                   </p>
                 </div>
-                <Badge variant={item.enabled ? 'default' : 'outline'} className="text-xs">
-                  {item.enabled ? t('paymentsEnabled') : t('paymentsDisabled')}
-                </Badge>
+                {stalled ? (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                  >
+                    {t('paymentsRecordingStalled')}
+                  </Badge>
+                ) : (
+                  <Badge variant={item.enabled ? 'default' : 'outline'} className="text-xs">
+                    {item.enabled ? t('paymentsRecordingOn') : t('paymentsRecordingOff')}
+                  </Badge>
+                )}
                 <Switch checked={item.enabled} onCheckedChange={() => handleToggleEnabled(item)} />
                 <button
                   onClick={() => openEdit(item)}
@@ -1358,22 +1547,48 @@ function PaymentsTab({ teamId }: { teamId: string }) {
           })}
         </div>
       )}
+
+      {/* THIS ENDPOINT IS RECORDING EVERY RECURRING PAYMENT TWICE.
+          Stated, never repaired. The two rows cannot be merged from here (an
+          `invoice.*` payload can no longer name its PaymentIntent, and BYO holds
+          no credentials to bridge them), and matching them by amount and time
+          would be a guess that deletes real money when it is wrong — so this
+          surface tells the one person who can change the endpoint, and touches
+          nothing. `bothFamilies` is a reading of `raw_status`, i.e. of what the
+          endpoint literally delivered, not an inference from the totals. */}
+      {doubleRecording?.bothFamilies && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                {t('paymentsDoubleRecordingTitle')}
+              </p>
+              <p className="text-xs text-amber-900/90 dark:text-amber-200/90">
+                {t('paymentsDoubleRecordingBody', {
+                  days: doubleRecording.windowDays,
+                  invoiceCount: doubleRecording.invoiceRows,
+                  paymentCount: doubleRecording.paymentRows,
+                })}
+              </p>
+              <p className="text-xs text-amber-900/90 dark:text-amber-200/90">
+                {t.rich('paymentsDoubleRecordingFix', {
+                  code: (chunks) => (
+                    <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/60">{chunks}</code>
+                  ),
+                })}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
         </CardContent>
       </Card>
 
-      {/* Studio billing currency + manual payment modes — paired, shown last. */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <BillingCurrencyCard
-          teamId={teamId}
-          current={team?.default_currency}
-          gatewayCurrency={gatewayCurrency}
-          canEdit={teamRole === 'owner'}
-        />
-        <PaymentModesCard
-          teamId={teamId}
-          current={team?.payment_modes}
-          canEdit={teamRole === 'owner'}
-        />
+        {/* Manual modes belong to this group for the same reason the card above
+            does: cash and TWINT are money the studio already took, written down
+            afterwards. */}
+        <PaymentModesCard teamId={teamId} current={team?.payment_modes} canEdit={canEdit} />
       </div>
 
       {/* Add/edit dialog */}
@@ -1381,7 +1596,7 @@ function PaymentsTab({ teamId }: { teamId: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingId ? t('paymentsEditGateway') : t('paymentsAddGateway')}
+              {editingId ? t('paymentsEditExternal') : t('paymentsAddExternal')}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
@@ -1422,6 +1637,16 @@ function PaymentsTab({ teamId }: { teamId: string }) {
               {errors.identifier && (
                 <p className="text-xs text-destructive">{errors.identifier.message}</p>
               )}
+              {/* The publishable key is a NAMEPLATE here — it is written to the
+                  integration doc and rendered back in the row above, and nothing
+                  in functions/ ever reads it (BYO holds no credentials and makes
+                  no Stripe API call). Saying so beats leaving an owner to infer
+                  that pasting it turns card payments on. */}
+              {selectedType === 'stripe' && (
+                <p className="text-[11px] text-muted-foreground">
+                  {t('paymentsPublishableKeyHelp')}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t('paymentsCurrency')}</Label>
@@ -1457,6 +1682,45 @@ function PaymentsTab({ teamId }: { teamId: string }) {
                   })
                 )}
               </p>
+              {/* WHICH EVENTS — the half of the wiring that decides whether the
+                  studio's revenue is counted once or twice, and until now it was
+                  written down only in the header of handleTeamStripeWebhook,
+                  where a studio will never see it.
+
+                  It is a real constraint, not a preference: an `invoice.*`
+                  payload can no longer name its PaymentIntent and a
+                  `payment_intent.*` payload can no longer name its invoice, and
+                  this rail holds no Stripe credentials with which to bridge
+                  them. So a subscription to BOTH records every recurring payment
+                  twice, and nothing on our side can merge the two rows. The rows
+                  it does produce are flagged in the payments table
+                  ("may be a duplicate"), and an endpoint caught sending both
+                  families is called out on the card behind this dialog — but
+                  both of those are after the fact. This is the PRIMARY defence
+                  (Franco, 2026-08-18: guidance + detection is the close for that
+                  defect; dedupe-by-heuristic was rejected), which is why it is a
+                  callout and not a footnote. */}
+              {selectedType === 'stripe' && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
+                        {t('paymentsWebhookEventsTitle')}
+                      </p>
+                      <p className="text-[11px] text-amber-900/90 dark:text-amber-200/90">
+                        {t.rich('paymentsWebhookEventsHelp', {
+                          code: (chunks) => (
+                            <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/60">
+                              {chunks}
+                            </code>
+                          ),
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t('paymentsDefaultSubscriptionType')}</Label>
@@ -1675,13 +1939,14 @@ function EmailSenderForm({
           </p>
 
           {!isPaidPlan ? (
-            <div className="rounded-lg border border-dashed px-4 py-4 flex items-start gap-3">
-              <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium">{t('byoUpsellTitle')}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('byoUpsellDescription')}</p>
-              </div>
-            </div>
+            /* UX-42: this used to be a lock icon, upsell copy and nothing to
+               click — a refusal with no way out. It speaks through the one
+               shared notice now, which names the plan and opens the modal. */
+            <PlanUpgradeNotice
+              minPlan="coach"
+              title={t('byoUpsellTitle')}
+              description={t('byoUpsellDescription')}
+            />
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-2">
@@ -1995,6 +2260,11 @@ export default function TeamSettingsPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
   const { isInstalled } = useInstalledPlugins()
+  // ONE derivation for the whole page — every section below writes the team doc
+  // or an owner-only subcollection of it, and `team.settings` is the capability
+  // that is owner-only by construction (OWNER_ONLY in shared/types/capabilities).
+  const { can } = useCapabilities()
+  const canEdit = can('team.settings')
   const t = useTranslations('TeamSettings')
   // The active section is driven entirely by ?tab= — the settings rail is the tab
   // bar now (each team sub-section is its own rail item). Deep-links like the contact
@@ -2044,7 +2314,7 @@ export default function TeamSettingsPage() {
 
       {/* Payments + Outreach manage their own stacked cards; the rest share one wrapper. */}
       {tab === 'payments' ? (
-        <PaymentsTab teamId={currentTeamId} />
+        <PaymentsTab teamId={currentTeamId} canEdit={canEdit} />
       ) : tab === 'outreach' ? (
         <OutreachTab teamId={currentTeamId} team={team} />
       ) : (
@@ -2052,13 +2322,15 @@ export default function TeamSettingsPage() {
           <CardContent className="pt-6">
             {tab === 'general' && (
               <>
-                <GeneralForm team={team} teamId={currentTeamId} />
-                <EngagementThresholdsForm team={team} teamId={currentTeamId} />
+                <GeneralForm team={team} teamId={currentTeamId} canEdit={canEdit} />
+                <EngagementThresholdsForm team={team} teamId={currentTeamId} canEdit={canEdit} />
                 <TabBarPreference />
               </>
             )}
-            {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} />}
-            {tab === 'ranking' && <RankingTab teamId={currentTeamId} team={team} />}
+            {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} canEdit={canEdit} />}
+            {tab === 'ranking' && (
+              <RankingTab teamId={currentTeamId} team={team} canEdit={canEdit} />
+            )}
             {tab === 'custom-fields' && isInstalled('custom-fields') && (
               <CustomFieldsTab teamId={currentTeamId} team={team} />
             )}

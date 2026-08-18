@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 
 // Shared, namespace-agnostic UI for the renew action (used by the contact detail
 // tab and the team + org rosters). All copy is passed in so each surface keeps its
@@ -34,24 +35,26 @@ export function AffiliationBulkBar({
   busy?: boolean
 }) {
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-card border rounded-full shadow-lg px-4 py-2">
-      <span className="text-sm font-medium mr-2">{selectedLabel}</span>
-      <button
-        onClick={onRenew}
-        disabled={busy}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm hover:bg-muted transition-colors disabled:opacity-50"
-      >
-        <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
-        {renewLabel}
-      </button>
-      <button
-        onClick={onClear}
-        className="p-1.5 rounded-full hover:bg-muted transition-colors ml-0.5 text-muted-foreground"
-        aria-label={clearLabel}
-      >
-        <X className="h-4 w-4" />
-      </button>
-    </div>
+    <FloatingSlot lane="page-bar">
+      <div className="flex items-center gap-2 bg-card border rounded-full shadow-lg px-4 py-2">
+        <span className="text-sm font-medium mr-2">{selectedLabel}</span>
+        <button
+          onClick={onRenew}
+          disabled={busy}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
+          {renewLabel}
+        </button>
+        <button
+          onClick={onClear}
+          className="p-1.5 rounded-full hover:bg-muted transition-colors ml-0.5 text-muted-foreground"
+          aria-label={clearLabel}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </FloatingSlot>
   )
 }
 

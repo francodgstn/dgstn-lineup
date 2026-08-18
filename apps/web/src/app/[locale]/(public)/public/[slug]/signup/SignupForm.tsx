@@ -7,8 +7,14 @@ import { z } from 'zod'
 import { httpsCallable } from 'firebase/functions'
 import { doc, getDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
-import { useTranslations } from 'next-intl'
-import { CONTACTS_COLLECTION } from '@linyup/shared'
+import { useLocale, useTranslations } from 'next-intl'
+import { CONTACTS_COLLECTION, type PublicFrom } from '@linyup/shared'
+import { Link } from '@/i18n/navigation'
+import { publicHref, returnHref } from '@/lib/publicRoutes'
+import { useWaiverGate } from '@/hooks/useWaiverGate'
+import { waiverErrorMessage } from '@/lib/waiver'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
+import { WaiverStep } from '@/components/booking/WaiverStep'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
@@ -52,9 +58,11 @@ type DetailsValues = z.infer<ReturnType<typeof createDetailsSchema>>
 
 interface Props {
   slug: string
+  /** `?from=` — which surface to return to. See `returnHref`. */
+  from?: PublicFrom
 }
 
-export default function SignupForm({ slug }: Props) {
+export default function SignupForm({ slug, from }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
   // A live contact session skips the email+OTP steps entirely: the session was
@@ -62,9 +70,12 @@ export default function SignupForm({ slug }: Props) {
   const { isAuthenticated, contact: sessionContact } = usePublicContactAuth()
   const t = useTranslations('PublicSignup')
   const tSurfaces = useTranslations('PublicSurfaceLinks')
-  // The team root renders whatever default surface the studio chose (bio-link,
-  // website, shop, …) — label the link accordingly instead of assuming bio-link.
-  const homeSurface = team.default_public_surface ?? 'bio-link'
+  const tWaiver = useTranslations('Waiver')
+  const locale = useLocale()
+  // Where 'back' goes: the surface named by `?from=`, else whatever default the
+  // studio chose (bio-link, website, shop, …). Labelled to match, and resolved
+  // here rather than by bouncing through the team root's client redirect.
+  const backTo = returnHref(team, slug, from)
   const teamName = team.name || ''
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -73,6 +84,21 @@ export default function SignupForm({ slug }: Props) {
   // falls back to the plain consent text below — no regression for teams without
   // the plugin installed.
   const signupDocs = team.signup_documents ?? []
+
+  // A required waiver gets its OWN tick on this rail, never a link bundled into
+  // the consent sentence beside a privacy policy — that is the weakest possible
+  // presentation of the strongest possible document. Inert (no network call at
+  // all) for every team that requires nothing, which is every team on the day
+  // this ships.
+  //
+  // `activityId: null` on purpose: signup books nothing, so only the
+  // every-booking waivers resolve here. An activities-scoped one is presented at
+  // the booking step, where the activity is known.
+  const waiverGate = useWaiverGate({
+    teamId: teamId ?? null,
+    requiredWaivers: team.required_waivers ?? null,
+    activityId: null,
+  })
 
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -128,8 +154,11 @@ export default function SignupForm({ slug }: Props) {
           setStep((s) => (s === 'email' || s === 'code' ? 'success' : s))
           return
         }
-      } catch {
-        /* self-read failed — fall through to the normal details step */
+      } catch (err: unknown) {
+        // Falls through to the normal details step, which is the right default
+        // either way — but a self-read that fails for everyone would otherwise
+        // be invisible, since its success path only ever SKIPS a step.
+        reportPublicLoadFailure('signup/self-contact', err)
       }
       if (cancelled) return
       setStep((s) => (s === 'email' || s === 'code' ? 'details' : s))
@@ -202,6 +231,27 @@ export default function SignupForm({ slug }: Props) {
 
   const onSubmitDetails = async (values: DetailsValues) => {
     setError(null)
+
+    // THE CONSENT STEP, interposed between the details form and the call.
+    //
+    // `ensure()` resolves the requirement for THIS person and returns false when
+    // there is something to read — the step then renders and its own Confirm
+    // re-enters this same function, which is why there is no second submit path
+    // to keep in sync.
+    //
+    // The identity handed over is the one this rail actually has: the address
+    // the visitor verified (or their session's contact) plus the names they just
+    // typed, resolved by the same email+name predicate the booking rails use.
+    if (waiverGate.applies) {
+      const clear = await waiverGate.ensure({
+        ...(sessionContact?.id ? { contactId: sessionContact.id } : {}),
+        email,
+        firstname: values.firstname,
+        lastname: values.lastname,
+      })
+      if (!clear) return
+    }
+
     try {
       const fn = httpsCallable<
         {
@@ -209,7 +259,14 @@ export default function SignupForm({ slug }: Props) {
           code?: string
           teamId?: string
           contactDetails: Omit<DetailsValues, 'privacyConsent'> & { privacyConsent: boolean }
-          acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
+          acceptedDocuments?: Array<{
+            documentId?: string
+            slug?: string
+            kind?: string
+            version?: string | number
+          }>
+          waiverAcceptances?: unknown
+          locale?: string
         },
         { success: boolean }
       >(functions, 'completeSignup')
@@ -225,15 +282,49 @@ export default function SignupForm({ slug }: Props) {
           notes: values.notes || undefined,
           privacyConsent: true,
         },
+        // WHICH documents were shown and at WHICH version — the two facts that
+        // turn this tick into a real acceptance event. `version: ''` used to go
+        // here for every document, which is why the old record recorded nothing.
+        // A document with no version (published before versioning existed and not
+        // yet backfilled) still renders its link; the server writes no row for it
+        // rather than inventing one.
         acceptedDocuments:
           signupDocs.length > 0
-            ? signupDocs.map((d) => ({ slug: d.slug, kind: d.kind, version: '' }))
+            ? signupDocs.map((d) => ({
+                documentId: d.documentId,
+                slug: d.slug,
+                kind: d.kind,
+                ...(typeof d.version === 'number' ? { version: d.version } : {}),
+              }))
             : undefined,
+        ...(waiverGate.acceptances.length > 0
+          ? { waiverAcceptances: waiverGate.acceptances }
+          : {}),
+        locale,
       })
       setStep('success')
     } catch (err: unknown) {
+      // A waiver refusal is not a dead end: it names a reason with its own
+      // sentence, and the step is already on screen to act on it — EXCEPT when
+      // the team's public mirror was stale-empty, in which case `applies` was
+      // false, no step was ever presented, and the sentence would be all this
+      // visitor ever got. `recover` forces the resolve and puts the step under
+      // the message; it renders in place above this same submit.
+      const waiverMessage = waiverErrorMessage(err, tWaiver)
+      if (
+        waiverMessage &&
+        (await waiverGate.recover(err, {
+          ...(sessionContact?.id ? { contactId: sessionContact.id } : {}),
+          email,
+          firstname: values.firstname,
+          lastname: values.lastname,
+        }))
+      ) {
+        setError(waiverMessage)
+        return
+      }
       const e = err as { message?: string }
-      setError(e.message || t('errorCompleteSignupFailed'))
+      setError(waiverMessage ?? e.message ?? t('errorCompleteSignupFailed'))
     }
   }
 
@@ -500,6 +591,20 @@ export default function SignupForm({ slug }: Props) {
             )}
           </div>
 
+          {/* The consent step, rendered in place above the submit rather than as
+              a separate screen: this rail has ONE terminal submit, and the same
+              button confirms both halves. It appears only after `ensure()` has
+              answered, so a team that requires nothing never sees a flicker. */}
+          {waiverGate.presented && (
+            <div className="rounded-xl border p-4">
+              <WaiverStep
+                gate={waiverGate}
+                teamName={teamName}
+                disabled={detailsForm.formState.isSubmitting}
+              />
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               {error}
@@ -508,7 +613,15 @@ export default function SignupForm({ slug }: Props) {
 
           <BioLinkButton
             type="submit"
-            disabled={detailsForm.formState.isSubmitting}
+            disabled={
+              detailsForm.formState.isSubmitting ||
+              waiverGate.loading ||
+              // Disabled rather than submitting-and-being-refused: the remaining
+              // actions (a parent's emailed link, an address that bounced) cannot
+              // be completed by ticking here, and a button that fails is worse
+              // than one that waits.
+              (waiverGate.presented && !waiverGate.ready)
+            }
             accentColor={accentColor}
           >
             {detailsForm.formState.isSubmitting ? t('savingEllipsis') : t('completeRegistration')}
@@ -546,18 +659,18 @@ export default function SignupForm({ slug }: Props) {
         </div>
         <div className="space-y-2">
           {/* Their personal portal — where membership, bookings and courses live. */}
-          <a
-            href={`/public/${slug}/space`}
+          <Link
+            href={publicHref(slug, 'space')}
             className="block text-sm font-medium text-primary hover:underline"
           >
             {t('openSpace')}
-          </a>
-          <a
-            href={`/public/${slug}`}
+          </Link>
+          <Link
+            href={backTo.href}
             className="block text-sm text-muted-foreground hover:text-foreground hover:underline"
           >
-            {t('toSurface', { name: tSurfaces(homeSurface as Parameters<typeof tSurfaces>[0]) })}
-          </a>
+            {t('toSurface', { name: tSurfaces(backTo.surface) })}
+          </Link>
         </div>
       </div>
     </BioLinkShell>

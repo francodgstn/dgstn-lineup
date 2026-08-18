@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, Fragment } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -10,12 +11,14 @@ import {
   orderBy,
   limit,
   getDocs,
+  getCountFromServer,
   Timestamp,
   doc,
   addDoc,
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore'
+import { addDays, addMonths } from 'date-fns'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -28,16 +31,19 @@ import {
 } from '@linyup/shared'
 import type { Session, Activity, Event } from '@linyup/shared'
 import { useEventTypes } from '@/hooks/useEventTypes'
-import { useCoaches, coachLabel } from '@/hooks/useCoaches'
+import { useCoaches } from '@/hooks/useCoaches'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import dynamic from 'next/dynamic'
+import type { Route } from 'next'
+import { cn } from '@/lib/utils'
 import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DateTimePicker } from '@/components/ui/date-picker'
@@ -58,7 +64,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -75,26 +80,50 @@ import {
   User,
   Repeat2,
   ArrowUpRight,
+  EyeOff,
   Zap,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { SectionIntro } from '@/components/onboarding/SectionIntro'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
-import { AppointmentAvailabilityDialog, AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
+import { AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
 import { AppointmentFormDialog } from '@/components/appointments/AppointmentFormDialog'
+import { useVisibleCalendars, type ScheduleCalendar } from '@/hooks/useVisibleCalendars'
+import { VisibleCalendarsMenu } from '@/components/schedule/VisibleCalendarsMenu'
+import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
+import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
 type CalendarView = 'calendar' | 'list'
-type TimeTab = 'upcoming' | 'past'
-// Shared type filter, applied to both calendar + list. 'classes' = group
-// classes; 'appointment' = 1:1 appointment sessions (activityType === 'appointment').
-// 'availability' is a distinct calendar VIEW (all coaches' free time as lanes),
-// not a subset of 'all' — the filter row separates it visually.
-type ItemFilter = 'all' | 'classes' | 'appointment' | 'events' | 'availability'
+const TIME_TABS = ['upcoming', 'past'] as const
+
+// How far the list reaches, in months from today. `3` reproduces the window the
+// page was hard-coded to before UX-64; the rest are the zoom-out.
+const HORIZONS = [3, 6, 12] as const
+type Horizon = (typeof HORIZONS)[number]
+const DEFAULT_HORIZON: Horizon = 3
+type TimeTab = (typeof TIME_TABS)[number]
+// What the filter row does is now LAYER VISIBILITY, not filtering — Classes,
+// Appointments, Bookable hours and Events are four independent things the
+// schedule can DRAW, ticked on and off like the calendars in the sidebar of any
+// calendar app. The store, the default set and the reasoning live in
+// `hooks/useVisibleCalendars.ts`; the control is `VisibleCalendarsMenu`.
+//
+// The old model was a single-select `ItemFilter` ('all' | 'classes' |
+// 'appointment' | 'events'), which could not express "classes and appointments
+// but not events", and bookable hours could not be a member of it at all — so
+// they were drawn unconditionally instead, with no control anywhere to stop
+// them. Both problems are the same problem, and one tickable set is the fix
+// for both.
+//
+// The row now holds exactly TWO controls, `<who> | <what>`, and they share one
+// grammar: a chip with a caret, whose label names the current state, opening a
+// list of checkboxes. That symmetry is the point — the four calendars spent one
+// release as four bare chips sitting beside a single-select coach chip, which
+// made two different kinds of control look like one kind.
 type ListItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event }
 
 interface MemberDoc {
@@ -190,26 +219,103 @@ type EventForm = z.infer<typeof eventSchema>
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useAllSessions(teamId: string | null, year: number, month: number) {
+/**
+ * Sessions in an EXPLICIT window.
+ *
+ * This used to be `useAllSessions(teamId, year, month)`, which hard-coded
+ * `[month-1, month+2)` — right for a month grid that wants its neighbours
+ * prefetched, and the reason the LIST could never show more than three months
+ * (UX-64): the list was reading the calendar's cursor window. A studio planning
+ * a season had to page the calendar forward one month at a time and read the
+ * list three months at a time.
+ *
+ * The window is a parameter now, and the two views ask for different ones. Same
+ * query shape as before — `teamId ==` + a `start` range + `orderBy(start)` — so
+ * it runs on the composite index that already exists (`sessions: teamId ASC,
+ * start ASC`). Widening the window needs NO new index; it only costs reads.
+ */
+function useSessionsInRange(
+  teamId: string | null,
+  from: Date,
+  to: Date,
+  { enabled = true }: { enabled?: boolean } = {}
+) {
   return useQuery<Session[]>({
-    queryKey: ['sessions', 'calendar', teamId, year, month],
-    enabled: !!teamId,
+    // Bounds in the key, not a view name: two views asking for the same window
+    // share one cache entry instead of fetching it twice.
+    queryKey: ['sessions', 'range', teamId, from.getTime(), to.getTime()],
+    enabled: !!teamId && enabled,
     staleTime: 60_000,
     queryFn: async () => {
       if (!teamId) return []
-      // Load prev + current + next month so navigation feels instant
-      const from = Timestamp.fromDate(new Date(year, month - 1, 1))
-      const to = Timestamp.fromDate(new Date(year, month + 2, 1))
       const snap = await getDocs(
         query(
           collection(db, SESSIONS_COLLECTION),
           where('teamId', '==', teamId),
-          where('start', '>=', from),
-          where('start', '<', to),
+          where('start', '>=', Timestamp.fromDate(from)),
+          where('start', '<', Timestamp.fromDate(to)),
           orderBy('start', 'asc')
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
+    },
+  })
+}
+
+/**
+ * THE authoritative answer to "how many upcoming?".
+ *
+ * The header used to count the rows the CALENDAR had loaded — a window anchored
+ * to the month cursor, not to now. Page back to March and the grid filled with
+ * March's classes while the header above it read "0 upcoming", because nothing
+ * in the loaded window was still in the future (UX-20). Page forward to
+ * November and it counted November alone, ignoring everything between today and
+ * then.
+ *
+ * Two questions, so two queries: the grid/list ask "what is in this window",
+ * this asks "what is still ahead", anchored to now and to nothing else. A
+ * server-side aggregation, so a studio with a year of sessions pays one count
+ * rather than downloading them to length a filtered array.
+ */
+function useUpcomingCount(teamId: string | null, orgId: string | null | undefined) {
+  return useQuery<number>({
+    queryKey: ['schedule', 'upcoming-count', teamId, orgId],
+    enabled: !!teamId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!teamId) return 0
+      const now = Timestamp.now()
+      const counts = await Promise.all([
+        getCountFromServer(
+          query(
+            collection(db, SESSIONS_COLLECTION),
+            where('teamId', '==', teamId),
+            where('start', '>=', now)
+          )
+        ),
+        getCountFromServer(
+          query(
+            collection(db, EVENTS_COLLECTION),
+            where('teamId', '==', teamId),
+            where('deleted_at', '==', null),
+            where('start', '>=', now)
+          )
+        ),
+        ...(orgId
+          ? [
+              getCountFromServer(
+                query(
+                  collection(db, EVENTS_COLLECTION),
+                  where('orgId', '==', orgId),
+                  where('scope', '==', 'org'),
+                  where('deleted_at', '==', null),
+                  where('start', '>=', now)
+                )
+              ),
+            ]
+          : []),
+      ])
+      return counts.reduce((n, c) => n + c.data().count, 0)
     },
   })
 }
@@ -657,7 +763,15 @@ function ListItemRow({
                 <Badge variant="secondary" className="text-xs shrink-0">
                   {tS(`type_${s.activityType ?? 'class'}` as Parameters<typeof tS>[0])}
                 </Badge>
-                {s.seriesId && <Repeat2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                {/* Labelled, not bare — the pattern and end date live one click
+                    away in the peek sheet, but the glyph must at least say what
+                    it means. */}
+                {s.seriesId && (
+                  <Repeat2
+                    className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+                    aria-label={tS('partOfSeries')}
+                  />
+                )}
                 {s.bookingMandatory && (
                   <Badge variant="outline" className="text-xs shrink-0">
                     {tS('bookingRequiredChip')}
@@ -806,11 +920,19 @@ export default function CalendarPage() {
   const [viewMonth, setViewMonth] = useState(() => today.getMonth())
 
   const [view, setView] = useState<CalendarView>('calendar')
-  const [tab, setTab] = useState<TimeTab>('upcoming')
-  const [filter, setFilter] = useState<ItemFilter>('all')
+  const [tab, setTab] = useTabParam(TIME_TABS, 'upcoming')
+  // How far the LIST reaches, in months from today. Three was the old hard cap;
+  // it stays the default so nothing gets slower for a studio that never touches
+  // it, and zooming out to a season or a year is now one click (UX-64).
+  const [horizon, setHorizon] = useState<Horizon>(DEFAULT_HORIZON)
+  // Which calendars are drawn — a per-browser VIEW PREFERENCE, deliberately
+  // not nav memory (see the hook's header before adding anything to it).
+  const calendars = useVisibleCalendars()
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
-  // 'all' · 'mine' (current user's uid) · a specific coach uid
-  const [coachFilter, setCoachFilter] = useState<string>('all')
+  // Which coaches are in scope. **EMPTY = every coach**, never "none" — see
+  // CoachFilterMenu's header. Multi-select, because "what are Anna and Ben doing
+  // this week" is an ordinary question the old single-select could not ask.
+  const [coachIds, setCoachIds] = useState<string[]>([])
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
     open: false,
     editing: null,
@@ -820,12 +942,16 @@ export default function CalendarPage() {
     open: false,
     editing: null,
   })
-  // Appointments, folded into the schedule: the availability MANAGER (the list,
-  // opened from the header — a list isn't a "new" action), the availability
-  // CREATE form (from "+ New entry"), and a bookings-roster modal (clicking a
-  // booked appointment slot).
-  const [availabilityOpen, setAvailabilityOpen] = useState(false)
+  // Appointments, folded into the schedule: the availability CREATE form (from
+  // "+ New → Add bookable hours") and a bookings-roster modal (clicking a booked
+  // appointment slot). MANAGING availability — schedules per coach, pause/resume,
+  // edit, delete, time off — is the /schedule/availability route, reached by name
+  // from the header.
   const [newAvailabilityOpen, setNewAvailabilityOpen] = useState(false)
+  // MANAGING bookable hours — the side sheet over this calendar. Same component
+  // the /schedule/availability route renders, so there is one writer and the
+  // route stays a working deep link (see BookableHoursSheet's header).
+  const [hoursSheetOpen, setHoursSheetOpen] = useState(false)
   const [appointmentSlot, setAppointmentSlot] = useState<Session | null>(null)
   // Manual booking — a manager books an appointment for a client (or blocks
   // time) on the spot, e.g. a phone booking. Distinct from "Appointment
@@ -833,7 +959,22 @@ export default function CalendarPage() {
   // session directly via the staff-only callable.
   const [appointmentFormOpen, setAppointmentFormOpen] = useState(false)
 
-  const sessionsQ = useAllSessions(currentTeamId, viewYear, viewMonth)
+  // ── the window each view asks for ─────────────────────────────────────────
+  // The calendar wants the month either side of its cursor (instant paging);
+  // the list wants a HORIZON measured from today, which is the thing a studio
+  // planning a season actually asks for and which the cursor window could never
+  // express (UX-64). Both bounds are snapped to midnight so the query key is
+  // stable for the whole day instead of changing on every render.
+  const listAnchor = startOfDay(today)
+  const range =
+    view === 'calendar'
+      ? { from: new Date(viewYear, viewMonth - 1, 1), to: new Date(viewYear, viewMonth + 2, 1) }
+      : tab === 'upcoming'
+        ? { from: listAnchor, to: addMonths(listAnchor, horizon) }
+        : { from: addMonths(listAnchor, -horizon), to: addDays(listAnchor, 1) }
+
+  const sessionsQ = useSessionsInRange(currentTeamId, range.from, range.to)
+  const upcomingCountQ = useUpcomingCount(currentTeamId, orgId)
   const activitiesQ = useActivities(currentTeamId)
   const eventsQ = useAllEvents(currentTeamId, orgId)
   const { data: members = [] } = useTeamMembers(currentTeamId)
@@ -851,7 +992,7 @@ export default function CalendarPage() {
     : ''
 
   const handleDeleteEvent = async (e: Event) => {
-    if (!window.confirm(`Delete event "${e.title}"? This cannot be undone.`)) return
+    if (!window.confirm(t('deleteEventConfirm', { title: e.title }))) return
     await updateDoc(doc(db, EVENTS_COLLECTION, e.id), { deleted_at: serverTimestamp() })
     invalidateEvents()
   }
@@ -860,51 +1001,51 @@ export default function CalendarPage() {
 
   const nowMs = Date.now()
 
-  // Coach filter — narrows sessions to a single instructor (or the current user).
-  // Events aren't coach-scoped, so a specific-coach filter hides them entirely,
-  // leaving only that coach's teaching schedule. Applies to both calendar + list.
-  const providerId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
-  // The coach chip shows the CURRENT selection rather than a static "Coach"
-  // label, so the filter row states what's applied without being opened.
-  const coachFilterLabel =
-    coachFilter === 'all'
-      ? t('coachAll')
-      : coachFilter === 'mine'
-        ? t('coachMine')
-        : (() => {
-            const c = coachRoster.find((x) => x.userId === coachFilter)
-            return c ? coachLabel(c) : t('coachAll')
-          })()
+  // Coach filter — narrows sessions to the selected instructors. Purely
+  // client-side: no query takes a coach (sessions come by team+window, bookable
+  // hours by team), so this is an array filter and nothing more. Events aren't
+  // coach-scoped, so ANY coach selection hides them entirely — the same rule as
+  // when this was single-select, and it stays coherent for several coaches:
+  // narrowing to people leaves those people's teaching schedule, and an event
+  // belongs to no one. Applies to both calendar + list.
+  const coachScoped = coachIds.length > 0
   const isAppointment = (s: Session) => s.activityType === 'appointment'
-  // 'availability' is a dedicated all-coach free-time view — no sessions/events.
-  const availabilityMode = filter === 'availability'
-  const filteredSessions = availabilityMode
-    ? []
-    : (sessionsQ.data ?? []).filter((s) => {
-        // Group classes and appointment (private-lesson) sessions both store the
-        // running provider in providerId.
-        if (providerId && s.providerId !== providerId) return false
-        if (filter === 'events') return false
-        if (filter === 'classes' && isAppointment(s)) return false
-        if (filter === 'appointment' && !isAppointment(s)) return false
-        return true
-      })
-  // Events aren't coach- or appointment-scoped; hidden when a coach or a
-  // class/appointment/availability filter is active, shown for 'all' and 'events'.
-  const filteredEvents =
-    !availabilityMode && coachFilter === 'all' && (filter === 'all' || filter === 'events')
-      ? (eventsQ.data ?? [])
-      : []
+  // Coach scope FIRST, calendars second — the two are different questions ("whose"
+  // vs "what kind"), and keeping the coach-scoped set around lets the
+  // hidden-calendars notice below ask "would this calendar have shown anything?"
+  // without re-deriving the scope.
+  const scopedSessions = (sessionsQ.data ?? []).filter(
+    // Group classes and appointment (private-lesson) sessions both store the
+    // running provider in providerId.
+    (s) => !coachScoped || (!!s.providerId && coachIds.includes(s.providerId))
+  )
+  const filteredSessions = scopedSessions.filter((s) =>
+    isAppointment(s) ? calendars.isVisible('appointments') : calendars.isVisible('classes')
+  )
+  // Events aren't coach-scoped, so any coach selection hides them entirely
+  // (unchanged); the Events LAYER is the other half of the condition.
+  const scopedEvents = coachScoped ? [] : (eventsQ.data ?? [])
+  const filteredEvents = calendars.isVisible('events') ? scopedEvents : []
 
-  // Availability MODE ('Availability' filter): every coach's active free time as
-  // one lane per coach in each day column (or just the selected coach's, when a
-  // coach filter is set). Empty in every other filter.
+  // Published bookable hours: a LAYER now, off by default, remembered per
+  // browser. They used to be drawn unconditionally as "context" — which was the
+  // right instinct with the wrong mechanism, because there was then no way to
+  // turn several coaches' windows off on a week where they made the grid
+  // unreadable. Scoped to the coach filter when one is set, so "Only me"
+  // narrows the bands exactly as it narrows the sessions. Paused schedules never
+  // show (they're not bookable).
+  //
+  // Selecting several coaches meets the calendar's own lane cap, and THE CAP
+  // WINS: SessionsCalendar draws one sub-lane per coach up to MAX_AVAIL_LANES
+  // (3), coaches past the third share the last lane with their own colour, and
+  // the legend says "+N more". That is not a new case introduced here — an
+  // unfiltered team with four coaches already renders exactly this — so a
+  // five-coach selection degrades the way the unfiltered week already does.
   const activeAvailability = availabilityQ.data?.filter((a) => a.status === 'active') ?? []
-  const calendarAvailability = !availabilityMode
-    ? []
-    : providerId
-      ? activeAvailability.filter((a) => a.providerId === providerId)
-      : activeAvailability
+  const scopedAvailability = coachScoped
+    ? activeAvailability.filter((a) => coachIds.includes(a.providerId))
+    : activeAvailability
+  const calendarAvailability = calendars.isVisible('bookableHours') ? scopedAvailability : []
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -926,35 +1067,79 @@ export default function CalendarPage() {
     )
 
   const isListLoading = sessionsQ.isLoading || eventsQ.isLoading
-  const upcomingCount = allItems.filter((item) => getItemMs(item) >= nowMs).length
+  // ONE query answers this, and it is not this page's window — see
+  // `useUpcomingCount`. Undefined while it loads, so the header says nothing
+  // rather than saying zero. A SHOWN/HIDDEN CALENDAR MUST NEVER REACH THIS: the
+  // count is a fact about the team, not about the view, which is exactly what
+  // UX-20 fixed when it stopped counting from the calendar's own cursor window.
+  const upcomingCount = upcomingCountQ.data
+
+  // ── "you are looking at an empty grid because you hid a calendar" ─────────
+  //
+  // An empty grid under a hidden calendar is the same defect class as UX-20's
+  // "0 upcoming" over a full grid: the screen states something false about the
+  // studio's business. So a hidden calendar is only worth mentioning when it
+  // WOULD have drawn something — otherwise every studio with a quiet week would
+  // be told its calendars are the problem, and the default set hides one, so
+  // that misfire would be the common case rather than the rare one.
+  const inTimeWindow = (ms: number) =>
+    view === 'calendar' ? true : tab === 'upcoming' ? ms >= nowMs : ms < nowMs
+  const calendarHasContent = (calendar: ScheduleCalendar): boolean => {
+    switch (calendar) {
+      case 'classes':
+        return scopedSessions.some((s) => !isAppointment(s) && inTimeWindow(s.start.toDate().getTime()))
+      case 'appointments':
+        return scopedSessions.some((s) => isAppointment(s) && inTimeWindow(s.start.toDate().getTime()))
+      case 'events':
+        return scopedEvents.some((e) => inTimeWindow(e.start.toDate().getTime()))
+      // Bookable hours draw on the week grid only — in the list there is nothing
+      // for them to have been hiding.
+      case 'bookableHours':
+        return view === 'calendar' && scopedAvailability.length > 0
+    }
+  }
+  const hiddenWithContent = calendars.hidden.filter(calendarHasContent)
+  const nothingDrawn =
+    view === 'calendar'
+      ? filteredSessions.length === 0 && filteredEvents.length === 0 && calendarAvailability.length === 0
+      : listItems.length === 0
+  const showHiddenCalendarsNotice =
+    hiddenWithContent.length > 0 && nothingDrawn && !isListLoading && !availabilityQ.isLoading
+  const calendarLabel: Record<ScheduleCalendar, string> = {
+    classes: t('filterClasses'),
+    appointments: t('filterAppointments'),
+    bookableHours: t('bookableHours'),
+    events: t('filterEvents'),
+  }
+
+  // "Next 6 months" vs "Last 6 months" — the same distance reads differently
+  // depending on which way the tab is pointing, and a bare "6 months" beside a
+  // Past tab is ambiguous about which six.
+  const horizonLabel = (h: Horizon) =>
+    tab === 'upcoming' ? t('horizonNext', { months: h }) : t('horizonLast', { months: h })
 
   const TABS: { key: TimeTab; label: string }[] = [
     { key: 'upcoming', label: t('tabUpcoming') },
     { key: 'past', label: t('tabPast') },
   ]
-  // 'availability' is separated from the entity filters (all/classes/appointments/
-  // events) — it's a distinct calendar view, not a subset of 'all'.
-  const FILTERS: { key: ItemFilter; label: string }[] = [
-    { key: 'all', label: t('filterAll') },
-    { key: 'classes', label: t('filterClasses') },
-    { key: 'appointment', label: t('filterAppointments') },
-    { key: 'events', label: t('filterEvents') },
-    { key: 'availability', label: t('filterAvailability') },
-  ]
-
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-            <SectionIntro sectionKey="calendar" />
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitle', { count: upcomingCount })}
+            {upcomingCount === undefined ? ' ' : t('subtitle', { count: upcomingCount })}
           </p>
         </div>
+        {/* ONE height across this row. The three controls were hand-sized
+            independently — a p-1 segmented group, a `size="sm"` link and a
+            px-4/py-2 trigger — so nothing lined up. They all render at the
+            Button default (h-8) now; only the view toggle keeps its own padding,
+            because its inner buttons sit inside a p-1 track that must add up to
+            the same 32px. */}
         <div className="flex items-center gap-2">
           {/* View toggle */}
           <div className="hidden sm:flex gap-1 p-1 bg-muted rounded-lg">
@@ -967,7 +1152,7 @@ export default function CalendarPage() {
               <button
                 key={key}
                 onClick={() => setView(key)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+                className={`flex h-6 items-center gap-1.5 px-2.5 rounded-md text-sm font-medium transition-colors ${
                   view === key
                     ? 'bg-background shadow-sm text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -978,13 +1163,47 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
-          {/* The availability MANAGER used to be a header button here. It moved
-              onto the Availability filter chip's caret menu — managing schedules
-              belongs next to viewing them, and the header stays down to "+ New". */}
+          {/* Bookable hours — a NAMED control, at every width. This is what a
+              coach hunts for when she wants to be bookable; it was a bare
+              chevron on a filter chip and she never found it, so it must never
+              be reduced to an icon.
+              It now opens the SIDE SHEET rather than navigating: publishing
+              hours is done against the week those hours have to fit into, and
+              the full page took that week away. The route it used to point at is
+              still a route — the sheet's footer links to it — so bookmarks, QR
+              codes and habits still land. */}
+          <Button
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setHoursSheetOpen(true)}
+            disabled={!currentTeamId || !user}
+          >
+            <CalendarClock className="h-3.5 w-3.5" />
+            {t('bookableHours')}
+          </Button>
+          {/* Places — the locations and rooms the session/event forms pick from.
+              It lived in Settings, so adding a room mid-schedule meant leaving the
+              calendar and hunting for it (UX-67). Peer of Bookable hours: both are
+              the scheduling reference data this page consumes, both are edited
+              from here. Label hidden below `sm` only — the icon is a map pin next
+              to a labelled sibling, so it does not have to carry the meaning
+              alone on a narrow screen. */}
+          <Link
+            href={'/schedule/places' as Route}
+            title={t('places')}
+            className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('places')}</span>
+          </Link>
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>
-              <DropdownMenuTrigger className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+              {/* `hover:bg-primary/90` is not redundant: the default variant's
+                  own hover is `[a]:hover:…`, which never matches a button. */}
+              <DropdownMenuTrigger
+                className={cn(buttonVariants(), 'hidden sm:inline-flex gap-2 hover:bg-primary/90')}
+              >
                 <Plus className="h-4 w-4" />
                 {t('newEntry')}
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -1002,7 +1221,9 @@ export default function CalendarPage() {
                   <CalendarRange className="h-4 w-4 mr-2" />
                   {t('newEvent')}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {/* Four peer verbs, no separator to explain: the last one
+                    publishes hours rather than putting one thing on the
+                    calendar, and its label says so. */}
                 <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
                   <CalendarClock className="h-4 w-4 mr-2" />
                   {t('newAvailability')}
@@ -1013,117 +1234,58 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Filters — ONE control group, read left to right as
-          <who> | <what> | <availability>. The coach and availability chips
-          carry a caret (they open menus); the type options stay flat, so the
-          shape of a chip tells you whether it holds more behind it. */}
+      {/* Filters — ONE control group, read left to right as <who> | <what>.
+          Both chips carry a caret and open checkboxes: same shape, same
+          gesture, and the label on each names its current state rather than a
+          static noun. Nothing here switches the view. */}
       <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
         {/* WHO — first, because it scopes everything to its right. */}
         {coachRoster.length > 1 && (
           <>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  coachFilter === 'all'
-                    ? 'bg-muted text-muted-foreground hover:text-foreground'
-                    : 'bg-primary text-primary-foreground'
-                }`}
-              >
-                <User className="h-3.5 w-3.5" />
-                {coachFilterLabel}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setCoachFilter('all')}>
-                  {t('coachAll')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCoachFilter('mine')}>
-                  {t('coachMine')}
-                </DropdownMenuItem>
-                {coachRoster
-                  .filter((c) => c.userId !== user?.uid)
-                  .map((c) => (
-                    <DropdownMenuItem key={c.userId} onClick={() => setCoachFilter(c.userId)}>
-                      {coachLabel(c)}
-                    </DropdownMenuItem>
-                  ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <CoachFilterMenu
+              coaches={coachRoster}
+              selected={coachIds}
+              onChange={setCoachIds}
+              currentUserId={user?.uid ?? null}
+            />
             <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
           </>
         )}
 
-        {/* WHAT — flat options, no menu. */}
-        {FILTERS.filter((f) => f.key !== 'availability').map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => {
-              setFilter(key)
-              if (key !== 'classes') setActivityFilter(null)
-            }}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filter === key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-
-        <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
-
-        {/* AVAILABILITY — outside "all", so it sits past the divider. One chip,
-            two affordances: the label switches the calendar to availability,
-            the caret opens the manager (which used to be a header button —
-            moved here to keep the top area to just "+ New"). */}
-        <div
-          className={`inline-flex items-center rounded-full text-xs font-medium transition-colors ${
-            availabilityMode
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground'
-          }`}
-        >
-          <button
-            onClick={() => {
-              setFilter('availability')
-              setActivityFilter(null)
-              // Availability is a calendar-only view.
-              setView('calendar')
-            }}
-            className={`py-1.5 pl-3 transition-colors ${
-              // Without the caret (no team/user) this is the whole chip, so it
-              // has to round on both ends rather than keep a flat right edge.
-              currentTeamId && user ? 'rounded-l-full pr-1.5' : 'rounded-full pr-3'
-            } ${availabilityMode ? '' : 'hover:text-foreground'}`}
-          >
-            {t('filterAvailability')}
-          </button>
-          {currentTeamId && user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                title={t('manageAvailability')}
-                aria-label={t('manageAvailability')}
-                className={`rounded-r-full py-1.5 pl-0.5 pr-2.5 transition-colors ${
-                  availabilityMode ? '' : 'hover:text-foreground'
-                }`}
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setAvailabilityOpen(true)}>
-                  <CalendarClock className="h-4 w-4 mr-2" />
-                  {t('manageAvailability')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('newAvailability')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        {/* WHAT — four CALENDARS, ticked on and off independently, plus
+            show-all and reset-to-default. See VisibleCalendarsMenu. */}
+        <VisibleCalendarsMenu
+          calendars={calendars}
+          calendarView={view === 'calendar'}
+          onCalendarHidden={(calendar) => {
+            // The activity picker narrows classes; with classes hidden it
+            // narrows nothing and would silently survive the calendar coming
+            // back.
+            if (calendar === 'classes') setActivityFilter(null)
+          }}
+        />
       </div>
+
+      {/* Hidden-calendars notice — an empty grid must never read as "you have
+          nothing scheduled" when the truth is "you switched it off". Only
+          raised for calendars that would actually have drawn something (see
+          `hiddenWithContent`). */}
+      {showHiddenCalendarsNotice && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed bg-muted/20 px-4 py-3">
+          <EyeOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t('calendars.hiddenTitle')}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {t('calendars.hiddenBody', {
+                calendars: hiddenWithContent.map((c) => calendarLabel[c]).join(', '),
+              })}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={calendars.showAll}>
+            {t('calendars.showAll')}
+          </Button>
+        </div>
+      )}
 
       {/* Nudge: sessions hang off activities, so surface activity creation first
           when the team hasn't defined any yet. */}
@@ -1153,7 +1315,6 @@ export default function CalendarPage() {
           activities={activitiesQ.data ?? []}
           events={filteredEvents}
           availability={calendarAvailability}
-          availabilityMode={availabilityMode}
           onEdit={(s) =>
             s.activityType === 'appointment'
               ? setAppointmentSlot(s)
@@ -1174,26 +1335,49 @@ export default function CalendarPage() {
       {/* List view */}
       {view === 'list' && (
         <>
-          {/* Tabs */}
-          <div className="flex gap-1 border-b">
-            {TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                  tab === key
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          {/* Tabs, and — on the same line — HOW FAR the list reaches.
+              The horizon belongs beside the upcoming/past switch because it
+              modifies exactly that: the tab says which direction from today,
+              this says how far. It is not a filter (it does not narrow what is
+              shown, it decides what is fetched), so it stays out of the chip row
+              above, which is all filters. */}
+          <div className="flex items-end justify-between gap-3 border-b">
+            <div className="flex gap-1">
+              {TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    tab === key
+                      ? 'border-primary text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <Select
+              value={String(horizon)}
+              onValueChange={(v) => setHorizon(Number(v) as Horizon)}
+            >
+              <SelectTrigger className="h-7 text-xs w-[150px] mb-1" aria-label={t('horizonLabel')}>
+                <span className="truncate">{horizonLabel(horizon)}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {HORIZONS.map((h) => (
+                  <SelectItem key={h} value={String(h)}>
+                    {horizonLabel(h)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Activity sub-filter — only when narrowing to group classes.
-              The type/coach chips live in the shared filter row above. */}
-          {filter === 'classes' && (activitiesQ.data?.length ?? 0) > 0 && (
+          {/* Activity sub-filter — a genuine FILTER (it narrows one calendar to
+              one activity), which is why it is here and not in the filter row
+              above. Only meaningful while Classes is drawn. */}
+          {calendars.isVisible('classes') && (activitiesQ.data?.length ?? 0) > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={activityFilter ?? '__all__'}
@@ -1232,7 +1416,10 @@ export default function CalendarPage() {
                   </div>
                 </div>
               ))}
-            {!isListLoading && listItems.length === 0 && (
+            {/* The generic empty line stands down when the notice above is
+                already explaining the emptiness — two answers to one question,
+                one of them wrong, is worse than either alone. */}
+            {!isListLoading && listItems.length === 0 && !showHiddenCalendarsNotice && (
               <div className="py-16 text-center text-muted-foreground text-sm">
                 {tab === 'upcoming' ? t('emptyUpcoming') : t('emptyPast')}
               </div>
@@ -1281,7 +1468,7 @@ export default function CalendarPage() {
 
       {/* Mobile FAB */}
       {currentTeamId && user && (
-        <div className="sm:hidden fixed bottom-6 right-6 z-40">
+        <FloatingSlot lane="page-primary" className="sm:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors">
               <Plus className="h-6 w-6" />
@@ -1299,14 +1486,13 @@ export default function CalendarPage() {
                 <CalendarRange className="h-4 w-4 mr-2" />
                 {t('newEvent')}
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setNewAvailabilityOpen(true)}>
                 <CalendarClock className="h-4 w-4 mr-2" />
                 {t('newAvailability')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
+        </FloatingSlot>
       )}
 
       {/* Dialogs */}
@@ -1345,14 +1531,22 @@ export default function CalendarPage() {
             onClose={() => setEventDialog({ open: false, editing: null })}
             onSaved={invalidateEvents}
           />
-          {/* Availability MANAGER — the list of schedules (header button) */}
-          <AppointmentAvailabilityDialog
-            open={availabilityOpen}
-            onOpenChange={setAvailabilityOpen}
+          {/* Bookable hours — the MANAGEMENT sheet over this calendar (list,
+              add, edit, pause, remove, time off). Same component the
+              /schedule/availability route renders. */}
+          <BookableHoursSheet
+            open={hoursSheetOpen}
+            onOpenChange={setHoursSheetOpen}
             teamId={currentTeamId}
             userId={user.uid}
+            calendarVisible={calendars.isVisible('bookableHours')}
+            onShowCalendar={() => {
+              if (!calendars.isVisible('bookableHours')) calendars.toggle('bookableHours')
+            }}
           />
-          {/* Availability CREATE — one new schedule ("+ New entry") */}
+          {/* Availability CREATE — one new schedule ("+ New → Add bookable
+              hours"). Managing them lives in the sheet above, or at
+              /schedule/availability. */}
           <AppointmentAvailabilityFormDialog
             open={newAvailabilityOpen}
             onOpenChange={setNewAvailabilityOpen}

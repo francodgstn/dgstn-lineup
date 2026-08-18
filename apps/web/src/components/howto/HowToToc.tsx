@@ -93,7 +93,10 @@ export function HowToTocChips() {
   return (
     <nav
       aria-label={t('tocTitle')}
-      className="sticky top-0 z-20 -mx-4 mt-5 flex gap-2 overflow-x-auto border-b bg-background/80 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/70 xl:hidden"
+      // `top-14` below `md`, not `top-0`: the app header is sticky on phones
+      // (MobileHeader, 3.5rem), so a bar pinned at 0 slides UNDER it and the
+      // chips disappear exactly when they are the only navigation there is.
+      className="sticky top-14 md:top-0 z-20 -mx-4 mt-5 flex gap-2 overflow-x-auto border-b bg-background/80 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/70 xl:hidden"
     >
       {TOC_SECTIONS.map((s) => (
         <a

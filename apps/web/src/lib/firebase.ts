@@ -31,6 +31,29 @@ export const EMULATOR_PORTS = {
   storage: Number(process.env.NEXT_PUBLIC_STORAGE_EMULATOR_PORT ?? '9199'),
 }
 
+/**
+ * WHERE the emulators are, from the point of view of whoever is asking.
+ *
+ * `localhost` is not a place — it is "wherever this code is running". That is
+ * correct on the Next server (the emulators are on the same machine) and correct
+ * in a browser on that machine, but wrong for every OTHER device: a phone on the
+ * LAN opening `http://192.168.1.102:3000` resolves `localhost` to the PHONE, so
+ * the page renders and every Firebase call fails with nothing in the UI to say
+ * why.
+ *
+ * Following the page's own hostname makes one build serve both: open it at
+ * `localhost` and the emulators are at `localhost`; open it at a LAN address and
+ * they are at that address; a tunnel or a second machine works for free. It also
+ * cannot drift out of step with the port env vars the way a hardcoded host does.
+ *
+ * The emulators already listen on 0.0.0.0 (see firebase.worktree.json), so
+ * nothing on the server side needs to change for this to work.
+ */
+export function emulatorHost(): string {
+  if (typeof window === 'undefined') return 'localhost'
+  return window.location.hostname || 'localhost'
+}
+
 // In a browser-based Codespace the emulators aren't reachable on localhost.
 // Instead of relying on (public) forwarded emulator ports, the browser talks
 // to this app's own origin and the Next.js dev server proxies the emulator
@@ -67,7 +90,10 @@ function createDb(): Firestore {
         experimentalForceLongPolling: true,
       })
     }
-    return initializeFirestore(app, { host: `localhost:${EMULATOR_PORTS.firestore}`, ssl: false })
+    return initializeFirestore(app, {
+      host: `${emulatorHost()}:${EMULATOR_PORTS.firestore}`,
+      ssl: false,
+    })
   } catch {
     // Already initialized for this app in this realm (HMR re-run).
     return getFirestore(app)
@@ -88,8 +114,9 @@ if (
   // The functions and storage emulators aren't reachable through the dev-server
   // proxy, so only wire them up for direct (non-proxied) local dev.
   if (!emulatorProxy) {
-    connectFunctionsEmulator(functions, 'localhost', EMULATOR_PORTS.functions)
-    connectStorageEmulator(storage, 'localhost', EMULATOR_PORTS.storage)
+    const host = emulatorHost()
+    connectFunctionsEmulator(functions, host, EMULATOR_PORTS.functions)
+    connectStorageEmulator(storage, host, EMULATOR_PORTS.storage)
   }
   ;(globalThis as { _emulatorConnected?: boolean })._emulatorConnected = true
 }

@@ -21,8 +21,9 @@
  *
  *   # Also wire "pay with Linyup" (Stripe Connect) for the seeded team — pass an
  *   # already-onboarded Stripe TEST account (acct_…). Precedence: --connect flag >
- *   # STRIPE_CONNECT_TEST_ACCOUNT env > profile.stripeConnectTestAccount. Grab an
- *   # acct id with `pnpm connect:test-account --list`. Survives reseeds:
+ *   # profile.stripeConnectTestAccount > STRIPE_CONNECT_TEST_ACCOUNT env. Grab an
+ *   # acct id with `pnpm connect:test-account --list`. Survives reseeds. Without
+ *   # any of the three the tenant shows NO priced doors (see scripts/lib/connect.ts):
  *   pnpm lead:seed --lead swimli --target emulator --connect acct_123
  *
  *   # ...or set the hosts yourself (an already-set host wins over --target):
@@ -50,12 +51,14 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as crypto from 'node:crypto'
 import { parseArgs } from 'node:util'
+import { createInterface } from 'node:readline/promises'
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
 import {
   DEFAULT_PAYMENT_MODES,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   GIFT_CARDS_SUBCOLLECTION,
+  TENANT_DATA_COLLECTIONS,
 } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -67,7 +70,12 @@ import {
 } from './lib/affiliations'
 import { buildStorefrontPageLinks } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
-import { linkConnectAccount } from './lib/connect'
+import {
+  planSeedConnectAccounts,
+  linkSeedConnectAccount,
+  reportSeedConnectAccounts,
+} from './lib/connect'
+import { requireConsentExport } from './lib/exportConsentLedger'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -88,6 +96,8 @@ const { values: cli } = parseArgs({
   options: {
     lead: { type: 'string' },
     reset: { type: 'boolean', default: false },
+    // Skip the typed confirmation that --reset asks for against the cloud.
+    yes: { type: 'boolean', default: false },
     // `--target emulator` fills in the emulator host env vars below so you don't
     // have to; `cloud` (the default) targets linyup-sandbox via ADC.
     target: { type: 'string' },
@@ -98,8 +108,16 @@ const { values: cli } = parseArgs({
     // Pin the staff-login password instead of generating a random one — use it
     // when reseeding so the lead's known password keeps working.
     password: { type: 'string' },
+    // Q13's escape hatch, typed rather than defaulted: --reset destroys every
+    // signature the tenant collected, and this is what says "I know it holds
+    // none". Echoed to the console, which is a destructive run's only record.
+    'no-consent-export': { type: 'boolean', default: false },
   },
 })
+
+/** Where the pre-teardown consent ledgers land. Under `exports/`, which is
+ *  gitignored: they carry names, addresses and IP addresses. */
+const CONSENT_EXPORT_DIR = path.resolve(process.cwd(), 'exports', 'consent-ledgers')
 const LEAD = cli.lead ?? process.env.LEAD
 if (!LEAD || !/^[a-z0-9-]+$/.test(LEAD)) {
   console.error(
@@ -433,40 +451,47 @@ async function resolveSectionAssets(
 }
 
 // ── lead-scoped reset (--reset) ─────────────────────────────────────────────
-// Tears down ONLY this lead's tenant. Mirrors TENANT_DATA_COLLECTIONS +
-// tenantStoragePrefix in packages/shared/src/tenantData.ts (re-declared here —
-// scripts don't resolve the workspace import; keep in sync with that file).
+// Tears down ONLY this lead's tenant, driven by the SHARED manifest
+// (TENANT_DATA_COLLECTIONS in packages/shared/src/tenantData.ts). This used to
+// be a hand-copied list and it went stale — `availability_exceptions` (coach
+// time-off) and `feedback` were added to the shared manifest but never here, so
+// a --reset left them behind. The shared list carries a completeness test; a
+// local copy carries nothing. Never re-introduce one.
+
+// Structural type for the imported manifest: tsconfig.scripts.json doesn't
+// resolve the @linyup/shared types (the import is `any` at compile time even
+// though it resolves fine at runtime), so annotate rather than infer.
+type TenantCollection = {
+  collection: string
+  match: { by: 'field'; field: string } | { by: 'docId' }
+}
+const TENANT_COLLECTIONS: TenantCollection[] = TENANT_DATA_COLLECTIONS
 
 const TENANT_FIELD_COLLECTIONS: { collection: string; field: string }[] = [
-  { collection: 'contacts', field: 'teamId' },
-  { collection: 'sessions', field: 'teamId' },
-  { collection: 'activities', field: 'teamId' },
-  { collection: 'events', field: 'teamId' },
-  { collection: 'checkins', field: 'teamId' },
-  { collection: 'session_series', field: 'teamId' },
-  { collection: 'courses', field: 'teamId' },
-  { collection: 'forms', field: 'teamId' },
-  { collection: 'documents', field: 'teamId' },
-  { collection: 'availability', field: 'teamId' },
-  { collection: 'referrals', field: 'team_id' },
-  { collection: 'referral_codes', field: 'teamId' },
-  { collection: 'connect_accounts', field: 'teamId' },
-  { collection: 'saas_checkout_attempts', field: 'teamId' },
+  ...TENANT_COLLECTIONS.flatMap((c) =>
+    c.match.by === 'field' ? [{ collection: c.collection, field: c.match.field }] : []
+  ),
   // Legacy: nothing writes auth_tokens any more (the mechanism was dead and was
-  // removed 2026-07-17), but keep purging it so docs left by earlier seed runs of
-  // an already-provisioned sandbox still get cleaned up on --reset.
+  // removed 2026-07-17), so it is absent from the shared manifest — but keep
+  // purging it so docs left by earlier seed runs still get cleaned up.
   { collection: 'auth_tokens', field: 'teamId' },
 ]
-const TENANT_DOCID_COLLECTIONS = [
-  'saas_subscriptions',
-  'site_drafts',
-  'site_published',
-  'embed_widgets',
-  'messaging_policies',
-]
+const TENANT_DOCID_COLLECTIONS: string[] = TENANT_COLLECTIONS.flatMap((c) =>
+  c.match.by === 'docId' ? [c.collection] : []
+)
 
 async function resetLeadTenant(teamId: string) {
   console.log(`   ⟲ resetting tenant '${teamId}'…`)
+
+  // EXPORT BEFORE TEARDOWN (Q13). `documents` is swept by teamId below, so this
+  // delete destroys every signature the tenant collected — the acceptance
+  // events, the immutable version snapshots their hashes point at, and the
+  // signer rows. The ledger is written to disk FIRST, and a failure refuses the
+  // whole reset rather than proceeding on the guess that there was nothing to
+  // keep. A lead sandbox rarely holds a real signature; the gate is here anyway,
+  // because a teardown path that only exports sometimes is a teardown path
+  // nobody can rely on.
+  await requireConsentExport(db, [teamId], CONSENT_EXPORT_DIR, { skip: cli['no-consent-export'] })
 
   // teams/{teamId} subtree (members, plugins, subscription_types, products, …)
   await db.recursiveDelete(db.collection('teams').doc(teamId))
@@ -696,9 +721,10 @@ async function seedLeadTenant(profile: LeadProfile) {
     `teams/${teamId}/portal/hero`
   )
 
-  // Booking settings — seeded to BOTH the public_profile (read by the public
-  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
-  // admin Settings → Booking form).
+  // Booking settings — ONE store, the team's public_profile: the public booking
+  // flow, the mobile app, the booking callables and the admin Settings → Booking
+  // form all read it there. (There used to be a team-doc mirror at
+  // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
   const bookingSettings = {
     flowType: 'activity-first',
     // Cover the materialized future window so the booking page shows it all.
@@ -743,7 +769,6 @@ async function seedLeadTenant(profile: LeadProfile) {
       settings: {
         gamification: profile.gamification,
         teamEmail: profile.contactEmail,
-        booking: bookingSettings,
         giftCards: giftCardSettings,
         noShowPolicy: noShowPolicySettings,
         ...(profile.bookingConfirmationInstructions
@@ -875,17 +900,14 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // Stripe Connect — wire a TEST connected account so "pay with Linyup" works out
-  // of the box (survives reseeds). Source: --connect flag > env > profile field.
-  // MUST run after the full team set() above, since it merge-adds teams/{id}.payments.
-  const connectAccount = cli.connect ?? process.env.STRIPE_CONNECT_TEST_ACCOUNT ?? profile.stripeConnectTestAccount
-  if (connectAccount) {
-    if (!connectAccount.startsWith('acct_')) {
-      console.warn(`   ⚠️  Ignoring Connect account '${connectAccount}' — expected an acct_… id.`)
-    } else {
-      await linkConnectAccount({ db, teamId, accountId: connectAccount })
-      console.log(`   💳 Wired Stripe Connect (${connectAccount}) — "pay with Linyup" ready.`)
-    }
-  }
+  // of the box (survives reseeds). Source: --connect flag > profile field > the
+  // STRIPE_CONNECT_TEST_ACCOUNT env var; nothing at all => the tenant keeps the
+  // honest closed state (no shop, no prices) and the summary says so. The write
+  // itself happens at the END of this function, after the public_profile set()
+  // below — see linkSeedConnectAccount.
+  planSeedConnectAccounts([teamId], {
+    pinned: { [teamId]: cli.connect ?? profile.stripeConnectTestAccount },
+  })
 
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
   // would produce). price.id must equal the raw subscription_types price id or the
@@ -2195,6 +2217,11 @@ async function seedLeadTenant(profile: LeadProfile) {
       ? { name: `${pool[demoIdx].firstname} ${pool[demoIdx].lastname}`.trim(), emails: demoLoginEmails }
       : null
 
+  // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
+  // Planned above; written here so it merges onto the team public_profile rather
+  // than being overwritten by it. Silent no-op when no account is configured.
+  await linkSeedConnectAccount({ db, teamId })
+
   return { teamId, studentEmail, sessionCount: sessionDefs.length, demoContact }
 }
 
@@ -2378,9 +2405,13 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     ...(profile.customFieldDefinitions?.length ? [{ id: 'custom-fields' }] : []),
     ...(profile.contactGroups?.length ? [{ id: 'contact-groups' }] : []),
     ...(profile.forms?.length ? [{ id: 'custom-forms' }] : []),
-    ...(profile.documents.length > 0
-      ? [{ id: 'documents', config: { signupDocumentIds: signupDocIds } }]
-      : []),
+    // Gift cards are install-gated (Wave 3.5), and syncTeamPublicProfile refuses
+    // to mirror `giftCards.enabled` without the plugin — so a lead tenant with
+    // gift cards configured needs it, or the offer silently vanishes from the
+    // shop mid prospect demo.
+    ...(profile.giftCards?.enabled ? [{ id: 'gift-cards' }] : []),
+    // NOT 'documents' — a default feature on every plan, not a plugin. Its
+    // signup-consent selection goes to teams/{teamId}/settings/documents below.
   ]
   for (const p of plugins) {
     await db
@@ -2397,6 +2428,15 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
         config: p.config ?? {},
         updated_at: ts(daysFromNow(-200)),
       })
+  }
+
+  if (profile.documents.length > 0) {
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('settings')
+      .doc('documents')
+      .set({ signupDocumentIds: signupDocIds, updated_at: ts(daysFromNow(-200)) })
   }
 
   // ── website: profile-authored sections with asset resolution ───────────────
@@ -2810,7 +2850,29 @@ async function main() {
     await enableEmailPasswordSignIn()
   }
 
-  if (cli.reset) await resetLeadTenant(teamId)
+  if (cli.reset) {
+    // Typed confirmation against the CLOUD sandbox — a typo in --lead would
+    // otherwise silently destroy a different (possibly live) prospect demo.
+    // The emulator is disposable, so it skips straight through; --yes is the
+    // non-interactive escape hatch.
+    if (!USE_EMULATOR && !cli.yes) {
+      if (!process.stdin.isTTY) {
+        console.error(`\n❌ Refusing to --reset '${teamId}' non-interactively without --yes.\n`)
+        process.exit(1)
+      }
+      const rl = createInterface({ input: process.stdin, output: process.stdout })
+      const answer = await rl.question(
+        `\n⚠️  This DESTROYS the '${teamId}' tenant in ${PROJECT_ID} (Firestore + Storage + logins).\n` +
+          `   Type '${LEAD}' to confirm: `
+      )
+      rl.close()
+      if (answer.trim() !== LEAD) {
+        console.error('❌ Confirmation did not match — aborted. Nothing was deleted.\n')
+        process.exit(1)
+      }
+    }
+    await resetLeadTenant(teamId)
+  }
 
   const { studentEmail, sessionCount, demoContact } = await seedLeadTenant(profile)
 
@@ -2839,6 +2901,7 @@ async function main() {
   console.log(
     `\n   Public surfaces: /public/${profile.slug} (bio-link · site · booking · shop · space · appointments)`
   )
+  reportSeedConnectAccounts()
   if (profile.notes?.length) {
     console.log('\n   ⚠ Notes:')
     for (const n of profile.notes) console.log(`     · ${n}`)

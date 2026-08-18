@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Sparkles, Send, Loader2 } from 'lucide-react'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
@@ -63,16 +64,22 @@ function AssistantPanel() {
 
   return (
     <>
-      {/* Floating launcher */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t('launcherLabel')}
-        title={t('launcherLabel')}
-        className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-      >
-        <Sparkles className="h-5 w-5" />
-      </button>
+      {/* Floating launcher, in the shell lane — stacked above whatever primary
+          action the page mounted, or in the corner if it mounted none. The
+          position is the dock's, not ours: this used to hardcode the bottom-right
+          corner and swallow taps meant for a page FAB or a dirty form's Save
+          (UX-9). Never give this a `fixed bottom-*` again. */}
+      <FloatingSlot lane="shell">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={t('launcherLabel')}
+          title={t('launcherLabel')}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+        >
+          <Sparkles className="h-5 w-5" />
+        </button>
+      </FloatingSlot>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex flex-col gap-0 p-0 sm:max-w-md!">

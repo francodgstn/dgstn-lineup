@@ -20,16 +20,30 @@
  *   • Real project (default):  ADC via `applicationDefault()` → linyup-sandbox.
  *     Run `gcloud auth application-default login` once; the identity needs Editor
  *     (or Firebase Admin + Datastore + Identity Toolkit Admin).
- *       pnpm seed:sandbox
+ *       pnpm sandbox:seed
  *   • Local emulator (no cloud project needed): set the emulator host vars and the
  *     seed writes into the emulator's `demo-linyup` namespace (what the web app
  *     reads). Useful for exercising /try before the project exists:
  *       FIRESTORE_EMULATOR_HOST=localhost:8080 \
  *       FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
- *       pnpm seed:sandbox
+ *       pnpm sandbox:seed
  *
  * Idempotent: deterministic IDs + set(), so re-running overwrites. For a clean
- * slate against the real project, run `pnpm reset:sandbox` first.
+ * slate against the real project, run `pnpm sandbox:reset` first.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * PRICED SURFACES need a Stripe TEST connected account. `payments_enabled` fails
+ * CLOSED (UX-33), so without one the /try tenants show no shop, no drop-in price,
+ * no priced trial and no priced appointment duration. Export an already-onboarded
+ * TEST account id before seeding to light them up (and get a checkout that really
+ * completes):
+ *
+ *   export STRIPE_CONNECT_TEST_ACCOUNT=acct_123               # → sandbox-grappling
+ *   export STRIPE_CONNECT_TEST_ACCOUNT=sandbox-yoga=acct_123  # → pin a tenant
+ *
+ * ONE account backs exactly ONE team — the six tenants are served in profile order
+ * until the configured accounts run out. Unset ⇒ silent skip (one warning line).
+ * Full setup notes: scripts/lib/connect.ts.
  */
 
 import admin from 'firebase-admin'
@@ -50,15 +64,35 @@ import {
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 import {
+  planSeedConnectAccounts,
+  linkSeedConnectAccount,
+  reportSeedConnectAccounts,
+} from './lib/connect'
+import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
+// Emulator convenience: the Auth host is required alongside Firestore — default
+// it so a forgotten env var doesn't silently create auth users (with the shared
+// demo password) on the REAL sandbox project while Firestore writes go local.
+// Same guard as seed-lead.ts.
+if (USE_EMULATOR && !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099'
+}
 // On the emulator, write into the namespace the web app + emulator use
 // (demo-linyup); against the cloud, target the dedicated sandbox project.
 const PROJECT_ID = USE_EMULATOR ? process.env.GCLOUD_PROJECT || 'demo-linyup' : 'linyup-sandbox'
+
+// Guard: this script only ever targets the sandbox project (or the emulator) —
+// it must never write demo teams into staging/production.
+const envProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT
+if (!USE_EMULATOR && envProject && envProject !== PROJECT_ID) {
+  console.error(`❌ Refusing to run: ambient project '${envProject}' != '${PROJECT_ID}'.`)
+  process.exit(1)
+}
 
 admin.initializeApp(
   USE_EMULATOR
@@ -1510,9 +1544,10 @@ async function seedDemoTeam(profile: SectorProfile) {
   // courses, website), so the bio-link surfaces all of them.
   const portalLinks = buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
-  // Booking settings — seeded to BOTH the public_profile (read by the public
-  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
-  // admin Settings → Booking form).
+  // Booking settings — ONE store, the team's public_profile: the public booking
+  // flow, the mobile app, the booking callables and the admin Settings → Booking
+  // form all read it there. (There used to be a team-doc mirror at
+  // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
   const bookingSettings = {
     flowType: 'activity-first',
     windowMonths: 2,
@@ -1542,7 +1577,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       // Standalone Studio demo teams enable the affiliation axis (team-local 'club').
       affiliations_enabled: true,
       ranking_systems: rankingSystem ? [{ ...rankingSystem, is_primary: true }] : [],
-      settings: { gamification: gamificationSettings, teamEmail: email, booking: bookingSettings },
+      settings: { gamification: gamificationSettings, teamEmail: email },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground,
@@ -2607,6 +2642,13 @@ async function seedDemoTeam(profile: SectorProfile) {
     claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
   })
 
+  // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
+  // Links a REAL onboarded test account when STRIPE_CONNECT_TEST_ACCOUNT names
+  // one for this team; silently leaves the team payment-less otherwise. Last, so
+  // it merges onto the public_profile written above rather than being overwritten
+  // by it. See scripts/lib/connect.ts for the one-time setup.
+  await linkSeedConnectAccount({ db, teamId })
+
   console.log(
     `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
   )
@@ -2820,12 +2862,9 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     { id: 'gamification' }, // seed already writes scores/badges/settings
     { id: 'website' },
     { id: 'online-courses' },
-    {
-      id: 'documents',
-      config: {
-        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      },
-    },
+    // NOT 'documents' — it is a default feature on every plan, not a plugin. Its
+    // signup-consent selection is written to teams/{teamId}/settings/documents
+    // below.
   ]
   for (const p of plugins) {
     await db
@@ -2843,6 +2882,17 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
         updated_at: ts(daysFromNow(-200)),
       })
   }
+
+  // Documents settings — the signup-consent selection, in its post-plugin home.
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('settings')
+    .doc('documents')
+    .set({
+      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      updated_at: ts(daysFromNow(-200)),
+    })
 
   // ── website plugin: a published one-page site (draft + public snapshot) ──────
   // hero + about + schedule (live sessions) + contact — every section populated.
@@ -3406,6 +3456,11 @@ async function main() {
 
   if (!USE_EMULATOR) await enableEmailPasswordSignIn()
 
+  // Which teams get a Stripe TEST connected account — one account backs exactly
+  // ONE team (see scripts/lib/connect.ts), so the six /try tenants are served in
+  // profile order until the configured accounts run out.
+  planSeedConnectAccounts(SECTOR_PROFILES.map((p) => `sandbox-${p.key}`))
+
   for (const profile of SECTOR_PROFILES) {
     await seedDemoTeam(profile)
   }
@@ -3425,6 +3480,7 @@ async function main() {
   for (const p of SECTOR_PROFILES) {
     console.log(`   ${p.teamName.padEnd(26)} → /public/${p.teamSlug}`)
   }
+  reportSeedConnectAccounts()
   console.log('')
 }
 

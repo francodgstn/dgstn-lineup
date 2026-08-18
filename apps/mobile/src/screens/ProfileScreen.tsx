@@ -34,6 +34,7 @@ import { FirestoreService } from '../services/firestore';
 import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
+import { waiverRefusal } from '../utils/waiverRefusal';
 
 // Redesigned Components
 import { ProfileHeader } from '../components/profile/ProfileHeader';
@@ -288,6 +289,31 @@ export const ProfileScreen: React.FC = () => {
     setTimeout(() => setCheckInFeedback(null), 5000);
   };
 
+  // A waiver refusal is not a failure of the scan and must not read like one.
+  // `selfCheckIn` is gated (a member scanning alone is the one attendance path
+  // with nobody supervising it), so an unsigned member gets a named document and
+  // — when the server sent a link — a way to go and sign it on the phone they are
+  // already holding. Everything else keeps the existing generic message.
+  const handleCheckInError = (err: unknown) => {
+    const waiver = waiverRefusal(err);
+    if (!waiver) {
+      showFeedback({
+        type: 'error',
+        message: (err as { message?: string })?.message || 'Check-in failed. Please try again.',
+      });
+      return;
+    }
+    if (waiver.signUrl) {
+      const url = waiver.signUrl;
+      Alert.alert('Signature needed', waiver.message, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open', onPress: () => { Linking.openURL(url).catch(() => undefined); } },
+      ]);
+      return;
+    }
+    showFeedback({ type: 'error', message: waiver.message });
+  };
+
   const refreshAgenda = useCallback(async () => {
     if (!contact?.teamId || !contact?.id) return;
     const startDate = new Date();
@@ -313,8 +339,8 @@ export const ProfileScreen: React.FC = () => {
         showFeedback({ type: 'success', sessionName: result.sessionName, sessionStart: result.sessionStart });
         refreshAgenda();
       }
-    } catch (err: any) {
-      showFeedback({ type: 'error', message: err?.message || 'Check-in failed. Please try again.' });
+    } catch (err: unknown) {
+      handleCheckInError(err);
     } finally {
       setCheckInLoading(false);
     }
@@ -332,8 +358,8 @@ export const ProfileScreen: React.FC = () => {
       } else {
         showFeedback({ type: 'error', message: 'Check-in failed. Please try again.' });
       }
-    } catch (err: any) {
-      showFeedback({ type: 'error', message: err?.message || 'Check-in failed. Please try again.' });
+    } catch (err: unknown) {
+      handleCheckInError(err);
     } finally {
       setCheckInLoading(false);
       setPendingTeamSlug(null);

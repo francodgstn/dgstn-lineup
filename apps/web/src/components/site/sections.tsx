@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   collectionGroup,
   query,
@@ -12,7 +13,9 @@ import {
   doc,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
+import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { formatCurrency } from '@/lib/format'
 import {
   Instagram,
@@ -33,6 +36,8 @@ import {
   CalendarRange,
   List,
   ArrowRight,
+  Check,
+  Tag,
   User,
   X,
 } from 'lucide-react'
@@ -50,17 +55,66 @@ import type {
   SocialLink,
   OrgSiteTeamRef,
 } from '@linyup/shared'
-import { compareActivities, type ActivityAccessRule, type ActivityMemberBenefit } from '@linyup/shared'
-import { resolveActivityTerms, resolveActivityPricingDisplay, type ActivityTerm, type SubLookup } from '@/lib/activityTerms'
+import {
+  browseDurationMinutes,
+  compareActivities,
+  mergeAvailabilitySlots,
+  resolveActivityAccessRule,
+  resolveDurationSale,
+  type ActivityAccessRule,
+  type ActivityMemberBenefit,
+} from '@linyup/shared'
+import {
+  resolveActivityTerms,
+  resolveActivityPricingDisplay,
+  type ActivityTerm,
+  type SubLookup,
+} from '@/lib/activityTerms'
 import type { SitePalette } from './theme'
 import { ctaHref } from './theme'
+import { publicHrefLocalized, publicSubHrefLocalized } from '@/lib/publicRoutes'
+import { IntroOfferLine, readIntroTerms } from '@/components/pricing/IntroOfferLine'
+import type { BookIntent } from '@/components/booking/BookingOverlay'
 import { usePlaces } from '@/hooks/usePlaces'
 import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
 import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
 
+/**
+ * THE CHROME IS TRANSLATED; THE STUDIO'S CONTENT NEVER IS.
+ *
+ * This renderer draws two kinds of text and they are governed differently:
+ *
+ *   1. The studio's own words — headings, subheadings, body copy, activity
+ *      names and descriptions, plan names, place names. These are read from
+ *      Firestore verbatim and rendered verbatim, in whatever language the
+ *      studio wrote them. Machine-translating them is NOT a feature: tenant
+ *      content translation is a findability concern, there is no per-locale
+ *      authoring UI, and a mistranslated class description is the studio's
+ *      words put in their mouth.
+ *   2. Linyup's chrome — "Book", "Loading…", "Free trial", "/mo", the empty
+ *      states, the heading FALLBACKS used when a studio left one blank. None
+ *      of it is the studio's words, and every bit of it used to arrive in
+ *      English on a German site. It lives in the `Site` message namespace and
+ *      follows the visitor's locale like the rest of the app.
+ *
+ * The precedent for the split is IntroOfferLine: this block's chrome was not
+ * translated, but the intro-offer sentence was, "because it is a price promise
+ * and a mistranslated one is a lie". Every money term here is a price promise,
+ * so they all moved.
+ */
+export type SiteT = ReturnType<typeof useTranslations>
+
 export interface RenderCtx {
   palette: SitePalette
   slug: string
+  /**
+   * Active locale. These blocks emit RAW `<a href>` — they cannot use next-intl's
+   * `Link`, because the same components render inside a cross-origin iframe
+   * (app/[locale]/embed/…) where every anchor click is delegated to `window.open`,
+   * and in the website builder with no router context. So the locale prefix has
+   * to be baked into the href by `publicHrefLocalized`.
+   */
+  locale: string
   /** Team sites only (undefined for org sites — use `orgId`/`orgTeams` instead). */
   teamId?: string
   /** Org sites only. */
@@ -69,7 +123,27 @@ export interface RenderCtx {
    *  locations/coaches aggregate blocks to fetch each club's live public_profile. */
   orgTeams?: OrgSiteTeamRef[]
   preview: boolean
+  /**
+   * Whether the studio can actually BE PAID (TeamPublicProfile.payments_enabled).
+   * Set by the LIVE team site, which resolves the team; absent on the builder
+   * canvas, the org site and the embed, none of which do. A priced door is
+   * advertised only when true — see the pricing lines in the activities block
+   * (UX-33). Absent ⇒ treated as "unknown", and the prices are shown: the
+   * builder must render the studio's own configuration back to it, and the org
+   * site's activity blocks belong to member teams whose accounts differ.
+   */
+  paymentsEnabled?: boolean
   socialLinks?: SocialLink[]
+  /**
+   * Set only by the LIVE team site (`PublicSite`), which hosts the booking
+   * overlay. When present, booking CTAs open the funnel in place instead of
+   * navigating away.
+   *
+   * Absent everywhere else on purpose: the website builder's canvas and the
+   * cross-origin embed both render these same blocks with no
+   * `PublicTeamProvider`, and the overlay would throw there.
+   */
+  onBook?: (intent: BookIntent) => void
 }
 
 export const SOCIAL_ICONS: Record<string, React.FC<{ className?: string }>> = {
@@ -96,11 +170,85 @@ function linkProps(href: string | undefined, preview: boolean, external = false)
   return external ? { href, target: '_blank' as const, rel: 'noopener noreferrer' } : { href }
 }
 
+// ─── Public-flow hrefs ───────────────────────────────────────────────────────
+//
+// Every link out of the website into a booking/shop flow goes through these.
+// Two invariants, both easy to lose when hand-building template literals:
+//   1. locale-PREFIXED — these render as raw <a> (see RenderCtx.locale)
+//   2. `from: 'site'` — so the flow's back link returns to THIS website, not to
+//      whatever surface the studio picked as its default landing.
+
+/** Where an activity card's "Book" goes. Appointments have their own picker. */
+function activityBookHref(
+  ctx: RenderCtx,
+  a: { id: string; slug?: string | null; activityType?: string },
+  fallbackToBooking = false
+): string | undefined {
+  const { locale, slug } = ctx
+  if (a.activityType === 'appointment')
+    return publicHrefLocalized(locale, slug, 'appointments', { activity: a.id, from: 'site' })
+  if (a.slug) return publicSubHrefLocalized(locale, slug, 'booking', a.slug, { from: 'site' })
+  return fallbackToBooking
+    ? publicHrefLocalized(locale, slug, 'booking', { from: 'site' })
+    : undefined
+}
+
+/**
+ * Where a CLICKED session goes: straight to that class at that time.
+ *
+ * The whole point of the schedule block. Until this existed the CTA was one
+ * constant `/booking` for every row, so picking "Fri 18:00 Yoga" landed the
+ * visitor on a blank activity picker and made them find it again.
+ */
+function sessionBookHref(ctx: RenderCtx, session: { id: string }): string {
+  return publicHrefLocalized(ctx.locale, ctx.slug, 'booking', {
+    session: session.id,
+    from: 'site',
+  })
+}
+
+/** Which funnel an activity card opens: the appointment picker, or classes. */
+function activityIntent(a: {
+  id: string
+  slug?: string | null
+  activityType?: string
+}): BookIntent {
+  return a.activityType === 'appointment'
+    ? { kind: 'appointment', activityId: a.id }
+    : { kind: 'activity', activitySlug: a.slug ?? '' }
+}
+
+/**
+ * Anchor props for a booking CTA: opens the overlay when the host provides one
+ * (`ctx.onBook`), otherwise a plain navigation to the canonical route.
+ *
+ * The `href` STAYS on the anchor even when onBook handles the click, and that is
+ * load-bearing, not decoration:
+ *   - middle-click / cmd-click / "open in new tab" keep working
+ *   - crawlers keep the link into the booking page
+ *   - the embed iframe's click delegation still has an anchor to read
+ * Never turn these into bare <button>s.
+ */
+export function bookProps(href: string | undefined, ctx: RenderCtx, intent: BookIntent) {
+  // Preview wins FIRST — the builder canvas stays inert no matter what.
+  if (ctx.preview) return linkProps(undefined, true)
+  if (!ctx.onBook || !href) return linkProps(href, ctx.preview)
+  return {
+    href,
+    onClick: (e: React.MouseEvent) => {
+      // Leave new-tab/new-window intents to the browser.
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      e.preventDefault()
+      ctx.onBook!(intent)
+    },
+  }
+}
+
 // ─── Hero ───────────────────────────────────────────────────────────────────
 
 function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
-  const { palette, slug, preview } = ctx
-  const href = ctaHref(section.cta, slug)
+  const { palette, slug, locale, preview } = ctx
+  const href = ctaHref(section.cta, slug, locale)
   const center = section.align !== 'left'
   const overlay = (section.overlay ?? 40) / 100
 
@@ -146,7 +294,10 @@ function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
         {section.cta?.label && (
           <div className={`mt-8 flex ${center ? 'justify-center' : 'justify-start'}`}>
             <a
-              {...linkProps(href, preview, section.cta.action === 'url')}
+              // A 'booking' CTA opens the overlay; signup/external stay navigations.
+              {...(section.cta.action === 'booking'
+                ? bookProps(href, ctx, { kind: 'root' })
+                : linkProps(href, preview, section.cta.action === 'url'))}
               className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-base font-semibold shadow-lg transition-transform hover:scale-[1.03]"
               style={{ background: palette.accent, color: palette.onAccent }}
             >
@@ -229,6 +380,7 @@ function ContentText({ section, palette }: { section: ContentSection; palette: S
 // ─── Gallery ────────────────────────────────────────────────────────────────
 
 function GalleryBlock({ section, ctx }: { section: GallerySection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette } = ctx
   const cols =
     section.columns === 2
@@ -263,7 +415,7 @@ function GalleryBlock({ section, ctx }: { section: GallerySection; ctx: RenderCt
           ))}
           {!section.images.length && (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No photos yet.
+              {t('emptyPhotos')}
             </p>
           )}
         </div>
@@ -296,32 +448,30 @@ interface ActivityEntry {
    *  FREE (today's behaviour); a number ⇒ the trial costs that instead. */
   trialPriceAmount?: number | null
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
-  durations?: Array<{ minutes: number; priceAmount: number | null }>
+  durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
   memberBenefit?: ActivityMemberBenefit
 }
 
-// Public website chip labels are hardcoded English, matching this renderer's
-// existing convention (it isn't i18n-aware — see the other literal strings in
-// this block, e.g. "Free trial", "Book"). Benefit chips stay GENERIC (no plan
-// names — the website has no subscription-type list loaded).
-function activityTermLabel(term: ActivityTerm, currency: string): string | null {
+// Benefit chips stay GENERIC (no plan names — the website has no
+// subscription-type list loaded).
+//
+// MONEY TERMS ONLY. Its one caller (payPerVisitLine) filters to price / dropIn /
+// benefit*, so a 'gate' or 'trial' term never arrives here; access is said in
+// full on the activity CARD, not compressed into a chip on the pricing block.
+// A gate arm lived here until 2026-08 and was unreachable the whole time.
+function activityTermLabel(term: ActivityTerm, currency: string, t: SiteT): string | null {
   switch (term.kind) {
-    case 'gate':
-      // Default vocabulary is "subscription", not "membership" — a studio may
-      // separately define "membership" as its own term (the affiliation axis),
-      // but the subscription gate stays "Subscription required" by default.
-      return term.tier === 'subscription' ? 'Subscription required' : 'Members only'
     case 'dropIn':
-      return `Drop-in ${formatCurrency(term.amount ?? 0, currency)}`
+      return t('termPerClass', { price: formatCurrency(term.amount ?? 0, currency) })
     case 'price':
       return term.min === term.max
-        ? `From ${formatCurrency(term.min ?? 0, currency)}`
+        ? t('termFrom', { price: formatCurrency(term.min ?? 0, currency) })
         : `${formatCurrency(term.min ?? 0, currency)}–${formatCurrency(term.max ?? 0, currency)}`
     case 'benefitIncluded':
-      return 'Included with subscription'
+      return t('termIncludedWithSubscription')
     case 'benefitDiscount':
-      return `−${term.percent ?? 0}% for members`
+      return t('termMemberDiscount', { percent: term.percent ?? 0 })
     default:
       return null
   }
@@ -333,7 +483,8 @@ function activityTermLabel(term: ActivityTerm, currency: string): string | null 
 // per visit, so it never appears on the Pricing block's pay-per-visit card.
 function activityHasMoneyStory(a: ActivityEntry): boolean {
   if (a.activityType === 'appointment') {
-    return (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+    // A benefit_only length is not sold per visit — it is sold as the plan.
+    return (a.durations ?? []).some((d) => resolveDurationSale(d).priceAmount !== null)
   }
   return a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
 }
@@ -341,7 +492,7 @@ function activityHasMoneyStory(a: ActivityEntry): boolean {
 // One activity's money terms as a "·"-joined line (price / drop-in / member
 // benefit) for the Pricing block's pay-per-visit card. Generic labels — the
 // website has no subscription-type list, same convention as the chips.
-function payPerVisitLine(a: ActivityEntry, currency: string): string {
+function payPerVisitLine(a: ActivityEntry, currency: string, t: SiteT): string {
   return resolveActivityTerms({
     type: a.activityType,
     dropIn: a.dropIn,
@@ -352,13 +503,94 @@ function payPerVisitLine(a: ActivityEntry, currency: string): string {
     .filter(
       (term) => term.kind === 'price' || term.kind === 'dropIn' || term.kind.startsWith('benefit')
     )
-    .map((term) => activityTermLabel(term, currency))
+    .map((term) => activityTermLabel(term, currency, t))
     .filter((l): l is string => !!l)
     .join(' · ')
 }
 
+// ─── activity card pricing (UX-94: hide / list / compact) ────────────────────
+//
+// A CARD'S LINES COME IN TWO KINDS AND ONLY ONE OF THEM IS OPTIONAL.
+//
+//   • GATE lines say what a visitor MUST have to book at all: "Open to members"
+//     (the members tier — signing up, no money) and "Included with {plan}" on a
+//     subscription-gated CLASS, where the named plan IS the key. These render
+//     under every display mode. A studio that hides them buys itself a card a
+//     prospect clicks and a booking flow that then refuses them, which is worse
+//     than the price it was trying not to show.
+//   • MONEY lines say what a visitor could CHOOSE to spend: drop-in, appointment
+//     prices, a member discount, and an appointment's "included with {plan}"
+//     benefit — an appointment has NO access gate (the price is the gate), so
+//     that line names a saving, not a requirement.
+//
+// `pricingDisplay` governs the second kind only. Under 'hidden' a gate line is
+// still drawn but WITHOUT its price ("Included with Premium", not "… — CHF
+// 89/mo"), which is the honest reduction: the requirement survives, the amount
+// does not. Under 'compact' the gate line keeps its price inline — splitting it
+// would either duplicate the line or strip the one number that makes the
+// requirement actionable — and only the optional spend collapses.
+interface CardPricing {
+  /** Requirements. Always rendered. */
+  gate: string[]
+  /** Optional spend. Inline under 'list', behind the control under 'compact', absent under 'hidden'. */
+  money: string[]
+}
+
+function ActivityPricingLines({
+  pricing,
+  mode,
+  palette,
+  t,
+}: {
+  pricing: CardPricing
+  mode: 'list' | 'compact' | 'hidden'
+  palette: SitePalette
+  t: SiteT
+}) {
+  const [open, setOpen] = useState(false)
+  const { gate, money } = pricing
+  const inlineMoney = mode === 'list' || (mode === 'compact' && open)
+  const rows = [...gate, ...(inlineMoney ? money : [])]
+  const showToggle = mode === 'compact' && money.length > 0
+  if (rows.length === 0 && !showToggle) return null
+
+  return (
+    <div className="mt-3 border-t" style={{ borderColor: palette.border }}>
+      {rows.map((line, i) => (
+        <p
+          key={line + i}
+          className={`py-1.5 text-sm${i > 0 ? ' border-t' : ''}`}
+          style={{ color: palette.muted, borderColor: palette.border }}
+        >
+          {line}
+        </p>
+      ))}
+      {showToggle && (
+        // Icon + tooltip, and ALSO tap-to-open: a `title` alone is invisible on
+        // a phone, which is where most of a studio's visitors read this card.
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title={money.join(' · ')}
+          aria-expanded={open}
+          className={`flex items-center gap-1.5 py-1.5 text-sm transition-opacity hover:opacity-70${
+            rows.length > 0 ? ' border-t' : ''
+          }`}
+          style={{ color: palette.muted, borderColor: palette.border }}
+        >
+          <Tag className="h-3.5 w-3.5 shrink-0" />
+          {open ? t('pricesHide') : t('pricesShow')}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
-  const { palette, slug, teamId, preview } = ctx
+  const t = useTranslations('Site')
+  // slug/locale/preview are read from `ctx` by activityBookHref and bookProps —
+  // not needed directly here.
+  const { palette, teamId } = ctx
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [currency, setCurrency] = useState('CHF')
   // Subscription plans (id → name + price) so a card can name which plan includes
@@ -373,13 +605,14 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
       if (!p) return null
       const price = p.prices?.[0]
       return {
+        id: p.id,
         name: p.name,
         priceLabel: price
-          ? `${formatCurrency(price.amount, currency)}${RECURRENCE_SUFFIX[price.recurrence] ?? ''}`
+          ? `${formatCurrency(price.amount, currency)}${recurrenceSuffix(price.recurrence, t)}`
           : null,
       }
     }
-  }, [subPlans, currency])
+  }, [subPlans, currency, t])
 
   useEffect(() => {
     let alive = true
@@ -419,7 +652,10 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
         setCurrency((teamSnap.data()?.default_currency as string | undefined) ?? 'CHF')
         setSubPlans((teamSnap.data()?.aggregator_subscription_types as PlanEntry[] | undefined) ?? [])
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // A public marketing page: an empty activities block reads as "this
+        // studio teaches nothing". Keep the terminal state, lose the silence.
+        reportPublicLoadFailure('site/activities', err)
         if (alive) setActivities([])
       })
       .finally(() => {
@@ -430,66 +666,133 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
     }
   }, [teamId])
 
+  // Two arrangements of the SAME card. Only the wrapper direction and the image
+  // box differ — the body (chips, pricing rows, CTA) is shared, so the two can't
+  // drift apart.
+  const isList = section.layout === 'list'
+  // Hide / list / icon + tooltip (UX-94). Absent ⇒ 'list' — today's cards.
+  const pricingMode = section.pricingDisplay ?? 'list'
   const cols =
     section.columns === 2
       ? '@2xl:grid-cols-2'
       : section.columns === 4
         ? '@2xl:grid-cols-2 @5xl:grid-cols-4'
         : '@2xl:grid-cols-2 @5xl:grid-cols-3'
+  // List: one full-width row per activity, image left. Container queries (not
+  // viewport ones) because this also renders inside the embed iframe, where the
+  // frame — not the window — is what the layout must respond to.
+  const containerClass = isList
+    ? 'mt-10 flex flex-col gap-4'
+    : `mt-10 grid grid-cols-1 gap-5 ${cols}`
+  // Side-by-side only once there's room; below that a list row stacks like a card.
+  const cardClass = isList
+    ? 'flex flex-col overflow-hidden rounded-2xl border @2xl:flex-row'
+    : 'flex flex-col overflow-hidden rounded-2xl border'
+  const mediaClass = isList
+    ? 'relative aspect-[4/3] w-full shrink-0 @2xl:aspect-auto @2xl:w-56 @4xl:w-72'
+    : 'relative aspect-[4/3] w-full'
 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'What we offer'} palette={palette} />
+        <Heading text={section.heading ?? t('headingActivities')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
           </p>
         )}
-        <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
+        <div className={containerClass}>
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : activities.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No activities yet.
+              {t('emptyActivities')}
             </p>
           ) : (
             activities.map((a) => {
               // Appointments book via their own flow (per-coach slot picker).
-              const href = !section.showBooking
-                ? undefined
-                : a.activityType === 'appointment'
-                  ? `/public/${slug}/appointments?activity=${a.id}`
-                  : a.slug
-                    ? `/public/${slug}/booking/${a.slug}`
-                    : undefined
+              const href = section.showBooking ? activityBookHref(ctx, a) : undefined
               // Structured commercial display (locked with the user): Free trial
               // stays a ribbon on the image; the card shows a type chip (Class /
               // Appointment) + NAMED pricing lines ("Included with {sub} — {price}",
               // "Discount with {sub} — {%}", drop-in, appointment price). No generic
-              // "Subscription required" / "Members only".
+              // "Subscription required" chip — where a plan IS the key it is named,
+              // with its price. The one exception is the 'members' tier below,
+              // where there is no plan to name because none is required.
               const d = resolveActivityPricingDisplay({ ...a, type: a.activityType }, subLookup)
-              const pricingLines: string[] = []
-              for (const s of d.includedWith)
-                pricingLines.push(s.priceLabel ? `Included with ${s.name} — ${s.priceLabel}` : `Included with ${s.name}`)
-              for (const s of d.discountWith) pricingLines.push(`Discount with ${s.name} — ${s.percent}%`)
-              if (d.dropInAmount != null) pricingLines.push(`Drop-in ${formatCurrency(d.dropInAmount, currency)}`)
-              if (d.appointmentPrice)
-                pricingLines.push(
-                  d.appointmentPrice.min === d.appointmentPrice.max
-                    ? `From ${formatCurrency(d.appointmentPrice.min, currency)}`
-                    : `${formatCurrency(d.appointmentPrice.min, currency)}–${formatCurrency(d.appointmentPrice.max, currency)}`
-                )
+              // A price is only advertised where somebody could pay it. `false`
+              // is a resolved "this studio has no chargeable account"; undefined
+              // is "not resolved here" (builder / org site / embed) and keeps
+              // the previous behaviour. See RenderCtx.paymentsEnabled.
+              const showPrices = ctx.paymentsEnabled !== false
+              // TWO INDEPENDENT SWITCHES, kept apart on purpose.
+              //   `amountsShown`  — the STUDIO'S display choice (UX-94).
+              //   `showPrices`    — whether an ONLINE CHECKOUT could open at
+              //                     all; it governed the drop-in and
+              //                     appointment lines before this option
+              //                     existed and still governs only those.
+              // A membership price and a paid-trial badge are terms the studio
+              // charges however it collects them, so they follow the display
+              // choice alone — folding them into `showPrices` would have
+              // silently blanked them for every studio without Stripe.
+              const amountsShown = pricingMode !== 'hidden'
+              const amountsAllowed = amountsShown && showPrices
+              // Whether "Included with {plan}" is a REQUIREMENT here. Only a
+              // class carries an access rule; an appointment's identical-looking
+              // line comes from its member benefit and is a saving.
+              const subscriptionGated =
+                d.type === 'class' &&
+                resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })
+                  .type === 'subscription'
+              const gate: string[] = []
+              const money: string[] = []
+              // A 'members'-tier class (the DEFAULT for every new class) used to
+              // render nothing at all here: a name, a "Class" chip and a Book
+              // link, with no hint that membership is required — on the surface a
+              // prospect reaches earliest. It gets a line now, and the line names
+              // the gate that is enforced (being signed up) rather than a plan
+              // price nobody has to pay to book it. See `signedUpOnly`.
+              if (d.signedUpOnly) gate.push(t('signedUpOnlyLine'))
+              // A gated class whose plans are not public resolved to NO line at
+              // all before this — the card looked open. Hiding a price must
+              // never hide a gate, so the requirement is stated generically.
+              if (d.planRequired) gate.push(t('planRequiredLine'))
+              for (const s of d.includedWith) {
+                const line =
+                  s.priceLabel && amountsShown
+                    ? t('includedWithSubPriced', { name: s.name, price: s.priceLabel })
+                    : t('includedWithSub', { name: s.name })
+                ;(subscriptionGated ? gate : money).push(line)
+              }
+              if (amountsShown)
+                // A percentage off, not an amount to be paid online — this line
+                // never depended on `showPrices` and still does not.
+                for (const s of d.discountWith)
+                  money.push(t('discountWithSub', { name: s.name, percent: s.percent }))
+              if (amountsAllowed) {
+                if (d.dropInAmount != null)
+                  money.push(t('termPerClass', { price: formatCurrency(d.dropInAmount, currency) }))
+                if (d.appointmentPrice)
+                  money.push(
+                    d.appointmentPrice.min === d.appointmentPrice.max
+                      ? t('termFrom', { price: formatCurrency(d.appointmentPrice.min, currency) })
+                      : `${formatCurrency(d.appointmentPrice.min, currency)}–${formatCurrency(d.appointmentPrice.max, currency)}`
+                  )
+              }
+              // A PAID trial badge quotes an amount, so it follows the switch; a
+              // free one quotes none and always shows. It is never re-worded —
+              // a "Trial" badge on a door that costs CHF 15 would read as free.
+              const showTrialBadge = !!d.trial && (d.trial.priceAmount == null || amountsShown)
               return (
                 <div
                   key={a.id}
-                  className="flex flex-col overflow-hidden rounded-2xl border"
+                  className={cardClass}
                   style={{ borderColor: palette.border, background: palette.surface }}
                 >
                   <div
-                    className="relative aspect-[4/3] w-full"
+                    className={mediaClass}
                     style={{ background: a.color || palette.accent }}
                   >
                     {a.imageUrl ? (
@@ -509,14 +812,14 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         </span>
                       </div>
                     )}
-                    {d.trial && (
+                    {showTrialBadge && d.trial && (
                       <span
                         className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow"
                         style={{ background: palette.accent, color: palette.onAccent }}
                       >
                         {d.trial.priceAmount != null
-                          ? `Trial ${formatCurrency(d.trial.priceAmount, currency)}`
-                          : 'Free trial'}
+                          ? t('trialPriced', { price: formatCurrency(d.trial.priceAmount, currency) })
+                          : t('trialFree')}
                       </span>
                     )}
                   </div>
@@ -530,7 +833,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         className="rounded-full border px-2 py-0.5 text-xs"
                         style={{ borderColor: palette.border, color: palette.muted }}
                       >
-                        {d.type === 'appointment' ? 'Appointment' : 'Class'}
+                        {d.type === 'appointment' ? t('typeAppointment') : t('typeClass')}
                       </span>
                     </div>
                     {a.description && (
@@ -541,27 +844,25 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                     {/* Each way to pay is its own row with a hairline between, so a
                         card offering a subscription AND a drop-in AND a trial reads
                         as a list rather than a paragraph of prices. Rules take the
-                        site palette, not Tailwind's divide-* (colours are per-site). */}
-                    {pricingLines.length > 0 && (
-                      <div className="mt-3 border-t" style={{ borderColor: palette.border }}>
-                        {pricingLines.map((line, i) => (
-                          <p
-                            key={i}
-                            className={`py-1.5 text-sm${i > 0 ? ' border-t' : ''}`}
-                            style={{ color: palette.muted, borderColor: palette.border }}
-                          >
-                            {line}
-                          </p>
-                        ))}
-                      </div>
-                    )}
+                        site palette, not Tailwind's divide-* (colours are per-site).
+                        The gate/money split — and why only one of them is
+                        optional — lives in ActivityPricingLines. */}
+                    <ActivityPricingLines
+                      pricing={{ gate, money }}
+                      mode={pricingMode}
+                      palette={palette}
+                      t={t}
+                    />
+
                     {href && (
                       <a
-                        {...linkProps(preview ? undefined : href, preview)}
+                        // Both kinds open the overlay: the panel hosts the class
+                        // funnel or the appointment picker depending on intent.
+                        {...bookProps(href, ctx, activityIntent(a))}
                         className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                         style={{ color: palette.accent }}
                       >
-                        Book
+                        {t('book')}
                         <ArrowRight className="h-4 w-4" />
                       </a>
                     )}
@@ -584,6 +885,10 @@ interface PlanPrice {
   recurrence: string
   label?: string
   included_months?: number
+  /** The plan's INTRO OFFER on this price (resolved server-side by
+   *  syncSubscriptionTypesToPublicProfile). Rendered through the same
+   *  `IntroOfferLine` the shop uses — one discount, one sentence. */
+  intro?: unknown
 }
 
 interface PlanEntry {
@@ -593,25 +898,216 @@ interface PlanEntry {
   prices?: PlanPrice[]
 }
 
-// Short, public-facing recurrence suffixes (this renderer is not i18n-aware).
-const RECURRENCE_SUFFIX: Record<string, string> = {
-  per_class: '/class',
-  weekly: '/week',
-  biweekly: '/2 weeks',
-  monthly: '/mo',
-  quarterly: '/quarter',
-  annual: '/yr',
+/** Short, public-facing recurrence suffixes ("/mo", "/yr"). An unknown
+ *  recurrence renders nothing rather than a raw key. */
+const RECURRENCE_KEYS: Record<string, string> = {
+  per_class: 'recurrencePerClass',
+  weekly: 'recurrenceWeekly',
+  biweekly: 'recurrenceBiweekly',
+  monthly: 'recurrenceMonthly',
+  quarterly: 'recurrenceQuarterly',
+  annual: 'recurrenceAnnual',
+}
+
+function recurrenceSuffix(recurrence: string, t: SiteT): string {
+  const key = RECURRENCE_KEYS[recurrence]
+  return key ? t(key) : ''
+}
+
+// ─── pricing comparison table (UX-95) ────────────────────────────────────────
+//
+// The comparison a prospect actually makes — WHICH ACTIVITIES DOES EACH PLAN
+// INCLUDE — as activities down the side and plans across the top. It is a
+// rendering variant, not new data: the same activity `public_profile` mirrors
+// and the same `aggregator_subscription_types` the cards already read, resolved
+// through `resolveActivityAccessRule` / the appointment's `memberBenefit`.
+//
+// THE `members` TIER IS TICKED UNDER EVERY PLAN, and that is the whole care
+// point of this block. `members` gates on being SIGNED UP, not on holding any
+// particular plan — so every plan-holder can book it, and so can somebody with
+// no plan at all. Leaving the row blank would say the opposite; picking a plan
+// to tick would invent a rule that does not exist. The row therefore ticks
+// across and carries a note saying why. `open` is the same shape for a
+// different reason (nothing is required at all) and gets its own note.
+type CellKind = 'yes' | 'no' | 'text'
+interface Cell {
+  kind: CellKind
+  text?: string
+}
+
+/** What one plan buys you for one activity. */
+function pricingCell(
+  a: ActivityEntry,
+  planId: string,
+  currency: string,
+  t: SiteT
+): Cell {
+  if (a.activityType === 'appointment') {
+    // An appointment has NO access gate — the price is the gate — so a plan
+    // never unlocks one; it can only make it cheaper (Activity.memberBenefit).
+    const benefit = a.memberBenefit
+    const covered = benefit?.subscriptionTypeIds?.includes(planId) === true
+    if (covered && benefit?.kind === 'included') return { kind: 'yes' }
+    if (covered && benefit?.kind === 'discount')
+      return { kind: 'text', text: t('tableDiscount', { percent: benefit.discountPercent ?? 0 }) }
+    // `resolveDurationSale` rather than a raw price test: a benefit_only length
+    // (UX-70) has no individual price, so it must not produce a "from" figure.
+    const priced = (a.durations ?? [])
+      .map((d) => resolveDurationSale(d).priceAmount)
+      .filter((p): p is number => typeof p === 'number')
+    if (priced.length === 0) return { kind: 'yes' }
+    const min = Math.min(...priced)
+    return { kind: 'text', text: t('termFrom', { price: formatCurrency(min, currency) }) }
+  }
+
+  const rule = resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })
+  // Open to anyone, or open to anyone signed up: every plan-holder qualifies.
+  if (rule.type === 'open' || rule.type === 'members') return { kind: 'yes' }
+  if (rule.subscriptionTypeIds?.includes(planId)) return { kind: 'yes' }
+  // Not included — but say what a holder of THIS plan can still do rather than
+  // leaving a bare dash where a door exists.
+  if (a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number')
+    return { kind: 'text', text: t('termPerClass', { price: formatCurrency(a.dropIn.priceAmount, currency) }) }
+  return { kind: 'no' }
+}
+
+/** The row's one-line explanation, where the row needs one. */
+function pricingRowNote(a: ActivityEntry, t: SiteT): string | null {
+  if (a.activityType === 'appointment') {
+    const priced = (a.durations ?? []).some(
+      (d) => resolveDurationSale(d).priceAmount !== null
+    )
+    return priced ? null : t('tableFreeNote')
+  }
+  const rule = resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })
+  if (rule.type === 'members') return t('tableAnyPlanNote')
+  if (rule.type === 'open') return t('tableOpenNote')
+  return null
+}
+
+function PricingTable({
+  plans,
+  activities,
+  currency,
+  palette,
+  t,
+}: {
+  plans: PlanEntry[]
+  activities: ActivityEntry[]
+  currency: string
+  palette: SitePalette
+  t: SiteT
+}) {
+  return (
+    // A wide table scrolls INSIDE its own box — never the page, and never by
+    // squeezing the columns until the plan names wrap to one letter.
+    <div
+      className="mt-10 overflow-x-auto rounded-2xl border"
+      style={{ borderColor: palette.border, background: palette.surface }}
+    >
+      <table className="w-full min-w-[36rem] border-collapse text-sm">
+        <thead>
+          <tr>
+            <th
+              className="border-b p-4 text-left font-semibold"
+              style={{ borderColor: palette.border, color: palette.text }}
+              scope="col"
+            >
+              {t('tableActivityColumn')}
+            </th>
+            {plans.map((p) => {
+              const price = p.prices?.[0]
+              return (
+                <th
+                  key={p.id}
+                  scope="col"
+                  className="border-b border-l p-4 text-center font-semibold"
+                  style={{ borderColor: palette.border, color: palette.text }}
+                >
+                  {p.name}
+                  {price && (
+                    <span className="mt-0.5 block text-xs font-normal" style={{ color: palette.muted }}>
+                      {formatCurrency(price.amount, currency)}
+                      {recurrenceSuffix(price.recurrence, t)}
+                    </span>
+                  )}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {activities.map((a) => {
+            const note = pricingRowNote(a, t)
+            return (
+              <tr key={a.id}>
+                <th
+                  scope="row"
+                  className="border-b p-4 text-left font-medium"
+                  style={{ borderColor: palette.border, color: palette.text }}
+                >
+                  {a.name}
+                  {note && (
+                    <span className="mt-0.5 block text-xs font-normal" style={{ color: palette.muted }}>
+                      {note}
+                    </span>
+                  )}
+                </th>
+                {plans.map((p) => {
+                  const cell = pricingCell(a, p.id, currency, t)
+                  return (
+                    <td
+                      key={p.id}
+                      className="border-b border-l p-4 text-center"
+                      style={{ borderColor: palette.border, color: palette.muted }}
+                    >
+                      {cell.kind === 'yes' ? (
+                        // A tick needs a text alternative; "—" is decorative and
+                        // hidden from the reader who is being read to.
+                        <span style={{ color: palette.accent }}>
+                          <Check className="mx-auto h-4 w-4" aria-hidden="true" />
+                          <span className="sr-only">{t('tableIncluded')}</span>
+                        </span>
+                      ) : cell.kind === 'no' ? (
+                        <>
+                          <span aria-hidden="true">—</span>
+                          <span className="sr-only">{t('tableNotIncluded')}</span>
+                        </>
+                      ) : (
+                        cell.text
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCtx }) {
-  const { palette, slug, teamId, preview } = ctx
+  const t = useTranslations('Site')
+  const { palette, slug, locale, teamId, preview } = ctx
   const [plans, setPlans] = useState<PlanEntry[]>([])
+  // EVERY published activity, kept whole. Two readers want different subsets of
+  // it and neither may narrow the fetch: the pay-per-visit card wants only the
+  // ones with a price (`activityHasMoneyStory`), the comparison table wants all
+  // of them — a members-only class with no price of its own is precisely the row
+  // a prospect is scanning the table for.
+  const [activities, setActivities] = useState<ActivityEntry[]>([])
+  const [currency, setCurrency] = useState('CHF')
+  const [loading, setLoading] = useState(true)
+
   // Pay-per-visit activities (priced drop-ins + priced appointments) — the same
   // "additional lines" the shop shows under Subscriptions, surfaced here as a
   // card so the website's pricing isn't subscriptions-only.
-  const [ppvActivities, setPpvActivities] = useState<ActivityEntry[]>([])
-  const [currency, setCurrency] = useState('CHF')
-  const [loading, setLoading] = useState(true)
+  const ppvActivities = useMemo(
+    () => activities.filter(activityHasMoneyStory),
+    [activities]
+  )
 
   useEffect(() => {
     let alive = true
@@ -650,14 +1146,15 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                 memberBenefit: (d.data().memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
               }) as ActivityEntry
           )
-          .filter((a) => a.name && activityHasMoneyStory(a))
+          .filter((a) => a.name)
           .sort(compareActivities)
-        setPpvActivities(acts)
+        setActivities(acts)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('site/pricing', err)
         if (alive) {
           setPlans([])
-          setPpvActivities([])
+          setActivities([])
         }
       })
       .finally(() => {
@@ -671,20 +1168,33 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Pricing'} palette={palette} />
+        <Heading text={section.heading ?? t('headingPricing')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
           </p>
         )}
+        {/* The table is a LAYOUT of the same plans, so it renders in place of the
+            card grid and everything below it (pay-per-visit, "see all options")
+            is untouched. A table with no activities to compare would be an empty
+            grid of ticks, so that case falls back to the cards. */}
+        {!loading && (section.layout ?? 'cards') === 'table' && plans.length > 0 && activities.length > 0 ? (
+          <PricingTable
+            plans={plans}
+            activities={activities}
+            currency={currency}
+            palette={palette}
+            t={t}
+          />
+        ) : (
         <div className="mt-10 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @5xl:grid-cols-3">
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : plans.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No plans available yet.
+              {t('emptyPlans')}
             </p>
           ) : (
             plans.map((p) => (
@@ -698,17 +1208,37 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                 </h3>
                 {p.prices && p.prices.length > 0 && (
                   <div className="mt-3 space-y-1">
-                    {p.prices.map((pr, i) => (
-                      <div key={i} className="flex items-baseline gap-1.5">
-                        <span className="text-2xl font-bold" style={{ color: palette.text }}>
-                          {formatCurrency(pr.amount, currency)}
-                        </span>
-                        <span className="text-sm" style={{ color: palette.muted }}>
-                          {RECURRENCE_SUFFIX[pr.recurrence] ?? ''}
-                          {pr.label ? ` · ${pr.label}` : ''}
-                        </span>
-                      </div>
-                    ))}
+                    {p.prices.map((pr, i) => {
+                      const intro = readIntroTerms(pr.intro)
+                      return (
+                        <div key={i}>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-2xl font-bold" style={{ color: palette.text }}>
+                              {formatCurrency(pr.amount, currency)}
+                            </span>
+                            <span className="text-sm" style={{ color: palette.muted }}>
+                              {recurrenceSuffix(pr.recurrence, t)}
+                              {pr.label ? ` · ${pr.label}` : ''}
+                            </span>
+                          </div>
+                          {/* The offer, stated on the card the visitor decides
+                              from — a price promise, and a mistranslated one is
+                              a lie, which is why this sentence was the first
+                              thing here to be translated (see the module
+                              header). */}
+                          {intro && (
+                            <p className="mt-1 text-sm font-semibold" style={{ color: palette.accent }}>
+                              <IntroOfferLine
+                                intro={intro}
+                                fullAmount={pr.amount}
+                                recurrence={pr.recurrence}
+                                currency={currency}
+                              />
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
                 {p.description && (
@@ -717,16 +1247,22 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                   </p>
                 )}
                 <a
-                  {...linkProps(preview ? undefined : `/public/${slug}/shop?type=${p.id}`, preview)}
+                  {...linkProps(
+                    preview
+                      ? undefined
+                      : publicHrefLocalized(locale, slug, 'shop', { type: p.id, from: 'site' }),
+                    preview
+                  )}
                   className="mt-5 inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
                   style={{ background: palette.accent, color: palette.onAccent }}
                 >
-                  {section.ctaLabel ?? 'Join now'}
+                  {section.ctaLabel ?? t('joinNow')}
                 </a>
               </div>
             ))
           )}
         </div>
+        )}
         {/* Pay per visit — the drop-in + appointment prices that aren't
             subscriptions. One card, each activity a row with its price line and
             a Book CTA into the right flow (appointments → picker, class → the
@@ -737,20 +1273,15 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             style={{ borderColor: palette.border, background: palette.surface }}
           >
             <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
-              Pay per visit
+              {t('payPerVisitTitle')}
             </h3>
             <p className="mt-1 text-sm" style={{ color: palette.muted }}>
-              Book single classes and appointments — no subscription needed.
+              {t('payPerVisitSubtitle')}
             </p>
             <div className="mt-4 space-y-3">
               {ppvActivities.map((a) => {
-                const line = payPerVisitLine(a, currency)
-                const href =
-                  a.activityType === 'appointment'
-                    ? `/public/${slug}/appointments?activity=${a.id}`
-                    : a.slug
-                      ? `/public/${slug}/booking/${a.slug}`
-                      : `/public/${slug}/booking`
+                const line = payPerVisitLine(a, currency, t)
+                const href = activityBookHref(ctx, a, true)
                 return (
                   <div
                     key={a.id}
@@ -768,11 +1299,11 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                       )}
                     </div>
                     <a
-                      {...linkProps(preview ? undefined : href, preview)}
+                      {...bookProps(href, ctx, activityIntent(a))}
                       className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-transform hover:scale-[1.02]"
                       style={{ background: palette.accent, color: palette.onAccent }}
                     >
-                      Book
+                      {t('book')}
                     </a>
                   </div>
                 )
@@ -784,11 +1315,14 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
         {!loading && plans.length > 0 && (
           <div className="mt-8 text-center">
             <a
-              {...linkProps(preview ? undefined : `/public/${slug}/shop`, preview)}
+              {...linkProps(
+                preview ? undefined : publicHrefLocalized(locale, slug, 'shop', { from: 'site' }),
+                preview
+              )}
               className="text-sm font-medium underline-offset-4 hover:underline"
               style={{ color: palette.muted }}
             >
-              View all options →
+              {t('viewAllOptions')} →
             </a>
           </div>
         )}
@@ -799,6 +1333,19 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
 
 // ─── Schedule (live: upcoming bookable sessions) ──────────────────────────────
 
+/** The slice of `listAvailability`'s payload the schedule needs. */
+interface AvailCoachLite {
+  providerId: string
+  providerName: string | null
+  activities: {
+    activityId: string
+    activityName: string
+    durations: { minutes: number }[]
+    location: string | null
+    days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
+  }[]
+}
+
 interface SessionEntry {
   id: string
   activityName?: string
@@ -808,6 +1355,21 @@ interface SessionEntry {
   end?: Timestamp
   location?: string
   providerName?: string
+  /**
+   * 'session' — a scheduled class, bookable at exactly this time.
+   * 'availability' — a merged window in which an appointment CAN be booked;
+   * the visitor still picks the exact start in the appointment picker.
+   *
+   * Absent ⇒ 'session', so the kiosk and existing call sites are unaffected.
+   */
+  variant?: 'session' | 'availability'
+  /** Availability only — whose time this window is, so the picker can preselect. */
+  providerId?: string
+}
+
+/** Timestamp-alike over a plain epoch, so merged windows reuse the session render path. */
+function msTimestamp(ms: number): Timestamp {
+  return Timestamp.fromMillis(ms)
 }
 
 // Group sorted sessions into ordered per-day buckets (used by the list dividers).
@@ -834,6 +1396,11 @@ function groupByDay(sessions: SessionEntry[]): DayGroup[] {
 const fmtTime = (d: Date) =>
   d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
+/** Local YYYY-MM-DD — the same day-key form MiniCalendar and `?date=` use. */
+function toDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Midnight Monday of the current week — the timetable's lower bound. */
 function mondayOfCurrentWeek(): Date {
   const d = new Date()
@@ -846,24 +1413,28 @@ const isPastSession = (s: SessionEntry) =>
   (s.end ?? s.start).toDate().getTime() < Date.now()
 
 function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: RenderCtx }) {
-  const { palette, slug, teamId, preview } = ctx
+  const t = useTranslations('Site')
+  const { palette, slug, locale, teamId, preview } = ctx
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [loading, setLoading] = useState(true)
   // Studio sets the default view; visitors can switch with the toggle below.
   const [view, setView] = useState<'list' | 'calendar'>(section.displayMode ?? 'calendar')
   const [selected, setSelected] = useState<SessionEntry | null>(null)
   const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
+  // Merged appointment availability, loaded separately (see the effect below).
+  const [availability, setAvailability] = useState<SessionEntry[]>([])
+  const [kind, setKind] = useState<'all' | 'classes' | 'appointments'>('all')
 
   useEffect(() => {
     let alive = true
     const windowEnd = new Date()
     windowEnd.setDate(windowEnd.getDate() + (section.windowDays ?? 7))
-    // Classes only — appointments are availability-only now (a Session exists only
-    // once booked), so the only appointment_session mirrors that exist are
-    // ALREADY-BOOKED appointments. Listing them here as bookable would be wrong;
-    // appointment ACTIVITIES still surface via the Activities block, routing to
-    // the dedicated /appointments picker. The lower bound is Monday of the
-    // CURRENT week (not "now"): the calendar doubles as a timetable, showing
+    // This query is CLASSES only, deliberately: appointments are availability-
+    // only (a Session exists only once booked), so the only appointment_session
+    // mirrors that exist are ALREADY-BOOKED appointments — listing those as
+    // bookable would be wrong. Appointment availability comes from
+    // listAvailability in the effect below instead. The lower bound is Monday of
+    // the CURRENT week (not "now"): the calendar doubles as a timetable, showing
     // this week's already-run sessions muted.
     const q = query(
       collectionGroup(db, 'public_profile'),
@@ -883,7 +1454,8 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
           .filter((s) => !section.activityId || s.activityId === section.activityId)
         setSessions(list)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        reportPublicLoadFailure('site/schedule', err)
         if (alive) setSessions([])
       })
       .finally(() => {
@@ -894,15 +1466,107 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     }
   }, [teamId, section.windowDays, section.activityId])
 
-  // Classes only now — see the query above. Appointments book via their own
-  // dedicated flow, routed to from the Activities block instead.
-  const bookHref = preview ? undefined : `/public/${slug}/booking`
+  // ── Appointment availability ────────────────────────────────────────────────
+  //
+  // Two-step on purpose. `listAvailability` is a Cloud Function, and a public
+  // marketing page can be hit a lot — so first check the (cheap, SDK-cached)
+  // activity mirrors for an appointment offering, and only invoke the callable
+  // for teams that actually have one. A classes-only studio pays nothing.
+  useEffect(() => {
+    if (preview || !teamId) return
+    let alive = true
+    const windowDays = section.windowDays ?? 7
+    const windowEnd = Date.now() + windowDays * 24 * 60 * 60_000
+
+    async function load() {
+      const offerings = await getDocs(
+        query(
+          collectionGroup(db, 'public_profile'),
+          where('teamId', '==', teamId),
+          where('type', '==', 'activity'),
+          where('activityType', '==', 'appointment')
+        )
+      )
+      if (!alive || offerings.empty) return
+
+      const fn = httpsCallable<
+        { teamId: string; days?: number; activityId?: string },
+        { coaches: AvailCoachLite[] }
+      >(functions, 'listAvailability')
+      const res = await fn({
+        teamId: teamId!,
+        days: windowDays,
+        ...(section.activityId ? { activityId: section.activityId } : {}),
+      })
+      if (!alive) return
+
+      const entries: SessionEntry[] = []
+      for (const coach of res.data.coaches ?? []) {
+        for (const activity of coach.activities ?? []) {
+          // Browse by the SHORTEST duration — the most granular starts, and so
+          // the widest true window. Picking an exact length is the picker's job.
+          const minutes = browseDurationMinutes(activity.durations)
+          if (!minutes) continue
+          const starts = (activity.days ?? []).flatMap(
+            (d) => d.slotsByDuration?.[String(minutes)] ?? []
+          )
+          for (const w of mergeAvailabilitySlots(starts, minutes)) {
+            if (w.startMs > windowEnd) continue
+            entries.push({
+              id: `avail-${coach.providerId}-${activity.activityId}-${w.startMs}`,
+              activityId: activity.activityId,
+              providerId: coach.providerId,
+              activityName: activity.activityName,
+              providerName: coach.providerName ?? undefined,
+              location: activity.location ?? undefined,
+              start: msTimestamp(w.startMs),
+              end: msTimestamp(w.endMs),
+              variant: 'availability',
+            })
+          }
+        }
+      }
+      if (alive) setAvailability(entries)
+    }
+
+    load().catch((err: unknown) => {
+      // Availability is additive — a failure leaves the classes schedule intact.
+      reportPublicLoadFailure('site/availability', err)
+      if (alive) setAvailability([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [teamId, section.windowDays, section.activityId, preview])
+
+  //
+  // The section-level CTA ("Book a session") is a browse entry: no session in
+  // hand, but it does carry the block's activity filter when it has one — a
+  // schedule scoped to Yoga should open Yoga's calendar, not the full picker.
+  // A CLICKED session gets `sessionBookHref` instead (see the modal below).
+  const browseBookHref = preview
+    ? undefined
+    : publicHrefLocalized(locale, slug, 'booking', {
+        activity: section.activityId || undefined,
+        from: 'site',
+      })
+
+  // Classes and appointment availability share one timeline; the chips below
+  // narrow it. Chips only appear when the team has BOTH — a classes-only studio
+  // shouldn't be shown a filter with one meaningful option.
+  const hasAvailability = availability.length > 0
+  const showKindChips = hasAvailability && sessions.length > 0
+  const visibleEntries = useMemo(() => {
+    const wanted =
+      kind === 'classes' ? sessions : kind === 'appointments' ? availability : [...sessions, ...availability]
+    return [...wanted].sort((a, b) => a.start.toMillis() - b.start.toMillis())
+  }, [kind, sessions, availability])
 
   // Daily list covers today onward (today's finished sessions render muted);
   // the calendar additionally shows the current week's past days as a timetable.
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
-  const listDays = groupByDay(sessions.filter((s) => s.start.toDate() >= startOfToday))
+  const listDays = groupByDay(visibleEntries.filter((s) => s.start.toDate() >= startOfToday))
   const activeDay = listDays.find((g) => g.key === activeDayKey) ?? listDays[0]
   const today = new Date()
   const isToday = (d: Date) =>
@@ -935,7 +1599,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
                 style={active ? undefined : { color: palette.muted }}
               >
                 {isToday(g.date)
-                  ? 'Today'
+                  ? t('today')
                   : g.date.toLocaleDateString(undefined, { weekday: 'short' })}
               </span>
               <span className="text-base font-bold tabular-nums">{g.date.getDate()}</span>
@@ -964,7 +1628,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
               />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: palette.text }}>
-                  {s.activityName ?? 'Session'}
+                  {s.activityName ?? t('sessionFallback')}
                   {s.providerName ? ` · ${s.providerName}` : ''}
                 </p>
                 {s.location && (
@@ -1017,26 +1681,60 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
     <section id={section.id} className="py-20" style={{ background: palette.surface }}>
       {/* Calendar view needs room for the 7-day grid; list view stays a tidy reading width. */}
       <div className={`mx-auto px-6 ${view === 'calendar' ? 'max-w-5xl' : 'max-w-3xl'}`}>
-        <Heading text={section.heading ?? 'Schedule'} palette={palette} />
+        <Heading text={section.heading ?? t('headingSchedule')} palette={palette} />
 
         <div className="mt-4 flex justify-center">
           <div
             className="inline-flex items-center gap-1 rounded-full border p-1"
             style={{ borderColor: palette.border }}
           >
-            <ToggleButton mode="list" icon={List} label="Daily list" />
-            <ToggleButton mode="calendar" icon={CalendarRange} label="Calendar" />
+            <ToggleButton mode="list" icon={List} label={t('viewDailyList')} />
+            <ToggleButton mode="calendar" icon={CalendarRange} label={t('viewCalendar')} />
           </div>
         </div>
+
+        {/* Classes vs appointment availability. Defaults to All so a visitor
+            sees everything without having to discover the filter; only shown
+            when the team actually has both to choose between. */}
+        {showKindChips && (
+          <div className="mt-3 flex justify-center">
+            <div
+              className="inline-flex items-center gap-1 rounded-full border p-1"
+              style={{ borderColor: palette.border }}
+            >
+              {(['all', 'classes', 'appointments'] as const).map((k) => {
+                const active = kind === k
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKind(k)}
+                    aria-pressed={active}
+                    className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
+                    style={
+                      active
+                        ? { background: palette.accent, color: palette.onAccent }
+                        : { color: palette.muted }
+                    }
+                  >
+                    {t(
+                      k === 'all' ? 'kindAll' : k === 'classes' ? 'kindClasses' : 'kindAppointments'
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="mt-8">
           {loading ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
-              Loading…
+              {t('loading')}
             </p>
           ) : sessions.length === 0 ? (
             <p className="text-center text-sm" style={{ color: palette.muted }}>
-              No upcoming sessions.
+              {t('emptySessions')}
             </p>
           ) : view === 'calendar' ? (
             // WeeklyCalendar is shared with the kiosk and styles its chrome with
@@ -1059,7 +1757,7 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
               }
             >
               <WeeklyCalendar
-                sessions={sessions}
+                sessions={visibleEntries}
                 accent={palette.accent}
                 windowDays={section.windowDays ?? 7}
                 onSelect={(s) => setSelected(s as SessionEntry)}
@@ -1074,20 +1772,52 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
           <SessionDetailModal
             s={selected}
             palette={palette}
-            preview={preview}
-            bookHref={section.showBooking && !isPastSession(selected) ? bookHref : undefined}
+            bookLinkProps={
+              section.showBooking && !isPastSession(selected) && !preview
+                ? selected.variant === 'availability'
+                  ? // An availability window is not a bookable moment — it's a
+                    // range. Hand over to the picker, carrying the coach and day
+                    // the window already identifies so the visitor isn't asked to
+                    // choose again what they just clicked; they only pick the
+                    // exact start and length.
+                    bookProps(
+                      publicHrefLocalized(locale, slug, 'appointments', {
+                        activity: selected.activityId,
+                        provider: selected.providerId,
+                        date: toDayKey(selected.start.toDate()),
+                        from: 'site',
+                      }),
+                      ctx,
+                      {
+                        kind: 'appointment',
+                        activityId: selected.activityId ?? '',
+                        providerId: selected.providerId,
+                        date: toDayKey(selected.start.toDate()),
+                      }
+                    )
+                  : bookProps(sessionBookHref(ctx, selected), ctx, {
+                      kind: 'session',
+                      sessionId: selected.id,
+                    })
+                : null
+            }
+            // This modal is a hand-rolled `fixed inset-0 z-50` overlay. The
+            // booking panel portals to <body> at the same layer, so leaving this
+            // backdrop underneath would break Esc and the focus trap — close it
+            // FIRST, then open.
+            onBookClick={() => setSelected(null)}
             onClose={() => setSelected(null)}
           />
         )}
 
         <div className="mt-8 text-center">
           <a
-            {...linkProps(bookHref, preview)}
+            {...bookProps(browseBookHref, ctx, { kind: 'root' })}
             className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
             style={{ background: palette.accent, color: palette.onAccent }}
           >
             <CalendarDays className="h-4 w-4" />
-            Book a session
+            {t('bookASession')}
           </a>
         </div>
       </div>
@@ -1100,16 +1830,18 @@ function ScheduleBlock({ section, ctx }: { section: ScheduleSection; ctx: Render
 function SessionDetailModal({
   s,
   palette,
-  preview,
-  bookHref,
+  bookLinkProps,
+  onBookClick,
   onClose,
 }: {
   s: SessionEntry
   palette: SitePalette
-  preview: boolean
-  bookHref?: string
+  /** Ready-made anchor props from `bookProps`; null hides the CTA. */
+  bookLinkProps: ReturnType<typeof bookProps> | null
+  onBookClick: () => void
   onClose: () => void
 }) {
+  const t = useTranslations('Site')
   const start = s.start.toDate()
   const end = s.end?.toDate()
   return (
@@ -1128,7 +1860,7 @@ function SessionDetailModal({
             style={{ background: s.activityColor || palette.accent }}
           />
           <div className="min-w-0 flex-1">
-            <h3 className="text-xl font-bold">{s.activityName ?? 'Session'}</h3>
+            <h3 className="text-xl font-bold">{s.activityName ?? t('sessionFallback')}</h3>
             <p className="mt-1 text-sm capitalize" style={{ color: palette.muted }}>
               {start.toLocaleDateString(undefined, {
                 weekday: 'long',
@@ -1140,7 +1872,7 @@ function SessionDetailModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('close')}
             className="shrink-0 rounded-lg p-1.5 transition-opacity hover:opacity-70"
             style={{ color: palette.muted }}
           >
@@ -1168,14 +1900,19 @@ function SessionDetailModal({
             </div>
           )}
         </div>
-        {bookHref && (
+        {bookLinkProps && (
           <a
-            {...linkProps(bookHref, preview)}
+            {...bookLinkProps}
+            onClick={(e) => {
+              // Dismiss this backdrop before the booking panel opens over it.
+              onBookClick()
+              bookLinkProps.onClick?.(e)
+            }}
             className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
             style={{ background: palette.accent, color: palette.onAccent }}
           >
             <CalendarPlus className="h-4 w-4" />
-            Book
+            {t('book')}
           </a>
         )}
       </div>
@@ -1186,6 +1923,7 @@ function SessionDetailModal({
 // ─── Contact ──────────────────────────────────────────────────────────────────
 
 function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, preview, socialLinks } = ctx
   const socials = (socialLinks ?? []).filter((s) => s.url)
   const rows: { icon: React.FC<{ className?: string }>; value?: string }[] = [
@@ -1198,7 +1936,7 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Get in touch'} palette={palette} />
+        <Heading text={section.heading ?? t('headingContact')} palette={palette} />
         <div
           className={`mt-10 grid gap-8 ${section.mapQuery ? '@3xl:grid-cols-2' : 'max-w-md mx-auto'}`}
         >
@@ -1261,6 +1999,7 @@ function ContactBlock({ section, ctx }: { section: ContactSection; ctx: RenderCt
 // Selected places as simple cards (no map). Published sites carry an embedded
 // `places` snapshot; the builder preview resolves the selected ids live.
 function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx }) {
+  const t = useTranslations('Site')
   const { palette, preview, teamId } = ctx
   // PlacesBlock only ever renders inside a team site (org sites have no
   // 'places' section type), so teamId is always defined here.
@@ -1282,7 +2021,7 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
   return (
     <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-5xl px-6">
-        <Heading text={section.heading ?? 'Find us'} palette={palette} />
+        <Heading text={section.heading ?? t('headingPlaces')} palette={palette} />
         {section.subheading && (
           <p className="mt-3 text-center" style={{ color: palette.muted }}>
             {section.subheading}
@@ -1291,7 +2030,7 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
         <div className={`mt-10 grid grid-cols-1 gap-5 ${cols}`}>
           {places.length === 0 ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
-              No places selected.
+              {t('emptyPlaces')}
             </p>
           ) : (
             places.map((p) => (
@@ -1322,7 +2061,7 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
                     className="mt-4 inline-flex items-center gap-1.5 self-start text-sm font-semibold transition-opacity hover:opacity-70"
                     style={{ color: palette.accent }}
                   >
-                    Open in maps
+                    {t('openInMaps')}
                     <ArrowRight className="h-4 w-4" />
                   </a>
                 )}
@@ -1373,34 +2112,35 @@ export function SectionBlock({
   }
 }
 
-/** Nav-menu label for a section: an explicit `menuLabel` wins, otherwise fall
- *  back to the section heading (or a type default). Keeps the menu terse while
+/** Nav-menu label for a section: an explicit `menuLabel` wins, then the section
+ *  heading — both the studio's own words, returned verbatim — and only the
+ *  last-resort type default is ours to translate. Keeps the menu terse while
  *  the on-page title can stay long. */
-export function sectionNavLabel(section: WebsiteSection | OrgSiteSection): string {
+export function sectionNavLabel(section: WebsiteSection | OrgSiteSection, t: SiteT): string {
   const menuLabel = (section as { menuLabel?: string }).menuLabel?.trim()
   if (menuLabel) return menuLabel
   switch (section.type) {
     case 'content':
     case 'about':
-      return section.heading || 'Content'
+      return section.heading || t('navContent')
     case 'gallery':
-      return section.heading || 'Gallery'
+      return section.heading || t('navGallery')
     case 'activities':
-      return section.heading || 'Activities'
+      return section.heading || t('navActivities')
     case 'pricing':
-      return section.heading || 'Pricing'
+      return section.heading || t('navPricing')
     case 'schedule':
-      return section.heading || 'Schedule'
+      return section.heading || t('navSchedule')
     case 'contact':
-      return section.heading || 'Contact'
+      return section.heading || t('navContact')
     case 'places':
-      return section.heading || 'Locations'
+      return section.heading || t('navLocations')
     case 'clubs':
-      return section.heading || 'Clubs'
+      return section.heading || t('navClubs')
     case 'locations':
-      return section.heading || 'Locations'
+      return section.heading || t('navLocations')
     case 'coaches':
-      return section.heading || 'Coaches'
+      return section.heading || t('navCoaches')
     default:
       return ''
   }

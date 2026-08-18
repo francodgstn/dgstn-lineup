@@ -14,6 +14,22 @@
  * from a clean slate, run `pnpm reset:staging` first.
  *
  * ──────────────────────────────────────────────────────────────────────────────
+ * NOT WIRED FOR STRIPE CONNECT — deliberately, and it is a separate decision.
+ *
+ * seed-emulator / seed-sandbox / seed-lead link a real Stripe TEST connected
+ * account when STRIPE_CONNECT_TEST_ACCOUNT names one, so their priced doors show
+ * (payments_enabled fails closed — UX-33). This script does NOT, because staging
+ * is a REAL deployed project with its own live Connect webhook endpoint on the
+ * same Stripe TEST platform: attaching a developer's shared test acct here moves
+ * `connect_accounts/{acct}.teamId` for staging AND leaves both endpoints
+ * receiving each other's `checkout.session.completed` events. Whether staging
+ * gets its own dedicated onboarded test account is a call to make with the
+ * staging Stripe configuration in front of you, not a seeding default.
+ *
+ * To wire a staging team by hand, on purpose:
+ *   pnpm connect:test-account --team <teamId> --account acct_… --target staging
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
  * What it creates — three SaaS plan tiers, all major features covered:
  *
  *   coach@linyup.com   / linyup123  →  plan: coach        (trial)
@@ -797,9 +813,10 @@ async function seedTeam(opts: TeamSeed) {
   // lighter link set; studio/org teams surface the full storefront.
   const portalLinks = plan === 'coach' ? buildBasicPageLinks() : buildStorefrontPageLinks()
   const bioLinkBackground = { type: 'gradient', color: portalGradient }
-  // Booking settings — seeded to BOTH the public_profile (read by the public
-  // booking flow + the mobile app) and the team-doc mirror (re-hydrates the
-  // admin Settings → Booking form).
+  // Booking settings — ONE store, the team's public_profile: the public booking
+  // flow, the mobile app, the booking callables and the admin Settings → Booking
+  // form all read it there. (There used to be a team-doc mirror at
+  // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
   const bookingSettings = {
     flowType: 'activity-first',
     windowMonths: 2,
@@ -828,7 +845,7 @@ async function seedTeam(opts: TeamSeed) {
       ...(orgId
         ? { org_id: orgId, organization_ids: [orgId], ranking_systems: [] }
         : { ranking_systems: rankingSystemDefs }),
-      settings: { gamification: gamificationSettings, teamEmail: email, booking: bookingSettings },
+      settings: { gamification: gamificationSettings, teamEmail: email },
       bioLinkTheme: 'light',
       bioLinkAccentColor: accentColor,
       bioLinkBackground,
@@ -2063,21 +2080,16 @@ async function seedDocuments(
   teamName: string,
   uid: string,
 ) {
-  // Install the Documents plugin (minPlan 'free' — available to every plan).
+  // NO PLUGIN INSTALL — Documents is a default feature on every plan. The
+  // signup-consent selection lives in teams/{teamId}/settings/documents.
   await db
     .collection('teams')
     .doc(teamId)
-    .collection('installed_plugins')
+    .collection('settings')
     .doc('documents')
     .set({
-      pluginId: 'documents',
-      teamId,
-      installedAt: ts(daysFromNow(-30)),
-      installedBy: uid,
-      status: 'active',
-      config: {
-        signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      },
+      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
+      updated_at: ts(daysFromNow(-30)),
     })
 
   const docSeeds = [

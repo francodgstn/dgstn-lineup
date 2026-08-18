@@ -2,8 +2,9 @@
 // Variable substitution, HTML body rendering, and outreach email builder for team-defined templates.
 import { addDays, format } from 'date-fns'
 import { marked } from 'marked'
-import { wrapInLayout, gradients, buildTeamFooter } from './emailLayout'
+import { wrapInLayout, gradients, buildTeamFooter, htmlToPlainText } from './emailLayout'
 import { getHostingUrl } from './env'
+import { publicUrl } from '@linyup/shared'
 
 // Re-exported for existing importers — implementation lives in @linyup/shared.
 export { buildTeamFooter }
@@ -74,9 +75,9 @@ export function substituteVariables(
   const reviewUrl = socialLinks.find((l) => l.platform === 'review')?.url || ''
 
   const urlMap: Record<string, string> = {
-    bookingUrl: slug ? `${baseUrl}/public/${slug}/booking` : '',
-    membershipUrl: slug ? `${baseUrl}/public/${slug}/signup` : '',
-    bioLinkUrl: slug ? `${baseUrl}/public/${slug}` : '',
+    bookingUrl: slug ? publicUrl(baseUrl, slug, 'booking') : '',
+    membershipUrl: slug ? publicUrl(baseUrl, slug, 'signup') : '',
+    bioLinkUrl: slug ? publicUrl(baseUrl, slug) : '',
     websiteUrl,
     reviewUrl,
   }
@@ -140,9 +141,9 @@ export function buildOutreachEmail({
     content: body,
     footerContent: buildTeamFooter(teamData, language),
   })
-  const text = body
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  // Same flattener as the transactional mail (UX-81). It matters more here: a
+  // markdown body renders through `marked`, so this is the one rail whose HTML
+  // routinely contains real lists and headings.
+  const text = htmlToPlainText(body)
   return { html, text }
 }

@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicEvents } from '@/components/events/program/usePublicEvents'
 import { PublicEventList } from '@/components/events/program/PublicEventList'
+import { publicSubHref } from '@/lib/publicRoutes'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export default function PublicEventsIndexPage() {
       <PublicEventList
         events={events}
         loading={loading}
-        hrefFor={(event) => `/public/${slug}/events/${event.id}`}
+        hrefFor={(event) => publicSubHref(slug, 'events', event.id)}
       />
     </div>
   )

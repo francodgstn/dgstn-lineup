@@ -69,11 +69,20 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   )
 }
 
+// `[&[inert]]:hidden` is load-bearing, not decoration. base-ui keeps inactive
+// panels mounted and marks them `inert`, leaving the actual hiding to CSS — which
+// this wrapper never shipped. Every panel therefore rendered at once, so a
+// "tabbed" page was really a stacked one with a tab bar on top (all four
+// consumers were affected).
+//
+// Hiding via CSS rather than `keepMounted={false}` deliberately: unmounting would
+// also throw away a panel's internal state, and some panels hold unsaved edits
+// (e.g. the online-course Settings tab keeps its form in local state).
 function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      className={cn("flex-1 text-sm outline-none [&[inert]]:hidden", className)}
       {...props}
     />
   )

@@ -1,15 +1,14 @@
 'use client'
 
 // "Keep going" utilities under the How-to concepts: replay the guided tour,
-// the live setup checklist (same data as the dashboard card — never dismissed
-// here), a rotating tip, and a nudge to the plugin marketplace.
+// the studio's setup progress, a rotating tip, and a nudge to the plugin
+// marketplace.
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
 import {
   ArrowRight,
   Check,
-  ChevronRight,
   Compass,
   Puzzle,
   RefreshCw,
@@ -19,7 +18,9 @@ import { Link } from '@/i18n/navigation'
 import { Button } from '@/components/ui/button'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSetupChecklist } from '@/hooks/useSetupChecklist'
+import { setSetupDismissed } from '@/lib/onboarding'
 import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
 import { TIPS } from '@/data/tips'
 
@@ -64,18 +65,37 @@ function TourCard() {
   )
 }
 
-// How many open steps to list before pointing at the rest with the progress bar.
-const CHECKLIST_PREVIEW = 3
-
+/**
+ * Setup PROGRESS — a pointer at the checklist, not a second copy of it (UX-45).
+ *
+ * This card used to render the open steps itself, which made How-to a third
+ * place setup was presented and the only one that could never be dismissed. It
+ * shows the same progress (one shared query) and sends the reader to the one
+ * card that owns the steps — and, because that card's dismissal is permanent
+ * and team-wide, it is also the place a dismissal can be UNDONE. A hidden
+ * checklist with no way back is how "I closed it and now I can't find what I
+ * still have to do" happens.
+ */
 function ChecklistCard() {
   const t = useTranslations('HowTo')
   const tOnb = useTranslations('Onboarding')
   const { currentTeamId, team } = useAuth()
-  const { steps, requiredDone, requiredTotal, allRequiredDone } = useSetupChecklist(
-    currentTeamId ?? null,
-    team ?? null
-  )
-  const open = steps.filter((s) => !s.done).slice(0, CHECKLIST_PREVIEW)
+  const { can } = useCapabilities()
+  const { requiredDone, requiredTotal, allRequiredDone } = useSetupChecklist(currentTeamId ?? null)
+  const [restoring, setRestoring] = useState(false)
+
+  const hidden = team?.setup_dismissed === true
+  const canRestore = hidden && !!currentTeamId && can('team.settings')
+
+  async function restore() {
+    if (!currentTeamId) return
+    setRestoring(true)
+    try {
+      await setSetupDismissed(currentTeamId, false)
+    } finally {
+      setRestoring(false)
+    }
+  }
 
   return (
     <UtilityCard icon={<Rocket className="h-4 w-4" />} title={t('utilities.checklist.title')}>
@@ -93,26 +113,30 @@ function ChecklistCard() {
           {tOnb('setup.progress', { done: requiredDone, total: requiredTotal })}
         </span>
       </div>
-      {allRequiredDone ? (
+      {allRequiredDone && (
         <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Check className="h-3.5 w-3.5 text-primary" />
           {t('utilities.checklist.allDone')}
         </p>
-      ) : (
-        <ul className="mt-2 flex-1 space-y-0.5">
-          {open.map((s) => (
-            <li key={s.key}>
-              <Link
-                href={s.href as Route}
-                className="group flex items-center justify-between gap-2 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <span>{tOnb(`setup.steps.${s.key}.label` as Parameters<typeof tOnb>[0])}</span>
-                <ChevronRight className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
-              </Link>
-            </li>
-          ))}
-        </ul>
       )}
+      <div className="mt-3 flex flex-1 items-end">
+        {canRestore ? (
+          <Button variant="outline" size="sm" onClick={restore} disabled={restoring}>
+            {t('utilities.checklist.restore')}
+          </Button>
+        ) : hidden ? (
+          /* Hidden by the owner, and this reader cannot write the team doc —
+             so do not send them to a dashboard where the card isn't. */
+          <p className="text-xs text-muted-foreground">{t('utilities.checklist.hiddenNote')}</p>
+        ) : (
+          <Link
+            href={'/dashboard' as Route}
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            {t('utilities.checklist.open')} <ArrowRight className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
     </UtilityCard>
   )
 }

@@ -6,6 +6,7 @@
 // All three execution paths (daily scanner, event triggers, manual callable)
 // funnel through runRule() for consistent behaviour.
 
+import { randomUUID } from 'node:crypto'
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { to } from './async'
@@ -13,7 +14,15 @@ import { sendEmail } from './email'
 import { logActivity } from './users'
 import { substituteVariables, renderBody, buildOutreachEmail } from './outreachEmail'
 import { pluginActionHandlers } from '../plugins/index'
-import type { PluginActionId, PluginTriggerId } from '@linyup/shared'
+import type {
+  PluginActionId, PluginTriggerId, ContactGroup, ConsentLedger, EngagementThresholds,
+} from '@linyup/shared'
+import {
+  consentDocumentIds,
+  matchesFilter,
+  TEAMS_COLLECTION, CONTACT_GROUPS_SUBCOLLECTION,
+} from '@linyup/shared'
+import { loadConsentLedgers } from '../waivers/consentLedger'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,7 +33,6 @@ export type AutomationTriggerType =
   | 'schedule_daily'
   // Tier 1 — Firestore event triggers (real-time)
   | 'contact_created'
-  | 'contact_updated'
   | 'booking_confirmed'
   | 'booking_no_show'
   | 'booking_cancelled'
@@ -70,6 +78,10 @@ export type AutomationCondition =
   // Affiliation axis conditions (summary-based, no subcollection read required)
   | { type: 'has_affiliation' } // affiliation_summary.has_active === true
   | { type: 'affiliation_type'; value: string } // affiliation_summary.types includes value
+  // Contact Groups plugin — is the contact in this group (subgroups included)?
+  // Works for BOTH kinds: a manual group tests group_ids, a dynamic group
+  // resolves its saved rule per contact. Nothing is materialized either way.
+  | { type: 'in_group'; group_id: string }
   // NOTE: affiliation_status (per-affiliation status_id check) and affiliation_expires_in
   // are deferred — they require reading the affiliations subcollection per contact in the
   // scheduled scan path, which is expensive. The summary covers the primary use cases.
@@ -153,6 +165,20 @@ export interface ContactData {
   birthdate?: Timestamp | { seconds: number; nanoseconds: number } | null
   // Affiliation axis — summary maintained by onAffiliationWrite
   affiliation_summary?: { has_active: boolean; types: string[]; org_ids: string[] }
+  // Read by the `in_group` condition via the shared contact predicate. Declared
+  // explicitly (not left to the index signature) so ContactData satisfies
+  // ContactFilterSubject — a dynamic group's rule may filter on any of these.
+  group_ids?: string[]
+  source?: string
+  ranks?: Record<string, number>
+  custom_fields?: Record<string, string | number | boolean>
+  alerts_count?: number
+  pending_signup?: boolean
+  // Declared for the same reason as `group_ids` above: a dynamic group's rule
+  // may filter on the coach assignment or on "needs attention", and both read
+  // these off the contact document (UX-62 / UX-44).
+  assigned_coach_ids?: string[]
+  lead_acknowledged?: boolean
   [key: string]: unknown
 }
 
@@ -163,6 +189,14 @@ export interface AutomationContext {
    * only for the duration of the run, since it may carry the caller's secrets.
    */
   payload?: Record<string, unknown>
+  /**
+   * The CloudEvent id of the Firestore write that fired this run. Used as the
+   * OCCURRENCE half of a delayed event rule's dedup key, so a duplicate
+   * delivery of the same write cannot enqueue a second sending task. Absent is
+   * safe but weaker — see buildEventIdempotencyKey and the fallback in
+   * fireEventRules.
+   */
+  eventId?: string
   /** Extra data passed by the triggering event (e.g. sessionId for session_ended) */
   [key: string]: unknown
 }
@@ -191,6 +225,39 @@ export interface RuleStats {
   sent: number
   skipped: number
   errors: number
+  /**
+   * Contact ids an action ACTUALLY RAN FOR — not everyone who matched. A contact
+   * whose every action threw is counted in `errors` and is absent from here, so
+   * the log answers "who got the mail" rather than "who was considered". Held
+   * whole (a Set, deduped — one contact with two no-show bookings is one
+   * recipient) and CAPPED only when written to the log, so `recipients_total` is
+   * exact even when the stored list is a sample.
+   */
+  recipients: Set<string>
+}
+
+/**
+ * How many recipient ids one log row carries. A run that reaches 400 people
+ * stores the first 50 and says so — the row is a sample plus an exact total,
+ * never a roster presented as complete (see RunHistoryDialog's copy).
+ *
+ * IDS, NOT NAMES OR EMAILS: `automation_logs` is readable by every manager, and
+ * a resolved id is a lookup against contacts they can already read. Names in the
+ * log would be a copy of contact data living outside the contact — surviving the
+ * contact's deletion, and unreachable by any correction. A recipient who has
+ * since been deleted therefore resolves to nothing; that is the accepted cost.
+ */
+export const RECIPIENT_ID_CAP = 50
+
+/**
+ * Records one recipient. Called at the single point where an action is known to
+ * have succeeded for a contact, so there is no second definition of "reached".
+ * Ignores an empty id — the booking path can run actions for a booking that
+ * names no contact document, and a booking id in a contact-id list would resolve
+ * to a stranger or to nothing.
+ */
+export function recordRecipient(stats: RuleStats, contactId: string | undefined): void {
+  if (contactId) stats.recipients.add(contactId)
 }
 
 export interface AutomationLogData {
@@ -202,6 +269,15 @@ export interface AutomationLogData {
   contacts_matched: number
   actions_executed: number
   actions_failed: number
+  /**
+   * Up to RECIPIENT_ID_CAP contact ids an action ran for. ALWAYS WRITTEN (an
+   * empty array when nobody was reached) so a reader can tell "this run reached
+   * nobody" from "this row predates recipient recording", which is the
+   * difference between two very different sentences in the UI.
+   */
+  recipient_ids: string[]
+  /** The true number of recipients, which may exceed recipient_ids.length. */
+  recipients_total: number
   error?: string
 }
 
@@ -295,13 +371,52 @@ function resolveTimestampMs(ts: unknown): number | null {
  * bio_link_booking_no_show conditions are skipped — they are handled by
  * the booking-based execution path.
  */
+/**
+ * What `in_group` needs to answer a membership question. Loaded once per team
+ * per run (loadGroupContext) — a handful of docs, not per contact.
+ */
+export interface ConditionContext {
+  groups?: ContactGroup[]
+  engagementThresholds?: EngagementThresholds
+  /**
+   * documentId → that document's signature ledger, for every group rule that
+   * filters on consent. Loaded ONCE per rule run (one query per document), never
+   * per contact — see waivers/consentLedger.ts.
+   */
+  consent?: Record<string, ConsentLedger>
+}
+
 export function evaluateContactConditions(
   conditions: AutomationCondition[],
   contact: ContactData,
-  now: Date
+  now: Date,
+  ctx: ConditionContext = {}
 ): boolean {
   for (const cond of conditions) {
     switch (cond.type) {
+      // Group membership is a PER-CONTACT predicate, never a materialized set:
+      // the contact is already in hand, so a manual group checks its group_ids
+      // and a dynamic group resolves its rule right here. Both go through the
+      // shared resolver so "in the group" means one thing everywhere.
+      case 'in_group': {
+        // Delegated, NOT reimplemented: descendant expansion, dynamic-rule
+        // resolution and the not-in-context fallback all live in the shared
+        // resolver. Duplicating them here is exactly the parallel check its
+        // docstring forbids — the copies would drift on the next change.
+        const matched = matchesFilter(
+          contact,
+          { groups: [cond.group_id] },
+          {
+            groups: ctx.groups ?? [],
+            engagementThresholds: ctx.engagementThresholds,
+            consent: ctx.consent,
+            nowMs: now.getTime(),
+          },
+        )
+        if (!matched) return false
+        break
+      }
+
       case 'bio_link_booking_no_show':
         // handled separately in booking path
         continue
@@ -1125,6 +1240,8 @@ async function runBookingRule(
     | { type: 'bio_link_booking_no_show'; delay_days?: number; delay_hours?: number }
     | undefined
 
+  const conditionCtx = await loadConditionContext(rule, teamId, teamData)
+
   const delayDays =
     bookingCond?.delay_days || Math.round((bookingCond?.delay_hours || 24) / 24) || 1
   const delayHours = delayDays * 24
@@ -1221,7 +1338,7 @@ async function runBookingRule(
         stats.skipped++
         continue
       }
-      if (!evaluateContactConditions(rule.conditions, contact, now)) {
+      if (!evaluateContactConditions(rule.conditions, contact, now, conditionCtx)) {
         stats.skipped++
         continue
       }
@@ -1242,6 +1359,7 @@ async function runBookingRule(
       )
       stats.sent += executed
       stats.errors += failed
+      if (executed > 0) recordRecipient(stats, contactId)
 
       // Mark booking as processed
       await to(bookingDoc.ref.update({ noShowOutreachSentAt: FieldValue.serverTimestamp() }))
@@ -1252,6 +1370,39 @@ async function runBookingRule(
 // ---------------------------------------------------------------------------
 // Contact-based rule path
 // ---------------------------------------------------------------------------
+
+/**
+ * Load the group context for a rule — but only when a condition actually asks
+ * for it. A rule with no in_group condition costs zero extra reads.
+ */
+export async function loadConditionContext(
+  rule: AutomationRule,
+  teamId: string,
+  teamData: Record<string, unknown>
+): Promise<ConditionContext> {
+  if (!rule.conditions.some((c) => c.type === 'in_group')) return {}
+  const [err, snap] = await to(
+    admin.firestore().collection(TEAMS_COLLECTION).doc(teamId)
+      .collection(CONTACT_GROUPS_SUBCOLLECTION).get()
+  )
+  if (err || !snap) {
+    console.error(`[automationEngine] rule=${rule.id}: failed to load contact groups`, err)
+    return {}
+  }
+  const groups = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactGroup)
+  // A group whose rule asks about consent needs that document's ledger, or the
+  // dimension fails closed and the rule silently matches nobody. One query per
+  // referenced document, once per run — the same "loaded once per team per run"
+  // shape as the groups above, and zero reads for the ordinary rule that names
+  // no document.
+  const documentIds = consentDocumentIds(groups.map((g) => g.rule))
+  const consent = documentIds.length ? await loadConsentLedgers(teamId, documentIds) : undefined
+  return {
+    groups,
+    engagementThresholds: teamData.engagement_thresholds as EngagementThresholds | undefined,
+    consent,
+  }
+}
 
 async function runContactRule(
   rule: AutomationRule,
@@ -1264,6 +1415,7 @@ async function runContactRule(
   payload?: Record<string, unknown>
 ): Promise<void> {
   const db = admin.firestore()
+  const conditionCtx = await loadConditionContext(rule, teamId, teamData)
 
   console.log(
     `[automationEngine] rule=${rule.id} team=${teamId}: evaluating ${contacts.length} contacts`
@@ -1307,7 +1459,7 @@ async function runContactRule(
       }
     }
 
-    if (!evaluateContactConditions(rule.conditions, contact, now)) {
+    if (!evaluateContactConditions(rule.conditions, contact, now, conditionCtx)) {
       stats.skipped++
       continue
     }
@@ -1332,8 +1484,11 @@ async function runContactRule(
     stats.sent += executed
     stats.errors += failed
 
-    // Mark rule as sent for this contact
+    // Mark rule as sent for this contact — and record them as a recipient. The
+    // two share one condition on purpose: "reached" in the log means exactly
+    // what the dedup window already means by it.
     if (executed > 0) {
+      recordRecipient(stats, contact.id)
       await to(
         db
           .collection('contacts')
@@ -1372,7 +1527,13 @@ export async function runRule(
   options: RunRuleOptions = {}
 ): Promise<AutomationLogData> {
   const now = new Date()
-  const stats: RuleStats = { processed: 0, sent: 0, skipped: 0, errors: 0 }
+  const stats: RuleStats = {
+    processed: 0,
+    sent: 0,
+    skipped: 0,
+    errors: 0,
+    recipients: new Set<string>(),
+  }
   const triggerTier = options.triggerTier || 'scheduled'
 
   if (!rule.actions.length && !rule.template_id && !rule.alert_preset_id) {
@@ -1416,22 +1577,71 @@ export async function runRule(
     contacts_matched: stats.processed,
     actions_executed: stats.sent,
     actions_failed: stats.errors,
+    // Written HERE, on the same row as the counts, by the one function every
+    // trigger tier goes through — the event tier, runScheduledRules,
+    // triggerAutomationRule and executeDelayedRule all persist this object
+    // verbatim, so there is no second write to keep in step.
+    recipient_ids: Array.from(stats.recipients).slice(0, RECIPIENT_ID_CAP),
+    recipients_total: stats.recipients.size,
   }
 
-  console.log(`[automationEngine] runRule complete rule=${rule.id} team=${teamId}`, stats)
+  console.log(`[automationEngine] runRule complete rule=${rule.id} team=${teamId}`, {
+    ...stats,
+    recipients: stats.recipients.size,
+  })
   return log
 }
 
 // ---------------------------------------------------------------------------
-// enqueueDelayedRule — Tier 2: Cloud Tasks (Phase 3)
+// Tier 2 — delayed execution via Cloud Tasks
 // ---------------------------------------------------------------------------
+
+/**
+ * Cloud Tasks refuses a scheduleTime more than 30 days out, and the delay field
+ * in the rule builder is a free-text number of minutes. A delay beyond the
+ * ceiling is CLAMPED (never dropped, never silently run inline) and logged —
+ * a rule that says "90 days later" fires at 30, which is visible in the log,
+ * rather than throwing at enqueue time and losing the run entirely.
+ */
+export const MAX_DELAY_MINUTES = 30 * 24 * 60
+
+/**
+ * The task-queue handler is deployed in the region set by setGlobalOptions in
+ * src/index.ts, and Firebase creates the Cloud Tasks queue in that SAME region.
+ * firebase-admin's `taskQueue('name')` defaults to **us-central1** when the name
+ * carries no location (see functions-api-client-internal.js DEFAULT_LOCATION),
+ * so a bare name enqueues into a queue that does not exist. Always address the
+ * queue by its fully-qualified partial resource name.
+ */
+const DELAYED_RULE_FUNCTION = 'locations/europe-west6/functions/executeDelayedRule'
 
 export interface DelayedRulePayload {
   ruleId: string
   teamId: string
-  sessionId: string
+  /**
+   * Session-kind tasks only — the participants are re-read from this session at
+   * fire time. Absent/empty for event-kind tasks.
+   */
+  sessionId?: string
   contactIds: string[]
   idempotencyKey: string
+  /**
+   * Which shape of delayed run this is. ABSENT means 'session': tasks enqueued
+   * before event delays existed carry no kind, and must keep the session
+   * behaviour they were enqueued with.
+   */
+  kind?: 'session' | 'event'
+  /**
+   * Event-kind only — the trigger type the rule carried at enqueue time. If the
+   * studio re-points the rule at a different trigger while the task is in
+   * flight, the task is dropped rather than run with the new rule's actions.
+   */
+  triggerType?: AutomationTriggerType
+}
+
+async function delayedRuleQueue() {
+  const { getFunctions } = await import('firebase-admin/functions')
+  return getFunctions().taskQueue(DELAYED_RULE_FUNCTION)
 }
 
 /**
@@ -1450,12 +1660,11 @@ export async function enqueueDelayedRule(
   sessionEndTime: Date,
   contactIds: string[]
 ): Promise<void> {
-  const { getFunctions } = await import('firebase-admin/functions')
-  const delayMs = (rule.trigger.delayMinutes || 0) * 60 * 1000
+  const delayMs = clampDelayMinutes(rule.trigger.delayMinutes || 0, rule.id) * 60 * 1000
   const scheduleTime = new Date(sessionEndTime.getTime() + delayMs)
   const idempotencyKey = `${rule.id}:${sessionId}`
 
-  const queue = getFunctions().taskQueue('executeDelayedRule')
+  const queue = await delayedRuleQueue()
   await queue.enqueue(
     {
       ruleId: rule.id,
@@ -1463,12 +1672,127 @@ export async function enqueueDelayedRule(
       sessionId,
       contactIds,
       idempotencyKey,
+      kind: 'session',
     } satisfies DelayedRulePayload,
     { scheduleTime }
   )
 
   console.log(
     `[automationEngine] enqueued delayed rule=${rule.id} session=${sessionId} at=${scheduleTime.toISOString()}`
+  ) // eslint-disable-line no-console
+}
+
+/** Clamps a configured delay to what Cloud Tasks will accept. Pure. */
+export function clampDelayMinutes(delayMinutes: number, ruleId?: string): number {
+  if (!Number.isFinite(delayMinutes) || delayMinutes <= 0) return 0
+  const floored = Math.floor(delayMinutes)
+  if (floored <= MAX_DELAY_MINUTES) return floored
+  console.log(
+    `[automationEngine] rule=${ruleId ?? '?'}: delay ${floored}min exceeds the Cloud Tasks ceiling, clamped to ${MAX_DELAY_MINUTES}min`
+  ) // eslint-disable-line no-console
+  return MAX_DELAY_MINUTES
+}
+
+/**
+ * How long an EVENT rule should be deferred, in minutes. 0 means "run inline,
+ * exactly as before" — which is the answer for every rule that stores no delay,
+ * and the reason a rule that works today cannot regress.
+ *
+ * Refused a delay on purpose, each for its own reason:
+ *
+ * - `session_ended` owns its own Tier 2 path (onSessionWrite enqueues against
+ *   the session's END time, not against now). fireEventRules only ever sees it
+ *   on the already-ended backfill path, where a delay is meaningless — the
+ *   session is in the past. Delaying here would change the reference path.
+ * - `schedule_daily` / `manual` are not event triggers at all; reaching this
+ *   function with one is a caller bug, and inline is the safe answer.
+ * - `inbound_webhook` is payload-bearing BY DEFINITION: a delayed run persists
+ *   its body in the Cloud Tasks queue, and that body is the caller's raw POST
+ *   (routinely carrying their secrets — see inboundWebhook.ts). Refused by name
+ *   so an empty POST body cannot slip past the payload check below.
+ *
+ * And ANY trigger is refused a delay while it actually carries a `payload`, for
+ * the same reason — one rule covering every future payload-bearing trigger
+ * rather than a list that goes stale.
+ *
+ * The web builder's TRIGGER_OPTIONS.supportsDelay must agree with this function
+ * exactly; automation/delayedRules.test.ts reads both sources and pins it, so a
+ * trigger offered a delay it will never get fails the build rather than the
+ * studio.
+ */
+export function resolveEventDelayMinutes(
+  rule: AutomationRule,
+  context?: AutomationContext
+): number {
+  const type = rule.trigger.type
+  if (
+    type === 'session_ended' ||
+    type === 'schedule_daily' ||
+    type === 'manual' ||
+    type === 'inbound_webhook'
+  )
+    return 0
+  if (context?.payload && Object.keys(context.payload).length > 0) return 0
+  return clampDelayMinutes(rule.trigger.delayMinutes ?? 0, rule.id)
+}
+
+/**
+ * The dedup key for a delayed EVENT run.
+ *
+ * The session key is `{ruleId}:{sessionId}` because the session IS the
+ * occurrence — re-enqueueing after an end-time edit must collapse onto the same
+ * key. An event has no such document, so the occurrence is the EVENT: the
+ * CloudEvent id of the Firestore write that fired it, which is stable across a
+ * duplicate delivery of that same write. The delta is folded in because one
+ * write can emit several events (two subscriptions added at once), and those
+ * are genuinely different occurrences.
+ *
+ * The key is deliberately NOT `{ruleId}:{contactId}`: that would make a
+ * legitimate second booking, months later, a permanent no-op. Repeat firings
+ * inside the window are the job of the per-rule/per-contact dedup in
+ * runContactRule, which the delayed run goes through like every other tier.
+ */
+export function buildEventIdempotencyKey(input: {
+  ruleId: string
+  occurrenceId: string
+  delta?: EventDelta
+}): string {
+  const deltaKey = input.delta?.subscriptionTypeId || input.delta?.affiliationTypeKey
+  return ['evt', input.ruleId, input.occurrenceId, deltaKey].filter(Boolean).join(':')
+}
+
+/**
+ * Enqueues a Cloud Task to run an event rule against the given contacts after
+ * the rule's delay. Contact ids are snapshotted here; the contact DOCUMENTS are
+ * re-read at fire time (see executeDelayedRule) — see the evaluation-timing
+ * note on fireEventRules.
+ */
+export async function enqueueDelayedEventRule(params: {
+  rule: AutomationRule
+  teamId: string
+  contactIds: string[]
+  delayMinutes: number
+  idempotencyKey: string
+  now?: Date
+}): Promise<void> {
+  const { rule, teamId, contactIds, delayMinutes, idempotencyKey } = params
+  const scheduleTime = new Date((params.now ?? new Date()).getTime() + delayMinutes * 60 * 1000)
+
+  const queue = await delayedRuleQueue()
+  await queue.enqueue(
+    {
+      ruleId: rule.id,
+      teamId,
+      contactIds,
+      idempotencyKey,
+      kind: 'event',
+      triggerType: rule.trigger.type,
+    } satisfies DelayedRulePayload,
+    { scheduleTime }
+  )
+
+  console.log(
+    `[automationEngine] enqueued delayed event rule=${rule.id} trigger=${rule.trigger.type} contacts=${contactIds.length} at=${scheduleTime.toISOString()} key=${idempotencyKey}`
   ) // eslint-disable-line no-console
 }
 
@@ -1487,6 +1811,22 @@ export async function enqueueDelayedRule(
  *               type that changed. Rules with a matching trigger.subscriptionTypeId or
  *               trigger.affiliationTypeKey are scoped to this delta; absent/empty = match any.
  *               Unused for all other trigger types — pass undefined or omit.
+ *
+ * WHEN THINGS ARE DECIDED, and why the line falls where it does:
+ *
+ *   EVENT-SHAPED facts are decided HERE, at enqueue time, because they are only
+ *   knowable here — which trigger fired, which subscription type was added,
+ *   which webhook endpoint was hit. None of that is re-derivable three days
+ *   later.
+ *
+ *   CONTACT-SHAPED facts are decided at FIRE time, by re-reading the contact
+ *   documents and running the same runRule() every other tier runs. That is
+ *   what stops a "welcome" mail reaching someone who was archived, deleted,
+ *   unsubscribed or no longer matches the rule's conditions in the meantime.
+ *   The contact ids are snapshotted; the contact STATE never is.
+ *
+ * Only `rule.active` is checked twice — once here to avoid queueing dead work,
+ * once at fire time because it is the studio's off switch.
  */
 export async function fireEventRules(
   teamId: string,
@@ -1524,6 +1864,17 @@ export async function fireEventRules(
   // actions plus the team's installed-plugin actions), so the engine simply
   // runs whatever rules the team was allowed to create. No tier is skipped here.
 
+  // One occurrence per fireEventRules call — every rule that matches this event
+  // shares it, and the ruleId in the key keeps them apart. The random fallback
+  // is honest about what it buys: it still collapses a Cloud Tasks REDELIVERY
+  // of the same task (the payload, and so the key, is identical), but it cannot
+  // collapse a duplicate delivery of the same Firestore write. Callers that can
+  // supply event.id (onContactWrite, onBookingWrite) do; the rest lean on the
+  // per-rule/per-contact dedup window in runContactRule, exactly as the inline
+  // path already does.
+  const occurrenceId =
+    typeof context?.eventId === 'string' && context.eventId ? context.eventId : randomUUID()
+
   for (const ruleDoc of rulesSnap.docs) {
     const rule = normalizeRule(ruleDoc.id, ruleDoc.data() as Record<string, unknown>)
     if (rule.trigger.type !== triggerType) continue
@@ -1553,6 +1904,33 @@ export async function fireEventRules(
       rule.trigger.affiliationTypeKey !== delta?.affiliationTypeKey
     )
       continue
+
+    // Tier 2 — a rule carrying a delay is deferred to Cloud Tasks instead of
+    // running now. 0 (the overwhelmingly common case) falls straight through to
+    // the inline path below, byte-for-byte the behaviour it has always had.
+    const delayMinutes = resolveEventDelayMinutes(rule, context)
+    if (delayMinutes > 0) {
+      const [enqueueErr] = await to(
+        enqueueDelayedEventRule({
+          rule,
+          teamId,
+          contactIds: subjects.map((s) => s.id),
+          delayMinutes,
+          idempotencyKey: buildEventIdempotencyKey({
+            ruleId: rule.id,
+            occurrenceId,
+            delta,
+          }),
+        })
+      )
+      if (enqueueErr) {
+        console.error(
+          `[automationEngine] fireEventRules: failed to enqueue delayed rule=${rule.id} trigger=${triggerType}:`,
+          (enqueueErr as Error).message
+        )
+      }
+      continue
+    }
 
     const log = await runRule(rule, subjects, teamId, teamData, {
       triggerTier: 'event',

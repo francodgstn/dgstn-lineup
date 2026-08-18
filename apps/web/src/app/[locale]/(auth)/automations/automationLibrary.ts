@@ -16,7 +16,7 @@
 
 import type { LucideIcon } from 'lucide-react'
 import { UserPlus, RefreshCw, Trophy, CalendarCheck, Settings2 } from 'lucide-react'
-import { TRIAL_CLEANUP_RULE, TRIAL_CLEANUP_RULE_KEY } from '@linyup/shared'
+import { TRIAL_CLEANUP_RULE, TRIAL_CLEANUP_RULE_KEY, planIsAtLeast, type SaasPlan } from '@linyup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +44,12 @@ export interface LibraryItem {
   name: string
   description: string // 1-line shown on card
   tags: string[]
-  requires_plan: 'coach' | 'studio'
+  /** The tier this ready-made rule belongs to. READ — see
+   *  `libraryItemUnlocked`: for a long time this field was declared on every
+   *  item and consulted by nothing, so a Free team could install a 'studio'
+   *  item from the dialog. A declared-but-unenforced gate is worse than none,
+   *  because everyone maintaining the catalogue reads it as a guarantee. */
+  requires_plan: 'free' | 'coach' | 'studio'
   /** Defined only for items that own their email template. Migrated items reference
    *  an existing sys_* template via the action's template_key instead. */
   template?: {
@@ -175,6 +180,102 @@ Il team {{teamName}}`,
   },
 
   {
+    // THE WELCOME, at the moment of joining. Deliberately NOT `contact_created`
+    // with an `acquisition_stage = joined` condition: for the population this
+    // mail is most for — a trial lead who converted — `contact_created` fired at
+    // trial-booking time, when the stage was `trial_booked`, and it never
+    // re-evaluates. `acquisition_stage_changed` fires on the forward move
+    // itself, including the one `auth/signupJoin.ts` makes when the signup form
+    // is completed, so the condition below is read at exactly the right instant.
+    library_key: 'lib_member_welcome',
+    category: 'trial',
+    name: 'Welcome a new member',
+    description:
+      'Sends a welcome email the moment a contact becomes a member — including a trial lead who just completed signup.',
+    tags: ['member', 'welcome', 'joined', 'onboarding', 'conversion'],
+    requires_plan: 'studio',
+    template: {
+      name: 'Welcome to the team',
+      body_mode: 'markdown',
+      translations: {
+        en: {
+          subject: 'You are in, {{firstname}} — welcome to {{teamName}}!',
+          body: `Hi {{firstname}},
+
+Welcome to **{{teamName}}** — we are really glad to have you with us.
+
+Here is how to get going:
+
+- **Book your next sessions** whenever you like, online.
+- Bring anything you need for training; if you are unsure, just ask us.
+- Questions about your membership? Reply to this email and we will sort it out.
+
+**[Book your next session ↗]({{bookingUrl}})**
+
+See you on the floor,
+The {{teamName}} team`,
+        },
+        de: {
+          subject: 'Willkommen im Team, {{firstname}} — schön, dass du bei {{teamName}} bist!',
+          body: `Hallo {{firstname}},
+
+herzlich willkommen bei **{{teamName}}** — wir freuen uns sehr, dass du dabei bist.
+
+So geht es los:
+
+- **Buche deine nächsten Einheiten** jederzeit online.
+- Bring mit, was du fürs Training brauchst; wenn du unsicher bist, frag uns einfach.
+- Fragen zu deiner Mitgliedschaft? Antworte auf diese E-Mail, wir kümmern uns darum.
+
+**[Nächste Einheit buchen ↗]({{bookingUrl}})**
+
+Bis bald,
+Das {{teamName}}-Team`,
+        },
+        fr: {
+          subject: 'Bienvenue parmi nous, {{firstname}} — vous faites partie de {{teamName}} !',
+          body: `Bonjour {{firstname}},
+
+Bienvenue chez **{{teamName}}** — nous sommes ravis de vous compter parmi nous.
+
+Pour bien démarrer :
+
+- **Réservez vos prochaines séances** en ligne, quand vous le souhaitez.
+- Apportez ce dont vous avez besoin pour l'entraînement ; en cas de doute, demandez-nous.
+- Une question sur votre abonnement ? Répondez à cet e-mail et nous nous en occupons.
+
+**[Réserver votre prochaine séance ↗]({{bookingUrl}})**
+
+À très bientôt,
+L'équipe {{teamName}}`,
+        },
+        it: {
+          subject: 'Benvenuto/a nel team, {{firstname}} — siamo felici di averti in {{teamName}}!',
+          body: `Ciao {{firstname}},
+
+Benvenuto/a in **{{teamName}}** — siamo davvero felici di averti con noi.
+
+Ecco come iniziare:
+
+- **Prenota le tue prossime sessioni** online, quando vuoi.
+- Porta ciò che ti serve per l'allenamento; se hai dubbi, chiedici pure.
+- Domande sul tuo abbonamento? Rispondi a questa email e ce ne occupiamo noi.
+
+**[Prenota la prossima sessione ↗]({{bookingUrl}})**
+
+A presto,
+Il team {{teamName}}`,
+        },
+      },
+    },
+    rule: {
+      trigger: { type: 'acquisition_stage_changed' },
+      conditions: [{ type: 'acquisition_stage', value: 'joined' }],
+      actions: [{ type: 'send_email', template_key: 'lib_member_welcome' }],
+    },
+  },
+
+  {
     // Installed ACTIVE by default for every new team (functions onTeamCreated) —
     // rule shape shared via @linyup/shared TRIAL_CLEANUP_RULE. Listed here so
     // existing teams can (re)install it and everyone can see/edit what it does.
@@ -184,7 +285,10 @@ Il team {{teamName}}`,
     description:
       'Keeps your list clean: archives (never deletes) trial bookings that never attended within 30 days. Edit the rule to change the window. Installed automatically for new teams.',
     tags: ['trial', 'cleanup', 'archive', 'hygiene'],
-    requires_plan: 'coach',
+    // 'free', and provably so: `onTeamCreated` installs this rule ACTIVE for
+    // EVERY new team whatever its plan. Locking the re-install behind Coach
+    // would refuse a Free team a rule it is already running.
+    requires_plan: 'free',
     rule: {
       trigger: { type: TRIAL_CLEANUP_RULE.trigger.type },
       conditions: TRIAL_CLEANUP_RULE.conditions.map((c) => ({ ...c })),
@@ -1060,8 +1164,14 @@ Check the contact in your Linyup dashboard to follow up.`,
 ]
 
 // ---------------------------------------------------------------------------
-// Starter bundle — subset of library items to install in one click
-// Keeps the same library_keys as the old SYSTEM_RULES for backward compat.
+// Starter bundle — subset of library items to install in one click.
+// The `sys_rule_*` keys are the old SYSTEM_RULES, kept verbatim for backward
+// compat; membership is not restricted to that prefix (see lib_member_welcome).
+// Every item lands `active: false` — the bundle installs through the same
+// `installItems` writer as the library dialog, and nothing in it is an
+// exception. Nothing here counts itself either: the button's label reads
+// `starterBundleItemsForPlan(plan).length`, so this list is the only place a
+// bundle change is made.
 // ---------------------------------------------------------------------------
 
 export const STARTER_BUNDLE_KEYS: string[] = [
@@ -1073,4 +1183,38 @@ export const STARTER_BUNDLE_KEYS: string[] = [
   'sys_rule_winback_30d',
   'sys_rule_winback_60d',
   'sys_rule_milestone_10',
+  // The welcome at the moment of joining. In the bundle because the day-one
+  // studio's first automated mail should be the one that greets a new member,
+  // not only the ones that chase a lapsed one. It fires on
+  // `acquisition_stage_changed` — the trigger that also fires when a trial lead
+  // completes the signup form — so it reaches the population it is written for
+  // rather than only contacts created already-joined. `requires_plan: 'studio'`
+  // still applies: `starterBundleItemsForPlan` filters it out below Studio, and
+  // the button's count follows.
+  'lib_member_welcome',
 ]
+
+// ---------------------------------------------------------------------------
+// Plan gating
+// ---------------------------------------------------------------------------
+
+/** Whether `plan` may install `item`. THE ONE READER of `requires_plan` —
+ *  the dialog locks on it, the select-all skips it, the install filters on it
+ *  and the starter bundle filters on it, so a new call site cannot quietly
+ *  reintroduce the unenforced-gate bug.
+ *
+ *  Fails CLOSED on an unknown plan: `usePlan()` reports null while the team
+ *  doc loads, and treating that as "allowed" would open the gate for exactly
+ *  as long as it takes to click. */
+export function libraryItemUnlocked(item: LibraryItem, plan: SaasPlan | null): boolean {
+  return plan != null && planIsAtLeast(plan, item.requires_plan)
+}
+
+/** The starter-bundle items this plan may actually install. The empty state
+ *  counts them: offering "Quick-start (8 rules)" to a team that can install
+ *  none of them is a button that does nothing. */
+export function starterBundleItemsForPlan(plan: SaasPlan | null): LibraryItem[] {
+  return AUTOMATION_LIBRARY.filter(
+    (i) => STARTER_BUNDLE_KEYS.includes(i.library_key) && libraryItemUnlocked(i, plan)
+  )
+}

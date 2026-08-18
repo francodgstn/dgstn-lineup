@@ -1,6 +1,10 @@
 # Firebase App Hosting config for the operator console (@linyup/admin).
-# Deploy as a SEPARATE backend (rootDirectory: apps/admin) on its own domain
-# (e.g. ops.linyup.app).
+# Deploy as a SEPARATE backend (rootDirectory: apps/admin) on its own domain:
+# ops.linyup.com (prod) and ops-stg.linyup.com (staging). Domains follow a
+# surface-then-environment scheme — app.linyup.com / app-stg.linyup.com for the
+# web app, ops.* for this console — with linyup.com reserved for the marketing
+# site and demo.linyup.com kept as-is because prospects see it during demos.
+# (An earlier note here suggested ops.linyup.app; that domain was never owned.)
 #
 # Runtime identity: point this backend at the dedicated `linyup-admin` service
 # account (NOT the shared firebase-app-hosting-compute SA used by apps/web). That
@@ -22,6 +26,21 @@ env:
   # Operator allowlist (comma-separated). Set per environment.
   - variable: OPERATOR_EMAILS
     value: franco.dgstn@gmail.com
+    availability:
+      - RUNTIME
+
+  # SERVER-side project id for the Admin SDK (src/lib/firebase-admin.ts). REQUIRED:
+  # that file resolves FIREBASE_PROJECT_ID || GOOGLE_CLOUD_PROJECT || GCLOUD_PROJECT
+  # and falls back to 'demo-linyup'. App Hosting populates FIREBASE_CONFIG but NONE
+  # of those three (Cloud Run doesn't set GOOGLE_CLOUD_PROJECT), and the explicit
+  # projectId passed to initializeApp overrides FIREBASE_CONFIG — so without this the
+  # SDK initialises as 'demo-linyup' and verifyIdToken rejects every real token
+  # ("invalid token" on /api/auth/session), because the token's audience is this
+  # project. Also fixes adminBucket and the target label in the shell.
+  # RUNTIME only — read per request, never inlined into the bundle (unlike the
+  # NEXT_PUBLIC_* values below, which need BUILD for exactly that reason).
+  - variable: FIREBASE_PROJECT_ID
+    value: linyup-staging
     availability:
       - RUNTIME
 

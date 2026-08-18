@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, updateDoc,
 } from 'firebase/firestore'
@@ -11,6 +13,7 @@ import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CONTACTS_COLLECTION, ACTIVITIES_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
@@ -58,6 +61,9 @@ interface GamificationSettings {
   }
   coach_badges: CoachBadge[]
 }
+
+/** Lets the floating Save submit the settings form from its FloatingSlot portal. */
+const GAMIFICATION_FORM_ID = 'gamification-settings-form'
 
 const DEFAULTS: GamificationSettings = {
   default_base_score: 10,
@@ -259,10 +265,20 @@ function LeaderboardTab({ teamId }: { teamId: string }) {
                 {initials(contact)}
               </div>
               <div className="flex-1 min-w-0">
+                {/* The name links to the record — the same fix UX-63 made on
+                    /bookings. A trial contact is deliberately shown as initials
+                    here, so that row stays plain text: linking it would undo the
+                    anonymity the initials are for. */}
                 <p className="text-sm font-medium truncate">
-                  {displayName}
-                  {isTrial && (
-                    <span className="ml-1.5 text-xs text-muted-foreground">— {t('trialLabel')}</span>
+                  {isTrial ? (
+                    <>
+                      {displayName}
+                      <span className="ml-1.5 text-xs text-muted-foreground">— {t('trialLabel')}</span>
+                    </>
+                  ) : (
+                    <Link href={`/contacts/${contact.id}` as Route} className="hover:underline">
+                      {displayName}
+                    </Link>
                   )}
                 </p>
                 {bestStreak > 0 && (
@@ -720,13 +736,14 @@ function BadgesTab({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'leaderboard' | 'scoring' | 'badges'
+const TAB_IDS = ['leaderboard', 'scoring', 'badges'] as const
+type TabId = (typeof TAB_IDS)[number]
 
 export default function GamificationPage() {
   const { currentTeamId } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Gamification')
-  const [tab, setTab] = useState<TabId>('leaderboard')
+  const [tab, setTab] = useTabParam(TAB_IDS, 'leaderboard')
   const [pendingBaseScores, setPendingBaseScores] = useState<Record<string, number | null>>({})
 
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
@@ -819,7 +836,7 @@ export default function GamificationPage() {
 
       {/* Scoring + Badges share one form */}
       {(tab === 'scoring' || tab === 'badges') && (
-        <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
+        <form id={GAMIFICATION_FORM_ID} onSubmit={handleSubmit(onSubmit)} autoComplete="off">
           {tab === 'scoring' && currentTeamId && (
             <ScoringTab
               register={register}
@@ -836,18 +853,20 @@ export default function GamificationPage() {
             <BadgesTab register={register} watch={watch} control={control} setValue={setValue} />
           )}
 
-          {/* Sticky save */}
+          {/* Sticky save — page-primary lane; portalled out of the <form>, hence
+              the explicit `form` attribute. */}
           {showSave && (
-            <div className="fixed bottom-6 right-6 z-40">
+            <FloatingSlot lane="page-primary">
               <button
                 type="submit"
+                form={GAMIFICATION_FORM_ID}
                 disabled={isSubmitting}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
                 {isSubmitting ? t('saving') : t('save')}
               </button>
-            </div>
+            </FloatingSlot>
           )}
         </form>
       )}

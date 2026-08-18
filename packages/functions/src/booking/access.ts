@@ -16,6 +16,7 @@ import {
   usageWindowDocId,
   type ActivityAccessRule,
   type ContactPaymentSnapshot,
+  type PaymentDenial,
   type SubscriptionPrice,
   type SubscriptionUsageLimit,
 } from '@linyup/shared'
@@ -92,7 +93,12 @@ export interface BookingCoverageResult extends AccessGateResult {
   denial: BookingAccessDenialReason | null
 }
 
-function denialMessage(denial: BookingAccessDenialReason, isAppointment: boolean): string {
+/** THE wording for every coverage refusal. Widened past
+ *  BookingAccessDenialReason (a strict subset) to the resolver's full denial
+ *  union so the waitlist claim — which resolves a DROP-IN target and can
+ *  therefore see the trial denials too — reuses these strings instead of
+ *  growing a second, drifting set. */
+export function denialMessage(denial: PaymentDenial, isAppointment: boolean): string {
   switch (denial) {
     case 'guest':
       return isAppointment
@@ -108,6 +114,10 @@ function denialMessage(denial: BookingAccessDenialReason, isAppointment: boolean
       return 'You have used all the classes your membership includes for this period.'
     case 'no_subscription':
       return 'This class requires an active membership you do not currently hold.'
+    case 'sign_in_required':
+      return 'Please sign in to book this class.'
+    case 'trial_used':
+      return 'This email has already used a trial'
   }
 }
 

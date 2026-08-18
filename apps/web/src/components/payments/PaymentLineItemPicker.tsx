@@ -18,6 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+// Kinds a manager may PICK. 'appointment' and 'gift_card' are deliberately not
+// offered: each is minted by one specific flow (the appointment checkout, the
+// gift-card issue dialog), and hand-tagging an arbitrary payment with one would
+// book money into that category with no booking — or no card — behind it.
 const KINDS: PaymentLineItemKind[] = ['subscription', 'course', 'product', 'drop_in', 'other']
 
 export function PaymentLineItemPicker({
@@ -35,6 +39,11 @@ export function PaymentLineItemPicker({
   const { data: products = [] } = useProducts(teamId)
 
   const kind = value?.kind ?? 'none'
+  // A stored row can carry a kind the picker does not offer. Without an option
+  // for it the trigger renders empty and the manager cannot tell what the
+  // payment is linked to, so show it — they can move off it, just not onto it.
+  const kinds =
+    kind === 'none' || KINDS.includes(kind) ? KINDS : [...KINDS, kind as PaymentLineItemKind]
   const selectedType = types.find((ty) => ty.id === value?.subscriptionTypeId)
   const prices = (selectedType?.prices ?? []).filter((p) => p.active !== false)
   const selectedProduct = products.find((p) => p.id === value?.productId)
@@ -57,7 +66,7 @@ export function PaymentLineItemPicker({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">{t('lineKind_none')}</SelectItem>
-            {KINDS.map((k) => (
+            {kinds.map((k) => (
               <SelectItem key={k} value={k}>
                 {t(`lineKind_${k}` as never)}
               </SelectItem>

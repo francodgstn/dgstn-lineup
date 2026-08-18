@@ -1,6 +1,10 @@
 import type { Timestamp } from './common'
-// Type-only import — no runtime cycle (document.ts only imports Timestamp).
+// Type-only import — no runtime cycle. document.ts imports only types
+// (Timestamp, WaiverConfig), and waiver.ts's only runtime import is
+// utils/identity, which imports nothing from here.
 import type { DocumentKind } from './document'
+// Type-only — waiver.ts imports SaasPlan from here; erased at compile (no cycle).
+import type { PublicRequiredWaiver } from './waiver'
 // Type-only import — no runtime cycle (connect.ts imports SaasPlan from here).
 import type { ConnectOnboardingModel, ConnectAccountStatus } from './connect'
 import type { PublicMainAddress } from './place'
@@ -39,6 +43,24 @@ export type PublicSurface =
   | 'kiosk'
   | 'events'
 
+/** Runtime companion to `PublicSurface`, for validating untrusted values. */
+export const PUBLIC_SURFACES: readonly PublicSurface[] = [
+  'bio-link',
+  'site',
+  'space',
+  'booking',
+  'shop',
+  'signup',
+  'documents',
+  'kiosk',
+  'events',
+]
+
+/** Type guard for an untrusted surface value (query params, stored config). */
+export function isPublicSurface(value: unknown): value is PublicSurface {
+  return typeof value === 'string' && (PUBLIC_SURFACES as readonly string[]).includes(value)
+}
+
 // Denormalized onto TeamPublicProfile so the public root page (which may only
 // read world-readable public_profile, never the private installed_plugins) can
 // tell which non-bio-link surfaces are actually live before redirecting to one.
@@ -50,8 +72,17 @@ export interface ActivePublicSurfaces {
   // available on every plan, so effectively always true. Present so the root can
   // redirect to it when chosen as the default landing.
   signup?: boolean
-  // shop is live when a sellable channel is enabled (products / online-courses
-  // plugin or Stripe Connect); the public shop aggregates whatever exists.
+  // shop is live when the studio can BE PAID (a chargeable Stripe Connect
+  // account, kill-switch up) — every shop item, membership / product / course /
+  // gift card alike, is bought through Connect. The plugins decide what is on
+  // the shelves; this decides whether there is a till (UX-33).
+  //
+  // IT IS NOT THE ROUTING ANSWER, and this is the one flag here where the two
+  // differ: without a till the shop route renders a READ-ONLY PRICE LIST, so it
+  // is still a destination. Anything asking "may I link there?" reads it
+  // through `routableSurfaces` (publicRoutes.ts), which is the only place that
+  // correction is made; anything asking "can this studio be paid?" should read
+  // `TeamPublicProfile.payments_enabled` directly.
   shop?: boolean
   // ≥1 event has been explicitly published (Event.publicVisibility === 'public').
   // Events are private by default, so this is false for most studios.
@@ -60,12 +91,74 @@ export interface ActivePublicSurfaces {
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
   // surface, so this is a discovery signal (e.g. a bio-link entry), NOT a landing.
   forms?: boolean
-  // ≥1 published + public Document exists (documents plugin active). Reached via the
+  // ≥1 public_profile MIRROR exists for one of the team's documents. Documents is
+  // no longer a plugin, so there is no install to probe — and the probe is
+  // deliberately over the MIRRORS rather than over the root `documents`
+  // collection: a team that was torn down by a downgrade still has its documents,
+  // only its mirrors were deleted, so a root-collection probe would flip the
+  // surface live over a page that renders empty. Reached via the
   // /public/{slug}/documents index, so — unlike forms — it CAN be a default landing.
   documents?: boolean
   // kiosk plugin active — the entrance-tablet surface at /public/{slug}/kiosk.
   // Reached by its own URL (paired to a device), never a default landing.
   kiosk?: boolean
+  // ── THE APPOINTMENT PICKER (/public/{slug}/appointments) — HALF AN ANSWER,
+  // and it says so in its own doc comment because the other half is on this very
+  // document and must NOT be copied into this flag.
+  //
+  // THIS FLAG IS THE CONTENT HALF: is there anything bookable behind the picker?
+  // It mirrors what `listAvailability` would return — ≥1 `status: 'active'`
+  // availability window whose `activityIds` resolve to ≥1 `type: 'appointment'`
+  // activity of this team with a bookable duration menu (priced-only durations
+  // drop out when the studio has no chargeable Connect account, exactly as they
+  // do there). Hours with no appointment activity yield zero slots, and an
+  // activity nobody published hours for is equally unbookable, so neither on its
+  // own is a live surface.
+  //
+  // THE OTHER HALF IS `bookingSettings.appointmentsEnabled`, the studio's own
+  // toggle, and it is deliberately NOT folded in here: it is written straight to
+  // this public_profile document by Settings → Booking, which does not touch the
+  // team document, so `syncTeamPublicProfile` never sees the write. A stored
+  // copy would be silently stale from the moment a studio flipped the switch —
+  // which is the one failure mode this flag was added to avoid. It is read LIVE
+  // from the same document instead, in the same read, at no cost.
+  //
+  // COMPOSE THE TWO THROUGH `appointmentPickerLive` (publicRoutes.ts) and
+  // nowhere else. Absent ⇒ not computed ⇒ treated as not live, which is the
+  // safe direction: an absent row beats a row with a guessed live state.
+  //
+  // Not a `PublicSurface` member: the picker has a landing URL, but making it
+  // one would also put it in the default-landing choices, the website header
+  // link derivation and the bio-link page-link picker. It is a deep-link
+  // destination (activity/provider/date presets), not a front door.
+  appointments?: boolean
+}
+
+// ─── Documents settings (teams/{teamId}/settings/documents) ──────────────────
+// Documents is a DEFAULT FEATURE, not a plugin, so its per-team config cannot
+// live in `installed_plugins/documents.config` any more. This is its new home.
+export interface TeamDocumentsSettings {
+  /** Published documents attached to the public signup consent checkbox. */
+  signupDocumentIds: string[]
+}
+
+/**
+ * The ONE dual read for the signup-consent selection, used by every reader —
+ * the sync that denormalises it and the panel that edits it — so the two cannot
+ * disagree about which location wins while teams are being migrated.
+ *
+ * New location first, retired plugin config second. It stays until the backfill
+ * has run everywhere; deleting the fallback before then blanks `signup_documents`
+ * for un-migrated teams, which silently drops the consent links off the anonymous
+ * signup form.
+ */
+export function resolveSignupDocumentIds(input: {
+  settings?: Partial<TeamDocumentsSettings> | null
+  legacyPluginConfig?: { signupDocumentIds?: unknown } | null
+}): string[] {
+  const pick = (v: unknown): string[] | null =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x) : null
+  return pick(input.settings?.signupDocumentIds) ?? pick(input.legacyPluginConfig?.signupDocumentIds) ?? []
 }
 
 export interface RankLevel {
@@ -148,7 +241,7 @@ export interface TeamNavDefaults {
 //  - shop-courses     → /shop?tab=courses         (sellable courses section)
 //  - space            → /space                   (member course library; online-courses plugin)
 //  - site             → /site                    (studio website; website plugin)
-//  - documents        → /documents               (studio's public documents; documents plugin)
+//  - documents        → /documents               (studio's public documents; every plan)
 // `route` may carry a query (e.g. 'shop?tab=products') — the public link is a plain
 // <a href>, so the query rides through to deep-link the right shop tab.
 export type SystemLinkTarget =
@@ -161,6 +254,7 @@ export type SystemLinkTarget =
   | 'space'
   | 'site'
   | 'documents'
+  | 'events'
 
 export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'booking',
@@ -172,6 +266,7 @@ export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'space',
   'site',
   'documents',
+  'events',
 ]
 
 export interface SystemLinkMeta {
@@ -189,6 +284,7 @@ export const SYSTEM_LINK_META: Record<SystemLinkTarget, SystemLinkMeta> = {
   space: { route: 'space', defaultIcon: 'BookOpen' },
   site: { route: 'site', defaultIcon: 'Globe' },
   documents: { route: 'documents', defaultIcon: 'FileText' },
+  events: { route: 'events', defaultIcon: 'CalendarRange' },
 }
 
 // A bio-link entry: either a custom external link (`url`) or a "page link" to one
@@ -266,6 +362,11 @@ export interface Team {
   // sub-shapes (e.g. TeamNavDefaults for `defaultNavPins`, BookingSettings)
   // live alongside their feature and get cast at the read site — see
   // TeamNavDefaults above for the nav-pins-seeding key.
+  //
+  // `settings.experimentalFeatures` is one such sub-shape:
+  // ExperimentalFeatureSettings in types/experimental.ts, read through
+  // resolveExperimentalFeatures / isExperimentalFeatureEnabled. Owner-write,
+  // like every other key in this bag.
   settings?: Record<string, unknown>
 
   // Bio-link / link-in-bio
@@ -365,6 +466,18 @@ export interface TeamMember {
   is_coach?: boolean
 }
 
+/**
+ * How the studio's booking flow behaves. Stored in exactly ONE place:
+ * `teams/{teamId}/public_profile/{teamId}.bookingSettings` — world-readable (the
+ * public booking page and the mobile app need it) and team-member writable (the
+ * admin Settings → Booking form). The booking callables read it there too.
+ *
+ * There used to be a second copy on the team doc (`settings.booking`). It is
+ * gone: the team doc is owner-only, so a manager's mirror write was denied while
+ * her public write succeeded, and the cutoff she had just set was enforced on the
+ * public page and nowhere else (UX-6). See
+ * packages/functions/src/booking/bookingSettings.ts.
+ */
 export interface BookingSettings {
   flowType: 'activity-first' | 'date-first'
   windowMonths: number
@@ -374,6 +487,31 @@ export interface BookingSettings {
   ctaUrl?: string | null
   ctaLabel?: string | null
   appointmentsEnabled?: boolean
+  /** Minutes before a session's start that online booking closes. Absent/0 = no
+   *  cutoff (bookable right up to start, today's behaviour). Enforced
+   *  authoritatively by the booking callables — see `isPastBookingCutoff`
+   *  (types/session.ts); this setting only configures the threshold. */
+  cutoffMinutes?: number
+  /**
+   * Whether the studio uses waitlists at all — a VISIBILITY switch, not an
+   * enforcement one.
+   *
+   * Off (and absent, the default) hides the per-activity waitlist toggle, so a
+   * new studio never meets the concept while setting up its first class. Most
+   * will never want a queue, and the ones who do go looking for it.
+   *
+   * It deliberately does NOT close queues that already exist: an activity keeps
+   * its stored `waitlistEnabled`, and people already waiting keep their place
+   * and their offers. Turning this off declutters the authoring surface; it does
+   * not strand somebody who is third in line. Same shape as the plan gate on the
+   * same control, and as the plugin gates in connect/pluginGate.test.ts.
+   */
+  waitlistEnabled?: boolean
+  /** How long a waitlist offer stays claimable, in minutes. Absent = 120.
+   *  It is a MAXIMUM, not a guarantee: the claim window is also clamped by the
+   *  booking cutoff and the session start, and an offer is simply not made when
+   *  what survives that clamp is too short to reach checkout. */
+  waitlistClaimMinutes?: number
 }
 
 /** A coach as exposed on the world-readable team public_profile (opt-in). */
@@ -400,6 +538,27 @@ export interface TeamPublicProfile {
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
+  // Team-wide cancellation policy shown on public booking pages and appended to
+  // confirmation emails when the activity has no `cancellationPolicy` of its
+  // own. Denormalized by syncTeamPublicProfile from
+  // teams/{id}.settings.bookingCancellationPolicy (owner-editable, same home as
+  // the existing bookingConfirmationInstructions default).
+  bookingCancellationPolicy?: string
+  // The no-show policy's PUBLIC TERMS — the fee and the number of strikes that
+  // triggers it, denormalized by syncTeamPublicProfile from
+  // teams/{id}.settings.noShowPolicy via resolveNoShowPolicy.
+  //
+  // This is here because it is the only booking money a visitor can incur AFTER
+  // they commit: `markNoShowBookings` auto-flips an un-checked-in `fromBioLink`
+  // booking to 'no_show', and at the threshold `processNoShowStrike` creates a
+  // real PolicyFee and emails a payment link. Telling somebody about that only
+  // once they owe it is the defect this field exists to close.
+  //
+  // ABSENT/NULL MEANS OFF — `enabled` is deliberately not mirrored, so there is
+  // one way for a public surface to ask the question and no way to read a fee
+  // off a disabled policy. Nothing private here: the fee and the threshold are
+  // terms the visitor is subject to.
+  noShowPolicy?: { feeAmount: number; threshold: number } | null
   // Opt-in coach roster (name + optional photo), maintained by
   // syncTeamCoachesPublicProfile when `public_coaches_enabled` is true. Consumed by
   // the organization website's coaches section. Absent/empty ⇒ not opted in.
@@ -408,6 +567,21 @@ export interface TeamPublicProfile {
   // free plan, where the bio-link shows a "Powered by Linyup" badge. The bio-link
   // must never read teams/, so the flag lives here.
   showBranding?: boolean
+  // Whether the studio can actually BE PAID online right now — its Stripe
+  // Connect account is chargeable AND the operator kill-switch is not down.
+  // Computed by syncTeamPublicProfile from the same two facts
+  // `loadEnabledTeam` + `requireChargeableAccount` enforce server-side
+  // (packages/functions/src/connect/access.ts), so the public surface and the
+  // callable cannot disagree about whether a checkout would open.
+  //
+  // It is here because a public surface may not read teams/, and it exists so
+  // that A DOOR NOBODY CAN PAY THROUGH IS NOT OFFERED: the drop-in door, the
+  // priced trial, the shop. It is NOT a "this studio is closed" flag — free
+  // and members-only doors are governed by their own rules and stay open when
+  // this is false. ABSENT/FALSE means cannot charge (fail closed): a profile
+  // written before this field existed advertises no priced door until its next
+  // sync, which is the safe direction.
+  payments_enabled?: boolean
   // Denormalized from teams/{id}.default_currency by syncTeamPublicProfile so the
   // public website pricing table can format prices without reading teams/.
   default_currency?: string
@@ -425,16 +599,67 @@ export interface TeamPublicProfile {
   // denormalized by syncTeamPublicProfile MINUS the PIN, so the public kiosk page
   // reads layout/features from one world-readable doc. Present only when installed.
   kiosk?: KioskPublicConfig
-  // Documents the studio attached to the signup consent checkbox (documents
-  // plugin config). Denormalized by syncTeamPublicProfile from the published +
-  // public documents referenced in installed_plugins/documents.config so the
-  // ANONYMOUS signup form can render consent links from a single world-readable
-  // doc (never the private installed_plugins nor the root `documents` collection).
-  signup_documents?: Array<{ slug: string; title: string; kind: DocumentKind }>
+  // Documents the studio attached to the signup consent checkbox. Denormalized by
+  // syncTeamPublicProfile from the published + public documents named in
+  // `teams/{id}/settings/documents` (TeamDocumentsSettings) — read through
+  // resolveSignupDocumentIds, which still falls back to the retired
+  // installed_plugins/documents.config for un-migrated teams — so the ANONYMOUS
+  // signup form can render consent links from one world-readable doc (never a
+  // private team subcollection, never the root `documents` collection).
+  //
+  // `documentId` and `version` are what turn the signup tick into a REAL
+  // acceptance. Before waivers, the form sent `version: ''` for every document
+  // and the server wrote it into an advisory blob nothing read — a consent
+  // record that recorded nothing. `completeSignup` now writes a ledger event per
+  // document, and it needs the id (to find the document without trusting a
+  // client-supplied slug) and the version the visitor was ACTUALLY SHOWN (to
+  // avoid recording a signature against text published a minute later).
+  // `version: null` marks a document published before versioning existed and not
+  // yet covered by scripts/backfill-document-versions.ts — no ledger row is
+  // written for one, because there is nothing to pin it to.
+  signup_documents?: Array<{
+    documentId: string
+    slug: string
+    title: string
+    kind: DocumentKind
+    version: number | null
+  }>
+  // Whether this team's PUBLIC pages may be indexed by search engines. Computed by
+  // syncTeamPublicProfile from `publicPagesIndexable(team)`; denormalized because
+  // the pages that need it are rendered from public_profile alone and must not
+  // read the private team doc. See the predicate for why a trial reads as
+  // not-indexable.
+  public_pages_indexable?: boolean
+  // The team's required waivers, SUMMARY ONLY (id, slug, title, version, minors
+  // flag) — never the body: this document is served by an
+  // unauthenticated collection-group read, so anything put here is
+  // world-readable by anyone. Computed by syncTeamPublicProfile FROM
+  // teams/{id}/waiver_policy/current.
+  //
+  // IT IS A RENDERING HINT AND NEVER A DECISION. The public surface calls
+  // resolveWaiverRequirement if and only if this list is non-empty, so a tenant
+  // with no waiver pays zero extra round-trips on the acquisition path; the
+  // AUTHORIZATION answer always comes from the policy document, which fails
+  // closed. A briefly-stale empty list therefore degrades to a server refusal
+  // the surface can act on, never to a compliance hole — and the publish path
+  // touches the team document in the same transaction so it is never stale by
+  // more than one sync.
+  required_waivers?: PublicRequiredWaiver[]
   // Denormalized from teams/{id}.settings.space.signup_nudge (absent ⇒ true): whether
   // the Space shows the "complete your signup" reminder to contacts who haven't
   // finished the full registration. The Space only ever reads public_profile.
   space_signup_nudge?: boolean
+  // The team-wide default answer to "how do I get it?" for a product sale,
+  // denormalized by syncTeamPublicProfile from
+  // teams/{id}.settings.productCollectionNote (owner-editable, the same home and
+  // the same shape as bookingCancellationPolicy above).
+  //
+  // Public for the same reason that one is: it is shown BEFORE the buyer pays,
+  // on a surface that reads public_profile alone. The per-product override
+  // travels on the mirrored product entry (`products[].collectionNote`); the
+  // shop resolves the pair through `resolveProductCollectionNote` so that the
+  // card, the checkout modal and the receipt cannot disagree.
+  productCollectionNote?: string | null
 }
 
 export interface TeamInvitation {

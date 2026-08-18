@@ -9,17 +9,40 @@
 // entitlements the contact already has — linking straight to the player. Anonymous
 // visitors get a sign-in wall (this is a "my account" area), so free-course
 // discovery also flows through the shop.
+//
+// THE ORDER OF THE PAGE IS THE POINT (UX-38 / UX-55). It opens with WHAT'S NEXT
+// — her next booking — because that is the question a member opens a portal to
+// answer. Everything that SELLS her something comes after everything that
+// SERVES her. Before this, home led with her own name, then a membership block
+// duplicated from Account, and offered four separate links into the shop and
+// none into booking.
+//
+// FOUR BLOCKS WERE DUPLICATES AND ARE GONE:
+//   1. the welcome card (name only) — the shell header already names her; the
+//      greeting now rides on the next-up card;
+//   2. the membership section — a second, DIVERGENT copy of Account's (it never
+//      learned to say a membership is cancelling). One component now, two
+//      variants, per `SpaceWaiverCard`;
+//   3. the quick-links grid (Bookings / Account) — the portal nav directly above
+//      it is those same links;
+//   4. the shop's "subscriptions" row when the membership block was already
+//      showing a "choose a plan" CTA to the same URL on the same screen.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag, Ticket, CalendarDays } from 'lucide-react'
+import { GraduationCap, CreditCard, ChevronRight, ShoppingBag, Ticket, CalendarDays } from 'lucide-react'
 import { resolvePaymentOptions, heldSubscriptionTypeIds, type CourseAccessRule } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
-import { formatCurrency } from '@/lib/format'
+import { QueryErrorState } from '@/components/ui/query-error'
+import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
+import { SpaceWaiverCard } from './SpaceWaiverCard'
+import { SpaceMembershipCard } from './SpaceMembershipCard'
+import { SpaceNextUpCard } from './SpaceNextUpCard'
+import SpaceSignInWall from './SpaceSignInWall'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpaceContact } from './useSpaceContact'
@@ -76,19 +99,74 @@ function hasAccess(
   )
 }
 
+// ─── One entry in "My courses" ────────────────────────────────────────────────
+// Extracted because the section renders the grid from two branches: the normal
+// one, and the degraded one where a query failed and we show the error state
+// above whatever entitlements we could still resolve.
+
+function CourseCard({
+  course,
+  slug,
+  cardStyle,
+}: {
+  course: PublicCourseCard
+  slug: string
+  cardStyle: CSSProperties
+}) {
+  const t = useTranslations('Space')
+  const { textMain, textMuted } = useSpaceTheme()
+  return (
+    <Link
+      href={`/public/${slug}/space/courses/${course.slug}` as Route}
+      className="rounded-xl overflow-hidden transition-all hover:scale-[1.015] hover:shadow-lg"
+      style={cardStyle}
+    >
+      <div className="aspect-video bg-muted/30 flex items-center justify-center overflow-hidden">
+        {course.coverImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={course.coverImageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
+        )}
+      </div>
+      <div className="p-3">
+        <p className="font-semibold text-sm leading-snug" style={{ color: textMain }}>
+          {course.title}
+        </p>
+        <p className="text-xs mt-1" style={{ color: textMuted }}>
+          {t('lessonCount', { count: course.lessonCount ?? 0 })}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SpaceHome() {
   const t = useTranslations('Space')
   const tEvents = useTranslations('EventProgram')
-  const { slug, teamId, isAuthenticated, contact, openSignIn } = useSpaceAuth()
+  const { slug, teamId, isAuthenticated, contact } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
-  const currency = team?.default_currency ?? 'CHF'
-  const { data: fullContact } = useSpaceContact()
+  const {
+    data: fullContact,
+    isError: contactFailed,
+    error: contactError,
+    refetch: refetchContact,
+  } = useSpaceContact()
   const [courses, setCourses] = useState<PublicCourseCard[]>([])
   const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  // ONE SLOT PER QUERY, deliberately. Any of these failing makes the library
+  // WRONG rather than empty — a 403 on the entitlements query hides exactly the
+  // courses the contact paid for — but they fail and recover independently, so a
+  // shared slot would let whichever one succeeded LAST erase a live error (and,
+  // conversely, pin a stale one over correct data). Each effect owns its slot and
+  // clears it on its own success; the section below reads the union.
+  const [courseListError, setCourseListError] = useState<unknown>(null)
+  const [entitlementsError, setEntitlementsError] = useState<unknown>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   // Upcoming published events — the studio's own plus its parent org's. Read
   // from the same world-readable mirrors the public events page uses. NOT
@@ -117,20 +195,31 @@ export default function SpaceHome() {
         }))
         cards.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         setCourses(cards)
+        // Clear where the success is stored: a transient failure must not leave a
+        // banner sitting over data that has since loaded correctly.
+        setCourseListError(null)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (cancelled) return
+        reportPublicLoadFailure('space/courses', err)
+        setCourseListError(err)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, teamId])
+  }, [isAuthenticated, teamId, retryKey])
 
   // Which 'purchase'-tier courses this contact has bought (lifetime entitlements).
+  // Authorised by the {path=**}/purchases collection-group block in
+  // firestore.rules — which is scoped by BOTH `where` clauses below, so neither
+  // may be dropped without the whole query being refused.
   useEffect(() => {
     if (!isAuthenticated || !contact?.id) {
       setPurchasedCourseIds(new Set())
+      setEntitlementsError(null)
       return
     }
     let cancelled = false
@@ -145,47 +234,46 @@ export default function SpaceHome() {
         setPurchasedCourseIds(
           new Set(snap.docs.map((d) => (d.data().courseId as string | undefined) ?? d.id))
         )
+        setEntitlementsError(null)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (cancelled) return
+        reportPublicLoadFailure('space/purchases', err)
+        setEntitlementsError(err)
+      })
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, contact?.id, teamId])
+  }, [isAuthenticated, contact?.id, teamId, retryKey])
 
-  const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
+  // The contact doc decides which subscription-tier courses are open, so its
+  // failure belongs in the library's error slot too — not only in the membership
+  // block above it. Only where it can actually hide something, though: against a
+  // course list that loaded and came back empty there is nothing to hide, and
+  // claiming otherwise would be its own false alarm.
+  const membershipError = contactFailed ? contactError : null
+  const coursesError =
+    courseListError ?? entitlementsError ?? (courses.length > 0 ? membershipError : null)
 
-  // Anonymous → sign-in wall. Space is a personal area; discovery lives in the shop.
-  if (!isAuthenticated || !contact) {
-    return (
-      <div className="mt-10 rounded-2xl p-8 text-center" style={cardStyle}>
-        <LogIn className="mx-auto h-7 w-7" style={{ color: accent }} />
-        <p className="mt-3 text-sm" style={{ color: textMuted }}>{t('accountSignInPrompt')}</p>
-        <button
-          onClick={() => openSignIn()}
-          className="mt-4 text-sm font-medium px-4 py-2 rounded-full"
-          style={{ background: accent, color: '#fff' }}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-    )
+  function retryCourses() {
+    setCourseListError(null)
+    setEntitlementsError(null)
+    setLoading(true)
+    setRetryKey((k) => k + 1)
+    void refetchContact()
   }
 
-  // ── Membership summary (subscriptions + affiliation) ──
-  const subs = fullContact?.active_subscriptions ?? []
-  const legacy =
-    !subs.length && fullContact?.subscription_type_id
-      ? [{
-          subscription_type_id: fullContact.subscription_type_id,
-          subscription_type_name: fullContact.subscription_type_name ?? null,
-          recurrence: fullContact.subscription_recurrence ?? null,
-          amount: undefined as number | undefined,
-          status: 'active' as string,
-        }]
-      : []
-  const shownSubs = subs.length ? subs : legacy
-  const aff = fullContact?.affiliation_summary
-  const hasMembership = shownSubs.length > 0 || aff?.has_active === true
+  const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
+  // The Space is painted from the STUDIO's bio-link theme, so the error block has
+  // to be too — app tokens render it near-black on a dark studio theme.
+  const errorTheme = { textMain, textMuted, accent, border: cardBorder }
+
+  // Anonymous → sign-in wall. Space is a personal area; discovery lives in the
+  // shop. The wall knows the difference between "not signed in" and "not known
+  // yet" — see SpaceSignInWall.
+  if (!isAuthenticated || !contact) {
+    return <SpaceSignInWall prompt={t('accountSignInPrompt')} />
+  }
 
   // ── My courses = accessible entitlements only (no locked/buy cards here) ──
   // Full held union when the fuller contact doc has loaded (active_subscriptions
@@ -209,12 +297,15 @@ export default function SpaceHome() {
   // The shop is the courses' home and lists every tier, so link to it whenever the
   // studio has any shop-visible course (not just purchasable ones).
   const hasShopCourses = courses.some((c) => c.hideFromShop !== true)
-  const hasActiveSubscription = shownSubs.length > 0
+  // A contact with a live plan is here to CHANGE it, not to start one. Without a
+  // plan the membership block above is already offering exactly this URL, and
+  // two links to one page on one screen is the duplication UX-55 counted.
+  const hasActiveSubscription =
+    (fullContact?.active_subscriptions?.length ?? 0) > 0 || !!fullContact?.subscription_type_id
   const shopLinks = [
-    hasSubscriptions && {
+    hasSubscriptions && hasActiveSubscription && {
       key: 'subscriptions',
-      // A contact with a plan is more likely here to change it than to start one.
-      label: hasActiveSubscription ? t('changeSubscription') : t('shopSubscriptions'),
+      label: t('changeSubscription'),
       icon: CreditCard,
       href: `/public/${slug}/shop?tab=subscriptions`,
     },
@@ -234,13 +325,9 @@ export default function SpaceHome() {
 
   return (
     <div className="mt-6 space-y-4">
-      {/* Welcome */}
-      <div className="rounded-2xl p-4" style={cardStyle}>
-        <p className="text-xs" style={{ color: textMuted }}>{t('welcomeBack')}</p>
-        <p className="text-lg font-semibold" style={{ color: textMain }}>
-          {contact.firstname} {contact.lastname}
-        </p>
-      </div>
+      {/* WHAT'S NEXT — first, above everything, and carrying the greeting the
+          standalone welcome card used to carry on its own. */}
+      <SpaceNextUpCard bookingLive={team?.active_public_surfaces?.booking === true} />
 
       {/* Complete-signup reminder — PROMINENT when a paid 'full'-mode purchase left
           the registration unfinished (pending_signup), light for self-registered
@@ -278,55 +365,28 @@ export default function SpaceHome() {
           </div>
         ) : null)}
 
-      {/* Membership */}
-      <section className="rounded-2xl p-4" style={cardStyle}>
-        <div className="flex items-center gap-2 mb-3">
-          <CreditCard className="h-4 w-4" style={{ color: accent }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
-            {t('membershipTitle')}
-          </h2>
-        </div>
-        {!hasMembership ? (
-          <div>
-            <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
-            {/* Prompt to pick a plan — only when the studio actually sells subscriptions */}
-            {hasSubscriptions && (
-              <Link
-                href={`/public/${slug}/shop?tab=subscriptions` as Route}
-                className="mt-2 inline-block text-sm font-medium hover:underline"
-                style={{ color: accent }}
-              >
-                {t('membershipNoneCta')} →
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {shownSubs.map((s, i) => (
-              <div key={s.subscription_type_id ?? i} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium" style={{ color: textMain }}>
-                  {s.subscription_type_name ?? t('membershipActive')}
-                  {s.recurrence ? <span style={{ color: textMuted }}> · {s.recurrence}</span> : null}
-                </span>
-                {typeof s.amount === 'number' && (
-                  <span className="text-sm" style={{ color: textMuted }}>{formatCurrency(s.amount, currency)}</span>
-                )}
-              </div>
-            ))}
-            {aff?.has_active && (
-              <div className="flex items-center gap-1.5 text-sm" style={{ color: textMain }}>
-                <BadgeCheck className="h-4 w-4" style={{ color: '#16a34a' }} />
-                {t('affiliationActive')}
-                {aff.types?.length ? <span style={{ color: textMuted }}> · {aff.types.join(', ')}</span> : null}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {/* A superseded or missing signature, surfaced to a member who is NOT
+          currently booking — which is the only way a `require_resign` publish
+          reaches somebody before it refuses them mid-flow. Renders nothing when
+          everything is in order. */}
+      <SpaceWaiverCard variant="banner" />
+
+      {/* Membership — ONE implementation, shared with Account (see
+          SpaceMembershipCard). The copy this replaced had already fallen behind
+          Account's: it never said a membership was cancelling. */}
+      <SpaceMembershipCard variant="summary" slug={slug} hasSubscriptionsForSale={hasSubscriptions} />
 
       {/* Lesson credits — compact list of credit-pack balances (denormalised
-          Contact.credit_summary). Hidden entirely when the contact holds none. */}
-      {(fullContact?.credit_summary?.length ?? 0) > 0 && (
+          Contact.credit_summary). Hidden entirely when the contact holds none —
+          but NOT when the contact read FAILED. `credit_summary` lives on the doc
+          that just refused to load, so the gate below cannot tell "no credits"
+          from "no answer", and the whole section disappearing off the page is
+          read by a member as the first one: lessons they paid for, gone. Absence
+          because we could not look is not absence in fact.
+          The sentence rather than a second QueryErrorState, for the same reason
+          as AccountHome's profile card: this IS the membership block's failure,
+          one section above, and that block already carries the Retry. */}
+      {(membershipError != null || (fullContact?.credit_summary?.length ?? 0) > 0) && (
         <section className="rounded-2xl p-4" style={cardStyle}>
           <div className="flex items-center gap-2 mb-3">
             <Ticket className="h-4 w-4" style={{ color: accent }} />
@@ -334,30 +394,37 @@ export default function SpaceHome() {
               {t('creditsTitle')}
             </h2>
           </div>
-          <div className="space-y-2">
-            {fullContact!.credit_summary!.map((entry) => (
-              <div key={entry.subscription_type_id} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium" style={{ color: textMain }}>
-                  {entry.subscription_type_name ?? t('membershipActive')}
-                </span>
-                <span className="text-sm" style={{ color: textMuted }}>
-                  {t('creditsRemaining', { count: entry.remaining })}
-                  {entry.next_expires_at && (
-                    <>
-                      {' '}
-                      · {t('creditsExpiresOn', { date: entry.next_expires_at.toDate().toLocaleDateString() })}
-                    </>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
+          {membershipError != null ? (
+            <p role="alert" className="text-sm" style={{ color: textMuted }}>
+              {t('creditsUnknown')}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {fullContact!.credit_summary!.map((entry) => (
+                <div key={entry.subscription_type_id} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium" style={{ color: textMain }}>
+                    {entry.subscription_type_name ?? t('membershipActive')}
+                  </span>
+                  <span className="text-sm" style={{ color: textMuted }}>
+                    {t('creditsRemaining', { count: entry.remaining })}
+                    {entry.next_expires_at && (
+                      <>
+                        {' '}
+                        · {t('creditsExpiresOn', { date: entry.next_expires_at.toDate().toLocaleDateString() })}
+                      </>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
       {/* My courses — accessible entitlements only; discovery/buying is in the shop.
-          Hidden entirely when the studio publishes no courses. */}
-      {(loading || courses.length > 0) && (
+          Hidden entirely when the studio publishes no courses — but NOT when a
+          query failed, because "no courses" would then be a claim we cannot make. */}
+      {(loading || courses.length > 0 || coursesError != null) && (
         <section className="rounded-2xl p-4" style={cardStyle}>
           <div className="flex items-center gap-2 mb-3">
             <GraduationCap className="h-4 w-4" style={{ color: accent }} />
@@ -373,66 +440,33 @@ export default function SpaceHome() {
                 style={{ borderColor: accent, borderTopColor: 'transparent' }}
               />
             </div>
+          ) : coursesError != null ? (
+            // A failure never renders as an empty library. Anything that DID
+            // resolve still shows below it — the list is incomplete, not absent.
+            <>
+              <QueryErrorState
+                onRetry={retryCourses}
+                title={t('coursesLoadFailed')}
+                detail={loadFailureDetail(coursesError)}
+                theme={errorTheme}
+              />
+              {myCourses.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {myCourses.map((course) => (
+                    <CourseCard key={course.id} course={course} slug={slug} cardStyle={cardStyle} />
+                  ))}
+                </div>
+              )}
+            </>
           ) : myCourses.length === 0 ? (
             <p className="text-sm py-4" style={{ color: textMuted }}>{t('noAccessibleCourses')}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {myCourses.map((course) => (
-                <Link
-                  key={course.id}
-                  href={`/public/${slug}/space/courses/${course.slug}` as Route}
-                  className="rounded-xl overflow-hidden transition-all hover:scale-[1.015] hover:shadow-lg"
-                  style={cardStyle}
-                >
-                  <div className="aspect-video bg-muted/30 flex items-center justify-center overflow-hidden">
-                    {course.coverImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={course.coverImageUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <GraduationCap className="h-8 w-8" style={{ color: textMuted }} />
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="font-semibold text-sm leading-snug" style={{ color: textMain }}>
-                      {course.title}
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: textMuted }}>
-                      {t('lessonCount', { count: course.lessonCount ?? 0 })}
-                    </p>
-                  </div>
-                </Link>
+                <CourseCard key={course.id} course={course} slug={slug} cardStyle={cardStyle} />
               ))}
             </div>
           )}
-        </section>
-      )}
-
-      {/* Shop — the studio's sellable channels, deep-linked to the right shop tab */}
-      {shopLinks.length > 0 && (
-        <section className="rounded-2xl p-4" style={cardStyle}>
-          <div className="flex items-center gap-2 mb-3">
-            <ShoppingBag className="h-4 w-4" style={{ color: accent }} />
-            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
-              {t('shopTitle')}
-            </h2>
-          </div>
-          <div className="grid gap-2">
-            {shopLinks.map((l) => {
-              const Icon = l.icon
-              return (
-                <Link
-                  key={l.key}
-                  href={l.href as Route}
-                  className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
-                  style={{ background: `${accent}14`, color: textMain }}
-                >
-                  <Icon className="h-4 w-4" style={{ color: accent }} />
-                  <span className="flex-1 text-sm font-medium">{l.label}</span>
-                  <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
-                </Link>
-              )
-            })}
-          </div>
         </section>
       )}
 
@@ -481,27 +515,39 @@ export default function SpaceHome() {
         </section>
       )}
 
-      {/* Quick links to the other portal modules */}
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { href: `/public/${slug}/space/bookings`, label: t('navBookings'), icon: CalendarClock },
-          { href: `/public/${slug}/space/account`, label: t('navAccount'), icon: User },
-        ].map((q) => {
-          const Icon = q.icon
-          return (
-            <Link
-              key={q.href}
-              href={q.href as Route}
-              className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
-              style={{ background: `${accent}14`, color: textMain }}
-            >
-              <Icon className="h-4 w-4" style={{ color: accent }} />
-              <span className="flex-1 text-sm font-medium">{q.label}</span>
-              <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
-            </Link>
-          )
-        })}
-      </div>
+      {/* Shop — the studio's sellable channels, deep-linked to the right shop tab */}
+      {shopLinks.length > 0 && (
+        <section className="rounded-2xl p-4" style={cardStyle}>
+          <div className="flex items-center gap-2 mb-3">
+            <ShoppingBag className="h-4 w-4" style={{ color: accent }} />
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
+              {t('shopTitle')}
+            </h2>
+          </div>
+          <div className="grid gap-2">
+            {shopLinks.map((l) => {
+              const Icon = l.icon
+              return (
+                <Link
+                  key={l.key}
+                  href={l.href as Route}
+                  className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
+                  style={{ background: `${accent}14`, color: textMain }}
+                >
+                  <Icon className="h-4 w-4" style={{ color: accent }} />
+                  <span className="flex-1 text-sm font-medium">{l.label}</span>
+                  <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* NO quick-links grid here. It listed "My bookings" and "Account" —
+          the two tabs the portal nav renders a few pixels above it, on every
+          page of the portal. A second copy of a navigation control is not a
+          shortcut; it is the same control twice. */}
 
       {/* Branding */}
       {team?.showBranding === true && (

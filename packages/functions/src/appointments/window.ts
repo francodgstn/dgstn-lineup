@@ -19,19 +19,23 @@ import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { loadContactPaymentSnapshot } from '../booking/access'
+import { attachWaiverContact, enforceWaiverGate, parseWaiverSubmissions } from '../waivers/gate'
 import {
   AVAILABILITY_COLLECTION,
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   ACTIVITIES_COLLECTION,
+  TEAMS_COLLECTION,
   GUEST_SNAPSHOT,
   appointmentSlotBlocked,
   resolveAppointmentDurations,
+  resolveDurationSale,
   resolvePaymentOptions,
   type Activity,
   type ActivityDuration,
   type ActivityMemberBenefit,
   type Availability,
   type Benefit,
+  localizedPublicUrl,
 } from '@linyup/shared'
 import {
   DAY_MS,
@@ -69,6 +73,11 @@ interface ActivityInfo {
   /** Priced duration menu (resolveAppointmentDurations default applied). */
   durations: ActivityDuration[]
   memberBenefit?: ActivityMemberBenefit | Benefit
+  /** Per-activity cancellation-policy override; the picker falls back to the
+   *  team default it already has (TeamPublicProfile.bookingCancellationPolicy).
+   *  Display-only, and the same text the confirmation email appends — the point
+   *  is that the visitor reads it BEFORE the button, not after. */
+  cancellationPolicy?: string | null
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
@@ -79,6 +88,7 @@ function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
     name: a.name || 'Appointment',
     durations,
     memberBenefit: a.memberBenefit,
+    cancellationPolicy: a.cancellationPolicy?.trim() || null,
   }
 }
 
@@ -177,6 +187,27 @@ export const listAvailability = onCall(async (request) => {
   if (data.providerId) templates = templates.filter((t) => t.providerId === data.providerId)
   if (templates.length === 0) return { coaches: [] }
 
+  // CAN THE STUDIO BE PAID? A priced duration is a door that only opens through
+  // Stripe: `createAppointmentCheckout` calls requireChargeableAccount and
+  // `bookAppointment` refuses a payable caller with `payment_required`. So when
+  // the studio has no chargeable account, offering a priced length puts a slot
+  // in front of a visitor that neither path can complete (UX-33) — the menu
+  // drops those lengths instead, here rather than in each client, so the web
+  // picker and the mobile app cannot disagree.
+  //
+  // "Cannot take money" is NOT "free": an UNPRICED duration stays bookable for
+  // anyone, exactly as before. The deliberate cost is a member whose
+  // `memberBenefit` would have covered a priced length free — they lose that
+  // length too while the account is unfinished, because this listing is built
+  // once for every caller (anonymous included) and does not resolve the
+  // caller's coverage. Finishing Connect onboarding restores it.
+  const teamSnap = await db.collection(TEAMS_COLLECTION).doc(data.teamId).get()
+  const teamPayments = teamSnap.data()?.payments as
+    | { connectStatus?: string; connectEnabled?: boolean }
+    | undefined
+  const canCharge =
+    teamPayments?.connectEnabled !== false && teamPayments?.connectStatus === 'enabled'
+
   // Batch-load the union of referenced activities; keep only bookable appointment offerings.
   const activityIds = new Set<string>()
   for (const t of templates) for (const id of t.activityIds ?? []) activityIds.add(id)
@@ -190,7 +221,16 @@ export const listAvailability = onCall(async (request) => {
     if (a.type !== 'appointment' || a.teamId !== data.teamId) continue
     if (data.activityId && doc.id !== data.activityId) continue
     const info = toActivityInfo(doc.id, a)
-    if (info) activityMap.set(doc.id, info)
+    if (!info) continue
+    if (!canCharge) {
+      // 'priced' is the only mode that needs Stripe. A benefit_only length is
+      // paid for by the subscription/pack the contact already holds, so it
+      // survives an unfinished Connect account exactly as an unpriced one does.
+      const bookable = info.durations.filter((d) => resolveDurationSale(d).mode !== 'priced')
+      if (bookable.length === 0) continue // nothing here anyone could book
+      info.durations = bookable
+    }
+    activityMap.set(doc.id, info)
   }
   if (activityMap.size === 0) return { coaches: [] }
 
@@ -210,6 +250,7 @@ export const listAvailability = onCall(async (request) => {
     activityName: string
     durations: ActivityDuration[]
     memberBenefit?: ActivityMemberBenefit | Benefit
+    cancellationPolicy: string | null
     location: string | null
     onlineUrl: string | null
     daysMap: Map<number, Record<string, Set<number>>>
@@ -266,6 +307,7 @@ export const listAvailability = onCall(async (request) => {
             activityName: info.name,
             durations: info.durations,
             memberBenefit: info.memberBenefit,
+            cancellationPolicy: info.cancellationPolicy ?? null,
             location: tpl.location ?? null,
             onlineUrl: tpl.onlineUrl ?? null,
             daysMap: new Map(),
@@ -291,14 +333,23 @@ export const listAvailability = onCall(async (request) => {
           activityId: acc.activityId,
           activityName: acc.activityName,
           // Priced duration menu so the picker can show prices per length.
-          durations: acc.durations.map((d) => ({
-            minutes: d.minutes,
-            priceAmount: d.priceAmount ?? null,
-          })),
+          // `benefitOnly` rides along because the picker must be able to say
+          // "not sold individually — {pack} opens it" instead of rendering a
+          // free-looking slot the server will refuse (UX-70).
+          durations: acc.durations.map((d) => {
+            const sale = resolveDurationSale(d)
+            return {
+              minutes: d.minutes,
+              priceAmount: sale.priceAmount,
+              benefitOnly: sale.mode === 'benefit_only',
+            }
+          }),
           // Verbatim from the activity — the picker mirrors the resolver
           // (resolveEffectiveAppointmentPrice) for display; the server always
           // re-resolves authoritatively at booking/checkout.
           memberBenefit: acc.memberBenefit ?? null,
+          // Display-only; the picker falls back to the team-wide default.
+          cancellationPolicy: acc.cancellationPolicy,
           location: acc.location,
           onlineUrl: acc.onlineUrl,
           days,
@@ -331,6 +382,8 @@ export const bookAppointment = onCall(async (request) => {
     contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
     authenticatedContactId?: string
     verificationCodeId?: string
+    /** Ticks from the waiver step — see waivers/gate.ts. */
+    waiverAcceptances?: unknown
   }
   if (
     !data?.teamId ||
@@ -370,6 +423,17 @@ export const bookAppointment = onCall(async (request) => {
       priceAmount: priceOption.amount,
     })
   }
+  // NO OPTION AT ALL — a benefit_only length (UX-70) the caller has no way into.
+  // This branch must exist and must come BEFORE the free path: without it an
+  // empty options array falls straight through to "books without spending",
+  // which is the free one-to-one the whole feature exists to prevent. The
+  // resolver's denial is passed through verbatim so the picker can say sign in
+  // vs buy the pack.
+  if (!priceOption) {
+    throw new HttpsError('failed-precondition', 'This duration is not sold individually.', {
+      reason: priced.denial ?? 'no_subscription',
+    })
+  }
   // Free path: 'covered' (unpriced, or included via an unmetered subscription)
   // books without spending; 'spend_credits' burns one credit transactionally.
   const creditSpendTypeId =
@@ -381,6 +445,44 @@ export const bookAppointment = onCall(async (request) => {
         ? priceOption.via.subscriptionTypeId
         : null
 
+  // ── The waiver gate — after the caller is identified, before the contact is
+  // created. Everything above is a read; `resolveOrCreateAppointmentContact`
+  // below is the first write, so a refusal here costs nothing.
+  //
+  // The one cost that IS real on this rail is upstream and unavoidable:
+  // `resolveAppointmentCaller` marks the OTP code used at its own entry, so a
+  // refusal that sends the caller back to the email step costs them one
+  // re-verification against a three-per-hour budget. That is why the picker
+  // presents the step BEFORE calling this callable rather than reacting to the
+  // refusal — the refusal is the floor, not the plan. ──
+  const waiverNowMs = Date.now()
+  let waiverOutcome = await enforceWaiverGate({
+    teamId,
+    activityId,
+    subject: {
+      contactId: caller.authenticatedContact?.id ?? null,
+      name: `${caller.sanitized.firstname} ${caller.sanitized.lastname}`.trim(),
+      email: caller.sanitized.email,
+    },
+    submissions: parseWaiverSubmissions(data.waiverAcceptances),
+    source: 'appointment',
+    // See the same three-way distinction in bookSession: an OTP proves control
+    // of that mailbox, a contact session identifies only the contact.
+    signerEmailVerifiedBy: data.authenticatedContactId
+      ? 'verified_code'
+      : caller.authenticatedContact
+        ? 'session'
+        : 'none',
+    // The address that strength is ABOUT — the mailbox the code went to, which
+    // on this rail is routinely a parent's rather than the subject's. null on
+    // the session and guest paths.
+    signerEmail: caller.verifiedEmail,
+    ip: request.rawRequest?.ip ?? null,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale: null,
+    nowMs: waiverNowMs,
+  })
+
   // ── Resolve/create the contact — guests are always allowed now (no access gate). ──
   const { contactId, isNewContact } = await resolveOrCreateAppointmentContact({
     teamId,
@@ -388,6 +490,7 @@ export const bookAppointment = onCall(async (request) => {
     sanitized: caller.sanitized,
     authenticatedContact: caller.authenticatedContact,
   })
+  waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
 
   // ── Overlap-safe create (transaction) ──
   const bookingToken = generateSecureToken()
@@ -447,6 +550,9 @@ export const bookAppointment = onCall(async (request) => {
       status: 'confirmed' as const,
       fullname: `${caller.sanitized.firstname} ${caller.sanitized.lastname}`,
     }),
+    ...(waiverOutcome.bookingWaiverState
+      ? { waiver_state: waiverOutcome.bookingWaiverState }
+      : {}),
   }
 
   await runAppointmentSlotTransaction({
@@ -460,6 +566,9 @@ export const bookAppointment = onCall(async (request) => {
     endMs: ctx.end.getTime(),
     bufferMs: ctx.bufferMs,
     creditSpend: creditSpendTypeId ? { contactId, subscriptionTypeId: creditSpendTypeId } : undefined,
+    // The acceptance rides INSIDE the slot transaction — the free path's seat
+    // and its signature commit together or not at all.
+    waiverLedger: { accepts: waiverOutcome.accepts, nowMs: waiverNowMs },
   })
 
   if (!isNewContact) {
@@ -473,8 +582,12 @@ export const bookAppointment = onCall(async (request) => {
   }
 
   // ── Emails (confirmation + .ics + coach notification) ──
+  // Locale-pinned to the studio's language, like the mail it goes into — an
+  // unprefixed link opens in the reader's browser language instead.
   const cancelUrl = ctx.teamSlug
-    ? `${getHostingUrl()}/public/${ctx.teamSlug}/appointments/cancel?token=${bookingToken}`
+    ? localizedPublicUrl(getHostingUrl(), ctx.lang, ctx.teamSlug, 'appointments/cancel', {
+        token: bookingToken,
+      })
     : null
   await sendAppointmentBookingEmails({
     teamId,
@@ -489,6 +602,13 @@ export const bookAppointment = onCall(async (request) => {
     onlineUrl: ctx.tpl.onlineUrl ?? null,
     cancelUrl,
     bookingId: `${sessionRef.id}-${contactId}`,
+    // FREE BY CONSTRUCTION. This callable refuses a payable caller outright
+    // (`payment_required` above) — the money rail is createAppointmentCheckout →
+    // the Connect webhook, which sends its own confirmation as a receipt. A
+    // credit-pack spend also lands here and is NOT counted as paid, exactly as
+    // the class free path treats one: `bookingWasPaidFor` reads money and gift
+    // cards, and widening it is a decision for the predicate, not for a mailer.
+    wasPaidFor: false,
     client: caller.sanitized,
   })
 

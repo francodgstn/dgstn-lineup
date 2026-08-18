@@ -8,6 +8,7 @@ import {
   normalizeBenefit,
   resolveActivityAccessRule,
   resolveAppointmentDurations,
+  resolveDurationSale,
   resolvePaymentOptions,
   resolveProductPrice,
   resolveUsageLimit,
@@ -132,9 +133,15 @@ export type PriceCell =
       kind: 'pay'
       /** Major units, team currency. */
       amount: number
-      /** Set when a member rate applied — render the base struck through. */
+      /** Set when a member rate OR a promo code lowered the price — render the
+       *  base struck through. */
       baseAmount?: number
       viaTypeId?: string
+      /** The promo code that priced this cell, when one beat both the list price
+       *  and the member benefit. Display only — this page never applies a code
+       *  itself (personas have none); the field exists so a real quote flowing
+       *  through the same helper renders the same way a checkout charges. */
+      promoCode?: string
       source: 'base' | 'drop_in' | 'trial' | 'course_price' | 'product'
     }
   | { kind: 'blocked'; denial: PaymentDenial; trialAvailable?: boolean }
@@ -176,11 +183,24 @@ function fromResult(
   if (option.type === 'spend_credits') {
     return { kind: 'credit', typeId: option.via.subscriptionTypeId, remaining: option.remaining }
   }
+  // A modifier priced this cell: EITHER a member benefit or a promo code, never
+  // both (best-one-wins, and the resolver stamps at most one). Both carry the
+  // same `baseAmount` — the list price the discount was taken from — so the
+  // struck-through figure is one field read from whichever won.
+  //
+  // `viaTypeId` falls through to `appliedPromo.supersededBenefit` on purpose:
+  // without it, every running campaign would blank the member badge on this page
+  // for exactly the members who used the code — the studio's own attribution,
+  // gone while a campaign runs. (`supersededBenefit` carries no `baseAmount` of
+  // its own, and needs none: `appliedPromo.baseAmount` IS the same list price
+  // `appliedBenefit.baseAmount` would have carried.)
+  const promo = option.appliedPromo
   return {
     kind: 'pay',
     amount: option.amount,
-    baseAmount: option.appliedBenefit ? option.appliedBenefit.baseAmount : undefined,
-    viaTypeId: option.appliedBenefit?.subscriptionTypeId,
+    baseAmount: option.appliedBenefit?.baseAmount ?? promo?.baseAmount,
+    viaTypeId: option.appliedBenefit?.subscriptionTypeId ?? promo?.supersededBenefit?.subscriptionTypeId,
+    ...(promo ? { promoCode: promo.code } : {}),
     source: option.source,
   }
 }
@@ -321,6 +341,7 @@ export type PricingWarningCode =
   | 'benefit_bad_percent'
   | 'gated_no_newcomer_path'
   | 'credits_unusable'
+  | 'appointment_no_way_in'
 
 export interface PricingWarning {
   code: PricingWarningCode
@@ -362,19 +383,64 @@ export function computePricingHealth(
   for (const a of activities) {
     const isAppointment = a.type === 'appointment'
     checkBenefit(a.memberBenefit, a.name, 'activity', a.id)
-    if (isAppointment) continue
+    if (isAppointment) {
+      // UX-70's own failure mode: a length sold ONLY through the member benefit
+      // (`benefitOnly`), with no benefit that actually covers it, is bookable by
+      // NOBODY — the appointment twin of `gated_no_newcomer_path`, and the
+      // reason that fix could not ship without this check. Only an INCLUDED
+      // benefit is a way in: a percentage off a price that does not exist opens
+      // nothing (see the resolver's appointment arm).
+      const hasBenefitOnly = (a.durations ?? []).some(
+        (d) => resolveDurationSale(d).mode === 'benefit_only'
+      )
+      const benefit = normalizeBenefit(a.memberBenefit)
+      const opensDoor =
+        !!benefit &&
+        (benefit.effect === 'included' || benefit.effect === 'spend_credits') &&
+        benefit.subscriptionTypeIds.length > 0
+      if (hasBenefitOnly) {
+        // Those types ARE where a credit pack gets spent, so they count for
+        // `credits_unusable` exactly as a subscription-gated class does.
+        if (opensDoor) benefit!.subscriptionTypeIds.forEach((id) => acceptedTypeIds.add(id))
+        else
+          warnings.push({
+            code: 'appointment_no_way_in',
+            severity: 'error',
+            subjectName: a.name,
+            subjectKind: 'activity',
+            subjectId: a.id,
+          })
+      }
+      continue
+    }
     const rule = resolveActivityAccessRule(a)
-    if (rule.type !== 'subscription') continue
-    const allowed = rule.subscriptionTypeIds ?? []
-    allowed.forEach((id) => acceptedTypeIds.add(id))
-    if (allowed.length === 0) {
-      warnings.push({
-        code: 'gated_empty_allowlist',
-        severity: 'error',
-        subjectName: a.name,
-        subjectKind: 'activity',
-        subjectId: a.id,
-      })
+    // 'open' is the only tier a newcomer can always walk into. BOTH gated tiers
+    // ('members' and 'subscription') refuse a stranger — resolveClassCoverage
+    // denies 'guest'/'not_joined' before it ever looks at subscriptions — so the
+    // newcomer-path check below must run on both. It used to `continue` on
+    // anything but 'subscription', which blinded it to 'members': the DEFAULT
+    // tier of every new class.
+    if (rule.type === 'open') continue
+    if (rule.type === 'subscription') {
+      const allowed = rule.subscriptionTypeIds ?? []
+      allowed.forEach((id) => acceptedTypeIds.add(id))
+      // Deliberately subscription-only, both of them:
+      //  · an empty allow-list is a broken RULE — 'members' has no allow-list to
+      //    be empty (it gates on joined, not on holding a plan), so a studio that
+      //    sells no subscriptions at all still has a perfectly bookable class;
+      //  · acceptedTypeIds feeds `credits_unusable`, which asks where a credit
+      //    gets SPENT. A 'members' class covers a joined contact outright
+      //    (`via: { reason: 'members' }`) and burns no credit, so it must not
+      //    count as a place a credit pack is usable.
+      if (allowed.length === 0) {
+        warnings.push({
+          code: 'gated_empty_allowlist',
+          severity: 'error',
+          subjectName: a.name,
+          subjectKind: 'activity',
+          subjectId: a.id,
+        })
+      }
     }
     const hasDropIn = a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number'
     if (!hasDropIn && a.trialEnabled !== true) {

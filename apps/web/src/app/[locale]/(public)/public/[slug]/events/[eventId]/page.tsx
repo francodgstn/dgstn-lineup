@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { usePublicTeam } from '../../PublicTeamProvider'
 import { usePublicEvent } from '@/components/events/program/usePublicEvents'
 import { PublicEventDetail } from '@/components/events/program/PublicEventDetail'
+import { publicHref, publicSubHref } from '@/lib/publicRoutes'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,9 +44,9 @@ export default function PublicEventDetailPage() {
     <div className="mx-auto max-w-2xl px-4 py-8">
       <PublicEventDetail
         event={event}
-        backHref={`/public/${slug}/events`}
+        backHref={publicHref(slug, 'events')}
         backLabel={t('publicBackToEvents')}
-        printHref={`/public/${slug}/events/${event.id}/print`}
+        printHref={publicSubHref(slug, 'events', [event.id, 'print'])}
       />
     </div>
   )

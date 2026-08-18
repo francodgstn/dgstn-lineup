@@ -6,8 +6,11 @@ import { sendBookingReminders } from './sendBookingReminders'
 import { runScheduledRules } from './runScheduledRules'
 import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
+import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
+import { rollSessionSeries } from './rollSessionSeries'
+import { sweepWaitlistOffers } from '../booking/waitlist/sweep'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
 
 // Booking reminders run HOURLY (not in the 02:00 batch): multi-step schedules
@@ -20,6 +23,16 @@ export const bookingRemindersHourly = onSchedule(
   async () => {
     await publishMessagingEnv()
     await sendBookingReminders()
+    // The waitlist rides this schedule for the same reason reminders do: a claim
+    // window is two hours, so an offer that lapses at 11:00 has to roll on to the
+    // next person then — the 02:00 batch would leave the seat dead all day. Its
+    // own failure must not take the reminders down with it, and the next hour
+    // re-derives everything from storage.
+    try {
+      await sweepWaitlistOffers()
+    } catch (err) {
+      console.error('sweepWaitlistOffers failed:', err) // eslint-disable-line no-console
+    }
   },
 )
 
@@ -47,7 +60,16 @@ export const dailyTasks = onSchedule(
       { name: 'runScheduledRules', handler: runScheduledRules },
       { name: 'expireAffiliations', handler: expireAffiliations },
       { name: 'expirePendingBookings', handler: expirePendingBookings },
+      // Org member invitations past their deadline. Bookkeeping ONLY — accepting
+      // already refuses on the deadline itself, so this sweep can never grant
+      // anything and its failure is a stale row, not an open door. See the
+      // module header for why it earns a place the waiver work gave nothing.
+      { name: 'expireOrgMemberInvitations', handler: expireOrgMemberInvitations },
       { name: 'purgeProvisionalContacts', handler: purgeProvisionalContacts },
+      // The rolling 6-month horizon for recurring classes. Without it a series
+      // simply stops at whatever was materialised the day it was created, and
+      // every public booking link for it goes with it.
+      { name: 'rollSessionSeries', handler: rollSessionSeries },
       // Recurring accounting entry templates (finance plugin) — e.g. monthly rent.
       { name: 'materializeRecurringEntries', handler: materializeRecurringEntries },
     ]

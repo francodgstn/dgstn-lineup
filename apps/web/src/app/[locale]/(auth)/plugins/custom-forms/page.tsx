@@ -16,9 +16,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ClipboardList, Plus, MessageSquare } from 'lucide-react'
+import { ClipboardList, Plus, Copy, MessageSquare } from 'lucide-react'
 import type { Form, FormStatus } from '@linyup/shared'
-import { useForms, createForm, countForms } from '@/plugins/custom-forms/hooks'
+import { useForms, createForm, duplicateForm, countForms } from '@/plugins/custom-forms/hooks'
 import { MAX_FORMS_PER_TEAM } from '@/plugins/custom-forms/limits'
 
 const STATUS_BADGE: Record<FormStatus, string> = {
@@ -27,13 +27,28 @@ const STATUS_BADGE: Record<FormStatus, string> = {
   archived: 'bg-amber-100 text-amber-700',
 }
 
-function FormCard({ form, onOpen }: { form: Form; onOpen: () => void }) {
+function FormCard({
+  form,
+  onOpen,
+  onDuplicate,
+  duplicating,
+}: {
+  form: Form
+  onOpen: () => void
+  onDuplicate: () => void
+  duplicating: boolean
+}) {
   const t = useTranslations('CustomForms')
+  const tCommon = useTranslations('Common')
   return (
+    /* The card itself is one big button, so Duplicate sits BESIDE it rather
+       than inside it — a button inside a button is invalid markup and the
+       inner one stops being reachable. */
+    <div className="relative">
     <button
       type="button"
       onClick={onOpen}
-      className="text-left rounded-lg border bg-card p-4 hover:shadow-sm hover:border-primary/40 transition-all flex flex-col gap-2"
+      className="w-full text-left rounded-lg border bg-card p-4 hover:shadow-sm hover:border-primary/40 transition-all flex flex-col gap-2"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium line-clamp-2">{form.title}</span>
@@ -41,7 +56,8 @@ function FormCard({ form, onOpen }: { form: Form; onOpen: () => void }) {
           {t(`status_${form.status}`)}
         </span>
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      {/* pr-9 keeps this row clear of the Duplicate control in the corner. */}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pr-9">
         <Badge variant="secondary">
           {form.access === 'contacts' ? t('accessContacts') : t('accessPublic')}
         </Badge>
@@ -51,11 +67,23 @@ function FormCard({ form, onOpen }: { form: Form; onOpen: () => void }) {
         </span>
       </div>
     </button>
+      <button
+        type="button"
+        onClick={onDuplicate}
+        disabled={duplicating}
+        title={tCommon('duplicate')}
+        aria-label={tCommon('duplicate')}
+        className="absolute bottom-3 right-3 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+      >
+        <Copy className="h-4 w-4" />
+      </button>
+    </div>
   )
 }
 
 export default function CustomFormsPage() {
   const t = useTranslations('CustomForms')
+  const tCommon = useTranslations('Common')
   const { currentTeamId, user } = useAuth()
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
   const router = useRouter()
@@ -78,6 +106,28 @@ export default function CustomFormsPage() {
     onSuccess: (formId) => {
       setCreateOpen(false)
       setTitle('')
+      queryClient.invalidateQueries({ queryKey: ['forms', currentTeamId] })
+      router.push(`/plugins/custom-forms/${formId}` as Route)
+    },
+    onError: (err: Error) => {
+      toast.error(err.message === 'LIMIT' ? t('limitReached', { max: MAX_FORMS_PER_TEAM }) : t('createError'))
+    },
+  })
+
+  // Copying reuses the create mutation's guards — the same per-team cap, the
+  // same "open it for editing" landing — and adds nothing of its own.
+  const duplicateMutation = useMutation({
+    mutationFn: async (source: Form) => {
+      if (!currentTeamId || !user) throw new Error('No team')
+      const count = await countForms(currentTeamId)
+      if (count >= MAX_FORMS_PER_TEAM) throw new Error('LIMIT')
+      return duplicateForm({
+        source,
+        userId: user.uid,
+        title: tCommon('copyName', { name: source.title }),
+      })
+    },
+    onSuccess: (formId) => {
       queryClient.invalidateQueries({ queryKey: ['forms', currentTeamId] })
       router.push(`/plugins/custom-forms/${formId}` as Route)
     },
@@ -147,6 +197,8 @@ export default function CustomFormsPage() {
               key={form.id}
               form={form}
               onOpen={() => router.push(`/plugins/custom-forms/${form.id}` as Route)}
+              onDuplicate={() => duplicateMutation.mutate(form)}
+              duplicating={duplicateMutation.isPending}
             />
           ))}
         </div>

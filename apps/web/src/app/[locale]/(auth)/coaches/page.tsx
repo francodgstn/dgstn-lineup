@@ -15,6 +15,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import {
   TEAMS_COLLECTION,
@@ -135,10 +136,14 @@ export default function CoachesPage() {
 
   // ── Plan gate (the nav hides this on free/coach; guard the page too) ──
   if (!planLoading && !studioPlus) {
+    // Was a dead-end refusal: upsell prose with nothing to click, which is
+    // failure mode 2 in PlanUpgradeNotice's header. Same tier, same feature and
+    // same sentence as the members invite it depends on — inviting a coach here
+    // calls the very callable that gate protects.
     return (
-      <div className="max-w-3xl">
+      <div className="max-w-3xl space-y-4">
         <h1 className="text-2xl font-semibold">{t('title')}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{t('planGate')}</p>
+        <PlanUpgradeNotice minPlan="studio" feature="multiple_managers" description={t('planGate')} />
       </div>
     )
   }

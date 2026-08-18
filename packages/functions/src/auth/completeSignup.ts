@@ -8,6 +8,8 @@ import { escapeHtml } from '../utils/html'
 import { timingSafeEqualStr } from '../utils/secureCompare'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import { assertVerifiableCode } from './verificationCode'
+import { recordSignupConsent } from '../waivers/signup'
+import { resolveSignupJoinPromotion, type SignupJoinPromotion } from './signupJoin'
 import { to } from '../utils/async'
 import {
   CONTACTS_COLLECTION,
@@ -60,11 +62,29 @@ export const completeSignup = onCall(async (request) => {
       notes?: string
       privacyConsent: boolean
     }
-    // Documents plugin: the terms/privacy documents the studio linked in the
-    // consent checkbox, as shown to (and accepted by) this contact. Advisory
-    // audit metadata only — the server still hard-requires privacyConsent below;
-    // it does NOT trust these titles/versions for any authorization decision.
-    acceptedDocuments?: Array<{ slug?: string; kind?: string; version?: string }>
+    // The terms/privacy documents the studio linked beside the consent checkbox,
+    // echoed back as the visitor was SHOWN them.
+    //
+    // `documentId` + `version` are what make this a real record: each becomes an
+    // append-only acceptance event, at the version on screen, pinned to that
+    // version's own frozen text (see recordSignupConsent below). The legacy
+    // `slug`/`kind`/`version: ''` shape is still accepted and still written to
+    // the deprecated `Contact.consent` blob for one release — a client that has
+    // not deployed yet keeps working, it simply produces no ledger row.
+    //
+    // Nothing here is trusted for authorization: privacyConsent is hard-required
+    // above, and the ledger writer intersects this list with the team's OWN
+    // configured signup documents.
+    acceptedDocuments?: Array<{
+      documentId?: string
+      slug?: string
+      kind?: string
+      version?: string | number
+    }>
+    // A required WAIVER shown as its own step on this rail (§7.3). Recorded, never
+    // enforced: signup is not attendance, and the gate binds at the first
+    // booking. Same payload shape every booking callable takes.
+    waiverAcceptances?: unknown
   }
 
   if (!data?.contactDetails) {
@@ -162,9 +182,11 @@ export const completeSignup = onCall(async (request) => {
     notes: contactDetails.notes?.trim() || null,
   }
 
-  // Consent audit trail — records that privacy consent was given and which
-  // documents (if any) were presented at signup. Legal record only; strings are
-  // clamped and never used for authorization.
+  // DEPRECATED consent blob. Kept for ONE release beside the real ledger rows
+  // written below, and now declared on `Contact.consent` with a pointer to its
+  // replacement — two proofs of acceptance with different evidential weight and
+  // no marker saying which is which is the state to avoid, so the marker is on
+  // the type. Retiring it is a follow-up once no reader remains.
   const acceptedDocuments = Array.isArray(data.acceptedDocuments)
     ? data.acceptedDocuments
         .filter((d) => d && typeof d.slug === 'string')
@@ -172,7 +194,12 @@ export const completeSignup = onCall(async (request) => {
         .map((d) => ({
           slug: String(d.slug).slice(0, 200),
           kind: typeof d.kind === 'string' ? d.kind.slice(0, 40) : null,
-          version: typeof d.version === 'string' ? d.version.slice(0, 60) : null,
+          version:
+            typeof d.version === 'string'
+              ? d.version.slice(0, 60)
+              : typeof d.version === 'number'
+                ? String(d.version)
+                : null,
         }))
     : []
   const consent = {
@@ -211,6 +238,29 @@ export const completeSignup = onCall(async (request) => {
     consent,
   }
 
+  // Completing signup IS the act of joining, so the contact is moved to
+  // 'joined' here — from no stage at all (a shop buyer, UX-82) and from a trial
+  // stage (a trial lead who decided to join, UX-83). Only a contact already at
+  // 'joined' is left alone; the funnel never runs backwards. See signupJoin.ts
+  // for the whole decision (what "absent" means, why entry/converted_at still
+  // fill-gaps-overwrite-nothing, and why only the trial→joined case is counted
+  // as a conversion).
+  const logJoinPromotion = (p: SignupJoinPromotion, id: string): void => {
+    if (p.reason === 'promoted_from_stage') {
+      console.log(
+        `[completeSignup] contact ${id} moved ${String(p.from)} → 'joined' by completing signup (a trial conversion; entry=${String(p.patch.entry ?? 'kept')})`,
+      )
+    } else if (p.reason === 'promoted_from_none') {
+      console.log(
+        `[completeSignup] contact ${id} carried no acquisition_stage — promoted to 'joined' (entry=${String(p.patch.entry ?? 'kept')})`,
+      )
+    } else if (p.reason === 'holds_unrecognised_stage') {
+      console.warn(
+        `[completeSignup] contact ${id} holds an unrecognised acquisition_stage (${String(p.from)}) — left untouched, so paid access still refuses it`,
+      )
+    }
+  }
+
   let contactRef: admin.firestore.DocumentReference
   if (sessionContactId) {
     // Session path: finalize EXACTLY the signed-in contact (never an email guess).
@@ -224,9 +274,16 @@ export const completeSignup = onCall(async (request) => {
       throw new HttpsError('permission-denied', 'This account is no longer active')
     }
     const { email: _keepExistingEmail, ...profileWithoutEmail } = profile
+    const promotion = resolveSignupJoinPromotion(sc, () => FieldValue.serverTimestamp())
+    logJoinPromotion(promotion, sessionContactId)
     await contactRef.set(
       {
         ...profileWithoutEmail,
+        // Advances the stage to 'joined' (unless it is already there) and fills
+        // entry/converted_at only where the contact holds none — a shop
+        // registration signs in with a session and carries no stage; a trial
+        // lead signs in with one and carries 'trial_booked'.
+        ...promotion.patch,
         // Completing the full signup MATERIALIZES a provisional lead — it now
         // counts toward the contact cap (see Contact.provisional).
         provisional: FieldValue.delete(),
@@ -239,9 +296,11 @@ export const completeSignup = onCall(async (request) => {
     contactRef = db.collection(CONTACTS_COLLECTION).doc()
     await contactRef.set({
       ...profile,
-      // Birth facts set on CREATE only; a finalize of an existing contact preserves
-      // whatever stage/entry it already carries. The approval pipeline (requested →
-      // active) lives on the affiliation axis, not here.
+      // Birth facts, stamped whole: nothing exists to preserve. A finalize of an
+      // EXISTING contact reaches the same 'joined' by a different route — it
+      // ADVANCES the stage (never backwards) and keeps every entry/converted_at
+      // it already holds (resolveSignupJoinPromotion). The approval pipeline
+      // (requested → active) lives on the affiliation axis, not here.
       acquisition_stage: 'joined',
       acquisition_stage_updated_at: FieldValue.serverTimestamp(),
       converted_at: FieldValue.serverTimestamp(),
@@ -253,7 +312,10 @@ export const completeSignup = onCall(async (request) => {
     })
   } else {
     // Finalize the existing contact. >1 active match (shared family email) → newest;
-    // never overwrite the birth facts (acquisition_stage/entry/converted_at) it holds.
+    // never overwrite the birth facts (entry/converted_at) it HOLDS — but do fill the
+    // ones it holds NOT, and do advance the acquisition stage to 'joined', because
+    // completing this form is the join. Without that, a shop buyer (no stage) and a
+    // trial lead ('trial_booked') are both refused by every gated class forever.
     if (activeMatches.length > 1) {
       activeMatches.sort(
         (a, b) => (b.data().created_at?.toMillis?.() ?? 0) - (a.data().created_at?.toMillis?.() ?? 0),
@@ -263,9 +325,15 @@ export const completeSignup = onCall(async (request) => {
       )
     }
     contactRef = activeMatches[0].ref
+    const promotion = resolveSignupJoinPromotion(
+      activeMatches[0].data(),
+      () => FieldValue.serverTimestamp(),
+    )
+    logJoinPromotion(promotion, contactRef.id)
     await contactRef.set(
       {
         ...profile,
+        ...promotion.patch,
         // Full signup materializes a provisional lead (counts toward the cap).
         provisional: FieldValue.delete(),
         provisional_expires_at: FieldValue.delete(),
@@ -274,6 +342,45 @@ export const completeSignup = onCall(async (request) => {
     )
   }
   const contactId = contactRef.id
+
+  // ── The consent LEDGER, written against real versions ──────────────────────
+  // The contact exists, so the rows can name somebody — which is the one thing a
+  // consent record has to do. Deliberately ABOVE the best-effort blocks below
+  // (affiliation, welcome mail, owner notification): those swallow their own
+  // failures because a signup should not fail over an email, and an evidential
+  // record must not sit in that zone. If this throws, the caller retries and the
+  // ledger's read-then-skip makes the retry write one row, not two.
+  const signupConsentRows = await recordSignupConsent({
+    teamId,
+    contactId,
+    contactName: `${sanitized.firstname} ${sanitized.lastname}`.trim(),
+    contactEmail: normEmail,
+    echoed: Array.isArray(data.acceptedDocuments)
+      ? data.acceptedDocuments
+          .filter(
+            (d): d is { documentId: string; version: number } =>
+              !!d && typeof d.documentId === 'string' && typeof d.version === 'number'
+          )
+          .map((d) => ({ documentId: d.documentId, version: d.version }))
+      : [],
+    waiverAcceptances: data.waiverAcceptances,
+    // WHICH DOOR WAS USED, and the two are not equally strong.
+    // `verification_codes.email` is the address the code was actually mailed to,
+    // so the OTP path shows control of THAT mailbox minutes ago. A session shows
+    // only that a contact session was open — it identifies the contact, not the
+    // person at the keyboard. The record says which, rather than flattening both
+    // into one claim.
+    signerEmailVerifiedBy: codeRef ? 'verified_code' : 'session',
+    signerEmail: email,
+    ip: request.rawRequest?.ip ?? null,
+    userAgent: (request.rawRequest?.headers?.['user-agent'] as string | undefined) ?? null,
+    locale: typeof (data as { locale?: string }).locale === 'string'
+      ? ((data as { locale?: string }).locale as string)
+      : null,
+  })
+  if (signupConsentRows > 0) {
+    console.log(`[completeSignup] recorded ${signupConsentRows} consent event(s) for ${contactId}`)
+  }
 
   // ── Create a PENDING affiliation (if affiliations are enabled + plan allows) ──
   // Best-effort: signup must not fail if the affiliation catalog is missing.

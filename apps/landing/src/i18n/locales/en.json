@@ -243,8 +243,8 @@
         "detail": "Let AI flag contacts at risk of leaving and even draft the perfect message to win them back before they're gone."
       },
       "appointments": {
-        "title": "1:1 Appointments",
-        "description": "Bookable 1:1 appointments.",
+        "title": "Appointments",
+        "description": "Bookable time with a specific coach.",
         "detail": "Publish availability slots clients book themselves from your bio link — with .ics calendar invites, reminders and buffer times. Your personal-trainer hook."
       },
       "goals": {

@@ -10,6 +10,8 @@
 //   • course       → grant the LIFETIME entitlement (courses/{id}/purchases/{cid},
 //                    which the security rules check to unlock the course in the Space).
 //   • product      → record-only (merch): an activity-log entry, no entitlement.
+//   • gift_card    → record-only: the CODE is the entitlement and the card doc
+//                    already carries it (teams/{id}/gift_cards).
 //   • drop_in/other→ last_payment_at + an activity-log entry.
 //
 // Every branch appends ONE activity_log entry carrying the payment id + source so
@@ -39,12 +41,19 @@ const LINE_ITEM_KINDS: PaymentLineItemKind[] = [
   'product',
   'drop_in',
   'appointment',
+  'gift_card',
   'other',
 ]
 
 /** Validate + normalise a client-supplied line-item. Returns null for junk;
  * downgrades an effect-less subscription/course link (missing id) to 'other' so
- * applyPaymentEffects never silently no-ops on what looked like a real link. */
+ * applyPaymentEffects never silently no-ops on what looked like a real link.
+ *
+ * `promoCode` is DELIBERATELY NOT READ HERE. It is a system stamp written by the
+ * webhook from Checkout Session metadata, and this function's input is whatever
+ * a manager's dialog sent — reading it would let a client write a redemption
+ * onto any payment row. `updatePaymentRecord` carries the STORED value forward
+ * across an edit instead, so the field is neither forgeable nor loseable. */
 export function normalizePaymentLineItem(raw: unknown): PaymentLineItem | null {
   if (!raw || typeof raw !== 'object') return null
   const li = raw as Partial<PaymentLineItem>
@@ -88,7 +97,20 @@ async function logPaymentActivity(
 }
 
 /** Set the contact's subscription-axis fields (no affiliation/expiry). Single
- * source of truth for the field list — also used by the Connect webhook. */
+ * source of truth for the field list — also used by the Connect webhook.
+ *
+ * `sourcePaymentRef` is PROVENANCE, and it is a required key precisely so that
+ * every call site has to answer the question. It is what a reversal checks
+ * before clearing these fields: matching on `subscription_type_id` instead
+ * would let a refund of an OLD payment strip a membership that a LATER renewal
+ * of the same plan paid for.
+ *
+ * It is written UNCONDITIONALLY, null included — never omitted. A recurring
+ * Stripe subscription renewal has no owning one-off payment and must pass null;
+ * omitting the key would leave the ref of some earlier one-off purchase
+ * standing, and refunding THAT payment would then clear a membership the
+ * renewal is paying for. Same rule as the cancellation record in CLAUDE.md:
+ * on a live write, write the record whole. */
 export async function writeContactSubscriptionFields(
   db: Db,
   contactId: string,
@@ -98,6 +120,9 @@ export async function writeContactSubscriptionFields(
     priceId?: string | null
     recurrence?: string | null
     amountMajor?: number | null
+    /** Doc id of the payment these fields were written FOR, or null when no
+     *  single payment owns them (a recurring subscription renewal). */
+    sourcePaymentRef: string | null
   }
 ): Promise<void> {
   const update: Record<string, unknown> = {
@@ -106,6 +131,7 @@ export async function writeContactSubscriptionFields(
     subscription_type_name: fields.subscriptionTypeName ?? null,
     subscription_price_id: fields.priceId ?? null,
     subscription_recurrence: fields.recurrence ?? null,
+    subscription_source_ref: fields.sourcePaymentRef ?? null,
     subscription_type_updated_at: FieldValue.serverTimestamp(),
   }
   if (fields.amountMajor != null) update.subscription_amount = fields.amountMajor
@@ -154,7 +180,14 @@ export async function grantPaymentCredits(
   }
 }
 
-/** Grant the lifetime course entitlement. Doc id = contactId → idempotent. */
+/** Grant the lifetime course entitlement. Doc id = contactId → idempotent.
+ *
+ * THE ONLY WRITER of courses/{id}/purchases/{contactId}. The Connect shop rail
+ * used to hand-roll this write and stamped `paymentIntentId` where this one
+ * stamps `payment_ref`, which meant the rail that actually SELLS courses did not
+ * write the field a reversal would check. Keep every grant going through here:
+ * the doc id is the CONTACT, so `payment_ref` is the only thing that says which
+ * payment bought it. */
 export async function grantCourseEntitlement(
   db: Db,
   grant: {
@@ -164,7 +197,15 @@ export async function grantCourseEntitlement(
     amount?: number | null
     currency?: string | null
     source: string
-    paymentRef: string
+    /** null only when the caller genuinely has no payment to point at (a Connect
+     *  session with no PaymentIntent). Stored as null, never as '' — a reversal
+     *  compares it against a real ref, and an empty string is a value that could
+     *  accidentally be produced on both sides of that comparison. */
+    paymentRef: string | null
+    /** Stripe PaymentIntent id, when there is one. Kept alongside `payment_ref`
+     *  because CoursePurchase declares it and the Connect rail has it; on that
+     *  rail the two carry the same value. */
+    paymentIntentId?: string | null
   }
 ): Promise<void> {
   await db
@@ -180,7 +221,10 @@ export async function grantCourseEntitlement(
         amount: grant.amount ?? null,
         currency: grant.currency ?? null,
         source: grant.source,
-        payment_ref: grant.paymentRef,
+        payment_ref: grant.paymentRef ?? null,
+        ...(grant.paymentIntentId !== undefined
+          ? { paymentIntentId: grant.paymentIntentId }
+          : {}),
         purchasedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
@@ -233,6 +277,8 @@ export async function applyPaymentEffects(db: Db, input: ApplyPaymentEffectsInpu
         priceId: li.priceId ?? null,
         recurrence: price?.recurrence ?? null,
         amountMajor,
+        // This payment owns the fields it just wrote — reversing it may clear them.
+        sourcePaymentRef: paymentRef,
       })
       if (price?.credits) {
         await grantPaymentCredits(db, contactId, {
@@ -288,6 +334,26 @@ export async function applyPaymentEffects(db: Db, input: ApplyPaymentEffectsInpu
         type: 'product_purchased',
         source,
         message: `Product · ${li.label ?? 'Product'}`,
+        paymentRef,
+      })
+      return
+    }
+
+    case 'gift_card': {
+      // Record-only ON PURPOSE — this branch must never mint a card. The card is
+      // minted once by whoever took the money (the Connect webhook, or the
+      // manager mint), whereas applyPaymentEffects is re-run every time a manager
+      // re-assigns or re-links the payment row: minting here would hand out a
+      // fresh code, and a fresh chunk of stored value, on each of those edits.
+      await db
+        .collection(CONTACTS_COLLECTION)
+        .doc(contactId)
+        .set({ last_payment_at: FieldValue.serverTimestamp() }, { merge: true })
+      await logPaymentActivity(db, contactId, {
+        type: 'payment_received',
+        source,
+        // The label carries the code when the caller knows it ("Gift card GC-…").
+        message: li.label ?? 'Gift card',
         paymentRef,
       })
       return

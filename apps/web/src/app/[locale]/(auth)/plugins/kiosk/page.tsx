@@ -4,8 +4,8 @@
 // Layout/structure is FIXED (built by the (public)/public/[slug]/kiosk route); this
 // settings page only lets the owner/manager flip features on/off and manage the
 // standby slideshow + device PIN lock. Mirrors the website plugin's page shape
-// (draft state + explicit Save) and the documents ConfigPanel's persistence
-// pattern (setDoc installed_plugins/kiosk.config, merge:true).
+// (draft state + explicit Save); the config itself is one setDoc on
+// installed_plugins/kiosk.config with merge:true.
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'

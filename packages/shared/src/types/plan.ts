@@ -12,6 +12,19 @@ export const TRIAL_DAYS = 30
 // When the trial lapses the team is downgraded to the Free plan (see
 // handleTrialLifecycle); there is no wall or data purge.
 
+// An ORGANISATION's trial (createOrganization). Separate constant, same length
+// today: the org tier is sales-led and its setup is operator-assisted, so the
+// number is expected to move independently of a self-service team's. It was 14
+// while nothing ended it at all — the sweep that ends it (handleTrialLifecycle,
+// phase 2) arrived with this constant.
+//
+// THE LENGTH IS A DEFAULT, NOT A COUNTDOWN. Both sweeps read the stored
+// `trial_ends_at` and never recompute it from `created`, so an operator
+// onboarding a customer by hand extends a trial by editing that one field.
+// `flags.internal` / `flags.pilot` on the entity exempt it from the sweep
+// entirely.
+export const ORG_TRIAL_DAYS = 30
+
 // Base subscription pricing per plan. Declarative source for scripts/stripe-sync.ts
 // (the whole Stripe catalogue — plans + add-ons — lives in the repo).
 // Amounts are INDICATIVE base prices in CHF/month; the authoritative amount is the
@@ -61,6 +74,37 @@ export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
 // hard-blocked; they get a tier-specific over-cap prompt (contactOverageForPlan).
 export function planHasHardContactCap(plan: SaasPlan | null): boolean {
   return plan === 'free'
+}
+
+// ─── Search-engine indexability of a team's PUBLIC pages ──────────────────────
+// Documents is a default feature on every tier, public pages included, so every
+// self-service signup now gets a publishing surface on a Linyup domain. That is
+// an SEO-spam and reputation vector: sign up, publish keyword pages, borrow the
+// domain's standing.
+//
+// The mitigation gates INDEXABILITY, not existence. The page works for everyone —
+// a Free studio's terms are readable and shareable by link and QR exactly as
+// before — it simply carries `noindex` until somebody is paying. Nothing has to
+// be withdrawn later, which is the property that made de-gating completely safe
+// to choose.
+//
+// A TRIAL IS NOT A PAID TIER, and this is the half that is easy to get wrong:
+// self-service signups are provisioned `plan: 'studio', plan_status: 'trial'`
+// (TRIAL_DAYS above), so keying on the plan alone would leave the vector wide
+// open for 30 days per throwaway account — and a spammer only needs the page
+// crawled once. Paying is the signal, so `plan_status` must be settled too.
+//
+// A lapsed trial reports its stored plan until the nightly cron writes
+// `plan: 'free'`; `status === 'expired'` is therefore refused explicitly rather
+// than left to the plan field.
+export function publicPagesIndexable(team: {
+  plan?: SaasPlan | null
+  plan_status?: string | null
+}): boolean {
+  const plan = team.plan ?? 'free'
+  const status = team.plan_status ?? 'trial'
+  if (plan === 'free') return false
+  return status === 'active'
 }
 
 // ─── Over-cap behaviour (NO per-contact metering) ───────────────────────────────
@@ -207,6 +251,19 @@ export type PlanFeature =
   | 'cross_team_messaging'
   | 'api_access'
   | 'advanced_permissions'
+
+/**
+ * The refusal a member-adding callable throws when the team's plan has no
+ * `multiple_managers`. A STABLE CODE, shared so the client can map it to
+ * localized copy instead of showing the server's English — and shared in BOTH
+ * directions, so renaming it here breaks the reader rather than silencing it.
+ *
+ * Thrown by every server seam that can put a SECOND user on a team
+ * (`sendTeamInvitation`, `acceptTeamInvitation`, `manageTeamMember` action
+ * 'add'); never by anything that manages the people already there — the gate is
+ * on adding, not on being.
+ */
+export const MULTIPLE_USERS_PLAN_REFUSAL = 'multiple-users-plan-required'
 
 // NOTE: features delivered by plugins (gamification, referral_program, courses,
 // ai_insights) are now gated by plugin INSTALL state, not these flags — see

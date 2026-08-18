@@ -120,6 +120,17 @@ Firestore's 1 MB document limit.
 
 ### Public surfaces
 
+Events are a registered `PublicSurface`: they appear in `PUBLIC_SURFACES`, can be
+a bio-link page link (`SystemLinkTarget`), and have a row in the studio's
+`/public-page` hub. `active_public_surfaces.events` is computed by probing the
+**mirrors**, not the root collection — the same rule `documents` follows, so the
+flag agrees with what a visitor would actually see. Only the team's OWN events
+count: a studio whose published events are all inherited from its org still lists
+them at `/public/{slug}/events`, but does not advertise the surface as a landing.
+
+URLs come from `publicRoutes.ts` (`publicPath` / `publicSubHref`), never
+hand-built, so `packages/functions` can emit the same links in email.
+
 | Route | Shows |
 |---|---|
 | `/public/{slug}/events` | A studio's published events **plus its parent org's** |

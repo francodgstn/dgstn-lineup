@@ -58,6 +58,8 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       status: data.status || 'open',
       allowBooking: true,
       bookingMandatory: data.bookingMandatory === true,
+      // Only mirrored when the studio opted in — see Session.headlinePublic.
+      ...(data.headlinePublic === true && data.headline ? { headline: data.headline } : {}),
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   } else {
@@ -80,7 +82,14 @@ export const syncSessionPublicProfile = onDocumentWritten('sessions/{sessionId}'
       providerId: data.providerId || null,
       max_participants: data.max_participants || null,
       bookings_count: data.bookings_count || 0,
+      // Queue SIZE only — an aggregate, never an identity. The public form
+      // derives "full" from max_participants vs bookings_count (this branch
+      // carries no `status`, and must not start), so this is all a "12 waiting"
+      // chip needs.
+      waitlist_count: data.waitlist_count || 0,
       bookingMandatory: data.bookingMandatory === true,
+      // Only mirrored when the studio opted in — see Session.headlinePublic.
+      ...(data.headlinePublic === true && data.headline ? { headline: data.headline } : {}),
     }
     await afterRef.collection('public_profile').doc(sessionId).set(publicProfile)
   }

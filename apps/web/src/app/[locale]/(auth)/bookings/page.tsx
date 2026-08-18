@@ -15,6 +15,7 @@ import {
   writeBatch,
   serverTimestamp,
   increment,
+  deleteField,
   collection,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -46,7 +47,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Booking } from '@linyup/shared'
+import {
+  bookingContactId,
+  confirmClearedHoldFields,
+  buildParticipantDoc,
+  type Booking,
+} from '@linyup/shared'
 import {
   Search,
   MoreHorizontal,
@@ -58,7 +64,7 @@ import {
   ExternalLink,
   User,
 } from 'lucide-react'
-import { useRouter } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -291,22 +297,42 @@ function useBookingAction(teamId: string | null) {
       const batch = writeBatch(db)
 
       if (action === 'confirm') {
-        // Mark booking confirmed
-        batch.update(bookingRef, { status: 'confirmed', confirmed_at: serverTimestamp() })
-        // Add participant from booking data
-        const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
-        batch.set(participantRef, {
-          fullname: `${booking.firstname ?? ''} ${booking.lastname ?? ''}`.trim(),
-          firstname: booking.firstname ?? '',
-          lastname: booking.lastname ?? '',
-          avatar_url: null,
-          contact: booking.contact ?? booking.id,
-          session: booking.session,
-          confirmedFromBooking: true,
+        // Mark booking confirmed. The hold markers go with the same write: a
+        // confirmed seat is an ordinary booking, and a leftover `waitlist_claim`
+        // would keep this person out of `sendBookingReminders` forever. For a
+        // claim that was mid-payment the drop-in hold's own markers have to go
+        // too, or the confirmed booking loses its seat at `expires_at` and
+        // `releaseExpiredBookingHolds` deletes it at 02:00 — see
+        // `confirmClearedHoldFields`, which all four confirm surfaces share.
+        batch.update(bookingRef, {
+          status: 'confirmed',
+          confirmed_at: serverTimestamp(),
+          ...confirmClearedHoldFields(booking, deleteField()),
         })
-        // Adjust session counters
+        // The attendance row — ONE builder, shared with session detail and the
+        // two check-in callables. This page used to key the row by the BOOKING
+        // id, spell `fullname` "firstname lastname" against everyone else's
+        // "lastname firstname", and write neither `checkedInAt` nor
+        // `checkedInBy` — so the same act produced a different document here
+        // than it did one click away on the session.
+        const contactId = bookingContactId(booking)
+        const participantRef = doc(db, 'sessions', booking.session, 'participants', contactId)
+        batch.set(
+          participantRef,
+          buildParticipantDoc({
+            contactId,
+            sessionId: booking.session,
+            who: booking,
+            checkedInBy: 'booking-confirm',
+            checkedInAt: serverTimestamp(),
+            fromBooking: true,
+          })
+        )
+        // Conversion only. `bookings_count` is never written from a client:
+        // it has one writing style (an absolute value from a server read set,
+        // or trackBookings' recount, which this status flip fires) and a blind
+        // increment from here would fight the booking transactions for it.
         batch.update(sessionRef, {
-          bookings_count: increment(-1),
           conversions_count: increment(1),
         })
         if (booking.contact) {
@@ -320,12 +346,17 @@ function useBookingAction(teamId: string | null) {
           status: 'pending',
           confirmed_at: null,
         })
-        // Remove participant doc
-        const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
+        // Remove participant doc — same id the confirm above wrote it under.
+        const participantRef = doc(
+          db,
+          'sessions',
+          booking.session,
+          'participants',
+          bookingContactId(booking)
+        )
         batch.delete(participantRef)
-        // Undo session counters
+        // Undo the conversion only — see the note above.
         batch.update(sessionRef, {
-          bookings_count: increment(1),
           conversions_count: increment(-1),
         })
         if (booking.contact) {
@@ -337,7 +368,7 @@ function useBookingAction(teamId: string | null) {
         batch.update(bookingRef, { status: 'no_show', no_show_at: serverTimestamp() })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { bookings_count: increment(-1) })
+          // The freed seat is trackBookings' recount to write — see above.
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),
@@ -352,7 +383,7 @@ function useBookingAction(teamId: string | null) {
         })
         const wasPending = !booking.status || booking.status === 'pending'
         if (wasPending) {
-          batch.update(sessionRef, { bookings_count: increment(-1) })
+          // The freed seat is trackBookings' recount to write — see above.
           if (booking.contact) {
             batch.update(doc(db, 'contacts', booking.contact), {
               pending_bookings_count: increment(-1),
@@ -508,10 +539,23 @@ function BookingRow({
       </div>
 
       <div className="flex-1 min-w-0">
+        {/* The two entities a booking row is ABOUT are its contact and its
+            session, and both used to be reachable only through the row's action
+            menu — so the most common thing to do with a row cost a menu open.
+            They are links now; the menu keeps the actions. */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="font-medium text-sm truncate">
-            {booking.firstname} {booking.lastname}
-          </p>
+          {booking.contact ? (
+            <Link
+              href={`/contacts/${booking.contact}` as Route}
+              className="font-medium text-sm truncate hover:underline"
+            >
+              {booking.firstname} {booking.lastname}
+            </Link>
+          ) : (
+            <p className="font-medium text-sm truncate">
+              {booking.firstname} {booking.lastname}
+            </p>
+          )}
           {booking.is_new_contact && (
             <Badge variant="outline" className="text-xs shrink-0">
               {t('trialBadge')}
@@ -519,18 +563,31 @@ function BookingRow({
           )}
         </div>
         <p className="text-xs text-muted-foreground truncate">{booking.email ?? '—'}</p>
-        {(activityName || sessionDate) && (
-          <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">
-            {activityName && <span>{activityName}</span>}
-            {activityName && sessionDate && (
-              <span className="text-muted-foreground font-normal"> · </span>
-            )}
-            {sessionDate && <span>{sessionDate}</span>}
-            {sessionTime && (
-              <span className="text-muted-foreground font-normal"> {sessionTime}</span>
-            )}
-          </p>
-        )}
+        {(activityName || sessionDate) &&
+          (() => {
+            const sessionLine = (
+              <>
+                {activityName && <span>{activityName}</span>}
+                {activityName && sessionDate && (
+                  <span className="text-muted-foreground font-normal"> · </span>
+                )}
+                {sessionDate && <span>{sessionDate}</span>}
+                {sessionTime && (
+                  <span className="text-muted-foreground font-normal"> {sessionTime}</span>
+                )}
+              </>
+            )
+            return booking.session ? (
+              <Link
+                href={`/sessions/${booking.session}` as Route}
+                className="block text-sm text-foreground/80 truncate mt-0.5 font-medium hover:underline"
+              >
+                {sessionLine}
+              </Link>
+            ) : (
+              <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">{sessionLine}</p>
+            )
+          })()}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

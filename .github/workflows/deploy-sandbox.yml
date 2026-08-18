@@ -1,29 +1,43 @@
 name: Deploy Sandbox
 
-# The sandbox web app (apps/web) auto-deploys via Firebase App Hosting's GitHub
-# integration. This workflow covers everything else the demo playground needs:
-# Cloud Functions + Firestore rules/indexes + Storage rules + RTDB rules.
+# The whole sandbox environment: Cloud Functions + Firestore rules/indexes +
+# Storage rules, then the App Hosting web app — in that order.
 #
-# Runs on pushes to main that touch backend config, and on manual dispatch.
-# Demo *data* is reseeded ONLY on a manual run with reseed_demo=true (it wipes
-# the running demo + all auth users) — auto-deploys never touch data. You can
-# also reseed locally with `pnpm reset:sandbox && pnpm seed:sandbox`.
+# TAG-DRIVEN — deliberately. The sandbox hosts live lead demos, so nothing lands
+# in it unattended: a rules change that denies a read, or a function that throws,
+# would otherwise break a demo mid-pitch. Push a `sandbox-*` tag when you're
+# ready to ship:
+#
+#   git tag sandbox-2026-07-28 && git push origin sandbox-2026-07-28
+#
+# The tag list IS the deployment record — `git tag -l 'sandbox-*'` is every
+# deploy in order, and `git diff $(git describe --tags --abbrev=0 --match
+# 'sandbox-*') main` is what hasn't shipped yet. Tag commits that are on `main`:
+# the rollout resolves the commit through the Developer Connect repo link, so an
+# orphan commit is asking for trouble. Sandbox deliberately drifts behind main —
+# tag before a demo if backend code changed.
+#
+# workflow_dispatch stays as the escape hatch: re-running a half-failed deploy
+# shouldn't require minting a throwaway tag.
+#
+# PREREQUISITE — automatic rollouts must be OFF for the sandbox `linyup-web`
+# App Hosting backend (Console → App Hosting → backend → ⚙ Settings →
+# Deployment / rollouts). Otherwise every push to `main` still ships the web app
+# behind this workflow's back, and the frontend drifts ahead of the backend it
+# calls. Leave the GitHub repo connected — the manual rollout below still builds
+# from it. Same arrangement as prod (infra/README.md §6), which also documents
+# the two Developer Connect roles the deploy SA needs to create a rollout.
+#
+# Demo *data* is only ever touched by an explicit dispatch with the box ticked —
+# a tag push carries no inputs, so it can never reseed.
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'packages/functions/**'
-      - 'packages/shared/**'
-      - 'firestore.rules'
-      - 'firestore.index.json'
-      - 'storage.rules'
-      - 'firebase.json'
-      - '.github/workflows/deploy-sandbox.yml'
+    tags: ['sandbox-*']
   workflow_dispatch:
     inputs:
       reseed_demo:
-        description: 'DESTRUCTIVE: wipe & reseed the sandbox demo data after deploy'
+        description: 'DESTRUCTIVE: wipe & reseed the /try demo data after deploy (lead tenants are preserved)'
         type: boolean
         default: false
 
@@ -91,16 +105,45 @@ jobs:
       - name: Deploy to Firebase (Sandbox)
         run: npx firebase-tools deploy --project sandbox --only functions,firestore,storage --non-interactive --force
 
-      # Optional demo reseed — manual dispatch + reseed_demo=true only, so routine
-      # backend deploys never wipe the running demo. Reuses the ADC from the auth
-      # step; the deploy SA's roles/firebase.admin covers Firestore + Auth writes.
+      # App Hosting (Next.js SSR) — the web app, rolled out AFTER the backend
+      # above so the frontend never goes live ahead of the functions and rules it
+      # calls. Auto-rollout must be OFF on this backend (see the header), or this
+      # step is racing the Console's own trigger.
+      #
+      # We roll out the exact commit being deployed ($GITHUB_SHA — on a tag push
+      # that is the tagged commit) rather than a branch tip, so a concurrent merge
+      # to main can't sneak into the rollout. Sandbox has ONE backend, linyup-web;
+      # there is no admin console here (prod and staging have both).
+      #
+      # Retry wrapper, same as prod: the WIF→STS token exchange occasionally
+      # fails ("Failed to authenticate"). Transient, converges on re-run.
+      - name: Roll out web app (App Hosting, sandbox)
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if npx firebase-tools apphosting:rollouts:create linyup-web --project sandbox --git-commit "$GITHUB_SHA" --non-interactive; then
+              exit 0
+            fi
+            echo "::warning::web rollout attempt $attempt failed; retrying in 30s…"
+            sleep 30
+          done
+          echo "::error::web rollout failed after 5 attempts"
+          exit 1
+
+      # Optional demo reseed — reseed_demo=true only, so a routine backend deploy
+      # never wipes the running demo. Reuses the ADC from the auth step; the
+      # deploy SA's roles/firebase.admin covers Firestore + Auth writes.
       # GOOGLE_CLOUD_PROJECT is pinned to satisfy reset-sandbox-db.ts's project
       # guard regardless of what the auth step exported. Runs after deploy so the
       # fresh data lands against the just-deployed rules/indexes (e.g. fromBioLink).
-      - name: Reseed demo data (destructive)
+      #
+      # `--yes` is the non-interactive escape hatch for the typed confirmation
+      # (there is no TTY here). LEAD TENANTS ARE PRESERVED by default — this only
+      # resets the /try playground. Wiping a lead demo is deliberately not
+      # reachable from CI; do it locally with `pnpm lead:seed --lead <id> --reset`.
+      - name: Reseed /try demo data (destructive)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.reseed_demo }}
         env:
           GOOGLE_CLOUD_PROJECT: linyup-sandbox
         run: |
-          pnpm reset:sandbox
-          pnpm seed:sandbox
+          pnpm sandbox:reset --yes
+          pnpm sandbox:seed

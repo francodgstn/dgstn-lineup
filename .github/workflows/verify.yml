@@ -43,6 +43,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # apps/web has no test runner, so this is the only place locale parity is
+      # enforced. It also fails if a lane's message fragment was never merged.
+      - name: Locales
+        run: pnpm i18n:check
+
   test-functions:
     name: Functions Tests
     runs-on: ubuntu-latest

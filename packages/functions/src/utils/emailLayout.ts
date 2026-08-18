@@ -9,4 +9,5 @@ export {
   ctaButton,
   wrapInLayout,
   buildTeamFooter,
+  htmlToPlainText,
 } from '@linyup/shared'

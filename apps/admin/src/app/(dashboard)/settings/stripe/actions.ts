@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireOperator } from '@/lib/require-operator'
-import { getSecretValue, setSecret, SecretManagerUnavailableError } from '@/lib/secret-manager'
+import { setSecret, SecretManagerUnavailableError } from '@/lib/secret-manager'
 import {
   STRIPE_CONNECT_WEBHOOK_SECRET,
   STRIPE_SECRET_KEY_SECRET,
@@ -64,65 +64,10 @@ export async function saveStripeConnectWebhookSecret(formData: FormData): Promis
   return saveStripeSecret(STRIPE_CONNECT_WEBHOOK_SECRET, 'Connect webhook signing secret', value)
 }
 
-export interface VerifyKeyResult {
-  ok: boolean
-  error?: string
-  warning?: string
-  /** Stripe account the key belongs to, so the operator can confirm it's the
-   *  right account — and whether it's LIVE or TEST mode. */
-  accountId?: string
-  accountName?: string
-  livemode?: boolean
-}
-
-// Reads the stored secret key and asks Stripe who it belongs to (GET /v1/account
-// — read-only). This is the check that catches the two mistakes that otherwise
-// surface only at the first real charge: a test key deployed to production, or a
-// key belonging to the wrong Stripe account.
-export async function verifyStripeKey(): Promise<VerifyKeyResult> {
-  await requireOperator()
-
-  let secretKey: string
-  try {
-    secretKey = await getSecretValue(STRIPE_SECRET_KEY_SECRET)
-  } catch (err) {
-    if (err instanceof SecretManagerUnavailableError) return { ok: false, warning: err.message }
-    if ((err as { code?: number }).code === 5) {
-      return { ok: false, error: 'No Stripe secret key is configured yet.' }
-    }
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-
-  try {
-    const res = await fetch('https://api.stripe.com/v1/account', {
-      headers: { Authorization: `Bearer ${secretKey}` },
-    })
-    if (!res.ok) {
-      let detail = ''
-      try {
-        const body = (await res.json()) as { error?: { message?: string } }
-        detail = body?.error?.message ? `: ${body.error.message}` : ''
-      } catch {
-        /* ignore non-JSON error bodies */
-      }
-      return { ok: false, error: `Stripe rejected the key (${res.status})${detail}` }
-    }
-    const acct = (await res.json()) as {
-      id?: string
-      business_profile?: { name?: string | null }
-      settings?: { dashboard?: { display_name?: string | null } }
-      charges_enabled?: boolean
-    }
-    return {
-      ok: true,
-      accountId: acct.id,
-      accountName:
-        acct.settings?.dashboard?.display_name || acct.business_profile?.name || undefined,
-      // Stripe doesn't return livemode on /v1/account; the key prefix is the
-      // authoritative signal and is what an operator actually needs to see.
-      livemode: secretKey.startsWith('sk_live_') || secretKey.startsWith('rk_live_'),
-    }
-  } catch (err) {
-    return { ok: false, error: `Check failed: ${err instanceof Error ? err.message : String(err)}` }
-  }
-}
+// NOTE: the "verify key" action was removed deliberately. It read the Stripe
+// secret key in plaintext (getSecretValue) to call GET /v1/account, which is the
+// ONLY reason the console's runtime SA would need roles/secretmanager.secretAccessor.
+// Reporting whether a secret is SET needs only roles/secretmanager.viewer
+// (versions.get, metadata — no payload). That check was genuinely useful: it caught
+// a test key deployed to prod, or a key on the wrong Stripe account. If you want it
+// back, it costs plaintext read of a live key — decide that explicitly.

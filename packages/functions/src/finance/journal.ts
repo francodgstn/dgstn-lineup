@@ -60,6 +60,68 @@ export async function recordFinanceTransaction(input: FinanceTransactionInput): 
 }
 
 /**
+ * Append a gift-card reclassification pair (buildGiftCardReclassTxns) as ONE
+ * batch: both rows land or neither does. Returns false when the pair was
+ * already recorded — never an error.
+ *
+ * The batch is what makes this webhook-retryable. Two separate create() calls
+ * could crash between them, and the Connect webhook claims its event id BEFORE
+ * processing and answers 200 even on a handler exception — so Stripe never
+ * redelivers, and a lone row would leave by_category wrong forever with no
+ * alarm (reconciliationCheck only counts 'charge' rows). A batch cannot land
+ * half-written, and since the ids are deterministic, ALREADY_EXISTS on a replay
+ * fails the WHOLE batch before writing anything.
+ */
+export async function recordGiftCardReclass(
+  pair: [FinanceTransactionInput, FinanceTransactionInput]
+): Promise<boolean> {
+  const batch = admin.firestore().batch()
+  for (const row of pair) batch.create(txnRef(row.teamId, row.id), toDoc(row))
+  try {
+    await batch.commit()
+    return true
+  } catch (err: unknown) {
+    if ((err as { code?: number }).code === 6) return false // ALREADY_EXISTS
+    throw err
+  }
+}
+
+/**
+ * Mark a journal row CORRECTED — the money event it records did not happen.
+ *
+ * Today's one caller is `voidManualPayment`: a manager un-records a cash payment
+ * she entered by mistake. Nothing else has ever written this status, which is
+ * why the protocol below has been in place, unexercised, since the journal
+ * shipped.
+ *
+ * ONE FIELD, AND DELIBERATELY NO SECOND ROW. `computeMonthlyFinanceReport`
+ * already drops corrected rows (shared/types/finance.ts), and
+ * `onFinanceTransactionWrite` already posts the compensating double-entry
+ * reversal on the `recorded → corrected` edge — both idempotently, both without
+ * further input. The "+ a compensating 'adjustment' row" in the immutability
+ * note beside this protocol describes correcting a wrong AMOUNT, where the right
+ * amount needs somewhere to live. A VOID HAS NO RIGHT AMOUNT: the redo is a
+ * fresh `recordManualPayment`, which writes its own row. An adjustment row here
+ * would be a phantom entry for money that never moved.
+ *
+ * Returns false when the row is absent — a manual payment whose journal write
+ * failed, the write path being best-effort by design. Nothing needs to be
+ * retried for it: the backfill skips voided `payment_events` rows, so the row
+ * that never existed never appears.
+ */
+export async function markFinanceTxnCorrected(teamId: string, txnId: string): Promise<boolean> {
+  try {
+    // Re-writing the same value on a retry is a no-op for the posting trigger,
+    // which fires its reversal only on the recorded → corrected transition.
+    await txnRef(teamId, txnId).update({ status: 'corrected' })
+    return true
+  } catch (err: unknown) {
+    if ((err as { code?: number }).code === 5) return false // NOT_FOUND
+    throw err
+  }
+}
+
+/**
  * Upgrade a degraded row's fee breakdown (fee_source 'recorded' → the
  * authoritative balance-transaction split). The ONLY financial-field mutation the
  * journal permits, and only while fee_source !== 'balance_transaction'. Used by

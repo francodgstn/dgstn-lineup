@@ -15,9 +15,13 @@ import { gamificationManifest } from './gamification/manifest'
 import { contactGroupsManifest } from './contact-groups/manifest'
 import { customFieldsManifest } from './custom-fields/manifest'
 import { customFormsManifest } from './custom-forms/manifest'
-import { documentsManifest } from './documents/manifest'
+// NO documents manifest: Documents is a default feature on every plan, not a
+// plugin. Leaving it registered would keep a marketplace card with an install
+// button that means nothing — and, on Free and Coach, one that the rules refuse.
 import { kioskManifest } from './kiosk/manifest'
 import { financeManifest } from './finance/manifest'
+import { giftCardsManifest } from './gift-cards/manifest'
+import { promoCodesManifest } from './promo-codes/manifest'
 
 export const PLUGIN_REGISTRY: PluginManifest[] = [
   aiAssistantManifest,
@@ -32,9 +36,10 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   contactGroupsManifest,
   customFieldsManifest,
   customFormsManifest,
-  documentsManifest,
   kioskManifest,
   financeManifest,
+  giftCardsManifest,
+  promoCodesManifest,
 ]
 
 /** All plugin-contributed event type IDs (built-in type IDs from installed plugins). */

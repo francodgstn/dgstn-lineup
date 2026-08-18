@@ -13,12 +13,17 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   BookOpen, Search, Mail, Bell, Settings2, FileText,
-  Clock, UserPlus, CalendarCheck, ShieldCheck, CreditCard, Play,
-  Check, Plus,
+  Clock, UserPlus, TrendingUp, CalendarCheck, ShieldCheck, CreditCard, Play,
+  Check, Plus, Lock,
 } from 'lucide-react'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { useTranslations } from 'next-intl'
+import { TEAMS_COLLECTION, PLAN_ORDER, type SaasPlan } from '@linyup/shared'
+import { usePlan } from '@/hooks/usePlan'
+import { usePlanName } from '@/hooks/usePlanName'
+import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
+import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import {
-  AUTOMATION_LIBRARY, CATEGORY_META, STARTER_BUNDLE_KEYS,
+  AUTOMATION_LIBRARY, CATEGORY_META, libraryItemUnlocked, starterBundleItemsForPlan,
   type LibraryCategory, type LibraryItem, type LibraryAction, type SupportedLanguage,
 } from './automationLibrary'
 
@@ -33,6 +38,7 @@ function triggerChip(type: string): { label: string; Icon: React.ElementType } {
   switch (type) {
     case 'schedule_daily':            return { label: 'Daily',         Icon: Clock }
     case 'contact_created':           return { label: 'On create',     Icon: UserPlus }
+    case 'acquisition_stage_changed': return { label: 'Stage moved',   Icon: TrendingUp }
     case 'booking_confirmed':         return { label: 'Booking',       Icon: CalendarCheck }
     case 'booking_no_show':           return { label: 'No-show',       Icon: CalendarCheck }
     case 'affiliation_changed':       return { label: 'Affiliation',   Icon: ShieldCheck }
@@ -58,12 +64,19 @@ function primaryAction(actions: LibraryAction[]): { label: string; Icon: React.E
 // ─── LibraryCard ──────────────────────────────────────────────────────────────
 
 function LibraryCard({
-  item, installed, selected, onToggle,
+  item, installed, selected, locked, lockedPlanLabel, onToggle, onLockedClick,
 }: {
   item: LibraryItem
   installed: boolean
   selected: boolean
+  /** Above the team's plan — see `libraryItemUnlocked`. Rendered, not hidden:
+   *  a hidden item is indistinguishable from one that does not exist, so it
+   *  gives the studio no reason to upgrade and no way to ask. */
+  locked: boolean
+  /** The plan that unlocks it, already resolved to its marketing name. */
+  lockedPlanLabel: string
   onToggle: () => void
+  onLockedClick: () => void
 }) {
   const trig  = triggerChip(item.rule.trigger.type)
   const act   = primaryAction(item.rule.actions)
@@ -73,27 +86,33 @@ function LibraryCard({
   return (
     <button
       type="button"
-      onClick={installed ? undefined : onToggle}
+      onClick={installed ? undefined : locked ? onLockedClick : onToggle}
       disabled={installed}
       className={[
         'relative w-full text-left rounded-xl border p-3.5 transition-all',
         installed
           ? 'bg-muted/40 border-transparent opacity-60 cursor-default'
-          : selected
-            ? 'bg-primary/5 border-primary ring-1 ring-primary shadow-sm'
-            : 'bg-card border-border hover:border-primary/50 hover:shadow-sm',
+          : locked
+            ? 'bg-muted/20 border-dashed border-border hover:border-primary/50'
+            : selected
+              ? 'bg-primary/5 border-primary ring-1 ring-primary shadow-sm'
+              : 'bg-card border-border hover:border-primary/50 hover:shadow-sm',
       ].join(' ')}
     >
-      {/* Checkbox / installed indicator */}
+      {/* Checkbox / installed / locked indicator */}
       <span className={[
         'absolute top-3 right-3 h-4 w-4 rounded flex items-center justify-center border',
         installed
           ? 'border-transparent bg-muted text-muted-foreground'
-          : selected
-            ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-muted-foreground/30 bg-background',
+          : locked
+            ? 'border-transparent text-muted-foreground'
+            : selected
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-muted-foreground/30 bg-background',
       ].join(' ')}>
-        {(installed || selected) && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+        {locked && !installed
+          ? <Lock className="h-2.5 w-2.5" />
+          : (installed || selected) && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
       </span>
 
       <p className="font-semibold text-sm leading-snug pr-6">{item.name}</p>
@@ -109,6 +128,11 @@ function LibraryCard({
         </span>
         {installed && (
           <Badge variant="secondary" className="text-xs h-5">Installed</Badge>
+        )}
+        {locked && !installed && (
+          <Badge variant="outline" className="text-xs h-5 gap-1">
+            <Lock className="h-2.5 w-2.5" />{lockedPlanLabel}
+          </Badge>
         )}
       </div>
     </button>
@@ -217,6 +241,10 @@ export function LibraryDialog({
   rules: InstalledRule[]
   onInstalled: () => void
 }) {
+  const t = useTranslations('Automations')
+  const planName = usePlanName()
+  const { plan } = usePlan()
+  const { openUpgradeModal } = useUpgradeModal()
   const [search, setSearch]       = useState('')
   const [catFilter, setCatFilter] = useState<LibraryCategory | 'all'>('all')
   const [selected, setSelected]   = useState<Set<string>>(new Set())
@@ -228,6 +256,19 @@ export function LibraryDialog({
     () => new Set(rules.flatMap(r => r.system_key ? [r.system_key] : [])),
     [rules]
   )
+
+  // Plan gate (UX-86). `requires_plan` was declared on every item and read by
+  // nothing, so a Free team could install a Studio automation from here.
+  const isLocked = (item: LibraryItem) => !libraryItemUnlocked(item, plan)
+  // The CHEAPEST plan that unlocks anything currently locked — the notice must
+  // name a plan the reader can act on, and naming the highest would overstate
+  // the price of the next step.
+  const lockedMinPlan = useMemo<SaasPlan | null>(() => {
+    const locked = AUTOMATION_LIBRARY.filter(i => isLocked(i)).map(i => i.requires_plan as SaasPlan)
+    if (locked.length === 0) return null
+    return locked.reduce((a, b) => (PLAN_ORDER.indexOf(b) < PLAN_ORDER.indexOf(a) ? b : a))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan])
 
   // Fetch ALL templates (no active filter) when dialog opens, for install-time lookup
   const { data: allTemplates = [] } = useQuery<InstalledTemplate[]>({
@@ -287,7 +328,7 @@ export function LibraryDialog({
 
   function selectAllAvailable() {
     const available = visibleItems
-      .filter(i => !installedRuleKeys.has(i.library_key))
+      .filter(i => !installedRuleKeys.has(i.library_key) && !isLocked(i))
       .map(i => i.library_key)
     setSelected(new Set(available))
   }
@@ -297,7 +338,10 @@ export function LibraryDialog({
     setInstalling(true)
     setError('')
     try {
-      const items = AUTOMATION_LIBRARY.filter(i => selected.has(i.library_key))
+      // Re-filtered here and not only at selection time: the plan can change
+      // (or finish loading) while the dialog is open, and the selection set
+      // outlives that.
+      const items = AUTOMATION_LIBRARY.filter(i => selected.has(i.library_key) && !isLocked(i))
       await installItems(items, teamId, teamLanguage, allTemplates, installedRuleKeys)
       setSelected(new Set())
       onInstalled()
@@ -310,7 +354,9 @@ export function LibraryDialog({
   }
 
   // Count available (not yet installed) items in current view
-  const availableCount  = visibleItems.filter(i => !installedRuleKeys.has(i.library_key)).length
+  const availableCount  = visibleItems.filter(
+    i => !installedRuleKeys.has(i.library_key) && !isLocked(i)
+  ).length
   const installedCount  = AUTOMATION_LIBRARY.filter(i => installedRuleKeys.has(i.library_key)).length
 
   // Category pills
@@ -376,6 +422,16 @@ export function LibraryDialog({
 
         {/* Scrollable items */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          {/* Above-tier items stay visible and locked; this is the one control
+              that can change the answer (the shared UX-42 notice). */}
+          {lockedMinPlan && (
+            <PlanUpgradeNotice
+              minPlan={lockedMinPlan}
+              feature="automation_flows"
+              variant="inline"
+              description={t('library.lockedNotice')}
+            />
+          )}
           {grouped.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
               No automations match your search.
@@ -400,7 +456,12 @@ export function LibraryDialog({
                       item={item}
                       installed={installedRuleKeys.has(item.library_key)}
                       selected={selected.has(item.library_key)}
+                      locked={isLocked(item)}
+                      lockedPlanLabel={planName(item.requires_plan as SaasPlan)}
                       onToggle={() => toggle(item.library_key)}
+                      onLockedClick={() =>
+                        openUpgradeModal({ minPlan: item.requires_plan as SaasPlan })
+                      }
                     />
                   ))}
                 </div>
@@ -454,12 +515,22 @@ export function LibraryDialog({
 
 // ─── Quick-start installer (used by empty-state button) ───────────────────────
 
+/** `plan` is REQUIRED, and deliberately not optional-with-a-default: the
+ *  quick-start button installs the whole starter bundle in one click with no
+ *  review step, so a call site that forgot to pass it would reopen UX-86 at its
+ *  widest point. Filtering happens in `starterBundleItemsForPlan`, the same
+ *  reader the dialog locks on.
+ *
+ *  Every rule lands `active: false` (installItems, above) — including the
+ *  welcome mail, which is the one whose failure mode is loudest: a bundle that
+ *  installed it live would greet the entire existing roster the first time
+ *  anyone's stage moved. The studio switches each rule on after reading it. */
 export async function installStarterBundle(
   teamId: string,
   allTemplates: InstalledTemplate[],
   installedRuleKeys: Set<string>,
-  teamLanguage = 'en'
+  opts: { plan: SaasPlan | null; teamLanguage?: string }
 ): Promise<void> {
-  const items = AUTOMATION_LIBRARY.filter(i => STARTER_BUNDLE_KEYS.includes(i.library_key))
-  await installItems(items, teamId, teamLanguage, allTemplates, installedRuleKeys)
+  const items = starterBundleItemsForPlan(opts.plan)
+  await installItems(items, teamId, opts.teamLanguage ?? 'en', allTemplates, installedRuleKeys)
 }

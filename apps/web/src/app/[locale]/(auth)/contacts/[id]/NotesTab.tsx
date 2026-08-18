@@ -22,8 +22,57 @@ import {
 export interface ContactNote {
   id: string
   content: string
+  /** The colour TAG's name — never a hex value. See NOTE_COLORS. Absent = the
+   *  plain card, which stays the default. */
+  color?: NoteColor
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+/**
+ * Post-it colour tags for notes (UX-96) — a SMALL FIXED PALETTE, not a colour
+ * picker, and the stored value is the NAME.
+ *
+ * A hex chosen against a white card is unreadable on a dark one, and once it is
+ * in Firestore it cannot be re-themed: every note ever written would keep a
+ * literal colour from whatever the app looked like the day it was typed. A name
+ * resolves per theme, here, in one map — which is also what keeps the set small
+ * enough to mean something at a glance. Grouping is the whole point; a
+ * free-form picker produces forty near-identical yellows and groups nothing.
+ */
+export const NOTE_COLORS = ['none', 'yellow', 'green', 'blue', 'pink', 'purple'] as const
+export type NoteColor = (typeof NOTE_COLORS)[number]
+
+/** name → the classes it resolves to, light and dark. The ONE place a colour
+ *  name becomes pixels; a surface that renders a note reads it from here. */
+export const NOTE_COLOR_CLASSES: Record<NoteColor, { card: string; swatch: string }> = {
+  none: { card: 'bg-card border-border', swatch: 'bg-muted border-border' },
+  yellow: {
+    card: 'bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-900',
+    swatch: 'bg-amber-200 border-amber-300 dark:bg-amber-800 dark:border-amber-700',
+  },
+  green: {
+    card: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900',
+    swatch: 'bg-emerald-200 border-emerald-300 dark:bg-emerald-800 dark:border-emerald-700',
+  },
+  blue: {
+    card: 'bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:border-sky-900',
+    swatch: 'bg-sky-200 border-sky-300 dark:bg-sky-800 dark:border-sky-700',
+  },
+  pink: {
+    card: 'bg-pink-50 border-pink-200 dark:bg-pink-950/40 dark:border-pink-900',
+    swatch: 'bg-pink-200 border-pink-300 dark:bg-pink-800 dark:border-pink-700',
+  },
+  purple: {
+    card: 'bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-900',
+    swatch: 'bg-violet-200 border-violet-300 dark:bg-violet-800 dark:border-violet-700',
+  },
+}
+
+/** Tolerant read: an unknown or absent name falls back to the plain card rather
+ *  than rendering nothing — a note must never disappear over a colour. */
+export function noteColorClasses(color: string | null | undefined): { card: string; swatch: string } {
+  return NOTE_COLOR_CLASSES[(color ?? 'none') as NoteColor] ?? NOTE_COLOR_CLASSES.none
 }
 
 // ─── data ─────────────────────────────────────────────────────────────────────
@@ -130,17 +179,20 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
 function NoteEditor({
   initialContent,
+  initialColor,
   onSave,
   onCancel,
   saving,
 }: {
   initialContent?: string
-  onSave: (html: string) => Promise<void>
+  initialColor?: NoteColor
+  onSave: (html: string, color: NoteColor) => Promise<void>
   onCancel: () => void
   saving: boolean
 }) {
   const t = useTranslations('Contacts')
   const [editorEmpty, setEditorEmpty] = useState(!initialContent)
+  const [color, setColor] = useState<NoteColor>(initialColor ?? 'none')
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -157,14 +209,31 @@ function NoteEditor({
 
   const handleSave = useCallback(async () => {
     if (!editor || editor.isEmpty) return
-    await onSave(editor.getHTML())
-  }, [editor, onSave])
+    await onSave(editor.getHTML(), color)
+  }, [editor, onSave, color])
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
+    <div className={`rounded-lg border overflow-hidden ${noteColorClasses(color).card}`}>
       <Toolbar editor={editor} />
       <EditorContent editor={editor} />
-      <div className="flex justify-end gap-2 px-3 py-2 border-t bg-muted/30">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t bg-muted/30">
+        {/* The palette. Six swatches, no picker — see NOTE_COLORS. */}
+        <div className="flex items-center gap-1.5">
+          {NOTE_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setColor(c)}
+              aria-pressed={color === c}
+              aria-label={t(`noteColor_${c}` as 'noteColor_none')}
+              title={t(`noteColor_${c}` as 'noteColor_none')}
+              className={`h-4 w-4 rounded-full border transition-transform ${
+                noteColorClasses(c).swatch
+              } ${color === c ? 'ring-2 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+            />
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
         <button
           onClick={onCancel}
           disabled={saving}
@@ -181,6 +250,7 @@ function NoteEditor({
           <Check className="h-3.5 w-3.5" />
           {saving ? '…' : t('save')}
         </button>
+        </div>
       </div>
     </div>
   )
@@ -205,7 +275,7 @@ function NoteCard({
   }) ?? ''
 
   return (
-    <div className="group rounded-lg border bg-card">
+    <div className={`group rounded-lg border ${noteColorClasses(note.color).card}`}>
       {/* Header row */}
       <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
         <span className="text-[11px] text-muted-foreground">{dateLabel}</span>
@@ -271,11 +341,14 @@ export function NotesTab({ contact }: { contact: Contact }) {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-notes', contact.id] })
 
-  const handleAdd = async (html: string) => {
+  const handleAdd = async (html: string, color: NoteColor) => {
     setSaving(true)
     try {
       await addDoc(notesRef, {
         content: html,
+        // The NAME, and only when it says something — an uncoloured note stores
+        // no colour field at all.
+        ...(color !== 'none' ? { color } : {}),
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       })
@@ -286,12 +359,15 @@ export function NotesTab({ contact }: { contact: Contact }) {
     }
   }
 
-  const handleUpdate = async (html: string) => {
+  const handleUpdate = async (html: string, color: NoteColor) => {
     if (!editingNote) return
     setSaving(true)
     try {
       await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_NOTES_SUBCOLLECTION, editingNote.id), {
         content: html,
+        // Written unconditionally on an edit: clearing a colour has to be
+        // expressible, and an omitted key on an update leaves the old one.
+        color: color === 'none' ? null : color,
         updated_at: serverTimestamp(),
       })
       setEditingNote(null)
@@ -343,6 +419,7 @@ export function NotesTab({ contact }: { contact: Contact }) {
           <NoteEditor
             key={note.id}
             initialContent={note.content}
+            initialColor={note.color}
             onSave={handleUpdate}
             onCancel={() => setEditingNote(null)}
             saving={saving}

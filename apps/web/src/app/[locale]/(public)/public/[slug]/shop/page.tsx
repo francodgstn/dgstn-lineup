@@ -1,3 +1,4 @@
+import { parseDocId } from '@linyup/shared'
 import ShopHome from './ShopHome'
 
 export const dynamic = 'force-dynamic'
@@ -14,5 +15,13 @@ export default async function ShopPage({
   const { type, tab, course } = await searchParams
   const initialTab =
     tab === 'products' || tab === 'subscriptions' || tab === 'courses' ? tab : null
-  return <ShopHome focusTypeId={type ?? null} focusCourseId={course ?? null} initialTab={initialTab} />
+  // Attacker-supplied: both ids are matched against loaded data and one reaches a
+  // checkout callable, so shape them before they leave this boundary.
+  return (
+    <ShopHome
+      focusTypeId={parseDocId(type) ?? null}
+      focusCourseId={parseDocId(course) ?? null}
+      initialTab={initialTab}
+    />
+  )
 }

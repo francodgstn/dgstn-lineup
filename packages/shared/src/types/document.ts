@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { WaiverConfig } from './waiver'
 
 // ─── Documents plugin ─────────────────────────────────────────────────────────
 //
@@ -21,7 +22,13 @@ export type DocumentSource = 'rich_text' | 'external_link'
 
 // Semantic role — drives which documents are suggested for the signup consent
 // slot (terms/privacy) and the icon/label shown on cards. 'other' is the catch-all.
-export type DocumentKind = 'terms' | 'privacy' | 'regulation' | 'other'
+//
+// 'waiver' is a liability release, and it is the one kind that is not merely
+// semantic: a waiver document is CALLABLE-ONLY (firestore.rules denies client
+// create, update and delete on it), because its content is somebody's evidence
+// and its required-ness is an authorization fact. Its settings live in
+// `StudioDocument.waiver` — see types/waiver.ts.
+export type DocumentKind = 'terms' | 'privacy' | 'regulation' | 'waiver' | 'other'
 
 export interface StudioDocument {
   id: string
@@ -41,6 +48,30 @@ export interface StudioDocument {
   updated_at: Timestamp
   createdBy: string
   archived_at?: Timestamp | null
+
+  // ── Versioning (Wave 3 Phase 4) ─────────────────────────────────────────────
+  /**
+   * Highest published version, or null when never published. Written ONLY by
+   * `publishDocumentVersion`; `firestore.rules` denies every client write of
+   * this field on every kind.
+   *
+   * A document that is published, or that has ever been published, can never be
+   * DELETED — its text may be somebody's evidence. Note that the delete rule
+   * keys on `status != 'published'` AS WELL as this field: every document
+   * published before Phase 4 has `current_version` unset, so the version clause
+   * alone would protect nothing that already carries acceptances.
+   */
+  current_version?: number | null
+  /**
+   * The floor a signature must meet to still count. Moved ONLY by a
+   * `require_resign` publish; a `silent` publish leaves it alone. This one
+   * number is what makes supersession a LAZY DERIVATION (`waiverAcceptanceState`)
+   * instead of a bulk write over every signer row.
+   */
+  min_valid_version?: number | null
+  /** `kind === 'waiver'` only. Absent on every other kind, and the booking gate
+   *  reads it from `teams/{t}/waiver_policy/current`, never from here. */
+  waiver?: WaiverConfig | null
 }
 
 // Mirrored to documents/{documentId}/public_profile/{documentId} by
@@ -57,7 +88,31 @@ export interface DocumentPublicProfile {
   kind: DocumentKind
   source: DocumentSource
   summary?: string
-  bodyHtml?: string // SANITIZED HTML — only for source === 'rich_text'
+  /**
+   * The SANITIZED HTML — only for source === 'rich_text'.
+   *
+   * COPIED FROM THE FROZEN VERSION SNAPSHOT (`documents/{d}/versions/{v}`)
+   * rather than re-sanitized from the raw `body`, so the text a signer read and
+   * the text stored as version N are the same string. Two sanitize calls with a
+   * library upgrade between them would silently break every acceptance hash.
+   * (A document published before versioning existed and not yet covered by
+   * `scripts/backfill-document-versions.ts` still falls back to sanitizing
+   * `body` — see the sync.)
+   */
+  bodyHtml?: string
   externalUrl?: string // only for source === 'external_link'
-  updated_at: Timestamp // used as the consent "version" stamp
+  /** The published version this summary was taken from, or null for a document
+   *  that predates versioning and has not been backfilled. */
+  version?: number | null
+  /** sha256 of `bodyHtml`, copied from the version snapshot. */
+  bodyHash?: string | null
+  /**
+   * When the document row was last written.
+   *
+   * NOT a version stamp. It used to carry a comment claiming it was "used as
+   * the consent version stamp"; nothing ever read it that way, and the real
+   * version is `version` above — minted by `publishDocumentVersion` and equal to
+   * the id of an immutable snapshot.
+   */
+  updated_at: Timestamp
 }

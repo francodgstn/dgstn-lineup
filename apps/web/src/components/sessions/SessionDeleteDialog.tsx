@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { deleteDoc, doc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
+import { toast } from 'sonner'
 import { db, functions } from '@/lib/firebase'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SESSIONS_COLLECTION } from '@linyup/shared'
@@ -15,6 +16,15 @@ import { Loader2, Repeat2, AlertTriangle } from 'lucide-react'
  * that belong to a recurring series offer a "this only / this and following"
  * choice and go through the `cancelSession` Cloud Function (which also notifies
  * booked contacts and marks single deletions as cancelled exceptions).
+ *
+ * ONE EXCEPTION, and it is about money: an appointment hold created with a
+ * Stripe PAYMENT LINK carries `payment_checkout_session_id`, and that id is the
+ * only thing that can ever close a link which stays payable for seven days.
+ * Deleting the document throws it away. So those go through
+ * `cancelAppointmentSlot` first — it closes the link, then cancels — and the
+ * delete follows. A delete on its own is not the defect decision 16 describes (a
+ * late payment for a MISSING session is refunded by handleAppointmentCheckout,
+ * not re-acquired); losing the ability to close the link is.
  */
 export function SessionDeleteDialog({
   open, onOpenChange, session, label, onDeleted,
@@ -45,6 +55,23 @@ export function SessionDeleteDialog({
         const cancel = httpsCallable<{ sessionId: string; deleteScope: string }, unknown>(functions, 'cancelSession')
         await cancel({ sessionId: session.id, deleteScope: scope })
       } else {
+        if (session.activityType === 'appointment' && session.payment_checkout_session_id) {
+          const closeLink = httpsCallable<
+            { teamId: string; sessionId: string },
+            { ok: boolean; cancelled: boolean; reason?: string; linkStillOpen?: boolean }
+          >(functions, 'cancelAppointmentSlot')
+          const res = await closeLink({ teamId: session.teamId, sessionId: session.id })
+          if (res.data?.ok === false) {
+            // The client paid in the window. Do NOT delete: the appointment is
+            // paid for, and deleting it here would erase the only record of it.
+            toast.warning(t('deleteAppointmentPaidInWindow'), { duration: 10_000 })
+            setBusy(false)
+            return
+          }
+          if (res.data?.linkStillOpen) {
+            toast.warning(t('deleteAppointmentLinkStillOpen'), { duration: 10_000 })
+          }
+        }
         await deleteDoc(doc(db, SESSIONS_COLLECTION, session.id))
       }
       onDeleted()

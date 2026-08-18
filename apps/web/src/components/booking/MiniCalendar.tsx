@@ -5,7 +5,7 @@
 // surfaces render the exact same calendar. Framework-agnostic: takes plain
 // YYYY-MM-DD date keys, no Firestore Timestamp dependency.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import {
   startOfMonth,
@@ -15,6 +15,7 @@ import {
   subMonths,
   isToday,
   isAfter,
+  isSameMonth,
   startOfDay,
   format,
 } from 'date-fns'
@@ -36,12 +37,26 @@ export interface MiniCalendarProps {
 
 export function MiniCalendar({ availableDates, selectedDate, onSelect, maxDateKey }: MiniCalendarProps) {
   const t = useTranslations('PublicBooking')
+  // The selected day wins over the first available one: a deep link
+  // (`?session=` / `?date=`) can select a day weeks out, and opening on the
+  // current month would show the visitor a calendar with nothing selected on it.
   const initialMonth = useMemo(() => {
+    if (selectedDate) return dateKeyToDate(selectedDate)
     if (availableDates.length > 0) return dateKeyToDate(availableDates[0])
     return new Date()
+    // Seed only — `currentMonth` is the visitor's own paging state from here on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableDates])
 
   const [currentMonth, setCurrentMonth] = useState(initialMonth)
+
+  // …and follow the selection when it jumps out of the displayed month (the
+  // activity changed, or a restored step selected a different day).
+  useEffect(() => {
+    if (!selectedDate) return
+    const target = dateKeyToDate(selectedDate)
+    if (!isSameMonth(target, currentMonth)) setCurrentMonth(startOfMonth(target))
+  }, [selectedDate, currentMonth])
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)

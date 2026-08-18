@@ -2,12 +2,12 @@
 
 import { useState, use, useMemo, useEffect } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
+import { useRecentContacts } from '@/contexts/RecentContactsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useBack } from '@/hooks/useBackNavigation'
-import { useSearchParams } from 'next/navigation'
+import { useTabParam } from '@/hooks/useTabParam'
 import {
   doc,
   getDoc,
@@ -24,13 +24,16 @@ import {
   serverTimestamp,
   Timestamp,
   limit,
+  documentId,
 } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { formatCurrency } from '@/lib/format'
+import { ConsentHistoryPanel } from '@/components/contacts/ConsentHistoryPanel'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Badge } from '@/components/ui/badge'
+import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -49,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
   DropdownMenu,
@@ -144,6 +148,7 @@ import {
   ArchiveRestore,
   AlertTriangle,
   UserPlus,
+  UserX,
   Archive,
   RotateCcw,
   ArrowRightLeft,
@@ -159,12 +164,14 @@ import {
   Info,
   Pencil,
   ShieldCheck,
+  ShieldOff,
   MoreVertical,
   User,
   Check,
   IdCard,
   RefreshCw,
   Ticket,
+  FileSignature,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -189,7 +196,7 @@ import {
   Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
-import { NotesTab, useContactNotesCount, useContactNotes, type ContactNote } from './NotesTab'
+import { NotesTab, useContactNotesCount, useContactNotes, noteColorClasses, type ContactNote } from './NotesTab'
 import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
 import { PlanGate } from '@/components/plan/PlanGate'
 import {
@@ -390,7 +397,11 @@ const profileSchema = z.object({
   address_postal_code: z.string().max(20).optional(),
   address_locality: z.string().max(100).optional(),
   // Entry — editable for data-entry correction; does NOT move acquisition_stage
-  entry: z.enum(['booking', 'walk_in', 'signup', 'import', 'form', 'shop'] as const).optional(),
+  // Derived from the union, never re-typed: a hand-copied list silently went
+  // stale against `entry: 'manual'` (written by createStaffAppointment), and a
+  // z.enum that rejects a value already ON the contact fails validation of the
+  // form's own default — blocking submit on that contact for every field.
+  entry: z.enum(CONTACT_ENTRIES).optional(),
   // Source axis
   source: z.enum(['website', 'referral', 'social', 'event', 'import', 'other'] as const).optional(),
   source_detail: z.string().max(500).optional(),
@@ -486,8 +497,32 @@ interface BookingSummary {
   sessionLabel: string
   sessionStart: { toDate(): Date } | null
   joinedAt: { toDate(): Date } | null
+  status: string | null
 }
 
+/** How many of a contact's bookings this tab loads. Newest first, so the cap
+ *  trims the oldest history rather than the part anybody is looking at, and it
+ *  bounds the session hydration below to at most one batch per 30 rows. */
+const CONTACT_BOOKINGS_LIMIT = 60
+
+/**
+ * A contact's bookings.
+ *
+ * THE FILTER FIELD IS `contact`, NOT `contactId`. Every writer of a booking
+ * document — `bookSession`, `rebookSession`, `createDropInCheckout`, the
+ * appointment rails — stores the contact id under `contact` (the doc id is the
+ * contact id too, but a collection-group query cannot filter on that). This
+ * query asked for `contactId`, a field no booking has ever carried, so it
+ * matched nothing for everybody, always: a confirmed booking left the contact
+ * record looking like the person had never booked at all (UX-89). The composite
+ * index that was already deployed — `(teamId, contact, joinedAt DESC)` in
+ * firestore.index.json — is the query as it was meant to be written.
+ *
+ * NOT the same question as the header's "Total sessions": that counter is
+ * `contact.total_sessions`, written only by the `sessions/{id}/participants`
+ * trigger, i.e. by ATTENDANCE. Zero attended after a booking is correct; the
+ * number that was missing is this one.
+ */
 function useContactBookings(contactId: string, teamId: string | null) {
   return useQuery<BookingSummary[]>({
     queryKey: ['contact-bookings', contactId],
@@ -497,18 +532,48 @@ function useContactBookings(contactId: string, teamId: string | null) {
         query(
           collectionGroup(db, 'bookings'),
           where('teamId', '==', teamId),
-          where('contactId', '==', contactId),
-          orderBy('joinedAt', 'desc')
+          where('contact', '==', contactId),
+          orderBy('joinedAt', 'desc'),
+          limit(CONTACT_BOOKINGS_LIMIT)
         )
       )
-      return snap.docs.map((d) => {
+      const rows = snap.docs.map((d) => {
         const data = d.data()
         return {
-          id: d.id,
+          id: d.ref.path,
           sessionId: d.ref.parent.parent?.id ?? '',
-          sessionLabel: data.sessionLabel ?? data.activityName ?? 'Session',
-          sessionStart: data.sessionStart ?? null,
-          joinedAt: data.joinedAt ?? null,
+          joinedAt: (data.joinedAt as BookingSummary['joinedAt']) ?? null,
+          status: (data.status as string | undefined) ?? 'pending',
+        }
+      })
+
+      // WHAT and WHEN come from the SESSION, not the booking: a booking document
+      // carries neither an activity name nor a start time (the old code read
+      // `sessionLabel` / `sessionStart`, which no writer has ever set, so every
+      // row would have rendered "Session" and the join date). Batched by
+      // documentId, 30 at a time — Firestore's `in` limit.
+      const ids = [...new Set(rows.map((r) => r.sessionId).filter(Boolean))]
+      const sessions = new Map<string, { label: string; start: BookingSummary['sessionStart'] }>()
+      for (let i = 0; i < ids.length; i += 30) {
+        const batch = ids.slice(i, i + 30)
+        const sSnap = await getDocs(
+          query(collection(db, 'sessions'), where(documentId(), 'in', batch))
+        )
+        sSnap.docs.forEach((sd) => {
+          const s = sd.data()
+          sessions.set(sd.id, {
+            label: (s.activityName as string | undefined) || (s.name as string | undefined) || '',
+            start: (s.start as BookingSummary['sessionStart']) ?? null,
+          })
+        })
+      }
+
+      return rows.map((r) => {
+        const s = sessions.get(r.sessionId)
+        return {
+          ...r,
+          sessionLabel: s?.label || 'Session',
+          sessionStart: s?.start ?? null,
         }
       })
     },
@@ -647,6 +712,29 @@ function useContactPerformanceCheckins(contactId: string) {
   })
 }
 
+/**
+ * TWO shapes exist in `contact_alerts`, and this page only ever understood one.
+ *
+ * This page (and the migration) write the FLAT `schedule_type` / `schedule_value`
+ * of the `ContactAlert` type. The server writers — `bookSession`'s booking
+ * notification and the automation engine's `create_alert` — write a NESTED
+ * `schedule: { type, value }` (which is also what the mobile app reads). A
+ * nested-shape alert therefore rendered here with no date, no icon and a
+ * permanent "pending" badge, because `schedule_type` was simply undefined.
+ *
+ * Normalising on READ fixes both writers at once and needs no migration; the
+ * flat shape stays canonical for anything this page writes.
+ */
+function normaliseAlert(raw: Record<string, unknown>, id: string): ContactAlert {
+  const nested = raw.schedule as { type?: string; value?: unknown } | undefined
+  return {
+    ...(raw as Omit<ContactAlert, 'id'>),
+    id,
+    schedule_type: (raw.schedule_type ?? nested?.type ?? 'datetime') as AlertScheduleType,
+    schedule_value: (raw.schedule_value ?? nested?.value) as ContactAlert['schedule_value'],
+  }
+}
+
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
     queryKey: ['contact-alerts', contactId],
@@ -657,7 +745,7 @@ function useContactAlerts(contactId: string) {
           orderBy('created_at', 'desc')
         )
       )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ContactAlert)
+      return snap.docs.map((d) => normaliseAlert(d.data() as Record<string, unknown>, d.id))
     },
   })
 }
@@ -1623,15 +1711,20 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
               key={n.id}
               type="button"
               onClick={onOpen}
-              className="group relative block w-full overflow-hidden rounded-lg border bg-card p-3 text-left transition-colors hover:border-border"
+              className={`group relative block w-full overflow-hidden rounded-lg border p-3 text-left transition-colors hover:border-border ${noteColorClasses(n.color).card}`}
             >
               <div className="mb-1 text-[11px] text-muted-foreground">{fmt(n)}</div>
               <div
                 className="prose-notes max-h-24 overflow-hidden text-sm"
                 dangerouslySetInnerHTML={{ __html: n.content }}
               />
-              {/* Fade the truncated content into the card background. */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent" />
+              {/* Fade the truncated content into the card background. Only on
+                  an UNCOLOURED card: the gradient is a `from-card` fade, so over
+                  a colour tag it would fade to the wrong colour — and a fade
+                  that ends in the wrong colour reads as a rendering bug. */}
+              {!n.color && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent" />
+              )}
             </button>
           ))}
           {extra > 0 && (
@@ -1650,6 +1743,9 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
 }
 
 // ─── profile tab ──────────────────────────────────────────────────────────────
+
+/** Lets the floating Save submit this form from inside its FloatingSlot portal. */
+const PROFILE_FORM_ID = 'contact-profile-form'
 
 function ProfileTab({
   contact,
@@ -1760,7 +1856,7 @@ function ProfileTab({
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12 lg:shrink-0">
+    <form id={PROFILE_FORM_ID} onSubmit={handleSubmit(onSubmit)} className="space-y-4 pb-24 lg:w-8/12 lg:shrink-0">
       {/* Single-column section blocks; fields flow into rows within each block on wider screens */}
       <div className="space-y-6">
         {/* Personal information */}
@@ -1956,20 +2052,17 @@ function ProfileTab({
           </div>
         </FormBlock>
 
-        {/* Ranks */}
-        <FormBlock title={t('sectionRanks')}>
-          {rankingSystems.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-4 text-center">
-              <Award className="h-6 w-6 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">{t('rankNoSystemsPrompt')}</p>
-              <Link
-                href="/settings/team"
-                className="text-sm text-primary hover:underline underline-offset-2"
-              >
-                {t('rankNoSystemsLink')}
-              </Link>
-            </div>
-          ) : (
+        {/* Ranks — rendered only where a studio actually awards them (UX-39).
+            This block used to render for everyone: a studio with no ranking
+            system met an empty panel, an icon and a link inviting it to go set
+            one up, on the page it opens most often in the product. Ranks are a
+            martial-arts / grading-school feature, not a general one, and this
+            was the loudest of the places the product taxed every studio that
+            will never award one. It is demoted, not gated — the manager
+            lives at Settings → Team → Ranking, and the moment a system exists
+            this panel comes back on every contact with nothing to migrate. */}
+        {rankingSystems.length > 0 && (
+          <FormBlock title={t('sectionRanks')}>
             <Controller
               control={control}
               name="ranks"
@@ -2077,8 +2170,8 @@ function ProfileTab({
                 </div>
               )}
             />
-          )}
-        </FormBlock>
+          </FormBlock>
+        )}
 
         {/* Acquisition — stage timeline + entry/source */}
         <div className="rounded-xl border bg-card p-4 space-y-4">
@@ -2181,17 +2274,21 @@ function ProfileTab({
         </FormBlock>
       </div>
 
-      {/* Floating save */}
+      {/* Floating save — the page's primary action, so it owns the 'page-primary'
+          lane and nothing the shell mounts can be painted over it. Portalled out
+          of this <form>, hence `form={PROFILE_FORM_ID}` rather than a bare
+          type="submit". */}
       {isDirty && (
-        <div className="fixed bottom-6 right-6 z-40">
+        <FloatingSlot lane="page-primary">
           <button
             type="submit"
+            form={PROFILE_FORM_ID}
             disabled={isSubmitting}
             className="flex items-center gap-2 px-5 py-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {isSubmitting ? tCommon('loading') : t('saveChanges')}
           </button>
-        </div>
+        </FloatingSlot>
       )}
     </form>
 
@@ -2208,8 +2305,20 @@ function ProfileTab({
 
 // ─── bookings tab ─────────────────────────────────────────────────────────────
 
+// Booking status → the label the bookings LIST already uses. Reusing that
+// namespace keeps one wording for one fact; a second set of strings here would
+// drift the moment either side was edited.
+const BOOKING_STATUS_KEY: Record<string, string> = {
+  pending: 'statusPending',
+  confirmed: 'statusConfirmed',
+  cancelled: 'statusCancelled',
+  no_show: 'statusNoShow',
+  rebooked: 'statusRebooked',
+}
+
 function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
+  const tBookings = useTranslations('Bookings')
   const { data: bookings = [], isLoading } = useContactBookings(contact.id, teamId)
 
   if (isLoading)
@@ -2239,6 +2348,20 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
                   : '—'}
             </p>
           </div>
+          {b.status && BOOKING_STATUS_KEY[b.status] && (
+            <Badge
+              variant={
+                b.status === 'confirmed'
+                  ? 'default'
+                  : b.status === 'cancelled' || b.status === 'no_show'
+                    ? 'destructive'
+                    : 'secondary'
+              }
+              className="shrink-0"
+            >
+              {tBookings(BOOKING_STATUS_KEY[b.status] as Parameters<typeof tBookings>[0])}
+            </Badge>
+          )}
         </div>
       ))}
     </div>
@@ -2552,6 +2675,17 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
 }
 
 // ─── grant credits dialog (manual lesson-credit pack grant) ──────────────────
+//
+// TWO THINGS UX-80 ADDED. "Let them know" defaults ON: the whole payload of a
+// credit grant is a NUMBER, and until the contact is told it, the only place ten
+// classes exist is a member area nobody has mentioned to them. The mail says the
+// studio ADDED the credits — it never thanks them for a purchase, because on
+// this rail they made none.
+//
+// The idempotency key is minted once per opening for a blunter reason: every
+// click of Grant used to mint a NEW grant document, so a double-click handed out
+// twice the credits, silently. One key per opening, `.create()` on the server,
+// and the second click is refused rather than doubled.
 
 function GrantCreditsDialog({
   open,
@@ -2573,6 +2707,8 @@ function GrantCreditsDialog({
   const [customMonths, setCustomMonths] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sendReceipt, setSendReceipt] = useState(true)
+  const [attemptKey, setAttemptKey] = useState('')
 
   // Only types with at least one credit-bearing price are grantable.
   const creditTypes = subTypes.filter((st) =>
@@ -2591,6 +2727,12 @@ function GrantCreditsDialog({
     setCustomCredits('')
     setCustomMonths('')
     setError(null)
+    setSendReceipt(true)
+    setAttemptKey(
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    )
   }, [open])
 
   const canSave =
@@ -2608,12 +2750,18 @@ function GrantCreditsDialog({
           priceId?: string
           credits?: number
           validityMonths?: number
+          idempotencyKey?: string
+          sendReceipt?: boolean
         },
-        { success: boolean; credits: number }
+        { success: boolean; credits: number; duplicate?: boolean }
       >(functions, 'grantCredits')
       await fn({
         contactId: contact.id,
         subscriptionTypeId: typeId,
+        idempotencyKey: attemptKey,
+        // No contact email ⇒ nothing to send to; the server logs and skips, but
+        // offering the switch at all would be a promise the data cannot keep.
+        sendReceipt: sendReceipt && !!contact.email,
         ...(priceId
           ? { priceId }
           : {
@@ -2710,6 +2858,16 @@ function GrantCreditsDialog({
                   onChange={(e) => setCustomMonths(e.target.value)}
                 />
               </Field>
+            </div>
+          )}
+
+          {typeId && contact.email && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">{t('creditsNotifyLabel')}</p>
+                <p className="text-xs text-muted-foreground">{t('creditsNotifyHint')}</p>
+              </div>
+              <Switch checked={sendReceipt} onCheckedChange={setSendReceipt} />
             </div>
           )}
 
@@ -3058,9 +3216,12 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
         </div>
         <div className="rounded-xl border bg-card p-4 text-center">
           <p className="text-2xl font-bold">{contact.total_sessions ?? 0}</p>
+          {/* `total_sessions` counts ATTENDANCE (the participants trigger), not
+              bookings — it was labelled "Bookings" here, which is the same
+              number answering the wrong question (UX-89). */}
           <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
             <Trophy className="h-3 w-3 text-primary" />
-            {t('tabBookings')}
+            {t('statTotalSessions')}
           </p>
         </div>
       </div>
@@ -3106,11 +3267,17 @@ const ACTIVITY_PERIODS = [
 ] as const
 type ActivityPeriodKey = (typeof ACTIVITY_PERIODS)[number]['key']
 
-type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach'
+type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach' | 'consent'
 
 const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
   sessions: ['session_participant_add', 'session_participant_delete'],
-  bookings: ['booking_created', 'booking_confirmed', 'booking_cancelled', 'booking_rebooked'],
+  bookings: [
+    'booking_created',
+    'booking_confirmed',
+    'booking_cancelled',
+    'booking_rebooked',
+    'booking_no_show',
+  ],
   profile: [
     'contact_add',
     'contact_type_change',
@@ -3125,6 +3292,10 @@ const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventTyp
     'contact_anonymized',
   ],
   outreach: ['outreach_email_sent'],
+  // Consent gets its own chip rather than joining `profile`: "when did they
+  // accept this, and did anybody withdraw it" is the question a dispute starts
+  // with, and it is not a profile edit.
+  consent: ['waiver_accepted', 'waiver_revoked'],
 }
 
 type EventMeta = { Icon: React.ElementType; bg: string; fg: string }
@@ -3145,9 +3316,12 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   booking_confirmed: { Icon: CheckCircle, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   booking_cancelled: { Icon: XCircle, bg: 'bg-red-500/10', fg: 'text-red-600' },
   booking_rebooked: { Icon: CalendarDays, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
+  booking_no_show: { Icon: UserX, bg: 'bg-red-500/10', fg: 'text-red-600' },
   contact_login: { Icon: Activity, bg: 'bg-green-500/10', fg: 'text-green-600' },
   outreach_email_sent: { Icon: Mail, bg: 'bg-blue-500/10', fg: 'text-blue-600' },
   contact_anonymized: { Icon: Trash2, bg: 'bg-muted', fg: 'text-muted-foreground' },
+  waiver_accepted: { Icon: ShieldCheck, bg: 'bg-emerald-500/10', fg: 'text-emerald-600' },
+  waiver_revoked: { Icon: ShieldOff, bg: 'bg-red-500/10', fg: 'text-red-600' },
 }
 
 function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): string {
@@ -3335,6 +3509,7 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
     { key: 'bookings', label: t('activityFilterBookings') },
     { key: 'profile', label: t('activityFilterProfile') },
     { key: 'outreach', label: t('activityFilterOutreach') },
+    { key: 'consent', label: t('activityFilterConsent') },
   ]
 
   return (
@@ -4823,6 +4998,7 @@ const TAB_IDS = [
   'bookings',
   'affiliation',
   'payments',
+  'documents',
   'goals',
   'gamification',
 ] as const
@@ -4844,12 +5020,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   })
   const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
   // Deep-link support: /contacts/{id}?tab=payments opens that tab (e.g. from the
-  // payments table). Falls back to profile for a missing/unknown value.
-  const searchParams = useSearchParams()
-  const [tab, setTab] = useState<TabId>(() => {
-    const p = searchParams.get('tab')
-    return p && (TAB_IDS as readonly string[]).includes(p) ? (p as TabId) : 'profile'
-  })
+  // payments table), and the active tab survives a refresh, a shared URL and a
+  // reopened tab. Falls back to profile for a missing/unknown value.
+  const [tab, setTab] = useTabParam(TAB_IDS, 'profile')
   // User-reorderable tab strip (opt-in edit mode; order persisted per-browser).
   const [tabOrder, setTabOrder] = useContactTabOrder()
   const [editingTabs, setEditingTabs] = useState(false)
@@ -4879,14 +5052,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     enabled: !!contact,
   })
 
-  // Keep ?tab= in the URL in sync (without a Next navigation) so a refresh or
-  // deep-link — and a reopened tab — restores the sub-tab. usePathname is
-  // query-agnostic, so tab-strip active detection is unaffected.
+  // Record the visit for "recently viewed contacts" in the sidebar search panel
+  // (see the nav-memory census in contexts/NavPinsContext.tsx — this is a
+  // different mechanism from the tab above, deliberately).
+  //
+  // ON LOAD, NOT ON ROUTE: it fires once the document has actually come back, so
+  // a mistyped, deleted or forbidden id never enters the list; and it carries
+  // the contact's OWN teamId, so an org admin reading another team's contact
+  // records it there rather than into the team they are currently in.
+  const { recordContactVisit } = useRecentContacts()
   useEffect(() => {
-    const p = new URLSearchParams(window.location.search)
-    p.set('tab', tab)
-    window.history.replaceState(null, '', `${window.location.pathname}?${p.toString()}`)
-  }, [tab])
+    if (contact?.id && contact.teamId) recordContactVisit(contact.id, contact.teamId)
+  }, [contact?.id, contact?.teamId, recordContactVisit])
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })
@@ -4939,6 +5116,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
     { id: 'followups', label: t('tabFollowups'), icon: Bell },
+    // What this person has been asked to accept — at signup, before booking, or
+    // both — and whether they did. Its own tab: buried under the profile form it
+    // was a screen nobody reached, and it rendered nothing at all for a studio
+    // whose consent is signup-only.
+    { id: 'documents', label: t('tabDocuments'), icon: FileSignature },
     // Gamification is a plugin — the tab appears only when it's installed (filtered below).
     { id: 'gamification', label: t('tabGamification'), icon: Star },
   ]
@@ -5254,6 +5436,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 orgId={team?.org_id}
                 onSaved={invalidate}
                 onOpenNotes={() => setNotesOpen(true)}
+              />
+            )}
+            {/* The operator's copy of this person's consent — every document the
+                studio asks for, on either surface, with state, version, role and
+                date. Its own tab, with an honest empty state. */}
+            {tab === 'documents' && (
+              <ConsentHistoryPanel
+                contactId={contact.id}
+                teamId={currentTeamId}
+                contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
               />
             )}
             {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}

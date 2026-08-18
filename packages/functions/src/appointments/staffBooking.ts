@@ -29,11 +29,15 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
   computePlatformFee,
   resolveAppointmentDurations,
+  resolveDurationSale,
   resolveAutoConfirm,
   type Activity,
   type SaasPlan,
+  localizedPublicUrl,
 } from '@linyup/shared'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from '../connect/access'
+import { closeTeamCheckoutSession } from '../connect/checkout'
+import type { CheckoutSessionCloseOutcome } from '../utils/connect/client'
 import { createOneOffCheckoutSession } from '../utils/connect/client'
 import { resolveBaseUrl, getHostingUrl } from '../utils/env'
 import { generateSecureToken } from '../utils/crypto'
@@ -44,6 +48,7 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { writeManualPaymentEvent } from '../payments/recordManualPayment'
 import { asLang, runAppointmentSlotTransaction } from './booking'
+import { releaseAppointmentHold } from './holdRelease'
 import { sendAppointmentBookingEmails } from './emails'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -238,7 +243,10 @@ export const createStaffAppointment = onCall(async (request) => {
   const allowedDurations = resolveAppointmentDurations(activity)
   const chosenDuration = allowedDurations.find((d) => d.minutes === durationMinutes)
   if (!chosenDuration) throw new HttpsError('failed-precondition', 'Duration is not offered')
-  const basePriceMajor = chosenDuration.priceAmount ?? null
+  // A staff booking is the studio's own judgement and is NOT refused on a
+  // benefit_only length — but it carries no price either: `resolveDurationSale`
+  // returns null for every mode but 'priced', so a stale amount can't be billed.
+  const basePriceMajor = resolveDurationSale(chosenDuration).priceAmount
   const autoConfirm = resolveAutoConfirm({ autoConfirm: activity.autoConfirm, type: activity.type })
 
   // ── Team ──
@@ -430,6 +438,7 @@ export const createStaffAppointment = onCall(async (request) => {
 
   // ── Post-tx effects per settlement rail ──
   let paymentUrl: string | undefined
+  let checkoutSessionId: string | undefined
 
   if (plan_.recordPaymentNow) {
     await writeManualPaymentEvent({
@@ -464,6 +473,13 @@ export const createStaffAppointment = onCall(async (request) => {
       providerId,
       startMs: String(startMs),
       durationMinutes: String(durationMinutes),
+      // This hold's proof of ownership, for `handleCheckoutExpired` — which on
+      // THIS rail is the only release path there is (the session deliberately
+      // carries no hold_expires_at, so the daily sweep never sees it). Without it
+      // the expiry handler falls back to the weaker EXCLUSIVITY proof, which is
+      // sound but is an argument about the document rather than a fact about this
+      // attempt. See appointments/holdRelease.ts.
+      bookingToken: bookingToken as string,
     }
     try {
       const checkoutSession = await createOneOffCheckoutSession({
@@ -472,7 +488,12 @@ export const createStaffAppointment = onCall(async (request) => {
         currency: currency.toLowerCase(),
         applicationFeeAmount,
         productName: `${activity.name} · ${durationMinutes} min`,
-        successUrl: `${base}?status=success${slugQuery}`,
+        // `&cs=…` mirrors `buildResultUrls` (connect/checkout.ts): the success
+        // page claims the checkout and signs the payer in rather than asking
+        // them for a credential after they have paid (UX-88). This rail builds
+        // its own URLs because it is a payment LINK the studio sends, so the
+        // param has to be repeated here — it is not a second mechanism.
+        successUrl: `${base}?status=success${slugQuery}&cs={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${base}?status=cancelled${slugQuery}`,
         customerEmail: client?.email || undefined,
         metadata,
@@ -480,25 +501,69 @@ export const createStaffAppointment = onCall(async (request) => {
         expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + PAYMENT_LINK_EXPIRY_SECONDS,
       })
       paymentUrl = checkoutSession.url
+      checkoutSessionId = checkoutSession.sessionId
     } catch (err) {
-      // Stripe create failed AFTER the hold was written — best-effort release,
-      // same pattern as createAppointmentCheckout's catch block.
+      // Stripe create failed AFTER the hold was written — release it through the
+      // SAME ownership-checked transaction `createAppointmentCheckout`'s
+      // rollback and `handleCheckoutExpired` use (appointments/holdRelease.ts,
+      // which owns the census and the proof each site rests on). This used to
+      // cancel the session and delete the booking on PRESENCE while a comment
+      // claimed it followed `createAppointmentCheckout`'s catch; that claim was
+      // false, and the gap was reachable: this rail writes its hold at the same
+      // deterministic `apt_{provider}_{start}` id, and the client's own public
+      // retry (`createAppointmentCheckout`, `allowRewriteByHolder: contactId`)
+      // can rewrite it between this transaction returning and this catch running
+      // — at which point a blind cancel here kills a live, payable Stripe session
+      // of theirs.
       console.error('[appointments] createStaffAppointment: payment-link create failed, releasing hold:', err)
       try {
-        await sessionRef.set({ status: 'cancelled' }, { merge: true })
-        await sessionRef.collection('bookings').doc(contactId as string).delete()
+        await releaseAppointmentHold({
+          teamId,
+          sessionId: sessionRef.id,
+          contactId: contactId as string,
+          bookingToken,
+          label: 'createStaffAppointment',
+        })
       } catch (releaseErr) {
         console.error('[appointments] createStaffAppointment: hold release failed:', releaseErr)
       }
       throw new HttpsError('internal', 'Failed to create the payment link')
     }
+    // STORE THE SESSION ID, so the link can be CLOSED and not merely waited out.
+    //
+    // This rail's whole deadline lives at Stripe (7 days, deliberately no
+    // `hold_expires_at`, unreachable by the daily sweep), so a client who turns
+    // up and pays CASH instead leaves a link that stays payable for a week.
+    // `markAppointmentPaid` expires it through `closeTeamCheckoutSession` before
+    // it records the money, and this is the only reference it has to expire with.
+    //
+    // OUTSIDE the try above on purpose: by here Stripe has created a live,
+    // payable session, so a Firestore hiccup must not fall into a catch whose
+    // job is to release the hold and report that the link could not be created.
+    // A failure here costs the ability to close the link (the late-payment
+    // refund in `handleAppointmentCheckout` is the remaining net) — it does not
+    // cost the appointment.
+    if (checkoutSessionId) {
+      try {
+        await sessionRef.set({ payment_checkout_session_id: checkoutSessionId }, { merge: true })
+      } catch (err) {
+        console.error(
+          `[appointments] createStaffAppointment: could not store the checkout session id ` +
+            `(session=${sessionRef.id}) — the payment link cannot be closed from the admin:`,
+          err
+        )
+      }
+    }
   }
 
   // ── Emails ──
   if (!blocked && client) {
+    // Locale-pinned to the studio's language, like the mail it goes into.
     const cancelUrl =
       teamSlug && bookingToken
-        ? `${getHostingUrl()}/public/${teamSlug}/appointments/cancel?token=${bookingToken}`
+        ? localizedPublicUrl(getHostingUrl(), lang, teamSlug, 'appointments/cancel', {
+            token: bookingToken,
+          })
         : null
     await sendAppointmentBookingEmails({
       teamId,
@@ -513,6 +578,16 @@ export const createStaffAppointment = onCall(async (request) => {
       onlineUrl: null,
       cancelUrl,
       bookingId: `${sessionRef.id}-${contactId}`,
+      // The one staff rail on which money has ALREADY changed hands: `paid_offline`
+      // takes it over the counter and `writeManualPaymentEvent` records it above.
+      // The booking document carries no marker for that settlement —
+      // `bookingWasPaidFor` would answer false for every rail here, since the only
+      // `payment_status` this callable ever writes is `'required'` — so the plan,
+      // which IS this callable's tender decision, answers instead. The other two
+      // priced rails are debts, not receipts: `pending_offline` is owed at the
+      // door and `payment_link` is unpaid until the webhook confirms it (and the
+      // link mail below is the message that actually matters for it).
+      wasPaidFor: plan_.recordPaymentNow,
       client,
     })
     if (paymentUrl) {
@@ -541,6 +616,47 @@ export const createStaffAppointment = onCall(async (request) => {
 })
 
 // ─── markAppointmentPaid ─────────────────────────────────────────────────────
+//
+// THE DESK SETTLEMENT OF AN APPOINTMENT THAT WAS AWAITING A PAYMENT — cash over
+// the counter, a bank transfer, TWINT. It now covers BOTH awaiting-payment
+// shapes, and the second one is why this comment exists.
+//
+//   • 'offline' — the studio always meant to be paid in person. Nothing external
+//     exists; the settlement is a manual payment row and a status flip.
+//   • 'link' — a Stripe Checkout link was emailed and the client paid CASH
+//     instead. Until UX-59 this callable refused the mode by name and the
+//     payments dashboard did not even offer the button, so the ONLY thing that
+//     could ever close such a booking was Stripe's own 7-day expiry — which
+//     cancels the session and deletes the booking. The studio's appointment
+//     quietly disappeared a week later and the cash was never recorded anywhere.
+//
+// ── THE LINK RAIL'S ONE EXTRA OBLIGATION: KILL THE LINK ─────────────────────
+//
+// A link that is still payable after the money has been taken at the desk is a
+// double charge waiting for a client to tidy their inbox. So the settlement
+// EXPIRES the Checkout Session (`closeTeamCheckoutSession`, three-valued on
+// purpose) and reports what happened:
+//
+//   closed → the link can never take money again. The ordinary case.
+//   paid   → the client paid online in the seconds before this call. Record NO
+//            cash: the webhook owns that money. The seat is already theirs.
+//   failed → Stripe could not tell us. The manager took cash and that is a fact,
+//            so it IS recorded — but the caller is told the link may still be
+//            live so it can say so.
+//
+// ORDER IS LOAD-BEARING. The settle transaction runs BEFORE the close, not
+// after. Expiring a session makes Stripe deliver `checkout.session.expired`,
+// which is census site 3 of the appointment-hold release
+// (appointments/holdRelease.ts) and would cancel this very hold — it holds the
+// booking token from the checkout metadata, so its ownership proof SUCCEEDS.
+// Settling first moves the session off `pending_payment`, at which point
+// `releaseAppointmentHold` returns `not_a_live_hold` and the event is inert.
+// Closing first would open a window in which the studio's own settlement
+// deletes the appointment it was settling.
+//
+// And the belt to that brace: the booking is stamped `settled_offline`, which is
+// what lets `handleAppointmentCheckout` REFUND a payment that arrives late on a
+// link this call could not close (or on one whose id was never stored).
 
 export const markAppointmentPaid = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
@@ -560,8 +676,13 @@ export const markAppointmentPaid = onCall(async (request) => {
   const s = sSnap.data()!
   if (s.teamId !== teamId) throw new HttpsError('permission-denied', 'Team mismatch')
   if (s.activityType !== 'appointment') throw new HttpsError('failed-precondition', 'Not an appointment session')
-  if (s.status !== 'pending_payment' || s.payment_pending !== true || s.payment_intent_mode !== 'offline') {
-    throw new HttpsError('failed-precondition', 'This appointment is not awaiting an offline payment')
+  const intentMode = s.payment_intent_mode as 'offline' | 'link' | undefined
+  if (
+    s.status !== 'pending_payment' ||
+    s.payment_pending !== true ||
+    (intentMode !== 'offline' && intentMode !== 'link')
+  ) {
+    throw new HttpsError('failed-precondition', 'This appointment is not awaiting a payment')
   }
 
   const amountMinor =
@@ -572,6 +693,113 @@ export const markAppointmentPaid = onCall(async (request) => {
   const currency = (s.payment_currency as string | undefined) ?? 'CHF'
   // Denormalised on the session by createStaffAppointment — no bookings-subcollection read needed.
   const contactId = (s.contact_id as string | null | undefined) ?? null
+  const checkoutSessionId = (s.payment_checkout_session_id as string | null | undefined) ?? null
+
+  // ── 1. SETTLE, in one transaction, before anything touches Stripe. ──
+  // The session leaves `pending_payment` and the booking becomes an ordinary
+  // confirmed one, so from here no release path in the census can act on it.
+  // Re-reads inside the transaction: the manager may have been looking at a row
+  // the Connect webhook settled a moment ago.
+  const settled = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(sessionRef)
+    if (!fresh.exists) return false
+    const f = fresh.data()!
+    if (f.status !== 'pending_payment' || f.payment_pending !== true) return false
+
+    tx.set(
+      sessionRef,
+      {
+        status: 'full',
+        payment_pending: FieldValue.delete(),
+        payment_intent_mode: FieldValue.delete(),
+        payment_checkout_session_id: FieldValue.delete(),
+      },
+      { merge: true }
+    )
+    // On the 'link' rail the booking is still `pending` / `payment_status:
+    // 'required'` — the webhook was going to confirm it. Nobody else will now.
+    // On the 'offline' rail it is already confirmed and this only adds the
+    // markers, which is the point: both rails end in the same shape.
+    if (contactId) {
+      tx.set(
+        sessionRef.collection('bookings').doc(contactId),
+        {
+          status: 'confirmed',
+          // The seat WAS paid for — `bookingWasPaidFor` must say so — and
+          // `settled_offline` is the extra fact a bare 'paid' cannot carry.
+          payment_status: 'paid',
+          settled_offline: true,
+          expires_at: FieldValue.delete(),
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+    }
+    return true
+  })
+  if (!settled) {
+    throw new HttpsError('failed-precondition', 'This appointment is no longer awaiting a payment', {
+      reason: 'not_pending',
+    })
+  }
+
+  // ── 2. Kill the link, if there is one. ──
+  let linkOutcome: CheckoutSessionCloseOutcome | 'no_reference' | null = null
+  if (intentMode === 'link') {
+    if (!checkoutSessionId) {
+      // A hold written before the id was stored (or one whose store failed).
+      // Nothing to expire — the late-payment refund below is the only net.
+      linkOutcome = 'no_reference'
+      console.warn(
+        `[appointments] markAppointmentPaid: no stored checkout session for a link hold ` +
+          `(session=${sessionId}) — the link cannot be closed from here`
+      )
+    } else {
+      // `loadEnabledTeam` THROWS for a studio that has since switched Connect
+      // off, and a refusal here would put the manager straight back in the state
+      // this whole callable exists to end: cash in the till and a booking
+      // nothing can close. A studio that cannot reach Stripe is told the link
+      // may still be live, exactly like any other failed close.
+      // `closeTeamCheckoutSession` swallows its own account-resolution errors
+      // the same way — this only covers the read that happens before it.
+      try {
+        const team = await loadEnabledTeam(teamId)
+        linkOutcome = await closeTeamCheckoutSession(team, checkoutSessionId)
+      } catch (err) {
+        console.error(
+          `[appointments] markAppointmentPaid: could not reach Stripe to close the link ` +
+            `(session=${sessionId}):`,
+          err
+        )
+        linkOutcome = 'failed'
+      }
+    }
+  }
+
+  // ── 3. Record the money — unless Stripe already took it. ──
+  // `paid` is the one branch that records nothing: the client paid online in the
+  // seconds before this call, `handlePaymentIntent` writes that row, and adding a
+  // cash row on top would double the studio's revenue for one appointment. The
+  // seat stays settled, because it is: they paid.
+  if (linkOutcome === 'paid') {
+    // …and TAKE THE MARKER BACK OFF. `settled_offline` means "this seat was paid
+    // for somewhere Stripe cannot see", and it is exactly what makes
+    // `handleAppointmentCheckout` refund an incoming charge. Leaving it standing
+    // here would refund the payment the client legitimately just made. It is
+    // stamped in step 1 rather than here because the case it guards — a link
+    // this call could NOT close — needs it as early as possible; this is the one
+    // outcome that retracts it.
+    if (contactId) {
+      await sessionRef
+        .collection('bookings')
+        .doc(contactId)
+        .set({ settled_offline: FieldValue.delete() }, { merge: true })
+    }
+    console.log(
+      `[appointments] markAppointmentPaid: link was already paid (session=${sessionId}) — no cash recorded`
+    )
+    return { ok: true, recorded: false, reason: 'already_paid_online' as const }
+  }
 
   await writeManualPaymentEvent({
     teamId,
@@ -585,11 +813,10 @@ export const markAppointmentPaid = onCall(async (request) => {
     recordedBy: request.auth.uid,
   })
 
-  await sessionRef.update({
-    status: 'full',
-    payment_pending: FieldValue.delete(),
-    payment_intent_mode: FieldValue.delete(),
-  })
-
-  return { ok: true }
+  // `linkStillOpen` is the honest half of a three-valued close: the studio is
+  // told when the link it emailed may still be payable, so it can cancel it in
+  // its own Stripe dashboard. A late payment is refunded automatically either
+  // way (handleAppointmentCheckout) — this is so nobody is surprised by that.
+  const linkStillOpen = linkOutcome === 'failed' || linkOutcome === 'no_reference'
+  return { ok: true, recorded: true, linkStillOpen }
 })

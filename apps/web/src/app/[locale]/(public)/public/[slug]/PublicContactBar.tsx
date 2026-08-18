@@ -16,12 +16,16 @@ import SignInDialog from './space/SignInDialog'
 // auth at all (it uses a separate device-pairing session — see kiosk/KioskLock.tsx),
 // so it opts out too. Backed by the lifted contact-session context, so a login
 // persists across surfaces.
-export function PublicContactBar() {
-  const t = useTranslations('Space')
-  const pathname = usePathname()
-  const { slug, step, isAuthenticated, contact, openSignIn, closeSignIn, logout } =
-    usePublicContactAuth()
-  const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
+/**
+ * The sign-in DIALOG, mounted for every public surface unconditionally.
+ *
+ * Split out from the pill below because the surfaces that opt out of the pill
+ * still need to be able to OPEN sign-in from their own chrome — the website
+ * (/site) draws its own palette-styled control and calls `openSignIn()`. One
+ * dialog instance, one `step` source from PublicContactAuthProvider.
+ */
+export function PublicContactSignIn() {
+  const { slug, step, closeSignIn } = usePublicContactAuth()
 
   const signInOpen =
     step === 'email' || step === 'code' || step === 'selectContact' || step === 'register'
@@ -32,9 +36,23 @@ export function PublicContactBar() {
     [closeSignIn]
   )
 
+  return <SignInDialog open={signInOpen} onOpenChange={onSignInOpenChange} slug={slug} />
+}
+
+export function PublicContactBar() {
+  const t = useTranslations('Space')
+  const pathname = usePathname()
+  const { slug, isAuthenticated, isRestoring, contact, openSignIn, logout } = usePublicContactAuth()
+  const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
+
   // Precise segment match (so a slug like "spacegym" isn't mistaken for /space).
   const onSurface = (s: string) => pathname.endsWith(`/${s}`) || pathname.includes(`/${s}/`)
   if (onSurface('space') || onSurface('site') || onSurface('kiosk')) return null
+  // A returning member's session is still being checked — show nothing rather
+  // than a "Sign in" pill she is about to be told she does not need (UX-37).
+  // Nothing, not a skeleton: this control floats over the page, and a pulsing
+  // placeholder in the corner of every load is worse than a half-second gap.
+  if (isRestoring) return null
 
   return (
     <>
@@ -78,7 +96,6 @@ export function PublicContactBar() {
           </button>
         )}
       </div>
-      <SignInDialog open={signInOpen} onOpenChange={onSignInOpenChange} slug={slug} />
     </>
   )
 }

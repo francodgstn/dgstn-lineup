@@ -8,6 +8,15 @@ export const whatsappManifest: PluginManifest = {
   minPlan: 'studio',
   status: 'coming_soon',
   iconName: 'MessageCircle',
+  // NOTHING FIRES `message_received` YET, and nothing may release this plugin
+  // until something does. A trigger a studio can select but that never runs is
+  // indistinguishable from a rule that has simply not matched — no error, no
+  // log, nothing to notice (UX-87). It is harmless today only because
+  // `status: 'coming_soon'` makes the plugin uninstallable, and a plugin that
+  // cannot be installed contributes no triggers to the automations builder. So
+  // flipping this to `'available'` is the same change as shipping the trigger:
+  // the server-side fire must land in the same commit. `referrals` is the worked
+  // example — packages/functions/src/referrals/events.ts.
   automationTriggers: [
     {
       id: 'plugin:whatsapp:message_received',

@@ -48,7 +48,24 @@ export const PLATFORM_METRICS_COLLECTION = 'platform_metrics'
 export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'
 export const ORG_TEAMS_SUBCOLLECTION = 'org_teams'
+// THE TWO ORG INVITATIONS ARE DIFFERENT RELATIONSHIPS. The naming rule that
+// tells them apart: AN INVITATION IS NAMED AFTER THE COLLECTION IT GRANTS INTO.
+//
+//   org_invitations         → org_teams    a whole STUDIO joins the org. Accepted
+//                                          by that studio's OWNER; it moves the
+//                                          studio's billing onto the org plan.
+//   org_member_invitations  → org_members  a PERSON joins the org's staff as
+//                                          org_admin / org_viewer. Accepted by
+//                                          that person; it grants no studio
+//                                          anything and touches no billing.
+//
+// `org_invitations` predates the rule and is misnamed by it (`org_team_invitations`
+// is what it would be called today); it is shipped data behind a live route
+// (/org-invite/{orgId}/{invId}), so it keeps its name and the rule is enforced
+// on everything after it. Never conflate the two — an org admin who receives
+// "you've been invited" must not land on a screen that enrols their studio.
 export const ORG_INVITATIONS_SUBCOLLECTION = 'org_invitations'
+export const ORG_MEMBER_INVITATIONS_SUBCOLLECTION = 'org_member_invitations'
 export const ORG_ACCESS_REQUESTS_SUBCOLLECTION = 'org_access_requests'
 export const ORG_AFFILIATION_STATUSES_SUBCOLLECTION = 'affiliation_statuses'
 export const ORG_PLACES_SUBCOLLECTION = 'org_places'
@@ -115,6 +132,12 @@ export const ORG_PROGRAM_TEMPLATES_SUBCOLLECTION = 'org_program_templates'
 export const CHECKINS_COLLECTION = 'checkins'
 export const SESSIONS_COLLECTION = 'sessions'
 export const PARTICIPANTS_SUBCOLLECTION = 'participants'
+// Class waitlist — sessions/{sessionId}/waitlist/{contactId}. The doc id is the
+// contactId, exactly like `bookings`, so a second join is an idempotent write
+// rather than a duplicate row. Written only by Cloud Functions (Admin SDK);
+// every client write is denied. Deliberately NOT registered in tenantData.ts:
+// tenant teardown uses recursiveDelete on the parent session.
+export const WAITLIST_SUBCOLLECTION = 'waitlist'
 export const MONTHLY_SCORES_SUBCOLLECTION = 'monthly_scores'
 export const ACTIVITIES_COLLECTION = 'activities'
 export const SESSION_SERIES_COLLECTION = 'session_series'
@@ -145,11 +168,68 @@ export const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
 export const FORMS_COLLECTION = 'forms'
 export const FORM_SUBMISSIONS_SUBCOLLECTION = 'submissions'
 
-// Documents plugin (core operational documents: terms, privacy, regulations)
+// Documents (core operational documents: terms, privacy, regulations, waivers)
 // documents/{documentId}: team-scoped, authored rich text OR an external link.
 // The world-readable summary lives in the generic `public_profile` subcollection
 // (written by syncDocumentPublicProfile) — no dedicated subcollection constant.
 export const DOCUMENTS_COLLECTION = 'documents'
+
+// ── Waivers (Wave 3 Phase 4) ────────────────────────────────────────────────
+// Everything hangs off the DOCUMENT, not off the contact, and that is
+// deliberate: the evidence must survive the contact. purgeProvisionalContacts
+// hard-deletes expired provisional contacts nightly and a per-team teardown uses
+// recursiveDelete, so a contact-scoped acceptance subcollection would be
+// destroyed by both. Document-scoped rows are not.
+//
+// NO tenantData.ts REGISTRATION for any of these: the completeness test
+// classifies top-level *_COLLECTION constants only, and `documents` is already
+// registered there with a teamId field match. Same finding as the gift-card and
+// promo phases — do not add a constant.
+
+/** IMMUTABLE published snapshots. Doc id = documentVersionId(n) → 'v0001'…,
+ *  zero-padded so a plain orderBy(documentId()) is chronological with no index.
+ *  `allow write: if false`; written once by publishDocumentVersion. */
+export const DOCUMENT_VERSIONS_SUBCOLLECTION = 'versions'
+/** APPEND-ONLY acceptance/revocation EVENT rows. Doc id = waiverAcceptanceId(),
+ *  which contains the event's own nonce — never the relationship alone, which is
+ *  what made re-signing, expiry and revocation inexpressible in the first
+ *  design. Server-written only. */
+export const DOCUMENT_ACCEPTANCES_SUBCOLLECTION = 'acceptances'
+/** APPEND-ONLY notice rows, one per send attempt.
+ *
+ *  ⚠ NO WRITER IN THIS PHASE. The `notify` publish outcome is deferred to v2;
+ *  the MODEL stays so adding it later is an addition rather than a migration.
+ *  See WaiverNoticeRow in types/waiver.ts for the full reasoning — do not delete
+ *  this constant on the grounds that nothing writes it. */
+export const DOCUMENT_NOTICES_SUBCOLLECTION = 'notices'
+/** THE one mutable current-state row per (document, contact). Doc id =
+ *  contactId — NOT an identity key, because a shared household mailbox would
+ *  give two people the same identity key and merge one person's signature with
+ *  another's. Exactly one writer: functions/src/waivers/accept.ts. */
+export const DOCUMENT_SIGNERS_SUBCOLLECTION = 'signers'
+/** teams/{teamId}/waiver_policy/current — THE authorization source for the
+ *  booking gate. Server-written, client-read; it fails CLOSED, unlike the
+ *  display mirror on the team's public profile, which fails open by design. */
+export const WAIVER_POLICY_SUBCOLLECTION = 'waiver_policy'
+export const WAIVER_POLICY_DOC_ID = 'current'
+
+// ─── Per-team feature settings ────────────────────────────────────────────────
+// teams/{teamId}/settings/{settingId} — owner-writable, member-readable config
+// for features that are NOT plugins. It exists because Documents stopped being a
+// plugin: its signup-consent selection used to live inside
+// `installed_plugins/documents.config`, which is the very document the de-gating
+// retires.
+//
+// The `match /teams/{teamId}` rules block enumerates its subcollections one by
+// one and has no catch-all, so this path was denied to every client until the
+// rule for it landed. It arrived in the SAME commit as the first writer — split,
+// a studio's first save fails outright with a permission error.
+export const TEAM_SETTINGS_SUBCOLLECTION = 'settings'
+/** teams/{teamId}/settings/documents — `TeamDocumentsSettings`. Readers must
+ *  fall back to the retired `installed_plugins/documents.config` until every
+ *  team is migrated; `resolveSignupDocumentIds` in types/team.ts is that read,
+ *  written once so the client and the sync cannot disagree about it. */
+export const DOCUMENTS_SETTINGS_DOC_ID = 'documents'
 
 // Website plugin (studio site builder)
 // site_drafts: PRIVATE working copy (manager+). site_published: PUBLIC snapshot
@@ -193,6 +273,23 @@ export const PAYMENT_EVENTS_SUBCOLLECTION = 'payment_events'
 export const PARTNER_VISITS_SUBCOLLECTION = 'partner_visits'
 // Gift cards (E3): teams/{teamId}/gift_cards/{code} — the code is the doc id.
 export const GIFT_CARDS_SUBCOLLECTION = 'gift_cards'
+// Manager-mint claims: teams/{teamId}/gift_card_issues/{issueRef}. A create()
+// on this doc is the serialisation point for issueGiftCard — whoever wins mints,
+// everyone else reads the code back. Server-only: no firestore.rules block, and
+// there is no `match /{document=**}` wildcard, so clients are denied by default.
+export const GIFT_CARD_ISSUES_SUBCOLLECTION = 'gift_card_issues'
+// Promo codes (Wave 3 P3): teams/{teamId}/promo_codes/{CODE} — the canonical
+// uppercase code is the doc id, which is what makes "is this code taken?" a
+// create() rather than a query-then-write race. Server-only: firestore.rules
+// give managers/owners read and deny every client write (the doc carries
+// usage_count, max_uses and internal labels), so every mutation is a callable.
+export const PROMO_CODES_SUBCOLLECTION = 'promo_codes'
+// Durable per-PERSON redemption ledger:
+// teams/{teamId}/promo_codes/{CODE}/redemptions/{identityKey}. The doc id is
+// promoIdentityKey(...) — a hash of the normalised email, NOT a contactId — so
+// the per-person cap survives a contact document being purged and recreated,
+// and the ids are not a harvestable list of a studio's customer emails.
+export const PROMO_REDEMPTIONS_SUBCOLLECTION = 'redemptions'
 // No-show policy fees (E5): teams/{teamId}/policy_fees/{feeId}.
 export const POLICY_FEES_SUBCOLLECTION = 'policy_fees'
 

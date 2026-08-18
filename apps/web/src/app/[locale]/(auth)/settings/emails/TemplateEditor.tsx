@@ -6,7 +6,7 @@
 // with the SAME wrapInLayout/buildTeamFooter the Cloud Functions use
 // (@linyup/shared — single source of truth, no drift).
 import { useEffect, useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
@@ -28,6 +28,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+
+// Language endonyms — intentionally not translated, same convention as
+// UserMenu's locale switcher.
+const LANGUAGE_ENDONYMS: Record<string, string> = {
+  en: 'English',
+  de: 'Deutsch',
+  fr: 'Français',
+  it: 'Italiano',
+}
 
 export interface OutreachTemplate {
   id: string
@@ -178,16 +193,23 @@ export function TemplateEditor({
   onOpenChange,
   teamId,
   editing,
+  duplicating,
   onSaved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   teamId: string
   editing: OutreachTemplate | null
+  /** The template a NEW one is being copied from. `editing` stays null, so the
+   *  save is an `addDoc` — and a copy therefore carries NO `system_key`: that
+   *  marks a stock template, is what "Reset to default" keys off, and is what
+   *  stops the library seeding it twice. A copy is the studio's own. */
+  duplicating?: OutreachTemplate | null
   onSaved: () => void
 }) {
   const t = useTranslations('Automations')
   const te = useTranslations('SettingsEmails')
+  const tCommon = useTranslations('Common')
   const [submitErr, setSubmitErr] = useState('')
   const [sideTab, setSideTab] = useState<'preview' | 'placeholders'>('preview')
 
@@ -207,6 +229,7 @@ export function TemplateEditor({
   const tmplSchema = useMemo(() => createTmplSchema(t), [t])
   const {
     register,
+    control,
     handleSubmit,
     reset,
     watch,
@@ -220,17 +243,19 @@ export function TemplateEditor({
     if (!open) return
     setSubmitErr('')
     setSideTab('preview')
-    if (editing) {
+    const seed = editing ?? duplicating
+    if (seed) {
       reset({
-        name: editing.name,
-        subject: editing.subject,
-        body: editing.body,
-        language: editing.language,
+        name: duplicating ? tCommon('copyName', { name: seed.name }) : seed.name,
+        subject: seed.subject,
+        body: seed.body,
+        language: seed.language,
       })
     } else {
       reset({ name: '', subject: '', body: '', language: 'en' })
     }
-  }, [open, editing, reset])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, duplicating, reset])
 
   // Live preview — the real production layout around the editable content.
   const body = watch('body')
@@ -275,7 +300,11 @@ export function TemplateEditor({
       <DialogContent className="sm:max-w-[1080px] max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
           <DialogTitle>
-            {editing ? editing.name : t('dialogs.templates.newTemplate')}
+            {editing
+              ? editing.name
+              : duplicating
+                ? tCommon('duplicate')
+                : t('dialogs.templates.newTemplate')}
           </DialogTitle>
         </DialogHeader>
 
@@ -321,16 +350,27 @@ export function TemplateEditor({
             </div>
             <div className="w-36">
               <Label className="text-xs">{t('dialogs.templates.languageLabel')}</Label>
-              <select
-                {...register('language')}
-                className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                {/* Language endonyms — intentionally not translated, same convention as UserMenu's locale switcher */}
-                <option value="en">English</option>
-                <option value="de">Deutsch</option>
-                <option value="fr">Français</option>
-                <option value="it">Italiano</option>
-              </select>
+              {/* Language endonyms — intentionally not translated, same convention as UserMenu's locale switcher */}
+              <Controller
+                control={control}
+                name="language"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="mt-1 h-9 w-full">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {LANGUAGE_ENDONYMS[field.value] ?? field.value}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(LANGUAGE_ENDONYMS).map(([code, label]) => (
+                        <SelectItem key={code} value={code}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             {submitErr && <p className="text-xs text-destructive">{submitErr}</p>}
             <div className="flex justify-between pt-1 pb-4">

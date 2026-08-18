@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { Globe, Menu, X } from 'lucide-react'
 import type { SiteMeta, WebsiteSection, OrgSiteSection, OrgSiteTeamRef, SocialLink } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
-import { SectionBlock, sectionNavLabel, SOCIAL_ICONS, type RenderCtx } from './sections'
+import { SectionBlock, sectionNavLabel, bookProps, SOCIAL_ICONS, type RenderCtx } from './sections'
+import type { BookIntent } from '@/components/booking/BookingOverlay'
 
 /** Structural subset satisfied by SiteDraft/PublishedSite (team sites, builder
  *  preview) AND OrgSiteDraft/OrgPublishedSite (org sites). `teamId` is only
@@ -25,13 +27,37 @@ export default function WebsiteRenderer({
   preview = false,
   orgId,
   orgTeams,
+  onBook,
+  surfaceLinks,
+  memberControl,
+  paymentsEnabled,
 }: {
   site: RenderableSite
   preview?: boolean
   /** Org sites only — the org id and its embedded member-team snapshot. */
   orgId?: string
   orgTeams?: OrgSiteTeamRef[]
+  /**
+   * Opens the booking overlay in place. Only the live team site passes this;
+   * optional so the builder canvas, the org site and the embed — none of which
+   * have a `PublicTeamProvider` — keep working untouched.
+   */
+  onBook?: (intent: BookIntent) => void
+  /**
+   * Cross-surface links (shop, Space, …) derived by the host from
+   * `active_public_surfaces`. Optional so the builder canvas, the org site and
+   * the embed — none of which resolve a team — are untouched.
+   */
+  surfaceLinks?: { href: string; label: string }[]
+  /** "Sign in" / "Hi Anna" — the host owns the contact session. */
+  memberControl?: { label: string; onClick: () => void }
+  /** Whether the studio has a chargeable Stripe Connect account. Passed only by
+   *  the live team site (the one host that resolves the team) — see
+   *  RenderCtx.paymentsEnabled for why absent is not the same as false. */
+  paymentsEnabled?: boolean
 }) {
+  const locale = useLocale()
+  const t = useTranslations('Site')
   const [systemDark, setSystemDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -49,31 +75,45 @@ export default function WebsiteRenderer({
   const ctx: RenderCtx = {
     palette,
     slug: site.slug,
+    locale,
     teamId: site.teamId,
     orgId,
     orgTeams,
     preview,
+    paymentsEnabled,
     socialLinks: site.socialLinks,
+    // Second, independent guard (bookProps checks `preview` too): the builder
+    // renders this component inside /(auth) with NO PublicTeamProvider, so a
+    // leaked onBook would make the overlay throw and blank the canvas.
+    onBook: preview ? undefined : onBook,
   }
 
   const navItems = site.meta.header.showNav
     ? site.sections
         .filter((s) => s.type !== 'hero' && s.showInNav !== false)
-        .map((s) => ({ id: s.id, label: sectionNavLabel(s) }))
+        .map((s) => ({ id: s.id, label: sectionNavLabel(s, t) }))
         .filter((n) => n.label)
     : []
   const hasMenu = navItems.length > 0 || !!site.meta.header.ctaLabel
 
+  const inert = (e: React.MouseEvent) => e.preventDefault()
+
+  const headerAction = site.meta.header.ctaAction ?? 'booking'
   const headerHref = site.meta.header.ctaLabel
-    ? ctaHref(
-        { action: site.meta.header.ctaAction ?? 'booking', url: site.meta.header.ctaUrl },
-        site.slug,
-      )
+    ? ctaHref({ action: headerAction, url: site.meta.header.ctaUrl }, site.slug, locale)
     : undefined
+
+  // The header CTA is the most-clicked booking entry on the whole site, so it
+  // opens the overlay like every other one. Signup/external CTAs stay plain
+  // navigations. Null when this isn't a booking CTA.
+  const headerBookProps =
+    headerAction === 'booking' ? bookProps(headerHref, ctx, { kind: 'root' }) : null
+
+  /** Plain-navigation fallback, matching the nav links' preview behaviour. */
+  const headerLinkProps = { href: preview ? undefined : headerHref, onClick: preview ? inert : undefined }
 
   const socials = (site.socialLinks ?? []).filter((s) => s.url)
   const year = new Date().getFullYear()
-  const inert = (e: React.MouseEvent) => e.preventDefault()
 
   return (
     <div className="@container min-h-full w-full" style={{ background: palette.bg, color: palette.text, fontFamily: font }}>
@@ -105,13 +145,35 @@ export default function WebsiteRenderer({
             ))}
             {site.meta.header.ctaLabel && (
               <a
-                href={preview ? undefined : headerHref}
-                onClick={preview ? inert : undefined}
+                {...(headerBookProps ?? headerLinkProps)}
                 className="rounded-full px-4 py-1.5 text-sm font-semibold"
                 style={{ background: palette.accent, color: palette.onAccent }}
               >
                 {site.meta.header.ctaLabel}
               </a>
+            )}
+            {/* Derived from active_public_surfaces — a member on the website
+                previously had no route to their Space or the shop at all. */}
+            {surfaceLinks?.map((l) => (
+              <a
+                key={l.href}
+                href={preview ? undefined : l.href}
+                onClick={preview ? inert : undefined}
+                className="text-sm transition-opacity hover:opacity-70"
+                style={{ color: palette.muted }}
+              >
+                {l.label}
+              </a>
+            ))}
+            {memberControl && (
+              <button
+                type="button"
+                onClick={preview ? undefined : memberControl.onClick}
+                className="text-sm font-medium transition-opacity hover:opacity-70"
+                style={{ color: palette.accent }}
+              >
+                {memberControl.label}
+              </button>
             )}
           </nav>
 
@@ -153,16 +215,46 @@ export default function WebsiteRenderer({
               ))}
               {site.meta.header.ctaLabel && (
                 <a
-                  href={preview ? undefined : headerHref}
+                  {...(headerBookProps ?? headerLinkProps)}
                   onClick={(e) => {
-                    if (preview) inert(e)
+                    // Dismiss the menu first, then let the CTA do its thing —
+                    // otherwise the overlay opens behind an open mobile menu.
                     setMobileOpen(false)
+                    if (headerBookProps) headerBookProps.onClick?.(e)
+                    else if (preview) inert(e)
                   }}
                   className="mt-2 rounded-full px-4 py-2 text-center text-sm font-semibold"
                   style={{ background: palette.accent, color: palette.onAccent }}
                 >
                   {site.meta.header.ctaLabel}
                 </a>
+              )}
+              {surfaceLinks?.map((l) => (
+                <a
+                  key={l.href}
+                  href={preview ? undefined : l.href}
+                  onClick={(e) => {
+                    if (preview) inert(e)
+                    setMobileOpen(false)
+                  }}
+                  className="rounded-md py-2 text-sm transition-opacity hover:opacity-70"
+                  style={{ color: palette.muted }}
+                >
+                  {l.label}
+                </a>
+              ))}
+              {memberControl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false)
+                    if (!preview) memberControl.onClick()
+                  }}
+                  className="rounded-md py-2 text-left text-sm font-medium transition-opacity hover:opacity-70"
+                  style={{ color: palette.accent }}
+                >
+                  {memberControl.label}
+                </button>
               )}
             </nav>
           </div>
@@ -202,7 +294,7 @@ export default function WebsiteRenderer({
           <p className="text-sm" style={{ color: palette.muted }}>© {year} {site.name}</p>
           {site.showBranding && (
             <p className="text-xs" style={{ color: palette.muted }}>
-              Powered by{' '}
+              {t('poweredBy')}{' '}
               <a
                 href={preview ? undefined : 'https://linyup.com'}
                 onClick={preview ? inert : undefined}

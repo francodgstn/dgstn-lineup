@@ -7,6 +7,9 @@ import { z } from 'zod'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
+import type { PublicFrom } from '@linyup/shared'
+import { Link } from '@/i18n/navigation'
+import { publicHref, returnHref } from '@/lib/publicRoutes'
 import { BioLinkShell, BioLinkButton } from '../BioLinkShell'
 import { usePublicTeam } from '../PublicTeamProvider'
 
@@ -47,16 +50,19 @@ type DetailsValues = z.infer<ReturnType<typeof createDetailsSchema>>
 interface Props {
   slug: string
   contactId: string
+  /** `?from=` — which surface to return to. See `returnHref`. */
+  from?: PublicFrom
 }
 
-export default function ContactUpdateForm({ slug, contactId }: Props) {
+export default function ContactUpdateForm({ slug, contactId, from }: Props) {
   // Team already resolved once by the parent PublicTeamProvider (the layout).
   const { teamId, team } = usePublicTeam()
   const t = useTranslations('PublicContactUpdate')
   const tSurfaces = useTranslations('PublicSurfaceLinks')
-  // The team root renders whatever default surface the studio chose (bio-link,
-  // website, shop, …) — label the link accordingly instead of assuming bio-link.
-  const homeSurface = team.default_public_surface ?? 'bio-link'
+  // Where 'back' goes: the surface named by `?from=`, else whatever default the
+  // studio chose (bio-link, website, shop, …). Labelled to match, and resolved
+  // here rather than by bouncing through the team root's client redirect.
+  const backTo = returnHref(team, slug, from)
   const teamName = team.name || slug
   const accentColor = team.bioLinkAccentColor ?? null
   const showBranding = team.showBranding === true
@@ -475,18 +481,18 @@ export default function ContactUpdateForm({ slug, contactId }: Props) {
         </div>
         <div className="space-y-2">
           {/* Their personal portal — where membership, bookings and courses live. */}
-          <a
-            href={`/public/${slug}/space`}
+          <Link
+            href={publicHref(slug, 'space')}
             className="block text-sm font-medium text-primary hover:underline"
           >
             {t('openSpace')}
-          </a>
-          <a
-            href={`/public/${slug}`}
+          </Link>
+          <Link
+            href={backTo.href}
             className="block text-sm text-muted-foreground hover:text-foreground hover:underline"
           >
-            {t('toSurface', { name: tSurfaces(homeSurface as Parameters<typeof tSurfaces>[0]) })}
-          </a>
+            {t('toSurface', { name: tSurfaces(backTo.surface) })}
+          </Link>
         </div>
       </div>
     </BioLinkShell>
