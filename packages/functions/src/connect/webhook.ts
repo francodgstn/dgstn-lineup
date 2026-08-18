@@ -55,6 +55,7 @@ import {
 } from './purchaseReceipts'
 import { canCreateContact } from '../utils/contactCap'
 import { getSecret } from '../utils/secrets'
+import { withErrorReporting } from '../utils/reportError'
 import { generateBookingReference, generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { buildEmailTemplate, sendEmail } from '../utils/email'
@@ -172,7 +173,9 @@ async function contactHasOtherLiveSameType(
   return snap.docs.some((d) => {
     if (d.id === excludeSubId) return false
     const s = d.data()
-    return s.subscriptionTypeId === subscriptionTypeId && live.has(s.status as string) && !s.duplicate
+    return (
+      s.subscriptionTypeId === subscriptionTypeId && live.has(s.status as string) && !s.duplicate
+    )
   })
 }
 
@@ -495,7 +498,9 @@ function baseLineItemFromMetadata(md: Record<string, string>): Record<string, un
       kind: 'product',
       productId: md.productId,
       variantId: md.variantId ?? null,
-      label: md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? null),
+      label: md.variantLabel
+        ? `${md.productName ?? 'Product'} · ${md.variantLabel}`
+        : (md.productName ?? null),
     }
   }
   if (md.kind === 'course' && md.courseId) {
@@ -561,7 +566,9 @@ function lineItemFromMetadata(md: Record<string, string>): Record<string, unknow
 /** Human "what was paid" label for the finance journal, from checkout metadata. */
 function financeDescription(md: Record<string, string>): string | null {
   if (md.kind === 'product') {
-    return md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? null)
+    return md.variantLabel
+      ? `${md.productName ?? 'Product'} · ${md.variantLabel}`
+      : (md.productName ?? null)
   }
   if (md.kind === 'course') return md.courseTitle ?? null
   if (md.kind === 'membership') return md.subscriptionTypeName ?? null
@@ -602,7 +609,8 @@ async function handlePaymentIntent(
     {
       teamId: team.teamId,
       paymentIntentId: pi.id,
-      chargeId: typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null),
+      chargeId:
+        typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null),
       // OMITTED, never nulled — the same rule handleSubscription already applies
       // to its own identity fields. `contactId: md.contactId ?? null` merged an
       // unconditional null straight over the contact the checkout handler had
@@ -739,7 +747,8 @@ async function handleChargeRefunded(
   eventId: string,
   accountId?: string
 ): Promise<void> {
-  const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id
+  const piId =
+    typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id
   if (!piId) return
   const amount: number = charge.amount ?? 0
   const amountRefunded: number = charge.amount_refunded ?? 0
@@ -770,7 +779,9 @@ async function handleChargeRefunded(
     amount: (r.amount as number) ?? 0,
     feeReversed: amount > 0 ? Math.round((((r.amount as number) ?? 0) / amount) * appFee) : 0,
     reason: (r.reason as string) ?? null,
-    created_at: r.created ? Timestamp.fromMillis((r.created as number) * 1000) : FieldValue.serverTimestamp(),
+    created_at: r.created
+      ? Timestamp.fromMillis((r.created as number) * 1000)
+      : FieldValue.serverTimestamp(),
   }))
 
   const fullyRefunded = amountRefunded >= amount && amount > 0
@@ -822,7 +833,8 @@ async function handleDispute(
   phase: 'created' | 'closed',
   eventId: string
 ): Promise<void> {
-  const piId = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : dispute.payment_intent?.id
+  const piId =
+    typeof dispute.payment_intent === 'string' ? dispute.payment_intent : dispute.payment_intent?.id
   if (!piId) return
   await memberPaymentRef(team.teamId, piId).set(
     {
@@ -960,7 +972,11 @@ async function handlePayout(
     let startingAfter: string | undefined
     for (let page = 0; page < 20; page += 1) {
       const list: any = await stripe.balanceTransactions.list(
-        { payout: payout.id as string, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) },
+        {
+          payout: payout.id as string,
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        },
         { stripeAccount: accountId }
       )
       for (const bt of (list.data ?? []) as any[]) {
@@ -1026,9 +1042,7 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       // nulled, because Firestore DEEP-merges a nested map: writing just
       // `{reason}` over an older cancellation keeps that one's `feedback`.
       cancel_at:
-        cancellation.cancelAt === null
-          ? null
-          : Timestamp.fromMillis(cancellation.cancelAt * 1000),
+        cancellation.cancelAt === null ? null : Timestamp.fromMillis(cancellation.cancelAt * 1000),
       canceled_at:
         cancellation.canceledAt === null
           ? null
@@ -1549,8 +1563,7 @@ async function handleCheckoutCompleted(
     // the payment included. On the recurring rail the same variable holds the
     // period end, which is a renewal date, not an "included until" — labelling
     // one as the other is exactly the confusion this receipt should not add.
-    validUntil:
-      session.mode === 'subscription' ? null : (membershipExpiration?.toDate() ?? null),
+    validUntil: session.mode === 'subscription' ? null : (membershipExpiration?.toDate() ?? null),
     paid: amountRappen > 0 ? { amount: amountRappen / 100, currency: sessionCurrency } : null,
     // WHAT THE MEMBER IS TOLD HAS TO MATCH WHAT THEY WERE CHARGED. The pricing
     // card promised "CHF 1 for the first 3 months, then CHF 79/month" before
@@ -1658,15 +1671,15 @@ async function handleProductCheckout(
   await confirmProvisionalContact(contactId)
 
   const piId =
-    typeof session.payment_intent === 'string'
-      ? session.payment_intent
-      : session.payment_intent?.id
+    typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
   if (piId) {
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
     await stampFinanceContact(team.teamId, piId, contactId)
   }
 
-  const label = md.variantLabel ? `${md.productName ?? 'Product'} · ${md.variantLabel}` : (md.productName ?? 'Product')
+  const label = md.variantLabel
+    ? `${md.productName ?? 'Product'} · ${md.variantLabel}`
+    : (md.productName ?? 'Product')
 
   // THE RECEIPT (UX-77) — ALWAYS ON; see connect/purchaseReceipts.ts. It names
   // what was bought and says what happens next, which for a product is "the
@@ -1750,9 +1763,7 @@ async function handleCourseCheckout(
   await confirmProvisionalContact(contactId)
 
   const piId =
-    typeof session.payment_intent === 'string'
-      ? session.payment_intent
-      : session.payment_intent?.id
+    typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
   if (piId) {
     await memberPaymentRef(team.teamId, piId).set({ contactId }, { merge: true })
     await stampFinanceContact(team.teamId, piId, contactId)
@@ -1847,7 +1858,7 @@ async function handleGiftCardCheckout(
 
   const amountMajor = md.amount
     ? Number(md.amount)
-    : Math.round(((session.amount_total as number | undefined) ?? 0)) / 100
+    : Math.round((session.amount_total as number | undefined) ?? 0) / 100
   const purchaserEmail =
     md.purchaserEmail ?? (session.customer_details?.email as string | undefined) ?? null
 
@@ -1918,7 +1929,9 @@ async function handlePolicyFeeCheckout(
 ): Promise<void> {
   if (!md.feeId) return
   const piId =
-    typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent?.id ?? null)
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : (session.payment_intent?.id ?? null)
   await markPolicyFeePaid({ teamId: team.teamId, feeId: md.feeId, paymentIntentId: piId })
   if (piId && md.contactId) await stampFinanceContact(team.teamId, piId, md.contactId)
 }
@@ -2305,7 +2318,8 @@ async function handleAppointmentCheckout(
   const bookingRef = sessionRef.collection('bookings').doc(contactId)
   const piId =
     typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id
-  const fullname = `${(contact.firstname as string) ?? ''} ${(contact.lastname as string) ?? ''}`.trim()
+  const fullname =
+    `${(contact.firstname as string) ?? ''} ${(contact.lastname as string) ?? ''}`.trim()
 
   const bSnap = await bookingRef.get()
 
@@ -2432,7 +2446,10 @@ async function handleAppointmentCheckout(
       let bufferMs = 0
       if (s.templateId) {
         try {
-          const tplSnap = await db.collection(AVAILABILITY_COLLECTION).doc(s.templateId as string).get()
+          const tplSnap = await db
+            .collection(AVAILABILITY_COLLECTION)
+            .doc(s.templateId as string)
+            .get()
           bufferMs = ((tplSnap.data()?.bufferMinutes as number | undefined) ?? 0) * 60_000
         } catch {
           bufferMs = 0
@@ -2497,7 +2514,9 @@ async function handleAppointmentCheckout(
         console.error(`[connect] appointment refund failed (${refundReason}, pi=${piId}):`, err)
       }
     }
-    console.log(`[connect] appointment checkout could not be applied (${refundReason}, session=${sessionId})`)
+    console.log(
+      `[connect] appointment checkout could not be applied (${refundReason}, session=${sessionId})`
+    )
     return
   }
   if (!confirmed) return
@@ -2554,9 +2573,15 @@ async function handleAppointmentCheckout(
       // `td.language`; an unprefixed link would open an English cancel page.
       const cancelUrl =
         teamSlug && bookingToken
-          ? localizedPublicUrl(getHostingUrl(), asLang(td?.language), teamSlug, 'appointments/cancel', {
-              token: bookingToken,
-            })
+          ? localizedPublicUrl(
+              getHostingUrl(),
+              asLang(td?.language),
+              teamSlug,
+              'appointments/cancel',
+              {
+                token: bookingToken,
+              }
+            )
           : null
       await sendAppointmentBookingEmails({
         teamId: team.teamId,
@@ -2633,7 +2658,11 @@ async function handleCheckoutExpired(session: any): Promise<void> {
 
   if (md.giftCardCode && md.giftCardHold && md.teamId) {
     try {
-      await releaseGiftCardHold({ teamId: md.teamId, code: md.giftCardCode, holdKey: md.giftCardHold })
+      await releaseGiftCardHold({
+        teamId: md.teamId,
+        code: md.giftCardCode,
+        holdKey: md.giftCardHold,
+      })
     } catch (err) {
       console.error(`[connect] gift card hold release failed (code=${md.giftCardCode}):`, err)
     }
@@ -2682,128 +2711,135 @@ async function handleCheckoutExpired(session: any): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 // handleConnectWebhook
 // ─────────────────────────────────────────────────────────────────────────────
-export const handleConnectWebhook = onRequest({ invoker: 'public' }, async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed')
-    return
-  }
-
-  const signature = req.headers['stripe-signature']
-  if (!signature || typeof signature !== 'string') {
-    res.status(400).send('Missing stripe-signature header')
-    return
-  }
-
-  let secret: string
-  try {
-    secret = await getSecret('stripe-connect-webhook-secret')
-  } catch (err) {
-    console.error('[connect] failed to load stripe-connect-webhook-secret:', err)
-    res.status(500).send('Internal error')
-    return
-  }
-
-  let event: any
-  try {
-    event = await constructConnectWebhookEvent({
-      payload: req.rawBody ?? req.body,
-      signature,
-      secret,
-    })
-  } catch (err) {
-    console.error('[connect] webhook signature verification failed:', err)
-    res.status(400).send('Invalid webhook signature')
-    return
-  }
-
-  // Idempotency: claim the event id; a duplicate delivery fails the create and
-  // short-circuits without reprocessing.
-  try {
-    await admin
-      .firestore()
-      .collection(CONNECT_WEBHOOK_EVENTS_COLLECTION)
-      .doc(event.id)
-      .create({ type: event.type, account: event.account ?? null, at: FieldValue.serverTimestamp() })
-  } catch {
-    console.log(`[connect] duplicate event ${event.id} — skipping`)
-    res.status(200).send('ok')
-    return
-  }
-
-  try {
-    const accountId: string | undefined = event.account
-    const obj = event.data?.object ?? {}
-
-    if (isAccountEvent(event.type)) {
-      const team = await resolveTeam(accountId)
-      if (team) {
-        const status = await retrieveAccountStatus(accountId!)
-        await persistAccountStatus(team.teamId, accountId!, team.model, status)
-      } else {
-        console.log(`[connect] account event for untracked account ${accountId}`)
-      }
-    } else {
-      const team = await resolveTeam(accountId)
-      if (!team) {
-        console.log(`[connect] event ${event.type} for untracked account ${accountId} — skipping`)
-        res.status(200).send('ok')
-        return
-      }
-      switch (event.type) {
-        case 'checkout.session.completed':
-          await handleCheckoutCompleted(team, obj, accountId, event.id)
-          break
-        case 'checkout.session.expired':
-          await handleCheckoutExpired(obj)
-          break
-        case 'payment_intent.succeeded':
-          await handlePaymentIntent(team, obj, 'succeeded', event.id, accountId)
-          break
-        case 'payment_intent.payment_failed':
-          await handlePaymentIntent(team, obj, 'failed', event.id, accountId)
-          break
-        case 'charge.refunded':
-          await handleChargeRefunded(team, obj, event.id, accountId)
-          break
-        case 'charge.updated':
-          await handleChargeUpdated(team, obj, accountId)
-          break
-        case 'charge.dispute.created':
-          await handleDispute(team, obj, 'created', event.id)
-          break
-        case 'charge.dispute.closed':
-          await handleDispute(team, obj, 'closed', event.id)
-          break
-        case 'payout.paid':
-          await handlePayout(team, obj, 'paid', accountId!, event.id)
-          break
-        case 'payout.failed':
-          await handlePayout(team, obj, 'failed', accountId!, event.id)
-          break
-        case 'customer.subscription.created':
-        case 'customer.subscription.updated':
-          await handleSubscription(team, obj, event.id)
-          break
-        case 'customer.subscription.deleted':
-          await handleSubscription(team, { ...obj, status: 'canceled' }, event.id)
-          break
-        case 'invoice.paid':
-          await handleInvoice(team, obj, 'paid', event.id, accountId)
-          break
-        case 'invoice.payment_failed':
-          await handleInvoice(team, obj, 'failed', event.id, accountId)
-          break
-        default:
-          console.log(`[connect] unhandled event type ${event.type}`)
-      }
+export const handleConnectWebhook = onRequest(
+  { invoker: 'public' },
+  withErrorReporting('handleConnectWebhook', async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed')
+      return
     }
-    console.log(`[connect] processed ${event.type} (${event.id}) account=${accountId}`)
-  } catch (err) {
-    // Log but return 200 — Stripe should not retry forever for our errors. The
-    // event marker has already been written; manual reconcile via getConnectStatus
-    // / Stripe dashboard if needed.
-    console.error(`[connect] failed to process event ${event.id}:`, err)
-  }
 
-  res.status(200).send('ok')
-})
+    const signature = req.headers['stripe-signature']
+    if (!signature || typeof signature !== 'string') {
+      res.status(400).send('Missing stripe-signature header')
+      return
+    }
+
+    let secret: string
+    try {
+      secret = await getSecret('stripe-connect-webhook-secret')
+    } catch (err) {
+      console.error('[connect] failed to load stripe-connect-webhook-secret:', err)
+      res.status(500).send('Internal error')
+      return
+    }
+
+    let event: any
+    try {
+      event = await constructConnectWebhookEvent({
+        payload: req.rawBody ?? req.body,
+        signature,
+        secret,
+      })
+    } catch (err) {
+      console.error('[connect] webhook signature verification failed:', err)
+      res.status(400).send('Invalid webhook signature')
+      return
+    }
+
+    // Idempotency: claim the event id; a duplicate delivery fails the create and
+    // short-circuits without reprocessing.
+    try {
+      await admin
+        .firestore()
+        .collection(CONNECT_WEBHOOK_EVENTS_COLLECTION)
+        .doc(event.id)
+        .create({
+          type: event.type,
+          account: event.account ?? null,
+          at: FieldValue.serverTimestamp(),
+        })
+    } catch {
+      console.log(`[connect] duplicate event ${event.id} — skipping`)
+      res.status(200).send('ok')
+      return
+    }
+
+    try {
+      const accountId: string | undefined = event.account
+      const obj = event.data?.object ?? {}
+
+      if (isAccountEvent(event.type)) {
+        const team = await resolveTeam(accountId)
+        if (team) {
+          const status = await retrieveAccountStatus(accountId!)
+          await persistAccountStatus(team.teamId, accountId!, team.model, status)
+        } else {
+          console.log(`[connect] account event for untracked account ${accountId}`)
+        }
+      } else {
+        const team = await resolveTeam(accountId)
+        if (!team) {
+          console.log(`[connect] event ${event.type} for untracked account ${accountId} — skipping`)
+          res.status(200).send('ok')
+          return
+        }
+        switch (event.type) {
+          case 'checkout.session.completed':
+            await handleCheckoutCompleted(team, obj, accountId, event.id)
+            break
+          case 'checkout.session.expired':
+            await handleCheckoutExpired(obj)
+            break
+          case 'payment_intent.succeeded':
+            await handlePaymentIntent(team, obj, 'succeeded', event.id, accountId)
+            break
+          case 'payment_intent.payment_failed':
+            await handlePaymentIntent(team, obj, 'failed', event.id, accountId)
+            break
+          case 'charge.refunded':
+            await handleChargeRefunded(team, obj, event.id, accountId)
+            break
+          case 'charge.updated':
+            await handleChargeUpdated(team, obj, accountId)
+            break
+          case 'charge.dispute.created':
+            await handleDispute(team, obj, 'created', event.id)
+            break
+          case 'charge.dispute.closed':
+            await handleDispute(team, obj, 'closed', event.id)
+            break
+          case 'payout.paid':
+            await handlePayout(team, obj, 'paid', accountId!, event.id)
+            break
+          case 'payout.failed':
+            await handlePayout(team, obj, 'failed', accountId!, event.id)
+            break
+          case 'customer.subscription.created':
+          case 'customer.subscription.updated':
+            await handleSubscription(team, obj, event.id)
+            break
+          case 'customer.subscription.deleted':
+            await handleSubscription(team, { ...obj, status: 'canceled' }, event.id)
+            break
+          case 'invoice.paid':
+            await handleInvoice(team, obj, 'paid', event.id, accountId)
+            break
+          case 'invoice.payment_failed':
+            await handleInvoice(team, obj, 'failed', event.id, accountId)
+            break
+          default:
+            console.log(`[connect] unhandled event type ${event.type}`)
+        }
+      }
+      console.log(`[connect] processed ${event.type} (${event.id}) account=${accountId}`)
+    } catch (err) {
+      // Log but return 200 — Stripe should not retry forever for our errors. The
+      // event marker has already been written; manual reconcile via getConnectStatus
+      // / Stripe dashboard if needed.
+      console.error(`[connect] failed to process event ${event.id}:`, err)
+    }
+
+    res.status(200).send('ok')
+  })
+)

@@ -15,7 +15,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Protect everything except the login page, the auth API, Next internals,
-  // and static assets.
-  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)'],
+  // Protect everything except the login page, the auth API, the health probe,
+  // Next internals, and static assets.
+  //
+  // `api/health` is exempt because an uptime check cannot log in — without this
+  // it 307s to /login, the probe records a redirect instead of a failure, and
+  // the check is green while the app is down. The route itself is written to be
+  // safe unauthenticated: project id and Cloud Run revision labels, nothing else.
+  matcher: ['/((?!login|api/auth|api/health|_next/static|_next/image|favicon.ico).*)'],
 }

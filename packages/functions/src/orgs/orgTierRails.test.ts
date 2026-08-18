@@ -70,7 +70,7 @@ ${read('orgs/memberInvitations.ts')}`
     for (const name of invoked) {
       assert.ok(
         members.includes(`export const ${name} = onCall(`),
-        `the Members tab calls '${name}', which is not declared in orgs/members.ts`,
+        `the Members tab calls '${name}', which is not declared in orgs/members.ts`
       )
     }
   })
@@ -82,12 +82,14 @@ ${read('orgs/memberInvitations.ts')}`
       const decl = body.split('\n})')[0]
       assert.ok(
         decl.includes('await assertOrgAdmin('),
-        `${name} does not go through assertOrgAdmin — an unguarded org callable`,
+        `${name} does not go through assertOrgAdmin — an unguarded org callable`
       )
     }
     const src = code(members)
-    assert.ok(!/hasTeamRole|assertOwner|assertManager/.test(src),
-      'the org member rail must not reach for a team_members check — an org admin has no team_members document')
+    assert.ok(
+      !/hasTeamRole|assertOwner|assertManager/.test(src),
+      'the org member rail must not reach for a team_members check — an org admin has no team_members document'
+    )
   })
 
   it('is exported from the functions entrypoint, or it does not exist at runtime', () => {
@@ -104,7 +106,10 @@ ${read('orgs/memberInvitations.ts')}`
     for (const name of ['updateOrgMemberRole', 'removeOrgMember'] as const) {
       const decl = members.split(`export const ${name} = onCall(`)[1].split('\n})')[0]
       assert.ok(decl.includes('assertNotLastAdmin(tx'), `${name} does not guard the last admin`)
-      assert.ok(decl.includes('runTransaction'), `${name}'s last-admin guard is outside a transaction`)
+      assert.ok(
+        decl.includes('runTransaction'),
+        `${name}'s last-admin guard is outside a transaction`
+      )
     }
   })
 })
@@ -129,7 +134,7 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
     const sync = read('sync/syncTeamPublicProfile.ts')
     assert.ok(
       /const shopActive = paymentsEnabled\b/.test(sync),
-      'shopActive must derive from paymentsEnabled — a plugin install is not a payment method',
+      'shopActive must derive from paymentsEnabled — a plugin install is not a payment method'
     )
   })
 
@@ -140,7 +145,7 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
       window.includes("info.durations.filter((d) => resolveDurationSale(d).mode !== 'priced')"),
       'listAvailability must keep every NON-PRICED duration and drop only the priced ones — ' +
         'being unable to take money is not the same as being free, and a benefit_only ' +
-        'length (UX-70) is paid for by a plan the contact already holds',
+        'length (UX-70) is paid for by a plan the contact already holds'
     )
   })
 
@@ -149,7 +154,7 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
     const trialDoor = form.split('function trialDoorOpen(')[1].split('\n}')[0]
     assert.ok(
       trialDoor.includes("paymentsEnabled || typeof a.trialPriceAmount !== 'number'"),
-      'a FREE trial must stay open when the studio cannot take money',
+      'a FREE trial must stay open when the studio cannot take money'
     )
     const dropIn = form.split('function dropInPriceOf(')[1].split('\n}')[0]
     assert.ok(dropIn.includes('if (!paymentsEnabled) return null'))
@@ -163,10 +168,12 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
 describe('an org-affiliated team does not own its own billing (UX-35)', () => {
   it('the trial sweep never downgrades a team an organisation bills', () => {
     const billing = read('saas-billing/index.ts')
-    const phase = billing.split('Phase 1 — lapsed trials')[1].split('Phase 2 — lapsed ORGANISATION')[0]
+    const phase = billing
+      .split('Phase 1 — lapsed trials')[1]
+      .split('Phase 2 — lapsed ORGANISATION')[0]
     assert.ok(
       /if \(doc\.data\(\)\.org_id\)/.test(phase),
-      'handleTrialLifecycle must skip org-affiliated teams — the org subscription governs them',
+      'handleTrialLifecycle must skip org-affiliated teams — the org subscription governs them'
     )
   })
 
@@ -175,9 +182,12 @@ describe('an org-affiliated team does not own its own billing (UX-35)', () => {
     const accept = orgs.split('acceptOrgInvitation = onCall(')[1].split('\n})')[0]
     assert.ok(
       accept.includes('trial_ends_at: FieldValue.delete()'),
-      'a stale trial_ends_at on a team whose status mirrors the org is what made the sweep fire',
+      'a stale trial_ends_at on a team whose status mirrors the org is what made the sweep fire'
     )
-    assert.ok(accept.includes("plan: 'organization'"), 'org_id and the plan are set together or not at all')
+    assert.ok(
+      accept.includes("plan: 'organization'"),
+      'org_id and the plan are set together or not at all'
+    )
   })
 })
 
@@ -197,13 +207,13 @@ describe('an organisation trial ends (UX-9)', () => {
     assert.ok(
       orgPhase.includes('.collection(ORGANIZATIONS_COLLECTION)'),
       'phase 2 must sweep organizations — phase 1 sweeps teams and is forbidden from touching an org’s ' +
-        'studios (UX-35), so an org trial that no query selects is a trial that never ends',
+        'studios (UX-35), so an org trial that no query selects is a trial that never ends'
     )
     assert.ok(orgPhase.includes("where('plan_status', '==', 'trial')"))
     assert.ok(
       orgPhase.includes("where('trial_ends_at', '<=', nowTs)"),
       'the deadline is READ from the document. Deriving it from `created` would make it un-extendable, ' +
-        'and an operator-assisted onboarding is exactly the case that needs to move it',
+        'and an operator-assisted onboarding is exactly the case that needs to move it'
     )
   })
 
@@ -215,7 +225,7 @@ describe('an organisation trial ends (UX-9)', () => {
     assert.ok(orgPhase.includes("lapseOrganization(orgId, { reason: 'trial_lapsed' })"))
     assert.ok(
       !/plan(_status)?:\s*'/.test(code(orgPhase)),
-      'phase 2 must delegate the whole teardown — a second writer here is how the two tiers drift',
+      'phase 2 must delegate the whole teardown — a second writer here is how the two tiers drift'
     )
   })
 
@@ -225,7 +235,7 @@ describe('an organisation trial ends (UX-9)', () => {
     assert.ok(
       !/14 \* 24 \* 60 \* 60 \* 1000/.test(code(orgs)),
       'no 14-day trial is granted anywhere any more — a team’s own trial is TRIAL_DAYS (30) and an ' +
-        'org’s is ORG_TRIAL_DAYS',
+        'org’s is ORG_TRIAL_DAYS'
     )
   })
 
@@ -233,7 +243,10 @@ describe('an organisation trial ends (UX-9)', () => {
     const plan = readFileSync(join(SRC, '..', '..', 'shared', 'src', 'types', 'plan.ts'), 'utf8')
     const teamDays = Number(/export const TRIAL_DAYS = (\d+)/.exec(plan)![1])
     const orgDays = Number(/export const ORG_TRIAL_DAYS = (\d+)/.exec(plan)![1])
-    assert.ok(orgDays >= teamDays, `ORG_TRIAL_DAYS (${orgDays}) must be at least TRIAL_DAYS (${teamDays})`)
+    assert.ok(
+      orgDays >= teamDays,
+      `ORG_TRIAL_DAYS (${orgDays}) must be at least TRIAL_DAYS (${teamDays})`
+    )
   })
 
   it('a lapsed organisation cannot re-grant the tier by re-inviting its studios', () => {
@@ -242,7 +255,7 @@ describe('an organisation trial ends (UX-9)', () => {
       /orgPlanStatus !== 'trial' && orgPlanStatus !== 'active'/.test(accept),
       'accepting IS the grant, so it must refuse for an org whose subscription is not live — otherwise ' +
         'the sweep lapses the org, the admin re-invites, and nothing can lapse it again (the sweep ' +
-        "selects 'trial' and the org now rests on 'expired')",
+        "selects 'trial' and the org now rests on 'expired')"
     )
     assert.ok(accept.includes("throw new HttpsError('failed-precondition'"))
   })
@@ -256,15 +269,18 @@ describe('an organisation trial ends (UX-9)', () => {
         i.collectionGroup === 'organizations' &&
         i.fields.length >= 2 &&
         i.fields[0].fieldPath === 'plan_status' &&
-        i.fields[1].fieldPath === 'trial_ends_at',
+        i.fields[1].fieldPath === 'trial_ends_at'
     )
-    assert.ok(found, 'organizations(plan_status, trial_ends_at) is missing from firestore.index.json')
+    assert.ok(
+      found,
+      'organizations(plan_status, trial_ends_at) is missing from firestore.index.json'
+    )
   })
 
   it('the org wind-down is idempotent about a studio it already handled', () => {
     assert.ok(
       lifecycle.includes("teamSnap.data()?.plan !== 'free'"),
-      'a daily sweep that resumes must not re-downgrade or re-email a studio already on Free',
+      'a daily sweep that resumes must not re-downgrade or re-email a studio already on Free'
     )
   })
 })
@@ -281,25 +297,28 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
     assert.ok(lifecycle.includes("import { downgradeTeamToFree } from '../saas-billing/downgrade'"))
     assert.ok(
       /await downgradeTeamToFree\(teamId, \{ fromTrial[,)]/.test(lifecycle),
-      'every member studio goes to Free through the SHARED path',
+      'every member studio goes to Free through the SHARED path'
     )
     assert.ok(
       !/plan:\s*'free'/.test(code(lifecycle)),
-      'orgs/lifecycle.ts must not write the Free plan itself — that is a second downgrade writer',
+      'orgs/lifecycle.ts must not write the Free plan itself — that is a second downgrade writer'
     )
   })
 
   it('the callers of the one downgrade are named, and nobody else calls it', () => {
     const callers = ['saas-billing/index.ts', 'orgs/lifecycle.ts']
     for (const f of callers) {
-      assert.ok(read(f).includes('downgradeTeamToFree('), `${f} no longer calls downgradeTeamToFree`)
+      assert.ok(
+        read(f).includes('downgradeTeamToFree('),
+        `${f} no longer calls downgradeTeamToFree`
+      )
     }
     const exempt = new Set([...callers, 'saas-billing/downgrade.ts'])
     for (const f of sourceFiles()) {
       if (exempt.has(f) || f.endsWith('.test.ts')) continue
       assert.ok(
         !read(f).includes('downgradeTeamToFree('),
-        `${f} calls downgradeTeamToFree and is not in the list above — add it there deliberately`,
+        `${f} calls downgradeTeamToFree and is not in the list above — add it there deliberately`
       )
     }
   })
@@ -309,7 +328,7 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
     assert.ok(
       lifecycle.includes('unpublishSiteForOrg(orgId)'),
       'an org has no installed_plugins trigger (that one is bound to teams/{teamId}/…), so the org ' +
-        'site must be torn down explicitly',
+        'site must be torn down explicitly'
     )
   })
 
@@ -329,11 +348,11 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
     assert.ok(
       publish.includes('await assertOrgSubscriptionLive(orgId)'),
       'the lapse unpublishes the org site but KEEPS the draft, so publishing must ask whether the ' +
-        'organisation still pays for that surface',
+        'organisation still pays for that surface'
     )
     assert.ok(
       !unpublish.includes('assertOrgSubscriptionLive'),
-      'taking your own page down is always allowed',
+      'taking your own page down is always allowed'
     )
     // ONE definition of "is this org paying", read off the document both billing
     // rails write.
@@ -350,10 +369,25 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
     // deleted and nothing rewrites them, UX-16). A past_due TEAM keeps its plan
     // and its installs and is refused by requirePlan, so a past_due ORG does the
     // same: status propagation and no more.
-    const branch = billing.split("} else if (entityType === 'org') {")[1].split('\n    } else {')[0]
+    // The closing `} else {` is matched WITHOUT pinning its indentation. It used
+    // to be `'\n    } else {'`, which made this test a hostage to how deeply the
+    // enclosing handler happened to be nested — wrapping handleStripeWebhook in
+    // withErrorReporting shifted the body two spaces and the split silently ran
+    // past the org branch, failing an assertion about behaviour nobody had
+    // touched. The invariant here is "past_due winds nothing down", not "this
+    // file is indented four spaces".
+    const branch = billing
+      .split("} else if (entityType === 'org') {")[1]
+      .split(/\n\s*\} else \{/)[0]
     const pastDue = branch.split("update.status === 'past_due'")[1]
-    assert.ok(!pastDue.includes('lapseOrganization('), 'past_due must not wind an organisation down')
-    assert.ok(pastDue.includes('plan_status: update.status'), 'past_due still propagates the status')
+    assert.ok(
+      !pastDue.includes('lapseOrganization('),
+      'past_due must not wind an organisation down'
+    )
+    assert.ok(
+      pastDue.includes('plan_status: update.status'),
+      'past_due still propagates the status'
+    )
   })
 })
 
@@ -395,7 +429,7 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
       assert.match(
         opts,
         /courseMirrors: '(tear_down|keep_for_buyers)'/,
-        `${file} calls downgradeTeamToFree without saying what happens to the course mirrors`,
+        `${file} calls downgradeTeamToFree without saying what happens to the course mirrors`
       )
       const keeps = opts.includes("courseMirrors: 'keep_for_buyers'")
       assert.equal(
@@ -404,7 +438,7 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
         keeps
           ? `${file} keeps course mirrors — only the ORG lapse may, because only there is the payer ` +
               'who stopped a third party'
-          : `${file} tears course mirrors down and is not a team rail — was this meant to keep them?`,
+          : `${file} tears course mirrors down and is not a team rail — was this meant to keep them?`
       )
     }
   })
@@ -413,21 +447,23 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
     const billing = code(read('saas-billing/index.ts'))
     assert.ok(
       !billing.includes('keep_for_buyers'),
-      "a team that stops paying loses its listings; that was not the decision under review",
+      'a team that stops paying loses its listings; that was not the decision under review'
     )
     assert.ok(
       /activePluginIds\.includes\('online-courses'\) && !keepCourseMirrors/.test(code(downgrade)),
-      'the synchronous teardown must still run for every caller that did not ask to keep the mirrors',
+      'the synchronous teardown must still run for every caller that did not ask to keep the mirrors'
     )
   })
 
   it('the disposition is REQUIRED — no default decides it for a new caller', () => {
-    const sig = code(downgrade).split('export async function downgradeTeamToFree(')[1].split('):')[0]
+    const sig = code(downgrade)
+      .split('export async function downgradeTeamToFree(')[1]
+      .split('):')[0]
     assert.ok(sig.includes('courseMirrors: CourseMirrorDisposition'), 'the option is missing')
     assert.ok(
       !/courseMirrors\?:/.test(sig) && !/courseMirrors[^,]*=/.test(sig),
       'an optional or defaulted disposition means a future caller silently inherits one of two ' +
-        'opposite behaviours — make it choose',
+        'opposite behaviours — make it choose'
     )
   })
 
@@ -440,7 +476,7 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
     assert.ok(guardAt >= 0, 'the trigger deletes course mirrors without ever asking to keep them')
     assert.ok(
       deleteAt >= 0 && guardAt < deleteAt,
-      'the keep check must come BEFORE the batch delete',
+      'the keep check must come BEFORE the batch delete'
     )
   })
 
@@ -450,14 +486,13 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
       ['sync/onInstalledPluginStatusChange.ts', trigger],
     ] as const) {
       assert.ok(
-        /KEEP_COURSE_MIRRORS_FIELD/.test(code(src)) &&
-          /from '@linyup\/shared'/.test(code(src)),
+        /KEEP_COURSE_MIRRORS_FIELD/.test(code(src)) && /from '@linyup\/shared'/.test(code(src)),
         `${name} must use the shared constant — a typo on either side of this pair silently ` +
-          'deletes the mirrors a bought course lives behind',
+          'deletes the mirrors a bought course lives behind'
       )
       assert.ok(
         !/'keep_course_mirrors'/.test(code(src)),
-        `${name} hardcodes the field name instead of importing it`,
+        `${name} hardcodes the field name instead of importing it`
       )
     }
   })
@@ -471,18 +506,19 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
     for (const f of sourceFiles()) {
       if (f.endsWith('.test.ts')) continue
       const src = code(read(f))
-      if (!/installed_plugins|INSTALLED_PLUGINS_SUBCOLLECTION|ORG_INSTALLED_PLUGINS/.test(src)) continue
+      if (!/installed_plugins|INSTALLED_PLUGINS_SUBCOLLECTION|ORG_INSTALLED_PLUGINS/.test(src))
+        continue
       if (!/status:\s*'inactive'/.test(src)) continue
       assert.ok(
         f === 'saas-billing/downgrade.ts' || f === 'orgs/lifecycle.ts',
         `${f} deactivates a plugin install without stating a course-mirror disposition — either ` +
-          'route it through downgradeTeamToFree or stamp the field yourself',
+          'route it through downgradeTeamToFree or stamp the field yourself'
       )
     }
     assert.ok(
       /status: 'inactive'/.test(code(lifecycle)),
       'expected the org-level install deactivation to still be here (it has no trigger, so it ' +
-        'needs no marker) — if it moved, re-check the list above',
+        'needs no marker) — if it moved, re-check the list above'
     )
   })
 })

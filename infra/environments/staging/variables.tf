@@ -106,3 +106,16 @@ variable "budget_amount" {
   description = "Monthly budget amount in whole currency units."
   default     = 100
 }
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+variable "alert_email" {
+  type        = string
+  description = "Where alerts go. Empty means nobody is notified; the metric and uptime check still collect. Set in terraform.tfvars (gitignored)."
+  default     = ""
+}
+
+variable "uptime_host" {
+  type        = string
+  description = "Public host probed at /api/health."
+  default     = "app-stg.linyup.com"
+}

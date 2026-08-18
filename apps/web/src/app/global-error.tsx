@@ -1,9 +1,21 @@
 'use client'
 
 import { useEffect } from 'react'
+import { posthog } from '@/lib/posthog'
 
 // Global error boundary — catches errors in the root layout itself.
 // Cannot use i18n here because NextIntlClientProvider is part of the layout that crashed.
+//
+// This is the WORST failure class in the app — the root layout crashing
+// white-screens every page for every user — and until now it reported nowhere
+// but the visitor's own console. The sibling `[locale]/error.tsx` has captured
+// to PostHog for a while; this one was missed precisely because it is the
+// boundary that fires when everything else is already broken.
+//
+// `posthog` is imported rather than the `initPostHog()` provider because that
+// provider lives in the layout that just crashed. If the key is unset (local
+// dev) posthog-js no-ops, and the capture is wrapped so a reporting failure can
+// never replace the error screen with a blank one.
 
 export default function GlobalError({
   error,
@@ -13,6 +25,11 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
+    try {
+      posthog.captureException(error, { digest: error.digest, boundary: 'global' })
+    } catch {
+      // Reporting must never be the reason the user sees nothing at all.
+    }
     console.error('[global error boundary]', error)
   }, [error])
 
