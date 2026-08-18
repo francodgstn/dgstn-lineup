@@ -5,7 +5,6 @@ import {
   sendPasswordResetEmail,
   signInWithPopup,
   GoogleAuthProvider,
-  FacebookAuthProvider,
   OAuthProvider,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
@@ -36,19 +35,13 @@ export async function resetPassword(email: string) {
 // Sign-in method) and, for production, the OAuth redirect domain authorised.
 // The Auth emulator renders a fake account-picker popup so these work locally.
 
-export type SocialProvider = 'google' | 'apple' | 'facebook'
+export type SocialProvider = 'google' | 'apple'
 
 export async function signInWithProvider(which: SocialProvider): Promise<UserCredential> {
   switch (which) {
     case 'google': {
       const provider = new GoogleAuthProvider()
       provider.setCustomParameters({ prompt: 'select_account' })
-      return signInWithPopup(auth, provider)
-    }
-    case 'facebook': {
-      // Firebase exposes Meta login through the Facebook provider; an
-      // Instagram-based login uses the same underlying Meta app.
-      const provider = new FacebookAuthProvider()
       return signInWithPopup(auth, provider)
     }
     case 'apple': {
