@@ -62,7 +62,8 @@ one thing local testing cannot prove is that the wait actually happens.
 confirm the task is scheduled rather than dispatched immediately.
 
 ## 7. Three affiliation triggers still use a random occurrence id (UX-85)
-**ASSUMED, safe.** `onAffiliationWrite.ts` was in a reserved lane, so
+**DONE 2026-08-18** — patched once the file was free; all 11 event triggers now
+derive the key from the CloudEvent id. Original note: `onAffiliationWrite.ts` was in a reserved lane, so
 `affiliation_added/removed/changed` fall back to `randomUUID()` for the dedup
 occurrence instead of the CloudEvent id. It still collapses a Cloud Tasks
 redelivery, and a duplicate Firestore delivery falls to the per-rule/per-contact
