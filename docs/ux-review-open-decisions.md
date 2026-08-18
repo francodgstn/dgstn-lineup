@@ -222,3 +222,21 @@ the provider as the other holder. Import from it the next time either is touched
 ## 28. `SectionEditor.tsx` is now mixed English/translated (UX-94)
 **FOLLOW-UP.** That panel is otherwise hardcoded English; the new pricing-display
 controls use `useTranslations('Website')`. Finish the file when someone owns it.
+
+---
+
+# Run complete — 2026-08-18
+
+**98 of 101 findings fixed. 0 open. 3 partial**, each with its interim shipped and
+its remainder stated:
+
+- **UX-2** — the checklist measures existence, not outcome (a studio can complete
+  it and have a class nobody can book). Interim: the misleading step landed
+  somewhere that works. **Remainder:** make each step measure the outcome, not the
+  document's presence. Note UX-27 found a second instance (`bioLink` reads "done"
+  because `syncTeamPublicProfile` writes that mirror on every team write).
+- **UX-4** — the recurring-series cliff is closed by a daily roller. **Remainder:**
+  the series surface itself — list, edit-on-existing, make-this-repeat.
+- **UX-7** — the trial is now stated. **Remainder:** the T-7 / T-1 reminders.
+
+Everything else in this file is a decision or a follow-up, not a defect.
