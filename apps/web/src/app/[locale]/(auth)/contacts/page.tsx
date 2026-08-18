@@ -14,6 +14,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
+import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
@@ -137,46 +138,6 @@ function entryToStage(entry: ContactEntry): {
 }
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
-
-// `coachScopeUid` restricts the list to a coach's own book (uid in
-// assigned_coach_ids). Own-scoped members (coaches) may only read their assigned
-// contacts per the Firestore rules, so a broad query would be denied — we filter by
-// assignee and do the active/archived filtering + sort client-side (a coach's book is small).
-function useActiveContacts(teamId: string | null, coachScopeUid?: string | null) {
-  return useQuery<Contact[]>({
-    queryKey: ['contacts', 'active', teamId, coachScopeUid ?? 'all'],
-    enabled: !!teamId,
-    queryFn: async () => {
-      if (!teamId) return []
-      if (coachScopeUid) {
-        const snap = await getDocs(
-          query(
-            collection(db, CONTACTS_COLLECTION),
-            where('teamId', '==', teamId),
-            where('assigned_coach_ids', 'array-contains', coachScopeUid),
-          ),
-        )
-        return snap.docs
-          .map((d) => ({ ...d.data(), id: d.id }) as Contact)
-          .filter((c) => !c.deleted_at && !c.archived_at)
-          .sort((a, b) =>
-            (a.lastname ?? '').localeCompare(b.lastname ?? '') ||
-            (a.firstname ?? '').localeCompare(b.firstname ?? ''),
-          )
-      }
-      const q = query(
-        collection(db, CONTACTS_COLLECTION),
-        where('teamId', '==', teamId),
-        where('deleted_at', '==', null),
-        where('archived_at', '==', null),
-        orderBy('lastname'),
-        orderBy('firstname'),
-      )
-      const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
-    },
-  })
-}
 
 function useArchivedContacts(teamId: string | null) {
   return useQuery<Contact[]>({

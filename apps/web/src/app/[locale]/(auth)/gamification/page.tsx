@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, updateDoc,
 } from 'firebase/firestore'
@@ -263,10 +264,20 @@ function LeaderboardTab({ teamId }: { teamId: string }) {
                 {initials(contact)}
               </div>
               <div className="flex-1 min-w-0">
+                {/* The name links to the record — the same fix UX-63 made on
+                    /bookings. A trial contact is deliberately shown as initials
+                    here, so that row stays plain text: linking it would undo the
+                    anonymity the initials are for. */}
                 <p className="text-sm font-medium truncate">
-                  {displayName}
-                  {isTrial && (
-                    <span className="ml-1.5 text-xs text-muted-foreground">— {t('trialLabel')}</span>
+                  {isTrial ? (
+                    <>
+                      {displayName}
+                      <span className="ml-1.5 text-xs text-muted-foreground">— {t('trialLabel')}</span>
+                    </>
+                  ) : (
+                    <Link href={`/contacts/${contact.id}` as Route} className="hover:underline">
+                      {displayName}
+                    </Link>
                   )}
                 </p>
                 {bestStreak > 0 && (

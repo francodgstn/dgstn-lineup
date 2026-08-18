@@ -151,7 +151,14 @@
     "navShortcutsClear": "Clear all",
     "navShortcutsClearTitle": "Clear all shortcuts?",
     "navShortcutsClearBody": "This removes your pinned pages and your recently visited ones. It can't be undone, and pinned items keep their order until you clear them.",
-    "navShortcutsClearCancel": "Cancel"
+    "navShortcutsClearCancel": "Cancel",
+    "navSearchGroupSettings": "Settings",
+    "navSearchGroupContacts": "Contacts",
+    "navSearchGroupSubscriptions": "Subscriptions",
+    "navSearchGroupActivities": "Activities",
+    "navSearchSearching": "Searching…",
+    "navSearchNoMatches": "Nothing found",
+    "navSearchPromptAll": "Search pages, settings, contacts, subscriptions and activities"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1347,7 +1354,8 @@
     "waitlistEnabledHint": "When a session is full, visitors join a queue instead of hitting a dead end. The first in line is offered the seat automatically as soon as one frees up.",
     "waitlistRequiresCapacity": "Only has an effect on sessions with a participant limit — a session with no limit is never full.",
     "waitlistRequiresPlan": "Available from the {plan} plan.",
-    "level_none": "Not specified"
+    "level_none": "Not specified",
+    "accessNoSubsAction": "Create a subscription type"
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -1364,7 +1372,8 @@
     "percentLabel": "Discount percent",
     "percentValidation": "Enter a discount between 1 and 99%.",
     "amountLabel": "Member price",
-    "amountValidation": "Enter a price of at least 0.50."
+    "amountValidation": "Enter a price of at least 0.50.",
+    "noSubsAction": "Create a subscription type"
   },
   "TeamSettings": {
     "title": "Team settings",
@@ -1588,7 +1597,8 @@
     "paymentsRecordingOn": "Recording",
     "paymentsRecordingOff": "Paused",
     "paymentsRecordingStalled": "Not recording yet",
-    "paymentsPublishableKeyHelp": "A label only — Linyup never charges with it. Recording starts once you add the webhook signing secret below."
+    "paymentsPublishableKeyHelp": "A label only — Linyup never charges with it. Recording starts once you add the webhook signing secret below.",
+    "subTypeActivitiesEmptyAction": "Create an activity"
   },
   "Bookings": {
     "title": "Bookings",
@@ -2526,7 +2536,11 @@
     "cancel": "Cancel",
     "sending": "Sending…",
     "processing": "Processing…",
-    "you": "you"
+    "you": "you",
+    "roleChange": "Change role",
+    "roleChangedSuccess": "Role updated",
+    "addNoAccount": "No Linyup account was found for that email address. They need to sign up first, then you can add them here.",
+    "lastAdminBlocked": "An organisation must keep at least one admin."
   },
   "OrgBilling": {
     "title": "Billing",
@@ -3522,7 +3536,8 @@
     "giftCardBuyerEmailLabel": "Your email",
     "giftCardBuyerEmailHelp": "We'll send the code and your receipt here.",
     "giftCardBuyerEmailInvalid": "Please enter a valid email address.",
-    "giftCardGuestNote": "No account needed."
+    "giftCardGuestNote": "No account needed.",
+    "paymentsUnavailable": "This studio is not accepting online payments at the moment. Please get in touch with them directly."
   },
   "Products": {
     "title": "Products",

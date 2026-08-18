@@ -9,7 +9,7 @@ import {
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
-import { useRouter } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { CONTACTS_COLLECTION } from '@linyup/shared'
 import type { Contact, ContactGroup } from '@linyup/shared'
@@ -618,7 +618,11 @@ export default function ContactGroupsPage() {
                   const removable = isDirect && !isDynamicGroup(selectedGroup)
                   return (
                     <div key={c.id} className="flex items-center gap-3 px-4 py-2 border-b last:border-0 hover:bg-muted/40 transition-colors group">
-                      <button type="button" onClick={() => router.push(`/contacts/${c.id}` as Route)}
+                      {/* A real href, not a router.push on a button (UX-98):
+                          middle-click, open-in-new-tab and hover preview all
+                          work, and reviewing a group is exactly when you want
+                          to open a few records side by side. */}
+                      <Link href={`/contacts/${c.id}` as Route}
                         className="flex-1 flex items-center gap-3 text-left min-w-0">
                         <span className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-xs font-semibold">
                           {initials(c)}
@@ -627,7 +631,7 @@ export default function ContactGroupsPage() {
                         {!isDirect && !ungroupedSelected && (
                           <Badge variant="outline" className="text-[10px] shrink-0">{t('viaSubgroup')}</Badge>
                         )}
-                      </button>
+                      </Link>
                       {/* Quick-assign: file someone into another group without
                           leaving the one you're reviewing. Same picker as the
                           contact detail header. Always available — it's the only

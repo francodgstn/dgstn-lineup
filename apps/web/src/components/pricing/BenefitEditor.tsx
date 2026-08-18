@@ -11,7 +11,11 @@
 
 import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { Input } from '@/components/ui/input'
+import { buttonVariants } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 import { normalizeBenefit, type ActivityMemberBenefit, type Benefit } from '@linyup/shared'
 
 export type BenefitEditorContext = 'appointment' | 'class' | 'course'
@@ -137,7 +141,20 @@ export function BenefitEditor({
 
       <div className="space-y-1.5 rounded-md border p-3">
         {subscriptionTypes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('noSubs')}</p>
+          /* A benefit is held BY a subscription type, so with none there is
+             nothing to build one from. The sentence named the destination and
+             linked nothing (UX-99) — and this editor is reached from inside the
+             appointment activity form, two steps into the flow UX-92 repaired. */
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t('noSubs')}</p>
+            <Link
+              href={'/offer/plans' as Route}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t('noSubsAction')}
+            </Link>
+          </div>
         ) : (
           subscriptionTypes.map((s) => (
             <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">

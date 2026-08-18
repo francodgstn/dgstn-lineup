@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { toast } from 'sonner'
 import {
   collection, addDoc, updateDoc, doc, serverTimestamp, writeBatch,
@@ -23,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
@@ -1047,7 +1049,20 @@ function ActivityDialog({
                   render={({ field }) => (
                     <div className="space-y-1.5 rounded-md border p-3">
                       {subscriptionTypes.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
+                        /* The tier that gates on subscription types, with none to
+                           gate on: the sentence named the destination and went
+                           nowhere (UX-99). Link it, like UX-92 did on the session
+                           and appointment pickers. */
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
+                          <Link
+                            href={'/offer/plans' as Route}
+                            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            {t('accessNoSubsAction')}
+                          </Link>
+                        </div>
                       ) : (
                         subscriptionTypes.map((s) => (
                           <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">

@@ -151,7 +151,14 @@
     "navShortcutsClear": "Alle entfernen",
     "navShortcutsClearTitle": "Alle Verknüpfungen entfernen?",
     "navShortcutsClearBody": "Damit werden deine angehefteten Seiten und die zuletzt besuchten entfernt. Das lässt sich nicht rückgängig machen; angeheftete Einträge behalten ihre Reihenfolge, bis du sie entfernst.",
-    "navShortcutsClearCancel": "Abbrechen"
+    "navShortcutsClearCancel": "Abbrechen",
+    "navSearchGroupSettings": "Einstellungen",
+    "navSearchGroupContacts": "Kontakte",
+    "navSearchGroupSubscriptions": "Abos",
+    "navSearchGroupActivities": "Aktivitäten",
+    "navSearchSearching": "Suche läuft…",
+    "navSearchNoMatches": "Nichts gefunden",
+    "navSearchPromptAll": "Seiten, Einstellungen, Kontakte, Abos und Aktivitäten durchsuchen"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -1347,7 +1354,8 @@
     "waitlistEnabledHint": "Ist eine Einheit ausgebucht, landen Besucher auf einer Warteliste statt in einer Sackgasse. Wird ein Platz frei, wird er automatisch der ersten Person angeboten.",
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
     "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
-    "level_none": "Nicht angegeben"
+    "level_none": "Nicht angegeben",
+    "accessNoSubsAction": "Abo-Typ erstellen"
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -1364,7 +1372,8 @@
     "percentLabel": "Rabatt in Prozent",
     "percentValidation": "Gib einen Rabatt zwischen 1 und 99% ein.",
     "amountLabel": "Mitgliederpreis",
-    "amountValidation": "Gib einen Preis von mindestens 0.50 ein."
+    "amountValidation": "Gib einen Preis von mindestens 0.50 ein.",
+    "noSubsAction": "Abo-Typ erstellen"
   },
   "TeamSettings": {
     "title": "Team-Einstellungen",
@@ -1588,7 +1597,8 @@
     "paymentsRecordingOn": "Erfasst",
     "paymentsRecordingOff": "Pausiert",
     "paymentsRecordingStalled": "Erfasst noch nichts",
-    "paymentsPublishableKeyHelp": "Nur eine Bezeichnung — Linyup belastet damit nichts. Die Erfassung startet, sobald du unten den Webhook-Signaturschlüssel hinterlegst."
+    "paymentsPublishableKeyHelp": "Nur eine Bezeichnung — Linyup belastet damit nichts. Die Erfassung startet, sobald du unten den Webhook-Signaturschlüssel hinterlegst.",
+    "subTypeActivitiesEmptyAction": "Aktivität erstellen"
   },
   "Bookings": {
     "title": "Buchungen",
@@ -2526,7 +2536,11 @@
     "cancel": "Abbrechen",
     "sending": "Wird gesendet…",
     "processing": "Wird verarbeitet…",
-    "you": "du"
+    "you": "du",
+    "roleChange": "Rolle ändern",
+    "roleChangedSuccess": "Rolle aktualisiert",
+    "addNoAccount": "Für diese E-Mail-Adresse wurde kein Linyup-Konto gefunden. Die Person muss sich zuerst registrieren, danach kannst du sie hier hinzufügen.",
+    "lastAdminBlocked": "Eine Organisation muss mindestens einen Admin behalten."
   },
   "OrgBilling": {
     "title": "Abrechnung",
@@ -3522,7 +3536,8 @@
     "giftCardBuyerEmailLabel": "Deine E-Mail-Adresse",
     "giftCardBuyerEmailHelp": "Wir senden den Code und deine Bestätigung hierhin.",
     "giftCardBuyerEmailInvalid": "Bitte gib eine gültige E-Mail-Adresse ein.",
-    "giftCardGuestNote": "Kein Konto erforderlich."
+    "giftCardGuestNote": "Kein Konto erforderlich.",
+    "paymentsUnavailable": "Dieses Studio akzeptiert derzeit keine Online-Zahlungen. Bitte wende dich direkt an das Studio."
   },
   "Products": {
     "title": "Produkte",

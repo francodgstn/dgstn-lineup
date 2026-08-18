@@ -151,7 +151,14 @@
     "navShortcutsClear": "Tout effacer",
     "navShortcutsClearTitle": "Effacer tous les raccourcis ?",
     "navShortcutsClearBody": "Cela supprime vos pages épinglées et celles récemment visitées. L’action est irréversible ; les éléments épinglés conservent leur ordre jusqu’à ce que vous les effaciez.",
-    "navShortcutsClearCancel": "Annuler"
+    "navShortcutsClearCancel": "Annuler",
+    "navSearchGroupSettings": "Réglages",
+    "navSearchGroupContacts": "Contacts",
+    "navSearchGroupSubscriptions": "Abonnements",
+    "navSearchGroupActivities": "Activités",
+    "navSearchSearching": "Recherche…",
+    "navSearchNoMatches": "Aucun résultat",
+    "navSearchPromptAll": "Rechercher pages, réglages, contacts, abonnements et activités"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -1347,7 +1354,8 @@
     "waitlistEnabledHint": "Quand une séance est complète, les visiteurs rejoignent une file au lieu d’aboutir à une impasse. Dès qu’une place se libère, elle est proposée automatiquement à la première personne.",
     "waitlistRequiresCapacity": "N’a d’effet que sur les séances avec une limite de participants — une séance sans limite n’est jamais complète.",
     "waitlistRequiresPlan": "Disponible à partir de la formule {plan}.",
-    "level_none": "Non précisé"
+    "level_none": "Non précisé",
+    "accessNoSubsAction": "Créer un type d’abonnement"
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -1364,7 +1372,8 @@
     "percentLabel": "Pourcentage de réduction",
     "percentValidation": "Saisissez une réduction entre 1 et 99%.",
     "amountLabel": "Prix membre",
-    "amountValidation": "Saisissez un prix d’au moins 0.50."
+    "amountValidation": "Saisissez un prix d’au moins 0.50.",
+    "noSubsAction": "Créer un type d’abonnement"
   },
   "TeamSettings": {
     "title": "Paramètres de l'équipe",
@@ -1588,7 +1597,8 @@
     "paymentsRecordingOn": "Enregistre",
     "paymentsRecordingOff": "En pause",
     "paymentsRecordingStalled": "N'enregistre pas encore",
-    "paymentsPublishableKeyHelp": "Une simple étiquette — Linyup ne débite rien avec. L'enregistrement démarre dès que vous ajoutez la clé de signature du webhook ci-dessous."
+    "paymentsPublishableKeyHelp": "Une simple étiquette — Linyup ne débite rien avec. L'enregistrement démarre dès que vous ajoutez la clé de signature du webhook ci-dessous.",
+    "subTypeActivitiesEmptyAction": "Créer une activité"
   },
   "Bookings": {
     "title": "Réservations",
@@ -2526,7 +2536,11 @@
     "cancel": "Annuler",
     "sending": "Envoi…",
     "processing": "Traitement…",
-    "you": "vous"
+    "you": "vous",
+    "roleChange": "Changer de rôle",
+    "roleChangedSuccess": "Rôle mis à jour",
+    "addNoAccount": "Aucun compte Linyup n'a été trouvé pour cette adresse e-mail. La personne doit d'abord s'inscrire, vous pourrez ensuite l'ajouter ici.",
+    "lastAdminBlocked": "Une organisation doit conserver au moins un administrateur."
   },
   "OrgBilling": {
     "title": "Facturation",
@@ -3522,7 +3536,8 @@
     "giftCardBuyerEmailLabel": "Votre e-mail",
     "giftCardBuyerEmailHelp": "Nous y enverrons le code et votre confirmation.",
     "giftCardBuyerEmailInvalid": "Veuillez saisir une adresse e-mail valide.",
-    "giftCardGuestNote": "Aucun compte nécessaire."
+    "giftCardGuestNote": "Aucun compte nécessaire.",
+    "paymentsUnavailable": "Ce studio n'accepte pas les paiements en ligne pour le moment. Merci de le contacter directement."
   },
   "Products": {
     "title": "Produits",

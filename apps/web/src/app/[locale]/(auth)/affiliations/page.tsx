@@ -8,6 +8,8 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
@@ -158,6 +160,22 @@ function formatExpiry(ts: { toDate(): Date } | null | undefined, fallback: strin
 
 function contactName(c: Contact) {
   return [c.firstname, c.lastname].filter(Boolean).join(' ') || '—'
+}
+
+/**
+ * The person's name, linked to their record — the same fix UX-63 made on
+ * /bookings and UX-91 on the session rosters. The ROW cannot be the link here
+ * (it holds an inline status Select), so the name carries it. A row with no
+ * contact id stays plain text rather than linking to nothing.
+ */
+function ContactNameLink({ contact }: { contact: Contact }) {
+  const base = 'font-medium text-sm'
+  if (!contact.id) return <div className={base}>{contactName(contact)}</div>
+  return (
+    <Link href={`/contacts/${contact.id}` as Route} className={`${base} hover:underline`}>
+      {contactName(contact)}
+    </Link>
+  )
 }
 
 // An affiliation is "expiring soon" if it's currently active and its validity ends
@@ -312,7 +330,7 @@ function ContactAffiliationRow({
           )}
         </td>
         <td className="px-4 py-3">
-          <div className="font-medium text-sm">{contactName(contact)}</div>
+          <ContactNameLink contact={contact} />
           {contact.email && (
             <div className="text-xs text-muted-foreground truncate max-w-[200px]">{contact.email}</div>
           )}
@@ -667,7 +685,7 @@ export default function TeamAffiliationsPage() {
               {filtered.map((c) => (
                 <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-sm">{contactName(c)}</div>
+                    <ContactNameLink contact={c} />
                     {c.email && <div className="text-xs text-muted-foreground truncate max-w-[200px]">{c.email}</div>}
                   </td>
                   <td className="px-4 py-3">

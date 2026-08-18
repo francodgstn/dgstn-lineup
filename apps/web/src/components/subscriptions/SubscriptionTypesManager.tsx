@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import {
   collection,
   doc,
@@ -55,7 +57,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -948,7 +950,19 @@ function SubTypeDialog({
               <p className="text-xs text-muted-foreground">{t('subTypeActivitiesDesc')}</p>
             </div>
             {activities.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{t('subTypeActivitiesEmpty')}</p>
+              /* The exact mirror of the activity form's empty subscription
+                 picker, pointing the other way — and it linked nothing either
+                 (UX-99). */
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">{t('subTypeActivitiesEmpty')}</p>
+                <Link
+                  href={'/offer/activities' as Route}
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('subTypeActivitiesEmptyAction')}
+                </Link>
+              </div>
             ) : (
               <div className="space-y-1.5">
                 {activities.map((a: Activity) => {

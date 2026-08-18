@@ -65,6 +65,9 @@ import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { useActivities } from '@/hooks/useActivities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useHasByoGateway } from '@/hooks/useConnect'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
@@ -1069,10 +1072,26 @@ function normalizeSearch(s: string) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+// What a result IS. A studio looks up two different kinds of thing by name —
+// where to go (a page, a settings screen) and a record it works on (a person, a
+// plan, an activity) — and a flat list of both reads as neither. The kind picks
+// the group heading; it is also why settings destinations are no longer listed
+// as ordinary pages (UX-90).
+type SearchKind = 'page' | 'settings' | 'contact' | 'subscription' | 'activity'
+
 // A searchable destination: the localized label plus curated keyword synonyms
 // from the `Nav.searchKeywords` i18n map (what a user might type instead of the
-// label — "members" for Contacts — maintained per locale).
-type SearchEntry = ResolvedNavEntry & { keywords: string; pinnable: boolean }
+// label — "members" for Contacts — maintained per locale). Entity results share
+// the shape (no keywords, never pinnable) so ONE flattened list still drives the
+// keyboard selection.
+type SearchEntry = ResolvedNavEntry & {
+  keywords: string
+  pinnable: boolean
+  kind: SearchKind
+  // Second line on an entity row — an email, a price, a level. Never matched
+  // against blindly: only the fields the provider chose to search are.
+  sublabel?: string
+}
 
 // ⌘ on Apple, Ctrl elsewhere. Deliberately NOT translated — these are key CAPS,
 // the same glyph on a German keyboard as on an English one. Guards `navigator`
@@ -1083,9 +1102,20 @@ function modKeyLabel(): string {
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl+'
 }
 
-// Sidebar quick-search (Firebase-style). Phase 1 searches nav destinations only,
-// but results are already grouped so later search providers (contacts, products,
-// courses… — async, Zoho-Books-style) can append their own result groups.
+// Sidebar quick-search (Firebase-style). It searches nav destinations AND the
+// three things a studio looks up by name all day — a contact, a subscription
+// type, an activity (UX-90) — each in its own group.
+//
+// HOW THE ENTITY LISTS ARE FETCHED, deliberately: not per keystroke. Firestore
+// has no substring search, so a query-per-keystroke design would cost a read
+// round-trip per letter and STILL only match prefixes. Instead each list is
+// pulled ONCE per panel session through the SAME hook its own page uses — so
+// the cache is shared, and the contacts list keeps its (lastname, firstname)
+// ordering, which is the composite index a real project requires — and filtered
+// in memory, exactly like every list page's search field. It arms on the second
+// typed character, so opening the panel by accident (or with ⌘K and closing
+// again) reads nothing; closing disarms it, so the next session sees anything
+// created meanwhile.
 function NavSearch({
   entries,
   onNavigate,
@@ -1099,6 +1129,8 @@ function NavSearch({
   const router = useRouter()
   const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
   const { isPinned, togglePin } = useNavPins()
+  const { currentTeamId, user } = useAuth()
+  const { ownScoped } = useCapabilities()
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -1122,15 +1154,94 @@ function NavSearch({
   }
 
   const q = normalizeSearch(query.trim())
-  const results = q
-    ? entries
-        .filter(
-          (e) => normalizeSearch(e.label).includes(q) || normalizeSearch(e.keywords).includes(q)
+
+  // Armed = the entity lists may be fetched. Latched: once a real query has been
+  // typed it stays armed for the rest of the panel session, so deleting back to
+  // one character and typing again does not re-run three queries.
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (expanded && q.length >= 2) setArmed(true)
+  }, [expanded, q])
+
+  // Own-scoped members (coaches) may only READ their assigned contacts — the
+  // broad roster query is denied for them by the rules — so the search runs the
+  // same scoped variant the contacts page does rather than a query that would
+  // fail silently and make search look empty for a whole role.
+  const scopeUid = ownScoped ? (user?.uid ?? null) : null
+  const entityTeamId = armed ? currentTeamId : null
+  const { data: contacts = [], isFetching: contactsFetching } = useActiveContacts(
+    entityTeamId,
+    scopeUid
+  )
+  const { data: subscriptionTypes = [], isFetching: subsFetching } =
+    useSubscriptionTypes(entityTeamId)
+  const { data: activities = [], isFetching: activitiesFetching } = useActivities(entityTeamId)
+  const entitiesFetching = contactsFetching || subsFetching || activitiesFetching
+
+  const matches = (...fields: (string | null | undefined)[]) =>
+    fields.some((f) => f && normalizeSearch(f).includes(q))
+
+  const navResults = (kind: SearchKind, limit: number) =>
+    q
+      ? entries
+          .filter((e) => e.kind === kind)
+          .filter((e) => matches(e.label, e.keywords))
+          .slice(0, limit)
+      : []
+
+  const entityRow = (
+    id: string,
+    href: string,
+    label: string,
+    icon: React.ElementType,
+    kind: SearchKind,
+    sublabel?: string
+  ): SearchEntry => ({ id, href, label, icon, keywords: '', pinnable: false, kind, sublabel })
+
+  // A contact has a record of its own to open. A subscription type and an
+  // activity do not — they are edited in a dialog on the page that lists them —
+  // so those results land on that page rather than inventing a route.
+  const contactResults: SearchEntry[] = q
+    ? contacts
+        .filter((c) => matches(`${c.firstname ?? ''} ${c.lastname ?? ''}`, c.email, c.phone))
+        .slice(0, 6)
+        .map((c) =>
+          entityRow(
+            `contact:${c.id}`,
+            `/contacts/${c.id}`,
+            `${c.firstname ?? ''} ${c.lastname ?? ''}`.trim() || (c.email ?? c.id),
+            Users,
+            'contact',
+            c.email ?? undefined
+          )
         )
-        .slice(0, 8)
     : []
-  // Future providers append their groups here (each may resolve asynchronously).
-  const groups = [{ label: t('navSearchGroupPages'), results }]
+  const subscriptionResults: SearchEntry[] = q
+    ? subscriptionTypes
+        .filter((st) => matches(st.name, st.description))
+        .slice(0, 4)
+        .map((st) => entityRow(`subscription:${st.id}`, '/offer/plans', st.name, IdCard, 'subscription'))
+    : []
+  const activityResults: SearchEntry[] = q
+    ? activities
+        .filter((a) => matches(a.name, a.description))
+        .slice(0, 4)
+        .map((a) => entityRow(`activity:${a.id}`, '/offer/activities', a.name, Zap, 'activity'))
+    : []
+
+  // Order = how a studio reads the panel: where-to-go first (few, precise
+  // matches), then the records, contacts first because they are the volume case.
+  const groups: { key: string; label: string; results: SearchEntry[] }[] = [
+    { key: 'pages', label: t('navSearchGroupPages'), results: navResults('page', 8) },
+    { key: 'settings', label: t('navSearchGroupSettings'), results: navResults('settings', 5) },
+    { key: 'contacts', label: t('navSearchGroupContacts'), results: contactResults },
+    {
+      key: 'subscriptions',
+      label: t('navSearchGroupSubscriptions'),
+      results: subscriptionResults,
+    },
+    { key: 'activities', label: t('navSearchGroupActivities'), results: activityResults },
+  ]
   // Two different things, no longer fused: the PANEL is open because the user
   // asked for it, and the RESULT LIST appears once there is something to match.
   const showResults = expanded && q.length > 0
@@ -1186,6 +1297,9 @@ function NavSearch({
     setQuery('')
     setExpanded(false)
     setActiveIndex(0)
+    // Disarm: the next panel session re-reads the entity lists, so a contact
+    // added a minute ago is findable without a page reload.
+    setArmed(false)
   }
 
   const openEntry = (entry: SearchEntry) => {
@@ -1315,7 +1429,7 @@ function NavSearch({
               the row read as a result rather than a prompt. The shortcut IS
               here, though: this is the moment the user is looking at the panel
               and can learn how to reach it without the mouse next time. */}
-          <span>{t('navSearchPrompt')}</span>
+          <span className="min-w-0 leading-snug">{t('navSearchPromptAll')}</span>
           <kbd className="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground/70">
             {modKeyLabel()}K
           </kbd>
@@ -1328,13 +1442,18 @@ function NavSearch({
           role="listbox"
           className="mt-1.5 max-h-[60vh] overflow-y-auto"
         >
-          {results.length === 0 ? (
-            <p className="px-2 py-2 text-sm text-muted-foreground">{t('navSearchNoResults')}</p>
+          {flat.length === 0 ? (
+            <p className="px-2 py-2 text-sm text-muted-foreground">
+              {/* Nav destinations match instantly; the entity lists may still be
+                  in flight, and "no results" shown over a pending fetch is a
+                  wrong answer stated confidently. */}
+              {entitiesFetching ? t('navSearchSearching') : t('navSearchNoMatches')}
+            </p>
           ) : (
             <>
               {groups.map((group) =>
                 group.results.length === 0 ? null : (
-                  <div key={group.label}>
+                  <div key={group.key}>
                     <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
                       {group.label}
                     </p>
@@ -1367,6 +1486,11 @@ function NavSearch({
                           >
                             <Icon className="h-4 w-4 shrink-0" />
                             <span className="truncate">{entry.label}</span>
+                            {entry.sublabel && (
+                              <span className="truncate text-xs font-normal text-muted-foreground/70">
+                                {entry.sublabel}
+                              </span>
+                            )}
                             {isPinned(entry.id) && (
                               <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
                                 {t('navSearchPinned')}
@@ -1531,8 +1655,12 @@ function SidebarContent({
     .slice(0, MAX_RECENT_SHORTCUTS)
   const shortcutEntries = [...pinnedEntries, ...recentEntries]
 
-  // The search index: everything in the catalogue plus the two fixed General
+  // The search index: everything in the catalogue plus the three fixed General
   // items (searchable but not pinnable — they're always visible anyway).
+  // A settings destination is tagged as such rather than listed among ordinary
+  // pages (UX-90) — including the /settings hub itself, which IS the settings
+  // answer to "where do I change this".
+  const settingsIds = new Set(SETTINGS_ITEMS.map((i) => i.id))
   const searchEntries: SearchEntry[] = [
     ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
@@ -1542,11 +1670,13 @@ function SidebarContent({
       exact: item.exact,
       keywords: kwOf(item.id),
       pinnable: false,
+      kind: (item.id === ALL_SETTINGS_ITEM.id ? 'settings' : 'page') as SearchKind,
     })),
     ...Array.from(catalogue.values()).map((e) => ({
       ...e,
       keywords: kwOf(e.id),
       pinnable: true,
+      kind: (settingsIds.has(e.id) ? 'settings' : 'page') as SearchKind,
     })),
   ]
 

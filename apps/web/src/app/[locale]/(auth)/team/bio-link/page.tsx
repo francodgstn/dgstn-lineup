@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { Link } from '@/i18n/navigation'
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
@@ -819,9 +821,12 @@ export default function TeamBioLinkEditorPage() {
           <Globe className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="font-medium">{t('noSlugTitle')}</p>
           <p className="text-sm text-muted-foreground">{t('noSlugDesc')}</p>
-          <a href="../settings" className="text-sm text-primary hover:underline">
+          {/* Was a raw <a href="../settings"> — a relative href that bypasses
+              @/i18n/navigation and resolves wrongly under a locale prefix
+              (UX-99). It now points at the page that actually holds the slug. */}
+          <Link href={'/settings/team' as Route} className="text-sm text-primary hover:underline">
             {t('goToSettings')} →
-          </a>
+          </Link>
         </div>
       </div>
     )
