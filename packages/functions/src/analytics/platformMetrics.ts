@@ -77,6 +77,9 @@ export const capturePlatformMetrics = onSchedule(
       // Internal teams (e.g. the prod smoke-test studio) never count toward
       // platform metrics. Filtered in memory — `flags.internal` is a nested field
       // (no top-level boolean to query on) and all teams are already loaded.
+      // `comped` deliberately does NOT filter: a comped tenant is a real customer
+      // whose usage belongs in every count. It only leaves the MRR line, which
+      // the reducer handles from the flag below.
       if (team.flags?.internal === true) continue
       const sub = subs.get(doc.id)
       inputs.push({
@@ -86,6 +89,7 @@ export const capturePlatformMetrics = onSchedule(
         createdMs: team.created?.toMillis?.() ?? 0,
         trialEndsAtMs: sub?.trial_ends_at?.toMillis?.() ?? team.trial_ends_at?.toMillis?.() ?? null,
         contactCount: contactCount.get(doc.id) ?? 0,
+        comped: team.flags?.comped === true,
       })
     }
 
@@ -99,6 +103,7 @@ export const capturePlatformMetrics = onSchedule(
         createdMs: org.created?.toMillis?.() ?? 0,
         trialEndsAtMs: sub?.trial_ends_at?.toMillis?.() ?? null,
         contactCount: null,
+        comped: org.flags?.comped === true,
       })
     }
 

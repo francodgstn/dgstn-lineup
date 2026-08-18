@@ -21,7 +21,6 @@ import {
   Calendar,
   ClipboardList,
   ClipboardCheck,
-  Trophy,
   Globe,
   Wallet,
   ChevronLeft,
@@ -29,11 +28,8 @@ import {
   ChevronDown,
   Lock,
   Puzzle,
-  Monitor,
   Building2,
-  Gift,
   GraduationCap,
-  FolderTree,
   Settings,
   HelpCircle,
   X,
@@ -57,7 +53,6 @@ import {
   LayoutTemplate,
 } from 'lucide-react'
 import { Eraser } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
 import { pluginAccessForPlan, type Contact, type PluginAccess, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
@@ -86,20 +81,11 @@ import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner
 import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
 import { FloatingDock } from '@/components/layout/FloatingDock'
+import { PLUGIN_ICON_MAP } from '@/plugins/icons'
 
-// Icons referenced by string name in plugin manifest navContributions
-const PLUGIN_NAV_ICONS: Record<string, LucideIcon> = {
-  Calculator,
-  GraduationCap,
-  Gift,
-  Puzzle,
-  Trophy,
-  FolderTree,
-  Globe,
-  FileText,
-  ClipboardList,
-  Monitor,
-}
+// Icons referenced by string name in plugin manifest navContributions resolve
+// through the ONE map in @/plugins/icons — this file used to keep its own, and
+// the three copies had already drifted (see that file's header).
 
 // ─── nav config ───────────────────────────────────────────────────────────────
 
@@ -759,7 +745,7 @@ function PluginNavItem({
   const router = useRouter()
   const t = useTranslations('Plugins')
   const planName = usePlanName()
-  const Icon = PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle
+  const Icon = PLUGIN_ICON_MAP[nav.icon] ?? Puzzle
   const linkLabel = t(nav.labelKey as Parameters<typeof t>[0])
 
   // Recommended but not installed → muted discovery item. Clicking opens the
@@ -2025,7 +2011,7 @@ function SidebarContent({
       id,
       href: nav.href,
       label: tp(nav.labelKey as Parameters<typeof tp>[0]),
-      icon: PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle,
+      icon: PLUGIN_ICON_MAP[nav.icon] ?? Puzzle,
     })
   }
   // Shortcuts = always shown (permanent, stored order) + recently visited

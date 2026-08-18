@@ -2423,7 +2423,14 @@
     "recommendedWhy": "Von Linyup als üblicher Startpunkt empfohlen – nicht auf Basis Ihrer Daten.",
     "suggestionIncluded": "In Ihrem Plan enthalten",
     "suggestionNeedsPlan": "Erfordert den Plan {plan}",
-    "suggestionOpenCatalogue": "Klicken, um es im Plugin-Katalog zu öffnen"
+    "suggestionOpenCatalogue": "Klicken, um es im Plugin-Katalog zu öffnen",
+    "hmdName": "HMD",
+    "hmdDescription": "Alles, was HMD nutzt: der Fighting Cup sowie die eigenen Veranstaltungen, Regeln und Vorlagen der Organisation.",
+    "bundleModulesTitle": "Module",
+    "bundleModulesHint": "Einzelne Funktionen ein- oder ausschalten. Änderungen werden innerhalb weniger Sekunden übernommen.",
+    "bundleModulesError": "Dieses Modul konnte nicht geändert werden. Bitte erneut versuchen.",
+    "bundleModulesOrgManaged": "Diese Module werden von der Organisation verwaltet.",
+    "removeConfirmBodyBundle": "Damit werden auch die installierten Funktionen entfernt. Deine Daten bleiben erhalten und kehren bei einer Neuinstallation zurück."
   },
   "AiAssistant": {
     "launcherLabel": "KI-Assistent",

@@ -6,22 +6,21 @@
 // plan.ts): studio/organization owners install the plugin free, coach pays the
 // add-on via activatePluginAddon, free sees an upgrade prompt and can't install.
 
-import * as admin from 'firebase-admin'
 import { HttpsError } from 'firebase-functions/v2/https'
-import { INSTALLED_PLUGINS_SUBCOLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
+import { pluginIsActive } from '../utils/plugins'
 
 export const FINANCE_PLUGIN_ID = 'finance'
 
-/** True when the finance plugin is installed and active for the team. */
+/**
+ * True when the finance plugin is installed and active for the team.
+ *
+ * Delegates to the ONE resolver rather than reading the install document here:
+ * this used to be its own copy, and so it could not see an ORG-level install —
+ * a studio inside an organisation that bought finance for it was refused. The
+ * named wrapper stays because its refusal copy below is specific.
+ */
 export async function isFinancePluginActive(teamId: string): Promise<boolean> {
-  const snap = await admin
-    .firestore()
-    .collection(TEAMS_COLLECTION)
-    .doc(teamId)
-    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
-    .doc(FINANCE_PLUGIN_ID)
-    .get()
-  return snap.exists && snap.data()?.status === 'active'
+  return pluginIsActive(teamId, FINANCE_PLUGIN_ID)
 }
 
 /** Callable gate — kiosk pattern (failed-precondition, not permission-denied,

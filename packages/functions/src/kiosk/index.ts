@@ -18,6 +18,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import type { KioskConfig } from '@linyup/shared'
 import { timingSafeEqualStr } from '../utils/secureCompare'
 import { bucketRateLimit } from '../utils/rateLimit'
+import { resolveActivePluginInstall } from '../utils/plugins'
 
 const UNLOCK_RATE_LIMIT_MAX = 10
 const UNLOCK_RATE_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
@@ -61,12 +62,14 @@ export const unlockKiosk = onCall(async (request) => {
     message: 'Too many attempts. Please try again later.',
   })
 
-  const pluginSnap = await admin.firestore().doc(`teams/${teamId}/installed_plugins/kiosk`).get()
-  if (!pluginSnap.exists || pluginSnap.data()?.status !== 'active') {
+  // Through the ONE resolver, so an ORG-level install counts. It returns the
+  // install document rather than a boolean because the PIN lives in its config.
+  const install = await resolveActivePluginInstall(teamId, 'kiosk')
+  if (!install) {
     throw new HttpsError('failed-precondition', 'Kiosk mode is not enabled for this team.')
   }
 
-  const config = pluginSnap.data()?.config as KioskConfig | undefined
+  const config = install.config as KioskConfig | undefined
   if (!config?.lock?.enabled) {
     throw new HttpsError('failed-precondition', 'Kiosk lock is not enabled for this team.')
   }

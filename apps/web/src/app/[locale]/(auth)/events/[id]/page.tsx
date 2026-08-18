@@ -42,13 +42,8 @@ import { useEventTypes } from '@/hooks/useEventTypes'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
 import { useOrg } from '@/contexts/OrgContext'
-import dynamic from 'next/dynamic'
+import { pluginSlot } from '@/plugins/slots'
 import type { Route } from 'next'
-
-const CategoryManager = dynamic(
-  () => import('@/plugins/hmd-fighting-cup/CategoryManager').then((m) => ({ default: m.CategoryManager })),
-  { ssr: false },
-)
 
 // ─── subcollection types ──────────────────────────────────────────────────────
 
@@ -544,6 +539,12 @@ export default function EventDetailPage() {
   // Detect if this event type is backed by a plugin that declares hasCategories
   const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event.type)
   const showCategoriesTab = !!eventPlugin?.eventType?.hasCategories
+  // Resolved from whichever plugin declares `hasCategories` for THIS event type.
+  // It used to be a hardcoded import of one customer's plugin, in a core page,
+  // while `eventPlugin` sat right here already computed and unused.
+  const CategoryManager = eventPlugin && showCategoriesTab
+    ? pluginSlot<{ eventId: string }>(eventPlugin.id, 'CategoryManager')
+    : null
 
   // Attendees tab: visible to org admins (cross-team events) and to members who can
   // view reports (owner/manager) — a coach/viewer sees the event but not the roster.
@@ -727,7 +728,7 @@ export default function EventDetailPage() {
       )}
 
       {/* ── Categories tab (plugin-provided, e.g. fighting_cup) ──────────────── */}
-      {tab === 'categories' && showCategoriesTab && (
+      {tab === 'categories' && showCategoriesTab && CategoryManager && (
         <CategoryManager eventId={id} />
       )}
 

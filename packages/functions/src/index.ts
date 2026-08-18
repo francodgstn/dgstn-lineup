@@ -49,6 +49,10 @@ export { onMemberSubscriptionWrite } from './sync/onMemberSubscriptionWrite'
 export { onSessionUpdate } from './sync/onSessionUpdate'
 export { onActivityTypeChange } from './sync/onActivityTypeChange'
 export { onInstalledPluginStatusChange } from './sync/onInstalledPluginStatusChange'
+// Bundle reconciliation — the ONE writer of a container's member installs.
+// Separate from the trigger above on purpose: that one carries a
+// non-idempotent activation hook and cannot be retried; these can.
+export { onTeamBundleInstallChange, onOrgBundleInstallChange } from './plugins/bundleTriggers'
 export { onAffiliationWrite } from './sync/onAffiliationWrite'
 export { onCreditGrantWrite } from './sync/onCreditGrantWrite'
 // Availability writes re-run the team sync so the appointment picker's liveness

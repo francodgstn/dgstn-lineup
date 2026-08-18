@@ -21,7 +21,7 @@ import {
   pluginAccessForPlan,
 } from '@linyup/shared'
 import type { PluginManifest, InstalledPlugin } from '@linyup/shared'
-import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { installableManifests } from '@/plugins/registry'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import { usePlan } from '@/hooks/usePlan'
@@ -164,7 +164,10 @@ function PluginsTab() {
   // more so: this panel is the most unsolicited surface there is, so a
   // customer-specific plugin has no business appearing in it at all. No
   // installed-plugin exception is needed here — the list already drops those.
-  const notInstalled = PLUGIN_REGISTRY.filter(
+  // Bundle members are absent by construction (`installableManifests`): the
+  // container is the card, so a nudge to install one member of it would offer a
+  // door that is not the one a tenant uses.
+  const notInstalled = installableManifests().filter(
     (m) => !isInstalled(m.id) && !m.locked && canDiscover(m),
   )
   const recommended = notInstalled.filter((m) => m.recommended)

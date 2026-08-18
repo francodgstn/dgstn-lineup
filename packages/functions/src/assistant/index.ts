@@ -10,6 +10,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { isTeamMember } from '../utils/teams'
 import { getAssistantModel } from '../utils/vertexClient'
+import { pluginIsActive } from '../utils/plugins'
 
 const MAX_MESSAGES = 20
 const MAX_CHARS_PER_MESSAGE = 4000
@@ -59,11 +60,9 @@ export const assistantChat = onCall(async (request) => {
   if (memberErr || !isMember) throw new HttpsError('permission-denied', 'You are not a member of this team.')
 
   // …and the (unlocked) assistant plugin must be installed for this team.
-  const installSnap = await db
-    .collection('teams').doc(teamId)
-    .collection('installed_plugins').doc(UNLOCK_PLUGIN_ID)
-    .get()
-  if (!installSnap.exists || installSnap.data()?.status !== 'active') {
+  // Through the ONE resolver, so an ORG-level install counts — this was its own
+  // read, and a studio whose organisation installed the plugin was refused.
+  if (!(await pluginIsActive(teamId, UNLOCK_PLUGIN_ID))) {
     throw new HttpsError('failed-precondition', 'The AI assistant is not enabled for this team.')
   }
 

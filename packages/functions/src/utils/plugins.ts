@@ -12,6 +12,8 @@ import {
   ORG_SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
+  ORGANIZATIONS_COLLECTION,
+  ORG_INSTALLED_PLUGINS_SUBCOLLECTION,
 } from '@linyup/shared'
 
 /**
@@ -35,16 +37,59 @@ export async function touchTeamForSurfaceRecompute(teamId: string): Promise<void
     .set({ surfaces_updated_at: FieldValue.serverTimestamp() }, { merge: true })
 }
 
-/** Is a plugin installed AND active for this team? */
-export async function pluginIsActive(teamId: string, pluginId: string): Promise<boolean> {
-  const snap = await admin
-    .firestore()
-    .collection(TEAMS_COLLECTION)
-    .doc(teamId)
-    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+/**
+ * The resolved ACTIVE install of `pluginId` for `teamId` — the team's own, or
+ * the one its organisation installed on its behalf. Null when neither is active.
+ *
+ * ── ORG_ID IS THE GRANT ──────────────────────────────────────────────────────
+ * This is `useInstalledPlugins`' doctrine (see its header) applied server-side.
+ * An org install confers the feature on every member studio, and there is no
+ * second plan check here for the same reason there is none there: joining an org
+ * sets `plan: 'organization'` in the same write as `org_id`, and every plugin is
+ * included at that tier, so the team's own plan already says yes.
+ *
+ * This function used to read the TEAM path only, which made an org-level install
+ * invisible to every server-side gate — a studio could see a feature in its own
+ * sidebar and be refused by the callable behind it.
+ *
+ * ── AN INACTIVE TEAM DOCUMENT DOES NOT VETO AN ACTIVE ORG ONE ────────────────
+ * The obvious "the team document wins if it exists" reading is WRONG, and the
+ * client is the specification: `useInstalledPlugins` filters to
+ * `status === 'active'` FIRST and only then lets a team entry take precedence
+ * over an org one. A veto here would refuse exactly what the studio can see.
+ * Precedence between two ACTIVE documents still favours the team's, which is
+ * why its config is returned in preference.
+ */
+export async function resolveActivePluginInstall(
+  teamId: string,
+  pluginId: string,
+): Promise<Record<string, unknown> | null> {
+  const db = admin.firestore()
+  const teamRef = db.collection(TEAMS_COLLECTION).doc(teamId)
+
+  const [installSnap, teamSnap] = await Promise.all([
+    teamRef.collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(pluginId).get(),
+    teamRef.get(),
+  ])
+  if (installSnap.exists && installSnap.data()?.status === 'active') {
+    return installSnap.data() ?? null
+  }
+
+  const orgId = teamSnap.data()?.org_id as string | undefined
+  if (!orgId) return null
+
+  const orgSnap = await db
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(orgId)
+    .collection(ORG_INSTALLED_PLUGINS_SUBCOLLECTION)
     .doc(pluginId)
     .get()
-  return snap.exists && snap.data()?.status === 'active'
+  return orgSnap.exists && orgSnap.data()?.status === 'active' ? (orgSnap.data() ?? null) : null
+}
+
+/** Is a plugin installed AND active for this team — its own, or its org's? */
+export async function pluginIsActive(teamId: string, pluginId: string): Promise<boolean> {
+  return (await resolveActivePluginInstall(teamId, pluginId)) !== null
 }
 
 /**
@@ -94,10 +139,15 @@ export async function unpublishSiteForTeam(teamId: string): Promise<void> {
  * flags the org draft disabled. Mirrors the core of the unpublishOrgWebsite
  * callable (orgWebsite/index.ts) without its auth guard.
  *
- * It exists because an org has NO `onInstalledPluginStatusChange` trigger — that
- * trigger is bound to `teams/{teamId}/installed_plugins/{pluginId}` only — so
- * deactivating an org's `website` install tears nothing down by itself. The org
- * lapse path (orgs/lifecycle.ts) calls this explicitly.
+ * It exists because no trigger tears an ORG's artefacts down.
+ * `onInstalledPluginStatusChange` is bound to
+ * `teams/{teamId}/installed_plugins/{pluginId}` only, and the org-level trigger
+ * that does now exist (`plugins/bundleTriggers.ts`) owns bundle reconciliation
+ * and nothing else — deliberately, because the org lapse path is
+ * resumable-not-atomic and a teardown step inside an eventually-consistent
+ * trigger could leave a public site up after a half-run lapse. So deactivating
+ * an org's `website` install still tears nothing down by itself, and
+ * orgs/lifecycle.ts calls this explicitly.
  */
 export async function unpublishSiteForOrg(orgId: string): Promise<void> {
   const db = admin.firestore()

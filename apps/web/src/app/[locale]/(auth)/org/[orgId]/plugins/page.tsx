@@ -10,38 +10,15 @@ import {
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOrg } from '@/contexts/OrgContext'
-import { ORGANIZATIONS_COLLECTION, ORG_INSTALLED_PLUGINS_SUBCOLLECTION, pluginVisibleToTenant } from '@linyup/shared'
+import { ORGANIZATIONS_COLLECTION, ORG_INSTALLED_PLUGINS_SUBCOLLECTION, pluginVisibleToTenant, isBundleContainer } from '@linyup/shared'
 import type { InstalledPlugin, PluginManifest, PluginCategory } from '@linyup/shared'
-import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { installableManifests } from '@/plugins/registry'
+import { BundleModulesPanel } from '@/plugins/hmd/ConfigPanel'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { Puzzle, Sparkles, MessageCircle, Globe, Zap, Settings2, Gift, GraduationCap, Trophy, FolderTree,
-  Calculator,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-
-// ─── Icon map ─────────────────────────────────────────────────────────────────
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  Calculator,
-  Sparkles,
-  MessageCircle,
-  Globe,
-  Zap,
-  Puzzle,
-  Settings2,
-  Gift,
-  GraduationCap,
-  Trophy,
-  FolderTree,
-}
-
-function PluginIcon({ name, className }: { name: string; className?: string }) {
-  const Icon = ICON_MAP[name] ?? Puzzle
-  return <Icon className={className} />
-}
+import { PluginIcon } from '@/plugins/icons'
 
 // ─── Org installed plugins snapshot ──────────────────────────────────────────
 
@@ -76,12 +53,18 @@ function OrgPluginCard({
   onInstall,
   onUninstall,
   busy,
+  orgId,
+  installation,
+  canEdit,
 }: {
   manifest: PluginManifest
   isInstalled: boolean
   onInstall: () => void
   onUninstall: () => void
   busy: boolean
+  orgId: string
+  installation: InstalledPlugin | undefined
+  canEdit: boolean
 }) {
   const t = useTranslations('Plugins')
   const tOrg = useTranslations('Org')
@@ -125,6 +108,18 @@ function OrgPluginCard({
       <p className="text-sm text-muted-foreground leading-relaxed">
         {t(manifest.descriptionKey as Parameters<typeof t>[0])}
       </p>
+
+      {/* A CONTAINER's module switches — the only config surface for a bundle,
+          and it has to live here: an org-installed plugin deliberately shows no
+          Configure control on a studio's own settings page. */}
+      {isInstalled && isBundleContainer(manifest.id) && (
+        <BundleModulesPanel
+          containerId={manifest.id}
+          orgId={orgId}
+          installation={installation}
+          canEdit={canEdit}
+        />
+      )}
 
       {/* Actions */}
       <div className="mt-auto pt-1">
@@ -219,7 +214,9 @@ export default function OrgPluginsPage() {
   // than through `usePluginDiscovery` for exactly that reason. An org already
   // running a plugin keeps seeing it (with its Uninstall control) even if it is
   // later dropped from the list: the gate is on discovery, not on running.
-  const sortedRegistry = [...PLUGIN_REGISTRY]
+  // Bundle members are excluded (`installableManifests`) — an org installs the
+  // CONTAINER, and the reconciler materializes the members from it.
+  const sortedRegistry = [...installableManifests()]
     .filter((m) => pluginVisibleToTenant(m, { orgId }) || activeIds.has(m.id))
     .sort((a, b) => Number(b.recommended ?? false) - Number(a.recommended ?? false))
 
@@ -245,6 +242,9 @@ export default function OrgPluginsPage() {
             busy={busyId === manifest.id}
             onInstall={() => isAdmin && installMutation.mutate(manifest)}
             onUninstall={() => isAdmin && uninstallMutation.mutate(manifest.id)}
+            orgId={orgId}
+            installation={installations.find((i) => i.pluginId === manifest.id)}
+            canEdit={isAdmin}
           />
         ))}
       </div>

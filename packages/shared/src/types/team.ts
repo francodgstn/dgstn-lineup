@@ -334,6 +334,64 @@ export interface BioLinkBackground {
   color: string
 }
 
+/**
+ * Operational flags shared by both billable tenants — a `Team` and an
+ * `Organization`. Declared ONCE, because the trial sweep asks the same question
+ * of both (`tenantExemptFromTrialSweep`) and two copies of the shape are how the
+ * two tiers start disagreeing about who may lapse.
+ */
+export interface TenantFlags {
+  /** Linyup-internal / synthetic tenant (e.g. the prod smoke-test studio).
+   *  Excluded from platform metrics AND exempt from trial auto-downgrade. */
+  internal?: boolean
+  /** Founder / pilot studio. Exempt from trial auto-downgrade so it cannot lapse
+   *  to Free mid-validation; still counted in platform metrics (a real customer). */
+  pilot?: boolean
+  /**
+   * A REAL customer the platform has agreed to bill nothing, indefinitely.
+   *
+   * Exempt from the trial sweep like `pilot`, and COUNTED in platform metrics
+   * like `pilot` — this is real usage, and Linyup's first migrated organisation
+   * is about to be its largest tenant, so hiding it (as `internal` would) would
+   * corrupt every usage number on the platform.
+   *
+   * It is deliberately NOT `pilot`: that one means "founder validation in
+   * progress" and is temporary by construction, so overloading it would make
+   * "how many pilots do we have" unanswerable and would sweep a comped customer
+   * into any future pilot-graduation job.
+   *
+   * Expected to sit on `plan_status: 'active'` with no Stripe subscription. The
+   * flag is the RECORD of why there is no subscription — without it, the first
+   * billing reconciliation reports the tenant as broken rather than as a
+   * decision somebody made. Operator-set only; never client-writable.
+   */
+  comped?: boolean
+  /** Why, in one line — e.g. 'founding customer, migrated 2026'. */
+  comped_reason?: string
+  comped_since?: Timestamp
+}
+
+/**
+ * Is this tenant exempt from the daily trial-lapse sweep?
+ *
+ * THE one reader of these flags for that decision, so a team and an organisation
+ * can never answer it differently — they used to each spell the check out, and
+ * adding a third flag meant finding both. Nothing else about the three flags is
+ * the same: `internal` also hides the tenant from platform metrics, `comped`
+ * deliberately does not.
+ */
+export function tenantExemptFromTrialSweep(flags?: TenantFlags): boolean {
+  return Boolean(flags?.internal || flags?.pilot || flags?.comped)
+}
+
+/** Which exemption applied, for the sweep's log line. Null when none did. */
+export function trialSweepExemption(flags?: TenantFlags): 'internal' | 'pilot' | 'comped' | null {
+  if (flags?.internal) return 'internal'
+  if (flags?.pilot) return 'pilot'
+  if (flags?.comped) return 'comped'
+  return null
+}
+
 export interface Team {
   id: string
   name: string
@@ -391,13 +449,7 @@ export interface Team {
   // dialog offers them (a sensible default set is shown until customized).
   payment_modes?: string[]
   // Operational flags for launch / founder onboarding (see docs/launch/).
-  flags?: {
-    // Linyup-internal / synthetic tenant (e.g. the prod smoke-test studio).
-    // Excluded from platform metrics AND exempt from trial auto-downgrade.
-    internal?: boolean
-    // Founder / pilot studio. Exempt from trial auto-downgrade so it cannot lapse
-    // to Free mid-validation; still counted in platform metrics (a real customer).
-    pilot?: boolean
+  flags?: TenantFlags & {
     // Set by the promote tool when a team is copied from sandbox into prod.
     promotedFrom?: string // source environment, e.g. 'sandbox'
     promotedAt?: Timestamp

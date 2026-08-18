@@ -29,7 +29,7 @@ import { GenericCheckinForm } from './forms/GenericCheckinForm'
 import { CampCheckinForm } from './forms/CampCheckinForm'
 import { ExamCheckinForm } from './forms/ExamCheckinForm'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
-import dynamic from 'next/dynamic'
+import { pluginSlot } from '@/plugins/slots'
 import type { ComponentType } from 'react'
 
 interface PluginCheckinFormProps {
@@ -268,11 +268,7 @@ export function CheckinPanel({
 
   const PluginCheckinForm = useMemo((): ComponentType<PluginCheckinFormProps> | null => {
     if (typeof formType === 'object') {
-      const { pluginId } = formType
-      return dynamic<PluginCheckinFormProps>(
-        () => import(`@/plugins/${pluginId}/CheckinForm`).then((m) => ({ default: m.CheckinForm })),
-        { ssr: false },
-      )
+      return pluginSlot<PluginCheckinFormProps>(formType.pluginId, 'CheckinForm')
     }
     return null
   }, [formType])
@@ -296,11 +292,7 @@ export function CheckinPanel({
     checkins: EventCheckin[]
   }> | null => {
     if (!exportPlugin) return null
-    const pluginId = exportPlugin.id
-    return dynamic(
-      () => import(`@/plugins/${pluginId}/Exports`).then((m) => ({ default: m.Exports })),
-      { ssr: false },
-    )
+    return pluginSlot(exportPlugin.id, 'Exports')
   }, [exportPlugin])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['event-checkins', eventId] })

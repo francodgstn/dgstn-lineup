@@ -192,6 +192,8 @@ describe('an organisation trial ends (UX-9)', () => {
 
   /** The org phase of the daily sweep, sliced out of handleTrialLifecycle. */
   const orgPhase = billing.split('Phase 2 — lapsed ORGANISATION')[1].split('Transitional sweep')[0]
+  /** The team phase — everything before the org phase begins. */
+  const teamPhase = billing.split('Phase 2 — lapsed ORGANISATION')[0]
 
   it('the daily sweep actually reads the organizations collection', () => {
     assert.ok(
@@ -207,8 +209,23 @@ describe('an organisation trial ends (UX-9)', () => {
     )
   })
 
-  it('the same two exemptions hold for an org as for a team', () => {
-    assert.ok(orgPhase.includes('flags?.internal || flags?.pilot'))
+  it('an org and a team share ONE exemption predicate, so they cannot disagree', () => {
+    // Both phases used to spell the flag check out, and adding a third flag
+    // (`comped`) meant finding both. The shared predicate is now the definition;
+    // asserting the CALL rather than the flag names keeps this test true when a
+    // fourth flag arrives, while still failing if either phase improvises.
+    assert.ok(
+      orgPhase.includes('tenantExemptFromTrialSweep(flags)'),
+      'the org phase must ask the shared predicate, not re-derive the exemption',
+    )
+    assert.ok(
+      teamPhase.includes('tenantExemptFromTrialSweep(flags)'),
+      'the team phase must ask the same predicate as the org phase',
+    )
+    assert.ok(
+      !/flags\?\.(internal|pilot|comped)\s*\|\|/.test(code(billing)),
+      'no hand-rolled copy of the exemption may survive anywhere in saas-billing',
+    )
   })
 
   it('the sweep hands off to the ONE org wind-down and never improvises one', () => {
@@ -308,8 +325,11 @@ describe('a lapsed organisation is torn down like a team (UX-10)', () => {
     assert.ok(lifecycle.includes("where('status', '==', 'active')"))
     assert.ok(
       lifecycle.includes('unpublishSiteForOrg(orgId)'),
-      'an org has no installed_plugins trigger (that one is bound to teams/{teamId}/…), so the org ' +
-        'site must be torn down explicitly',
+      'the org site must be torn down EXPLICITLY. An org does now have an ' +
+        'installed_plugins trigger (plugins/bundleTriggers.ts), but it owns bundle ' +
+        'reconciliation only — this lapse path is documented as resumable-not-atomic, and ' +
+        'moving a step of it into an eventually-consistent trigger would let a half-run lapse ' +
+        'leave a public site up',
     )
   })
 
@@ -481,8 +501,9 @@ describe('a lapsed organisation leaves bought courses watchable (UX-16 follow-up
     }
     assert.ok(
       /status: 'inactive'/.test(code(lifecycle)),
-      'expected the org-level install deactivation to still be here (it has no trigger, so it ' +
-        'needs no marker) — if it moved, re-check the list above',
+      'expected the org-level install deactivation to still be here. It needs no course-mirror ' +
+        'marker: the org trigger that now exists (plugins/bundleTriggers.ts) only reconciles ' +
+        'bundles and never tears artefacts down — if that changes, re-check the list above',
     )
   })
 })

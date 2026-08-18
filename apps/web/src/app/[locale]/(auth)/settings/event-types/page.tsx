@@ -27,7 +27,7 @@ import {
   BUILTIN_EVENT_TYPES,
 } from '@linyup/shared'
 import type { EventTypeConfig, EventTypeField, EventTypeFieldType } from '@linyup/shared'
-import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { PLUGIN_REGISTRY, containerManifestFor } from '@/plugins/registry'
 import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import { useTranslations } from 'next-intl'
 
@@ -197,6 +197,9 @@ function EventTypeFormDialog({
 
 export default function EventTypesPage() {
   const t = useTranslations('EventTypesSettings')
+  // Plugin display names live in the Plugins namespace, beside the manifests'
+  // nameKeys — this page credits a plugin without owning its copy.
+  const tPlugins = useTranslations('Plugins')
   const { currentTeamId } = useAuth()
   const { canDiscover } = usePluginDiscovery()
   const qc = useQueryClient()
@@ -241,13 +244,24 @@ export default function EventTypesPage() {
     invalidate()
   }
 
-  // This section names the plugin that provides each type ("Provided by
-  // hmd-fighting-cup"), so it is a discovery surface even though it installs
-  // nothing — it was the second place a customer's name reached every other
-  // tenant. Install state is deliberately NOT part of the filter: the list has
-  // always shown plugin types whether or not the team installed them, and
-  // narrowing that here would be a separate behaviour change.
-  const pluginTypes = PLUGIN_REGISTRY.filter((p) => p.eventType && canDiscover(p))
+  // This section names the plugin that provides each type ("Provided by HMD"),
+  // so it is a discovery surface even though it installs nothing — it was the
+  // second place a customer's name reached every other tenant. Install state is
+  // deliberately NOT part of the filter: the list has always shown plugin types
+  // whether or not the team installed them, and narrowing that here would be a
+  // separate behaviour change.
+  //
+  // It keeps the WHOLE registry rather than `installableManifests()`, and asks
+  // about the CONTAINER instead: a bundle member really does provide the event
+  // type, so hiding its row would only remove information from a page that
+  // offers no install — but attributing the row to the member would print the
+  // member's id, which is exactly the customer name the container's audience
+  // exists to keep out of other tenants' screens. So: gate on the container's
+  // audience, and label with the container's name.
+  const pluginTypes = PLUGIN_REGISTRY
+    .filter((p) => p.eventType)
+    .map((p) => ({ p, card: containerManifestFor(p.id) ?? p }))
+    .filter(({ card }) => canDiscover(card))
 
   return (
     <div className="space-y-6">
@@ -286,12 +300,17 @@ export default function EventTypesPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('fromPlugins.heading')}</h2>
           <div className="space-y-2">
-            {pluginTypes.map((plugin) => (
+            {pluginTypes.map(({ p: plugin, card }) => (
               <div key={plugin.id} className="flex items-center gap-3 rounded-lg border p-3">
                 <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{plugin.eventType!.id}</p>
-                  <p className="text-xs text-muted-foreground">{t('fromPlugins.providedBy', { pluginId: plugin.id })}</p>
+                  {/* The CONTAINER's display name, not the member's id — the row
+                      credits the card a tenant actually installs, and a raw id
+                      here used to be how a customer's name travelled. */}
+                  <p className="text-xs text-muted-foreground">
+                    {t('fromPlugins.providedBy', { pluginId: tPlugins(card.nameKey as never) })}
+                  </p>
                 </div>
                 <Badge variant="outline" className="text-xs shrink-0">{t('fromPlugins.badge')}</Badge>
               </div>

@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { hasTeamRole } from '../utils/teams'
-import { unpublishSiteForTeam, touchTeamForSurfaceRecompute } from '../utils/plugins'
+import { unpublishSiteForTeam, touchTeamForSurfaceRecompute, pluginIsActive } from '../utils/plugins'
 import { sanitizeRichHtml } from '../utils/sanitizeHtml'
 import {
   SITE_PUBLISHED_COLLECTION,
@@ -11,7 +11,6 @@ import {
   TEAM_PLACES_SUBCOLLECTION,
   ORGANIZATIONS_COLLECTION,
   ORG_PLACES_SUBCOLLECTION,
-  INSTALLED_PLUGINS_SUBCOLLECTION,
   isPublicSurface,
 } from '@linyup/shared'
 import type {
@@ -379,10 +378,8 @@ export const publishWebsite = onCall(async (request) => {
 
   // Defense in depth: the Website plugin must be installed & active. The install
   // flow already gates by plan/add-on; this stops publishing without the plugin.
-  const pluginSnap = await fs
-    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/website`)
-    .get()
-  if (!pluginSnap.exists || pluginSnap.data()?.status !== 'active') {
+  // Through the ONE resolver, so an ORG-level install counts.
+  if (!(await pluginIsActive(teamId, 'website'))) {
     throw new HttpsError('failed-precondition', 'The Website plugin is not active for this team')
   }
 
