@@ -135,14 +135,14 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 56 | confuses | weekly | Cancelling a class says nothing about the credit, and offers "try again" for a permanent refusal | C4 | web | ✅ Fixed |
 | 57 | confuses | every-session | A prospect on the Shop has no path to the studio's terms | C3 | web | ▶ Open |
 | 58 | confuses | weekly | Two competing sign-in UIs fire off the same state on gated forms | C3 | web | ▶ Open |
-| 59 | slows | weekly | A settled-in-cash appointment whose payment link went unpaid has no action at all | M6 | web + functions | ▶ Open |
-| 60 | confuses | weekly | A BYO studio's doubled revenue rows are indistinguishable from two real payments | M6 | web | ▶ Open |
+| 59 | slows | weekly | A settled-in-cash appointment whose payment link went unpaid has no action at all | M6 | web + functions | ✅ Fixed |
+| 60 | confuses | weekly | A BYO studio's doubled revenue rows are indistinguishable from two real payments | M6 | web | ✅ Fixed |
 | 61 | slows | weekly | Public pages is the only settings section that isn't a settings panel | M7×M11 | web | ▶ Open |
 | 62 | slows | weekly | Contacts cannot be filtered by coach, or by "in no group" | M4 | functions + web | ▶ Open |
 | 63 | slows | every-session | A booking row hides its own contact and session behind an action menu | M3×M4 | web | ✅ Fixed |
 | 64 | slows | weekly | The schedule cannot show a season, only a three-month window | M3 | web | ▶ Open |
 | 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ▶ Open |
-| 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ▶ Open |
+| 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ✅ Fixed |
 | 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ▶ Open |
 | 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
 | 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ✅ Fixed |

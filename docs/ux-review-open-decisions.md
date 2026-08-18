@@ -137,3 +137,26 @@ any manager can read. *Meanwhile:* the dialog points at Preview, which answers
 - `bookings` collection-group `(teamId, contact, joinedAt DESC)` — from UX-10.
 The emulator hides a missing index; a real project returns 400. Order:
 rules+indexes, then functions, then web.
+
+## 16. Cancelling a link-mode appointment does not close its Stripe link (UX-59)
+**PARKED, and it is the same family as the bug just fixed.** A manager cancelling
+a link-mode appointment from the sessions UI leaves the Checkout Session live —
+the client can still pay, and the webhook's case 3 then **re-acquires and
+confirms the cancelled slot**. Now cheap to fix (UX-59 stores
+`payment_checkout_session_id`), but it touches `sessions/index.ts` plus the
+client-side cancel path, so it was left rather than widened into a live lane.
+
+## 17. A gift-card-covered trial carries no "Paid trial" chip (UX-66)
+**NOTED, no action.** Full-cover gift-card redemption writes a finance reclass and
+no payment row at all, so there is nowhere to put the stamp. A property of
+full-cover redemption generally, not of trials. Recorded in
+`docs/payment-contact-studio.md`.
+
+## 18. UX-60 remains STRUCTURALLY open — the chip is a warning, not a fix
+**PARKED.** BYO double-recording is caused by the Stripe API no longer letting an
+`invoice.*` payload name its PaymentIntent (or vice versa), with no credentials on
+that rail to bridge them. Today's work makes the suspect rows *visible* and tells
+the studio which events to subscribe to; it does not stop the duplication. The
+three real closes each have a cost and none was mine to pick: swap to
+`invoice_payment.paid`, give the rail read-only credentials, or dedupe across
+keys. `docs/open-defects.md` entry 1 says explicitly that this is still not a fix.
