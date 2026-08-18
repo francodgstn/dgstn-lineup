@@ -30,6 +30,19 @@ import { Card, CardContent } from '@/components/ui/card'
  * so once, with a control that closes it — it does not simply vanish, because a
  * surface that disappears silently never told anybody they had finished.
  */
+/**
+ * The checklist keeps its 3% primary wash and NOTHING ELSE. `ring-0` drops the
+ * default card ring, so the tint is the whole signal — one tinted block beside
+ * the section header bands, which use the same token.
+ *
+ * The `border-primary/30` that used to sit here PAINTED NOTHING. Tailwind v4
+ * preflight sets `border: 0 solid` and no width utility was ever applied, so it
+ * only ever set a colour on a zero-width border; what this card actually looked
+ * like was the flat wash. Do NOT "fix" that by adding a border width — that
+ * would be a new decision, not a repair.
+ */
+const CHECKLIST_SHELL = 'bg-primary/[0.03] ring-0'
+
 export function SetupChecklist() {
   const t = useTranslations('Onboarding')
   const router = useRouter()
@@ -70,7 +83,7 @@ export function SetupChecklist() {
   // full checklist below must stay up to say why.
   if (allRequiredDone && !sessionsNotActuallyBookable) {
     return (
-      <Card data-tour="setup-checklist" className="border-primary/30 bg-primary/[0.03]">
+      <Card data-tour="setup-checklist" className={CHECKLIST_SHELL}>
         <CardContent className="flex flex-wrap items-center gap-3 p-5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
             <PartyPopper className="h-5 w-5" />
@@ -100,7 +113,7 @@ export function SetupChecklist() {
   }
 
   return (
-    <Card data-tour="setup-checklist" className="border-primary/30 bg-primary/[0.03]">
+    <Card data-tour="setup-checklist" className={CHECKLIST_SHELL}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">

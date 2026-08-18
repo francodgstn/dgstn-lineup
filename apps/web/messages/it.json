@@ -374,7 +374,25 @@
     "trendsNoHistoryBody": "Le tendenze confrontano settimana per settimana. Dopo qualche sessione, i grafici compariranno qui da soli.",
     "chartEmptyTitle": "Ancora nulla da mostrare",
     "chartEmptyContacts": "Nessun contatto corrisponde a questa suddivisione nelle settimane mostrate. Prova un'altra suddivisione o un periodo più lungo.",
-    "chartEmptySessions": "Nessuna sessione o prenotazione nelle settimane mostrate. Prova un'altra misura o un periodo più lungo."
+    "chartEmptySessions": "Nessuna sessione o prenotazione nelle settimane mostrate. Prova un'altra misura o un periodo più lungo.",
+    "attentionEmptyTitle": "Niente ti aspetta",
+    "attentionEmptyBody": "Nessun avviso, nessuna iscrizione in attesa, nessuno che si allontana. È la risposta che vuoi.",
+    "attentionSeeAll": "Vedi tutti i {count} in Contatti",
+    "attentionOpenContacts": "Apri in Contatti",
+    "statSubscriptionsSub": "su uno dei tuoi abbonamenti",
+    "statAffiliationSub": "affiliazione attualmente attiva",
+    "trendsPeriod": "Periodo",
+    "trendsWeeksOption": "{weeks} settimane",
+    "trendsCompare": "Confronta",
+    "trendsCompareNone": "Nessun confronto",
+    "trendsComparePrev": "Periodo precedente",
+    "trendsCompareLastYear": "Stesso periodo dell'anno scorso",
+    "legendCurrent": "Attuale",
+    "legendLastYear": "Anno scorso",
+    "legendPrevPeriod": "Periodo prec.",
+    "chartTitleSessions": "Sessioni",
+    "chartTitleContacts": "Contatti",
+    "chartTitleTopActivities": "Attività principali"
   },
   "Contacts": {
     "noteColor_none": "Nessun colore",
@@ -6056,7 +6074,8 @@
     "unassignedTitle": "Non assegnati",
     "unassignedSubtitle": "pagamenti senza contatto",
     "unassignedEmpty": "tutti i pagamenti sono collegati",
-    "unassignedAction": "Assegnali"
+    "unassignedAction": "Assegnali",
+    "recentViewAll": "Tutti i pagamenti"
   },
   "PublicSurfaceNav": {
     "shop": "Shop",

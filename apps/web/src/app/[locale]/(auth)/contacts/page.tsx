@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
@@ -2486,15 +2487,36 @@ export default function ContactsPage() {
   const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
 
   const [tab, setTab] = useTabParam(TAB_IDS, 'active')
+
+  /**
+   * `?attention=1` — THE Needs-attention view, entered from outside.
+   *
+   * The dashboard's attention block shows the top few and links here for the
+   * full answer, so this page has to be able to open ON that answer. It is the
+   * two controls the view is made of, set together: the `needsAttention` filter
+   * dimension and the attention sort — no third representation of "needs
+   * attention" is introduced, and `contactAttentionReasons` stays the one
+   * predicate.
+   *
+   * Read ONCE at mount via lazy initialisers rather than in an effect, so there
+   * is no unfiltered first paint, and so clearing the filter by hand afterwards
+   * is not snapped back by a re-render.
+   */
+  const searchParams = useSearchParams()
+  const [openOnAttention] = useState(() => searchParams.get('attention') === '1')
   // Ephemeral on purpose: a persisted per-device sort is one more of the
   // device-local preferences UX-23 counts, and this one is cheap to re-pick.
-  const [sortMode, setSortMode] = useState<SortMode>('name')
+  const [sortMode, setSortMode] = useState<SortMode>(openOnAttention ? 'attention' : 'name')
   // The Unconfirmed tab only exists while provisional contacts do — hop back to
   // Active when the last one is confirmed/deleted (its tab entry disappears).
   useEffect(() => {
     if (tab === 'leads' && !loadingActive && leads.length === 0) setTab('active')
   }, [tab, loadingActive, leads.length])
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<Filters>(() =>
+    openOnAttention
+      ? normalizeContactFilter({ ...EMPTY_FILTERS, needsAttention: true })
+      : EMPTY_FILTERS,
+  )
   // Search lives INSIDE the filter object so "Save as…" captures it — the old
   // separate state meant a saved preset silently lost its text query.
   const search = filters.search

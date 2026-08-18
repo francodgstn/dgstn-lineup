@@ -374,7 +374,25 @@
     "trendsNoHistoryBody": "Trends compare week against week. Once you have run a few sessions, the charts appear here on their own.",
     "chartEmptyTitle": "Nothing to chart yet",
     "chartEmptyContacts": "No contacts matched this breakdown in the weeks shown. Try another breakdown, or a longer range.",
-    "chartEmptySessions": "No sessions or bookings landed in the weeks shown. Try another measure, or a longer range."
+    "chartEmptySessions": "No sessions or bookings landed in the weeks shown. Try another measure, or a longer range.",
+    "attentionEmptyTitle": "Nothing needs you",
+    "attentionEmptyBody": "No alerts, no waiting signups, nobody drifting away. That is the answer you want.",
+    "attentionSeeAll": "See all {count} in Contacts",
+    "attentionOpenContacts": "Open in Contacts",
+    "statSubscriptionsSub": "on one of your own plans",
+    "statAffiliationSub": "affiliation currently active",
+    "trendsPeriod": "Period",
+    "trendsWeeksOption": "{weeks} weeks",
+    "trendsCompare": "Compare",
+    "trendsCompareNone": "No comparison",
+    "trendsComparePrev": "Previous period",
+    "trendsCompareLastYear": "Same period last year",
+    "legendCurrent": "Current",
+    "legendLastYear": "Last year",
+    "legendPrevPeriod": "Prev. period",
+    "chartTitleSessions": "Sessions",
+    "chartTitleContacts": "Contacts",
+    "chartTitleTopActivities": "Top activities"
   },
   "Contacts": {
     "noteColor_none": "No colour",
@@ -6056,7 +6074,8 @@
     "unassignedTitle": "Unassigned",
     "unassignedSubtitle": "payments with no contact",
     "unassignedEmpty": "every payment is linked",
-    "unassignedAction": "Assign them"
+    "unassignedAction": "Assign them",
+    "recentViewAll": "All payments"
   },
   "PublicSurfaceNav": {
     "shop": "Shop",

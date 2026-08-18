@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -8,7 +8,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import {
   Select,
   SelectContent,
@@ -31,6 +30,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
+  CheckCircle2,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -50,13 +50,17 @@ import type {
   UserProfile,
   Team,
   EngagementThresholds,
+  ContactAttentionReason,
+  ContactFilterContext,
 } from '@linyup/shared'
+import { compareContactsByAttention, contactAttentionReasons } from '@linyup/shared'
 import { getDailyQuote } from '@/data/quotes'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
+import { Figure, FigureNote, FigureNumber, FigureRail } from '@/components/dashboard/Figure'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
@@ -64,6 +68,7 @@ import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
 import { SessionsHeatmapCard } from '@/components/dashboard/SessionsHeatmapCard'
 import { TopActivitiesCard } from '@/components/dashboard/TopActivitiesCard'
 import { EngagementMatrixCard } from '@/components/dashboard/EngagementMatrixCard'
+import { useExperimentalFeatures } from '@/hooks/useExperimentalFeatures'
 import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
 // Temporarily hidden — restore alongside the commented rows in TrendsSection:
 // import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
@@ -172,72 +177,6 @@ function useUpcomingSessions(teamId: string | null) {
   })
 }
 
-// ─── stat card ────────────────────────────────────────────────────────────────
-
-// Figures-row cell: an accent card (left-border accent) with a large figure and
-// its detail text beside it.
-function StatCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  loading,
-  href,
-  secondary,
-}: {
-  title: string
-  value: number | null | undefined
-  subtitle: string
-  icon: React.ElementType
-  loading?: boolean
-  href?: string
-  secondary?: { label: string; value: number | null }
-}) {
-  const inner = (
-    <Card
-      variant="accent"
-      size="sm"
-      className={`h-full ${href ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
-    >
-      <CardContent className="py-1">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {title}
-          </p>
-          <Icon className="h-4 w-4 shrink-0 text-primary/60" />
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          {loading ? (
-            <Skeleton className="h-10 w-16" />
-          ) : (
-            <p className="text-4xl font-black leading-none">{value ?? '—'}</p>
-          )}
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-            {secondary && (
-              <p className="text-xs text-muted-foreground/60">
-                +{secondary.value ?? '—'} {secondary.label}
-              </p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-  return href ? (
-    <Link href={href as Route} className="h-full">
-      {inner}
-    </Link>
-  ) : (
-    inner
-  )
-}
-
-// Figures row: individual accent cards in a responsive grid.
-function StatsStrip({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{children}</div>
-}
-
 // ─── dashboard hero ───────────────────────────────────────────────────────────
 
 function DashboardHero({ profile, team }: { profile: UserProfile | null; team: Team | null }) {
@@ -278,13 +217,38 @@ function DailyQuote() {
 
 // ─── section heading ──────────────────────────────────────────────────────────
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+/**
+ * THE ONE TINT ON THE PAGE, and it lives only here.
+ *
+ * A wash on a block BODY was rejected in the sidebar, and the reason
+ * generalises: a tinted thing that GROWS reads as a highlight rather than a
+ * boundary, and it grows without bound. A section header band is fixed height,
+ * so it cannot do that. Flat 3% primary under a 1px full-strength primary rule
+ * — the same pair the sidebar settled on (`SHORTCUTS_RULE`, auth layout), not a
+ * second idiom invented here. No gradient, no ramp.
+ *
+ * It also has to OUTRANK a figure caption, which it did not: heading and
+ * caption were both `font-semibold uppercase tracking-wider text-muted-foreground`
+ * at 12px and 11px, so the page's highest-level label was typeset as its
+ * smallest. The heading is sentence case, foreground weight, `text-base
+ * font-bold`; the caption went to `font-medium`.
+ *
+ * `action` is the section's one right-hand affordance (a "see all" link, a
+ * period picker) — it belongs on the band, not floating above the content.
+ */
+function SectionHeading({
+  children,
+  action,
+}: {
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
   return (
-    <div className="mb-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-b-md border-t border-primary bg-primary/[0.03] px-3 py-2">
+      <h2 className="font-heading text-base font-bold leading-tight tracking-tight text-heading">
         {children}
-      </p>
-      <Separator className="mt-1.5" />
+      </h2>
+      {action}
     </div>
   )
 }
@@ -407,7 +371,11 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="max-h-[440px] overflow-y-auto px-6 pb-4">
+        {/* px-3 here + px-1 on a row puts a session title at 16px from the card
+            edge — the same place CardHeader's px-4 puts the card title. It was
+            px-6 + px-1, i.e. 28px, so the header and every row it labelled were
+            visibly out of line. */}
+        <div className="max-h-[440px] overflow-y-auto px-3 pb-4">
           {isLoading ? (
             <div className="space-y-3 pt-2">
               {[1, 2, 3].map((i) => (
@@ -503,6 +471,11 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
 }
 
 // ─── contacts snapshot ────────────────────────────────────────────────────────
+//
+// Two cards, and each keeps its frame for the same reason: it owns a view
+// `Select`, so it is a bounded thing you page through rather than a figure. The
+// third cell used to be "Triggered alerts" — see AttentionList below for where
+// it went and why.
 
 function ContactsSnapshot({
   contacts,
@@ -517,9 +490,9 @@ function ContactsSnapshot({
 }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-40 rounded-xl" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {[1, 2].map((i) => (
+          <Skeleton key={i} className="h-56 rounded-xl" />
         ))}
       </div>
     )
@@ -528,76 +501,143 @@ function ContactsSnapshot({
   const all = contacts ?? []
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <RosterCard contacts={all} thresholds={engagementThresholds} />
       <DemographicsCard contacts={all} rankingSystems={rankingSystems} />
-      <TriggeredAlertsCard contacts={all} />
     </div>
   )
 }
 
-function TriggeredAlertsCard({ contacts }: { contacts: Contact[] }) {
+// ─── needs attention ──────────────────────────────────────────────────────────
+//
+// Replaces `TriggeredAlertsCard`, which was titled "Triggered alerts" and
+// triggered nothing: it scanned `total_sessions` against a hardcoded milestone
+// array with an `s >= m && s < m + 3` window, so a contact drifted in and out of
+// it by attending, nothing raised or cleared it, and its badge rendered
+// hardcoded English.
+//
+// THE PREDICATE IS NOT NEW. `contactAttentionReasons`
+// (`shared/utils/contactFilter.ts`) is the one implementation — it already backs
+// the contacts page's "Needs attention" sort and its filter dimension, and every
+// reason reads a fact that is already on the contact document. This runs it over
+// the contacts the dashboard has ALREADY loaded, so it costs zero extra reads.
+//
+// It is not a card: it has no interior to page through, and it is the block the
+// direction's own rule matters most for. It links THROUGH to the contacts page
+// rather than duplicating the full answer here — one place owns that list.
+//
+// EVERY ROW SAYS WHY. The reason is the point; a name with no reason is an
+// urgency list nobody trusts, which is exactly what the contacts sort found when
+// it shipped. Reason labels come from the `Contacts` namespace rather than a
+// second copy of the same five strings.
+
+/** How many rows show before the list defers to the contacts page. */
+const ATTENTION_ROWS = 5
+
+/** The contacts page's Needs-attention view, entered directly. */
+const ATTENTION_HREF = '/contacts?attention=1' as Route
+
+function AttentionRow({ contact, reason }: { contact: Contact; reason: ContactAttentionReason }) {
+  const tc = useTranslations('Contacts')
+  const initials = `${contact.firstname?.[0] ?? ''}${contact.lastname?.[0] ?? ''}`.toUpperCase() || '?'
+  return (
+    <Link
+      href={`/contacts/${contact.id}` as Route}
+      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+        <span className="text-xs font-semibold text-amber-600">{initials}</span>
+      </div>
+      <p className="min-w-0 flex-1 truncate text-sm font-medium">
+        {contact.firstname} {contact.lastname}
+      </p>
+      <Badge variant="outline" className="shrink-0 border-amber-300 text-xs text-amber-600">
+        {tc(`attention_${reason}` as 'attention_alerts')}
+      </Badge>
+    </Link>
+  )
+}
+
+type AttentionRowData = { contact: Contact; reason: ContactAttentionReason }
+
+/**
+ * The rows, derived ONCE for the whole section — the heading's count and the
+ * list underneath it must never be able to disagree, and two components each
+ * running their own scan is exactly how they would.
+ */
+function useAttentionRows(
+  contacts: Contact[] | undefined,
+  engagementThresholds?: EngagementThresholds
+): AttentionRowData[] {
+  const ctx: ContactFilterContext = useMemo(
+    () => ({ engagementThresholds }),
+    [engagementThresholds]
+  )
+  return useMemo(() => {
+    const rows = (contacts ?? [])
+      .filter((c) => !c.archived_at)
+      .map((c) => ({ contact: c, reason: contactAttentionReasons(c, ctx)[0] }))
+      .filter((r): r is AttentionRowData => !!r.reason)
+    // Same comparator the contacts page sorts by, so "the top five here" and
+    // "the top of that list there" are the same five people.
+    rows.sort((a, b) => compareContactsByAttention(a.contact, b.contact, ctx))
+    return rows
+  }, [contacts, ctx])
+}
+
+function AttentionList({ rows, loading }: { rows: AttentionRowData[]; loading: boolean }) {
   const t = useTranslations('Dashboard')
 
-  // Find contacts with total_sessions ≥ any sessions_countdown alert value
-  // We approximate this client-side using total_sessions on the contact doc.
-  // Contacts whose session count crosses a round milestone (10, 20, 30…) are flagged.
-  const milestones = [10, 20, 30, 50, 75, 100, 150, 200]
-  const flagged = contacts
-    .filter((c) => {
-      const s = c.total_sessions ?? 0
-      return milestones.some((m) => s >= m && s < m + 3)
-    })
-    .slice(0, 5)
+  if (loading) {
+    return (
+      <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-center gap-3 py-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-3.5 flex-1" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // EMPTY IS A REAL STATE, AND A GOOD ONE. "Nothing needs you" is the answer a
+  // studio wants; it must not read as a load that failed, so it is a stated
+  // result with a tick, not a greyed placeholder.
+  if (rows.length === 0) {
+    return (
+      <div className="flex items-start gap-3 py-1">
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{t('attentionEmptyTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('attentionEmptyBody')}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle>{t('snapshotAlerts')}</CardTitle>
-          <Link
-            href="/contacts"
-            className="text-xs text-primary hover:underline flex items-center gap-0.5"
-          >
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {flagged.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">{t('snapshotNoAlerts')}</p>
-        ) : (
-          <div className="space-y-2.5">
-            {flagged.map((c) => {
-              const initials =
-                `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
-              return (
-                <Link
-                  key={c.id}
-                  href={`/contacts/${c.id}` as Route}
-                  className="flex items-center gap-2.5 rounded-lg hover:bg-muted/50 transition-colors p-1 -mx-1"
-                >
-                  <div className="h-7 w-7 rounded-full bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-semibold text-orange-600">{initials}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {c.firstname} {c.lastname}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="text-xs shrink-0 border-orange-300 text-orange-600"
-                  >
-                    {c.total_sessions} sessions
-                  </Badge>
-                </Link>
-              )
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
+      {rows.slice(0, ATTENTION_ROWS).map(({ contact, reason }) => (
+        <AttentionRow key={contact.id} contact={contact} reason={reason} />
+      ))}
+    </div>
+  )
+}
+
+/** The heading's right-hand affordance — count included, so the list can show
+ *  five without hiding how many there are. */
+function AttentionAction({ count }: { count: number }) {
+  const t = useTranslations('Dashboard')
+  if (count === 0) return null
+  return (
+    <Link
+      href={ATTENTION_HREF}
+      className="flex items-center gap-0.5 text-xs text-primary hover:underline"
+    >
+      {count > ATTENTION_ROWS ? t('attentionSeeAll', { count }) : t('attentionOpenContacts')}
+      <ArrowRight className="h-3 w-3" />
+    </Link>
   )
 }
 
@@ -639,14 +679,21 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
 
   const t = useTranslations('Dashboard')
   const data = useDashboardData(teamId, trendsWeeks, compareWith)
+  // The engagement matrix is an OPT-IN EXPERIMENT (Settings → Experimental
+  // features), off until a studio asks for it. Visibility only: the card and its
+  // data are untouched, so switching it on gets the working card.
+  const { isEnabled } = useExperimentalFeatures()
+  const showMatrix = isEnabled('engagement-matrix')
 
   const sharedProps = { trendsWeeks, compareWith }
 
   // UX-46: two of these charts have no empty state at all — with nothing to
   // plot they draw axes and a flat line, which reads as a broken chart rather
   // than a young studio. A trend needs history; say so once instead of drawing
-  // five of them. (Deliberately NOT gated on the period selector: no reports
-  // and no sessions means no history at any width.)
+  // a row of them. (This said "five of them" until the matrix became an opt-in
+  // experiment below — a comment asserting a count, gone stale exactly as the
+  // no-counts rule warns. Deliberately NOT gated on the period selector: no
+  // reports and no sessions means no history at any width.)
   const noHistory =
     !data.isLoading && data.weeklyReports.length === 0 && data.sessions.length === 0
   if (noHistory) {
@@ -663,41 +710,49 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
 
   return (
     <div className="space-y-6">
-      {/* Period controls */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Period controls — every label here was hardcoded English until now. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Period:</span>
+          <span className="text-xs text-muted-foreground">{t('trendsPeriod')}</span>
           <Select value={String(trendsWeeks)} onValueChange={(v) => setTrendsWeeks(Number(v))}>
-            <SelectTrigger className="h-7 text-xs w-[90px]">
+            <SelectTrigger className="h-7 w-[110px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {WEEKS_OPTIONS.map((w) => (
                 <SelectItem key={w} value={String(w)}>
-                  {w} weeks
+                  {t('trendsWeeksOption', { weeks: w })}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Compare:</span>
+          <span className="text-xs text-muted-foreground">{t('trendsCompare')}</span>
           <Select value={compareWith} onValueChange={(v) => setCompareWith(v as CompareWith)}>
-            <SelectTrigger className="h-7 text-xs w-[150px]">
+            <SelectTrigger className="h-7 w-[190px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No comparison</SelectItem>
-              <SelectItem value="prev_period">Previous period</SelectItem>
-              <SelectItem value="last_year">Same period last year</SelectItem>
+              <SelectItem value="none">{t('trendsCompareNone')}</SelectItem>
+              <SelectItem value="prev_period">{t('trendsComparePrev')}</SelectItem>
+              <SelectItem value="last_year">{t('trendsCompareLastYear')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Row 1: Contacts trend + Bookings trend — the headline shape of the week
-          leads; the breakdowns that explain it follow underneath. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ONE 2×2 GRID, not a 2-col row above a 12-col row.
+          The `lg:grid-cols-12` signature is gone. In it TopActivitiesCard held
+          3 (later 4) of 12 — about 230px, the same width as a stat figure — so a
+          chart and a bare number occupied identical footprints, and the heatmap's
+          `minWidth: 280` had to fight for the rest. Four equal cells at ~460px
+          give every chart room to be a chart.
+
+          The engagement matrix is an opt-in experiment (Settings → Experimental
+          features) and is left exactly as that lane placed it: when it is on it
+          is simply a fifth cell in the same grid. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ContactsSummaryCard
           weeklyReports={data.weeklyReports}
           comparisonWeeklyReports={data.comparisonWeeklyReports}
@@ -715,34 +770,26 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
           comparisonNewContactBookings={data.comparisonNewContactBookings}
           {...sharedProps}
         />
-      </div>
-
-      {/* Row 2: TopActivities + Heatmap + Engagement matrix */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-3">
-          <TopActivitiesCard
-            sessions={data.sessions}
-            allBookings={data.allBookings}
-            newContactBookings={data.newContactBookings}
-            activities={data.activities}
-            comparisonSessions={data.comparisonSessions}
-            comparisonAllBookings={data.comparisonAllBookings}
-            comparisonNewContactBookings={data.comparisonNewContactBookings}
-            compareWith={compareWith}
-          />
-        </div>
-        <div className="lg:col-span-5">
-          <SessionsHeatmapCard
-            sessions={data.sessions}
-            newContactBookings={data.newContactBookings}
-            compareWith={compareWith}
-            comparisonSessions={data.comparisonSessions}
-            comparisonNewContactBookings={data.comparisonNewContactBookings}
-          />
-        </div>
-        <div className="lg:col-span-4">
+        <TopActivitiesCard
+          sessions={data.sessions}
+          allBookings={data.allBookings}
+          newContactBookings={data.newContactBookings}
+          activities={data.activities}
+          comparisonSessions={data.comparisonSessions}
+          comparisonAllBookings={data.comparisonAllBookings}
+          comparisonNewContactBookings={data.comparisonNewContactBookings}
+          compareWith={compareWith}
+        />
+        <SessionsHeatmapCard
+          sessions={data.sessions}
+          newContactBookings={data.newContactBookings}
+          compareWith={compareWith}
+          comparisonSessions={data.comparisonSessions}
+          comparisonNewContactBookings={data.comparisonNewContactBookings}
+        />
+        {showMatrix && (
           <EngagementMatrixCard weeklyReports={data.weeklyReports} trendsWeeks={trendsWeeks} />
-        </div>
+        )}
       </div>
 
       {/* Temporarily hidden — restore the imports above to bring these back:
@@ -771,6 +818,9 @@ function TrendsSection({ teamId }: { teamId: string | null }) {
 export default function DashboardPage() {
   const { currentTeamId, profile, team } = useAuth()
   const t = useTranslations('Dashboard')
+  // The attention block's heading and its reason chips reuse the contacts
+  // page's copy rather than keeping a second translation of the same words.
+  const tContacts = useTranslations('Contacts')
   const affiliationTerm = useAffiliationTerm()
 
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
@@ -816,6 +866,10 @@ export default function DashboardPage() {
     withSub?.filter((c) => !aggregatorIds.has(c.subscription_type_id!)).length ?? null
   const aggregatorSubCount =
     withSub?.filter((c) => aggregatorIds.has(c.subscription_type_id!)).length ?? null
+
+  // Zero extra reads: the attention list runs the shared predicate over the
+  // contacts this page has already loaded.
+  const attentionRows = useAttentionRows(contacts, team?.engagement_thresholds)
 
   const teamSlug = team?.slug ?? (profile as { slug?: string } | null)?.slug
   const statsLoading = contactsLoading || sessionsLoading
@@ -868,71 +922,95 @@ export default function DashboardPage() {
             <DiscoverPanel />
           </div>
         )}
-
-        {/* ── 4. Highlights ── */}
-        {showData && (
-        <StatsStrip>
-          <StatCard
-            title={t('statEngaged')}
-            value={engagedThisWeek}
-            subtitle={t('statEngagedSub')}
-            icon={TrendingUp}
-            loading={statsLoading}
-            href="/contacts"
-            secondary={{ label: t('statEngagedPrev'), value: engagedPrevWeek }}
-          />
-          <StatCard
-            title={t('statBookings')}
-            value={upcomingBookingsCount}
-            subtitle={t('statBookingsSub')}
-            icon={BookOpen}
-            loading={sessionsLoading}
-            href="/bookings"
-            secondary={
-              upcomingTrialsCount !== null
-                ? { label: t('statBookingsTrial'), value: upcomingTrialsCount }
-                : undefined
-            }
-          />
-          <StatCard
-            title={t('statSubscribed')}
-            value={internalSubCount}
-            subtitle={t('statSubscribedSub')}
-            icon={CreditCard}
-            loading={statsLoading}
-            href="/contacts"
-            secondary={
-              aggregatorSubCount !== null
-                ? { label: t('statSubscribedAgg'), value: aggregatorSubCount }
-                : undefined
-            }
-          />
-          <StatCard
-            title={affiliationTerm}
-            value={activeMembers}
-            subtitle={t('statActiveMembersSub')}
-            icon={Users}
-            loading={statsLoading}
-            href="/contacts"
-          />
-        </StatsStrip>
-        )}
       </section>
 
       {showData && (
         <>
-          {/* ── 3. Finance (Studio+ only) ── Money sits directly under the
-              highlights: it's the question an owner opens the dashboard to answer,
-              so it outranks the roster breakdown below it. */}
-          <section className="space-y-5">
+          {/* ── 4. Highlights ── The four figures. They lost their frames: a
+              number has no interior to page through, so a box around one framed
+              nothing. Hairline rail at lg, two-up below it. */}
+          <section className="space-y-4">
+            <SectionHeading>{t('sectionHighlights')}</SectionHeading>
+            <FigureRail cols={4}>
+              <Figure title={t('statEngaged')} icon={TrendingUp} href="/contacts">
+                <FigureNumber
+                  value={engagedThisWeek}
+                  subtitle={t('statEngagedSub')}
+                  loading={statsLoading}
+                  note={
+                    <FigureNote>
+                      +{engagedPrevWeek ?? '—'} {t('statEngagedPrev')}
+                    </FigureNote>
+                  }
+                />
+              </Figure>
+              <Figure title={t('statBookings')} icon={BookOpen} href="/bookings">
+                <FigureNumber
+                  value={upcomingBookingsCount}
+                  subtitle={t('statBookingsSub')}
+                  loading={sessionsLoading}
+                  note={
+                    upcomingTrialsCount !== null ? (
+                      <FigureNote>
+                        +{upcomingTrialsCount} {t('statBookingsTrial')}
+                      </FigureNote>
+                    ) : undefined
+                  }
+                />
+              </Figure>
+              {/* These two used to ask the same question twice — "Subscribed"
+                  (a `subscription_type_id`) beside the affiliation count
+                  (`affiliation_summary.has_active`), both subtitled in terms of
+                  subscriptions, side by side with nothing saying how they
+                  differed. They count DIFFERENT things, and the subtitles now
+                  say which: one of YOUR plans vs an active affiliation. */}
+              <Figure title={t('statSubscribed')} icon={CreditCard} href="/contacts">
+                <FigureNumber
+                  value={internalSubCount}
+                  subtitle={t('statSubscriptionsSub')}
+                  loading={statsLoading}
+                  note={
+                    aggregatorSubCount !== null ? (
+                      <FigureNote>
+                        +{aggregatorSubCount} {t('statSubscribedAgg')}
+                      </FigureNote>
+                    ) : undefined
+                  }
+                />
+              </Figure>
+              <Figure title={affiliationTerm} icon={Users} href="/contacts">
+                <FigureNumber
+                  value={activeMembers}
+                  subtitle={t('statAffiliationSub')}
+                  loading={statsLoading}
+                />
+              </Figure>
+            </FigureRail>
+          </section>
+
+          {/* ── 5. Needs attention ── Above money on purpose: it is the only
+              block on the page that asks the studio to DO something today, and
+              the people in it go cold while the rest of the dashboard is being
+              read. On the background under its heading — no frame, because it
+              defers to the contacts page rather than holding the answer. */}
+          <section className="space-y-4">
+            <SectionHeading action={<AttentionAction count={attentionRows.length} />}>
+              {tContacts('sort_attention')}
+            </SectionHeading>
+            <AttentionList rows={attentionRows} loading={contactsLoading} />
+          </section>
+
+          {/* ── 6. Finance (Studio+ only) ── the question an owner opens the
+              dashboard to answer, so it outranks the roster breakdown below. */}
+          <section className="space-y-4">
             <SectionHeading>{t('sectionFinance')}</SectionHeading>
             <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
               <DashboardFinanceSection teamId={currentTeamId} />
             </PlanGate>
           </section>
 
-          {/* ── 4. Contacts snapshot ── */}
-          <section className="space-y-5">
+          {/* ── 7. Contacts snapshot ── */}
+          <section className="space-y-4">
             <SectionHeading>{t('sectionContactsSnapshot')}</SectionHeading>
             <ContactsSnapshot
               contacts={contacts}
@@ -942,8 +1020,8 @@ export default function DashboardPage() {
             />
           </section>
 
-          {/* ── 5. Trends (Studio+ only) ── */}
-          <section className="space-y-5">
+          {/* ── 8. Trends (Studio+ only) ── */}
+          <section className="space-y-4">
             <SectionHeading>{t('sectionTrends')}</SectionHeading>
             <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
               <TrendsSection teamId={currentTeamId} />

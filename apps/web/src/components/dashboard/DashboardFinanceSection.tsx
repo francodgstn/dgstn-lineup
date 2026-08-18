@@ -14,7 +14,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { ArrowRight, Banknote, Receipt, TrendingDown, TrendingUp, UserRoundX } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMemberPayments, usePaymentEvents } from '@/hooks/useConnect'
 import { useMonthlyRevenue } from '@/hooks/useMonthlyRevenue'
@@ -29,6 +29,7 @@ import {
   type UnifiedPaymentRow,
 } from '@/lib/payments'
 import { FinanceTrendsSection } from '@/components/finance/FinanceTrendsSection'
+import { Figure, FigureNumber, FigureRail } from '@/components/dashboard/Figure'
 
 const RECENT_COUNT = 5
 
@@ -40,44 +41,6 @@ function isSettled(row: UnifiedPaymentRow): boolean {
   return row.status === 'succeeded' || row.status === 'partially_refunded' || row.status === 'paid'
 }
 
-/** Shared shell so the three cards line up regardless of what's inside them. */
-function FinanceCard({
-  title,
-  icon: Icon,
-  children,
-  href,
-}: {
-  title: string
-  icon: React.ElementType
-  children: React.ReactNode
-  href?: string
-}) {
-  const inner = (
-    <Card
-      variant="accent"
-      size="sm"
-      className={`h-full ${href ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
-    >
-      <CardContent className="py-1">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {title}
-          </p>
-          <Icon className="h-4 w-4 shrink-0 text-primary/60" />
-        </div>
-        {children}
-      </CardContent>
-    </Card>
-  )
-  return href ? (
-    <Link href={href as Route} className="h-full">
-      {inner}
-    </Link>
-  ) : (
-    inner
-  )
-}
-
 function RevenueCard({ teamId }: { teamId: string | null }) {
   const t = useTranslations('DashboardFinance')
   const { data, isLoading } = useMonthlyRevenue(teamId)
@@ -85,29 +48,28 @@ function RevenueCard({ teamId }: { teamId: string | null }) {
   const delta = data?.deltaPercent ?? null
   const up = delta !== null && delta >= 0
 
+  // Rendered through the shared figure shell, which means text-4xl — money used
+  // to render at text-3xl, one step SMALLER than every other figure on the page
+  // including the count of payments nobody has filed yet, so takings were the
+  // smallest number on a dashboard opened to look at takings.
   return (
-    <FinanceCard title={t('revenueTitle')} icon={Banknote} href="/payments">
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        {isLoading ? (
-          <Skeleton className="h-10 w-28" />
-        ) : (
-          <p className="text-3xl font-black leading-none">
-            {formatMoneyMinor(data?.thisMonth ?? 0, data?.currency ?? 'CHF')}
-          </p>
-        )}
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{t('revenueSubtitle')}</p>
-          {!isLoading && delta !== null && (
+    <Figure title={t('revenueTitle')} icon={Banknote} href="/payments">
+      <FigureNumber
+        value={formatMoneyMinor(data?.thisMonth ?? 0, data?.currency ?? 'CHF')}
+        subtitle={t('revenueSubtitle')}
+        loading={isLoading}
+        note={
+          !isLoading && delta !== null ? (
             <p
               className={`flex items-center gap-1 text-xs ${up ? 'text-emerald-600' : 'text-amber-600'}`}
             >
               {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               {t('vsLastMonth', { percent: Math.abs(delta) })}
             </p>
-          )}
-        </div>
-      </div>
-    </FinanceCard>
+          ) : undefined
+        }
+      />
+    </Figure>
   )
 }
 
@@ -121,33 +83,53 @@ function RecentPaymentsCard({
   const t = useTranslations('DashboardFinance')
   const recent = rows.filter(isSettled).slice(0, RECENT_COUNT)
 
+  // A CARD, because it is a bounded list you click into — not a figure. It wore
+  // the figure shell (same accent frame, same caption) beside the real figures,
+  // so a five-row mini-table read as a headline number.
   return (
-    <FinanceCard title={t('recentTitle')} icon={Receipt} href="/payments">
-      {isLoading ? (
-        <div className="space-y-2 py-1">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-4/5" />
-          <Skeleton className="h-4 w-3/5" />
+    <Card className="h-full">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-1.5">
+            <Receipt className="h-4 w-4 shrink-0 text-primary/60" />
+            {t('recentTitle')}
+          </CardTitle>
+          <Link
+            href={'/payments' as Route}
+            className="flex shrink-0 items-center gap-0.5 text-xs text-primary hover:underline"
+          >
+            {t('recentViewAll')}
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
-      ) : recent.length === 0 ? (
-        <p className="py-2 text-xs text-muted-foreground">{t('recentEmpty')}</p>
-      ) : (
-        <div className="space-y-1">
-          {recent.map((r) => (
-            <div key={r.key} className="flex items-baseline justify-between gap-2 text-xs">
-              <span className="truncate text-muted-foreground">{paymentLabel(r)}</span>
-              <span className="shrink-0 font-medium tabular-nums">
-                {formatMoneyMinor(r.amount, r.currency)}
-              </span>
-            </div>
-          ))}
-          <p className="pt-0.5 text-[10px] text-muted-foreground/60">
-            {formatPaymentDate(recent[recent.length - 1].createdAt)} —{' '}
-            {formatPaymentDate(recent[0].createdAt)}
-          </p>
-        </div>
-      )}
-    </FinanceCard>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2 py-1">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-3/5" />
+          </div>
+        ) : recent.length === 0 ? (
+          <p className="py-2 text-xs text-muted-foreground">{t('recentEmpty')}</p>
+        ) : (
+          <div className="space-y-1">
+            {recent.map((r) => (
+              <div key={r.key} className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="truncate text-muted-foreground">{paymentLabel(r)}</span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {formatMoneyMinor(r.amount, r.currency)}
+                </span>
+              </div>
+            ))}
+            <p className="pt-0.5 text-[10px] text-muted-foreground/60">
+              {formatPaymentDate(recent[recent.length - 1].createdAt)} —{' '}
+              {formatPaymentDate(recent[0].createdAt)}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -158,26 +140,21 @@ function UnassignedCard({ rows, isLoading }: { rows: UnifiedPaymentRow[]; isLoad
   const count = rows.filter((r) => isSettled(r) && !r.assigned).length
 
   return (
-    <FinanceCard title={t('unassignedTitle')} icon={UserRoundX} href="/payments">
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        {isLoading ? (
-          <Skeleton className="h-10 w-16" />
-        ) : (
-          <p className="text-4xl font-black leading-none">{count}</p>
-        )}
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">
-            {count === 0 ? t('unassignedEmpty') : t('unassignedSubtitle')}
-          </p>
-          {!isLoading && count > 0 && (
+    <Figure title={t('unassignedTitle')} icon={UserRoundX} href="/payments">
+      <FigureNumber
+        value={count}
+        subtitle={count === 0 ? t('unassignedEmpty') : t('unassignedSubtitle')}
+        loading={isLoading}
+        note={
+          !isLoading && count > 0 ? (
             <p className="flex items-center gap-1 text-xs text-primary">
               {t('unassignedAction')}
               <ArrowRight className="h-3 w-3" />
             </p>
-          )}
-        </div>
-      </div>
-    </FinanceCard>
+          ) : undefined
+        }
+      />
+    </Figure>
   )
 }
 
@@ -195,12 +172,18 @@ export function DashboardFinanceSection({ teamId }: { teamId: string | null }) {
   )
   const isLoading = loadingConnect || loadingByo
 
+  // ONE gutter (gap-6, was gap-4) and ONE breakpoint (lg, was md — finance was
+  // the only block on the page that went three-up at md, so the layout reflowed
+  // twice on the way down). The two money FIGURES sit on the background as a
+  // hairline rail; recent payments is the card beside them.
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <RevenueCard teamId={teamId} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <FigureRail cols={2} className="lg:col-span-2">
+          <RevenueCard teamId={teamId} />
+          <UnassignedCard rows={rows} isLoading={isLoading} />
+        </FigureRail>
         <RecentPaymentsCard rows={rows} isLoading={isLoading} />
-        <UnassignedCard rows={rows} isLoading={isLoading} />
       </div>
 
       {teamId && isInstalled('finance') && <FinanceTrendsSection teamId={teamId} />}

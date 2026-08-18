@@ -7,6 +7,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Dumbbell } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import type { SessionDoc, BookingDoc, ActivityDoc } from '@/hooks/useDashboardData'
 
 const MODES = [
@@ -71,6 +72,7 @@ export function TopActivitiesCard({
   comparisonSessions = [], comparisonAllBookings = [], comparisonNewContactBookings = [],
   title,
 }: Props) {
+  const td = useTranslations('Dashboard')
   const [mode, setMode] = useState('checkins')
 
   const activityNames = useMemo(
@@ -122,7 +124,7 @@ export function TopActivitiesCard({
       <CardHeader>
         <div className="flex items-center gap-2">
 
-          <CardTitle className="flex-1">{title || 'Top activities'}</CardTitle>
+          <CardTitle className="flex-1">{title || td('chartTitleTopActivities')}</CardTitle>
           <Select value={mode} onValueChange={(v) => { if (v) setMode(v) }}>
             <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>

@@ -262,7 +262,10 @@ export function DiscoverPanel() {
 
   return (
     <Card className="flex h-full flex-col">
-      <div className="flex gap-1 border-b px-3 pt-3">
+      {/* px-1 here + px-3 on a tab puts the first tab label at 16px from the
+          card edge — where CardContent's p-4 puts the content below it. The
+          strip was px-3, so label and content sat 8px apart. */}
+      <div className="flex gap-1 border-b px-1 pt-3">
         {tabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}

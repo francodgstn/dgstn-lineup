@@ -374,7 +374,25 @@
     "trendsNoHistoryBody": "Trends vergleichen Woche für Woche. Sobald ein paar Sessions gelaufen sind, erscheinen die Diagramme hier von selbst.",
     "chartEmptyTitle": "Noch nichts zu zeigen",
     "chartEmptyContacts": "In den gezeigten Wochen passt kein Kontakt zu dieser Auswertung. Probiere eine andere Auswertung oder einen längeren Zeitraum.",
-    "chartEmptySessions": "In den gezeigten Wochen gab es keine Lektionen oder Buchungen. Probiere eine andere Kennzahl oder einen längeren Zeitraum."
+    "chartEmptySessions": "In den gezeigten Wochen gab es keine Lektionen oder Buchungen. Probiere eine andere Kennzahl oder einen längeren Zeitraum.",
+    "attentionEmptyTitle": "Nichts wartet auf Sie",
+    "attentionEmptyBody": "Keine Hinweise, keine offenen Anmeldungen, niemand wird inaktiv. Genau so soll es sein.",
+    "attentionSeeAll": "Alle {count} in Kontakte ansehen",
+    "attentionOpenContacts": "In Kontakte öffnen",
+    "statSubscriptionsSub": "in einem Ihrer eigenen Abos",
+    "statAffiliationSub": "Affiliation derzeit aktiv",
+    "trendsPeriod": "Zeitraum",
+    "trendsWeeksOption": "{weeks} Wochen",
+    "trendsCompare": "Vergleich",
+    "trendsCompareNone": "Kein Vergleich",
+    "trendsComparePrev": "Vorheriger Zeitraum",
+    "trendsCompareLastYear": "Gleicher Zeitraum im Vorjahr",
+    "legendCurrent": "Aktuell",
+    "legendLastYear": "Vorjahr",
+    "legendPrevPeriod": "Vorheriger Zeitr.",
+    "chartTitleSessions": "Einheiten",
+    "chartTitleContacts": "Kontakte",
+    "chartTitleTopActivities": "Top-Aktivitäten"
   },
   "Contacts": {
     "noteColor_none": "Keine Farbe",
@@ -6056,7 +6074,8 @@
     "unassignedTitle": "Nicht zugeordnet",
     "unassignedSubtitle": "Zahlungen ohne Kontakt",
     "unassignedEmpty": "alle Zahlungen sind zugeordnet",
-    "unassignedAction": "Jetzt zuordnen"
+    "unassignedAction": "Jetzt zuordnen",
+    "recentViewAll": "Alle Zahlungen"
   },
   "PublicSurfaceNav": {
     "shop": "Shop",

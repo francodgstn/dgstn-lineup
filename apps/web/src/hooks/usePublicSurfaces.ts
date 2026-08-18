@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION, routableSurfaces } from '@linyup/shared'
+import { TEAMS_COLLECTION, appointmentPickerLive, routableSurfaces } from '@linyup/shared'
 import type { PublicSurface, SaasPlan, ActivePublicSurfaces } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
@@ -60,6 +60,16 @@ export interface PublicSurfaceFlags {
   /** `kiosk` plugin installed — the /kiosk check-in surface is live (it reads the
    *  team's own sessions, so install is the only gate; no published content). */
   kioskActive: boolean
+  /** The studio's appointments TOGGLE (`bookingSettings.appointmentsEnabled`) —
+   *  an intention, not a fact. It is what distinguishes "not switched on" from
+   *  "switched on with nothing published", which are fixed in different places. */
+  appointmentsEnabled: boolean
+  /** The /appointments picker is live: the toggle above AND something bookable
+   *  behind it (`active_public_surfaces.appointments` — active hours linked to a
+   *  bookable appointment activity). Composed by `appointmentPickerLive`, which
+   *  is the ONLY place the two halves are combined — see its doc comment for why
+   *  the toggle is not stored inside the server flag. */
+  appointmentsLive: boolean
 }
 
 export interface UsePublicSurfacesResult {
@@ -89,15 +99,23 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
   const { data: publicProfile } = useQuery<{
     active: Partial<ActivePublicSurfaces>
     paymentsEnabled: boolean
+    appointmentsEnabled: boolean
+    appointmentsLive: boolean
   }>({
     queryKey: ['public-surfaces', currentTeamId],
     enabled: !!currentTeamId,
     staleTime: 60_000,
     queryFn: async () => {
       const snap = await getDoc(doc(db, TEAMS_COLLECTION, currentTeamId!, 'public_profile', currentTeamId!))
+      const profile = snap.data()
       return {
-        active: (snap.data()?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>,
-        paymentsEnabled: snap.data()?.payments_enabled === true,
+        active: (profile?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>,
+        paymentsEnabled: profile?.payments_enabled === true,
+        // The appointments toggle is written to THIS document by Settings →
+        // Booking, so it costs nothing extra here — which is exactly why the
+        // server flag does not store a copy of it (see appointmentPickerLive).
+        appointmentsEnabled: profile?.bookingSettings?.appointmentsEnabled === true,
+        appointmentsLive: appointmentPickerLive(profile),
       }
     },
   })
@@ -126,6 +144,8 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     formsActive: isInstalled('custom-forms'),
     formsLive: activeSurfaces?.forms ?? false,
     kioskActive: isInstalled('kiosk'),
+    appointmentsEnabled: publicProfile?.appointmentsEnabled ?? false,
+    appointmentsLive: publicProfile?.appointmentsLive ?? false,
   }
 
   const defaultSurface: PublicSurface = team?.default_public_surface ?? 'bio-link'

@@ -61,6 +61,7 @@ function ChartTooltip({ active, payload, label, valueLabel, color, compareWith, 
   label?: string; valueLabel?: string; color?: string
   compareWith?: string; series?: { value: string; label: string; color: string }[]
 }) {
+  const td = useTranslations('Dashboard')
   if (!active || !payload?.length || !label) return null
   const weekLabel = formatTooltipWeek(label)
 
@@ -91,7 +92,8 @@ function ChartTooltip({ active, payload, label, valueLabel, color, compareWith, 
       <p style={{ color }}>{valueLabel}: <strong>{mainVal}</strong></p>
       {compareWith && compareWith !== 'none' && compVal !== undefined && (
         <p className="text-muted-foreground mt-0.5">
-          {compareWith === 'last_year' ? 'Last year' : 'Prev. period'}: <strong>{compVal}</strong>
+          {compareWith === 'last_year' ? td('legendLastYear') : td('legendPrevPeriod')}:{' '}
+          <strong>{compVal}</strong>
         </p>
       )}
     </div>
@@ -236,7 +238,7 @@ export function ContactsSummaryCard({
       <CardHeader>
         <div className="flex items-center gap-2">
 
-          <CardTitle className="flex-1">{title || 'Contacts'}</CardTitle>
+          <CardTitle className="flex-1">{title || td('chartTitleContacts')}</CardTitle>
           <Select value={dimension} onValueChange={(v) => { if (v) handleDimensionChange(v) }}>
             <SelectTrigger size="sm" className="w-[130px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -317,12 +319,14 @@ export function ContactsSummaryCard({
               <div className="flex items-center gap-4 justify-end mt-1.5">
                 <div className="flex items-center gap-1">
                   <div className="w-5 h-0.5 rounded" style={{ background: color }} />
-                  <span className="text-xs text-muted-foreground">Current</span>
+                  <span className="text-xs text-muted-foreground">
+                    {td('legendCurrent')}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-5 h-0" style={{ borderTop: `2px dashed ${color}`, opacity: 0.45 }} />
                   <span className="text-xs text-muted-foreground">
-                    {compareWith === 'last_year' ? 'Last year' : 'Prev. period'}
+                    {compareWith === 'last_year' ? td('legendLastYear') : td('legendPrevPeriod')}
                   </span>
                 </div>
               </div>

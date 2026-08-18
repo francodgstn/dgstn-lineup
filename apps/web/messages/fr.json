@@ -374,7 +374,25 @@
     "trendsNoHistoryBody": "Les tendances comparent les semaines entre elles. Après quelques séances, les graphiques apparaîtront ici d'eux-mêmes.",
     "chartEmptyTitle": "Rien à afficher pour l'instant",
     "chartEmptyContacts": "Aucun contact ne correspond à cette répartition sur les semaines affichées. Essayez une autre répartition ou une période plus longue.",
-    "chartEmptySessions": "Aucune séance ni réservation sur les semaines affichées. Essayez une autre mesure ou une période plus longue."
+    "chartEmptySessions": "Aucune séance ni réservation sur les semaines affichées. Essayez une autre mesure ou une période plus longue.",
+    "attentionEmptyTitle": "Rien ne vous attend",
+    "attentionEmptyBody": "Aucune alerte, aucune inscription en attente, personne qui décroche. C'est la réponse que vous voulez.",
+    "attentionSeeAll": "Voir les {count} dans Contacts",
+    "attentionOpenContacts": "Ouvrir dans Contacts",
+    "statSubscriptionsSub": "sur un de vos propres forfaits",
+    "statAffiliationSub": "affiliation actuellement active",
+    "trendsPeriod": "Période",
+    "trendsWeeksOption": "{weeks} semaines",
+    "trendsCompare": "Comparer",
+    "trendsCompareNone": "Aucune comparaison",
+    "trendsComparePrev": "Période précédente",
+    "trendsCompareLastYear": "Même période l'an dernier",
+    "legendCurrent": "Actuel",
+    "legendLastYear": "L'an dernier",
+    "legendPrevPeriod": "Période préc.",
+    "chartTitleSessions": "Séances",
+    "chartTitleContacts": "Contacts",
+    "chartTitleTopActivities": "Activités principales"
   },
   "Contacts": {
     "noteColor_none": "Sans couleur",
@@ -6056,7 +6074,8 @@
     "unassignedTitle": "Non attribués",
     "unassignedSubtitle": "paiements sans contact",
     "unassignedEmpty": "tous les paiements sont liés",
-    "unassignedAction": "Les attribuer"
+    "unassignedAction": "Les attribuer",
+    "recentViewAll": "Tous les paiements"
   },
   "PublicSurfaceNav": {
     "shop": "Boutique",
