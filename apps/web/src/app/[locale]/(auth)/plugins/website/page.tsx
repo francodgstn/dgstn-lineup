@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@/i18n/navigation'
@@ -259,7 +260,7 @@ function sectionSummary(s: WebsiteSection): string {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'sections' | 'appearance' | 'embed'
+const SITE_TABS = ['sections', 'appearance', 'embed'] as const
 
 export default function WebsiteBuilderPage() {
   const t = useTranslations('Website')
@@ -271,7 +272,7 @@ export default function WebsiteBuilderPage() {
 
   const [draft, setDraft] = useState<SiteDraft | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [tab, setTab] = useState<Tab>('sections')
+  const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
   const [openId, setOpenId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)

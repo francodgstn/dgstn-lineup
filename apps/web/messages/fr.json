@@ -158,7 +158,13 @@
     "navSearchGroupActivities": "Activités",
     "navSearchSearching": "Recherche…",
     "navSearchNoMatches": "Aucun résultat",
-    "navSearchPromptAll": "Rechercher pages, réglages, contacts, abonnements et activités"
+    "navSearchPromptAll": "Rechercher pages, réglages, contacts, abonnements et activités",
+    "shortcutAlwaysShow": "Toujours afficher dans les raccourcis",
+    "shortcutStopAlwaysShowing": "Ne plus toujours afficher",
+    "navSearchInShortcuts": "Raccourci",
+    "navSearchHintShortcut": "ajouter un raccourci",
+    "navSearchKeepTyping": "Continuez à taper pour chercher des contacts, des abonnements et des activités",
+    "navShortcutsClearExplain": "Cela supprime les pages toujours affichées et celles récemment visitées. L’action est irréversible ; les pages toujours affichées conservent leur ordre jusqu’à ce que vous les effaciez."
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -829,7 +835,9 @@
     "bulkSubscriptionClearNote": "Toutes les personnes sélectionnées perdent leur abonnement, ainsi que son tarif et son montant.",
     "bulkSubscriptionIntroNote": "Ce tarif comporte une offre de lancement. Les offres de lancement ne s'appliquent qu'au paiement en ligne : le tarif complet est donc enregistré ici.",
     "creditsNotifyLabel": "Prévenir par e-mail",
-    "creditsNotifyHint": "L'e-mail indique que vous avez crédité le compte — il ne mentionne ni achat ni prix."
+    "creditsNotifyHint": "L'e-mail indique que vous avez crédité le compte — il ne mentionne ni achat ni prix.",
+    "savedShowInFilterBar": "Afficher dans la barre de filtres",
+    "savedHideFromFilterBar": "Masquer de la barre de filtres"
   },
   "TeamAffiliations": {
     "title": "Affiliations",

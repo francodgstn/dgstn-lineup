@@ -158,7 +158,13 @@
     "navSearchGroupActivities": "Activities",
     "navSearchSearching": "Searching…",
     "navSearchNoMatches": "Nothing found",
-    "navSearchPromptAll": "Search pages, settings, contacts, subscriptions and activities"
+    "navSearchPromptAll": "Search pages, settings, contacts, subscriptions and activities",
+    "shortcutAlwaysShow": "Always show in shortcuts",
+    "shortcutStopAlwaysShowing": "Stop always showing",
+    "navSearchInShortcuts": "Shortcut",
+    "navSearchHintShortcut": "add shortcut",
+    "navSearchKeepTyping": "Keep typing to search contacts, plans and activities",
+    "navShortcutsClearExplain": "This removes the pages you always show and the ones you recently visited. It can't be undone, and always-shown pages keep their order until you clear them."
   },
   "PublicHub": {
     "title": "Public pages",
@@ -829,7 +835,9 @@
     "bulkSubscriptionClearNote": "Everyone selected loses their plan, along with its price and amount.",
     "bulkSubscriptionIntroNote": "This price has an intro offer. Intro offers apply to online checkout only, so the full price is recorded here.",
     "creditsNotifyLabel": "Let them know by email",
-    "creditsNotifyHint": "Says the credits were added by you — it never mentions a purchase or a price."
+    "creditsNotifyHint": "Says the credits were added by you — it never mentions a purchase or a price.",
+    "savedShowInFilterBar": "Show in filter bar",
+    "savedHideFromFilterBar": "Hide from filter bar"
   },
   "TeamAffiliations": {
     "title": "Affiliations",

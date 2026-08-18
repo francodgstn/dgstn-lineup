@@ -158,7 +158,13 @@
     "navSearchGroupActivities": "Aktivitäten",
     "navSearchSearching": "Suche läuft…",
     "navSearchNoMatches": "Nichts gefunden",
-    "navSearchPromptAll": "Seiten, Einstellungen, Kontakte, Abos und Aktivitäten durchsuchen"
+    "navSearchPromptAll": "Seiten, Einstellungen, Kontakte, Abos und Aktivitäten durchsuchen",
+    "shortcutAlwaysShow": "Immer in Verknüpfungen anzeigen",
+    "shortcutStopAlwaysShowing": "Nicht mehr immer anzeigen",
+    "navSearchInShortcuts": "Verknüpfung",
+    "navSearchHintShortcut": "Verknüpfung hinzufügen",
+    "navSearchKeepTyping": "Weitertippen, um Kontakte, Abos und Aktivitäten zu durchsuchen",
+    "navShortcutsClearExplain": "Damit werden die immer angezeigten Seiten und die zuletzt besuchten entfernt. Das lässt sich nicht rückgängig machen; immer angezeigte Seiten behalten ihre Reihenfolge, bis du sie entfernst."
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -829,7 +835,9 @@
     "bulkSubscriptionClearNote": "Alle ausgewählten Personen verlieren ihr Abo samt Preis und Betrag.",
     "bulkSubscriptionIntroNote": "Für diesen Preis gibt es ein Einstiegsangebot. Einstiegsangebote gelten nur beim Online-Kauf, hier wird deshalb der volle Preis erfasst.",
     "creditsNotifyLabel": "Per E-Mail informieren",
-    "creditsNotifyHint": "Die E-Mail sagt, dass Sie das Guthaben gutgeschrieben haben — von Kauf oder Preis ist keine Rede."
+    "creditsNotifyHint": "Die E-Mail sagt, dass Sie das Guthaben gutgeschrieben haben — von Kauf oder Preis ist keine Rede.",
+    "savedShowInFilterBar": "In Filterleiste anzeigen",
+    "savedHideFromFilterBar": "Aus Filterleiste ausblenden"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",

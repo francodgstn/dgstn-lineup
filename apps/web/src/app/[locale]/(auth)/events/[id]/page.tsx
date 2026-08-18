@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -406,7 +407,8 @@ function StatCard({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type DetailTab = 'overview' | 'checkins' | 'categories' | 'attendees' | 'invitations'
+const DETAIL_TABS = ['overview', 'checkins', 'categories', 'attendees', 'invitations'] as const
+type DetailTab = (typeof DETAIL_TABS)[number]
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -417,7 +419,7 @@ export default function EventDetailPage() {
   const router = useRouter()
   const qc = useQueryClient()
 
-  const [tab, setTab] = useState<DetailTab>('overview')
+  const [tab, setTab] = useTabParam(DETAIL_TABS, 'overview')
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [sending, setSending] = useState(false)

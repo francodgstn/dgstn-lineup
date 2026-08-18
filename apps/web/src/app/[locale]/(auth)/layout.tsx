@@ -45,7 +45,7 @@ import {
   ShoppingBag,
   DoorOpen,
   UserCog,
-  Pin,
+  Star,
   Activity,
   Tag,
   TrendingUp,
@@ -271,33 +271,39 @@ const NAV_SECTIONS: NavSection[] = [
 
 // ─── nav link ─────────────────────────────────────────────────────────────────
 
-// Small hover-reveal pin control on the right of a pinnable nav row (needs a
-// `group` ancestor). Clicking pins/unpins without navigating. Unpinning is
-// managed from the Shortcuts group only: menu rows and search results use
-// `pinOnly`, which hides the button once the item is pinned instead of offering
-// an unpin toggle there.
-function PinButton({ id, pinOnly }: { id: string; pinOnly?: boolean }) {
+// Small hover-reveal "always show" control on the right of a shortcut-able nav
+// row (needs a `group` ancestor). Clicking adds/removes the destination from the
+// always-shown half of Shortcuts without navigating. Turning it back OFF is
+// managed from the Shortcuts group only: menu rows and search results pass
+// `addOnly`, which hides the button once the destination is already always
+// shown instead of offering a remove toggle there.
+//
+// A STAR, not a pin: "pin" is reserved for the open-tabs strip, which is a
+// different mechanism (see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx).
+function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
   const t = useTranslations('Nav')
-  const { isPinned, togglePin } = useNavPins()
-  const pinned = isPinned(id)
-  if (pinOnly && pinned) return null
+  const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
+  const shown = isAlwaysShown(id)
+  if (addOnly && shown) return null
   return (
     <button
       type="button"
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
-        togglePin(id)
+        toggleAlwaysShown(id)
       }}
-      title={pinned ? t('unpinFromSidebar') : t('pinToSidebar')}
-      aria-pressed={pinned}
+      title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+      aria-pressed={shown}
       className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
-        pinned
+        shown
           ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
           : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
       }`}
     >
-      <Pin className="h-3.5 w-3.5" />
+      {/* Filled while ON — a star that only changes opacity reads as "hovered",
+          not as "this is switched on", which is the state that matters here. */}
+      <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
     </button>
   )
 }
@@ -306,14 +312,14 @@ function NavLink({
   item,
   collapsed,
   onClick,
-  pinId,
+  shortcutId,
 }: {
   item: NavItem
   collapsed: boolean
   onClick?: () => void
-  // When set (and the sidebar is expanded), a hover pin toggle is shown that
-  // pins/unpins this destination under Dashboard.
-  pinId?: string
+  // When set (and the sidebar is expanded), a hover "always show" toggle is
+  // shown that adds this destination to the Shortcuts group.
+  shortcutId?: string
 }) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
@@ -365,18 +371,18 @@ function NavLink({
         isActive
           ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
           : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : ''} ${pinId && !collapsed ? 'pr-8' : ''}`}
+      } ${collapsed ? 'justify-center px-2' : ''} ${shortcutId && !collapsed ? 'pr-8' : ''}`}
     >
       <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
       {!collapsed && <span>{label}</span>}
     </Link>
   )
 
-  if (pinId && !collapsed) {
+  if (shortcutId && !collapsed) {
     return (
       <div className="group relative">
         {link}
-        <PinButton id={pinId} pinOnly />
+        <ShortcutButton id={shortcutId} addOnly />
       </div>
     )
   }
@@ -691,7 +697,7 @@ function PluginNavItem({
   }
 
   const isActive = pathname.startsWith(nav.href)
-  const pinId = `plugin:${nav.pluginId}:${nav.href}`
+  const shortcutId = `plugin:${nav.pluginId}:${nav.href}`
   const link = (
     <Link
       href={nav.href as Route}
@@ -711,7 +717,7 @@ function PluginNavItem({
   return (
     <div className="group relative">
       {link}
-      <PinButton id={pinId} pinOnly />
+      <ShortcutButton id={shortcutId} addOnly />
     </div>
   )
 }
@@ -844,8 +850,8 @@ function ShortcutRow({
   return (
     <div className={`group relative ${dragging ? 'opacity-40' : ''}`} {...dragProps}>
       {link}
-      {/* Remove from Shortcuts entirely — the pin only promotes/demotes
-          (Firebase-style: unpinning keeps the item listed as a recent). */}
+      {/* Remove from Shortcuts entirely — the star only promotes/demotes
+          (turning "always show" off keeps the row listed as a recent). */}
       <button
         type="button"
         onClick={(e) => {
@@ -859,7 +865,7 @@ function ShortcutRow({
       >
         <X className="h-3.5 w-3.5" />
       </button>
-      <PinButton id={entry.id} />
+      <ShortcutButton id={entry.id} />
     </div>
   )
 }
@@ -891,20 +897,21 @@ const SHORTCUTS_RULE =
   'before:absolute before:left-0 before:top-1 before:bottom-2 before:w-0.5 before:rounded-full ' +
   'before:bg-gradient-to-b before:from-primary/55 before:via-primary/20 before:to-transparent'
 
-// How many recently-visited (unpinned) items the Shortcuts group keeps, in
-// addition to the pinned ones.
+// How many recently-visited items the Shortcuts group keeps, in addition to the
+// always-shown ones.
 const MAX_RECENT_SHORTCUTS = 5
-// Rows shown before "Show more" — pinned rows are never truncated, so the
-// effective cap is max(this, pinned count).
+// Rows shown before "Show more" — always-shown rows are never truncated, so the
+// effective cap is max(this, always-shown count).
 const SHORTCUTS_VISIBLE_MIN = 5
 
 // The "Shortcuts" macro group — Firebase-style: a rolling history of the user's
-// recently-opened destinations, with pinned ones promoted to the top and kept
-// permanently. The pin toggle on each row promotes a recent to pinned (and back —
-// unpinning keeps it listed as a recent); the X removes it from the group; drag
-// a row to reorder (manual placement pins it). Items can also be pinned from the
-// menu rows and the search dropdown. Hidden entirely when there's nothing to
-// show. Per-browser (NavPinsContext).
+// recently-opened destinations, with the always-shown ones promoted to the top
+// and kept permanently. The star on each row promotes a recent to always-shown
+// (and back — turning it off keeps the row listed as a recent); the X removes it
+// from the group; drag a row to reorder (manual placement makes it always shown).
+// A destination can also be added from the menu rows and the search dropdown.
+// Hidden entirely when there's nothing to show. Per-browser (NavPinsContext) —
+// one of the mechanisms enumerated in THE NAV-MEMORY CENSUS there.
 function ShortcutsNav({
   entries,
   collapsed,
@@ -915,7 +922,7 @@ function ShortcutsNav({
   onLinkClick?: () => void
 }) {
   const t = useTranslations('Nav')
-  const { pinnedIds, setPinOrder, clearShortcuts } = useNavPins()
+  const { alwaysShownIds, setShortcutOrder, clearShortcuts } = useNavPins()
   const [expanded, setExpanded] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -938,14 +945,14 @@ function ShortcutsNav({
     )
   }
 
-  const pinnedCount = entries.filter((e) => pinnedIds.includes(e.id)).length
-  const visibleCount = Math.max(SHORTCUTS_VISIBLE_MIN, pinnedCount)
+  const alwaysShownCount = entries.filter((e) => alwaysShownIds.includes(e.id)).length
+  const visibleCount = Math.max(SHORTCUTS_VISIBLE_MIN, alwaysShownCount)
   const shown = expanded ? entries : entries.slice(0, visibleCount)
   const hasMore = entries.length > visibleCount
 
-  // Drop = manual curation: the dragged row becomes (or stays) pinned, and the
-  // pin order becomes the displayed order filtered to pinned rows. Untouched
-  // recents keep flowing chronologically below the pins.
+  // Drop = manual curation: the dragged row becomes (or stays) always shown, and
+  // the stored order becomes the displayed order filtered to always-shown rows.
+  // Untouched recents keep flowing chronologically below them.
   const commitDrop = () => {
     if (dragId != null && dropAt != null) {
       const ids = entries.map((e) => e.id)
@@ -953,8 +960,8 @@ function ShortcutsNav({
       if (from !== -1) {
         const next = ids.filter((id) => id !== dragId)
         next.splice(dropAt > from ? dropAt - 1 : dropAt, 0, dragId)
-        const pinnedSet = new Set([...pinnedIds, dragId])
-        setPinOrder(next.filter((id) => pinnedSet.has(id)))
+        const shownSet = new Set([...alwaysShownIds, dragId])
+        setShortcutOrder(next.filter((id) => shownSet.has(id)))
       }
     }
     setDragId(null)
@@ -966,8 +973,9 @@ function ShortcutsNav({
   return (
     <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'mt-3'}>
       {/* Header row: the group label, with "clear all" pushed to the right.
-          Confirmed, because pins are hand-curated and drag-ordered — rebuilding
-          them is minutes of fiddling, and there is no undo. */}
+          Confirmed, because the always-shown rows are hand-curated and
+          drag-ordered — rebuilding them is minutes of fiddling, and there is no
+          undo. */}
       {!collapsed && (
         <div className="flex items-center pb-1">
           <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
@@ -989,7 +997,7 @@ function ShortcutsNav({
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>{t('navShortcutsClearTitle')}</AlertDialogTitle>
-              <AlertDialogDescription>{t('navShortcutsClearBody')}</AlertDialogDescription>
+              <AlertDialogDescription>{t('navShortcutsClearExplain')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{t('navShortcutsClearCancel')}</AlertDialogCancel>
@@ -1082,11 +1090,11 @@ type SearchKind = 'page' | 'settings' | 'contact' | 'subscription' | 'activity'
 // A searchable destination: the localized label plus curated keyword synonyms
 // from the `Nav.searchKeywords` i18n map (what a user might type instead of the
 // label — "members" for Contacts — maintained per locale). Entity results share
-// the shape (no keywords, never pinnable) so ONE flattened list still drives the
-// keyboard selection.
+// the shape (no keywords, never shortcut-able) so ONE flattened list still
+// drives the keyboard selection.
 type SearchEntry = ResolvedNavEntry & {
   keywords: string
-  pinnable: boolean
+  canShortcut: boolean
   kind: SearchKind
   // Second line on an entity row — an email, a price, a level. Never matched
   // against blindly: only the fields the provider chose to search are.
@@ -1128,7 +1136,7 @@ function NavSearch({
   const t = useTranslations('Nav')
   const router = useRouter()
   const { openInNewTab, enabled: tabsEnabled } = useOpenTabs()
-  const { isPinned, togglePin } = useNavPins()
+  const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
   const { currentTeamId, user } = useAuth()
   const { ownScoped } = useCapabilities()
   const [query, setQuery] = useState('')
@@ -1196,7 +1204,7 @@ function NavSearch({
     icon: React.ElementType,
     kind: SearchKind,
     sublabel?: string
-  ): SearchEntry => ({ id, href, label, icon, keywords: '', pinnable: false, kind, sublabel })
+  ): SearchEntry => ({ id, href, label, icon, keywords: '', canShortcut: false, kind, sublabel })
 
   // A contact has a record of its own to open. A subscription type and an
   // activity do not — they are edited in a dialog on the page that lists them —
@@ -1409,10 +1417,10 @@ function NavSearch({
             e.preventDefault()
             if (e.metaKey || e.ctrlKey) openEntryAsTab(active)
             else openEntry(active)
-          } else if ((e.key === 'p' || e.key === 'P') && e.altKey && active?.pinnable) {
-            // Alt rather than ⌘/Ctrl: ⌘P is Print in every browser.
+          } else if ((e.key === 's' || e.key === 'S') && e.altKey && active?.canShortcut) {
+            // Alt rather than ⌘/Ctrl: ⌘S is Save in every browser.
             e.preventDefault()
-            togglePin(active.id)
+            toggleAlwaysShown(active.id)
           }
         }}
         placeholder={t('navSearchPlaceholder')}
@@ -1446,8 +1454,15 @@ function NavSearch({
             <p className="px-2 py-2 text-sm text-muted-foreground">
               {/* Nav destinations match instantly; the entity lists may still be
                   in flight, and "no results" shown over a pending fetch is a
-                  wrong answer stated confidently. */}
-              {entitiesFetching ? t('navSearchSearching') : t('navSearchNoMatches')}
+                  wrong answer stated confidently. Same for the FIRST character:
+                  the entity lists arm at two, so a one-letter query has not
+                  looked at a single contact yet and must not claim it has
+                  (UX-21 — this panel is now the way to reach a person). */}
+              {q.length < 2
+                ? t('navSearchKeepTyping')
+                : entitiesFetching
+                  ? t('navSearchSearching')
+                  : t('navSearchNoMatches')}
             </p>
           ) : (
             <>
@@ -1482,7 +1497,7 @@ function NavSearch({
                             }}
                             className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground ${
                               isActive ? 'bg-accent text-foreground' : 'text-muted-foreground'
-                            } ${entry.pinnable ? 'pr-8' : ''}`}
+                            } ${entry.canShortcut ? 'pr-8' : ''}`}
                           >
                             <Icon className="h-4 w-4 shrink-0" />
                             <span className="truncate">{entry.label}</span>
@@ -1491,18 +1506,18 @@ function NavSearch({
                                 {entry.sublabel}
                               </span>
                             )}
-                            {isPinned(entry.id) && (
+                            {isAlwaysShown(entry.id) && (
                               <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
-                                {t('navSearchPinned')}
+                                {t('navSearchInShortcuts')}
                               </span>
                             )}
                           </Link>
                         )
-                        if (!entry.pinnable) return <div key={entry.id}>{row}</div>
+                        if (!entry.canShortcut) return <div key={entry.id}>{row}</div>
                         return (
                           <div key={entry.id} className="group relative">
                             {row}
-                            <PinButton id={entry.id} pinOnly />
+                            <ShortcutButton id={entry.id} addOnly />
                           </div>
                         )
                       })}
@@ -1524,9 +1539,9 @@ function NavSearch({
                     <kbd className="font-sans">{modKeyLabel()}↵</kbd> {t('navSearchHintTab')}
                   </span>
                 )}
-                {active?.pinnable && (
+                {active?.canShortcut && (
                   <span>
-                    <kbd className="font-sans">Alt+P</kbd> {t('navSearchHintPin')}
+                    <kbd className="font-sans">Alt+S</kbd> {t('navSearchHintShortcut')}
                   </span>
                 )}
               </div>
@@ -1559,7 +1574,7 @@ function SidebarContent({
   const { isAtLeast } = usePlan()
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
   const canEditTeamSettings = useCapabilities().can('team.settings')
-  const { pinnedIds, recentIds, recordVisit } = useNavPins()
+  const { alwaysShownIds, recentIds, recordVisit } = useNavPins()
   // Raw message tree — used to read the per-locale `Nav.searchKeywords` synonym
   // map without a t() call per id (ids without keywords are simply label-only).
   const messages = useMessages() as unknown as {
@@ -1591,7 +1606,7 @@ function SidebarContent({
   const { open: openSection, toggle: toggleSection } = useAccordionSection()
 
   // Whether a main-nav item passes its plan/plugin/org/shop gates — shared by the
-  // section render and the pinnable catalogue so the two never disagree.
+  // section render and the shortcut-able catalogue so the two never disagree.
   const mainItemVisible = (item: NavItem) =>
     (!item.requiresOrg || inOrg) &&
     (!item.requiresConnect || connectOn) &&
@@ -1599,7 +1614,7 @@ function SidebarContent({
     (!item.requiresPlugin || isInstalled(item.requiresPlugin)) &&
     (!item.requiresPlan || isAtLeast(item.requiresPlan))
 
-  // Mirrors SettingsRail's gateOk — the sidebar's pinnable catalogue and the rail
+  // Mirrors SettingsRail's gateOk — the sidebar's shortcut-able catalogue and the rail
   // must never disagree about what exists.
   const settingsItemVisible = (item: SettingsNavItem) => {
     if (item.gate === 'ownerOnly') return canEditTeamSettings
@@ -1607,9 +1622,9 @@ function SidebarContent({
     return true
   }
 
-  // Resolve every currently-visible pinnable destination by id (main nav +
-  // settings + installed plugin items), then pick the pinned ones in pin order.
-  // Ids that aren't currently available (gated off) are silently skipped.
+  // Resolve every currently-visible shortcut-able destination by id (main nav +
+  // settings + installed plugin items), then pick the always-shown ones in their
+  // stored order. Ids that aren't currently available (gated off) are skipped.
   const catalogue = new Map<string, ResolvedNavEntry>()
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
@@ -1643,20 +1658,20 @@ function SidebarContent({
       icon: PLUGIN_NAV_ICONS[nav.icon] ?? Puzzle,
     })
   }
-  // Shortcuts = pinned (permanent, pin order) + recently visited (rolling history,
-  // newest first, excluding already-pinned) — Firebase-style.
-  const pinnedEntries = pinnedIds
+  // Shortcuts = always shown (permanent, stored order) + recently visited
+  // (rolling history, newest first, minus anything already always shown).
+  const alwaysShownEntries = alwaysShownIds
     .map((id) => catalogue.get(id))
     .filter((e): e is ResolvedNavEntry => !!e)
   const recentEntries = recentIds
-    .filter((id) => !pinnedIds.includes(id))
+    .filter((id) => !alwaysShownIds.includes(id))
     .map((id) => catalogue.get(id))
     .filter((e): e is ResolvedNavEntry => !!e)
     .slice(0, MAX_RECENT_SHORTCUTS)
-  const shortcutEntries = [...pinnedEntries, ...recentEntries]
+  const shortcutEntries = [...alwaysShownEntries, ...recentEntries]
 
   // The search index: everything in the catalogue plus the three fixed General
-  // items (searchable but not pinnable — they're always visible anyway).
+  // items (searchable but not shortcut-able — they're always visible anyway).
   // A settings destination is tagged as such rather than listed among ordinary
   // pages (UX-90) — including the /settings hub itself, which IS the settings
   // answer to "where do I change this".
@@ -1669,13 +1684,13 @@ function SidebarContent({
       icon: item.icon,
       exact: item.exact,
       keywords: kwOf(item.id),
-      pinnable: false,
+      canShortcut: false,
       kind: (item.id === ALL_SETTINGS_ITEM.id ? 'settings' : 'page') as SearchKind,
     })),
     ...Array.from(catalogue.values()).map((e) => ({
       ...e,
       keywords: kwOf(e.id),
-      pinnable: true,
+      canShortcut: true,
       kind: (settingsIds.has(e.id) ? 'settings' : 'page') as SearchKind,
     })),
   ]
@@ -1829,7 +1844,7 @@ function SidebarContent({
                       item={item}
                       collapsed={false}
                       onClick={onLinkClick}
-                      pinId={item.id}
+                      shortcutId={item.id}
                     />
                   ))}
                   {secPlugins.map((nav) => (

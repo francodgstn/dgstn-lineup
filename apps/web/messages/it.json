@@ -158,7 +158,13 @@
     "navSearchGroupActivities": "Attività",
     "navSearchSearching": "Ricerca in corso…",
     "navSearchNoMatches": "Nessun risultato",
-    "navSearchPromptAll": "Cerca pagine, impostazioni, contatti, abbonamenti e attività"
+    "navSearchPromptAll": "Cerca pagine, impostazioni, contatti, abbonamenti e attività",
+    "shortcutAlwaysShow": "Mostra sempre nelle scorciatoie",
+    "shortcutStopAlwaysShowing": "Non mostrare più sempre",
+    "navSearchInShortcuts": "Scorciatoia",
+    "navSearchHintShortcut": "aggiungi scorciatoia",
+    "navSearchKeepTyping": "Continua a digitare per cercare contatti, abbonamenti e attività",
+    "navShortcutsClearExplain": "Rimuove le pagine sempre visibili e quelle visitate di recente. L’azione non è reversibile; le pagine sempre visibili mantengono il loro ordine finché non le cancelli."
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -829,7 +835,9 @@
     "bulkSubscriptionClearNote": "Tutte le persone selezionate perdono l'abbonamento, insieme a prezzo e importo.",
     "bulkSubscriptionIntroNote": "Questo prezzo ha un'offerta introduttiva. Le offerte introduttive valgono solo per l'acquisto online, quindi qui viene registrato il prezzo pieno.",
     "creditsNotifyLabel": "Avvisa via email",
-    "creditsNotifyHint": "L'email dice che i crediti sono stati aggiunti da te — non menziona alcun acquisto né prezzo."
+    "creditsNotifyHint": "L'email dice che i crediti sono stati aggiunti da te — non menziona alcun acquisto né prezzo.",
+    "savedShowInFilterBar": "Mostra nella barra dei filtri",
+    "savedHideFromFilterBar": "Nascondi dalla barra dei filtri"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",

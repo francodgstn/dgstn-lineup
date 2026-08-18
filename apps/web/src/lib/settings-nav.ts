@@ -1,7 +1,8 @@
 // Shared catalogue of "settings" destinations. Consumed by the sidebar (which shows
-// the user's pinned subset under the Settings group) and by the settings rail
-// (/settings/* — which lists them all, grouped, with pin toggles). Keeping it in one
-// place means the sidebar and rail never drift.
+// the subset the user always shows, under Shortcuts) and by the settings rail
+// (/settings/* — which lists them all, grouped, with an "always show" toggle on
+// each). Keeping it in one place means the sidebar and rail never drift.
+// Vocabulary: see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx.
 import {
   CalendarRange,
   CalendarCheck,
@@ -88,6 +89,8 @@ export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
   { key: 'studio', labelKey: 'groupStudio' },
 ]
 
-// Pinned to the sidebar by default — the settings that matter most while setting up a
-// new studio. Users add/remove pins from the rail; the choice is per-browser.
-export const DEFAULT_PINNED_IDS = ['publicPages', 'bookingPage', 'plugins']
+// Always shown in the sidebar's Shortcuts group by default — the settings that matter
+// most while setting up a new studio. Users add/remove them from the rail; the choice
+// is per-browser. (The STORED name of this list stays `defaultNavPins` — see the
+// census in contexts/NavPinsContext.tsx for why.)
+export const DEFAULT_SHORTCUT_IDS = ['publicPages', 'bookingPage', 'plugins']

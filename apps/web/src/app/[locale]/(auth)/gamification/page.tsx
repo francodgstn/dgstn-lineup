@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
@@ -735,13 +736,14 @@ function BadgesTab({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'leaderboard' | 'scoring' | 'badges'
+const TAB_IDS = ['leaderboard', 'scoring', 'badges'] as const
+type TabId = (typeof TAB_IDS)[number]
 
 export default function GamificationPage() {
   const { currentTeamId } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Gamification')
-  const [tab, setTab] = useState<TabId>('leaderboard')
+  const [tab, setTab] = useTabParam(TAB_IDS, 'leaderboard')
   const [pendingBaseScores, setPendingBaseScores] = useState<Record<string, number | null>>({})
 
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()

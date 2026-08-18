@@ -2,8 +2,9 @@
 
 // The settings rail — a searchable, grouped vertical tab list shared by the whole
 // /settings/* area via the settings layout. Highlights the active destination
-// (matching path + ?tab= for the team sub-sections) and keeps the pin toggles that
-// add/remove an item from the sidebar's Settings group. On desktop it sits beside
+// (matching path + ?tab= for the team sub-sections) and carries the "always show"
+// toggle that adds/removes an item from the sidebar's Shortcuts group (vocabulary:
+// THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). On desktop it sits beside
 // the detail pane; on mobile it IS the /settings index list.
 
 import { useState } from 'react'
@@ -11,7 +12,7 @@ import { useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
-import { Pin, Search } from 'lucide-react'
+import { Search, Star } from 'lucide-react'
 import { SETTINGS_ITEMS, SETTINGS_GROUPS } from '@/lib/settings-nav'
 import { useNavPins } from '@/contexts/NavPinsContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
@@ -28,7 +29,7 @@ export function SettingsRail() {
   // the ones this capability names.
   const canEdit = can('team.settings')
   const { isInstalled } = useInstalledPlugins()
-  const { isPinned, togglePin } = useNavPins()
+  const { isAlwaysShown, toggleAlwaysShown } = useNavPins()
   const [query, setQuery] = useState('')
 
   const q = query.trim().toLowerCase()
@@ -80,7 +81,7 @@ export function SettingsRail() {
               {items.map((item) => {
                 const Icon = item.icon
                 const active = isActive(item.href)
-                const pinned = isPinned(item.id)
+                const shown = isAlwaysShown(item.id)
                 return (
                   <div key={item.id} className="group relative flex items-center">
                     <Link
@@ -98,16 +99,16 @@ export function SettingsRail() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => togglePin(item.id)}
-                      title={pinned ? t('unpinFromSidebar') : t('pinToSidebar')}
-                      aria-pressed={pinned}
+                      onClick={() => toggleAlwaysShown(item.id)}
+                      title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+                      aria-pressed={shown}
                       className={`absolute right-1 rounded-md p-1 transition-all ${
-                        pinned
+                        shown
                           ? 'text-primary opacity-100'
                           : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
                       }`}
                     >
-                      <Pin className={`h-3.5 w-3.5 ${pinned ? 'fill-current' : ''}`} />
+                      <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
                     </button>
                   </div>
                 )

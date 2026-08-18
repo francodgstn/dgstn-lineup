@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useBack } from '@/hooks/useBackNavigation'
-import { useSearchParams } from 'next/navigation'
+import { useTabParam } from '@/hooks/useTabParam'
 import {
   doc,
   getDoc,
@@ -4911,12 +4911,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   })
   const membershipFieldLocked = orgMembershipLocked && !isOrgAdmin
   // Deep-link support: /contacts/{id}?tab=payments opens that tab (e.g. from the
-  // payments table). Falls back to profile for a missing/unknown value.
-  const searchParams = useSearchParams()
-  const [tab, setTab] = useState<TabId>(() => {
-    const p = searchParams.get('tab')
-    return p && (TAB_IDS as readonly string[]).includes(p) ? (p as TabId) : 'profile'
-  })
+  // payments table), and the active tab survives a refresh, a shared URL and a
+  // reopened tab. Falls back to profile for a missing/unknown value.
+  const [tab, setTab] = useTabParam(TAB_IDS, 'profile')
   // User-reorderable tab strip (opt-in edit mode; order persisted per-browser).
   const [tabOrder, setTabOrder] = useContactTabOrder()
   const [editingTabs, setEditingTabs] = useState(false)
@@ -4945,15 +4942,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     entityKind: 'contact',
     enabled: !!contact,
   })
-
-  // Keep ?tab= in the URL in sync (without a Next navigation) so a refresh or
-  // deep-link — and a reopened tab — restores the sub-tab. usePathname is
-  // query-agnostic, so tab-strip active detection is unaffected.
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search)
-    p.set('tab', tab)
-    window.history.replaceState(null, '', `${window.location.pathname}?${p.toString()}`)
-  }, [tab])
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['contact', id] })

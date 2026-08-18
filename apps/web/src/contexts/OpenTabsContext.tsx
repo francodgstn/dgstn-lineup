@@ -10,7 +10,14 @@
 // Tabs are keyed by a stable instance id (NOT the route), so the same page can
 // live in two tabs and a tab can change what it points at. State (tabs +
 // active tab) lives in localStorage; hydrated after mount to avoid an SSR
-// mismatch. Kept separate from NavPinsContext (sidebar shortcuts) on purpose.
+// mismatch.
+//
+// Kept separate from the sidebar's Shortcuts (NavPinsContext) on purpose: they
+// answer different questions — "what am I in the middle of" vs "where do I go
+// often". A TAB is the only thing in this app that can be PINNED; the sidebar
+// says "always show" instead. Both mechanisms, and why they are not merged, are
+// enumerated ONCE in THE NAV-MEMORY CENSUS at the top of
+// contexts/NavPinsContext.tsx. Add to that list; never copy it.
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { EntityKind } from '@/lib/tab-routes'

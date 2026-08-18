@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
@@ -64,7 +65,7 @@ import {
   Search, UserPlus, X, Plus,
   AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
   MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
-  Check, Bookmark, BookmarkPlus, BarChart2, Pin, FolderTree, ShieldCheck, UserCheck,
+  Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck,
 } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
@@ -706,10 +707,14 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
           return (
             <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
               <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
+              {/* Showing a saved filter as a chip in the filter bar. Deliberately
+                  NOT called "pin": that word belongs to the open-tabs strip, and
+                  this is not a destination at all — see THE NAV-MEMORY CENSUS in
+                  contexts/NavPinsContext.tsx. */}
               <button type="button" onClick={() => togglePresetPin(q.id)}
                 className={`shrink-0 p-1 transition-all ${isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
-                title={isPinned ? 'Unpin' : 'Pin to filter bar'}
-              ><Pin className="h-3 w-3" /></button>
+                title={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
+              ><Eye className="h-3 w-3" /></button>
             </div>
           )
         })}
@@ -722,8 +727,8 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
                 <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
                 <button type="button" onClick={() => togglePin(q.id)}
                   className={`shrink-0 p-1 transition-all ${q.pinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
-                  title={q.pinned ? 'Unpin' : 'Pin to filter bar'}
-                ><Pin className="h-3 w-3" /></button>
+                  title={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
+                ><Eye className="h-3 w-3" /></button>
                 <button type="button" onClick={() => remove(q.id)}
                   className="shrink-0 p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                 ><X className="h-3 w-3" /></button>
@@ -1450,7 +1455,7 @@ function FilterChips({
                 : 'border-border/60 text-muted-foreground hover:text-foreground hover:border-border'
             }`}
           >
-            <Pin className="h-3 w-3 opacity-50 shrink-0" />
+            <Eye className="h-3 w-3 opacity-50 shrink-0" />
             {q.name}
             {isActive && (
               <span role="button" aria-label="Clear"
@@ -2307,7 +2312,8 @@ function BulkBar({
 
 // ─── tab types ────────────────────────────────────────────────────────────────
 
-type TabId = 'active' | 'leads' | 'archived' | 'deleted' | 'requests'
+const TAB_IDS = ['active', 'leads', 'archived', 'deleted', 'requests'] as const
+type TabId = (typeof TAB_IDS)[number]
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
@@ -2383,7 +2389,7 @@ export default function ContactsPage() {
   const planIdx = plan ? PLAN_ORDER.indexOf(plan) : -1
   const nextPlan: SaasPlan | null = planIdx >= 0 && planIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[planIdx + 1] : null
 
-  const [tab, setTab] = useState<TabId>('active')
+  const [tab, setTab] = useTabParam(TAB_IDS, 'active')
   // The Unconfirmed tab only exists while provisional contacts do — hop back to
   // Active when the last one is confirmed/deleted (its tab entry disappears).
   useEffect(() => {

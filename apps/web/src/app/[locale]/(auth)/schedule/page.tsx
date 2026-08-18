@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, Fragment } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -90,7 +91,8 @@ const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), {
 // ─── types ────────────────────────────────────────────────────────────────────
 
 type CalendarView = 'calendar' | 'list'
-type TimeTab = 'upcoming' | 'past'
+const TIME_TABS = ['upcoming', 'past'] as const
+type TimeTab = (typeof TIME_TABS)[number]
 // Shared type filter, applied to both calendar + list. 'classes' = group
 // classes; 'appointment' = appointment sessions (activityType === 'appointment').
 // Published bookable hours are NOT a member here: they render as bands behind
@@ -817,7 +819,7 @@ export default function CalendarPage() {
   const [viewMonth, setViewMonth] = useState(() => today.getMonth())
 
   const [view, setView] = useState<CalendarView>('calendar')
-  const [tab, setTab] = useState<TimeTab>('upcoming')
+  const [tab, setTab] = useTabParam(TIME_TABS, 'upcoming')
   const [filter, setFilter] = useState<ItemFilter>('all')
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
   // 'all' · 'mine' (current user's uid) · a specific coach uid

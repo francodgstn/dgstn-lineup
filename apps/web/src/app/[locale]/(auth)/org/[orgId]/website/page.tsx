@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -215,7 +216,7 @@ function sectionSummary(s: OrgSiteSection): string {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'sections' | 'appearance'
+const SITE_TABS = ['sections', 'appearance'] as const
 
 export default function OrgWebsiteBuilderPage() {
   const t = useTranslations('OrgWebsite')
@@ -229,7 +230,7 @@ export default function OrgWebsiteBuilderPage() {
 
   const [draft, setDraft] = useState<OrgSiteDraft | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [tab, setTab] = useState<Tab>('sections')
+  const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
   const [openId, setOpenId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)

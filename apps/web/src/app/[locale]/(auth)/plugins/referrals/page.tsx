@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
 import { Link } from '@/i18n/navigation'
@@ -501,11 +502,13 @@ function ReferralsTab({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const REFERRAL_TABS = ['settings', 'referrals'] as const
+
 export default function ReferralsPluginPage() {
   const { currentTeamId } = useAuth()
   const queryClient = useQueryClient()
   const t = useTranslations('Referrals')
-  const [activeTab, setActiveTab] = useState<'settings' | 'referrals'>('referrals')
+  const [activeTab, setActiveTab] = useTabParam(REFERRAL_TABS, 'referrals')
 
   const { data: team, isLoading } = useQuery({
     queryKey: ['team-referral-settings', currentTeamId],

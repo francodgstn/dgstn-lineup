@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -268,7 +269,10 @@ function ResponsesTab({ form }: { form: Form }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const FORM_TABS = ['build', 'settings', 'responses'] as const
+
 export default function FormDetailPage() {
+  const [tab, setTab] = useTabParam(FORM_TABS, 'build')
   const t = useTranslations('CustomForms')
   const params = useParams()
   const formId = String(params.formId)
@@ -346,7 +350,7 @@ export default function FormDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="build">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as (typeof FORM_TABS)[number])}>
         <TabsList>
           <TabsTrigger value="build">{t('tabBuild')}</TabsTrigger>
           <TabsTrigger value="settings">{t('tabSettings')}</TabsTrigger>

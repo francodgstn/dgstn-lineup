@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
@@ -612,7 +613,8 @@ function SocialTab({ register }: { register: ReturnType<typeof useForm<FormData>
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'appearance' | 'links' | 'social'
+const BIO_TABS = ['appearance', 'links', 'social'] as const
+type Tab = (typeof BIO_TABS)[number]
 
 export default function TeamBioLinkEditorPage() {
   const { currentTeamId } = useAuth()
@@ -651,7 +653,7 @@ export default function TeamBioLinkEditorPage() {
   const qc = useQueryClient()
   const t = useTranslations('BioLink')
 
-  const [tab, setTab] = useState<Tab>('links')
+  const [tab, setTab] = useTabParam(BIO_TABS, 'links')
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null)
 
