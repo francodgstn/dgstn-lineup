@@ -31,18 +31,16 @@ function AppleIcon() {
   )
 }
 
-function FacebookIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-      <path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07c0 6.02 4.39 11.01 10.13 11.93v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.69.24 2.69.24v2.97h-1.52c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.08 24 18.09 24 12.07Z" />
-    </svg>
-  )
-}
-
+// Facebook/Meta was removed on 2026-08-19: it was never enabled as a provider on
+// any project, so the button could only ever fail with auth/operation-not-allowed,
+// and enabling it would mean maintaining a Meta app for a login nobody asked for.
+// The offered set is Google, Apple, email link and email/password.
+//
+// Not to be confused with the studio's own Facebook PAGE link on bio-links and
+// team profiles (`TeamSocialLink.platform`) — a different feature, still supported.
 const PROVIDERS: { id: SocialProvider; icon: () => React.ReactElement }[] = [
   { id: 'google', icon: GoogleIcon },
   { id: 'apple', icon: AppleIcon },
-  { id: 'facebook', icon: FacebookIcon },
 ]
 
 // ─── component ───────────────────────────────────────────────────────────────

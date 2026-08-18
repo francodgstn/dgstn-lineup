@@ -3310,8 +3310,7 @@
     "orWithEmail": "o con l'e-mail",
     "continueWith": {
       "google": "Continua con Google",
-      "apple": "Continua con Apple",
-      "facebook": "Continua con Facebook"
+      "apple": "Continua con Apple"
     },
     "continueWithEmailLink": "Continua con un link di accesso",
     "emailLinkLabel": "Indirizzo e-mail",
