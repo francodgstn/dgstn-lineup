@@ -127,7 +127,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 48 | slows | weekly | `automation_logs` is written by every trigger path and read by nothing | M9 | web | ✅ Fixed |
 | 49 | confuses | weekly | Unpublishing a surface leaves the bio-link pointing at a dead page | M11 | web + functions | ✅ Fixed |
 | 50 | slows | weekly | "Take it off the internet" is one unconfirmed click, next to Publish | M11 | web | ✅ Fixed |
-| 51 | confuses | at-setup | "Create alert" is selectable and silently stripped at save | M9 | web | ▶ Open |
+| 51 | confuses | at-setup | "Create alert" is selectable and silently stripped at save | M9 | web | ✅ Fixed |
 | 52 | confuses | every-session | A purchase-tier course opened by shared link shows a signed-in member a sign-in wall | C4×C3 | web | ▶ Open |
 | 53 | slows | weekly | Class bookings send no calendar invite; the manage link exists only in the email | C2 | functions + web | ▶ Open |
 | 54 | confuses | every-session | Filtering contacts in German reads English — 15 hardcoded strings | M4 | web | ✅ Fixed |
@@ -144,7 +144,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ✅ Fixed |
 | 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ✅ Fixed |
 | 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ✅ Fixed |
-| 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
+| 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ✅ Fixed |
 | 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ✅ Fixed |
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
 | 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ✅ Fixed |
