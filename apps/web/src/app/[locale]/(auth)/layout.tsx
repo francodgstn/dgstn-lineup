@@ -1010,40 +1010,49 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
-// Expanded-sidebar wrapper for the Shortcuts group — marked by a 2px brand-violet
-// accent down the left edge that fades out towards the bottom, rather than a
-// filled panel. Same "this section is different" signal with far less surface
-// area: a tinted block competes with the rows inside it, while an edge just
-// brackets them. (The icon rail keeps the plain hairline divider instead.)
-//
-// Drawn as a pseudo-element rather than a border: `border-color` takes no
-// gradient. Uses Tailwind's own `from-primary/55` utilities so the colour comes
-// from the design token — `--primary` is an oklch() value, so hand-rolling
-// `hsl(var(--primary)/…)` would not resolve.
-//
-// Wraps the ROWS ONLY, not the group label: the label stays at the same indent
-// as General/Features so the three macro headings line up, and the rule brackets
-// what's specific to this group.
-const SHORTCUTS_RULE =
-  'relative pl-3 pt-0.5 pb-1.5 ' +
-  'before:absolute before:left-0 before:top-1 before:bottom-2 before:w-0.5 before:rounded-full ' +
-  'before:bg-gradient-to-b before:from-primary/55 before:via-primary/20 before:to-transparent'
+// The seam between the pinned run and the recent run inside the Shortcuts group.
+// A hairline, NOT two sub-headings: a pinned row already wears a filled pin at
+// rest while a recent row's pin only appears on hover, so labels would restate
+// what the rows already say — the same "real noise, little gain" that retired the
+// gradient rule. Full row width and no horizontal inset: re-aligning these rows
+// with every other nav row is the point of the change, and a margin here would
+// quietly hint at the indent that was just removed.
+const SHORTCUT_SEAM = <div className="my-1.5 h-px bg-border/60" />
 
 // How many recently-visited items the Shortcuts group keeps, in addition to the
-// always-shown ones.
+// pinned ones.
 const MAX_RECENT_SHORTCUTS = 5
-// Rows shown before "Show more" — always-shown rows are never truncated, so the
-// effective cap is max(this, always-shown count).
+// Rows the group aims to show before "Show more". Pinned rows are never
+// truncated, so the budget is spent on them first and whatever is left goes to
+// the recent run.
 const SHORTCUTS_VISIBLE_MIN = 5
+// ...but the recent run never drops below this while it has rows. A heavy pinner
+// would otherwise spend the whole budget and push recents to zero, which hides
+// the seam and leaves "Show more" as the only evidence that half exists.
+const RECENT_VISIBLE_MIN = 2
 
-// The "Shortcuts" macro group — Firebase-style: a rolling history of the user's
-// recently-opened destinations, with the always-shown ones promoted to the top
-// and kept permanently. The star on each row promotes a recent to always-shown
-// (and back — turning it off keeps the row listed as a recent); the X removes it
-// from the group; drag a row to reorder (manual placement makes it always shown).
-// A destination can also be added from the menu rows and the search dropdown.
-// Hidden entirely when there's nothing to show. Per-browser (NavPinsContext) —
-// one of the mechanisms enumerated in THE NAV-MEMORY CENSUS there.
+// The "Shortcuts" macro group — Firebase-style: the destinations a studio keeps
+// within reach, shown as TWO RUNS of ONE mechanism separated by a hairline (item
+// 1 of THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx):
+//   · pinned — hand-curated, drag-orderable, never truncated, never ages out.
+//   · recent — the rolling visit history, truncated behind "Show more".
+// The pin on a row PROMOTES a recent into the pinned run (and, turned off,
+// demotes it back); the X removes the row from the group entirely. The seam is
+// what makes that promotion VISIBLE — inside the old merged list a pin re-sorted
+// the row a couple of places and told the user nothing — and it is ALL that
+// communicates it, so pin/unpin must always move the row across it.
+//
+// ONE heading, and no sub-headings: the runs are named by their own rows (a
+// pinned row wears a filled pin at rest, a recent row's pin appears on hover),
+// and "Clear all" empties both halves in a single action (clearShortcuts), so a
+// second heading would have nothing left to own. The seam is drawn only when
+// both runs have rows — a line above or below nothing means nothing.
+//
+// There is deliberately no accent rule down the left edge any more: it signalled
+// "a different kind of row" inline, which the seam plus the pins now do without
+// the noise, and dropping its indent is what re-aligns these rows with every
+// other nav row. Hidden entirely when there is nothing at all. Per-browser
+// (NavPinsContext).
 function ShortcutsNav({
   entries,
   collapsed,
@@ -1058,7 +1067,7 @@ function ShortcutsNav({
   const [expanded, setExpanded] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
-  // Insertion index (in the displayed list) the dragged row would drop into.
+  // Insertion index (within the PINNED list) the dragged row would drop into.
   const [dropAt, setDropAt] = useState<number | null>(null)
 
   // Keep the group visible even when empty (expanded sidebar only) — a short
@@ -1068,46 +1077,90 @@ function ShortcutsNav({
     return (
       <div data-tour="nav-shortcuts" className="mt-3">
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
-        <div className={SHORTCUTS_RULE}>
-          <p className="py-1 pr-2 text-xs leading-relaxed text-muted-foreground/60">
-            {t('navShortcutsEmpty')}
-          </p>
-        </div>
+        <p className="px-3 py-1 pr-2 text-xs leading-relaxed text-muted-foreground/60">
+          {t('navShortcutsEmpty')}
+        </p>
       </div>
     )
   }
 
-  const alwaysShownCount = entries.filter((e) => alwaysShownIds.includes(e.id)).length
-  const visibleCount = Math.max(SHORTCUTS_VISIBLE_MIN, alwaysShownCount)
-  const shown = expanded ? entries : entries.slice(0, visibleCount)
-  const hasMore = entries.length > visibleCount
+  // `entries` arrives merged (pinned first, then recents) — split it back into
+  // the two runs it was built from. The icon rail renders the same rows in the
+  // same order, just without the seam.
+  const pinned = entries.filter((e) => alwaysShownIds.includes(e.id))
+  const recents = entries.filter((e) => !alwaysShownIds.includes(e.id))
+  const recentVisible = Math.max(RECENT_VISIBLE_MIN, SHORTCUTS_VISIBLE_MIN - pinned.length)
+  const shownRecents = expanded ? recents : recents.slice(0, recentVisible)
+  const hasMore = recents.length > recentVisible
+  // All-pinned and all-recent both render as a plain list: a seam needs a row on
+  // each side of it to mean anything. So a new user (recents only) sees exactly
+  // what they see today, and the line appears at the moment the first pin creates
+  // the distinction — which is itself the clearest demonstration of what the pin
+  // just did. Never drawn in the icon rail (nothing there says which run is which,
+  // and a bare line in a 40px column reads as a section break between features).
+  const showSeam = !collapsed && pinned.length > 0 && recents.length > 0
 
-  // Drop = manual curation: the dragged row becomes (or stays) always shown, and
-  // the stored order becomes the displayed order filtered to always-shown rows.
-  // Untouched recents keep flowing chronologically below them.
+  // Drag is PINNED-ONLY, deliberately, and it now only ever REORDERS:
+  //  · Recent is ordered by when you were last there. A manual placement inside
+  //    it cannot be stored and would be undone by the next navigation — a drag
+  //    that silently does nothing, which is worse than one that isn't offered.
+  //  · Dragging ACROSS the boundary to promote is not offered either. Promotion
+  //    has one affordance — the pin: hoverable, labelled, keyboard-reachable and
+  //    reversible. A second, invisible path that promotes on an accidental drop
+  //    adds no discoverability and one more way to be surprised.
   const commitDrop = () => {
     if (dragId != null && dropAt != null) {
-      const ids = entries.map((e) => e.id)
-      const from = ids.indexOf(dragId)
-      if (from !== -1) {
-        const next = ids.filter((id) => id !== dragId)
-        next.splice(dropAt > from ? dropAt - 1 : dropAt, 0, dragId)
-        const shownSet = new Set([...alwaysShownIds, dragId])
-        setShortcutOrder(next.filter((id) => shownSet.has(id)))
+      const visible = pinned.map((e) => e.id)
+      const from = visible.indexOf(dragId)
+      // dropAt === from | from + 1 is a drop onto itself: nothing moves.
+      if (from !== -1 && dropAt !== from && dropAt !== from + 1) {
+        // Reorder inside the STORED list, not the displayed one: a pinned id
+        // whose destination is currently gated off is invisible here and must
+        // survive the reorder rather than be silently dropped from storage.
+        const rest = alwaysShownIds.filter((id) => id !== dragId)
+        const anchor = visible[dropAt]
+        const at = anchor
+          ? rest.indexOf(anchor) // insert BEFORE the row dropped onto…
+          : rest.indexOf(visible[visible.length - 1]) + 1 // …or after the last one
+        rest.splice(at < 0 ? rest.length : at, 0, dragId)
+        setShortcutOrder(rest)
       }
     }
     setDragId(null)
     setDropAt(null)
   }
 
+  const dragPropsFor = (entry: ResolvedNavEntry, idx: number): ShortcutDragProps => ({
+    draggable: true,
+    onDragStart: (e) => {
+      e.dataTransfer.effectAllowed = 'move'
+      setDragId(entry.id)
+    },
+    onDragOver: (e) => {
+      if (dragId == null) return
+      e.preventDefault()
+      const rect = e.currentTarget.getBoundingClientRect()
+      setDropAt(e.clientY < rect.top + rect.height / 2 ? idx : idx + 1)
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      commitDrop()
+    },
+    onDragEnd: () => {
+      setDragId(null)
+      setDropAt(null)
+    },
+  })
+
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
     <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'mt-3'}>
       {/* Header row: the group label, with "clear all" pushed to the right.
-          Confirmed, because the always-shown rows are hand-curated and
-          drag-ordered — rebuilding them is minutes of fiddling, and there is no
-          undo. */}
+          Confirmed, because the pinned rows are hand-curated and drag-ordered —
+          rebuilding them is minutes of fiddling, and there is no undo. It clears
+          BOTH runs, which is why it hangs off the group heading — there is no
+          second heading for it to belong to, and that is deliberate. */}
       {!collapsed && (
         <div className="flex items-center pb-1">
           <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
@@ -1145,8 +1198,8 @@ function ShortcutsNav({
           </AlertDialogContent>
         </AlertDialog>
       )}
-      <div className={collapsed ? 'space-y-0.5' : `${SHORTCUTS_RULE} space-y-0.5`}>
-        {shown.map((entry, idx) => (
+      <div className="space-y-0.5">
+        {pinned.map((entry, idx) => (
           <div key={entry.id}>
             {!collapsed && dragId != null && dropAt === idx && dropLine}
             <ShortcutRow
@@ -1154,37 +1207,16 @@ function ShortcutsNav({
               collapsed={collapsed}
               onClick={onLinkClick}
               dragging={dragId === entry.id}
-              dragProps={
-                collapsed
-                  ? undefined
-                  : {
-                      draggable: true,
-                      onDragStart: (e) => {
-                        e.dataTransfer.effectAllowed = 'move'
-                        setDragId(entry.id)
-                      },
-                      onDragOver: (e) => {
-                        if (dragId == null) return
-                        e.preventDefault()
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        setDropAt(e.clientY < rect.top + rect.height / 2 ? idx : idx + 1)
-                      },
-                      onDrop: (e) => {
-                        e.preventDefault()
-                        commitDrop()
-                      },
-                      onDragEnd: () => {
-                        setDragId(null)
-                        setDropAt(null)
-                      },
-                    }
-              }
+              dragProps={collapsed ? undefined : dragPropsFor(entry, idx)}
             />
           </div>
         ))}
-        {!collapsed && dragId != null && dropAt === shown.length && dropLine}
-        {/* Inside the rule: Show more belongs to this group's content, so it
-            shares the rows' indent rather than hanging off the edge. */}
+        {!collapsed && dragId != null && dropAt === pinned.length && dropLine}
+        {showSeam && SHORTCUT_SEAM}
+        {shownRecents.map((entry) => (
+          <ShortcutRow key={entry.id} entry={entry} collapsed={collapsed} onClick={onLinkClick} />
+        ))}
+        {/* Show more belongs to Recent — it is the only half that truncates. */}
         {!collapsed && hasMore && (
           <button
             type="button"
@@ -1616,7 +1648,13 @@ function NavSearch({
             : 'group/search flex h-8 min-w-0 flex-1 items-center gap-1.5 border-b border-transparent px-1 text-muted-foreground transition-colors hover:border-border hover:text-foreground'
         }
       >
-        <Search className="h-4 w-4 shrink-0" />
+        {/* Primary, not inherited muted: search is the fastest route to anything
+            in the app and the row is otherwise the quietest thing in the header.
+            Deliberately NOT hover-linked — the colour is the prominence, so it
+            holds at rest; the label beside it still lifts on hover. The colour
+            token is theme-aware (the dark palette lightens --primary for exactly
+            this), so it holds against both backgrounds. */}
+        <Search className="h-4 w-4 shrink-0 text-primary" />
         {/* Placeholder only — no ⌘K badge. The shortcut still works and is in
             the tooltip; printed in the row it was visual noise on a control
             whose whole job is to stay quiet until wanted. */}
@@ -1646,7 +1684,11 @@ function NavSearch({
         className="fixed z-50 w-[min(22rem,calc(100vw-1rem))] origin-top-left animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-150 rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-lg"
       >
       <div className="relative">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      {/* Full strength, not held back: a primary leading icon can read as a focus
+          state on an idle field, but this field is never idle — the panel mounts
+          it autoFocused and closes when it loses the mode, so "focused" is the
+          only state it is ever seen in. Matches the trigger icon it grows out of. */}
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
       <Input
         // autoFocus, NOT a ref: the shared Input is a plain function component
         // with no forwardRef, so a ref on it is silently null and the panel

@@ -5,8 +5,10 @@
  *
  * The admin shell remembers where you have been in more than one way, and until
  * 2026-08-18 all of them were called "pin" (UX-23). Two of them still are, in
- * storage; NONE of them is any more, on screen. What exists, and what each one
- * is called where a user can read it:
+ * storage. On screen the word survives on open tabs alone, and the pin GLYPH on
+ * exactly ONE model — "keep this within reach" — worn by open tabs and by the
+ * Shortcuts group's curated half; the saved-filter sense is gone entirely. What
+ * exists, and what each one is called where a user can read it:
  *
  * 1. SHORTCUTS — this file. A per-browser list of NAV DESTINATIONS (a page, a
  *    settings screen, a plugin item), keyed by a stable nav id, rendered as the
@@ -14,20 +16,67 @@
  *    not two:
  *      · ALWAYS SHOWN (`alwaysShownIds`) — hand-curated, drag-ordered, never
  *        truncated, never ages out. Added from a sidebar row, a settings-rail
- *        row or a search result. UI verb: "Always show in shortcuts".
+ *        row or a search result. UI verb: "Always show in shortcuts". The row
+ *        wears its pin FILLED and at rest — which is the only thing that names
+ *        this run (see the vocabulary note at the end of this item).
  *      · RECENT (`recentIds`) — an automatic rolling history of the last
- *        RECENTS_MAX destinations visited, the top few listed under the
- *        always-shown ones. No verb: it fills itself.
+ *        RECENTS_MAX destinations visited, listed under the always-shown ones
+ *        and truncated behind "Show more". No verb: it fills itself.
  *    The control on a row PROMOTES a recent to always-shown (and back); the ×
- *    REMOVES the row from Shortcuts entirely. Icon: a star.
+ *    REMOVES the row from Shortcuts entirely. Icon: a pin, filled while on.
+ *
+ *    SHOWN AS TWO RUNS SEPARATED BY A HAIRLINE since 2026-08-18 — always-shown
+ *    above the rule, recent below, inside the one "Shortcuts" heading. This
+ *    replaced a single merged list bracketed by a gradient accent rule down the
+ *    left edge (removed: it signalled "a different kind of row" inline for real
+ *    visual noise, and its indent was what pushed these rows out of line with
+ *    every other nav row). They are still ONE mechanism, and the seam is what
+ *    makes that visible: a pin now MOVES a row across the line, where before it
+ *    re-sorted it a couple of places inside one list and told the user nothing.
+ *    Unpinning moves it back rather than dropping it. Consequences worth keeping:
+ *      · NO SUB-HEADINGS, deliberately — a rule, not two labels. The rows already
+ *        name their own run (a pinned row's pin is filled and visible at rest; a
+ *        recent row's appears on hover), so labels would restate the icons, which
+ *        is the same little-gain-real-noise trade the gradient lost on. It also
+ *        keeps the group at ONE heading level, which "Clear all" needs — it
+ *        empties both halves in one action, so it belongs to the group, not to
+ *        either run.
+ *      · The seam is drawn ONLY when both runs have rows. A line above or below
+ *        nothing means nothing; all-pinned and all-recent are plain lists, so a
+ *        new user (recents only) sees exactly what they saw before, and the line
+ *        appears at the moment the first pin creates the distinction.
+ *      · DRAG REORDERS WITHIN THE PINNED RUN ONLY. Recent is ordered by last
+ *        visit, so a manual placement there could not be stored and the next
+ *        navigation would undo it; and dragging across the seam is not offered
+ *        because promotion already has one visible, reversible affordance (the
+ *        pin), and an accidental drop is a poor second one. A reorder is applied
+ *        to the STORED list, so a pinned destination that is currently gated off
+ *        (and therefore not rendered) survives it.
+ *      · The collapsed icon rail is unchanged: the same rows in the same order,
+ *        no seam (nothing there says which run is which) and no eraser.
+ *    Rendered by `ShortcutsNav` in `app/[locale]/(auth)/layout.tsx`.
+ *
+ *    VOCABULARY, recorded: the only words the user reads are still the verbs on
+ *    the control — "Always show in shortcuts" / "Stop always showing"
+ *    (`Nav.shortcutAlwaysShow`, `shortcutStopAlwaysShowing`, shared with the
+ *    sidebar rows and the search dropdown) — while the glyph is a pin. Splitting
+ *    the group added NO new copy, deliberately: naming the runs "Pinned" and
+ *    "Recent" would have put a noun in front of a verb that disagrees with it,
+ *    and reconciling the two is a separate four-locale decision that should move
+ *    in one pass or not at all.
  *
  * 2. OPEN TABS — `contexts/OpenTabsContext.tsx`. The Notion-style strip of
  *    pages you currently have OPEN, including individual records (a contact, a
  *    session). Different question: Shortcuts answers "where do I go often",
  *    Open tabs answers "what am I in the middle of". They are deliberately NOT
  *    merged. A tab may be PINNED, which protects it from Close-others and cap
- *    eviction — the same word every browser uses, and now the only thing in the
- *    app that word means. Icon: a pin.
+ *    eviction — the same word every browser uses. Icon: a pin. It is still the
+ *    only thing that WORD means on screen, but no longer the only thing that
+ *    GLYPH means: Shortcuts wears the same pin on its curated half (item 1),
+ *    unlabelled. That is deliberate — one mental model, "keep this within reach",
+ *    over two different objects on two different surfaces — and it is what UX-23
+ *    was NOT: back then "pin" also meant a saved contact filter, a third,
+ *    unrelated object, which now says "show in filter bar".
  *
  * 3. SAVED FILTERS ON THE CONTACTS PAGE — `app/[locale]/(auth)/contacts/page.tsx`.
  *    Not a destination at all: a stored ContactFilter, per TEAM (Firestore, not
