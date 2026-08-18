@@ -70,3 +70,53 @@ redelivery, and a duplicate Firestore delivery falls to the per-rule/per-contact
 window — the same protection the inline path has today, so there is no
 regression. *Follow-up:* add `{ eventId: event.id }` at
 `packages/functions/src/sync/onAffiliationWrite.ts:124/129/135`.
+
+## 8. ⚠ Seeded tenants now show NO priced doors (UX-33) — affects the next demo
+**PARKED, and the most time-sensitive item here.** `payments_enabled` fails closed,
+and **no seed writes `teams/{id}.payments`** — so every emulator, sandbox and lead
+tenant now reads `payments_enabled: false`: no shop surface, no drop-in price, no
+priced trial, no priced appointment duration.
+
+The lane deliberately did **not** fake `connectStatus: 'enabled'` in the seeds,
+which is right — that reproduces the exact lie UX-33 exists to remove. The honest
+fix is linking a real **test-mode** Connect account; the tooling already exists
+(`scripts/lib/connect.ts`, `scripts/connect-test-account.ts`).
+
+*Action:* do this before the next live demo **if priced surfaces are part of it.**
+Until then the demo tenants show a free-only product, which is coherent but not
+what you would want to present.
+
+## 9. Org trials never expire
+**PARKED.** `handleTrialLifecycle` sweeps `TEAMS_COLLECTION` only, while
+`createOrganization` grants a 14-day trial that nothing ends. An unpaid org — and
+every studio it bills — sits on the top tier indefinitely. UX-35 removed the
+*accidental* sweep that used to catch member teams, so this is now the only thing
+between an unpaid org and unlimited access.
+**The decision:** what should a lapsed org trial do to its member teams? Free (like
+a team trial), a fresh Studio trial (like `removeTeamFromOrg` does), or read-only?
+Not guessed. *Meanwhile:* nothing expires, which is the pre-existing behaviour.
+
+## 10. An org lapse mounts features it no longer pays for
+**PARKED.** On `past_due`/`cancelled` the webhook propagates `plan_status` to member
+teams but leaves `plan: 'organization'` and deactivates no installs — where the team
+rail calls `downgradeTeamToFree`, which does. Client `pluginAccessForPlan` reads the
+plan only, so navigation stays mounted while every gated callable 403s.
+**The decision:** should a lapsed org deactivate its org-level installs?
+
+## 11. Should a studio that takes payment offline get a read-only price list?
+**PARKED, product call.** Hiding the shop (UX-33) removes the only surface where a
+visitor can see membership prices. A cash-only studio may still want prices
+published with no buy button.
+
+## 12. Org-admin invitations by email
+**ASSUMED: out of scope.** UX-34's add-member is a **grant** against an existing
+Linyup account; an address with no account gets a named refusal rather than a
+placeholder user. A pending-invitation lifecycle would need its own accept surface
+and expiry sweep, and `org_invitations` already means something else (inviting a
+whole team). Say if you want it.
+
+## 13. `public_profile` is client-writable by any team member
+**NOTED, not acted on.** `payments_enabled` — like `showBranding` and
+`public_pages_indexable` before it — can be flipped client-side. Display only:
+every checkout still refuses server-side, so this changes what a page *shows*, not
+what it can *take*. Tightening the rule would break the bio-link settings editor.

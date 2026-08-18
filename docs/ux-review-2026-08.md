@@ -109,9 +109,9 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ▶ Open |
 | 31 | confuses | every-session | The bio-link — the one artifact meant to be shared — previews as "Linyup" | C1 | web | ▶ Open |
 | 32 | costs-money | weekly | Cancelling from the emailed link answers in English and says nothing about money | C2 | web | ✅ Fixed |
-| 33 | blocks | at-setup | A studio that cannot take money still advertises priced doors | C2×M6 | web + functions | ▶ Open |
-| 34 | blocks | at-setup | The org Members tab is a fully-styled form whose callables do not exist | M10 | functions + web | ▶ Open |
-| 35 | costs-money | weekly | Org plugin installs hand affiliated studios plan-gated features for free | M10 | web | ▶ Open |
+| 33 | blocks | at-setup | A studio that cannot take money still advertises priced doors | C2×M6 | web + functions | ✅ Fixed |
+| 34 | blocks | at-setup | The org Members tab is a fully-styled form whose callables do not exist | M10 | functions + web | ✅ Fixed |
+| 35 | costs-money | weekly | Org plugin installs hand affiliated studios plan-gated features for free | M10 | web | ✅ Fixed |
 | 36 | slows | every-session | The mobile hamburger scrolls away with the page | M1 | web | ▶ Open |
 | 37 | confuses | every-session | The member portal greets a signed-in member by telling her she is a stranger | C4 | web | ▶ Open |
 | 38 | slows | every-session | Space Home never answers "what's next", and duplicates four blocks that live elsewhere | C4 | web | ▶ Open |
@@ -166,7 +166,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 87 | confuses | at-setup | Declared triggers that can never fire, and mounted ones that never do | M9 | functions + web | ▶ Open |
 | 88 | blocks | every-session | After paying, the buyer lands on a page that asks them to sign in again | C2 | web + functions | ▶ Open |
 | 89 | confuses | every-session | A confirmed newcomer booking is not tracked - contact still shows 0 attended | M4xM3 | functions | ▶ Open |
-| 90 | slows | every-session | Sidebar search finds pages, not contacts, subscriptions or activities | M1 | web | ▶ Open |
+| 90 | slows | every-session | Sidebar search finds pages, not contacts, subscriptions or activities | M1 | web | ✅ Fixed |
 | 91 | slows | every-session | Session detail: secondary-looking primary action, unlinked names, heavy share control | M3 | web | ✅ Fixed |
 | 92 | slows | every-session | Schedule: oversized bookable-hours control, and no way to reach "new activity" | M3xM5 | web | ✅ Fixed |
 | 93 | slows | weekly | Documents are listed twice, and the publish controls scroll away from a long body | M11 | web | ▶ Open |
@@ -174,9 +174,8 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 95 | slows | weekly | The website has no pricing TABLE - activities as rows, plans as columns | M7 | web | ▶ Open |
 | 96 | slows | weekly | Contact notes cannot be colour-tagged | M2 | web | ▶ Open |
 | 97 | confuses | weekly | Nine emailed links still drop the locale, so the page answers in English | C2xM9 | functions | ▶ Open |
-| 98 | slows | every-session | A person's name is a dead end on four more lists | M2xM3 | web | ▶ Open |
-| 99 | slows | at-setup | Three more "create one first" dead ends, all naming a destination they don't link | M5 | web | ▶ Open |
-
+| 98 | slows | every-session | A person's name is a dead end on four more lists | M2xM3 | web | ✅ Fixed |
+| 99 | slows | at-setup | Three more "create one first" dead ends, all naming a destination they don't link | M5 | web | ✅ Fixed |
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
 
