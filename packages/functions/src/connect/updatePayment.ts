@@ -29,6 +29,14 @@
 // A COMMENT-ONLY EDIT NEITHER APPLIES NOR REVERSES: nothing about who holds what
 // changed, and a note is not a money event.
 //
+// THE BUYER'S RECEIPT IS OPTIONAL AND EXPLICIT (UX-80). Assigning an orphaned
+// bank transfer to the member it belonged to is the moment their pack becomes
+// real, and until now they were told nothing; re-linking a mis-assigned row is a
+// correction and usually warrants silence. The caller decides — `sendReceipt`,
+// omitted means no — and it is honoured only when this edit actually APPLIED
+// effects to somebody. Deliberately after step 4, so no mail can describe a
+// holder the row does not yet name.
+//
 // A REVERSAL NEVER TOUCHES A PROMO REDEMPTION. `reversePaymentEffects` knows
 // nothing about codes by design — there is no restore-on-refund path anywhere
 // (docs/promo-codes.md), and the manager levers delete lifecycle state rather
@@ -48,6 +56,7 @@ import {
 import { assertManager } from './access'
 import { resolveDivisible } from './refunds'
 import { applyPaymentEffects, normalizePaymentLineItem } from '../payments/effects'
+import { sendDeskSaleReceipt } from '../payments/deskReceipt'
 import { lineItemForReversal, reversalPlanFor, reversePaymentEffects } from '../payments/reversal'
 
 const MAX_COMMENT_LEN = 500
@@ -105,6 +114,8 @@ export const updatePaymentRecord = onCall(async (request) => {
     comment?: string | null
     // lineItem: structured "what was bought"; omit → unchanged.
     lineItem?: unknown
+    // "Send the buyer a receipt" — see the header. Omitted ⇒ no mail.
+    sendReceipt?: boolean
   }
   if (!data?.teamId || !data?.paymentId) {
     throw new HttpsError('invalid-argument', 'teamId and paymentId are required')
@@ -322,6 +333,30 @@ export const updatePaymentRecord = onCall(async (request) => {
         : { contactId: newContactId },
       { merge: true }
     )
+  }
+
+  // ── 5. …and only now, if asked, tell the buyer ────────────────────────────
+  // LAST, after the row names its holder: a receipt that arrives describing a
+  // purchase the ledger does not yet attribute is worse than a late one. Sent
+  // only when this edit APPLIED effects — a comment-only save, an unassign and a
+  // row with no structured line-item all grant nothing and so announce nothing.
+  // Re-saving the same dialog re-keys identically and the mail ledger drops it.
+  if (data.sendReceipt === true && shouldApply && targetContactId) {
+    const li = effectiveLineItem(finalLineItem, payment)
+    if (li) {
+      await sendDeskSaleReceipt({
+        teamId,
+        contactId: targetContactId,
+        lineItem: li,
+        paymentRef: docRef.id,
+        amountRappen: typeof payment.amount === 'number' ? payment.amount : null,
+        currency: (payment.currency as string | undefined) ?? 'CHF',
+        // The row's own tender when it has one ("Cash" on a manual row); a
+        // gateway row leaves it unset and the receipt prints a bare amount,
+        // which is right — the buyer paid that gateway and knows how.
+        methodLabel: (payment.payment_mode as string | undefined) ?? null,
+      })
+    }
   }
 
   return { ok: true, contactId: newContactId, source }

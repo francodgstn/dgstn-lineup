@@ -6,7 +6,12 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { CalendarClock, MapPin, X, LogIn, UserRound, Loader2 } from 'lucide-react'
-import type { MyBooking, MyBookingsResult } from '@linyup/shared'
+import type { BookingCancelEffect, CancelBookingResult, MyBooking, MyBookingsResult } from '@linyup/shared'
+import {
+  cancelEffectKeys,
+  cancelFailureIsRetryable,
+  cancelFailureKey,
+} from '@/lib/bookingCancellation'
 import { QueryErrorState } from '@/components/ui/query-error'
 import {
   loadFailureDetail,
@@ -43,13 +48,28 @@ function formatDate(iso: string | null): Date | null {
 
 export default function BookingsHome() {
   const t = useTranslations('Space')
+  const tCancel = useTranslations('BookingCancellation')
   const { teamId, contact, isAuthenticated, openSignIn } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const contactId = contact?.id ?? null
   const [cancelling, setCancelling] = useState<string | null>(null)
   // Which booking's cancel failed, and why — held per booking so the sentence
-  // appears on the row whose button was pressed, next to the button.
-  const [cancelError, setCancelError] = useState<{ id: string; detail: string | null } | null>(null)
+  // appears on the row whose button was pressed, next to the button. `key` is a
+  // `BookingCancellation` message key; `retryable` is true ONLY for a failure
+  // that could plausibly succeed on a second press.
+  const [cancelError, setCancelError] = useState<{
+    id: string
+    key: string
+    retryable: boolean
+  } | null>(null)
+  // Cancel is a two-step press on this surface: the first arms it (and states
+  // what cancelling returns), the second does it. It used to fire on one click
+  // with no confirmation and no explanation — for a destructive action on
+  // something the member may have paid for.
+  const [confirming, setConfirming] = useState<string | null>(null)
+  // What the last cancellation gave back. The row it belonged to is gone by the
+  // time this renders, so it lives above the list rather than on the row.
+  const [cancelled, setCancelled] = useState<BookingCancelEffect | null>(null)
 
   // `isError` is read, not ignored: a failed read must not render as "you have
   // no bookings" — a member who cannot see her booking assumes it was lost.
@@ -116,15 +136,30 @@ export default function BookingsHome() {
     setCancelling(b.sessionId)
     setCancelError(null)
     try {
-      const fn = httpsCallable(functions, 'cancelBooking')
-      await fn({ token: b.cancelToken })
+      const fn = httpsCallable<{ token: string }, CancelBookingResult>(functions, 'cancelBooking')
+      const res = await fn({ token: b.cancelToken })
+      // The server says what it gave back; the banner repeats that answer. A
+      // returned lesson credit is the single most useful thing this surface can
+      // tell her, and it used to say nothing at all.
+      setCancelled(res.data?.returned ?? { credit: false, usageUnit: false, paid: false })
+      setConfirming(null)
       await refetch()
     } catch (err: unknown) {
       reportPublicActionFailure('space/cancel-booking', err)
       // Deliberately NO refetch here: the list is unchanged because the cancel
       // did not happen, and re-reading it would only redraw the same row under
       // the message. The booking is still live — which is what the sentence says.
-      setCancelError({ id: b.sessionId, detail: loadFailureDetail(err) })
+      //
+      // WHICH sentence is the fix for the old one: every refusal cancelBooking
+      // gives is permanent (the class started, the studio checked her in, the
+      // booking is already gone), and the single message it used to show ended
+      // "Please try again". `cancelFailureKey` names what actually happened, and
+      // the button is withdrawn unless a retry could work.
+      setCancelError({
+        id: b.sessionId,
+        key: cancelFailureKey(err),
+        retryable: cancelFailureIsRetryable(err),
+      })
     } finally {
       setCancelling(null)
     }
@@ -153,6 +188,22 @@ export default function BookingsHome() {
       <h2 className="text-sm font-semibold uppercase tracking-wide mb-4" style={{ color: textMuted }}>
         {t('bookingsTitle')}
       </h2>
+
+      {/* The cancelled booking's row is gone by now, so the answer lives here.
+          "Cancelled" alone was the old behaviour and it left the one question
+          she actually has — what happened to my credit — unanswered. */}
+      {cancelled && (
+        <div className="mb-4 rounded-2xl p-3.5" style={cardStyle}>
+          <p className="text-sm font-semibold" style={{ color: textMain }}>
+            {t('bookingsCancelDone')}
+          </p>
+          {cancelEffectKeys(cancelled, 'did').map((key) => (
+            <p key={key} className="text-xs mt-1" style={{ color: textMuted }}>
+              {tCancel(key)}
+            </p>
+          ))}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
@@ -214,30 +265,65 @@ export default function BookingsHome() {
                       {t('bookingsCancelledByStudio')}
                     </p>
                   )}
+                  {/* Armed, not yet done: what cancelling gives back, stated
+                      before the second press rather than after it. */}
+                  {confirming === b.sessionId &&
+                    cancelEffectKeys(b.cancelEffect, 'will').map((key) => (
+                      <p key={key} className="text-xs mt-1" style={{ color: textMuted }}>
+                        {tCancel(key)}
+                      </p>
+                    ))}
                   {cancelError?.id === b.sessionId && (
-                    <p
-                      role="alert"
-                      className="text-xs mt-1"
-                      style={{ color: '#dc2626' }}
-                      title={cancelError.detail ?? undefined}
-                    >
-                      {t('bookingsCancelFailed')}
+                    <p role="alert" className="text-xs mt-1" style={{ color: '#dc2626' }}>
+                      {tCancel(cancelError.key)}
                     </p>
                   )}
                 </div>
                 {/* Shown only when the server says `cancelBooking` will accept
                     it — the token comes back only in that case, so the button
-                    cannot be offered for a call that is going to refuse. */}
-                {b.cancellable && b.cancelToken && (
-                  <button
-                    onClick={() => cancel(b)}
-                    disabled={cancelling === b.sessionId}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                    style={{ border: `1px solid ${cardBorder}`, color: textMuted }}
-                  >
-                    <X className="h-3.5 w-3.5" /> {cancelling === b.sessionId ? t('cancelling') : t('bookingsCancel')}
-                  </button>
-                )}
+                    cannot be offered for a call that is going to refuse. And
+                    withdrawn again once it HAS refused for a permanent reason,
+                    so the member is not invited to press into the same wall. */}
+                {b.cancellable &&
+                  b.cancelToken &&
+                  !(cancelError?.id === b.sessionId && !cancelError.retryable) && (
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      {confirming === b.sessionId && (
+                        <button
+                          onClick={() => setConfirming(null)}
+                          disabled={cancelling === b.sessionId}
+                          className="rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                          style={{ border: `1px solid ${cardBorder}`, color: textMuted }}
+                        >
+                          {t('bookingsCancelKeep')}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (confirming === b.sessionId) void cancel(b)
+                          else {
+                            setCancelError(null)
+                            setCancelled(null)
+                            setConfirming(b.sessionId)
+                          }
+                        }}
+                        disabled={cancelling === b.sessionId}
+                        className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                        style={
+                          confirming === b.sessionId
+                            ? { background: '#dc2626', color: '#fff' }
+                            : { border: `1px solid ${cardBorder}`, color: textMuted }
+                        }
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        {cancelling === b.sessionId
+                          ? t('cancelling')
+                          : confirming === b.sessionId
+                            ? t('bookingsCancelConfirm')
+                            : t('bookingsCancel')}
+                      </button>
+                    </div>
+                  )}
               </div>
             )
           })}

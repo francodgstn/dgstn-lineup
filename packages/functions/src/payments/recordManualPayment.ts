@@ -6,6 +6,12 @@
 // external payment. When a contact + line-item are given, it applies the same
 // effects a Connect purchase would (subscription fields / course entitlement /
 // credits) via applyPaymentEffects.
+//
+// THE BUYER'S RECEIPT IS SENT BY THE CALLABLE, NOT BY THE WRITER BELOW (UX-80).
+// `writeManualPaymentEvent` is shared with rails that confirm themselves in
+// their own words — the appointments phone booking and the gift-card till — so
+// the send sits in `recordManualPayment` where the studio ticked the box. See
+// payments/deskReceipt.ts for the full reasoning.
 
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
@@ -19,6 +25,7 @@ import {
 import { assertManager } from '../connect/access'
 import { recordFinanceTransaction } from '../finance/journal'
 import { applyPaymentEffects, normalizePaymentLineItem } from './effects'
+import { sendDeskSaleReceipt } from './deskReceipt'
 
 const MAX_COMMENT_LEN = 500
 const MAX_MODE_LEN = 60
@@ -71,7 +78,13 @@ export async function writeManualPaymentEvent(
     .collection(TEAMS_COLLECTION)
     .doc(teamId)
     .collection(PAYMENT_EVENTS_SUBCOLLECTION)
-  const ref = (input.idempotencyKey?.trim() || eventsCol.doc().id).slice(0, 120)
+  // The key becomes half a DOCUMENT ID, so it is stripped to characters that
+  // cannot change the path — a '/' here would silently address a different
+  // subcollection. It is also the receipt's tender ref (UX-80), which makes the
+  // sanitising load-bearing rather than merely defensive.
+  const ref =
+    (input.idempotencyKey ?? '').trim().replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 120) ||
+    eventsCol.doc().id
   const docRef = eventsCol.doc(`manual:${ref}`)
   const now = FieldValue.serverTimestamp()
 
@@ -156,6 +169,12 @@ export const recordManualPayment = onCall(async (request) => {
     lineItem?: unknown
     comment?: string | null
     idempotencyKey?: string
+    // "Send the buyer a receipt" — the studio's per-sale choice, made on the
+    // dialog in front of the person who just paid. OMITTED MEANS NO: an API
+    // caller that predates this flag cannot surprise anybody's members. The
+    // default the studio actually sees is set in the UI, by what the sale
+    // grants — see payments/deskReceipt.ts.
+    sendReceipt?: boolean
   }
   if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
   const teamId = data.teamId
@@ -184,7 +203,7 @@ export const recordManualPayment = onCall(async (request) => {
     }
   }
 
-  return writeManualPaymentEvent({
+  const result = await writeManualPaymentEvent({
     teamId,
     contactId,
     amount: data.amount,
@@ -196,4 +215,25 @@ export const recordManualPayment = onCall(async (request) => {
     idempotencyKey: data.idempotencyKey,
     recordedBy: request.auth.uid,
   })
+
+  // ── The buyer's receipt ───────────────────────────────────────────────────
+  // AFTER the write, so the mail can only describe money that was recorded and
+  // an entitlement that was granted. Skipped on a `duplicate`, which is the
+  // double-click: that call re-applied nothing, so it must re-announce nothing.
+  // (The ledger key would stop the second mail anyway — this stops the work.)
+  const lineItem = normalizePaymentLineItem(data.lineItem)
+  if (data.sendReceipt === true && contactId && lineItem && !result.duplicate) {
+    const sent = await sendDeskSaleReceipt({
+      teamId,
+      contactId,
+      lineItem,
+      paymentRef: result.id,
+      amountRappen: data.amount,
+      currency: (data.currency ?? 'CHF').toUpperCase().slice(0, 3),
+      methodLabel: data.paymentMode ?? null,
+    })
+    return { ...result, receiptSent: sent }
+  }
+
+  return result
 })

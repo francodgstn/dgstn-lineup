@@ -12,11 +12,24 @@
 // membership from Ana to Ben" is checkable at a glance in a way that "Assign to
 // Ben" is not, and picking the wrong Ben is the mistake this whole area exists
 // to make recoverable.
+//
+// "SEND THE BUYER A RECEIPT" (UX-80) defaults differently here than on the
+// record dialog, and the difference is the point. A FIRST assignment — an
+// orphaned bank transfer finally linked to the member it belonged to — is the
+// moment their pack becomes real, and they have been told nothing so far: it
+// starts ticked, by what the sale grants. A MOVE is a correction of the
+// studio's own record; the new holder usually already knows, and the old one
+// was never told anything to retract. It starts unticked and is one click away.
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Loader2 } from 'lucide-react'
-import { PAYMENT_COMMENT_PRESETS, type PaymentLineItem } from '@linyup/shared'
+import {
+  PAYMENT_COMMENT_PRESETS,
+  deskReceiptDefaultOn,
+  deskReceiptKindFor,
+  type PaymentLineItem,
+} from '@linyup/shared'
 import { useUpdatePaymentRecord } from '@/hooks/useConnect'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { ContactPicker, contactDisplayName } from '@/components/payments/ContactPicker'
@@ -31,6 +44,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 
 export interface AssignPaymentTarget {
@@ -60,6 +74,8 @@ export function AssignPaymentDialog({
   const [contactId, setContactId] = useState<string>(target?.contactId ?? '')
   const [comment, setComment] = useState<string>(target?.comment ?? '')
   const [lineItem, setLineItem] = useState<PaymentLineItem | null>(target?.lineItem ?? null)
+  const [sendReceipt, setSendReceipt] = useState(false)
+  const [receiptTouched, setReceiptTouched] = useState(false)
 
   // Re-seed local state whenever a new target is opened (parent passes a fresh
   // object each time), so the dialog always reflects the row being edited.
@@ -68,6 +84,10 @@ export function AssignPaymentDialog({
       setContactId(target.contactId ?? '')
       setComment(target.comment ?? '')
       setLineItem(target.lineItem ?? null)
+      // A row that already names somebody has already been through this dialog;
+      // only a FIRST assignment starts ticked. See the header.
+      setSendReceipt(!target.contactId && deskReceiptDefaultOn(target.lineItem ?? null))
+      setReceiptTouched(false)
     }
   }, [target])
 
@@ -80,11 +100,13 @@ export function AssignPaymentDialog({
       contactId?: string | null
       comment?: string | null
       lineItem?: PaymentLineItem | null
+      sendReceipt?: boolean
     } = { teamId, source: target.source, paymentId: target.paymentId }
 
     if (contactId !== (target.contactId ?? '')) vars.contactId = contactId || null
     if (comment.trim() !== (target.comment ?? '').trim()) vars.comment = comment.trim() || null
     if (JSON.stringify(lineItem) !== JSON.stringify(target.lineItem ?? null)) vars.lineItem = lineItem
+    if (canSendReceipt && sendReceipt) vars.sendReceipt = true
 
     // Nothing changed — just close.
     if (vars.contactId === undefined && vars.comment === undefined && vars.lineItem === undefined) {
@@ -100,6 +122,22 @@ export function AssignPaymentDialog({
       return
     }
     onClose()
+  }
+
+  // WILL THIS SAVE ACTUALLY GRANT SOMETHING? Mirrors the server's `shouldApply`
+  // in connect/updatePayment.ts, deliberately: the toggle must not offer a
+  // receipt for a save that applies no effects, because the callable would then
+  // accept the flag and correctly send nothing — a switch that silently does
+  // nothing is worse than no switch.
+  const contactChanged = contactId !== (target?.contactId ?? '')
+  const lineItemChanged =
+    JSON.stringify(lineItem) !== JSON.stringify(target?.lineItem ?? null)
+  const receiptKind = deskReceiptKindFor(lineItem)
+  const canSendReceipt = !!contactId && (contactChanged || lineItemChanged) && !!receiptKind
+
+  function pickLineItem(next: PaymentLineItem | null) {
+    setLineItem(next)
+    if (!receiptTouched) setSendReceipt(!target?.contactId && deskReceiptDefaultOn(next))
   }
 
   // "This moves the membership from Ana to Ben." Shown only when the payment is
@@ -128,7 +166,7 @@ export function AssignPaymentDialog({
 
         <div className="space-y-4">
           {/* What was bought (structured → drives entitlements) */}
-          <PaymentLineItemPicker teamId={teamId} value={lineItem} onChange={setLineItem} />
+          <PaymentLineItemPicker teamId={teamId} value={lineItem} onChange={pickLineItem} />
 
           {/* Contact */}
           <div className="space-y-1.5">
@@ -169,6 +207,25 @@ export function AssignPaymentDialog({
               })}
             </div>
           </div>
+
+          {/* Only when this save grants something to somebody — see canSendReceipt. */}
+          {canSendReceipt && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">{t('sendReceiptLabel')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t(`sendReceiptHint_${receiptKind}` as never)}
+                </p>
+              </div>
+              <Switch
+                checked={sendReceipt}
+                onCheckedChange={(v) => {
+                  setReceiptTouched(true)
+                  setSendReceipt(v)
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

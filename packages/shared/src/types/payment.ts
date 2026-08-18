@@ -86,6 +86,56 @@ export interface PaymentLineItem {
   introOffer?: { periods: number; amount: number } | null
 }
 
+/**
+ * The receipt a DESK SALE of this line-item would send, or null for one that
+ * warrants none (UX-80).
+ *
+ * ONE PREDICATE, shared: the functions rail dispatches on it
+ * (`payments/deskReceipt.ts`) and the manager dialogs mount their "send the
+ * buyer a receipt" checkbox on it, so the box cannot offer a mail the server
+ * would then decline to send.
+ *
+ * Only the three kinds that have a body: a credit pack / membership, a course,
+ * a product. The rest are excluded because a receipt would be worse than
+ * silence, not because nobody has written one yet — a gift card's own mail
+ * carries the CODE, a drop-in and an appointment are confirmed by the BOOKING
+ * (which can name the class and the time, as a payment row cannot), and `other`
+ * grants nothing a buyer does not already hold.
+ */
+export function deskReceiptKindFor(
+  lineItem: Pick<PaymentLineItem, 'kind'> | null | undefined
+): 'subscription' | 'course' | 'product' | null {
+  const k = lineItem?.kind
+  return k === 'subscription' || k === 'course' || k === 'product' ? k : null
+}
+
+/**
+ * Whether the "send the buyer a receipt" box should START TICKED for this sale.
+ *
+ * THE DEFAULT FOLLOWS WHAT THE SALE GRANTS, not which rail it came down. A
+ * receipt earns its send when it tells the buyer something that exists nowhere
+ * else in their world:
+ *
+ *   • a credit pack — the NUMBER. Ten classes, and the only other place the ten
+ *     lives is a member area nobody has told them about yet. Ticked.
+ *   • a course — WHERE TO WATCH IT. Ticked.
+ *   • a membership — what they hold and until when. Ticked.
+ *   • a product — they are holding the hoodie. The collection terms may still be
+ *     worth sending, but the studio just said them out loud, so this one starts
+ *     UNticked and is one click away.
+ *
+ * The counter-argument to ticking anything — the money changed hands in front of
+ * a person who already knows what they bought — is real, and it is exactly why
+ * this is a visible checkbox rather than an always-on send or a settings toggle.
+ * The studio can see it, and untick it, at the moment of the sale.
+ */
+export function deskReceiptDefaultOn(
+  lineItem: Pick<PaymentLineItem, 'kind'> | null | undefined
+): boolean {
+  const kind = deskReceiptKindFor(lineItem)
+  return kind === 'subscription' || kind === 'course'
+}
+
 export interface ExternalPayment {
   /** Firestore doc id = `${gateway}:${gatewayRef}` (idempotency key). */
   id: string

@@ -33,7 +33,7 @@ import {
   type ActivityMemberBenefit,
   type Availability,
   type Benefit,
-  publicUrl,
+  localizedPublicUrl,
 } from '@linyup/shared'
 import {
   DAY_MS,
@@ -532,8 +532,12 @@ export const bookAppointment = onCall(async (request) => {
   }
 
   // ── Emails (confirmation + .ics + coach notification) ──
+  // Locale-pinned to the studio's language, like the mail it goes into — an
+  // unprefixed link opens in the reader's browser language instead.
   const cancelUrl = ctx.teamSlug
-    ? publicUrl(getHostingUrl(), ctx.teamSlug, 'appointments/cancel', { token: bookingToken })
+    ? localizedPublicUrl(getHostingUrl(), ctx.lang, ctx.teamSlug, 'appointments/cancel', {
+        token: bookingToken,
+      })
     : null
   await sendAppointmentBookingEmails({
     teamId,

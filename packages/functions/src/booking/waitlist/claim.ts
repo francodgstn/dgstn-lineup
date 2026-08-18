@@ -33,7 +33,7 @@ import {
   clearedClaimHoldFields,
   isPastBookingCutoff,
   isUnclaimedClaimHold,
-  publicUrl,
+  localizedPublicUrl,
   resolveActivityAccessRule,
   resolveAutoConfirm,
   resolvePaymentOptions,
@@ -527,7 +527,8 @@ export const claimWaitlistSeat = onCall(async (request) => {
       const lang: Lang = isLang(team.language) ? team.language : 'en'
       const manageBookingUrl =
         team.slug && committed.bookingToken
-          ? publicUrl(getHostingUrl(), team.slug, 'manage-booking', {
+          // Locale-pinned to the studio's language, like the mail it goes into.
+          ? localizedPublicUrl(getHostingUrl(), lang, team.slug, 'manage-booking', {
               token: committed.bookingToken,
             })
           : null
@@ -539,7 +540,9 @@ export const claimWaitlistSeat = onCall(async (request) => {
         sessionEnd: (session.end as Timestamp).toDate(),
         locationName: (session.location as string) || null,
         manageBookingUrl,
-        spaceUrl: team.slug ? publicUrl(getHostingUrl(), team.slug, 'space') : null,
+        spaceUrl: team.slug
+          ? localizedPublicUrl(getHostingUrl(), lang, team.slug, 'space')
+          : null,
         instructions:
           (activity.confirmationInstructions as string)?.trim() ||
           ((team.settings as Record<string, unknown> | undefined)

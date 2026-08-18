@@ -815,7 +815,14 @@
     "askToSignResultNoEmail": "{count} have no email address — ask them in person.",
     "askToSignResultNotDelivered": "{count} could not be emailed.",
     "askToSignResultSkipped": "{count} skipped (archived, deleted, or not in this team).",
-    "activityFilterConsent": "Consent"
+    "activityFilterConsent": "Consent",
+    "bulkSubscriptionPrice": "Price on the new plan",
+    "bulkSubscriptionNoPrice": "Record no price",
+    "bulkSubscriptionReplaceNote": "Everyone selected moves to this plan at this price. Their previous plan's price and amount are replaced.",
+    "bulkSubscriptionClearNote": "Everyone selected loses their plan, along with its price and amount.",
+    "bulkSubscriptionIntroNote": "This price has an intro offer. Intro offers apply to online checkout only, so the full price is recorded here.",
+    "creditsNotifyLabel": "Let them know by email",
+    "creditsNotifyHint": "Says the credits were added by you — it never mentions a purchase or a price."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1652,7 +1659,10 @@
     "rebooking": "Changing…",
     "rebookSuccess": "Your booking has been changed.",
     "noAlternatives": "No alternative sessions available at the moment.",
-    "at": "at"
+    "at": "at",
+    "loadFailed": "We couldn't load this booking. Please try the link again.",
+    "rebookFailed": "We couldn't move your booking to that session. Please pick another one or contact the studio.",
+    "dismiss": "Close"
   },
   "Waitlist": {
     "loading": "Loading…",
@@ -3140,7 +3150,10 @@
     "consentDownload": "Download my consent history",
     "consentDownloading": "Preparing…",
     "consentDownloadHint": "A single file with every version you accepted, its full text and when you accepted it.",
-    "consentDownloadError": "We could not prepare the file. Please try again."
+    "consentDownloadError": "We could not prepare the file. Please try again.",
+    "bookingsCancelConfirm": "Yes, cancel",
+    "bookingsCancelKeep": "Keep",
+    "bookingsCancelDone": "Booking cancelled."
   },
   "FreePlan": {
     "downgradeBannerTitle": "Your trial has ended — you're now on the Free plan",
@@ -3406,7 +3419,11 @@
     "reassignRemoves": "This takes the membership back from {from}.",
     "reassignConsumedPack": "{used} classes have already been taken on this pack, so it can’t be moved. Void this payment and record a new one instead.",
     "reassignVoided": "This payment is voided, so it can’t be edited. Record a new payment instead.",
-    "reassignFailed": "Couldn’t move this payment. Check both contacts, then try again."
+    "reassignFailed": "Couldn’t move this payment. Check both contacts, then try again.",
+    "sendReceiptLabel": "Send the buyer a receipt",
+    "sendReceiptHint_subscription": "An email confirming what they now hold — credits, expiry and where to see them.",
+    "sendReceiptHint_course": "An email confirming the course and where to watch it.",
+    "sendReceiptHint_product": "An email confirming the item and your collection terms."
   },
   "PaymentErrors": {
     "setupIncomplete": "Payment account setup isn't finished yet, so this couldn't go through. Finish setup in Settings → Payments.",
@@ -3543,7 +3560,14 @@
     "limitImageSize": "Image must be under {max} MB.",
     "errorInvalid": "Please enter a name and a valid price.",
     "errorSave": "Couldn't save the product. Please try again.",
-    "errorUpload": "Image upload failed. You can add it again later."
+    "errorUpload": "Image upload failed. You can add it again later.",
+    "fieldCollection": "How the buyer gets it",
+    "collectionPlaceholder": "Collect at the front desk during opening hours.",
+    "collectionHint": "Shown in the shop before the buyer pays, and again in their receipt.",
+    "collectionInheritsHint": "Leave empty to use your default: “{note}”",
+    "defaultCollectionTitle": "Collection & handover",
+    "defaultCollectionHint": "Your default answer to “how do I get it?”, used by every product that doesn't say something else.",
+    "defaultCollectionEmpty": "Not set — only a team owner can change this."
   },
   "PayResult": {
     "successTitle": "Payment successful",
@@ -5927,5 +5951,17 @@
     "per": "{recurrence, select, weekly {per week} biweekly {every 2 weeks} monthly {per month} quarterly {per quarter} annual {per year} other {per month}}",
     "linePriced": "{price} for {span} — then {full} {per}",
     "lineFree": "Free for {span} — then {full} {per}"
+  },
+  "BookingCancellation": {
+    "willReturnCredit": "Cancelling puts the class credit back on your pack.",
+    "willReturnUsage": "This class will stop counting towards the plan's limit.",
+    "returnedCredit": "The class credit is back on your pack.",
+    "returnedUsage": "This class no longer counts towards the plan's limit.",
+    "paidNotRefunded": "This booking was paid for. Cancelling frees the place but does not return the payment — ask the studio about a refund.",
+    "refusedNotFound": "This booking is no longer there — it looks like it was already cancelled.",
+    "refusedSessionGone": "That session is no longer in the schedule, so there is nothing left to cancel.",
+    "refusedAlreadySettled": "This booking can no longer be cancelled — it was already cancelled, or the studio has confirmed attendance.",
+    "refusedPast": "That session has already started, so it can no longer be cancelled here. Please speak to the studio.",
+    "failedTransient": "We couldn't cancel this booking — it is still active. Please try again."
   }
 }

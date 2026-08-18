@@ -28,9 +28,9 @@ import {
   SUBSCRIPTION_TYPES_SUBCOLLECTION, ORGANIZATIONS_COLLECTION,
   ORG_AFFILIATION_STATUSES_SUBCOLLECTION, DEFAULT_ORG_AFFILIATION_STATUSES,
   CONTACT_FILTERS_SUBCOLLECTION, contactUsageForPlan, PLAN_ORDER, contactOverageForPlan,
-  planHasHardContactCap,
+  planHasHardContactCap, resolveIntroOffer,
 } from '@linyup/shared'
-import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
+import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, SubscriptionPrice, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
 import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS } from '@linyup/shared'
 // The ONE contact predicate — see packages/shared/src/utils/contactFilter.ts.
 // Never re-implement matching here; extend the resolver instead.
@@ -42,6 +42,7 @@ import type {
   ContactFilter, ConsentFilter, InactivityPreset, RankFilter,
   AgeFilter, CustomFieldCondition, CustomFieldOp, WaiverAcceptanceState,
 } from '@linyup/shared'
+import { formatCurrency } from '@/lib/format'
 import { useAskedDocuments, type AskedDocument } from '@/hooks/useContactDocuments'
 import { AskToSignDialog } from '@/components/contacts/AskToSignDialog'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
@@ -2028,25 +2029,71 @@ function BulkSetRankDialog({
   )
 }
 
+/** The "record no price" choice. Not a price id — a deliberate null. */
+const NO_PRICE = '__no_price__'
+
+// Bulk plan change.
+//
+// IT ASKS FOR THE PRICE, and that is the whole repair. It used to write two
+// fields — `subscription_type_id` and `subscription_type_name` — and leave
+// `subscription_price_id`, `subscription_recurrence` and `subscription_amount`
+// exactly as the PREVIOUS plan had set them. So a studio that moved twenty
+// members from Basic to Premium believed it had repriced them and had not: the
+// contact carried Premium's name at Basic's amount, on Basic's price id.
+//
+// That was never only a display bug. `onContactSubscriptionChange` fires on the
+// type change and copies those three fields verbatim into the member's
+// `subscription_history` entry AND into the team's `subscription_transitions`
+// analytics row — so the studio's own record of what it charges was written
+// wrong, permanently, at the moment of the change.
+//
+// Hence: every one of the five fields is written on every apply, including the
+// nulls. Choosing "no price" is an option here (some types are just containers,
+// and the per-contact dialog allows it too) — but it is a CHOICE the studio
+// makes, never the silent survival of the old plan's money.
+//
+// The intro offer is deliberately not involved. `SubscriptionType.introOffer` is
+// a property of the CHECKOUT — a Stripe Coupon minted on the connected account
+// by the membership checkout callables — and a bulk assignment is an offline
+// record that creates no Stripe subscription. The note below says so rather than
+// leaving the studio to assume the discount was applied.
 function BulkSetSubscriptionDialog({
-  open, onOpenChange, subscriptionTypes, count, onConfirm,
+  open, onOpenChange, subscriptionTypes, count, currency, onConfirm,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void
   subscriptionTypes: SubscriptionType[]; count: number
-  onConfirm: (type: SubscriptionType | null) => Promise<void>
+  currency: string
+  onConfirm: (type: SubscriptionType | null, price: SubscriptionPrice | null) => Promise<void>
 }) {
   const t = useTranslations('Contacts')
   const tSettings = useTranslations('TeamSettings')
   const [picked, setPicked] = useState<string | null>(null)
+  // null = nothing chosen yet; NO_PRICE = "record no price", deliberately.
+  const [pickedPrice, setPickedPrice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => { if (open) setPicked(null) }, [open])
+  useEffect(() => { if (open) { setPicked(null); setPickedPrice(null) } }, [open])
+
+  const pickedType = picked && picked !== 'none'
+    ? subscriptionTypes.find((s) => s.id === picked) ?? null
+    : null
+  const activePrices = (pickedType?.prices ?? []).filter((p) => p.active !== false)
+  // A type with prices must have one named — otherwise "apply" would again mean
+  // "leave the amount to whatever was there".
+  const priceChosen = activePrices.length === 0 || pickedPrice !== null
+  const selectedPrice =
+    pickedPrice && pickedPrice !== NO_PRICE
+      ? activePrices.find((p) => p.id === pickedPrice) ?? null
+      : null
+  const introOffer = pickedType && selectedPrice
+    ? resolveIntroOffer(pickedType, selectedPrice.id)
+    : null
 
   const handleConfirm = async () => {
-    if (!picked) return
+    if (!picked || !priceChosen) return
     setBusy(true)
-    const type = picked === 'none' ? null : subscriptionTypes.find((s) => s.id === picked) ?? null
-    try { await onConfirm(type); onOpenChange(false) } finally { setBusy(false) }
+    const type = picked === 'none' ? null : pickedType
+    try { await onConfirm(type, type ? selectedPrice : null); onOpenChange(false) } finally { setBusy(false) }
   }
 
   return (
@@ -2055,14 +2102,14 @@ function BulkSetSubscriptionDialog({
         <DialogHeader><DialogTitle>{t('bulkSetSubscriptionTitle')}</DialogTitle></DialogHeader>
         <div className="space-y-1 py-1 max-h-72 overflow-y-auto">
           <button
-            onClick={() => setPicked(picked === 'none' ? null : 'none')}
+            onClick={() => { setPicked(picked === 'none' ? null : 'none'); setPickedPrice(null) }}
             className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${picked === 'none' ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
           >
             <p className="font-medium text-muted-foreground">{t('bulkSubscriptionNone')}</p>
           </button>
           {subscriptionTypes.map((st) => (
             <button key={st.id}
-              onClick={() => setPicked(picked === st.id ? null : st.id)}
+              onClick={() => { setPicked(picked === st.id ? null : st.id); setPickedPrice(null) }}
               className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${picked === st.id ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
             >
               <div className="flex items-center gap-2">
@@ -2077,10 +2124,48 @@ function BulkSetSubscriptionDialog({
           {subscriptionTypes.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">{t('bulkNoSubscriptions')}</p>
           )}
+
+          {/* The price of the plan being moved TO. Without this step the amount
+              on every one of these contacts stays whatever their old plan cost. */}
+          {activePrices.length > 0 && (
+            <div className="pt-3 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+                {t('bulkSubscriptionPrice')}
+              </p>
+              {activePrices.map((p) => (
+                <button key={p.id}
+                  onClick={() => setPickedPrice(pickedPrice === p.id ? null : p.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${pickedPrice === p.id ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
+                >
+                  {p.label ? `${p.label} · ` : ''}
+                  {formatCurrency(p.amount, currency)} · {t(`recurrence_${p.recurrence}`)}
+                </button>
+              ))}
+              <button
+                onClick={() => setPickedPrice(pickedPrice === NO_PRICE ? null : NO_PRICE)}
+                className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${pickedPrice === NO_PRICE ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`}
+              >
+                <span className="text-muted-foreground">{t('bulkSubscriptionNoPrice')}</span>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* What the apply will write. Stated because the old behaviour — the
+            previous plan's price surviving the move — was invisible until it
+            reached the books. */}
+        {picked && (
+          <p className="text-xs text-muted-foreground">
+            {picked === 'none' ? t('bulkSubscriptionClearNote') : t('bulkSubscriptionReplaceNote')}
+          </p>
+        )}
+        {introOffer && (
+          <p className="text-xs text-muted-foreground">{t('bulkSubscriptionIntroNote')}</p>
+        )}
+
         <DialogFooter>
           <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">{t('cancel')}</button>
-          <button onClick={handleConfirm} disabled={busy || !picked}
+          <button onClick={handleConfirm} disabled={busy || !picked || !priceChosen}
             className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
             {t('bulkApplyTo', { count })}
           </button>
@@ -2467,11 +2552,23 @@ export default function ContactsPage() {
     invalidateContacts()
   }
 
-  const bulkSetSubscription = async (type: SubscriptionType | null) => {
+  // THE SAME FIVE FIELDS the per-contact dialog writes, every time — see the
+  // note on BulkSetSubscriptionDialog. The three price fields are written even
+  // when they are null: an omitted key on `updateDoc` leaves the PREVIOUS plan's
+  // price standing, which is exactly the defect this replaced, and it reaches
+  // the subscription history and the transitions ledger, not just the screen.
+  const bulkSetSubscription = async (
+    type: SubscriptionType | null,
+    price: SubscriptionPrice | null
+  ) => {
     await Promise.all([...selected].map((id) =>
       updateDoc(doc(db, CONTACTS_COLLECTION, id), {
         subscription_type_id: type?.id ?? null,
         subscription_type_name: type?.name ?? null,
+        subscription_price_id: price?.id ?? null,
+        subscription_recurrence: price?.recurrence ?? null,
+        subscription_amount: price?.amount ?? null,
+        subscription_type_updated_at: serverTimestamp(),
         // Assigning a subscription materializes a provisional lead (offline-paid
         // members count toward the cap too). See Contact.provisional.
         ...(type ? { provisional: deleteField(), provisional_expires_at: deleteField() } : {}),
@@ -2886,6 +2983,7 @@ export default function ContactsPage() {
         onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
         subscriptionTypes={subscriptionTypes}
         count={selected.size}
+        currency={(team?.default_currency ?? 'CHF').toUpperCase()}
         onConfirm={bulkSetSubscription}
       />
 

@@ -27,7 +27,7 @@ import {
   TEAM_PLACES_SUBCOLLECTION,
   resolveBookingReminderSteps,
   type BookingReminderStep,
-  publicUrl,
+  localizedPublicUrl,
 } from '@linyup/shared'
 
 type Lang = 'en' | 'de' | 'fr' | 'it'
@@ -223,9 +223,14 @@ export async function sendBookingReminders(): Promise<{
       const sessionStart = sessionData.start.toDate() as Date
       const sessionEnd = sessionData.end.toDate() as Date
       const bookingToken = (booking.booking_token as string) || null
+      // Locale-pinned: the reminder is built in `team.lang`, and the link it
+      // carries is the most-clicked route to the cancellation page. Unprefixed,
+      // that page picks the READER's browser language instead of the studio's.
       const manageBookingUrl =
         team.slug && bookingToken
-          ? publicUrl(getHostingUrl(), team.slug, 'manage-booking', { token: bookingToken })
+          ? localizedPublicUrl(getHostingUrl(), team.lang, team.slug, 'manage-booking', {
+              token: bookingToken,
+            })
           : null
 
       for (const step of pendingSteps) {

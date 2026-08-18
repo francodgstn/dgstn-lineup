@@ -121,3 +121,143 @@ describe('every rail that takes money in the SHOP sends one', () => {
     }
   })
 })
+
+// ── UX-80: the same money, taken by hand ─────────────────────────────────────
+// The offline sibling of the block above. What it guards is not "the mail stops
+// going out" — a desk receipt is a CHOICE and may legitimately not be sent — but
+// the two placements that would break the feature quietly:
+//
+//   1. the send migrating INTO `applyPaymentEffects`, which re-runs on every
+//      manager edit and would mail the member again on each re-save;
+//   2. the send migrating INTO `writeManualPaymentEvent`, which is shared with
+//      rails that already confirm themselves (the appointments phone booking,
+//      the gift-card till) and would give those buyers a second, worse mail.
+//
+// Both were live risks the finding named explicitly, and neither would fail a
+// runtime test — the mail simply goes out more often than anyone intended.
+describe('the DESK receipts confirm a sale made by hand', () => {
+  const desk = read('payments/deskReceipt.ts')
+
+  it('never lands in the shared effects function', () => {
+    const effects = code(read('payments/effects.ts'))
+    assert.equal(
+      /sendEmail|Receipt\(/.test(effects),
+      false,
+      'payments/effects.ts re-runs on every manager edit — a send there mails on each re-save'
+    )
+  })
+
+  it('never lands in the shared manual-payment writer', () => {
+    const src = code(read('payments/recordManualPayment.ts'))
+    const writer = src.slice(
+      src.indexOf('export async function writeManualPaymentEvent'),
+      src.indexOf('export const recordManualPayment')
+    )
+    assert.ok(writer.length > 0, 'the writer must still precede the callable')
+    assert.equal(
+      /sendDeskSaleReceipt/.test(writer),
+      false,
+      'staffBooking + the gift-card till share this writer and confirm themselves already'
+    )
+    assert.ok(
+      /sendDeskSaleReceipt/.test(src.slice(src.indexOf('export const recordManualPayment'))),
+      'the CALLABLE is where the studio ticked the box'
+    )
+  })
+
+  it('sends only on an explicit opt-in — an omitted flag never mails', () => {
+    for (const file of [
+      'payments/recordManualPayment.ts',
+      'connect/updatePayment.ts',
+      'contacts/grantCredits.ts',
+    ]) {
+      assert.ok(
+        /data\.sendReceipt === true/.test(code(read(file))),
+        `${file} must require an explicit true, not a truthy default`
+      )
+    }
+  })
+
+  it('reuses the shop bodies rather than growing a fifth template', () => {
+    for (const fn of [
+      'sendMembershipPurchaseReceipt',
+      'sendCoursePurchaseReceipt',
+      'sendProductPurchaseReceipt',
+    ]) {
+      assert.ok(desk.includes(fn), `payments/deskReceipt.ts must delegate to ${fn}`)
+    }
+    assert.equal(
+      /buildEmailTemplate|detailsBox/.test(code(desk)),
+      false,
+      'no template assembly here — the bodies live in connect/purchaseTemplates.ts'
+    )
+  })
+
+  it('never claims a cash membership renews itself', () => {
+    // There is no Stripe subscription behind a manual payment, so the recurring
+    // copy would promise a billing portal this member has no access to.
+    assert.equal(
+      /recurring:\s*true/.test(code(desk)),
+      false,
+      'a manual payment creates no subscription — recurring must stay false'
+    )
+  })
+
+  it('names the tender, so a bare amount cannot read as a card charge', () => {
+    assert.ok(code(desk).includes('methodLabel'))
+    assert.ok(
+      code(read('connect/purchaseTemplates.ts')).includes('methodLabel'),
+      'the facts line must render it'
+    )
+  })
+
+  it('does not thank somebody for a purchase they did not make', () => {
+    assert.ok(
+      code(desk).includes('granted: true'),
+      'the grantCredits rail must swap the purchase copy'
+    )
+  })
+
+  it('is named in the census of what sits outside the toggles', () => {
+    assert.ok(
+      read('utils/systemEmails.ts').includes('payments/deskReceipt.ts'),
+      'utils/systemEmails.ts owns that list — say why this one is a choice, not a toggle'
+    )
+  })
+
+  it('a double-click grants once and mails once', () => {
+    const grant = code(read('contacts/grantCredits.ts'))
+    assert.ok(grant.includes('grantRef.create('), 'a deterministic id must be created, not set')
+    assert.ok(grant.includes('duplicate'), 'the second click must be reported, not applied')
+    const manual = code(read('payments/recordManualPayment.ts'))
+    assert.ok(
+      /!result\.duplicate/.test(manual),
+      'a duplicated manual payment re-applies nothing, so it must re-announce nothing'
+    )
+  })
+})
+
+// ── UX-79: a product can finally say how to get it ───────────────────────────
+describe('the product receipt states the studio’s collection terms', () => {
+  it('resolves them through the ONE shared resolver', () => {
+    const receipts = code(read('connect/purchaseReceipts.ts'))
+    assert.ok(
+      receipts.includes('resolveProductCollectionNote'),
+      'the receipt must resolve product-note→team-default the same way the shop does'
+    )
+  })
+
+  it('replaces the generic line rather than joining it', () => {
+    const tpl = code(read('connect/purchaseTemplates.ts'))
+    assert.ok(
+      tpl.includes('collectionNote ?? nextLines[lang]'),
+      "the studio's own terms must not be printed beside a platform disclaimer"
+    )
+  })
+
+  it('reaches both online product rails', () => {
+    assert.ok(/productId: md\.productId/.test(code(read('connect/webhook.ts'))))
+    const payments = code(read('connect/payments.ts'))
+    assert.ok(/itemLabel: productName,\s+productId,/.test(payments))
+  })
+})

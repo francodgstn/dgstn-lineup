@@ -4,10 +4,24 @@
 // client-reachable way to create one, since Firestore rules deny direct writes
 // (credits_used must never be client-mutable). The onCreditGrantWrite sync
 // recomputes Contact.credit_summary.
+//
+// TWO THINGS UX-80 ADDED, and the first is why the second is safe:
+//
+//   • `idempotencyKey` makes the grant doc id DETERMINISTIC, written with
+//     `.create()`. A double-click used to mint two grants — twice the credits,
+//     silently — and now writes one and reports the second as a duplicate. The
+//     key is optional: an omitted one keeps the old auto-id behaviour, so no
+//     existing caller changes shape.
+//   • `sendReceipt` tells the contact they now hold N credits. It is the same
+//     credit-pack body the shop sends, with `granted: true` (nobody bought
+//     anything here) and no paid line. It is skipped on a duplicate, so the
+//     double-click that no longer double-grants also does not double-mail.
+//     See payments/deskReceipt.ts for the posture.
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { isTeamMember } from '../utils/teams'
+import { sendGrantedCreditsReceipt } from '../payments/deskReceipt'
 import {
   CONTACTS_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
@@ -26,6 +40,10 @@ export const grantCredits = onCall(async (request) => {
     credits?: number
     // Validity in months from now (defaults to the price's included_months).
     validityMonths?: number
+    // Stable dedupe key; falls back to a fresh doc id (no dedup) when omitted.
+    idempotencyKey?: string
+    // "Let the contact know" — omitted means no. See the header.
+    sendReceipt?: boolean
   }
   if (!data?.contactId || !data?.subscriptionTypeId) {
     throw new HttpsError('invalid-argument', 'contactId and subscriptionTypeId are required.')
@@ -65,12 +83,15 @@ export const grantCredits = onCall(async (request) => {
     expiresAt = Timestamp.fromDate(d)
   }
 
-  const grantRef = db
+  const grantsCol = db
     .collection(CONTACTS_COLLECTION)
     .doc(data.contactId)
     .collection(CONTACT_CREDIT_GRANTS_SUBCOLLECTION)
-    .doc()
-  await grantRef.set({
+  // The key becomes a DOCUMENT ID, so it is stripped to characters that cannot
+  // change the path (a '/' would silently address a different subcollection).
+  const rawKey = (data.idempotencyKey ?? '').trim().replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 120)
+  const grantRef = grantsCol.doc(rawKey || grantsCol.doc().id)
+  const payload = {
     teamId,
     subscription_type_id: data.subscriptionTypeId,
     subscription_type_name: typeName,
@@ -81,7 +102,34 @@ export const grantCredits = onCall(async (request) => {
     source: 'manual',
     created_at: FieldValue.serverTimestamp(),
     created_by: request.auth.uid,
-  })
+  }
 
-  return { success: true, grantId: grantRef.id, credits, expiresAt: expiresAt?.toMillis() ?? null }
+  // `.create()`, not `.set()`: on a deterministic id a second click must be
+  // refused, not overwritten — overwriting would reset `credits_used` on a pack
+  // the contact has already drawn on.
+  let duplicate = false
+  try {
+    await grantRef.create(payload)
+  } catch (err: unknown) {
+    // ALREADY_EXISTS (code 6) — the same grant, clicked twice.
+    if ((err as { code?: number }).code === 6) duplicate = true
+    else throw err
+  }
+
+  if (data.sendReceipt === true && !duplicate) {
+    await sendGrantedCreditsReceipt({
+      teamId,
+      contactId: data.contactId,
+      grantId: grantRef.id,
+      planName: typeName ?? 'Credits',
+    })
+  }
+
+  return {
+    success: true,
+    grantId: grantRef.id,
+    credits,
+    expiresAt: expiresAt?.toMillis() ?? null,
+    duplicate,
+  }
 })

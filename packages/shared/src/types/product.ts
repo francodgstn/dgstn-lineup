@@ -40,6 +40,17 @@ export interface Product {
   // Display order (lower = first) in the storefront and the admin list. Absent
   // values sort last (by name).
   order?: number
+  // HOW THE BUYER GETS IT — free text, per product, falling back to the team
+  // default at `teams/{teamId}.settings.productCollectionNote`. Read through
+  // `resolveProductCollectionNote`, never directly, so the shop card and the
+  // receipt cannot disagree about which of the two applies.
+  //
+  // DELIBERATELY TEXT, and deliberately not a fulfilment MODEL. A studio handing
+  // over a gi at the front desk and one posting a water bottle need the same
+  // field to say different things; a shipping-method enum plus an address the
+  // checkout does not collect would be a bigger feature answering a smaller
+  // question. This says what is true and nothing more.
+  collectionNote?: string
   created_at?: Timestamp
   updated_at?: Timestamp
   createdBy?: string
@@ -87,3 +98,28 @@ export function getProductLimits(plan: SaasPlan | null): { maxProductsPerTeam: n
 
 // Max variants per product — keeps the editor and storefront tidy.
 export const MAX_PRODUCT_VARIANTS = 20
+
+// Max length of a collection/fulfilment note (per product AND the team default).
+// Long enough for "Collect at the front desk during opening hours, or ask us to
+// post it (CHF 8)" and short enough that it stays a note rather than a page.
+export const MAX_PRODUCT_COLLECTION_NOTE = 500
+
+/**
+ * The collection note that applies to one product: its own, else the team's
+ * default, else null.
+ *
+ * THE ONE RESOLVER — the shop card, the checkout modal and the purchase receipt
+ * all call this, so a studio that sets only the team default sees the same
+ * sentence in all three. A blank string is NOT a note (an emptied field falls
+ * back to the default rather than silencing it), which is the same convention
+ * `bookingCancellationPolicy` uses one level up.
+ */
+export function resolveProductCollectionNote(
+  product: Pick<Product, 'collectionNote'> | null | undefined,
+  teamDefault?: string | null
+): string | null {
+  const own = (product?.collectionNote ?? '').trim()
+  if (own) return own
+  const fallback = (teamDefault ?? '').trim()
+  return fallback || null
+}

@@ -815,7 +815,14 @@
     "askToSignResultNoEmail": "{count} non hanno un indirizzo e-mail — chiedi di persona.",
     "askToSignResultNotDelivered": "{count} non sono stati raggiunti via e-mail.",
     "askToSignResultSkipped": "{count} saltati (archiviati, eliminati o non in questo team).",
-    "activityFilterConsent": "Consenso"
+    "activityFilterConsent": "Consenso",
+    "bulkSubscriptionPrice": "Prezzo del nuovo abbonamento",
+    "bulkSubscriptionNoPrice": "Non registrare alcun prezzo",
+    "bulkSubscriptionReplaceNote": "Tutte le persone selezionate passano a questo abbonamento a questo prezzo. Prezzo e importo dell'abbonamento precedente vengono sostituiti.",
+    "bulkSubscriptionClearNote": "Tutte le persone selezionate perdono l'abbonamento, insieme a prezzo e importo.",
+    "bulkSubscriptionIntroNote": "Questo prezzo ha un'offerta introduttiva. Le offerte introduttive valgono solo per l'acquisto online, quindi qui viene registrato il prezzo pieno.",
+    "creditsNotifyLabel": "Avvisa via email",
+    "creditsNotifyHint": "L'email dice che i crediti sono stati aggiunti da te — non menziona alcun acquisto né prezzo."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -1652,7 +1659,10 @@
     "rebooking": "Modifica in corso…",
     "rebookSuccess": "La tua prenotazione è stata modificata.",
     "noAlternatives": "Nessuna sessione alternativa disponibile al momento.",
-    "at": "alle"
+    "at": "alle",
+    "loadFailed": "Non è stato possibile caricare questa prenotazione. Riprova con il link.",
+    "rebookFailed": "Non è stato possibile spostare la prenotazione su questa sessione. Scegli un'altra sessione o contatta lo studio.",
+    "dismiss": "Chiudi"
   },
   "Waitlist": {
     "loading": "Caricamento…",
@@ -3140,7 +3150,10 @@
     "consentDownload": "Scarica i miei consensi",
     "consentDownloading": "Preparazione…",
     "consentDownloadHint": "Un unico file con ogni versione accettata, il testo completo e la data di accettazione.",
-    "consentDownloadError": "Non è stato possibile preparare il file. Riprova."
+    "consentDownloadError": "Non è stato possibile preparare il file. Riprova.",
+    "bookingsCancelConfirm": "Sì, annulla",
+    "bookingsCancelKeep": "Mantieni",
+    "bookingsCancelDone": "Prenotazione annullata."
   },
   "FreePlan": {
     "downgradeBannerTitle": "La tua prova è terminata — sei ora sul piano Free",
@@ -3406,7 +3419,11 @@
     "reassignRemoves": "Questo riprende l’abbonamento a {from}.",
     "reassignConsumedPack": "Su questo pacchetto sono già state usate {used} lezioni, quindi non può essere trasferito. Annulla questo pagamento e registrane uno nuovo.",
     "reassignVoided": "Questo pagamento è annullato e non può essere modificato. Registra invece un nuovo pagamento.",
-    "reassignFailed": "Non è stato possibile trasferire questo pagamento. Controlla entrambi i contatti e riprova."
+    "reassignFailed": "Non è stato possibile trasferire questo pagamento. Controlla entrambi i contatti e riprova.",
+    "sendReceiptLabel": "Invia una ricevuta all'acquirente",
+    "sendReceiptHint_subscription": "Un'email che conferma cosa possiede ora — crediti, scadenza e dove vederli.",
+    "sendReceiptHint_course": "Un'email che conferma il corso e dove guardarlo.",
+    "sendReceiptHint_product": "Un'email che conferma l'articolo e le tue condizioni di ritiro."
   },
   "PaymentErrors": {
     "setupIncomplete": "La configurazione del conto di pagamento non è ancora completata, quindi l'operazione non è riuscita. Completare la configurazione in Impostazioni → Pagamenti.",
@@ -3543,7 +3560,14 @@
     "limitImageSize": "L'immagine deve essere inferiore a {max} MB.",
     "errorInvalid": "Inserisci un nome e un prezzo valido.",
     "errorSave": "Impossibile salvare il prodotto. Riprova.",
-    "errorUpload": "Caricamento immagine non riuscito. Puoi aggiungerla in seguito."
+    "errorUpload": "Caricamento immagine non riuscito. Puoi aggiungerla in seguito.",
+    "fieldCollection": "Come l'acquirente lo riceve",
+    "collectionPlaceholder": "Ritiro alla reception durante gli orari di apertura.",
+    "collectionHint": "Mostrato nel negozio prima del pagamento e poi nella ricevuta.",
+    "collectionInheritsHint": "Lascia vuoto per usare la tua impostazione predefinita: «{note}»",
+    "defaultCollectionTitle": "Ritiro e consegna",
+    "defaultCollectionHint": "La tua risposta predefinita a «come lo ricevo?», usata da ogni prodotto che non ne indica un'altra.",
+    "defaultCollectionEmpty": "Non impostato — solo un proprietario del team può modificarlo."
   },
   "PayResult": {
     "successTitle": "Pagamento riuscito",
@@ -5927,5 +5951,17 @@
     "per": "{recurrence, select, weekly {a settimana} biweekly {ogni 2 settimane} monthly {al mese} quarterly {a trimestre} annual {all'anno} other {al mese}}",
     "linePriced": "{price} per {span} — poi {full} {per}",
     "lineFree": "Gratis per {span} — poi {full} {per}"
+  },
+  "BookingCancellation": {
+    "willReturnCredit": "Con l'annullamento il credito della lezione torna sul pacchetto.",
+    "willReturnUsage": "La lezione non conterà più nel limite dell'abbonamento.",
+    "returnedCredit": "Il credito della lezione è tornato sul pacchetto.",
+    "returnedUsage": "La lezione non conta più nel limite dell'abbonamento.",
+    "paidNotRefunded": "Questa prenotazione è stata pagata. L'annullamento libera il posto ma non rimborsa l'importo — contattare lo studio per un rimborso.",
+    "refusedNotFound": "Questa prenotazione non esiste più: a quanto pare è già stata annullata.",
+    "refusedSessionGone": "Questa sessione non è più in programma, quindi non c'è più nulla da annullare.",
+    "refusedAlreadySettled": "Questa prenotazione non può più essere annullata: è già stata annullata oppure lo studio ha confermato la presenza.",
+    "refusedPast": "Questa sessione è già iniziata e non può più essere annullata qui. Contattare lo studio.",
+    "failedTransient": "Non siamo riusciti ad annullare questa prenotazione: è ancora attiva. Riprova."
   }
 }

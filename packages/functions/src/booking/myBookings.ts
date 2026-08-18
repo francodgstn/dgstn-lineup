@@ -52,6 +52,8 @@ import {
   SESSIONS_COLLECTION,
   isUnclaimedClaimHold,
   resolveAutoConfirm,
+  bookingWasPaidFor,
+  type SeatHold,
   type ActivityType,
   type MyBooking,
   type MyBookingsResult,
@@ -289,6 +291,15 @@ export const getMyBookings = onCall(async (request): Promise<MyBookingsResult> =
         // mailed it), but a button that exists is a promise.
         cancelToken: cancellable ? token : null,
         sessionCancelled,
+        // Read off THIS booking's own markers — the same three fields
+        // cancelBooking's transaction acts on. The row can therefore say what
+        // cancelling returns (and, for a paid seat, what it does not) before
+        // she presses, instead of leaving her to guess about her own money.
+        cancelEffect: {
+          credit: !!booking.credit_grant_id && !!booking.credit_spent,
+          usageUnit: !!booking.usage_window_doc_id,
+          paid: bookingWasPaidFor(booking as SeatHold),
+        },
       }
     }
   )

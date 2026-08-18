@@ -1669,6 +1669,8 @@ async function handleProductCheckout(
     teamId: team.teamId,
     contactId,
     itemLabel: label,
+    // Which product, so the receipt can read its collection note (UX-79).
+    productId: md.productId ?? null,
     tenderRef: piId ?? `cs:${session?.id ?? 'unknown'}`,
     paid:
       typeof session.amount_total === 'number' && session.amount_total > 0

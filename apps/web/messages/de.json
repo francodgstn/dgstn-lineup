@@ -815,7 +815,14 @@
     "askToSignResultNoEmail": "{count} haben keine E-Mail-Adresse — bitte persönlich fragen.",
     "askToSignResultNotDelivered": "{count} konnten nicht angeschrieben werden.",
     "askToSignResultSkipped": "{count} übersprungen (archiviert, gelöscht oder nicht in diesem Team).",
-    "activityFilterConsent": "Einwilligung"
+    "activityFilterConsent": "Einwilligung",
+    "bulkSubscriptionPrice": "Preis im neuen Abo",
+    "bulkSubscriptionNoPrice": "Keinen Preis erfassen",
+    "bulkSubscriptionReplaceNote": "Alle ausgewählten Personen wechseln zu diesem Abo mit diesem Preis. Preis und Betrag des bisherigen Abos werden ersetzt.",
+    "bulkSubscriptionClearNote": "Alle ausgewählten Personen verlieren ihr Abo samt Preis und Betrag.",
+    "bulkSubscriptionIntroNote": "Für diesen Preis gibt es ein Einstiegsangebot. Einstiegsangebote gelten nur beim Online-Kauf, hier wird deshalb der volle Preis erfasst.",
+    "creditsNotifyLabel": "Per E-Mail informieren",
+    "creditsNotifyHint": "Die E-Mail sagt, dass Sie das Guthaben gutgeschrieben haben — von Kauf oder Preis ist keine Rede."
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -1652,7 +1659,10 @@
     "rebooking": "Wird geändert…",
     "rebookSuccess": "Ihre Buchung wurde geändert.",
     "noAlternatives": "Derzeit keine alternativen Sessions verfügbar.",
-    "at": "um"
+    "at": "um",
+    "loadFailed": "Diese Buchung konnte nicht geladen werden. Bitte versuchen Sie den Link erneut.",
+    "rebookFailed": "Ihre Buchung konnte nicht auf diesen Termin verschoben werden. Bitte wählen Sie einen anderen Termin oder kontaktieren Sie das Studio.",
+    "dismiss": "Schliessen"
   },
   "Waitlist": {
     "loading": "Wird geladen …",
@@ -3140,7 +3150,10 @@
     "consentDownload": "Meine Einwilligungen herunterladen",
     "consentDownloading": "Wird vorbereitet…",
     "consentDownloadHint": "Eine einzige Datei mit jeder akzeptierten Version, dem vollständigen Text und dem Zeitpunkt.",
-    "consentDownloadError": "Die Datei konnte nicht erstellt werden. Bitte erneut versuchen."
+    "consentDownloadError": "Die Datei konnte nicht erstellt werden. Bitte erneut versuchen.",
+    "bookingsCancelConfirm": "Ja, stornieren",
+    "bookingsCancelKeep": "Behalten",
+    "bookingsCancelDone": "Buchung storniert."
   },
   "FreePlan": {
     "downgradeBannerTitle": "Deine Testphase ist beendet — du nutzt jetzt den Free-Plan",
@@ -3406,7 +3419,11 @@
     "reassignRemoves": "Damit wird das Abo von {from} zurückgenommen.",
     "reassignConsumedPack": "Von diesem Paket wurden bereits {used} Lektionen genutzt, deshalb lässt es sich nicht übertragen. Storniere diese Zahlung und erfasse stattdessen eine neue.",
     "reassignVoided": "Diese Zahlung ist storniert und kann nicht mehr bearbeitet werden. Erfasse stattdessen eine neue Zahlung.",
-    "reassignFailed": "Die Zahlung konnte nicht übertragen werden. Bitte beide Kontakte prüfen und nochmals versuchen."
+    "reassignFailed": "Die Zahlung konnte nicht übertragen werden. Bitte beide Kontakte prüfen und nochmals versuchen.",
+    "sendReceiptLabel": "Beleg an die Käuferin senden",
+    "sendReceiptHint_subscription": "Eine E-Mail mit dem, was jetzt vorhanden ist — Guthaben, Gültigkeit und wo es zu sehen ist.",
+    "sendReceiptHint_course": "Eine E-Mail mit dem Kurs und dem Link zum Ansehen.",
+    "sendReceiptHint_product": "Eine E-Mail mit dem Artikel und Ihren Angaben zur Übergabe."
   },
   "PaymentErrors": {
     "setupIncomplete": "Die Einrichtung des Zahlungskontos ist noch nicht abgeschlossen, daher konnte dies nicht durchgeführt werden. Einrichtung unter Einstellungen → Zahlungen abschliessen.",
@@ -3543,7 +3560,14 @@
     "limitImageSize": "Das Bild muss kleiner als {max} MB sein.",
     "errorInvalid": "Bitte gib einen Namen und einen gültigen Preis ein.",
     "errorSave": "Das Produkt konnte nicht gespeichert werden. Bitte versuche es erneut.",
-    "errorUpload": "Bild-Upload fehlgeschlagen. Du kannst es später erneut hinzufügen."
+    "errorUpload": "Bild-Upload fehlgeschlagen. Du kannst es später erneut hinzufügen.",
+    "fieldCollection": "Wie die Käuferin es erhält",
+    "collectionPlaceholder": "Abholung an der Rezeption während der Öffnungszeiten.",
+    "collectionHint": "Wird im Shop vor dem Bezahlen und danach im Beleg angezeigt.",
+    "collectionInheritsHint": "Leer lassen, um Ihre Vorgabe zu verwenden: „{note}“",
+    "defaultCollectionTitle": "Abholung & Übergabe",
+    "defaultCollectionHint": "Ihre Standardantwort auf „Wie erhalte ich es?“ — gilt für jedes Produkt ohne eigene Angabe.",
+    "defaultCollectionEmpty": "Nicht festgelegt — nur Team-Inhaber können das ändern."
   },
   "PayResult": {
     "successTitle": "Zahlung erfolgreich",
@@ -5927,5 +5951,17 @@
     "per": "{recurrence, select, weekly {pro Woche} biweekly {alle 2 Wochen} monthly {pro Monat} quarterly {pro Quartal} annual {pro Jahr} other {pro Monat}}",
     "linePriced": "{price} für {span} — danach {full} {per}",
     "lineFree": "Gratis für {span} — danach {full} {per}"
+  },
+  "BookingCancellation": {
+    "willReturnCredit": "Bei einer Stornierung wird die Lektion dem Guthaben wieder gutgeschrieben.",
+    "willReturnUsage": "Die Lektion zählt danach nicht mehr zum Limit des Abos.",
+    "returnedCredit": "Die Lektion wurde dem Guthaben wieder gutgeschrieben.",
+    "returnedUsage": "Die Lektion zählt nicht mehr zum Limit des Abos.",
+    "paidNotRefunded": "Diese Buchung wurde bezahlt. Die Stornierung gibt den Platz frei, erstattet den Betrag aber nicht — für eine Rückerstattung bitte das Studio kontaktieren.",
+    "refusedNotFound": "Diese Buchung gibt es nicht mehr — offenbar wurde sie bereits storniert.",
+    "refusedSessionGone": "Diese Lektion steht nicht mehr im Programm, es gibt also nichts mehr zu stornieren.",
+    "refusedAlreadySettled": "Diese Buchung kann nicht mehr storniert werden — sie wurde bereits storniert oder das Studio hat die Teilnahme bestätigt.",
+    "refusedPast": "Diese Lektion hat bereits begonnen und kann hier nicht mehr storniert werden. Bitte das Studio kontaktieren.",
+    "failedTransient": "Diese Buchung konnte nicht storniert werden — sie ist weiterhin aktiv. Bitte erneut versuchen."
   }
 }

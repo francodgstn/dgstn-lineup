@@ -42,9 +42,11 @@ import {
   CONTACTS_COLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   COURSES_COLLECTION,
+  PRODUCTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   publicUrl,
   publicSubUrl,
+  resolveProductCollectionNote,
 } from '@linyup/shared'
 import { sendEmail } from '../utils/email'
 import { getHostingUrl } from '../utils/env'
@@ -128,6 +130,10 @@ export interface MembershipPurchaseReceiptParams {
     recurrence: string
     currency: string
   } | null
+  /** These credits were GIVEN rather than bought (the `grantCredits` desk rail).
+   *  Only reaches the credit-pack body, which is the only one whose copy thanks
+   *  the reader for a purchase. Ignored when the sale carried no credits. */
+  granted?: boolean
   fallbackEmail?: string | null
 }
 
@@ -188,6 +194,7 @@ export async function sendMembershipPurchaseReceipt(
               (grant?.subscription_type_id as string | undefined) ?? null
             ),
             paid: p.paid ?? null,
+            granted: p.granted ?? false,
             spaceUrl,
             lang: team.lang,
           })
@@ -345,9 +352,51 @@ export interface ProductPurchaseReceiptParams {
   /** "Hoodie · XL" — already assembled by the caller, which is the same label it
    *  writes to the activity log and the payment line item. */
   itemLabel: string
+  /** The product sold, when the caller knows which one. Used ONLY to look up its
+   *  collection note (UX-79); absent ⇒ the team default still applies, because a
+   *  studio that answered "how do I get it?" once should not have that answer
+   *  disappear on a rail that lost the id. */
+  productId?: string | null
   tenderRef: string
   paid?: PaidAmount | null
   fallbackEmail?: string | null
+}
+
+/**
+ * The studio's answer to "how do I get it?" — the product's own note, else the
+ * team default, else null (and then the body falls back to its generic line).
+ *
+ * Resolved through the SHARED `resolveProductCollectionNote`, the same function
+ * the shop card and the checkout modal call, so a buyer cannot be shown one
+ * sentence before paying and a different one after. Best-effort: a failed read
+ * degrades to the team default rather than dropping the whole receipt.
+ */
+async function collectionNoteFor(
+  teamId: string,
+  productId: string | null | undefined,
+  teamData: Record<string, unknown>
+): Promise<string | null> {
+  const teamDefault = (
+    (teamData.settings as { productCollectionNote?: string } | undefined)?.productCollectionNote ??
+    ''
+  ).trim()
+  if (!productId) return resolveProductCollectionNote(null, teamDefault)
+  try {
+    const snap = await admin
+      .firestore()
+      .collection(TEAMS_COLLECTION)
+      .doc(teamId)
+      .collection(PRODUCTS_SUBCOLLECTION)
+      .doc(productId)
+      .get()
+    return resolveProductCollectionNote(
+      { collectionNote: snap.data()?.collectionNote as string | undefined },
+      teamDefault
+    )
+  } catch (err) {
+    console.warn(`[connect] collection note lookup failed (team=${teamId} product=${productId}):`, err)
+    return resolveProductCollectionNote(null, teamDefault)
+  }
 }
 
 export async function sendProductPurchaseReceipt(p: ProductPurchaseReceiptParams): Promise<void> {
@@ -370,6 +419,9 @@ export async function sendProductPurchaseReceipt(p: ProductPurchaseReceiptParams
       teamName: team.name,
       itemLabel: p.itemLabel,
       paid: p.paid ?? null,
+      // HOW TO GET IT (UX-79) — the studio's own words when it has any. Absent,
+      // the body keeps saying only what is true: handover is arranged directly.
+      collectionNote: await collectionNoteFor(p.teamId, p.productId, team.data),
       // The studio's published address, so "ask them" names somebody. Absent ⇒
       // the copy falls back to "reply to this email", which the Managed sender's
       // Reply-To makes true.

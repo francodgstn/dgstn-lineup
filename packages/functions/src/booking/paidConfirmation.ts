@@ -37,7 +37,7 @@ import {
   ACTIVITIES_COLLECTION,
   SESSIONS_COLLECTION,
   TEAMS_COLLECTION,
-  publicUrl,
+  localizedPublicUrl,
 } from '@linyup/shared'
 import { sendEmail } from '../utils/email'
 import { getHostingUrl } from '../utils/env'
@@ -128,11 +128,17 @@ export async function sendPaidBookingConfirmation(
       sessionStart: start.toDate(),
       sessionEnd: end ? end.toDate() : start.toDate(),
       locationName: (session.location as string) || null,
+      // Locale-pinned (`lang` is the studio's language, which this whole mail
+      // is written in): an unprefixed link opens in the READER's browser
+      // language, which is how a German confirmation handed out an English
+      // cancellation page. See localizedPublicUrl in @linyup/shared.
       manageBookingUrl:
         slug && bookingToken
-          ? publicUrl(getHostingUrl(), slug, 'manage-booking', { token: bookingToken })
+          ? localizedPublicUrl(getHostingUrl(), lang, slug, 'manage-booking', {
+              token: bookingToken,
+            })
           : null,
-      spaceUrl: slug ? publicUrl(getHostingUrl(), slug, 'space') : null,
+      spaceUrl: slug ? localizedPublicUrl(getHostingUrl(), lang, slug, 'space') : null,
       instructions,
       cancellationPolicy,
       reference: (booking?.booking_reference as string | undefined) ?? null,

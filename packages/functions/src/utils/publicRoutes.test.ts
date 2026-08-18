@@ -13,6 +13,9 @@ import {
   publicSubPath,
   publicSubUrl,
   publicUrl,
+  localizedPublicUrl,
+  localizedPublicSubUrl,
+  publicLocalePrefix,
 } from '@linyup/shared'
 
 // Unit tests for the shared public-route builder (@linyup/shared/publicRoutes).
@@ -290,6 +293,74 @@ describe('emailed + printed links stay byte-identical', () => {
     assert.equal(
       publicSubUrl(`${ORIGIN}/de`, slug, 'space', 'payments'),
       `${ORIGIN}/de/public/${slug}/space/payments`
+    )
+  })
+})
+
+// ─── Locale-pinned links (the ones that go into EMAILS) ─────────────────────
+//
+// An emailed link carries no locale unless it is put there, so the page answers
+// in the READER's browser language while the mail around it is written in the
+// studio's. These pin the prefix rule that fixes that — including the one that
+// must NOT appear: `localePrefix: 'as-needed'` means the default locale is
+// unprefixed, and an `/en/…` link costs a 302 on every click.
+
+const EMAIL_ORIGIN = 'https://app.linyup.com'
+
+describe('publicLocalePrefix', () => {
+  it('emits nothing for the default locale', () => {
+    assert.equal(publicLocalePrefix('en'), '')
+    assert.equal(publicLocalePrefix('en-GB'), '')
+  })
+
+  it('emits /de /fr /it for the others, region tags included', () => {
+    assert.equal(publicLocalePrefix('de'), '/de')
+    assert.equal(publicLocalePrefix('fr'), '/fr')
+    assert.equal(publicLocalePrefix('it'), '/it')
+    assert.equal(publicLocalePrefix('de-CH'), '/de')
+  })
+
+  it('degrades to the default language rather than to a 404 path', () => {
+    assert.equal(publicLocalePrefix(''), '')
+    assert.equal(publicLocalePrefix(null), '')
+    assert.equal(publicLocalePrefix(undefined), '')
+    assert.equal(publicLocalePrefix('xx'), '')
+    assert.equal(publicLocalePrefix('rm-CH'), '')
+  })
+})
+
+describe('localizedPublicUrl / localizedPublicSubUrl', () => {
+  const slug = 'my-studio'
+  const token = 'tok_abc123'
+
+  it("a German studio's manage-booking link opens in German", () => {
+    assert.equal(
+      localizedPublicUrl(EMAIL_ORIGIN, 'de', slug, 'manage-booking', { token }),
+      `${EMAIL_ORIGIN}/de/public/${slug}/manage-booking?token=${token}`
+    )
+  })
+
+  it("an English studio's link is byte-identical to the unprefixed builder", () => {
+    // The acceptance test for changing every emailed link at once: nothing that
+    // is already in an inbox may move.
+    assert.equal(
+      localizedPublicUrl(EMAIL_ORIGIN, 'en', slug, 'manage-booking', { token }),
+      publicUrl(EMAIL_ORIGIN, slug, 'manage-booking', { token })
+    )
+    assert.equal(
+      localizedPublicUrl(EMAIL_ORIGIN, undefined, slug, 'appointments/cancel', { token }),
+      publicUrl(EMAIL_ORIGIN, slug, 'appointments/cancel', { token })
+    )
+  })
+
+  it('carries the prefix onto sub-paths too', () => {
+    assert.equal(
+      localizedPublicSubUrl(EMAIL_ORIGIN, 'fr', slug, 'space', 'payments'),
+      `${EMAIL_ORIGIN}/fr/public/${slug}/space/payments`
+    )
+    assert.equal(
+      localizedPublicSubUrl(EMAIL_ORIGIN, 'en', slug, 'space', 'payments'),
+      `${EMAIL_ORIGIN}/public/${slug}/space/payments`
     )
   })
 })

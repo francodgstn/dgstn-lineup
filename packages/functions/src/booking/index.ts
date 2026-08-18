@@ -18,6 +18,8 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
+import { memberCanCancel } from './myBookings'
+import { isSessionCancelled } from './waitlist/constants'
 import { loadBookingSettings } from './bookingSettings'
 import { healSessionSeatCount } from './seatCount'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
@@ -45,7 +47,12 @@ import {
   PARTNER_VISITS_SUBCOLLECTION,
   type ActivityAccessRule,
   type ActivityType,
-  publicUrl,
+  localizedPublicUrl,
+  bookingWasPaidFor,
+  type SeatHold,
+  type BookingCancelEffect,
+  type BookingCancelRefusal,
+  type CancelBookingResult,
 } from '@linyup/shared'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1378,8 +1385,12 @@ export const bookSession = onCall(async (request) => {
       bookingToken: effectiveToken,
     }
   })
+  // Locale-pinned: the confirmation mail is built in the studio's language
+  // (`lang`), and an unprefixed link would hand the member an English page.
   const manageBookingUrl = teamSlug
-    ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: commit.bookingToken })
+    ? localizedPublicUrl(getHostingUrl(), lang, teamSlug, 'manage-booking', {
+        token: commit.bookingToken,
+      })
     : null
 
   // Partner (aggregator) visit ledger — a booking covered via a
@@ -1506,7 +1517,9 @@ export const bookSession = onCall(async (request) => {
         manageBookingUrl,
         // The Space link rides on the free path too: the complaint it answers —
         // nobody is ever told the portal exists — is not about the tender.
-        spaceUrl: teamSlug ? publicUrl(getHostingUrl(), teamSlug, 'space') : null,
+        spaceUrl: teamSlug
+          ? localizedPublicUrl(getHostingUrl(), lang, teamSlug, 'space')
+          : null,
         instructions: bookingInstructions,
         cancellationPolicy,
         reference: bookingReference,
@@ -1585,9 +1598,28 @@ export const bookSession = onCall(async (request) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // cancelBooking — public, token-based (unauthenticated)
+//
+// WHAT IT GIVES BACK, stated once so the copy on the member surfaces can be
+// checked against it: a spent lesson credit and a usage-window unit, both
+// unconditionally (no window, and even if the pack/window has since expired).
+// NOT money — this callable issues no refund of any kind, and none of its
+// callers may say otherwise. See `BookingCancelEffect` in @linyup/shared.
+//
+// Every refusal below is FINAL, and carries `details.reason` so a public page
+// can print what happened rather than a raw server sentence under a "try
+// again" that cannot work. See `BookingCancelRefusal`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const cancelBooking = onCall(async (request) => {
+/** A refusal, tagged with the machine reason the member surfaces render. */
+function cancelRefused(
+  code: 'not-found' | 'failed-precondition',
+  reason: BookingCancelRefusal,
+  message: string
+): HttpsError {
+  return new HttpsError(code, message, { reason })
+}
+
+export const cancelBooking = onCall(async (request): Promise<CancelBookingResult> => {
   const { token } = request.data as { token?: string }
   if (!token) throw new HttpsError('invalid-argument', 'Booking token is required')
 
@@ -1606,8 +1638,9 @@ export const cancelBooking = onCall(async (request) => {
       .get()
   }
   if (bookingsSnapshot.empty) {
-    throw new HttpsError(
+    throw cancelRefused(
       'not-found',
+      'not_found',
       'Booking not found. The link may have expired or the booking was already cancelled.'
     )
   }
@@ -1621,7 +1654,7 @@ export const cancelBooking = onCall(async (request) => {
 
   const [sessionErr, sessionDoc] = await to(db.collection('sessions').doc(sessionId).get())
   if (sessionErr || !sessionDoc || !sessionDoc.exists)
-    throw new HttpsError('not-found', 'Session no longer exists.')
+    throw cancelRefused('not-found', 'session_gone', 'Session no longer exists.')
 
   const session = sessionDoc.data()!
   const isAppointment = session.activityType === 'appointment'
@@ -1661,15 +1694,20 @@ export const cancelBooking = onCall(async (request) => {
     ? ['pending', 'no_show', 'confirmed']
     : ['pending', 'no_show']
   if (booking.status && !cancellableStatuses.includes(booking.status as string)) {
-    throw new HttpsError(
+    throw cancelRefused(
       'failed-precondition',
+      'already_settled',
       'This booking has already been cancelled or confirmed.'
     )
   }
 
   const sessionStart = (session.start as Timestamp).toDate()
   if (sessionStart < new Date())
-    throw new HttpsError('failed-precondition', 'Cannot cancel a booking for a past session.')
+    throw cancelRefused(
+      'failed-precondition',
+      'past',
+      'Cannot cancel a booking for a past session.'
+    )
 
   const teamId = (session.teamId || session.teacher) as string
   let teamName = ''
@@ -1702,10 +1740,16 @@ export const cancelBooking = onCall(async (request) => {
   // subcollection: a document that is written but never read carries no version
   // precondition, so the claim was simply false. One read is a small price for a
   // lock that is real rather than asserted.
+  //
+  // It also REPORTS what it gave back (`BookingCancelEffect`), read off the same
+  // read set that performed the refunds — so the sentence the member is shown
+  // ("your credit is back on your pack") is the transaction's own outcome and
+  // not a second guess made from the pre-read booking document.
   const sessionRef = db.collection('sessions').doc(sessionId)
-  await db.runTransaction(async (tx) => {
+  const returned: BookingCancelEffect = await db.runTransaction(async (tx) => {
     const freshSession = await tx.get(sessionRef)
-    if (!freshSession.exists) throw new HttpsError('not-found', 'Session no longer exists.')
+    if (!freshSession.exists)
+      throw cancelRefused('not-found', 'session_gone', 'Session no longer exists.')
     const freshSessionData = freshSession.data()!
     const bookingsSnap = await tx.get(sessionRef.collection('bookings'))
     // The document being cancelled still counts as holding a seat in this read
@@ -1776,6 +1820,13 @@ export const cancelBooking = onCall(async (request) => {
     if (usageRefund) {
       tx.update(usageRefund.ref, { used: Math.max(0, usageRefund.used - 1) })
     }
+    // `paid` is a fact about the booking, not an action taken here: nothing in
+    // this callable refunds money, and the member surfaces say so.
+    return {
+      credit: !!grantRefund,
+      usageUnit: !!usageRefund,
+      paid: bookingWasPaidFor(booking as SeatHold),
+    }
   })
 
   // Partner visit ledger: a cancelled booking earns no payout. Best-effort —
@@ -1791,10 +1842,13 @@ export const cancelBooking = onCall(async (request) => {
     // No ledger row — not an aggregator-covered booking.
   }
 
+  // Locale-pinned: this URL goes into a mail written in the studio's language.
   const rebookUrl = teamSlug
     ? isAppointment
-      ? publicUrl(getHostingUrl(), teamSlug, 'appointments')
-      : publicUrl(getHostingUrl(), teamSlug, 'booking', { activity: session.activityId })
+      ? localizedPublicUrl(getHostingUrl(), teamLanguage, teamSlug, 'appointments')
+      : localizedPublicUrl(getHostingUrl(), teamLanguage, teamSlug, 'booking', {
+          activity: session.activityId,
+        })
     : null
 
   const sessionEnd = (session.end as Timestamp).toDate()
@@ -1828,7 +1882,7 @@ export const cancelBooking = onCall(async (request) => {
     console.error('Error sending cancellation confirmation email:', err)
   }
 
-  return { success: true, message: 'Your booking has been cancelled.', rebookUrl }
+  return { success: true, message: 'Your booking has been cancelled.', rebookUrl, returned }
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1873,11 +1927,17 @@ export const getBookingDetails = onCall(async (request) => {
   const teamId = (session.teamId || session.teacher) as string
 
   let activityName = 'Session'
+  let activityAutoConfirm: boolean | undefined
+  let activityKind: ActivityType | undefined
   const activityId = (session.activityId as string) || null
   if (activityId) {
     const [actErr, actDoc] = await to(db.collection('activities').doc(activityId).get())
-    if (!actErr && actDoc && actDoc.exists)
-      activityName = (actDoc.data()?.name as string) || 'Session'
+    if (!actErr && actDoc && actDoc.exists) {
+      const actData = actDoc.data()!
+      activityName = (actData.name as string) || 'Session'
+      activityAutoConfirm = actData.autoConfirm as boolean | undefined
+      activityKind = actData.type as ActivityType | undefined
+    }
   }
 
   let teamName = ''
@@ -1944,11 +2004,45 @@ export const getBookingDetails = onCall(async (request) => {
   const sessionStart = (session.start as Timestamp).toDate()
   const isPastSession = sessionStart < new Date()
   const bookingStatus = (booking.status as string) || 'pending'
-  const canCancel = !isPastSession && ['pending', 'no_show'].includes(bookingStatus)
+  // ONE cancellable rule, shared with the member portal (`memberCanCancel`),
+  // which re-derives `cancelBooking`'s own gates. The local copy this replaces
+  // was a THIRD reading of them and disagreed with both: it hard-coded
+  // ['pending','no_show'], so on a session that AUTO-CONFIRMS — where
+  // 'confirmed' is the ordinary booked state — the emailed link offered no
+  // Cancel button at all for a booking the callable would happily have
+  // cancelled, and the portal did. It also offered one on a session the studio
+  // had already called off.
+  const autoConfirm =
+    typeof session.autoConfirm === 'boolean'
+      ? (session.autoConfirm as boolean)
+      : resolveAutoConfirm({
+          autoConfirm: activityAutoConfirm,
+          type:
+            activityKind ?? (session.activityType === 'appointment' ? 'appointment' : 'class'),
+        })
+  const canCancel = memberCanCancel({
+    bookingStatus,
+    hasToken: true, // the caller reached this document BY its token
+    startMs: sessionStart.getTime(),
+    nowMs: Date.now(),
+    autoConfirm,
+    sessionCancelled: isSessionCancelled(session),
+  })
   const canRebook = canCancel && availableSessions.length > 0
+
+  // What cancelling would give back, so the confirmation step can SAY it before
+  // the member commits rather than after. Read off this booking's own markers —
+  // the same three fields `cancelBooking`'s transaction acts on. `paid` is the
+  // one that has to be stated without softening: nothing here refunds money.
+  const cancelReturns: BookingCancelEffect = {
+    credit: !!booking.credit_grant_id && !!booking.credit_spent,
+    usageUnit: !!booking.usage_window_doc_id,
+    paid: bookingWasPaidFor(booking as SeatHold),
+  }
 
   return {
     success: true,
+    cancelReturns,
     booking: {
       contactId: booking.contact,
       firstname: booking.firstname,
@@ -2065,10 +2159,12 @@ export const rebookSession = onCall(async (request) => {
   // every other booking surface refuses (bookSession, createDropInCheckout).
   let teamName = ''
   let teamSlug: string | null = null
+  let teamLanguage = 'en'
   const [, teamDoc] = await to(db.collection('teams').doc(teamId).get())
   if (teamDoc && teamDoc.exists) {
     teamName = (teamDoc.data()!.name as string) || ''
     teamSlug = (teamDoc.data()!.slug as string) || null
+    teamLanguage = (teamDoc.data()!.language as string) || 'en'
   }
   const { cutoffMinutes: rebookCutoffMinutes } = await loadBookingSettings(teamId)
   // …but ONLY against the public, self-service door. The cutoff is an ONLINE
@@ -2188,8 +2284,11 @@ export const rebookSession = onCall(async (request) => {
     if (actDoc && actDoc.exists) activityName = (actDoc.data()?.name as string) || 'Session'
   }
 
+  // Locale-pinned — see the note on the confirmation mail's copy of this link.
   const manageBookingUrl = teamSlug
-    ? publicUrl(getHostingUrl(), teamSlug, 'manage-booking', { token: newBookingToken })
+    ? localizedPublicUrl(getHostingUrl(), teamLanguage, teamSlug, 'manage-booking', {
+        token: newBookingToken,
+      })
     : null
 
   const oldSessionStart = (oldSession.start as Timestamp).toDate()

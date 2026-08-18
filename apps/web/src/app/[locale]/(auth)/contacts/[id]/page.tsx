@@ -51,6 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
   DropdownMenu,
@@ -2568,6 +2569,17 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
 }
 
 // ─── grant credits dialog (manual lesson-credit pack grant) ──────────────────
+//
+// TWO THINGS UX-80 ADDED. "Let them know" defaults ON: the whole payload of a
+// credit grant is a NUMBER, and until the contact is told it, the only place ten
+// classes exist is a member area nobody has mentioned to them. The mail says the
+// studio ADDED the credits — it never thanks them for a purchase, because on
+// this rail they made none.
+//
+// The idempotency key is minted once per opening for a blunter reason: every
+// click of Grant used to mint a NEW grant document, so a double-click handed out
+// twice the credits, silently. One key per opening, `.create()` on the server,
+// and the second click is refused rather than doubled.
 
 function GrantCreditsDialog({
   open,
@@ -2589,6 +2601,8 @@ function GrantCreditsDialog({
   const [customMonths, setCustomMonths] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sendReceipt, setSendReceipt] = useState(true)
+  const [attemptKey, setAttemptKey] = useState('')
 
   // Only types with at least one credit-bearing price are grantable.
   const creditTypes = subTypes.filter((st) =>
@@ -2607,6 +2621,12 @@ function GrantCreditsDialog({
     setCustomCredits('')
     setCustomMonths('')
     setError(null)
+    setSendReceipt(true)
+    setAttemptKey(
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    )
   }, [open])
 
   const canSave =
@@ -2624,12 +2644,18 @@ function GrantCreditsDialog({
           priceId?: string
           credits?: number
           validityMonths?: number
+          idempotencyKey?: string
+          sendReceipt?: boolean
         },
-        { success: boolean; credits: number }
+        { success: boolean; credits: number; duplicate?: boolean }
       >(functions, 'grantCredits')
       await fn({
         contactId: contact.id,
         subscriptionTypeId: typeId,
+        idempotencyKey: attemptKey,
+        // No contact email ⇒ nothing to send to; the server logs and skips, but
+        // offering the switch at all would be a promise the data cannot keep.
+        sendReceipt: sendReceipt && !!contact.email,
         ...(priceId
           ? { priceId }
           : {
@@ -2726,6 +2752,16 @@ function GrantCreditsDialog({
                   onChange={(e) => setCustomMonths(e.target.value)}
                 />
               </Field>
+            </div>
+          )}
+
+          {typeId && contact.email && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">{t('creditsNotifyLabel')}</p>
+                <p className="text-xs text-muted-foreground">{t('creditsNotifyHint')}</p>
+              </div>
+              <Switch checked={sendReceipt} onCheckedChange={setSendReceipt} />
             </div>
           )}
 

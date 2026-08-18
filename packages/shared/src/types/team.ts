@@ -578,6 +578,17 @@ export interface TeamPublicProfile {
   // the Space shows the "complete your signup" reminder to contacts who haven't
   // finished the full registration. The Space only ever reads public_profile.
   space_signup_nudge?: boolean
+  // The team-wide default answer to "how do I get it?" for a product sale,
+  // denormalized by syncTeamPublicProfile from
+  // teams/{id}.settings.productCollectionNote (owner-editable, the same home and
+  // the same shape as bookingCancellationPolicy above).
+  //
+  // Public for the same reason that one is: it is shown BEFORE the buyer pays,
+  // on a surface that reads public_profile alone. The per-product override
+  // travels on the mirrored product entry (`products[].collectionNote`); the
+  // shop resolves the pair through `resolveProductCollectionNote` so that the
+  // card, the checkout modal and the receipt cannot disagree.
+  productCollectionNote?: string | null
 }
 
 export interface TeamInvitation {

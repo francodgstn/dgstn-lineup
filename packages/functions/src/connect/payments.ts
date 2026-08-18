@@ -826,6 +826,7 @@ export const createProductCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE
         teamId,
         contactId: session.contactId,
         itemLabel: productName,
+        productId,
         tenderRef: `gc:${holdKey}`,
         paid: {
           amount: plan.drawdown,

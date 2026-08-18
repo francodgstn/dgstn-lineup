@@ -3,12 +3,31 @@
 // Record a manual cash / bank-transfer payment into the unified ledger. Amount +
 // method + date + optional contact + structured line-item (drives entitlements) +
 // note → recordManualPayment. Used from the Payments page and the contact tab.
+//
+// "SEND THE BUYER A RECEIPT" (UX-80) is the studio's per-sale choice, made here
+// rather than in a settings page, because the argument against it — the money
+// changed hands in front of somebody who already knows what they bought — is
+// only answerable at the moment of the sale. It appears ONLY when the sale can
+// actually be described (a pack, a membership, a course, a product — see
+// `deskReceiptKindFor`) AND a contact is linked, and it starts ticked by what
+// the sale GRANTS (`deskReceiptDefaultOn`). Changing "what was paid" re-picks
+// that default until the manager overrides it, after which her choice stands.
+//
+// THE IDEMPOTENCY KEY is minted once per opening: without it every click of
+// Record wrote a NEW payment row, so a double-click charged the ledger twice and
+// would now mail twice as well.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Loader2, Plus, X } from 'lucide-react'
 import { doc, updateDoc } from 'firebase/firestore'
-import { DEFAULT_PAYMENT_MODES, TEAMS_COLLECTION, type PaymentLineItem } from '@linyup/shared'
+import {
+  DEFAULT_PAYMENT_MODES,
+  TEAMS_COLLECTION,
+  deskReceiptDefaultOn,
+  deskReceiptKindFor,
+  type PaymentLineItem,
+} from '@linyup/shared'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRecordManualPayment } from '@/hooks/useConnect'
@@ -24,6 +43,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -34,6 +54,15 @@ import {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+/** A stable key for ONE recording attempt. `crypto.randomUUID` is not in every
+ *  browser this app supports, so fall back rather than throw. */
+function newAttemptKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 export function RecordPaymentDialog({
@@ -70,6 +99,11 @@ export function RecordPaymentDialog({
   const [lineItem, setLineItem] = useState<PaymentLineItem | null>(null)
   const [comment, setComment] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [sendReceipt, setSendReceipt] = useState(false)
+  // Once the manager has answered the question herself, changing "what was paid"
+  // must not silently un-answer it.
+  const [receiptTouched, setReceiptTouched] = useState(false)
+  const [attemptKey, setAttemptKey] = useState('')
   // Inline "add a payment mode" affordance state.
   const [addingMode, setAddingMode] = useState(false)
   const [newMode, setNewMode] = useState('')
@@ -86,6 +120,11 @@ export function RecordPaymentDialog({
       setError(null)
       setAddingMode(false)
       setNewMode('')
+      setSendReceipt(false)
+      setReceiptTouched(false)
+      // One key per opening — every Record click in this dialog is the SAME
+      // attempt, so the server writes one row and sends one receipt.
+      setAttemptKey(newAttemptKey())
     }
     // modes is derived from team config; intentionally not a reset trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,6 +146,14 @@ export function RecordPaymentDialog({
     setAddingMode(false)
   }
 
+  // What the sale grants decides the default; the manager's own answer wins.
+  const receiptKind = deskReceiptKindFor(lineItem)
+  const canSendReceipt = !!contactId && !!receiptKind
+  function pickLineItem(next: PaymentLineItem | null) {
+    setLineItem(next)
+    if (!receiptTouched) setSendReceipt(deskReceiptDefaultOn(next))
+  }
+
   async function save() {
     const major = parseFloat(amount.replace(',', '.'))
     if (!Number.isFinite(major) || major <= 0) {
@@ -124,6 +171,10 @@ export function RecordPaymentDialog({
       paymentMode: mode.trim() || undefined,
       lineItem,
       comment: comment.trim() || null,
+      idempotencyKey: attemptKey,
+      // Never send for a sale the server would decline to describe, and never
+      // for an unassigned row — there is nobody to send it to.
+      sendReceipt: canSendReceipt && sendReceipt,
     })
     onClose()
   }
@@ -227,7 +278,7 @@ export function RecordPaymentDialog({
             )}
           </div>
 
-          <PaymentLineItemPicker teamId={teamId} value={lineItem} onChange={setLineItem} />
+          <PaymentLineItemPicker teamId={teamId} value={lineItem} onChange={pickLineItem} />
 
           <div className="space-y-1.5">
             <Label>{t('assignContactLabel')}</Label>
@@ -242,6 +293,27 @@ export function RecordPaymentDialog({
               placeholder={t('commentPlaceholder')}
             />
           </div>
+
+          {/* Shown only when there is something to describe AND somebody to
+              send it to — an always-visible, always-disabled control would just
+              be a question the studio cannot answer. */}
+          {canSendReceipt && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">{t('sendReceiptLabel')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t(`sendReceiptHint_${receiptKind}` as never)}
+                </p>
+              </div>
+              <Switch
+                checked={sendReceipt}
+                onCheckedChange={(v) => {
+                  setReceiptTouched(true)
+                  setSendReceipt(v)
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

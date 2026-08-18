@@ -4,17 +4,33 @@
 // Deliberately light: name, image, base price, optional size/colour variants
 // (with optional per-variant price override), and an active toggle. No stock.
 // Sold via the shared public storefront at /public/{slug}/shop (Products tab).
+//
+// COLLECTION TERMS (UX-79) — free text answering "how do I get it?", per product
+// with a TEAM DEFAULT written once at the top of this page. Deliberately not a
+// shipping model: a studio handing over a gi at the front desk and one posting a
+// water bottle need the same field to say different things, and a delivery-method
+// enum plus an address the checkout does not collect would be a bigger feature
+// answering a smaller question. The same text renders in the shop's checkout
+// modal BEFORE the buyer pays and in the purchase receipt after, resolved by the
+// one shared `resolveProductCollectionNote`.
+//
+// The team default lives on the TEAM DOC (`settings.productCollectionNote`),
+// which Firestore rules make owner-writable — hence the role gate below. It sits
+// here rather than in Settings because this is the page a studio is on when the
+// question occurs to them.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { storage } from '@/lib/firebase'
+import { doc, updateDoc } from 'firebase/firestore'
+import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -36,8 +52,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { Tag, Plus, ImageIcon, X, ExternalLink, Trash2, Pencil } from 'lucide-react'
-import { getProductLimits, MAX_PRODUCT_VARIANTS, type Product, type ProductVariant } from '@linyup/shared'
+import { Tag, Plus, ImageIcon, X, ExternalLink, Trash2, Pencil, Truck } from 'lucide-react'
+import {
+  getProductLimits,
+  MAX_PRODUCT_COLLECTION_NOTE,
+  MAX_PRODUCT_VARIANTS,
+  TEAMS_COLLECTION,
+  type Product,
+  type ProductVariant,
+} from '@linyup/shared'
 import { formatCurrency } from '@/lib/format'
 import {
   useProducts,
@@ -71,10 +94,19 @@ interface DraftState {
   variants: DraftVariant[]
   active: boolean
   imageUrl?: string
+  collectionNote: string
 }
 
 function emptyDraft(): DraftState {
-  return { name: '', description: '', priceText: '', variantLabel: '', variants: [], active: true }
+  return {
+    name: '',
+    description: '',
+    priceText: '',
+    variantLabel: '',
+    variants: [],
+    active: true,
+    collectionNote: '',
+  }
 }
 
 function draftFromProduct(p: Product): DraftState {
@@ -89,6 +121,7 @@ function draftFromProduct(p: Product): DraftState {
     })),
     active: p.active !== false,
     imageUrl: p.imageUrl,
+    collectionNote: p.collectionNote ?? '',
   }
 }
 
@@ -99,7 +132,7 @@ function parseAmount(text: string): number | null {
 
 export default function ProductsPage() {
   const t = useTranslations('Products')
-  const { user, currentTeamId, team } = useAuth()
+  const { user, currentTeamId, team, teamRole } = useAuth()
   const queryClient = useQueryClient()
   const currency = team?.default_currency ?? 'CHF'
 
@@ -114,6 +147,40 @@ export default function ProductsPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Team-wide collection default (UX-79) ──────────────────────────────────
+  // Owner-only, because Firestore rules make the team document owner-writable.
+  // A manager still sets per-product terms; she just cannot rewrite the fallback
+  // every product inherits.
+  const teamDefaultNote =
+    ((team?.settings as { productCollectionNote?: string } | undefined)?.productCollectionNote ??
+      '') as string
+  const canEditTeamDefault = teamRole === 'owner'
+  const [defaultNote, setDefaultNote] = useState(teamDefaultNote)
+  const [savingDefault, setSavingDefault] = useState(false)
+  // The team doc is a live snapshot; re-seed when it changes underneath us, but
+  // never while the studio is mid-edit.
+  useEffect(() => {
+    setDefaultNote(teamDefaultNote)
+  }, [teamDefaultNote])
+  const defaultDirty = defaultNote.trim() !== teamDefaultNote.trim()
+
+  async function saveDefaultNote() {
+    if (!currentTeamId) return
+    setSavingDefault(true)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
+        'settings.productCollectionNote': defaultNote
+          .trim()
+          .slice(0, MAX_PRODUCT_COLLECTION_NOTE),
+      })
+      toast.success(t('saved'))
+    } catch {
+      toast.error(t('errorSave'))
+    } finally {
+      setSavingDefault(false)
+    }
+  }
 
   const shopUrl = team?.slug
     ? typeof window !== 'undefined'
@@ -178,6 +245,9 @@ export default function ProductsPage() {
       variants: variants.length ? variants : undefined,
       active: draft.active,
       imageUrl: draft.imageUrl || undefined,
+      // '' rather than undefined: clearing it must FALL BACK to the team
+      // default, and `stripUndefined` would leave the old sentence standing.
+      collectionNote: draft.collectionNote.trim().slice(0, MAX_PRODUCT_COLLECTION_NOTE),
     }
     return input
   }
@@ -286,6 +356,45 @@ export default function ProductsPage() {
           </span>
           <PaymentSettingsLink />
         </div>
+      </div>
+
+      {/* Team-wide collection default — written once, inherited by every product
+          that says nothing of its own. Read-only for a manager: the team doc is
+          owner-writable, and showing a field that cannot be saved would be a
+          worse answer than showing the text that is in force. */}
+      <div className="rounded-lg border bg-card p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Truck className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-medium">{t('defaultCollectionTitle')}</p>
+        </div>
+        <p className="text-xs text-muted-foreground">{t('defaultCollectionHint')}</p>
+        {canEditTeamDefault ? (
+          <>
+            <Textarea
+              rows={2}
+              maxLength={MAX_PRODUCT_COLLECTION_NOTE}
+              value={defaultNote}
+              onChange={(e) => setDefaultNote(e.target.value)}
+              placeholder={t('collectionPlaceholder')}
+            />
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={saveDefaultNote}
+                disabled={!defaultDirty || savingDefault}
+              >
+                {t('save')}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm">
+            {defaultNote.trim() || (
+              <span className="text-muted-foreground">{t('defaultCollectionEmpty')}</span>
+            )}
+          </p>
+        )}
       </div>
 
       {/* List */}
@@ -440,6 +549,31 @@ export default function ProductsPage() {
                   }}
                 />
               </div>
+            </div>
+
+            {/* How the buyer gets it (UX-79). Placed BEFORE variants and after the
+                image because it is part of the offer, not an advanced setting:
+                its failure mode is silent (nobody complains about a missing
+                sentence, they just email the studio), so it has to be visible
+                while the product is being written. */}
+            <div className="space-y-2">
+              <Label htmlFor="p-collection">
+                {t('fieldCollection')}{' '}
+                <span className="font-normal text-muted-foreground">({t('optional')})</span>
+              </Label>
+              <Textarea
+                id="p-collection"
+                rows={2}
+                maxLength={MAX_PRODUCT_COLLECTION_NOTE}
+                value={draft.collectionNote}
+                onChange={(e) => setDraft((d) => ({ ...d, collectionNote: e.target.value }))}
+                placeholder={t('collectionPlaceholder')}
+              />
+              <p className="text-xs text-muted-foreground">
+                {defaultNote.trim()
+                  ? t('collectionInheritsHint', { note: defaultNote.trim() })
+                  : t('collectionHint')}
+              </p>
             </div>
 
             {/* Variants */}

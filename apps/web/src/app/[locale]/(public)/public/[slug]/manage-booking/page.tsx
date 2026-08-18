@@ -5,6 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import { httpsCallable } from 'firebase/functions'
 import { useTranslations } from 'next-intl'
 import { functions } from '@/lib/firebase'
+import {
+  callableErrorCode,
+  cancelEffectKeys,
+  cancelFailureIsRetryable,
+  cancelFailureKey,
+} from '@/lib/bookingCancellation'
+import type { BookingCancelEffect, CancelBookingResult } from '@linyup/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -43,6 +50,11 @@ interface BookingDetails {
   availableSessions: AvailableSession[]
   canCancel: boolean
   canRebook: boolean
+  /** What cancelling returns — a lesson credit, a usage-window unit — and
+   *  whether the seat was paid for (in which case nothing returns the money).
+   *  Absent when the server predates the field; the copy then simply omits it
+   *  rather than guessing. */
+  cancelReturns?: BookingCancelEffect
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -82,6 +94,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function ManageBookingPage() {
   const t = useTranslations('ManageBooking')
+  const tCancel = useTranslations('BookingCancellation')
   const searchParams = useSearchParams()
   const token = searchParams.get('token') ?? ''
 
@@ -90,7 +103,14 @@ export default function ManageBookingPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [cancelling, setCancelling] = useState(false)
-  const [cancelDone, setCancelDone] = useState(false)
+  // What the server said the cancellation gave back, held so the confirmation
+  // screen can state it. `null` = no cancellation has happened on this page.
+  const [cancelDone, setCancelDone] = useState<BookingCancelEffect | null>(null)
+  // A refusal, as a `BookingCancellation` message key plus whether pressing
+  // again could possibly help. Only the unexplained failure is retryable.
+  const [cancelFailure, setCancelFailure] = useState<{ key: string; retryable: boolean } | null>(
+    null
+  )
   const [rebooking, setRebooking] = useState(false)
   const [rebookDone, setRebookDone] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -108,8 +128,11 @@ export default function ManageBookingPage() {
       const result = await fn({ token: tok })
       setDetails(result.data as BookingDetails)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(msg.includes('not-found') || msg.includes('not found') ? t('notFound') : msg)
+      // The server's own sentences are English — this page is reached from a
+      // mail in the studio's language, so they are never rendered raw.
+      const code = callableErrorCode(err)
+      setError(code === 'not-found' ? t('notFound') : t('loadFailed'))
+      console.error('[public/manage-booking] load failed:', err)
     } finally {
       setLoading(false)
     }
@@ -124,15 +147,18 @@ export default function ManageBookingPage() {
   const handleCancel = async () => {
     if (!activeToken) return
     setCancelling(true)
+    setCancelFailure(null)
     try {
-      const fn = httpsCallable<{ token: string }, { success: boolean }>(functions, 'cancelBooking')
-      await fn({ token: activeToken })
-      setCancelDone(true)
+      const fn = httpsCallable<{ token: string }, CancelBookingResult>(functions, 'cancelBooking')
+      const res = await fn({ token: activeToken })
+      // The server reports what it actually gave back; the screen repeats that
+      // rather than describing cancellation in general.
+      setCancelDone(res.data?.returned ?? { credit: false, usageUnit: false, paid: false })
       setShowCancelConfirm(false)
       setDetails(null)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(msg)
+      console.error('[public/manage-booking] cancel failed:', err)
+      setCancelFailure({ key: cancelFailureKey(err), retryable: cancelFailureIsRetryable(err) })
     } finally {
       setCancelling(false)
     }
@@ -155,8 +181,10 @@ export default function ManageBookingPage() {
         await loadDetails(result.data.newBookingToken)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setError(msg)
+      // Same rule as the cancel path: the callable's message is English, and
+      // this page is opened from a mail written in the studio's language.
+      console.error('[public/manage-booking] rebook failed:', err)
+      setError(t('rebookFailed'))
     } finally {
       setRebooking(false)
     }
@@ -180,10 +208,18 @@ export default function ManageBookingPage() {
   }
 
   if (cancelDone) {
+    // States the outcome, then what came back with it. A member who has just
+    // given up a place is the person most owed the sentence about her credit.
+    const effects = cancelEffectKeys(cancelDone, 'did')
     return (
       <div className="text-center py-12 space-y-3">
         <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
         <p className="font-semibold text-lg">{t('cancelSuccess')}</p>
+        {effects.map((key) => (
+          <p key={key} className="text-sm text-muted-foreground max-w-sm mx-auto">
+            {tCancel(key)}
+          </p>
+        ))}
       </div>
     )
   }
@@ -200,6 +236,7 @@ export default function ManageBookingPage() {
   if (!details) return null
 
   const { booking, session, activity, availableSessions, canCancel, canRebook } = details
+  const willReturn = cancelEffectKeys(details.cancelReturns, 'will')
   const sessionDateStr = formatSessionDate(session.start)
   const sessionTimeStr = formatSessionTime(session.start, session.end)
 
@@ -264,24 +301,46 @@ export default function ManageBookingPage() {
           <p className="text-sm font-medium">
             {t('cancelConfirm', { activity: activity.name, date: sessionDateStr })}
           </p>
+          {/* What cancelling costs and what it returns, at the moment of the
+              decision — not in the mail that arrives afterwards. */}
+          {willReturn.map((key) => (
+            <p key={key} className="text-sm text-muted-foreground">
+              {tCancel(key)}
+            </p>
+          ))}
+          {/* A refusal says what happened. `retryable` is false for every reason
+              cancelBooking gives — the class has started, the studio checked her
+              in, the booking is already gone — and the Yes button is withdrawn
+              with it, because offering the press again is the thing that reads
+              as "this product is broken". */}
+          {cancelFailure && (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {tCancel(cancelFailure.key)}
+            </p>
+          )}
           <div className="flex gap-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="flex-1"
-            >
-              {cancelling ? t('cancelling') : t('cancelConfirmYes')}
-            </Button>
+            {(!cancelFailure || cancelFailure.retryable) && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="flex-1"
+              >
+                {cancelling ? t('cancelling') : t('cancelConfirmYes')}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowCancelConfirm(false)}
+              onClick={() => {
+                setShowCancelConfirm(false)
+                setCancelFailure(null)
+              }}
               disabled={cancelling}
               className="flex-1"
             >
-              {t('cancelConfirmNo')}
+              {cancelFailure && !cancelFailure.retryable ? t('dismiss') : t('cancelConfirmNo')}
             </Button>
           </div>
         </div>

@@ -253,6 +253,8 @@ export function useUpdatePaymentRecord() {
       contactId?: string | null
       comment?: string | null
       lineItem?: PaymentLineItem | null
+      // Tell the buyer what they now hold (UX-80). Omitted ⇒ no mail.
+      sendReceipt?: boolean
     }) => {
       const fn = httpsCallable<typeof vars, { ok: boolean; contactId: string | null }>(
         functions,
@@ -347,6 +349,11 @@ export function useRecordManualPayment() {
       paymentMode?: string
       lineItem?: PaymentLineItem | null
       comment?: string | null
+      // Minted once per dialog opening, so a double-click writes ONE payment row
+      // (the server creates the doc under this key) and therefore mails once.
+      idempotencyKey?: string
+      // Tell the buyer what they now hold (UX-80). Omitted ⇒ no mail.
+      sendReceipt?: boolean
     }) => {
       const fn = httpsCallable<typeof vars, { id: string; duplicate?: boolean }>(
         functions,

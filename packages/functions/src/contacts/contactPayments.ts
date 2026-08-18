@@ -17,7 +17,8 @@ import {
   TEAMS_COLLECTION,
   MEMBER_PAYMENTS_SUBCOLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
-  publicSubUrl,
+  localizedPublicSubUrl,
+  publicLocalePrefix,
 } from '@linyup/shared'
 import { getConnectStripe } from '../utils/connect/client'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
@@ -149,11 +150,14 @@ export const createContactBillingPortalSession = onCall(async (request) => {
   const team = await loadEnabledTeam(teamId)
   const { accountId } = requireChargeableAccount(team)
 
+  // `localePrefix: 'as-needed'` — the default locale carries NO prefix, so
+  // hand-concatenating one produced `/en/public/…` and a 302 on the way back
+  // from Stripe. `localizedPublicSubUrl` owns that rule.
   const locale = data.locale ?? 'en'
   const base = resolveBaseUrl(data.origin)
   const returnUrl = data.slug
-    ? publicSubUrl(`${base}/${locale}`, data.slug, 'space', 'payments')
-    : `${base}/${locale}`
+    ? localizedPublicSubUrl(base, locale, data.slug, 'space', 'payments')
+    : `${base}${publicLocalePrefix(locale)}`
 
   const stripe = await getConnectStripe()
   try {

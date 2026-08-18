@@ -36,6 +36,13 @@ export interface PaidAmount {
    *  a buyer who spent a gift card should not read "Paid: CHF 30.00" and wonder
    *  which of the two got charged. */
   giftCard?: boolean
+  /** HOW it was paid, in the studio's own words — "Cash", "Bank transfer",
+   *  "TWINT". Set by the DESK rails (UX-80), where the tender is the studio's
+   *  free-text payment mode and the buyer should not be left to assume a card
+   *  was charged; the online rails leave it unset and the line stays a bare
+   *  amount. Wins over `giftCard` when both are somehow present, because a
+   *  named tender is more specific than a category. */
+  methodLabel?: string
 }
 
 const GIFT_CARD_SUFFIX: Record<Lang, string> = {
@@ -48,6 +55,10 @@ const GIFT_CARD_SUFFIX: Record<Lang, string> = {
 function money(paid: PaidAmount | null | undefined, lang: Lang): string | null {
   if (!paid) return null
   const value = `${escapeHtml(paid.currency.toUpperCase())} ${paid.amount.toFixed(2)}`
+  // The studio's own mode label is free text it typed into its settings, so it
+  // is escaped here like every other interpolated value.
+  const method = (paid.methodLabel ?? '').trim()
+  if (method) return `${value} (${escapeHtml(method)})`
   return paid.giftCard ? `${value} (${GIFT_CARD_SUFFIX[lang]})` : value
 }
 
@@ -111,6 +122,17 @@ export interface CreditPackReceiptParams {
    *  some. Empty ⇒ the copy stays general rather than inventing a scope. */
   activityNames?: string[]
   paid?: PaidAmount | null
+  /**
+   * These credits were GIVEN, not bought — the `grantCredits` rail (a goodwill
+   * make-up lesson, a correction). The mail is otherwise identical, because the
+   * payload is identical: a number, a scope and an expiry.
+   *
+   * It exists because the purchase copy opens "Thank you — your purchase is
+   * confirmed", and saying that to somebody who paid nothing is the kind of
+   * small lie a member notices and a studio then has to explain. A CASH pack
+   * recorded at the desk is a purchase and leaves this false.
+   */
+  granted?: boolean
   spaceUrl?: string | null
   lang?: Lang
 }
@@ -135,6 +157,9 @@ export function buildCreditPackReceiptEmail(p: CreditPackReceiptParams): {
     it: 'I tuoi crediti sono pronti',
   }
 
+  // The subject is a NUMBER and a place, which is the same news either way — it
+  // is the body that must not say "thank you for your purchase" to somebody who
+  // did not make one.
   const subjects: Record<Lang, string> = {
     en: `${n} credits at ${p.teamName}`,
     de: `${n} Guthaben bei ${p.teamName}`,
@@ -142,12 +167,22 @@ export function buildCreditPackReceiptEmail(p: CreditPackReceiptParams): {
     it: `${n} crediti presso ${p.teamName}`,
   }
 
-  const intros: Record<Lang, string> = {
+  const purchaseIntros: Record<Lang, string> = {
     en: `Thank you — your purchase is confirmed. Your pack gives you <strong>${n} credits</strong> at <strong>${teamName}</strong>, and one credit books one class.`,
     de: `Vielen Dank — Ihr Kauf ist bestätigt. Ihr Paket enthält <strong>${n} Guthaben</strong> bei <strong>${teamName}</strong>; eine Buchung kostet ein Guthaben.`,
     fr: `Merci — votre achat est confirmé. Votre pack vous donne <strong>${n} crédits</strong> chez <strong>${teamName}</strong>, et un crédit réserve un cours.`,
     it: `Grazie — il tuo acquisto è confermato. Il tuo pacchetto ti dà <strong>${n} crediti</strong> presso <strong>${teamName}</strong>, e un credito prenota una lezione.`,
   }
+
+  // GIVEN, not bought — no "thank you", no "purchase". See `granted`.
+  const grantedIntros: Record<Lang, string> = {
+    en: `<strong>${teamName}</strong> has added <strong>${n} credits</strong> to your account. One credit books one class.`,
+    de: `<strong>${teamName}</strong> hat Ihrem Konto <strong>${n} Guthaben</strong> gutgeschrieben. Eine Buchung kostet ein Guthaben.`,
+    fr: `<strong>${teamName}</strong> a crédité votre compte de <strong>${n} crédits</strong>. Un crédit réserve un cours.`,
+    it: `<strong>${teamName}</strong> ha aggiunto <strong>${n} crediti</strong> al tuo account. Un credito prenota una lezione.`,
+  }
+
+  const intros = p.granted ? grantedIntros : purchaseIntros
 
   const factLabels: Record<Lang, { pack: string; credits: string; valid: string; noExpiry: string }> = {
     en: { pack: 'Pack', credits: 'Credits', valid: 'Valid until', noExpiry: 'No expiry date' },
@@ -517,6 +552,18 @@ export interface ProductReceiptParams {
   /** "Hoodie · XL" — product name plus the variant when one was chosen. */
   itemLabel: string
   paid?: PaidAmount | null
+  /**
+   * HOW TO GET IT, in the studio's own words (UX-79) — the product's own
+   * `collectionNote` or the team default, already resolved by the caller
+   * through `resolveProductCollectionNote`.
+   *
+   * When present it REPLACES the generic "arranges handover directly" sentence
+   * rather than joining it: the generic line exists only because the product
+   * model could not say anything, and printing both would have the studio's own
+   * terms argue with a platform disclaimer. The "ask them" sentence stays either
+   * way — a note answers the common case, not every case.
+   */
+  collectionNote?: string | null
   /** The studio's published address, when it has one. */
   teamEmail?: string | null
   spaceUrl?: string | null
@@ -534,6 +581,9 @@ export function buildProductReceiptEmail(p: ProductReceiptParams): {
   const itemLabel = escapeHtml(p.itemLabel)
   const teamEmail = p.teamEmail ? escapeHtml(p.teamEmail) : null
   const paidLine = money(p.paid, lang)
+  const collectionNote = (p.collectionNote ?? '').trim()
+    ? escapeHtml((p.collectionNote ?? '').trim())
+    : null
 
   const titles: Record<Lang, string> = {
     en: 'Order confirmed',
@@ -575,11 +625,11 @@ export function buildProductReceiptEmail(p: ProductReceiptParams): {
     it: 'Cosa succede ora',
   }
 
-  // WHAT IS TRUE, NOT WHAT WOULD BE NICE. Products carry no fulfilment, delivery
-  // or collection information anywhere in the product model, and the checkout
-  // collects no address — so this mail promises no shipping and no timeframe. It
-  // says the studio has the order and gives the buyer a way to ask. Rewrite this
-  // paragraph the day a product grows fulfilment terms, not before.
+  // WHAT IS TRUE, NOT WHAT WOULD BE NICE. Used when the studio has said NOTHING
+  // — no product `collectionNote` and no team default. It promises no shipping
+  // and no timeframe, because nothing in the data could back either; it says the
+  // studio has the order and gives the buyer a way to ask. The studio's own note
+  // replaces this line the moment there is one (UX-79).
   const nextLines: Record<Lang, string> = {
     en: `${teamName} arranges handover directly — nothing is shipped automatically.`,
     de: `${teamName} regelt die Übergabe direkt — es wird nichts automatisch versendet.`,
@@ -607,7 +657,7 @@ export function buildProductReceiptEmail(p: ProductReceiptParams): {
     detailsBox({ content: factLines(facts) }),
     detailsBox({
       title: nextTitles[lang],
-      content: `<p style="margin:0;">${nextLines[lang]} ${
+      content: `<p style="margin:0;">${collectionNote ?? nextLines[lang]} ${
         teamEmail ? askLines[lang](teamEmail) : askReplyLines[lang]
       }</p>`,
     }),

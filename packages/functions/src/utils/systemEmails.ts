@@ -29,6 +29,14 @@
 //    product (the only thing that says what happens next). Each has its OWN
 //    template, because a course has no time or place and a pack's whole payload
 //    is a number — reuse the posture and the mail_sends keying, not the body.
+//  • the DESK receipts (payments/deskReceipt.ts) — outside the toggles for the
+//    opposite reason to everything else on this list. They are not always-on:
+//    the studio chooses per sale, on the dialog, in front of the person who just
+//    paid, because a desk buyer has already been told something by a human. A
+//    `SystemEmailKey` would move that decision into a settings page nobody opens
+//    and turn a visible choice back into the silence UX-80 found. Bodies and
+//    ledger keying are reused from connect/purchaseReceipts.ts; the POSTURE is
+//    deliberately different, and the difference is the point.
 //  • a session cancellation for a booking that was PAID for (sessions/index.ts)
 //    — the `session_cancellation` toggle below still governs everybody else
 //  • booking reminders — pre-existing toggle settings.bookingRemindersEnabled

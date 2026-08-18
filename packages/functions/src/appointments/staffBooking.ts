@@ -32,7 +32,7 @@ import {
   resolveAutoConfirm,
   type Activity,
   type SaasPlan,
-  publicUrl,
+  localizedPublicUrl,
 } from '@linyup/shared'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import { createOneOffCheckoutSession } from '../utils/connect/client'
@@ -520,9 +520,12 @@ export const createStaffAppointment = onCall(async (request) => {
 
   // ── Emails ──
   if (!blocked && client) {
+    // Locale-pinned to the studio's language, like the mail it goes into.
     const cancelUrl =
       teamSlug && bookingToken
-        ? publicUrl(getHostingUrl(), teamSlug, 'appointments/cancel', { token: bookingToken })
+        ? localizedPublicUrl(getHostingUrl(), lang, teamSlug, 'appointments/cancel', {
+            token: bookingToken,
+          })
         : null
     await sendAppointmentBookingEmails({
       teamId,

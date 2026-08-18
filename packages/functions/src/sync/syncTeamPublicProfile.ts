@@ -286,6 +286,13 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     bookingCancellationPolicy:
       (data.settings as { bookingCancellationPolicy?: string } | undefined)
         ?.bookingCancellationPolicy || null,
+    // The team-wide "how do I get it?" default for product sales (UX-79). Same
+    // home, same shape and the same reason for being public as the line above:
+    // it is stated BEFORE the buyer pays, on a surface that reads public_profile
+    // alone. The per-product override rides on the mirrored product entry.
+    productCollectionNote:
+      (data.settings as { productCollectionNote?: string } | undefined)
+        ?.productCollectionNote || null,
     // The no-show policy's public TERMS (fee + threshold), so a booking surface
     // can state them BEFORE the button rather than in the email that follows.
     // Resolved through the same `resolveNoShowPolicy` the strike counter uses,

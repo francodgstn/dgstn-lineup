@@ -53,6 +53,10 @@ export interface MyBooking {
    *  visible, because a class silently disappearing from her list is exactly
    *  the sort of thing she would read as "my booking was lost". */
   sessionCancelled: boolean
+  /** What cancelling this one would give back — see `BookingCancelEffect`. It
+   *  travels with the row so the member reads it BEFORE she presses, which is
+   *  the only moment the answer can change her mind. */
+  cancelEffect: BookingCancelEffect
 }
 
 export interface MyBookingsResult {
@@ -74,4 +78,91 @@ export interface MyBookingsResult {
   /** How many of her booking documents this call actually read. The client does
    *  not render it; it exists so the cost of this surface is observable. */
   scanned: number
+}
+
+// ─── Cancelling: what actually comes back, and why a refusal is final ────────
+//
+// `cancelBooking` is the authority for both, and the copy on every surface has
+// to say what IT does rather than what a cancellation usually does elsewhere:
+//
+//  • A spent LESSON CREDIT is put back on the pack. Unconditionally — there is
+//    no cancellation window, and it is returned even if the pack has expired in
+//    the meantime ("the swimmer paid for a lesson they now didn't take").
+//  • A USAGE-LIMITED plan's window unit is put back the same way, against the
+//    ORIGINAL window, so a cancellation after the window rolled over is
+//    harmless rather than a free extra booking.
+//  • MONEY IS NEVER RETURNED. `cancelBooking` issues no refund and creates no
+//    refund request: a paid drop-in, a paid appointment and a gift-card-paid
+//    seat all release the seat and leave the payment standing, for the studio to
+//    settle. Copy that implies otherwise would be the same defect as promising a
+//    price nobody has to pay.
+//
+// The studio's own `cancellationPolicy` prose is a separate thing and NOTHING
+// ENFORCES IT (see components/booking/BookingTerms.tsx) — never restate it as
+// if the product applied it.
+
+/** What cancelling this booking gives back. Every field is a statement about
+ *  what the server WILL do (on `getBookingDetails`) or DID do (on the
+ *  `cancelBooking` response) — never a guess made on the client. */
+export interface BookingCancelEffect {
+  /** A lesson credit returns to the contact's pack. */
+  credit: boolean
+  /** A usage-limited plan's window unit is freed ("up to 3 classes per week"). */
+  usageUnit: boolean
+  /** The booking was PAID for (card or gift card). Cancelling does not refund
+   *  it — the money stays with the studio until the studio acts. */
+  paid: boolean
+}
+
+export const NO_CANCEL_EFFECT: BookingCancelEffect = {
+  credit: false,
+  usageUnit: false,
+  paid: false,
+}
+
+/**
+ * Why `cancelBooking` refused — carried as `HttpsError.details.reason`, so the
+ * client can state what happened instead of showing a raw English server
+ * sentence under a "try again" it should not offer.
+ *
+ * EVERY member of this union is PERMANENT: pressing the button again cannot
+ * change any of them. That is the whole point of the type — the failure it
+ * replaces was a generic retry prompt on a refusal that was already final,
+ * which teaches a member that the button is broken rather than that the answer
+ * is no. Anything NOT carrying a reason (a network drop, an internal error) is
+ * the transient case, and is the only case a retry belongs on.
+ */
+export type BookingCancelRefusal =
+  /** No booking matches this token — cancelled already, or the link is dead. */
+  | 'not_found'
+  /** The booking is there; its session is gone. */
+  | 'session_gone'
+  /** Already cancelled, or the studio has checked this person in. */
+  | 'already_settled'
+  /** The session has already started. */
+  | 'past'
+
+export interface BookingCancelRefusalDetails {
+  reason: BookingCancelRefusal
+}
+
+/** Narrow an `HttpsError.details` bag off the wire. Returns null for the
+ *  transient case (no reason ⇒ retrying is legitimate). */
+export function parseBookingCancelRefusal(details: unknown): BookingCancelRefusal | null {
+  if (typeof details !== 'object' || details === null) return null
+  const reason = (details as { reason?: unknown }).reason
+  const known: BookingCancelRefusal[] = ['not_found', 'session_gone', 'already_settled', 'past']
+  return typeof reason === 'string' && (known as string[]).includes(reason)
+    ? (reason as BookingCancelRefusal)
+    : null
+}
+
+/** The `cancelBooking` response. */
+export interface CancelBookingResult {
+  success: true
+  /** English, for logs — never rendered. The surfaces translate. */
+  message: string
+  rebookUrl: string | null
+  /** What this cancellation actually gave back. */
+  returned: BookingCancelEffect
 }

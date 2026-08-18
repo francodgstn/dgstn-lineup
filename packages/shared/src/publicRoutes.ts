@@ -191,6 +191,70 @@ export function publicSubUrl<R extends PublicRoutable>(
   return `${origin}${publicSubPath(slug, route, sub, params)}`
 }
 
+// ─── Locale-prefixed URLs — for EMAILED links ────────────────────────────────
+//
+// An emailed link carries no locale, so the page it opens picks its language
+// from the READER's browser (next-intl resolves: URL prefix → NEXT_LOCALE
+// cookie → Accept-Language → default 'en'; public surfaces never write that
+// cookie). The mail itself is written in the studio's language — every booking
+// template takes a `lang` off `Team.language` — so a German studio's German
+// confirmation mail was handing its member an English cancellation page.
+//
+// apps/web already fixed the same bug for anchors (`publicHrefLocalized`); this
+// is the equivalent for the URLs packages/functions builds, and the reason it
+// lives here rather than there is that both ends must agree on ONE prefix rule.
+//
+// `localePrefix: 'as-needed'`: the default locale is the one WITHOUT a prefix.
+// Emitting `/en/public/…` is not merely redundant — it costs a 302 on a link
+// somebody clicks in a mail client.
+
+/**
+ * The locales apps/web serves. MUST stay in step with
+ * `apps/web/src/i18n/routing.ts` and with `Team.language` (types/team.ts) —
+ * `publicRoutes.test.ts` pins the shape these produce.
+ */
+export const PUBLIC_LOCALES = ['en', 'de', 'fr', 'it'] as const
+export type PublicLocale = (typeof PUBLIC_LOCALES)[number]
+
+/** The unprefixed one, per `localePrefix: 'as-needed'`. */
+export const DEFAULT_PUBLIC_LOCALE: PublicLocale = 'en'
+
+/**
+ * `''` for the default locale and for anything unrecognised (a bad value
+ * degrades to the default language, never to a 404 at `/xx/public/…`),
+ * `'/de'` | `'/fr'` | `'/it'` otherwise.
+ */
+export function publicLocalePrefix(locale: string | null | undefined): string {
+  if (!locale) return ''
+  const normalized = locale.toLowerCase().split('-')[0]
+  if (normalized === DEFAULT_PUBLIC_LOCALE) return ''
+  return (PUBLIC_LOCALES as readonly string[]).includes(normalized) ? `/${normalized}` : ''
+}
+
+/** `publicUrl` with the reader's locale pinned into the path. Use this for every
+ *  link that goes into an email — see the note above. */
+export function localizedPublicUrl<R extends PublicRoutable>(
+  origin: string,
+  locale: string | null | undefined,
+  slug: string,
+  route?: R,
+  params?: PublicRouteParams[R]
+): string {
+  return `${origin}${publicLocalePrefix(locale)}${publicPath(slug, route, params)}`
+}
+
+/** Locale-pinned variant of `publicSubUrl`. */
+export function localizedPublicSubUrl<R extends PublicRoutable>(
+  origin: string,
+  locale: string | null | undefined,
+  slug: string,
+  route: R,
+  sub: string | string[],
+  params?: PublicRouteParams[R]
+): string {
+  return `${origin}${publicLocalePrefix(locale)}${publicSubPath(slug, route, sub, params)}`
+}
+
 /**
  * Structured form of `SYSTEM_LINK_META[t].route` (types/team.ts), which is a
  * pre-baked string that may carry a query (`'shop?tab=subscriptions'`).
