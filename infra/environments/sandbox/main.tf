@@ -83,6 +83,9 @@ module "firebase" {
 }
 
 # ── Firestore database instance ───────────────────────────────────────────────
+# Retention stays on the module default (7 days) deliberately: sandbox hosts
+# prospect demos and lead tenants, which are reseedable from scripts/leads/. PITR
+# is still on — an accidental wipe mid-demo is the case worth covering here.
 module "firestore" {
   source             = "../../modules/firestore"
   project_id         = var.project_id

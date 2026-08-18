@@ -78,10 +78,15 @@ module "firebase" {
 }
 
 # ── Firestore database instance ───────────────────────────────────────────────
+# PITR and daily backups are on by the module's defaults. Prod overrides only the
+# retention, taking the 14-week maximum: this is the one project where the data is
+# irreplaceable, and backup storage is negligible next to reconstructing a studio's
+# booking and payment history.
 module "firestore" {
   source             = "../../modules/firestore"
   project_id         = var.project_id
   firestore_location = var.firestore_location
+  backup_retention   = var.backup_retention
 
   depends_on = [module.services]
 }

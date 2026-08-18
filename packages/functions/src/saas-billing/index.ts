@@ -25,9 +25,6 @@ import {
   ORGANIZATIONS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   PLAN_PRICING,
-  TENANT_DATA_COLLECTIONS,
-  TENANT_TEAM_DOC_COLLECTION,
-  tenantStoragePrefix,
 } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
@@ -662,80 +659,13 @@ export const deactivatePluginAddon = onCall(async (request) => {
 // importing a module whose top level registers every billing function. There is
 // one downgrade path for both tiers; do not write a second one.
 
-/**
- * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
- * When `dryRun` is true, NOTHING is deleted — it only logs what it would remove
- * (counts per collection).
- *
- * The set of tenant-scoped collections is driven by TENANT_DATA_COLLECTIONS in
- * `@linyup/shared` (the single source of truth, guarded by a completeness test)
- * so a newly added tenant collection is purged automatically once registered.
- *
- * DORMANT as a schedule (the 90-day trial purge was retired when lapsed trials
- * began downgrading to Free). Kept as the manual GDPR / account-deletion (and
- * QA "reset account") utility — exported for admin scripts and callables.
- *
- * NOTE: this removes Firestore + Storage only. Provider-side state for entries
- * flagged `externalTeardown` (e.g. the Stripe Connect account + its member
- * subscriptions) must be cancelled/disconnected separately — a warning is logged.
- */
-export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
-  const db = admin.firestore()
-  const tag = dryRun ? '[purge][dry-run]' : '[purge]'
-
-  for (const entry of TENANT_DATA_COLLECTIONS) {
-    if (entry.match.by === 'field') {
-      const q = db.collection(entry.collection).where(entry.match.field, '==', teamId)
-      if (dryRun) {
-        const c = await q.count().get()
-        console.log(`${tag} team ${teamId}: would delete ${c.data().count} ${entry.collection}`)
-      } else {
-        const snap = await q.get()
-        for (const d of snap.docs) await db.recursiveDelete(d.ref)
-      }
-    } else {
-      // doc id IS the teamId
-      const ref = db.collection(entry.collection).doc(teamId)
-      if (dryRun) {
-        const exists = (await ref.get()).exists
-        console.log(`${tag} team ${teamId}: would delete ${exists ? 1 : 0} ${entry.collection}/${teamId}`)
-      } else {
-        await db.recursiveDelete(ref)
-      }
-    }
-    if (entry.externalTeardown === 'stripe_connect') {
-      console.warn(
-        `${tag} team ${teamId}: ${entry.collection} removed from Firestore — the Stripe Connect ` +
-          `account & its member subscriptions still require provider-side teardown (cancel/disconnect).`
-      )
-    }
-  }
-
-  if (dryRun) {
-    console.log(
-      `${tag} team ${teamId}: would recursively delete ${TENANT_TEAM_DOC_COLLECTION}/${teamId} ` +
-        `(doc + all subcollections) and Storage ${tenantStoragePrefix(teamId)}`
-    )
-    return
-  }
-
-  // Team doc + ALL its subcollections (team_members, installed_plugins,
-  // integrations, subscription_types, products, member_payments/subscriptions, …).
-  await db.recursiveDelete(db.collection(TENANT_TEAM_DOC_COLLECTION).doc(teamId))
-
-  // Team Storage files.
-  try {
-    await admin.storage().bucket().deleteFiles({ prefix: tenantStoragePrefix(teamId) })
-  } catch (err) {
-    console.error(`${tag} storage cleanup failed for ${teamId}:`, err)
-  }
-
-  // Audit trail (best-effort; never block the purge on it).
-  await db
-    .collection('team_audits')
-    .add({ action: 'purge_team', teamId, at: FieldValue.serverTimestamp() })
-    .catch((err) => console.error(`${tag} audit write failed for ${teamId}:`, err))
-}
+// `purgeTeam` — THE one implementation — now lives in ./purgeTeam.ts, re-exported
+// below. It moved out of this file for the same reason `downgradeTeamToFree` did:
+// `scripts/purge-team.ts` needs to call it, and importing a module whose top level
+// registers every billing function drags the Cloud Functions runtime into a CLI.
+// Re-exported here so anything already importing it from `./saas-billing` still
+// resolves. There is one tenant-erase path; do not write a second one.
+export { purgeTeam } from './purgeTeam'
 
 /** Notify the owner that the trial ended and the team is now on the Free plan. */
 async function sendTrialExpiredEmail(

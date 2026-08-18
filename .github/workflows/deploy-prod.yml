@@ -13,8 +13,16 @@ permissions:
   id-token: write
 
 jobs:
+  # Gate: a release tag can point at any commit, and `verify` previously ran on
+  # pull requests only — so a `v*` tag could ship to production having never been
+  # typechecked, linted or tested. This runs BEFORE the environment approval, so a
+  # reviewer is never asked to approve something that has not passed its checks.
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   deploy:
     name: Deploy to Production
+    needs: verify
     runs-on: ubuntu-latest
     environment: production
 
@@ -75,9 +83,18 @@ jobs:
           PUBLIC_POSTHOG_KEY: ${{ vars.PROD_POSTHOG_KEY }}
           PUBLIC_POSTHOG_HOST: https://eu.i.posthog.com
 
-      # Backend first: functions, Firestore rules/indexes, and the static landing
-      # site. The App Hosting apps (web + admin) are rolled out AFTER this so the
-      # frontend never goes live ahead of the backend it depends on.
+      # Backend first: functions, Firestore rules/indexes, Storage rules, and the
+      # static landing site. The App Hosting apps (web + admin) are rolled out
+      # AFTER this so the frontend never goes live ahead of the backend it depends on.
+      #
+      # ⚠️ `storage` was MISSING from this list while staging and sandbox both had
+      # it, so storage.rules had never reached production through the pipeline —
+      # prod ran on whatever was last pushed by hand, and every tenant-isolation
+      # change to that file silently stopped at staging. BEFORE the first run that
+      # includes it, diff the repo's storage.rules against what is actually live in
+      # prod (Firebase Console → Storage → Rules): this deploy REPLACES the live
+      # ruleset, so any hand-edit made directly in the Console is about to be
+      # reverted. Confirm the difference is only what you intend to ship.
       # Retry wrapper: the WIF→STS token exchange occasionally fails ("Failed to
       # authenticate") and the per-minute Cloud Functions mutation quota 429s on a
       # full redeploy. Both are transient and converge on re-run (auth blips clear;
@@ -85,7 +102,7 @@ jobs:
       - name: Deploy to Firebase (Production)
         run: |
           for attempt in 1 2 3 4 5; do
-            if npx firebase-tools deploy --project production --only functions,hosting:landing,firestore --non-interactive --force; then
+            if npx firebase-tools deploy --project production --only functions,hosting:landing,firestore,storage --non-interactive --force; then
               exit 0
             fi
             echo "::warning::firebase deploy attempt $attempt failed; retrying in 30s…"

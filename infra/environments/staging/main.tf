@@ -79,6 +79,9 @@ module "firebase" {
 }
 
 # ── Firestore database instance ───────────────────────────────────────────────
+# Retention stays on the module default (7 days) deliberately: staging data is
+# seeded (pnpm staging:seed) and reproducible. PITR still covers an accidental
+# reset while someone is mid-validation.
 module "firestore" {
   source             = "../../modules/firestore"
   project_id         = var.project_id
