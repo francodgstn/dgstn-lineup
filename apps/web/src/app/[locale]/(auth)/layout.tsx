@@ -52,6 +52,8 @@ import {
   Search,
   Calculator,
   Ticket,
+  MapPin,
+  LayoutTemplate,
 } from 'lucide-react'
 import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -157,6 +159,17 @@ const HOW_TO_ITEM: NavItem = {
 // Action-oriented sidebar sections for high-frequency destinations. Lower-frequency
 // configuration lives behind "All settings" (the /settings hub) + whatever the user
 // pins to the Pinned block — see src/lib/settings-nav.ts.
+//
+// ORDER WITHIN A SECTION IS FREQUENCY OF USE, MOST-USED FIRST, and it is the
+// order that renders — see the render in SidebarContent, which deliberately does
+// NOT sort. It was sorted alphabetically by translated label for one day
+// (6d94638f); the effect was that Schedule — the destination a studio opens every
+// single session — fell to the BOTTOM of Run, behind every row used less often,
+// and in German/French/Italian it landed somewhere else again, so nothing about
+// the list could be learned once (UX-29). Alphabetical is the right answer
+// only for a list nobody can rank; these are ranked, so declaration order wins.
+// Plugin-contributed rows still sort alphabetically: they arrive from a registry
+// in an order the studio did not author and cannot be ranked here.
 const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionRun',
@@ -183,6 +196,15 @@ const NAV_SECTIONS: NavSection[] = [
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
       { id: 'automations', href: '/automations', labelKey: 'automations', icon: Workflow },
+      // Places — the studio's locations and rooms. A SCHEDULING reference, not a
+      // preference: it is read by the session/event forms' place picker and by the
+      // website's places section, and it is edited when the schedule needs a room
+      // that doesn't exist yet. It sat in Settings → Scheduling, which meant
+      // leaving the calendar entirely to add one (UX-67). LAST in Run: everything
+      // above it is opened during a working day, this is opened while setting one
+      // up. The page is a sibling of the calendar at /schedule/places, beside
+      // /schedule/availability.
+      { id: 'places', href: '/schedule/places', labelKey: 'places', icon: MapPin },
     ],
   },
   {
@@ -256,11 +278,21 @@ const NAV_SECTIONS: NavSection[] = [
     // Audience + engagement surfaces. Bio-link is the acquisition funnel; Space is
     // the members' area where contacts stay engaged (needs the online-courses
     // plugin); Website + Forms + Gamification join as engagement plugins
-    // (section: 'engage'). The public-surface overview hub now lives under Settings
-    // ("Public pages"), so individual surfaces live in their natural sections.
+    // (section: 'engage').
     labelKey: 'sectionGrow',
     icon: TrendingUp,
     items: [
+      // THE MAP OF EVERYTHING PUBLIC, first in the section. The public surfaces
+      // are managed from route prefixes that have nothing in common — bio-link
+      // under /team, website/kiosk/forms under /plugins, shop and space under
+      // /public-page, the booking page under /settings, signup under /offer,
+      // documents at its own root — and nobody holds that spread in their head.
+      // The one page that does hold it (its `surfaces` array is the census) was
+      // reachable only from the Settings rail (UX-28). Same id as the Settings
+      // row, deliberately: ONE destination, one shortcut star, one search result.
+      // Listing it here is what makes it findable from where public surfaces are
+      // actually worked on.
+      { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, exact: true },
       { id: 'bioLink', href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
       // Space is the contacts' personal portal (membership, bookings, profile, their
       // courses) — a base surface, not tied to the online-courses plugin.
@@ -1805,22 +1837,16 @@ function SidebarContent({
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
-              // ALPHABETICAL within the section, by the TRANSLATED label — so the
-              // order is the one the reader can see, and it differs per locale on
-              // purpose. The hand-tuned declaration order stopped being worth
-              // defending once a section could hold a dozen items: nobody can
-              // recall a curated order that long, and anyone who wants their own
-              // has Shortcuts, which is drag-ordered and sits above this.
+              // DECLARATION ORDER — which is frequency of use, most-used first
+              // (see NAV_SECTIONS). Deliberately NOT sorted: alphabetical by
+              // translated label put Schedule last in Run, behind five items a
+              // studio opens far less often, and put it somewhere different again
+              // in each locale (UX-29).
               const byLabel = (a: string, b: string) => a.localeCompare(b, locale)
-              const items = section.items
-                .filter(mainItemVisible)
-                .slice()
-                .sort((a, b) =>
-                  byLabel(
-                    t(a.labelKey as Parameters<typeof t>[0]),
-                    t(b.labelKey as Parameters<typeof t>[0])
-                  )
-                )
+              const items = section.items.filter(mainItemVisible)
+              // Plugin rows keep the alphabetical sort: they come from a registry
+              // in an order the studio did not author, so there is no ranking to
+              // preserve — only a stable, readable one to impose.
               const secPlugins = sectionedEntries
                 .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
                 .slice()

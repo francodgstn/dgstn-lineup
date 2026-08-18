@@ -23,6 +23,19 @@ export function PublicPages() {
     <section>
       <h2 className="text-lg font-semibold">{t('publicPages.title')}</h2>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t('publicPages.intro')}</p>
+      {/* Out of the guide and into the studio's OWN surfaces. This section
+          teaches what the public pages are; the hub at /public-page is where a
+          studio sees which of its own are live, what their URLs are, and where
+          each is managed — and PUBLIC_PAGES here is a teaching subset of that
+          hub's census, not a second source of truth (see concepts.ts). Without
+          this link the guide is a dead end that names surfaces it never hands
+          you (UX-28). */}
+      <Link
+        href={'/public-page' as Route}
+        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+      >
+        {t('publicPages.seeAll')} <ArrowRight className="h-3 w-3" />
+      </Link>
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:gap-6">
         {/* Vertical tab list (horizontal scroll on mobile) */}

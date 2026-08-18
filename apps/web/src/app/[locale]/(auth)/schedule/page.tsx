@@ -1000,6 +1000,21 @@ export default function CalendarPage() {
             <CalendarClock className="h-3.5 w-3.5" />
             {t('bookableHours')}
           </Link>
+          {/* Places — the locations and rooms the session/event forms pick from.
+              It lived in Settings, so adding a room mid-schedule meant leaving the
+              calendar and hunting for it (UX-67). Peer of Bookable hours: both are
+              the scheduling reference data this page consumes, both are edited
+              from here. Label hidden below `sm` only — the icon is a map pin next
+              to a labelled sibling, so it does not have to carry the meaning
+              alone on a narrow screen. */}
+          <Link
+            href={'/schedule/places' as Route}
+            title={t('places')}
+            className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('places')}</span>
+          </Link>
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>

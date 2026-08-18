@@ -1047,7 +1047,8 @@
     "newAvailability": "Add bookable hours",
     "bookableHours": "Bookable hours",
     "availabilityLegend": "Bookable hours:",
-    "deleteEventConfirm": "Delete event \"{title}\"? This cannot be undone."
+    "deleteEventConfirm": "Delete event \"{title}\"? This cannot be undone.",
+    "places": "Places"
   },
   "Events": {
     "title": "Events",
@@ -4437,7 +4438,8 @@
     "orgBadge": "Org",
     "roomCount": "{count, plural, one {# room} other {# rooms}}",
     "openInMaps": "Open in maps",
-    "setAsMainAddress": "Set as main address"
+    "setAsMainAddress": "Set as main address",
+    "backToSchedule": "Back to schedule"
   },
   "EngagementMatrix": {
     "cardTitle": "Engagement matrix",
@@ -5542,7 +5544,8 @@
           "name": "Kiosk",
           "desc": "A fixed, low-chrome screen for an entrance tablet: today's schedule, a check-in QR and walk-in sign-up. What members and drop-ins see at the door."
         }
-      }
+      },
+      "seeAll": "See all your public pages"
     },
     "pricing": {
       "title": "Pricing",

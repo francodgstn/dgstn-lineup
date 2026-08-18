@@ -1047,7 +1047,8 @@
     "newAvailability": "Buchbare Zeiten hinzufügen",
     "bookableHours": "Buchbare Zeiten",
     "availabilityLegend": "Buchbare Zeiten:",
-    "deleteEventConfirm": "Event \"{title}\" löschen? Dies kann nicht rückgängig gemacht werden."
+    "deleteEventConfirm": "Event \"{title}\" löschen? Dies kann nicht rückgängig gemacht werden.",
+    "places": "Orte"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -4437,7 +4438,8 @@
     "orgBadge": "Org",
     "roomCount": "{count, plural, one {# Raum} other {# Räume}}",
     "openInMaps": "In Maps öffnen",
-    "setAsMainAddress": "Als Hauptadresse festlegen"
+    "setAsMainAddress": "Als Hauptadresse festlegen",
+    "backToSchedule": "Zurück zum Zeitplan"
   },
   "EngagementMatrix": {
     "cardTitle": "Engagement-Matrix",
@@ -5542,7 +5544,8 @@
           "name": "Kiosk",
           "desc": "Ein fester, schlichter Bildschirm für ein Eingangs-Tablet: heutiger Zeitplan, Check-in-QR und Walk-in-Anmeldung. Was Mitglieder und Spontanbesucher an der Tür sehen."
         }
-      }
+      },
+      "seeAll": "Alle deine öffentlichen Seiten ansehen"
     },
     "pricing": {
       "title": "Preise",

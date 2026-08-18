@@ -2,7 +2,33 @@
 
 // "Public pages" hub — the orientation layer for everything customer-facing. It
 // keeps the deep management pages where they are and just makes the system
-// legible. Layout is hero + list:
+// legible.
+//
+// THIS FILE OWNS THE CENSUS OF PUBLIC SURFACES. The `surfaces` array below is the
+// list; add a surface there and nowhere else. Each row's `action` is also the
+// record of WHERE that surface is managed, and those prefixes have nothing in
+// common with each other:
+//
+//   bio-link   → /team/bio-link
+//   website    → /plugins/website          (set up via /settings/plugins)
+//   shop       → /public-page/shop
+//   space      → /public-page/space
+//   booking    → /settings/booking
+//   kiosk      → /plugins/kiosk            (set up via /settings/plugins)
+//   signup     → /offer/plans?tab=subscriptions
+//   forms      → /plugins/custom-forms     (set up via /settings/plugins)
+//   documents  → /documents
+//
+// That spread is the reason this page exists (UX-28) and the reason it must be
+// findable: it is linked from the main nav's Grow section AND the Settings rail,
+// under one id (`publicPages` in lib/settings-nav.ts + NAV_SECTIONS). Renaming any
+// prefix above is off the table — these URLs are in bookmarks, bio-links and
+// printed QR codes.
+//
+// It RENDERS inside the settings shell (see (hub)/layout.tsx) — it is a settings
+// section, and was the only one that read as a bare full page (UX-61).
+//
+// Layout is hero + list:
 //
 //  • Hero — the one thing every studio owner comes here for: their public link
 //    (copy/open) and which surface visitors land on. This is the page's anchor.
@@ -199,7 +225,9 @@ export default function PublicPageHub() {
     {
       key: 'signup', icon: UserPlus, title: t('surfaceSignup'), desc: t('signupDesc'),
       live: true, previewUrl: publicUrl('signup'),
-      action: <ManageLink href={'/offer/subscriptions' as Route} label={t('manage')} />,
+      // Straight to the tab, not through the /offer/subscriptions redirect stub —
+      // the stub exists for links already in the world, not for the app's own.
+      action: <ManageLink href={'/offer/plans?tab=subscriptions' as Route} label={t('manage')} />,
     },
     {
       key: 'forms', icon: ClipboardList, title: t('surfaceForms'), desc: t('formsDesc'),

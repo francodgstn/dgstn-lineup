@@ -70,10 +70,9 @@ const CHECKLIST_PREVIEW = 3
 function ChecklistCard() {
   const t = useTranslations('HowTo')
   const tOnb = useTranslations('Onboarding')
-  const { currentTeamId, team } = useAuth()
+  const { currentTeamId } = useAuth()
   const { steps, requiredDone, requiredTotal, allRequiredDone } = useSetupChecklist(
-    currentTeamId ?? null,
-    team ?? null
+    currentTeamId ?? null
   )
   const open = steps.filter((s) => !s.done).slice(0, CHECKLIST_PREVIEW)
 

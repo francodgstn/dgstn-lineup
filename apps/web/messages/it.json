@@ -1047,7 +1047,8 @@
     "newAvailability": "Aggiungi orari prenotabili",
     "bookableHours": "Orari prenotabili",
     "availabilityLegend": "Orari prenotabili:",
-    "deleteEventConfirm": "Eliminare l'evento \"{title}\"? L'operazione non può essere annullata."
+    "deleteEventConfirm": "Eliminare l'evento \"{title}\"? L'operazione non può essere annullata.",
+    "places": "Sedi"
   },
   "Events": {
     "title": "Eventi",
@@ -4437,7 +4438,8 @@
     "orgBadge": "Org",
     "roomCount": "{count, plural, one {# sala} other {# sale}}",
     "openInMaps": "Apri in Maps",
-    "setAsMainAddress": "Imposta come indirizzo principale"
+    "setAsMainAddress": "Imposta come indirizzo principale",
+    "backToSchedule": "Torna al programma"
   },
   "EngagementMatrix": {
     "cardTitle": "Matrice di coinvolgimento",
@@ -5542,7 +5544,8 @@
           "name": "Kiosk",
           "desc": "Uno schermo fisso ed essenziale per un tablet all'ingresso: calendario del giorno, QR di check-in e iscrizione in loco. Ciò che vedono membri e visitatori alla porta."
         }
-      }
+      },
+      "seeAll": "Vedi tutte le tue pagine pubbliche"
     },
     "pricing": {
       "title": "Prezzi",

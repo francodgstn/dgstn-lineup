@@ -32,7 +32,7 @@ export function SetupChecklist() {
     loading,
     sessionsNotActuallyBookable,
     nextUnbookableSessionId,
-  } = useSetupChecklist(currentTeamId, team)
+  } = useSetupChecklist(currentTeamId)
   // Local dismissal for non-owners (who can't write the team doc) and instant feedback.
   const [localDismissed, setLocalDismissed] = useState(false)
 

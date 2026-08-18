@@ -117,6 +117,16 @@ export interface PublicPage {
   href: string
 }
 
+// A TEACHING SUBSET, not the census. The authoritative list of public surfaces —
+// and of where each one is managed — is the `surfaces` array in
+// (auth)/public-page/(hub)/page.tsx; this list exists to explain the idea, so it
+// carries only the surfaces that have a wireframe and a paragraph written for
+// them in the `HowTo.publicPages.surfaces` copy. It therefore differs from the
+// census in both directions (it has appointments, which the hub does not; the hub
+// has signup, forms and documents, which this does not) and that is fine as long
+// as nobody reads it as complete — which is what the "see all" link the section
+// renders is for. Adding a surface HERE without copy + a preview renders an empty
+// panel; adding one to the hub is the change that matters.
 export const PUBLIC_PAGES: PublicPage[] = [
   { id: 'bioLink', icon: LinkIcon, href: '/team/bio-link' },
   { id: 'website', icon: Globe, href: '/plugins/website' },

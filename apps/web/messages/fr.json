@@ -1047,7 +1047,8 @@
     "newAvailability": "Ajouter des heures réservables",
     "bookableHours": "Heures réservables",
     "availabilityLegend": "Heures réservables :",
-    "deleteEventConfirm": "Supprimer l'événement « {title} » ? Cette action est irréversible."
+    "deleteEventConfirm": "Supprimer l'événement « {title} » ? Cette action est irréversible.",
+    "places": "Lieux"
   },
   "Events": {
     "title": "Événements",
@@ -4437,7 +4438,8 @@
     "orgBadge": "Org",
     "roomCount": "{count, plural, one {# salle} other {# salles}}",
     "openInMaps": "Ouvrir dans Maps",
-    "setAsMainAddress": "Définir comme adresse principale"
+    "setAsMainAddress": "Définir comme adresse principale",
+    "backToSchedule": "Retour au planning"
   },
   "EngagementMatrix": {
     "cardTitle": "Matrice d'engagement",
@@ -5542,7 +5544,8 @@
           "name": "Kiosque",
           "desc": "Un écran fixe et épuré pour une tablette d'accueil : planning du jour, QR de pointage et inscription sur place. Ce que voient membres et visiteurs à la porte."
         }
-      }
+      },
+      "seeAll": "Voir toutes vos pages publiques"
     },
     "pricing": {
       "title": "Tarifs",

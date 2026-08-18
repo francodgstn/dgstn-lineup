@@ -6,7 +6,6 @@
 import {
   CalendarRange,
   CalendarCheck,
-  MapPin,
   Puzzle,
   UserCog,
   ShieldCheck,
@@ -54,7 +53,13 @@ export interface SettingsNavItem {
 export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // Scheduling — how sessions and bookings work.
   { id: 'eventTypes', href: '/settings/event-types', labelKey: 'eventTypes', icon: CalendarRange, group: 'scheduling' },
-  { id: 'places', href: '/settings/places', labelKey: 'places', icon: MapPin, group: 'scheduling' },
+  // Places is NOT here any more: it moved to /schedule/places, beside the calendar
+  // that reads it, and is listed in the main nav's Run section (UX-67). It is not
+  // kept as a rail row pointing there, deliberately — a rail row whose page lives
+  // outside the /settings shell throws the reader out of settings mid-task, which
+  // is exactly what UX-61 objected to. Every row in this list now renders inside
+  // the shell; `publicPages` below is the one that reaches it via a route group
+  // rather than a /settings/* path.
   { id: 'bookingPage', href: '/settings/booking', labelKey: 'bookingPage', icon: CalendarCheck, group: 'scheduling' },
   // Studio — the studio's own configuration. Each team sub-section is its own rail
   // item (selected by ?tab= on /settings/team); affiliations + custom-fields are
@@ -71,8 +76,17 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // The public-surface overview hub — the map of everything the world can see
   // (public URL, default landing, per-surface live status). Individual surfaces
   // are reachable from their own sections (Shop → Offer, Space → Grow, …); this is
-  // the settings/overview that ties them together. Lives outside the /settings/*
-  // shell at /public-page, so the layout injects a "back to settings" link.
+  // the settings/overview that ties them together.
+  //
+  // The route stays at /public-page — it is bookmarked, and its siblings
+  // /public-page/shop and /public-page/space are linked from the main nav — but it
+  // now RENDERS inside the settings shell (rail + detail pane) via a route-group
+  // layout at (auth)/public-page/(hub)/layout.tsx, so it reads like every other
+  // settings section instead of dumping the reader onto a bare full page (UX-61).
+  // The `(hub)` group scopes that shell to this page only; shop/space keep their
+  // own full-width layout. It is ALSO listed in the main nav's Grow section under
+  // the same id, so the map is reachable from where public surfaces are worked on
+  // (UX-28) — one destination, one shortcut star, listed twice.
   { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },
   { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
   // Account — workspace admin.
