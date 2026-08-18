@@ -19,6 +19,7 @@
 //   signup       → /offer/plans?tab=subscriptions
 //   forms        → /plugins/custom-forms     (set up via /settings/plugins)
 //   documents    → /documents
+//   events       → /events
 //
 // APPOINTMENTS IS THE ONE ROW WITH TWO MANAGEMENT HOMES, which is why its action
 // switches: the toggle lives in /settings/booking and the bookable hours behind
@@ -59,7 +60,7 @@ import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck, CalendarClock,
-  UserPlus, ClipboardList, FileText, ExternalLink, Copy, Check, Plus, Settings2,
+  UserPlus, ClipboardList, FileText, CalendarRange, ExternalLink, Copy, Check, Plus, Settings2,
 } from 'lucide-react'
 
 // Plugin a surface needs; clicking "Set up" deep-links the plugins page, whose
@@ -172,6 +173,7 @@ export default function PublicPageHub() {
     { value: 'booking', label: t('surfaceBooking') },
     { value: 'signup', label: t('surfaceSignup') },
     ...(flags.documentsLive ? [{ value: 'documents' as const, label: t('surfaceDocuments') }] : []),
+    ...(flags.eventsLive ? [{ value: 'events' as const, label: t('surfaceEvents') }] : []),
   ]
   const currentDefault = pendingDefault ?? defaultSurface
 
@@ -269,6 +271,15 @@ export default function PublicPageHub() {
       key: 'documents', icon: FileText, title: t('surfaceDocuments'), desc: t('documentsDesc'),
       live: flags.documentsLive, previewUrl: publicUrl('documents'),
       action: <ManageLink href={'/documents' as Route} label={t('manage')} />,
+    },
+    {
+      // Always "Manage" for the same reason as Documents: events are a default
+      // feature on every plan, and the surface is dark only until the studio
+      // publishes one — events are PRIVATE by default. Manage goes to the
+      // calendar, which is where events are created and published from.
+      key: 'events', icon: CalendarRange, title: t('surfaceEvents'), desc: t('eventsDesc'),
+      live: flags.eventsLive, previewUrl: publicUrl('events'),
+      action: <ManageLink href={'/schedule' as Route} label={t('manage')} />,
     },
   ]
 

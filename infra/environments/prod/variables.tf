@@ -100,6 +100,29 @@ variable "admin_writable_secret_ids" {
   ]
 }
 
+# ── Monitoring ────────────────────────────────────────────────────────────────
+variable "alert_email" {
+  type        = string
+  description = "Where production alerts go. EMPTY MEANS NOBODY IS PAGED. Set it in terraform.tfvars (gitignored) — this is production, so treat an empty value as an open action item, not a default."
+  default     = ""
+}
+
+variable "uptime_host" {
+  type        = string
+  description = "Public host probed at /api/health."
+  default     = "app.linyup.com"
+}
+
+# ── Backups ───────────────────────────────────────────────────────────────────
+# Answers the "decide retention" open item in docs/launch/data-safety-checklist.md.
+# 14 weeks is the Firestore maximum for a daily schedule; lower it deliberately if
+# storage cost ever becomes material, not by accident.
+variable "backup_retention" {
+  type        = string
+  description = "Firestore daily-backup retention, in seconds. Default 14 weeks (the maximum)."
+  default     = "8467200s"
+}
+
 # ── Budget ────────────────────────────────────────────────────────────────────
 variable "budget_amount" {
   type        = number

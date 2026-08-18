@@ -64,6 +64,14 @@ resource "google_identity_platform_config" "this" {
   depends_on = [google_firebase_project.this]
 
   lifecycle {
-    ignore_changes = [blocking_functions, sign_in]
+    # multi_tenant joined this list on 2026-08-18. Terraform saw a multi_tenant
+    # block on the live config that this resource does not declare, so every plan
+    # proposed removing it. Linyup's tenant boundary is `teamId` in Firestore —
+    # GCIP multi-tenancy is not used and never has been — so the block is a
+    # Console/API artifact of enabling Identity Platform, not configuration we
+    # own. Ignoring it keeps plans clean without Terraform reaching into live auth
+    # config to turn something off that nothing asked for. Same reasoning as
+    # sign_in above: Console-managed, not ours to reconcile.
+    ignore_changes = [blocking_functions, sign_in, multi_tenant]
   }
 }

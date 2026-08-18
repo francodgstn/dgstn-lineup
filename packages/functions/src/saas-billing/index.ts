@@ -4,6 +4,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
+import { withErrorReporting } from '../utils/reportError'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
 import { downgradeTeamToFree } from './downgrade'
@@ -30,9 +31,6 @@ import {
   ORGANIZATIONS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   PLAN_PRICING,
-  TENANT_DATA_COLLECTIONS,
-  TENANT_TEAM_DOC_COLLECTION,
-  tenantStoragePrefix,
 } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 
@@ -158,259 +156,259 @@ export const createCheckoutSession = onCall(async (request) => {
 // handleStripeWebhook — onRequest: validates signature, syncs saas_subscriptions
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed')
-    return
-  }
+export const handleStripeWebhook = onRequest(
+  { invoker: 'public' },
+  withErrorReporting('handleStripeWebhook', async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed')
+      return
+    }
 
-  const signature = req.headers['stripe-signature']
-  if (!signature || typeof signature !== 'string') {
-    console.error('Missing stripe-signature header')
-    res.status(400).send('Missing stripe-signature header')
-    return
-  }
+    const signature = req.headers['stripe-signature']
+    if (!signature || typeof signature !== 'string') {
+      console.error('Missing stripe-signature header')
+      res.status(400).send('Missing stripe-signature header')
+      return
+    }
 
-  let webhookSecret: string
-  try {
-    webhookSecret = await getSecret('stripe-webhook-secret')
-  } catch (err) {
-    console.error('Failed to load stripe-webhook-secret:', err)
-    res.status(500).send('Internal error')
-    return
-  }
+    let webhookSecret: string
+    try {
+      webhookSecret = await getSecret('stripe-webhook-secret')
+    } catch (err) {
+      console.error('Failed to load stripe-webhook-secret:', err)
+      res.status(500).send('Internal error')
+      return
+    }
 
-  // Verification-only adapter: parseWebhook is pure crypto (HMAC of the raw
-  // body against the signing secret) — no API key needed, so don't fetch
-  // 'stripe-secret-key' here. The old getPlatformStripeAdapter() call sat
-  // OUTSIDE any try/catch, so a missing key 500'd every platform event with
-  // no useful log. Same pattern as handleTeamStripeWebhook.
-  const adapter = StripeAdapter.withSecretKey(
-    { type: 'stripe', publishable_key: '', currency: 'chf' },
-    'sk_webhook_verification_only'
-  )
+    // Verification-only adapter: parseWebhook is pure crypto (HMAC of the raw
+    // body against the signing secret) — no API key needed, so don't fetch
+    // 'stripe-secret-key' here. The old getPlatformStripeAdapter() call sat
+    // OUTSIDE any try/catch, so a missing key 500'd every platform event with
+    // no useful log. Same pattern as handleTeamStripeWebhook.
+    const adapter = StripeAdapter.withSecretKey(
+      { type: 'stripe', publishable_key: '', currency: 'chf' },
+      'sk_webhook_verification_only'
+    )
 
-  let event: Awaited<ReturnType<typeof adapter.parseWebhook>>
-  try {
-    event = await adapter.parseWebhook({
-      payload: req.rawBody ?? req.body,
-      signature,
-      secret: webhookSecret,
-    })
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err)
-    res.status(400).send('Invalid webhook signature')
-    return
-  }
+    let event: Awaited<ReturnType<typeof adapter.parseWebhook>>
+    try {
+      event = await adapter.parseWebhook({
+        payload: req.rawBody ?? req.body,
+        signature,
+        secret: webhookSecret,
+      })
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err)
+      res.status(400).send('Invalid webhook signature')
+      return
+    }
 
-  // Either teamId or orgId must be present in the event metadata to route the update
-  const entityId = event.teamId ?? event.orgId
-  const entityType = event.orgId ? 'org' : 'team'
-  if (!entityId) {
-    console.log(`Webhook event ${event.eventId} has no teamId or orgId — skipping`)
-    res.status(200).send('ok')
-    return
-  }
+    // Either teamId or orgId must be present in the event metadata to route the update
+    const entityId = event.teamId ?? event.orgId
+    const entityType = event.orgId ? 'org' : 'team'
+    if (!entityId) {
+      console.log(`Webhook event ${event.eventId} has no teamId or orgId — skipping`)
+      res.status(200).send('ok')
+      return
+    }
 
-  const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
+    const subRef = admin.firestore().collection('saas_subscriptions').doc(entityId)
 
-  try {
-    // Idempotency check — through readGatewayData, because a doc written before
-    // the dotted-key fix keeps `last_event_id` as a literal field. Reading only
-    // the nested map returned undefined for every such doc, so this check never
-    // matched and a Stripe retry was processed a second time.
-    const existing = await subRef.get()
-    if (existing.exists) {
-      const lastEventId = readGatewayData(existing.data()).last_event_id
-      if (lastEventId === event.eventId) {
-        console.log(`Webhook event ${event.eventId} already processed — skipping`)
-        res.status(200).send('ok')
-        return
+    try {
+      // Idempotency check — through readGatewayData, because a doc written before
+      // the dotted-key fix keeps `last_event_id` as a literal field. Reading only
+      // the nested map returned undefined for every such doc, so this check never
+      // matched and a Stripe retry was processed a second time.
+      const existing = await subRef.get()
+      if (existing.exists) {
+        const lastEventId = readGatewayData(existing.data()).last_event_id
+        if (lastEventId === event.eventId) {
+          console.log(`Webhook event ${event.eventId} already processed — skipping`)
+          res.status(200).send('ok')
+          return
+        }
       }
-    }
 
-    const now = FieldValue.serverTimestamp()
+      const now = FieldValue.serverTimestamp()
 
-    // Add-on subscription items present on this subscription (Coach plugins).
-    const addonActive = (event.items ?? [])
-      .map((it) => ({
-        itemId: it.itemId,
-        pluginId: it.lookupKey ? pluginIdForAddonLookupKey(it.lookupKey) : undefined,
-      }))
-      .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
+      // Add-on subscription items present on this subscription (Coach plugins).
+      const addonActive = (event.items ?? [])
+        .map((it) => ({
+          itemId: it.itemId,
+          pluginId: it.lookupKey ? pluginIdForAddonLookupKey(it.lookupKey) : undefined,
+        }))
+        .filter((x): x is { itemId: string; pluginId: string } => !!x.pluginId)
 
-    // Map event to saas_subscriptions fields.
-    //
-    // `gateway_data` is built as a NESTED object and never as dotted keys: this
-    // handler persists with `set(…, { merge: true })`, and `set()` takes a
-    // dotted key literally — only `update()` reads it as a field path. Written
-    // the old way, every one of these became a top-level field *named*
-    // "gateway_data.subscription_id" and the map the readers want was never
-    // created. `set` with merge still deep-merges a nested map, so writing only
-    // the keys this event carries leaves the rest of gateway_data standing.
-    const gatewayData: Record<string, unknown> = { last_event_id: event.eventId }
-    const update: Record<string, unknown> = {
-      entity_type: entityType,
-      entity_id: entityId,
-      teamId: entityId, // kept for backwards compatibility
-      updated_at: now,
-      gateway_type: 'stripe',
-    }
+      // Map event to saas_subscriptions fields.
+      //
+      // `gateway_data` is built as a NESTED object and never as dotted keys: this
+      // handler persists with `set(…, { merge: true })`, and `set()` takes a
+      // dotted key literally — only `update()` reads it as a field path. Written
+      // the old way, every one of these became a top-level field *named*
+      // "gateway_data.subscription_id" and the map the readers want was never
+      // created. `set` with merge still deep-merges a nested map, so writing only
+      // the keys this event carries leaves the rest of gateway_data standing.
+      const gatewayData: Record<string, unknown> = { last_event_id: event.eventId }
+      const update: Record<string, unknown> = {
+        entity_type: entityType,
+        entity_id: entityId,
+        teamId: entityId, // kept for backwards compatibility
+        updated_at: now,
+        gateway_type: 'stripe',
+      }
 
-    switch (event.type) {
-      case 'subscription.created':
-        update.status = 'active'
-        gatewayData.subscription_id = event.subscriptionId
-        gatewayData.customer_id = event.customerId
-        if (event.plan) update.plan = event.plan
-        if (event.currentPeriodStart)
-          update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
-        if (event.currentPeriodEnd)
-          update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-        update.cancel_at_period_end = false
-        update.cancel_at = null
-        update.canceled_at = null
-        update.cancellation_details = null
-        update.trial_ends_at = null
-        gatewayData.activeAddOns = addonActive
-        if (!existing.exists) {
-          update.created_at = now
+      switch (event.type) {
+        case 'subscription.created':
+          update.status = 'active'
+          gatewayData.subscription_id = event.subscriptionId
+          gatewayData.customer_id = event.customerId
+          if (event.plan) update.plan = event.plan
+          if (event.currentPeriodStart)
+            update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
+          if (event.currentPeriodEnd)
+            update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
+          update.cancel_at_period_end = false
+          update.cancel_at = null
+          update.canceled_at = null
+          update.cancellation_details = null
+          update.trial_ends_at = null
+          gatewayData.activeAddOns = addonActive
+          if (!existing.exists) {
+            update.created_at = now
+          }
+          break
+
+        case 'subscription.updated':
+          if (event.plan) update.plan = event.plan
+          if (event.currentPeriodStart)
+            update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
+          if (event.currentPeriodEnd)
+            update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
+          if (event.cancelAtPeriodEnd !== undefined) {
+            update.cancel_at_period_end = event.cancelAtPeriodEnd
+            // The WHOLE record, written on every subscription.updated with nulls
+            // included: a reactivation is exactly the event that must ERASE a
+            // previous end date and reason, and an omitted key on a merge would
+            // leave them standing. `cancellation_details` is set whole or nulled —
+            // Firestore deep-merges a nested map, so a partial write would keep
+            // the old cancellation's feedback behind the new reason.
+            update.cancel_at = event.cancelAt ? Timestamp.fromDate(event.cancelAt) : null
+            update.canceled_at = event.canceledAt ? Timestamp.fromDate(event.canceledAt) : null
+            update.cancellation_details = event.cancellationDetails ?? null
+          }
+          if (event.subscriptionId) gatewayData.subscription_id = event.subscriptionId
+          if (event.customerId) gatewayData.customer_id = event.customerId
+          gatewayData.activeAddOns = addonActive
+          break
+
+        case 'subscription.cancelled':
+          update.status = 'cancelled'
+          // It has ENDED — there is no longer a future end to announce.
+          update.cancel_at_period_end = false
+          update.cancel_at = null
+          // …but WHEN and WHY it was cancelled are KEPT, and this is the event that
+          // carries them most reliably. Only overwritten when the payload actually
+          // says something: a `deleted` event with no cancellation_details must not
+          // erase the reason an earlier `updated` already recorded.
+          if (event.canceledAt) update.canceled_at = Timestamp.fromDate(event.canceledAt)
+          if (event.cancellationDetails) update.cancellation_details = event.cancellationDetails
+          break
+
+        case 'payment.succeeded':
+          update.status = 'active'
+          gatewayData.last_invoice_id = event.lastInvoiceId
+          gatewayData.last_payment_status = 'succeeded'
+          break
+
+        case 'payment.failed':
+          update.status = 'past_due'
+          gatewayData.last_invoice_id = event.lastInvoiceId
+          gatewayData.last_payment_status = 'failed'
+          break
+      }
+
+      // Heal a doc still carrying the legacy dotted-literal fields: copy anything
+      // this event is NOT itself writing into the nested map, then delete the
+      // literal. The carry-over is not belt-and-braces — a `payment.succeeded`
+      // event knows no subscription id, so deleting that literal without copying
+      // it first would destroy the only copy on the document. Doing it here means
+      // a doc converges on its next event whether or not the backfill has run.
+      for (const field of legacyGatewayDataFields(existing.data())) {
+        const key = field.slice('gateway_data.'.length)
+        if (!(key in gatewayData)) gatewayData[key] = existing.data()![field]
+        update[field] = FieldValue.delete()
+      }
+      update.gateway_data = gatewayData
+
+      await subRef.set(update, { merge: true })
+
+      // Sync plan + status to the owning entity so usePlan() / useOrg() stays accurate
+      const entityUpdate: Record<string, unknown> = { updated_at: now }
+      if (update.plan) entityUpdate.plan = update.plan
+      if (update.status) entityUpdate.plan_status = update.status
+      // Reactivation: paying clears any legacy wall-era suspension markers.
+      if (update.status === 'active') {
+        entityUpdate.suspended_at = FieldValue.delete()
+        entityUpdate.purge_at = FieldValue.delete()
+      }
+
+      // A cancelled subscription lands the payer on what it now pays for, and the
+      // TWO TIERS FOLLOW THE SAME RULE (UX-10) — a team lands on Free; an
+      // organisation winds down through `lapseOrganization`, which puts each of
+      // its studios on Free through this very same `downgradeTeamToFree`.
+      //
+      // `past_due` deliberately does NOT tear anything down, on either tier. It is
+      // Stripe's dunning window — a card that failed on the first retry and
+      // recovers two days later — and the teardown is partly ONE-WAY (course
+      // public_profile mirrors are deleted and nothing rewrites them on
+      // re-activation, UX-16). A team on past_due keeps its plan and its installs
+      // and is refused server-side by `requirePlan` ('plan_inactive'); an org now
+      // does exactly the same, propagating the status to its studios and nothing
+      // more. If that answer is wrong it is wrong for both tiers — change it in
+      // one place, not here alone.
+      if (entityType === 'team' && update.status === 'cancelled') {
+        await downgradeTeamToFree(entityId, { fromTrial: false, courseMirrors: 'tear_down' })
+      } else if (entityType === 'org') {
+        await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
+        if (update.status === 'cancelled') {
+          await lapseOrganization(entityId, { reason: 'subscription_cancelled' })
+        } else if (update.status === 'past_due') {
+          // Propagate the status to linked studios so their own gates refuse.
+          const orgTeamsSnap = await admin
+            .firestore()
+            .collection('organizations')
+            .doc(entityId)
+            .collection('org_teams')
+            .where('status', '==', 'active')
+            .get()
+          const batch = admin.firestore().batch()
+          for (const doc of orgTeamsSnap.docs) {
+            batch.update(admin.firestore().collection('teams').doc(doc.id), {
+              plan_status: update.status,
+              updated_at: now,
+            })
+          }
+          await batch.commit()
         }
-        break
+      } else {
+        await admin.firestore().collection('teams').doc(entityId).update(entityUpdate)
+      }
 
-      case 'subscription.updated':
-        if (event.plan) update.plan = event.plan
-        if (event.currentPeriodStart)
-          update.current_period_start = Timestamp.fromDate(event.currentPeriodStart)
-        if (event.currentPeriodEnd)
-          update.current_period_end = Timestamp.fromDate(event.currentPeriodEnd)
-        if (event.cancelAtPeriodEnd !== undefined) {
-          update.cancel_at_period_end = event.cancelAtPeriodEnd
-          // The WHOLE record, written on every subscription.updated with nulls
-          // included: a reactivation is exactly the event that must ERASE a
-          // previous end date and reason, and an omitted key on a merge would
-          // leave them standing. `cancellation_details` is set whole or nulled —
-          // Firestore deep-merges a nested map, so a partial write would keep
-          // the old cancellation's feedback behind the new reason.
-          update.cancel_at = event.cancelAt ? Timestamp.fromDate(event.cancelAt) : null
-          update.canceled_at = event.canceledAt ? Timestamp.fromDate(event.canceledAt) : null
-          update.cancellation_details = event.cancellationDetails ?? null
-        }
-        if (event.subscriptionId) gatewayData.subscription_id = event.subscriptionId
-        if (event.customerId) gatewayData.customer_id = event.customerId
-        gatewayData.activeAddOns = addonActive
-        break
-
-      case 'subscription.cancelled':
-        update.status = 'cancelled'
-        // It has ENDED — there is no longer a future end to announce.
-        update.cancel_at_period_end = false
-        update.cancel_at = null
-        // …but WHEN and WHY it was cancelled are KEPT, and this is the event that
-        // carries them most reliably. Only overwritten when the payload actually
-        // says something: a `deleted` event with no cancellation_details must not
-        // erase the reason an earlier `updated` already recorded.
-        if (event.canceledAt) update.canceled_at = Timestamp.fromDate(event.canceledAt)
-        if (event.cancellationDetails) update.cancellation_details = event.cancellationDetails
-        break
-
-      case 'payment.succeeded':
-        update.status = 'active'
-        gatewayData.last_invoice_id = event.lastInvoiceId
-        gatewayData.last_payment_status = 'succeeded'
-        break
-
-      case 'payment.failed':
-        update.status = 'past_due'
-        gatewayData.last_invoice_id = event.lastInvoiceId
-        gatewayData.last_payment_status = 'failed'
-        break
-    }
-
-    // Heal a doc still carrying the legacy dotted-literal fields: copy anything
-    // this event is NOT itself writing into the nested map, then delete the
-    // literal. The carry-over is not belt-and-braces — a `payment.succeeded`
-    // event knows no subscription id, so deleting that literal without copying
-    // it first would destroy the only copy on the document. Doing it here means
-    // a doc converges on its next event whether or not the backfill has run.
-    for (const field of legacyGatewayDataFields(existing.data())) {
-      const key = field.slice('gateway_data.'.length)
-      if (!(key in gatewayData)) gatewayData[key] = existing.data()![field]
-      update[field] = FieldValue.delete()
-    }
-    update.gateway_data = gatewayData
-
-    await subRef.set(update, { merge: true })
-
-    // Sync plan + status to the owning entity so usePlan() / useOrg() stays accurate
-    const entityUpdate: Record<string, unknown> = { updated_at: now }
-    if (update.plan) entityUpdate.plan = update.plan
-    if (update.status) entityUpdate.plan_status = update.status
-    // Reactivation: paying clears any legacy wall-era suspension markers.
-    if (update.status === 'active') {
-      entityUpdate.suspended_at = FieldValue.delete()
-      entityUpdate.purge_at = FieldValue.delete()
-    }
-
-    // A cancelled subscription lands the payer on what it now pays for, and the
-    // TWO TIERS FOLLOW THE SAME RULE (UX-10) — a team lands on Free; an
-    // organisation winds down through `lapseOrganization`, which puts each of
-    // its studios on Free through this very same `downgradeTeamToFree`.
-    //
-    // `past_due` deliberately does NOT tear anything down, on either tier. It is
-    // Stripe's dunning window — a card that failed on the first retry and
-    // recovers two days later — and the teardown is partly ONE-WAY (course
-    // public_profile mirrors are deleted and nothing rewrites them on
-    // re-activation, UX-16). A team on past_due keeps its plan and its installs
-    // and is refused server-side by `requirePlan` ('plan_inactive'); an org now
-    // does exactly the same, propagating the status to its studios and nothing
-    // more. If that answer is wrong it is wrong for both tiers — change it in
-    // one place, not here alone.
-    if (entityType === 'team' && update.status === 'cancelled') {
-      await downgradeTeamToFree(entityId, { fromTrial: false, courseMirrors: 'tear_down' })
-    } else if (entityType === 'org') {
-      await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
-      if (update.status === 'cancelled') {
-        await lapseOrganization(entityId, { reason: 'subscription_cancelled' })
-      } else if (update.status === 'past_due') {
-        // Propagate the status to linked studios so their own gates refuse.
-        const orgTeamsSnap = await admin
+      // Reconcile plugin add-on installs against the subscription's items.
+      // Handles trial→paid conversion (carried add-ons become paid items) and
+      // external removals. Only touches paid add-on installs (config.addonItemId).
+      if (
+        entityType === 'team' &&
+        (event.type === 'subscription.created' || event.type === 'subscription.updated')
+      ) {
+        const installsCol = admin
           .firestore()
-          .collection('organizations')
+          .collection(TEAMS_COLLECTION)
           .doc(entityId)
-          .collection('org_teams')
-          .where('status', '==', 'active')
-          .get()
-        const batch = admin.firestore().batch()
-        for (const doc of orgTeamsSnap.docs) {
-          batch.update(admin.firestore().collection('teams').doc(doc.id), {
-            plan_status: update.status,
-            updated_at: now,
-          })
-        }
-        await batch.commit()
-      }
-    } else {
-      await admin.firestore().collection('teams').doc(entityId).update(entityUpdate)
-    }
-
-    // Reconcile plugin add-on installs against the subscription's items.
-    // Handles trial→paid conversion (carried add-ons become paid items) and
-    // external removals. Only touches paid add-on installs (config.addonItemId).
-    if (
-      entityType === 'team' &&
-      (event.type === 'subscription.created' || event.type === 'subscription.updated')
-    ) {
-      const installsCol = admin
-        .firestore()
-        .collection(TEAMS_COLLECTION)
-        .doc(entityId)
-        .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
-      const activeIds = new Set(addonActive.map((a) => a.pluginId))
-      for (const a of addonActive) {
-        await installsCol
-          .doc(a.pluginId)
-          .set(
+          .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
+        const activeIds = new Set(addonActive.map((a) => a.pluginId))
+        for (const a of addonActive) {
+          await installsCol.doc(a.pluginId).set(
             {
               pluginId: a.pluginId,
               teamId: entityId,
@@ -420,24 +418,27 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
             },
             { merge: true }
           )
-      }
-      const installsSnap = await installsCol.get()
-      for (const d of installsSnap.docs) {
-        const cfg = (d.data().config ?? {}) as { addonItemId?: string }
-        if (cfg.addonItemId && !activeIds.has(d.id)) {
-          await installsCol.doc(d.id).delete()
+        }
+        const installsSnap = await installsCol.get()
+        for (const d of installsSnap.docs) {
+          const cfg = (d.data().config ?? {}) as { addonItemId?: string }
+          if (cfg.addonItemId && !activeIds.has(d.id)) {
+            await installsCol.doc(d.id).delete()
+          }
         }
       }
+
+      console.log(
+        `Processed webhook ${event.type} (${event.eventId}) for ${entityType} ${entityId}`
+      )
+    } catch (err) {
+      // Log but always return 200 so Stripe doesn't retry forever
+      console.error(`Failed to process webhook event ${event.eventId}:`, err)
     }
 
-    console.log(`Processed webhook ${event.type} (${event.eventId}) for ${entityType} ${entityId}`)
-  } catch (err) {
-    // Log but always return 200 so Stripe doesn't retry forever
-    console.error(`Failed to process webhook event ${event.eventId}:`, err)
-  }
-
-  res.status(200).send('ok')
-})
+    res.status(200).send('ok')
+  })
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The four TEAM billing callables. Each is one line of authorization plus the
@@ -552,9 +553,7 @@ export const activatePluginAddon = onCall(async (request) => {
       console.error('addSubscriptionItem failed:', err)
       throw new HttpsError('internal', 'Failed to add the add-on to your subscription')
     }
-    const current = (
-      readGatewayData(sub).activeAddOns ?? []
-    ).filter((a) => a.pluginId !== pluginId)
+    const current = (readGatewayData(sub).activeAddOns ?? []).filter((a) => a.pluginId !== pluginId)
     await admin
       .firestore()
       .collection('saas_subscriptions')
@@ -667,80 +666,13 @@ export const deactivatePluginAddon = onCall(async (request) => {
 // importing a module whose top level registers every billing function. There is
 // one downgrade path for both tiers; do not write a second one.
 
-/**
- * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
- * When `dryRun` is true, NOTHING is deleted — it only logs what it would remove
- * (counts per collection).
- *
- * The set of tenant-scoped collections is driven by TENANT_DATA_COLLECTIONS in
- * `@linyup/shared` (the single source of truth, guarded by a completeness test)
- * so a newly added tenant collection is purged automatically once registered.
- *
- * DORMANT as a schedule (the 90-day trial purge was retired when lapsed trials
- * began downgrading to Free). Kept as the manual GDPR / account-deletion (and
- * QA "reset account") utility — exported for admin scripts and callables.
- *
- * NOTE: this removes Firestore + Storage only. Provider-side state for entries
- * flagged `externalTeardown` (e.g. the Stripe Connect account + its member
- * subscriptions) must be cancelled/disconnected separately — a warning is logged.
- */
-export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> {
-  const db = admin.firestore()
-  const tag = dryRun ? '[purge][dry-run]' : '[purge]'
-
-  for (const entry of TENANT_DATA_COLLECTIONS) {
-    if (entry.match.by === 'field') {
-      const q = db.collection(entry.collection).where(entry.match.field, '==', teamId)
-      if (dryRun) {
-        const c = await q.count().get()
-        console.log(`${tag} team ${teamId}: would delete ${c.data().count} ${entry.collection}`)
-      } else {
-        const snap = await q.get()
-        for (const d of snap.docs) await db.recursiveDelete(d.ref)
-      }
-    } else {
-      // doc id IS the teamId
-      const ref = db.collection(entry.collection).doc(teamId)
-      if (dryRun) {
-        const exists = (await ref.get()).exists
-        console.log(`${tag} team ${teamId}: would delete ${exists ? 1 : 0} ${entry.collection}/${teamId}`)
-      } else {
-        await db.recursiveDelete(ref)
-      }
-    }
-    if (entry.externalTeardown === 'stripe_connect') {
-      console.warn(
-        `${tag} team ${teamId}: ${entry.collection} removed from Firestore — the Stripe Connect ` +
-          `account & its member subscriptions still require provider-side teardown (cancel/disconnect).`
-      )
-    }
-  }
-
-  if (dryRun) {
-    console.log(
-      `${tag} team ${teamId}: would recursively delete ${TENANT_TEAM_DOC_COLLECTION}/${teamId} ` +
-        `(doc + all subcollections) and Storage ${tenantStoragePrefix(teamId)}`
-    )
-    return
-  }
-
-  // Team doc + ALL its subcollections (team_members, installed_plugins,
-  // integrations, subscription_types, products, member_payments/subscriptions, …).
-  await db.recursiveDelete(db.collection(TENANT_TEAM_DOC_COLLECTION).doc(teamId))
-
-  // Team Storage files.
-  try {
-    await admin.storage().bucket().deleteFiles({ prefix: tenantStoragePrefix(teamId) })
-  } catch (err) {
-    console.error(`${tag} storage cleanup failed for ${teamId}:`, err)
-  }
-
-  // Audit trail (best-effort; never block the purge on it).
-  await db
-    .collection('team_audits')
-    .add({ action: 'purge_team', teamId, at: FieldValue.serverTimestamp() })
-    .catch((err) => console.error(`${tag} audit write failed for ${teamId}:`, err))
-}
+// `purgeTeam` — THE one implementation — now lives in ./purgeTeam.ts, re-exported
+// below. It moved out of this file for the same reason `downgradeTeamToFree` did:
+// `scripts/purge-team.ts` needs to call it, and importing a module whose top level
+// registers every billing function drags the Cloud Functions runtime into a CLI.
+// Re-exported here so anything already importing it from `./saas-billing` still
+// resolves. There is one tenant-erase path; do not write a second one.
+export { purgeTeam } from './purgeTeam'
 
 /** Notify the owner that the trial ended and the team is now on the Free plan. */
 async function sendTrialExpiredEmail(
@@ -819,7 +751,9 @@ export const handleTrialLifecycle = onSchedule(
       // webhook already propagates a lapse to every active org_team. Nothing
       // here may downgrade one.
       if (doc.data().org_id) {
-        console.log(`[trial] skipped org-affiliated team ${teamId} (org ${doc.data().org_id} bills it)`)
+        console.log(
+          `[trial] skipped org-affiliated team ${teamId} (org ${doc.data().org_id} bills it)`
+        )
         continue
       }
       try {

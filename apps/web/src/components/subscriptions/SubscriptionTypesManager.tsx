@@ -895,11 +895,15 @@ function SubTypeDialog({
                         </SelectTrigger>
                         <SelectContent>
                           {introEligiblePrices.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {formatCurrency(Number(p.amount) || 0, currency)} ·{' '}
-                              {tc(`recurrence_${p.recurrence}`)}
-                              {p.label ? ` · ${p.label}` : ''}
-                            </SelectItem>
+                            <SelectItem
+                              key={p.id}
+                              value={p.id}
+                              label={
+                                `${formatCurrency(Number(p.amount) || 0, currency)} · ` +
+                                `${tc(`recurrence_${p.recurrence}`)}` +
+                                (p.label ? ` · ${p.label}` : '')
+                              }
+                            />
                           ))}
                         </SelectContent>
                       </Select>

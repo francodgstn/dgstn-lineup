@@ -79,6 +79,9 @@ module "firebase" {
 }
 
 # ── Firestore database instance ───────────────────────────────────────────────
+# Retention stays on the module default (7 days) deliberately: staging data is
+# seeded (pnpm staging:seed) and reproducible. PITR still covers an accidental
+# reset while someone is mid-validation.
 module "firestore" {
   source             = "../../modules/firestore"
   project_id         = var.project_id
@@ -129,6 +132,19 @@ module "budget" {
   project_number  = local.project_number
   env             = "staging"
   budget_amount   = var.budget_amount
+
+  depends_on = [module.services]
+}
+
+# ── Error metric, alert policy, uptime check ──────────────────────────────────
+# Until `alert_email` is set in terraform.tfvars, the metric and uptime check
+# collect but NOTHING pages anyone — see `terraform output monitoring_alerting_enabled`.
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project_id  = var.project_id
+  env         = "staging"
+  alert_email = var.alert_email
+  uptime_host = var.uptime_host
 
   depends_on = [module.services]
 }

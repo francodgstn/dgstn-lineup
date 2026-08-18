@@ -509,7 +509,7 @@ function TemplateDialog({
                   <Select value={String(field.value ?? 15)} onValueChange={(v) => field.onChange(Number(v))}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {GRANULARITY_OPTIONS.map((g) => <SelectItem key={g} value={String(g)}>{g} min</SelectItem>)}
+                      {GRANULARITY_OPTIONS.map((g) => <SelectItem key={g} value={String(g)} label={`${g} min`} />)}
                     </SelectContent>
                   </Select>
                 )} />

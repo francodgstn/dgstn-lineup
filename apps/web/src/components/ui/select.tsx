@@ -23,7 +23,12 @@ function extractEntries(children: React.ReactNode): SelectEntry[] {
     if (!React.isValidElement(child)) return
     const p = child.props as Record<string, unknown>
     if (p.value !== undefined && p.value !== null) {
-      const label = p.label ?? (typeof p.children === "string" ? p.children : undefined)
+      // `label` also switches the item to the two-line title+sublabel layout, so
+      // a row whose children are inline DECORATION (a colour dot, an icon, a tree
+      // indent) uses `textValue` instead: it registers the trigger's text without
+      // touching how the row renders.
+      const label =
+        p.label ?? p.textValue ?? (typeof p.children === "string" ? p.children : undefined)
       if (label !== undefined) out.push({ value: p.value, label: String(label) })
     } else {
       out.push(...extractEntries(p.children as React.ReactNode))
@@ -156,8 +161,23 @@ function SelectItem({
   className,
   children,
   label,
+  textValue,
   ...props
-}: SelectPrimitive.Item.Props & { label?: string }) {
+}: SelectPrimitive.Item.Props & {
+  /** Title of a TWO-LINE item: rendered as the row's text, with `children` shown
+   *  beneath it as a muted sublabel. Also what the trigger displays. */
+  label?: string
+  /** The trigger's text for a row that renders its own inline content — a colour
+   *  dot, an icon, a hierarchy indent. Registers the label WITHOUT changing the
+   *  layout, which is the difference from `label`.
+   *
+   *  One of `label`, `textValue`, or a plain-string child is REQUIRED: with none
+   *  of them nothing registers and the trigger falls back to printing the raw
+   *  `value` — a document id, a number, an account code. Pinned by
+   *  packages/functions/src/web/selectItemLabels.test.ts. */
+  textValue?: string
+}) {
+  void textValue // consumed by extractEntries during render, not needed here
   const hasRichContent = label !== undefined
 
   return (

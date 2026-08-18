@@ -83,6 +83,9 @@ module "firebase" {
 }
 
 # ── Firestore database instance ───────────────────────────────────────────────
+# Retention stays on the module default (7 days) deliberately: sandbox hosts
+# prospect demos and lead tenants, which are reseedable from scripts/leads/. PITR
+# is still on — an accidental wipe mid-demo is the case worth covering here.
 module "firestore" {
   source             = "../../modules/firestore"
   project_id         = var.project_id
@@ -133,6 +136,19 @@ module "budget" {
   project_number  = local.project_number
   env             = "sandbox"
   budget_amount   = var.budget_amount
+
+  depends_on = [module.services]
+}
+
+# ── Error metric, alert policy, uptime check ──────────────────────────────────
+# Until `alert_email` is set in terraform.tfvars, the metric and uptime check
+# collect but NOTHING pages anyone — see `terraform output monitoring_alerting_enabled`.
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project_id  = var.project_id
+  env         = "sandbox"
+  alert_email = var.alert_email
+  uptime_host = var.uptime_host
 
   depends_on = [module.services]
 }

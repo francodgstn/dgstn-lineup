@@ -391,3 +391,47 @@
     margin: 14mm;
   }
 }
+
+/* ── Print: the event programme sheet ────────────────────────────────────────
+   The second printable surface (/public/{slug}/events/{id}/print). Browser
+   "Save as PDF" over these rules produces the A4 handout, which is why there
+   is no jsPDF path — hand-laying a multi-day multi-track grid there would be
+   far more work for a worse result.
+
+   NOTE the header re-show below. The manifest block above hides `header`
+   wholesale to drop the app chrome, and this sheet titles itself with one
+   (event name, dates, venue) — without this the handout printed with no
+   indication of WHICH event it was. Simple selector only, for the same
+   CSS-pipeline reason spelled out there. */
+@media print {
+  .program-print {
+    max-width: none;
+    padding: 0;
+  }
+
+  .program-print header,
+  .program-print .program-day h3 {
+    display: block !important;
+  }
+
+  /* Each day starts a fresh page, and a day's block is never split mid-way. */
+  .program-print .program-day {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .program-print .program-day + .program-day {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* Tracks keep their columns on paper — the screen layout only collapses them
+     for narrow viewports, which a printed page is not. */
+  .program-print .grid {
+    display: grid !important;
+  }
+
+  /* Flat on paper: borders carry the structure, shadows do not. */
+  .program-print * {
+    box-shadow: none !important;
+  }
+}

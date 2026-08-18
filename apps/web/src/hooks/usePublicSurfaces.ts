@@ -53,6 +53,10 @@ export interface PublicSurfaceFlags {
    *  default feature on every plan, so there is no install to be "active", and
    *  the two flags would only ever have disagreed by drifting. */
   documentsLive: boolean
+  /** ≥1 published event MIRROR exists — the /events surface is live. Events are
+   *  a base feature on every plan, and PRIVATE by default, so this stays false
+   *  until a studio explicitly publishes one. */
+  eventsLive: boolean
   /** `custom-forms` plugin installed. */
   formsActive: boolean
   /** ≥1 published form exists (plugin + content) — the /forms surface is live. */
@@ -141,6 +145,7 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
     shopLive: routableSurfaces(activeSurfaces).shop ?? false,
     bookingLive: activeSurfaces?.booking ?? true,
     documentsLive: activeSurfaces?.documents ?? false,
+    eventsLive: activeSurfaces?.events ?? false,
     formsActive: isInstalled('custom-forms'),
     formsLive: activeSurfaces?.forms ?? false,
     kioskActive: isInstalled('kiosk'),

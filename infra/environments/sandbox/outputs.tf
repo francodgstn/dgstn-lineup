@@ -25,3 +25,12 @@ output "secret_ids" {
   description = "Secret Manager containers created (populate values with gcloud)."
   value       = module.secrets.secret_ids
 }
+
+# Whether an alert can actually reach a human in this environment. FALSE means
+# the error metric and uptime check are collecting but nothing pages anyone —
+# set `alert_email` in terraform.tfvars. Surfaced as an output because a green
+# metric in the Console looks identical either way.
+output "monitoring_alerting_enabled" {
+  description = "False = nothing pages anyone. Set alert_email in terraform.tfvars."
+  value       = module.monitoring.alerting_enabled
+}

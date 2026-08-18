@@ -41,6 +41,7 @@ export type PublicSurface =
   | 'signup'
   | 'documents'
   | 'kiosk'
+  | 'events'
 
 /** Runtime companion to `PublicSurface`, for validating untrusted values. */
 export const PUBLIC_SURFACES: readonly PublicSurface[] = [
@@ -52,6 +53,7 @@ export const PUBLIC_SURFACES: readonly PublicSurface[] = [
   'signup',
   'documents',
   'kiosk',
+  'events',
 ]
 
 /** Type guard for an untrusted surface value (query params, stored config). */
@@ -82,6 +84,9 @@ export interface ActivePublicSurfaces {
   // correction is made; anything asking "can this studio be paid?" should read
   // `TeamPublicProfile.payments_enabled` directly.
   shop?: boolean
+  // ≥1 event has been explicitly published (Event.publicVisibility === 'public').
+  // Events are private by default, so this is false for most studios.
+  events?: boolean
   // ≥1 published Custom Form exists (custom-forms plugin active). Optional — forms
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default
   // surface, so this is a discovery signal (e.g. a bio-link entry), NOT a landing.
@@ -249,6 +254,7 @@ export type SystemLinkTarget =
   | 'space'
   | 'site'
   | 'documents'
+  | 'events'
 
 export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'booking',
@@ -260,6 +266,7 @@ export const SYSTEM_LINK_TARGETS: readonly SystemLinkTarget[] = [
   'space',
   'site',
   'documents',
+  'events',
 ]
 
 export interface SystemLinkMeta {
@@ -277,6 +284,7 @@ export const SYSTEM_LINK_META: Record<SystemLinkTarget, SystemLinkMeta> = {
   space: { route: 'space', defaultIcon: 'BookOpen' },
   site: { route: 'site', defaultIcon: 'Globe' },
   documents: { route: 'documents', defaultIcon: 'FileText' },
+  events: { route: 'events', defaultIcon: 'CalendarRange' },
 }
 
 // A bio-link entry: either a custom external link (`url`) or a "page link" to one
@@ -569,6 +577,10 @@ export interface TeamPublicProfile {
   name: string
   description?: string
   slug: string
+  // Which organisation this studio belongs to. Public surfaces need it to list
+  // the parent org's published events alongside the studio's own — an org event
+  // has no teamId, so a teamId query can never find it. Null when independent.
+  org_id?: string | null
   links?: TeamLink[]
   sport_type?: string
   profileImage?: string

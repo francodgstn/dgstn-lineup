@@ -1,19 +1,27 @@
 name: Verify
 
+# `workflow_call` lets the deploy workflows run these exact checks as a gate
+# before shipping. Until that was wired, verify ran on pull requests ONLY — so a
+# tagged release, or anything that reached `main` without a PR, deployed to a real
+# project having never been typechecked, linted or tested.
+#
+# Keep this workflow free of secrets. It builds with placeholder env values on
+# purpose, which is what makes it safe to call from anywhere.
 on:
   pull_request:
     branches: [main]
+  workflow_call: {}
 
 jobs:
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -28,11 +36,11 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -52,11 +60,11 @@ jobs:
     name: Functions Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -87,11 +95,11 @@ jobs:
     name: Build Admin Console
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -114,11 +122,11 @@ jobs:
     name: Build Landing Site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -128,6 +136,9 @@ jobs:
 
       - name: Build landing site
         run: pnpm --filter @linyup/landing run build
+        # Keep these matching deploy.yml / deploy-prod.yml so the verify build
+        # exercises the same config the real build uses. They were left on a
+        # pre-rename `lineup.io` domain that has never existed for this product.
         env:
-          PUBLIC_APP_URL: https://app.lineup.io
-          PUBLIC_SITE_URL: https://lineup.io
+          PUBLIC_APP_URL: https://app.linyup.com
+          PUBLIC_SITE_URL: https://linyup.com

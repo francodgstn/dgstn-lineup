@@ -33,6 +33,7 @@ const SURFACE_LABEL_KEY: Record<PublicSurface, string> = {
   signup: 'surfaceSignup',
   documents: 'surfaceDocuments',
   kiosk: 'surfaceKiosk',
+  events: 'surfaceEvents',
 }
 
 export function QRDialog({

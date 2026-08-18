@@ -637,11 +637,15 @@ function CreatePaymentLinkDialog({ teamId }: { teamId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   {prices.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {fmt(p.amount)} · {tc(`recurrence_${p.recurrence}` as never)}
-                      {p.included_months ? ` (${p.included_months} ${t('monthsShort')})` : ''}
-                      {p.label ? ` — ${p.label}` : ''}
-                    </SelectItem>
+                    <SelectItem
+                      key={p.id}
+                      value={p.id}
+                      label={
+                        `${fmt(p.amount)} · ${tc(`recurrence_${p.recurrence}` as never)}` +
+                        (p.included_months ? ` (${p.included_months} ${t('monthsShort')})` : '') +
+                        (p.label ? ` — ${p.label}` : '')
+                      }
+                    />
                   ))}
                 </SelectContent>
               </Select>
