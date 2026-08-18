@@ -13,7 +13,12 @@ What follows is the prompt for that audit, written to be pasted into a fresh
 session. It leads with `ultracode` because the fan-out is the point.
 
 Parked 2026-08-19 while the go-live readiness work ran
-(`docs/launch/readiness-2026-08.md`). Nothing here has been started.
+(`docs/launch/readiness-2026-08.md`).
+
+**Phase 1 is DONE** — the deliverable is `docs/seed-truth-2026-08.md`. It was run
+as a single session rather than the fan-out this prompt describes; the prompt is
+kept below verbatim as the record of what was asked for. Phase 2, which consumes
+it, is appended at the end of this file.
 
 ---
 
@@ -103,3 +108,141 @@ branch the default seed run skips. Drop or downgrade anything that does not surv
   prose. The matrix is the census — everything else points at it.
 - Mark anything you could not verify `UNVERIFIED` rather than inferring it. An honest gap is
   useful; a confident wrong row costs a Phase 2 session.
+
+---
+
+# Phase 2 — close the gaps (the seed-writing sessions)
+
+Phase 1 established the schema truth once, in `docs/seed-truth-2026-08.md`. Phase 2
+spends it. **Read that document, not this one, for what is broken** — the matrix
+there is the census, and restating any part of it here would create the second
+copy that goes stale.
+
+## The rule that shapes everything below
+
+**Four seeders, four sessions, and they collide at FILE level.** `seed-emulator.ts`,
+`seed-sandbox.ts`, `seed-staging.ts` and `seed-lead.ts` are 2.7-3.5 KLOC each; an
+agent reads the whole file, edits, and writes it back, so two sessions touching
+entirely different functions in one file still silently lose one another's work —
+exactly the failure the i18n `_pending/` fragment protocol exists to prevent.
+
+So the lanes below are **cut by file, never by feature**. A lane owns whole files
+for its whole run. A feature that spans all four seeders is fixed by extracting it
+into `scripts/lib/` FIRST (Lane 0), which turns a four-file edit into a one-file
+edit that the other lanes merely call.
+
+## Lane 0 — extract, then everything else is cheap (do this first, alone)
+
+Sequential prerequisite. Nothing else starts until it lands.
+
+`docs/seed-truth-2026-08.md` → "Duplication register" names seven fixtures copied
+across three or more surfaces. Extract the two that are both duplicated **and**
+already divergent, into `scripts/lib/fixtures/`:
+
+1. **`documents.ts`** — the documents seed plus its `versions/v0001` snapshot plus
+   the `public_profile` mirror. `seed-emulator.ts` holds the correct version; the
+   other three reproduce the state `backfill-document-versions.ts` exists to clear
+   and copy raw HTML into the mirror. Lift the emulator's implementation, do not
+   re-derive it, and keep its comment explaining why the version exists.
+2. **`appointments.ts` (extend)** — the appointment ACTIVITY document and the
+   `availability` template. `scripts/lib/appointments.ts` already owns the booked
+   sessions; the activity and the availability window are still written inline
+   three times.
+
+Leave the other five duplications alone. They are duplicated but not divergent,
+and extracting them is churn without a defect behind it.
+
+Acceptance: `pnpm verify:waiver-ledger` is clean after a fresh run of every
+seeder, and each seeder reaches `status: 'published'` on a document only through
+the shared writer.
+
+## Lanes 1-5 — one owner per file, run in parallel after Lane 0
+
+| Lane | Owns (exclusive) | Works from |
+|---|---|---|
+| 1 | `scripts/seed-emulator.ts` | the "emulator" worklist in the truth doc |
+| 2 | `scripts/seed-sandbox.ts` | the "sandbox" worklist |
+| 3 | `scripts/seed-staging.ts` | the "staging" worklist |
+| 4 | `scripts/seed-lead.ts` + `scripts/leads/types.ts` | the "lead" worklist |
+| 5 | `scripts/migration/**` | the "migration" worklist |
+
+Each lane works its own ranked list top-down and stops when it runs out of time,
+not when it runs out of list — the lists are ordered by demo visibility precisely
+so that a partial lane still lands the things a prospect sees.
+
+**Lane 4 has an extra constraint**: `scripts/leads/*/profile.ts` is gitignored, so
+anything a lead tenant needs must be expressible in `scripts/leads/types.ts` and
+must degrade to "absent" when a profile omits it. A lane-4 change that only works
+with a local profile in place is not shippable.
+
+**Lane 5 has an extra warning**: the pass-through subcollection list in
+`passes/11-team-subcollections.ts:9-23` copies HMD's shape with no transform, and
+whether those shapes still match today's schema is the largest `UNVERIFIED` area
+in Phase 1. Verify against the HMD source before writing a transform, or leave it
+and say so.
+
+## Lane 6 — the cross-surface features (sequential, after Lanes 1-5)
+
+These are single features absent from ALL five surfaces, so they cannot be split
+by lane. Each is one session that adds one shared fixture in `scripts/lib/` and
+one call per seeder. Ranked:
+
+1. **Waivers.** The single largest hole: no `kind: 'waiver'` document, no
+   `waiver_policy/current`, no `signers`, no `acceptances`, anywhere. Because the
+   gate fails CLOSED on an absent policy, every seeded tenant silently behaves as
+   "no waiver required", which means the feature is neither demoable nor
+   rehearsed. Seed one waiver document with a policy and a mix of signature states
+   (valid / expired / revoked / superseded) so `waiverAcceptanceState`'s fixed
+   order is visible on a real roster. **Write through the same shapes
+   `packages/functions/src/waivers/accept.ts` writes** — a seed that invents its
+   own row shape is how the ledger verifier learns to be ignored.
+2. **Event programmes.** `program_items` on one multi-day event, plus one
+   `program_templates` entry, plus one `org_program_templates` entry so the
+   org-applies-to-studio flow has something to apply. Times are WALL-CLOCK
+   strings; do not write `Timestamp`s.
+3. **Waitlist.** One full class with a queue, and one offered seat holding the
+   single-deadline invariant (`resolveClaimWindow` computes it once; the seed
+   must copy it, never recompute it).
+4. **`course_purchases`.** One contact who has bought the `purchase`-tier course
+   that already exists in the shop, so the Space unlock state renders.
+5. **`contact_notes`** and a **dynamic contact group** (a group carrying a `rule`,
+   with membership never materialised) — two small, high-visibility gaps.
+
+## Parked for Franco — do not decide these inside a lane
+
+Each of these would change the shape of the work, and picking one inside a session
+is how four sessions end up with four answers.
+
+1. **Do the seeds get fake money?** `member_payments` / `member_subscriptions` are
+   unseeded everywhere, which also leaves `Contact.subscription_status` and
+   `active_subscriptions` unwritten and `/payments` empty. But
+   `scripts/lib/appointments.ts:15-20` states a deliberate rule that seeded
+   bookings are always free-path-shaped, because a paid one needs a
+   webhook-written ledger row. Seeding the ledger by hand contradicts that rule;
+   not seeding it leaves the payments dashboard blank in every demo.
+   **Recommend:** seed the ledger rows — "the payments screen is empty" is the
+   most damaging thing a prospect can see in a payments-first product. But this
+   reverses a written decision, so it needs the call.
+2. **Is the finance plugin in scope for demos at all?** Zero coverage, and never
+   installed by any seeder. Seeding it properly means the journal AND the chart of
+   accounts, while leaving the cron-regenerated rollups alone. **Recommend:** yes
+   for sandbox and lead (where prospects look), no for emulator and staging.
+3. **Promo codes.** Same shape of question, much smaller. `/offer/promo-codes` is
+   empty everywhere. **Recommend:** one active code per storefront tenant, seeded
+   in the shared storefront helper — it is a few lines and it makes a whole
+   feature visible.
+4. **Does staging stay Connect-unwired?** `seed-staging.ts`'s header argues it
+   should, and the reasoning (shared Stripe TEST platform, two webhook endpoints
+   receiving each other's events) still holds. **Recommend:** leave it; the answer
+   changes only if staging gets its own dedicated onboarded test account.
+5. **How far does the `scripts/lib/fixtures/` extraction go?** Lane 0 extracts only
+   the two divergent fixtures. Going further is a large refactor of four big files
+   with no defect behind it. **Recommend:** stop at two.
+
+## Acceptance
+
+Phase 2 is done when, for every row the truth doc marks `MISSING` and Phase 2
+chose to close, the named screen in its "the screen that proves it" column renders
+real content on a fresh run of the surface. That column was written to be a
+checklist; use it as one, and record the rows Phase 2 deliberately left alone
+rather than quietly dropping them.
