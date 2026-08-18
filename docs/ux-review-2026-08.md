@@ -161,7 +161,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 82 | blocks | weekly | A member can buy a plan and still be locked out, with no self-serve way back | M5×M8 | functions | ✅ Fixed |
 | 83 | blocks | every-session | A trial lead who signs up is still refused, and the card promises otherwise | M5×M8 | functions | ✅ Fixed |
 | 84 | blocks | weekly | "When someone joins" cannot be built: the trigger exists but is unreachable | M9 | web | ✅ Fixed |
-| 85 | costs-money | weekly | Ten automation triggers offer a delay that is silently ignored | M9 | web + functions | ▶ Open |
+| 85 | costs-money | weekly | Ten automation triggers offer a delay that is silently ignored | M9 | web + functions | ✅ Fixed |
 | 86 | costs-money | once | A library automation gated to a paid plan installs on any plan | M9×M8 | web | ▶ Open |
 | 87 | confuses | at-setup | Declared triggers that can never fire, and mounted ones that never do | M9 | functions + web | ▶ Open |
 | 88 | blocks | every-session | After paying, the buyer lands on a page that asks them to sign in again | C2 | web + functions | ▶ Open |

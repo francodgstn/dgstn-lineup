@@ -48,3 +48,24 @@ after they were composed. *Meanwhile:* nothing changed, and the new
 changing what a new studio gets on day one is a first-run product decision, not a
 copy fix. The library item ships and is installable; it is simply not bundled.
 One-line change if you want it in.
+
+## 6. Cloud Tasks region fix wants eyes on the first deploy (UX-85)
+**ASSUMED, needs confirmation once — not blocking.** `getFunctions().taskQueue()`
+with a bare name resolves to `us-central1` (firebase-admin `DEFAULT_LOCATION`)
+while our functions live in `europe-west6`, so every delayed-rule enqueue has
+been posting to a queue that does not exist. The error is swallowed by `to()`,
+which is why nobody noticed. Now fully qualified.
+**This was verified statically and against a local probe, NOT against a deployed
+404.** The Tasks emulator is a plain FIFO that ignores `scheduleTime`, so the
+one thing local testing cannot prove is that the wait actually happens.
+*Action on first sandbox deploy:* create a rule with a short delay, fire it, and
+confirm the task is scheduled rather than dispatched immediately.
+
+## 7. Three affiliation triggers still use a random occurrence id (UX-85)
+**ASSUMED, safe.** `onAffiliationWrite.ts` was in a reserved lane, so
+`affiliation_added/removed/changed` fall back to `randomUUID()` for the dedup
+occurrence instead of the CloudEvent id. It still collapses a Cloud Tasks
+redelivery, and a duplicate Firestore delivery falls to the per-rule/per-contact
+window — the same protection the inline path has today, so there is no
+regression. *Follow-up:* add `{ eventId: event.id }` at
+`packages/functions/src/sync/onAffiliationWrite.ts:124/129/135`.
