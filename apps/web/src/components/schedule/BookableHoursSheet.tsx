@@ -39,11 +39,12 @@ interface Props {
   onOpenChange: (v: boolean) => void
   teamId: string
   userId: string
-  /** Whether the Bookable hours LAYER is currently drawn on the calendar behind
-   *  this sheet. When it isn't, the sheet says so and offers to switch it on —
-   *  it never flips a stored view preference on the user's behalf. */
-  layerVisible?: boolean
-  onShowLayer?: () => void
+  /** Whether the Bookable hours CALENDAR is currently drawn on the grid behind
+   *  this sheet (see `hooks/useVisibleCalendars.ts`). When it isn't, the sheet
+   *  says so and offers to switch it on — it never flips a stored view
+   *  preference on the user's behalf. */
+  calendarVisible?: boolean
+  onShowCalendar?: () => void
 }
 
 export function BookableHoursSheet({
@@ -51,8 +52,8 @@ export function BookableHoursSheet({
   onOpenChange,
   teamId,
   userId,
-  layerVisible,
-  onShowLayer,
+  calendarVisible,
+  onShowCalendar,
 }: Props) {
   const t = useTranslations('Appointments')
   const tq = useTranslations('QuickLinks')
@@ -72,18 +73,18 @@ export function BookableHoursSheet({
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {/* The layer state, stated where it is being contradicted: a studio
+          {/* The visibility state, stated where it is contradicted: a studio
               editing windows it cannot see on the grid behind the sheet has no
               way to know the grid is not lying to it. */}
-          {layerVisible === false && onShowLayer && (
+          {calendarVisible === false && onShowCalendar && (
             <button
               type="button"
-              onClick={onShowLayer}
+              onClick={onShowCalendar}
               className="mb-3 flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             >
               <Eye className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 flex-1">{t('layerHiddenNote')}</span>
-              <span className="shrink-0 font-medium text-primary">{t('layerShowOnCalendar')}</span>
+              <span className="min-w-0 flex-1">{t('hoursHiddenNote')}</span>
+              <span className="shrink-0 font-medium text-primary">{t('hoursShowOnCalendar')}</span>
             </button>
           )}
 

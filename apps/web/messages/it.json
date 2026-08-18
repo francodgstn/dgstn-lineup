@@ -1118,7 +1118,23 @@
     "layerHide": "Nascondi {layer}",
     "layerCalendarOnly": "Le ore prenotabili sono mostrate nel calendario, non nell'elenco",
     "layersHiddenTitle": "Alcuni livelli sono nascosti",
-    "layersHiddenBody": "Qui non viene mostrato nulla perché questi livelli sono nascosti: {layers}."
+    "layersHiddenBody": "Qui non viene mostrato nulla perché questi livelli sono nascosti: {layers}.",
+    "layersAll": "Tutti i livelli",
+    "layersNone": "Nessun livello",
+    "layersMenuLabel": "Livelli del calendario",
+    "layersResetDefault": "Ripristina i valori predefiniti",
+    "coachMenuLabel": "Filtro per coach",
+    "coachCount": "{count} coach",
+    "calendars": {
+      "heading": "Calendari mostrati",
+      "all": "Tutti i calendari",
+      "none": "Nessun calendario",
+      "showAll": "Mostra tutto",
+      "resetDefault": "Ripristina i valori predefiniti",
+      "calendarViewOnly": "Visibile solo nella vista calendario — una finestra prenotabile non è una voce dell'elenco",
+      "hiddenTitle": "Alcuni calendari sono nascosti",
+      "hiddenBody": "Qui non viene mostrato nulla perché questi calendari sono nascosti: {calendars}."
+    }
   },
   "Events": {
     "title": "Eventi",
@@ -2061,7 +2077,9 @@
     "timeOffCount": "{count, plural, one {# assenza} other {# assenze}}",
     "openFullPage": "Apri la pagina completa",
     "layerHiddenNote": "Queste ore non sono mostrate nel calendario dietro questo pannello.",
-    "layerShowOnCalendar": "Mostra nel calendario"
+    "layerShowOnCalendar": "Mostra nel calendario",
+    "hoursHiddenNote": "Questi orari non sono mostrati nel calendario dietro questo pannello.",
+    "hoursShowOnCalendar": "Mostra nel calendario"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Con abbonamento",

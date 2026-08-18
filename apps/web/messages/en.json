@@ -1118,7 +1118,23 @@
     "layerHide": "Hide {layer}",
     "layerCalendarOnly": "Bookable hours are drawn on the calendar, not in the list",
     "layersHiddenTitle": "Some layers are hidden",
-    "layersHiddenBody": "Nothing is shown here because these layers are switched off: {layers}."
+    "layersHiddenBody": "Nothing is shown here because these layers are switched off: {layers}.",
+    "layersAll": "All layers",
+    "layersNone": "No layers",
+    "layersMenuLabel": "Calendar layers",
+    "layersResetDefault": "Reset to default",
+    "coachMenuLabel": "Coach filter",
+    "coachCount": "{count} coaches",
+    "calendars": {
+      "heading": "Calendars shown",
+      "all": "All calendars",
+      "none": "No calendars",
+      "showAll": "Show all",
+      "resetDefault": "Reset to default",
+      "calendarViewOnly": "Only shown in calendar view — a bookable window is not a list entry",
+      "hiddenTitle": "Some calendars are hidden",
+      "hiddenBody": "Nothing is shown here because these calendars are switched off: {calendars}."
+    }
   },
   "Events": {
     "title": "Events",
@@ -2061,7 +2077,9 @@
     "timeOffCount": "{count, plural, one {# time off} other {# time off}}",
     "openFullPage": "Open the full page",
     "layerHiddenNote": "These hours are not drawn on the calendar behind this panel.",
-    "layerShowOnCalendar": "Show on calendar"
+    "layerShowOnCalendar": "Show on calendar",
+    "hoursHiddenNote": "These hours are not drawn on the calendar behind this panel.",
+    "hoursShowOnCalendar": "Show on calendar"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "With a plan",

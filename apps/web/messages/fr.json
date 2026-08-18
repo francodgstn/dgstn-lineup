@@ -1118,7 +1118,23 @@
     "layerHide": "Masquer {layer}",
     "layerCalendarOnly": "Les heures réservables s'affichent dans le calendrier, pas dans la liste",
     "layersHiddenTitle": "Certains calques sont masqués",
-    "layersHiddenBody": "Rien ne s'affiche ici car ces calques sont masqués : {layers}."
+    "layersHiddenBody": "Rien ne s'affiche ici car ces calques sont masqués : {layers}.",
+    "layersAll": "Tous les calques",
+    "layersNone": "Aucun calque",
+    "layersMenuLabel": "Calques du calendrier",
+    "layersResetDefault": "Rétablir la valeur par défaut",
+    "coachMenuLabel": "Filtre par coach",
+    "coachCount": "{count} coachs",
+    "calendars": {
+      "heading": "Calendriers affichés",
+      "all": "Tous les calendriers",
+      "none": "Aucun calendrier",
+      "showAll": "Tout afficher",
+      "resetDefault": "Rétablir la valeur par défaut",
+      "calendarViewOnly": "Visible uniquement en vue calendrier — une plage réservable n'est pas une entrée de liste",
+      "hiddenTitle": "Certains calendriers sont masqués",
+      "hiddenBody": "Rien ne s'affiche ici car ces calendriers sont masqués : {calendars}."
+    }
   },
   "Events": {
     "title": "Événements",
@@ -2061,7 +2077,9 @@
     "timeOffCount": "{count, plural, one {# absence} other {# absences}}",
     "openFullPage": "Ouvrir la page complète",
     "layerHiddenNote": "Ces heures ne sont pas affichées dans le calendrier derrière ce panneau.",
-    "layerShowOnCalendar": "Afficher dans le calendrier"
+    "layerShowOnCalendar": "Afficher dans le calendrier",
+    "hoursHiddenNote": "Ces heures ne sont pas affichées dans le calendrier derrière ce panneau.",
+    "hoursShowOnCalendar": "Afficher dans le calendrier"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Avec un abonnement",

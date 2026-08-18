@@ -1118,7 +1118,23 @@
     "layerHide": "{layer} ausblenden",
     "layerCalendarOnly": "Buchbare Zeiten werden im Kalender angezeigt, nicht in der Liste",
     "layersHiddenTitle": "Einige Ebenen sind ausgeblendet",
-    "layersHiddenBody": "Hier wird nichts angezeigt, weil diese Ebenen ausgeblendet sind: {layers}."
+    "layersHiddenBody": "Hier wird nichts angezeigt, weil diese Ebenen ausgeblendet sind: {layers}.",
+    "layersAll": "Alle Ebenen",
+    "layersNone": "Keine Ebenen",
+    "layersMenuLabel": "Kalenderebenen",
+    "layersResetDefault": "Auf Standard zurücksetzen",
+    "coachMenuLabel": "Coach-Filter",
+    "coachCount": "{count} Coaches",
+    "calendars": {
+      "heading": "Angezeigte Kalender",
+      "all": "Alle Kalender",
+      "none": "Keine Kalender",
+      "showAll": "Alle anzeigen",
+      "resetDefault": "Auf Standard zurücksetzen",
+      "calendarViewOnly": "Nur in der Kalenderansicht sichtbar — ein buchbares Zeitfenster ist kein Listeneintrag",
+      "hiddenTitle": "Einige Kalender sind ausgeblendet",
+      "hiddenBody": "Hier wird nichts angezeigt, weil diese Kalender ausgeblendet sind: {calendars}."
+    }
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -2061,7 +2077,9 @@
     "timeOffCount": "{count, plural, one {# Abwesenheit} other {# Abwesenheiten}}",
     "openFullPage": "Ganze Seite öffnen",
     "layerHiddenNote": "Diese Zeiten werden im Kalender hinter diesem Bereich nicht angezeigt.",
-    "layerShowOnCalendar": "Im Kalender anzeigen"
+    "layerShowOnCalendar": "Im Kalender anzeigen",
+    "hoursHiddenNote": "Diese Zeiten werden im Kalender hinter diesem Bereich nicht angezeigt.",
+    "hoursShowOnCalendar": "Im Kalender anzeigen"
   },
   "AppointmentForm": {
     "durationBenefitOnly": "Mit Abo",

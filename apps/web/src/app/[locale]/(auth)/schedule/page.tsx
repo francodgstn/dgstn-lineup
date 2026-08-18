@@ -31,7 +31,7 @@ import {
 } from '@linyup/shared'
 import type { Session, Activity, Event } from '@linyup/shared'
 import { useEventTypes } from '@/hooks/useEventTypes'
-import { useCoaches, coachLabel } from '@/hooks/useCoaches'
+import { useCoaches } from '@/hooks/useCoaches'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -88,8 +88,9 @@ import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 import { AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
 import { AppointmentFormDialog } from '@/components/appointments/AppointmentFormDialog'
-import { useCalendarLayers, type CalendarLayer } from '@/hooks/useCalendarLayers'
-import { CalendarLayerChips } from '@/components/schedule/CalendarLayerChips'
+import { useVisibleCalendars, type ScheduleCalendar } from '@/hooks/useVisibleCalendars'
+import { VisibleCalendarsMenu } from '@/components/schedule/VisibleCalendarsMenu'
+import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
 import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
@@ -105,17 +106,24 @@ const HORIZONS = [3, 6, 12] as const
 type Horizon = (typeof HORIZONS)[number]
 const DEFAULT_HORIZON: Horizon = 3
 type TimeTab = (typeof TIME_TABS)[number]
-// What the chip row does is now LAYER VISIBILITY, not filtering — Classes,
+// What the filter row does is now LAYER VISIBILITY, not filtering — Classes,
 // Appointments, Bookable hours and Events are four independent things the
 // schedule can DRAW, ticked on and off like the calendars in the sidebar of any
 // calendar app. The store, the default set and the reasoning live in
-// `hooks/useCalendarLayers.ts`; the row itself is `CalendarLayerChips`.
+// `hooks/useVisibleCalendars.ts`; the control is `VisibleCalendarsMenu`.
 //
 // The old model was a single-select `ItemFilter` ('all' | 'classes' |
 // 'appointment' | 'events'), which could not express "classes and appointments
 // but not events", and bookable hours could not be a member of it at all — so
 // they were drawn unconditionally instead, with no control anywhere to stop
-// them. Both problems are the same problem, and layers is the fix for both.
+// them. Both problems are the same problem, and one tickable set is the fix
+// for both.
+//
+// The row now holds exactly TWO controls, `<who> | <what>`, and they share one
+// grammar: a chip with a caret, whose label names the current state, opening a
+// list of checkboxes. That symmetry is the point — the four calendars spent one
+// release as four bare chips sitting beside a single-select coach chip, which
+// made two different kinds of control look like one kind.
 type ListItem = { kind: 'session'; data: Session } | { kind: 'event'; data: Event }
 
 interface MemberDoc {
@@ -917,12 +925,14 @@ export default function CalendarPage() {
   // it stays the default so nothing gets slower for a studio that never touches
   // it, and zooming out to a season or a year is now one click (UX-64).
   const [horizon, setHorizon] = useState<Horizon>(DEFAULT_HORIZON)
-  // Which layers are drawn — a per-browser VIEW PREFERENCE, deliberately not
-  // nav memory (see the hook's header before adding anything to it).
-  const layers = useCalendarLayers()
+  // Which calendars are drawn — a per-browser VIEW PREFERENCE, deliberately
+  // not nav memory (see the hook's header before adding anything to it).
+  const calendars = useVisibleCalendars()
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
-  // 'all' · 'mine' (current user's uid) · a specific coach uid
-  const [coachFilter, setCoachFilter] = useState<string>('all')
+  // Which coaches are in scope. **EMPTY = every coach**, never "none" — see
+  // CoachFilterMenu's header. Multi-select, because "what are Anna and Ben doing
+  // this week" is an ordinary question the old single-select could not ask.
+  const [coachIds, setCoachIds] = useState<string[]>([])
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
     open: false,
     editing: null,
@@ -991,38 +1001,31 @@ export default function CalendarPage() {
 
   const nowMs = Date.now()
 
-  // Coach filter — narrows sessions to a single instructor (or the current user).
-  // Events aren't coach-scoped, so a specific-coach filter hides them entirely,
-  // leaving only that coach's teaching schedule. Applies to both calendar + list.
-  const providerId = coachFilter === 'mine' ? (user?.uid ?? null) : coachFilter === 'all' ? null : coachFilter
-  // The coach chip shows the CURRENT selection rather than a static "Coach"
-  // label, so the filter row states what's applied without being opened.
-  const coachFilterLabel =
-    coachFilter === 'all'
-      ? t('coachAll')
-      : coachFilter === 'mine'
-        ? t('coachMine')
-        : (() => {
-            const c = coachRoster.find((x) => x.userId === coachFilter)
-            return c ? coachLabel(c) : t('coachAll')
-          })()
+  // Coach filter — narrows sessions to the selected instructors. Purely
+  // client-side: no query takes a coach (sessions come by team+window, bookable
+  // hours by team), so this is an array filter and nothing more. Events aren't
+  // coach-scoped, so ANY coach selection hides them entirely — the same rule as
+  // when this was single-select, and it stays coherent for several coaches:
+  // narrowing to people leaves those people's teaching schedule, and an event
+  // belongs to no one. Applies to both calendar + list.
+  const coachScoped = coachIds.length > 0
   const isAppointment = (s: Session) => s.activityType === 'appointment'
-  // Coach scope FIRST, layers second — the two are different questions ("whose"
+  // Coach scope FIRST, calendars second — the two are different questions ("whose"
   // vs "what kind"), and keeping the coach-scoped set around lets the
-  // hidden-layer notice below ask "would this layer have shown anything?"
+  // hidden-calendars notice below ask "would this calendar have shown anything?"
   // without re-deriving the scope.
   const scopedSessions = (sessionsQ.data ?? []).filter(
     // Group classes and appointment (private-lesson) sessions both store the
     // running provider in providerId.
-    (s) => !providerId || s.providerId === providerId
+    (s) => !coachScoped || (!!s.providerId && coachIds.includes(s.providerId))
   )
   const filteredSessions = scopedSessions.filter((s) =>
-    isAppointment(s) ? layers.isVisible('appointments') : layers.isVisible('classes')
+    isAppointment(s) ? calendars.isVisible('appointments') : calendars.isVisible('classes')
   )
-  // Events aren't coach-scoped, so a specific-coach filter hides them entirely
+  // Events aren't coach-scoped, so any coach selection hides them entirely
   // (unchanged); the Events LAYER is the other half of the condition.
-  const scopedEvents = coachFilter === 'all' ? (eventsQ.data ?? []) : []
-  const filteredEvents = layers.isVisible('events') ? scopedEvents : []
+  const scopedEvents = coachScoped ? [] : (eventsQ.data ?? [])
+  const filteredEvents = calendars.isVisible('events') ? scopedEvents : []
 
   // Published bookable hours: a LAYER now, off by default, remembered per
   // browser. They used to be drawn unconditionally as "context" — which was the
@@ -1031,11 +1034,18 @@ export default function CalendarPage() {
   // unreadable. Scoped to the coach filter when one is set, so "Only me"
   // narrows the bands exactly as it narrows the sessions. Paused schedules never
   // show (they're not bookable).
+  //
+  // Selecting several coaches meets the calendar's own lane cap, and THE CAP
+  // WINS: SessionsCalendar draws one sub-lane per coach up to MAX_AVAIL_LANES
+  // (3), coaches past the third share the last lane with their own colour, and
+  // the legend says "+N more". That is not a new case introduced here — an
+  // unfiltered team with four coaches already renders exactly this — so a
+  // five-coach selection degrades the way the unfiltered week already does.
   const activeAvailability = availabilityQ.data?.filter((a) => a.status === 'active') ?? []
-  const scopedAvailability = providerId
-    ? activeAvailability.filter((a) => a.providerId === providerId)
+  const scopedAvailability = coachScoped
+    ? activeAvailability.filter((a) => coachIds.includes(a.providerId))
     : activeAvailability
-  const calendarAvailability = layers.isVisible('bookableHours') ? scopedAvailability : []
+  const calendarAvailability = calendars.isVisible('bookableHours') ? scopedAvailability : []
 
   const allItems: ListItem[] = [
     ...filteredSessions.map((s) => ({ kind: 'session' as const, data: s })),
@@ -1059,23 +1069,23 @@ export default function CalendarPage() {
   const isListLoading = sessionsQ.isLoading || eventsQ.isLoading
   // ONE query answers this, and it is not this page's window — see
   // `useUpcomingCount`. Undefined while it loads, so the header says nothing
-  // rather than saying zero. A LAYER MUST NEVER REACH THIS: the count is a fact
-  // about the team, not about the view, which is exactly what UX-20 fixed when
-  // it stopped counting from the calendar's own cursor window.
+  // rather than saying zero. A SHOWN/HIDDEN CALENDAR MUST NEVER REACH THIS: the
+  // count is a fact about the team, not about the view, which is exactly what
+  // UX-20 fixed when it stopped counting from the calendar's own cursor window.
   const upcomingCount = upcomingCountQ.data
 
-  // ── "you are looking at an empty grid because you hid the layer" ──────────
+  // ── "you are looking at an empty grid because you hid a calendar" ─────────
   //
-  // An empty calendar under a hidden layer is the same defect class as UX-20's
+  // An empty grid under a hidden calendar is the same defect class as UX-20's
   // "0 upcoming" over a full grid: the screen states something false about the
-  // studio's business. So a hidden layer is only worth mentioning when it WOULD
-  // have drawn something — otherwise every studio with a quiet week would be
-  // told its layers are the problem, and the default set hides one layer, so
+  // studio's business. So a hidden calendar is only worth mentioning when it
+  // WOULD have drawn something — otherwise every studio with a quiet week would
+  // be told its calendars are the problem, and the default set hides one, so
   // that misfire would be the common case rather than the rare one.
   const inTimeWindow = (ms: number) =>
     view === 'calendar' ? true : tab === 'upcoming' ? ms >= nowMs : ms < nowMs
-  const layerHasContent = (layer: CalendarLayer): boolean => {
-    switch (layer) {
+  const calendarHasContent = (calendar: ScheduleCalendar): boolean => {
+    switch (calendar) {
       case 'classes':
         return scopedSessions.some((s) => !isAppointment(s) && inTimeWindow(s.start.toDate().getTime()))
       case 'appointments':
@@ -1088,14 +1098,14 @@ export default function CalendarPage() {
         return view === 'calendar' && scopedAvailability.length > 0
     }
   }
-  const hiddenWithContent = layers.hiddenLayers.filter(layerHasContent)
+  const hiddenWithContent = calendars.hidden.filter(calendarHasContent)
   const nothingDrawn =
     view === 'calendar'
       ? filteredSessions.length === 0 && filteredEvents.length === 0 && calendarAvailability.length === 0
       : listItems.length === 0
-  const showHiddenLayersNotice =
+  const showHiddenCalendarsNotice =
     hiddenWithContent.length > 0 && nothingDrawn && !isListLoading && !availabilityQ.isLoading
-  const layerLabel: Record<CalendarLayer, string> = {
+  const calendarLabel: Record<ScheduleCalendar, string> = {
     classes: t('filterClasses'),
     appointments: t('filterAppointments'),
     bookableHours: t('bookableHours'),
@@ -1225,75 +1235,54 @@ export default function CalendarPage() {
       </div>
 
       {/* Filters — ONE control group, read left to right as <who> | <what>.
-          The coach chip carries a caret (it opens a menu); the type options stay
-          flat, so the shape of a chip tells you whether it holds more behind it.
-          Everything here FILTERS — nothing switches the view. */}
+          Both chips carry a caret and open checkboxes: same shape, same
+          gesture, and the label on each names its current state rather than a
+          static noun. Nothing here switches the view. */}
       <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
         {/* WHO — first, because it scopes everything to its right. */}
         {coachRoster.length > 1 && (
           <>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  coachFilter === 'all'
-                    ? 'bg-muted text-muted-foreground hover:text-foreground'
-                    : 'bg-primary text-primary-foreground'
-                }`}
-              >
-                <User className="h-3.5 w-3.5" />
-                {coachFilterLabel}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setCoachFilter('all')}>
-                  {t('coachAll')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCoachFilter('mine')}>
-                  {t('coachMine')}
-                </DropdownMenuItem>
-                {coachRoster
-                  .filter((c) => c.userId !== user?.uid)
-                  .map((c) => (
-                    <DropdownMenuItem key={c.userId} onClick={() => setCoachFilter(c.userId)}>
-                      {coachLabel(c)}
-                    </DropdownMenuItem>
-                  ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <CoachFilterMenu
+              coaches={coachRoster}
+              selected={coachIds}
+              onChange={setCoachIds}
+              currentUserId={user?.uid ?? null}
+            />
             <span aria-hidden className="mx-1 h-4 w-px self-center bg-border" />
           </>
         )}
 
-        {/* WHAT — four LAYERS, ticked on and off independently, plus show-all
-            and reset. See CalendarLayerChips. */}
-        <CalendarLayerChips
-          layers={layers}
+        {/* WHAT — four CALENDARS, ticked on and off independently, plus
+            show-all and reset-to-default. See VisibleCalendarsMenu. */}
+        <VisibleCalendarsMenu
+          calendars={calendars}
           calendarView={view === 'calendar'}
-          onLayerHidden={(layer) => {
+          onCalendarHidden={(calendar) => {
             // The activity picker narrows classes; with classes hidden it
-            // narrows nothing and would silently survive the layer coming back.
-            if (layer === 'classes') setActivityFilter(null)
+            // narrows nothing and would silently survive the calendar coming
+            // back.
+            if (calendar === 'classes') setActivityFilter(null)
           }}
         />
       </div>
 
-      {/* Hidden-layer notice — an empty grid must never read as "you have
+      {/* Hidden-calendars notice — an empty grid must never read as "you have
           nothing scheduled" when the truth is "you switched it off". Only
-          raised for layers that would actually have drawn something (see
+          raised for calendars that would actually have drawn something (see
           `hiddenWithContent`). */}
-      {showHiddenLayersNotice && (
+      {showHiddenCalendarsNotice && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed bg-muted/20 px-4 py-3">
           <EyeOff className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t('layersHiddenTitle')}</p>
+            <p className="text-sm font-medium">{t('calendars.hiddenTitle')}</p>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {t('layersHiddenBody', {
-                layers: hiddenWithContent.map((l) => layerLabel[l]).join(', '),
+              {t('calendars.hiddenBody', {
+                calendars: hiddenWithContent.map((c) => calendarLabel[c]).join(', '),
               })}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="shrink-0" onClick={layers.showAll}>
-            {t('layersShowAll')}
+          <Button variant="outline" size="sm" className="shrink-0" onClick={calendars.showAll}>
+            {t('calendars.showAll')}
           </Button>
         </div>
       )}
@@ -1385,10 +1374,10 @@ export default function CalendarPage() {
             </Select>
           </div>
 
-          {/* Activity sub-filter — a genuine FILTER (it narrows a layer to one
-              activity), which is why it is here and not in the layer row above.
-              Only meaningful while the Classes layer is drawn. */}
-          {layers.isVisible('classes') && (activitiesQ.data?.length ?? 0) > 0 && (
+          {/* Activity sub-filter — a genuine FILTER (it narrows one calendar to
+              one activity), which is why it is here and not in the filter row
+              above. Only meaningful while Classes is drawn. */}
+          {calendars.isVisible('classes') && (activitiesQ.data?.length ?? 0) > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={activityFilter ?? '__all__'}
@@ -1430,7 +1419,7 @@ export default function CalendarPage() {
             {/* The generic empty line stands down when the notice above is
                 already explaining the emptiness — two answers to one question,
                 one of them wrong, is worse than either alone. */}
-            {!isListLoading && listItems.length === 0 && !showHiddenLayersNotice && (
+            {!isListLoading && listItems.length === 0 && !showHiddenCalendarsNotice && (
               <div className="py-16 text-center text-muted-foreground text-sm">
                 {tab === 'upcoming' ? t('emptyUpcoming') : t('emptyPast')}
               </div>
@@ -1550,9 +1539,9 @@ export default function CalendarPage() {
             onOpenChange={setHoursSheetOpen}
             teamId={currentTeamId}
             userId={user.uid}
-            layerVisible={layers.isVisible('bookableHours')}
-            onShowLayer={() => {
-              if (!layers.isVisible('bookableHours')) layers.toggle('bookableHours')
+            calendarVisible={calendars.isVisible('bookableHours')}
+            onShowCalendar={() => {
+              if (!calendars.isVisible('bookableHours')) calendars.toggle('bookableHours')
             }}
           />
           {/* Availability CREATE — one new schedule ("+ New → Add bookable
