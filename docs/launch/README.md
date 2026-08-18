@@ -30,6 +30,14 @@ linyup-sandbox (test mode)            linyup-prod (live)
 The model rests on two safety nets so "we got it wrong" is always recoverable:
 backups (PITR + scheduled exports) and a per-tenant **reset/export** capability.
 
+## Status
+
+[`readiness-2026-08.md`](./readiness-2026-08.md) — what the first readiness pass
+shipped (backups, deploy gates, observability, tenant purge) and what is still
+open. Read it before working through the checklists below: several of their
+boxes are already done, and three claims in the wider `docs/` tree were found to
+be stale against the code.
+
 ## Checklists
 
 | Doc | Use it for |
