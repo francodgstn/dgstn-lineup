@@ -16,6 +16,9 @@ import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
+// The Archived tab's query moved to a hook of its own so the sidebar search can
+// run the SAME one — same shape, same key, one cache entry (UX-21).
+import { useArchivedContacts } from '@/hooks/useArchivedContacts'
 import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
@@ -143,25 +146,6 @@ function entryToStage(entry: ContactEntry): {
 }
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
-
-function useArchivedContacts(teamId: string | null) {
-  return useQuery<Contact[]>({
-    queryKey: ['contacts', 'archived', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      if (!teamId) return []
-      const q = query(
-        collection(db, CONTACTS_COLLECTION),
-        where('teamId', '==', teamId),
-        where('archived_at', '!=', null),
-        where('deleted_at', '==', null),
-        orderBy('archived_at', 'desc'),
-      )
-      const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Contact)
-    },
-  })
-}
 
 function useDeletedContacts(teamId: string | null) {
   return useQuery<Contact[]>({

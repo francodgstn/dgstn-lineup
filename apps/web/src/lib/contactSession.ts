@@ -5,12 +5,13 @@
 // `PublicContactAuthProvider`, which is what every public surface asks "am I
 // signed in?".
 //
-// THE OTHER HOLDER OF THIS CONTRACT is
-// `app/[locale]/(public)/public/[slug]/PublicContactAuthProvider.tsx`, which
-// still inlines its own `loadSession` / `saveSession` / `clearSession` against
-// the same key. They must stay in step; the provider should be pointed at this
-// module the next time it is touched. It was left alone here only because a
-// parallel lane held that file.
+// THIS MODULE IS THE ONLY HOLDER (since 2026-08-18, UX-88).
+// `app/[locale]/(public)/public/[slug]/PublicContactAuthProvider.tsx` — the
+// provider every public surface asks "am I signed in?" — imports load/save/clear
+// from here rather than inlining its own against the same key, and takes its
+// `PublicContact` type from `StoredPublicContact` below. Anything else that
+// needs to read or drop the session imports it too; never re-inline
+// `localStorage.getItem(CONTACT_SESSION_KEY)` at a call site.
 //
 // The Firebase custom token is the AUTHORITY, never this record: the provider
 // re-reads `contactId` + `teamId` off the id token before it trusts anything

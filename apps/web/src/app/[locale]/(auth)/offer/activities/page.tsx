@@ -1549,6 +1549,7 @@ export default function ActivitiesPage() {
   const currency = team?.default_currency ?? 'CHF'
   const qc = useQueryClient()
   const t = useTranslations('Activities')
+  const tq = useTranslations('QuickLinks')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
   const [duplicating, setDuplicating] = useState<Activity | null>(null)
@@ -1653,9 +1654,16 @@ export default function ActivitiesPage() {
 
   return (
     <div className="space-y-6">
+      {/* ONE quick link (UX-71), and it answers the question this page cannot:
+          an activity is a TEMPLATE — nothing here says whether it is actually on
+          the calendar, and an activity with no sessions behind it is invisible to
+          every visitor while looking perfectly configured. The Schedule is where
+          that is confirmed. Deliberately not a second link to Plans: this page
+          already shows which plans unlock each activity on the row itself. */}
       <PageHeader
         title={t('title')}
         subtitle={isLoading ? undefined : t('subtitle', { count: activities.length })}
+        quickLinks={[{ href: '/schedule' as Route, label: tq('activitiesToSchedule') }]}
         action={
           <Button onClick={openNew}>
             <Plus className="h-4 w-4 mr-1.5" />

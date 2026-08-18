@@ -6,6 +6,13 @@ import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/aut
 import { functions } from '@/lib/firebase'
 import { auth } from '@/lib/firebase-auth'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
+import {
+  loadContactSession,
+  saveContactSession,
+  clearContactSession,
+  type PersistedContactSession,
+  type StoredPublicContact,
+} from '@/lib/contactSession'
 import { usePublicTeam } from './PublicTeamProvider'
 
 // The passwordless CONTACT-SESSION auth, lifted from Space to the team root so it
@@ -17,24 +24,22 @@ import { usePublicTeam } from './PublicTeamProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface PublicContact {
-  id: string
-  firstname: string
-  lastname: string
-  subscription_type_id?: string
-  /** The contact's own address, as `buildContactSession` returns it. Optional
-   *  because it is the contact's, not the mailbox that authenticated (a parent
-   *  can verify with theirs and select a child), and because a session persisted
-   *  by an older build may not carry one. Surfaces that name it — "sent to …" —
-   *  must handle its absence rather than render `undefined`.
-   *
-   *  `| null` because that is what the server actually sends: `buildContactSession`
-   *  returns `contactEmail ?? contactData.email ?? null`, so a contact with no
-   *  address arrives as an explicit null, not as a missing key. Typing it away
-   *  did not remove the null — it removed the compiler's knowledge of it, which
-   *  is how `string | null` values end up flowing into props typed `string`. */
-  email?: string | null
-}
+/**
+ * The signed-in contact, as the surfaces read it.
+ *
+ * ONE SHAPE, DEFINED WITH THE STORAGE CONTRACT (`lib/contactSession.ts`) — this
+ * is an alias, not a copy. It has to be the persisted shape: the whole of it is
+ * written to localStorage on sign-in and read back on restore, so a field the
+ * two disagreed about would survive one hop and vanish on the next.
+ *
+ * On `email`, which is the field that has caught people out: it is the
+ * CONTACT's address, not the mailbox that authenticated (a parent can verify
+ * with theirs and select a child), it may be absent on a session persisted by
+ * an older build, and it is `| null` because `buildContactSession` returns
+ * `contactEmail ?? contactData.email ?? null` — an explicit null, not a missing
+ * key. Surfaces that name it ("sent to …") must handle both.
+ */
+export type PublicContact = StoredPublicContact
 
 export interface MatchedContact {
   id: string
@@ -107,39 +112,26 @@ export function usePublicContactAuth() {
   return ctx
 }
 
-// ─── Storage helpers ─────────────────────────────────────────────────────────
-// Key kept stable ('space' era) so existing sessions survive the lift.
-
-const SESSION_KEY = 'linyup:space:session'
-
-interface PersistedSession {
-  contactId: string
-  sessionExpires: string
-  contact: PublicContact
-}
-
-function loadSession(): PersistedSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as PersistedSession
-    if (new Date(parsed.sessionExpires) < new Date()) {
-      localStorage.removeItem(SESSION_KEY)
-      return null
-    }
-    return parsed
-  } catch {
-    return null
-  }
-}
-
-function saveSession(data: PersistedSession) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(data))
-}
-
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY)
-}
+// ─── Storage ─────────────────────────────────────────────────────────────────
+//
+// ONE HOLDER: `@/lib/contactSession` owns the key, the shape and load/save/clear
+// (UX-88). This file used to inline its own copies against the same key, which
+// made a two-file contract out of something that has to be exact — without a
+// stored record a perfectly valid Firebase session is ignored by every public
+// surface, so a drift in either direction signs a member out for no reason.
+//
+// The one deliberate behaviour change of pointing here: `saveContactSession`
+// SWALLOWS a storage failure (private mode, storage disabled) where the inlined
+// copy threw. Throwing landed in the sign-in catch below and showed "could not
+// sign in" to someone who had in fact just signed in — the Firebase session was
+// live, only the cache was refused. Now the sign-in completes and only the
+// restore-on-reload is lost, which is the honest consequence.
+//
+// Aliased to the old local names so the flow below reads unchanged.
+const loadSession = loadContactSession
+const saveSession = saveContactSession
+const clearSession = clearContactSession
+type PersistedSession = PersistedContactSession
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 

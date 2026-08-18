@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
+import { Users } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -9,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { ChartEmptyState } from './ChartEmptyState'
 import { buildWeekKeys, shortWeekLabel, formatTooltipWeek, formatAxisWeek } from '@/lib/isoWeek'
 import type { WeeklyReport, SubscriptionTypeDoc } from '@/hooks/useDashboardData'
 
@@ -146,6 +149,7 @@ export function ContactsSummaryCard({
     { value: 'subscription_type', label: 'Subscription' },
   ]
 
+  const td = useTranslations('Dashboard')
   const [dimension, setDimension] = useState('type')
   const [selectedValues, setSelectedValues] = useState<string[]>(['all'])
 
@@ -246,9 +250,11 @@ export function ContactsSummaryCard({
       </CardHeader>
       <CardContent className="flex-1 flex flex-col pb-4 pt-3">
         {!hasData ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">No data for this period</p>
-          </div>
+          <ChartEmptyState
+            icon={Users}
+            title={td('chartEmptyTitle')}
+            hint={td('chartEmptyContacts')}
+          />
         ) : (
           <div className="mt-auto">
             <ResponsiveContainer width="100%" height={220}>

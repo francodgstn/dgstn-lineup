@@ -58,7 +58,7 @@ import {
 import { Eraser } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Route } from 'next'
-import { pluginAccessForPlan, type PluginAccess, type SaasPlan } from '@linyup/shared'
+import { pluginAccessForPlan, type Contact, type PluginAccess, type SaasPlan } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
 import { useCapabilities } from '@/hooks/useCapabilities'
@@ -69,6 +69,7 @@ import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { useOrgLinks } from '@/hooks/useOrgLinks'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { useArchivedContacts } from '@/hooks/useArchivedContacts'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -1221,6 +1222,10 @@ type SearchEntry = ResolvedNavEntry & {
   // Second line on an entity row — an email, a price, a level. Never matched
   // against blindly: only the fields the provider chose to search are.
   sublabel?: string
+  // A STATE the row's record is in, not a category: "Archived". Rendered as a
+  // chip because the difference has to survive a glance — a result you can open
+  // but must not book or message reads identically to any other without it.
+  badge?: string
 }
 
 // ⌘ on Apple, Ctrl elsewhere. Deliberately NOT translated — these are key CAPS,
@@ -1303,10 +1308,29 @@ function NavSearch({
     entityTeamId,
     scopeUid
   )
+  // ARCHIVED TOO — a former member is exactly who you look up when they come
+  // back or ask about an old payment, and until now searching for them returned
+  // nothing at all (UX-21). It is a SECOND query, not a widened first one: the
+  // pickers, the roster and the dashboard all read `useActiveContacts` for its
+  // meaning. One extra read per panel session, on the same latch as the others,
+  // and it shares its cache entry with the contacts page's Archived tab.
+  //
+  // DELETED CONTACTS ARE NOT SEARCHED, and that is the decision rather than an
+  // omission: someone asked to be removed, and a search box that still finds
+  // them works against the request. They remain reachable from the Contacts
+  // page's own Deleted tab, where restoring is the deliberate act it should be.
+  //
+  // Own-scoped coaches get no archived results — the broad query is denied for
+  // them by the rules (see the hook), so `null` here is the same answer the
+  // contacts page gives by hiding the tab.
+  const { data: archivedContacts = [], isFetching: archivedFetching } = useArchivedContacts(
+    scopeUid ? null : entityTeamId
+  )
   const { data: subscriptionTypes = [], isFetching: subsFetching } =
     useSubscriptionTypes(entityTeamId)
   const { data: activities = [], isFetching: activitiesFetching } = useActivities(entityTeamId)
-  const entitiesFetching = contactsFetching || subsFetching || activitiesFetching
+  const entitiesFetching =
+    contactsFetching || archivedFetching || subsFetching || activitiesFetching
 
   const matches = (...fields: (string | null | undefined)[]) =>
     fields.some((f) => f && normalizeSearch(f).includes(q))
@@ -1325,26 +1349,39 @@ function NavSearch({
     label: string,
     icon: React.ElementType,
     kind: SearchKind,
-    sublabel?: string
-  ): SearchEntry => ({ id, href, label, icon, keywords: '', canShortcut: false, kind, sublabel })
+    sublabel?: string,
+    badge?: string
+  ): SearchEntry => ({
+    id, href, label, icon, keywords: '', canShortcut: false, kind, sublabel, badge,
+  })
 
   // A contact has a record of its own to open. A subscription type and an
   // activity do not — they are edited in a dialog on the page that lists them —
   // so those results land on that page rather than inventing a route.
+  const contactMatches = (c: Contact) =>
+    matches(`${c.firstname ?? ''} ${c.lastname ?? ''}`, c.email, c.phone)
+  const contactRow = (c: Contact, badge?: string) =>
+    entityRow(
+      `contact:${c.id}`,
+      `/contacts/${c.id}`,
+      `${c.firstname ?? ''} ${c.lastname ?? ''}`.trim() || (c.email ?? c.id),
+      Users,
+      'contact',
+      c.email ?? undefined,
+      badge
+    )
+  // Active first and archived after, each capped separately rather than sharing
+  // one cap: a studio with six matching current members would otherwise never
+  // see the former one they are actually looking for. The archived rows carry a
+  // badge — an unmarked result is one somebody messages or books by mistake.
   const contactResults: SearchEntry[] = q
-    ? contacts
-        .filter((c) => matches(`${c.firstname ?? ''} ${c.lastname ?? ''}`, c.email, c.phone))
-        .slice(0, 6)
-        .map((c) =>
-          entityRow(
-            `contact:${c.id}`,
-            `/contacts/${c.id}`,
-            `${c.firstname ?? ''} ${c.lastname ?? ''}`.trim() || (c.email ?? c.id),
-            Users,
-            'contact',
-            c.email ?? undefined
-          )
-        )
+    ? [
+        ...contacts.filter(contactMatches).slice(0, 6).map((c) => contactRow(c)),
+        ...archivedContacts
+          .filter(contactMatches)
+          .slice(0, 3)
+          .map((c) => contactRow(c, t('navSearchArchivedBadge'))),
+      ]
     : []
   const subscriptionResults: SearchEntry[] = q
     ? subscriptionTypes
@@ -1623,6 +1660,11 @@ function NavSearch({
                           >
                             <Icon className="h-4 w-4 shrink-0" />
                             <span className="truncate">{entry.label}</span>
+                            {entry.badge && (
+                              <span className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                                {entry.badge}
+                              </span>
+                            )}
                             {entry.sublabel && (
                               <span className="truncate text-xs font-normal text-muted-foreground/70">
                                 {entry.sublabel}

@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
+import { CalendarDays } from 'lucide-react'
 import {
   AreaChart,
   Area,
@@ -25,6 +27,7 @@ import {
   formatAxisWeek,
   dateToIsoWeek,
 } from '@/lib/isoWeek'
+import { ChartEmptyState } from './ChartEmptyState'
 import type { SessionDoc, BookingDoc, WeeklyReport } from '@/hooks/useDashboardData'
 
 const SOURCE_OPTIONS = [
@@ -214,6 +217,7 @@ export function BookingsTrendCard({
   comparisonNewContactBookings = [],
   title,
 }: Props) {
+  const td = useTranslations('Dashboard')
   const [source, setSource] = useState('checkins')
   const selectedOption = SOURCE_OPTIONS.find((o) => o.value === source)!
   const comparisonOffset = compareWith === 'last_year' ? 52 : trendsWeeks
@@ -291,9 +295,11 @@ export function BookingsTrendCard({
       </CardHeader>
       <CardContent className="flex-1 flex flex-col pb-4 pt-3">
         {!hasData ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">No data for this period</p>
-          </div>
+          <ChartEmptyState
+            icon={CalendarDays}
+            title={td('chartEmptyTitle')}
+            hint={td('chartEmptySessions')}
+          />
         ) : (
           <div className="mt-auto">
             <ResponsiveContainer width="100%" height={220}>

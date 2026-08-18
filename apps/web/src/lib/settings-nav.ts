@@ -52,6 +52,17 @@ export interface SettingsNavItem {
 // legacy paths (/team/settings, /billing, …) resolve via redirect stubs.
 export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // Scheduling — how sessions and bookings work.
+  //
+  // TWO ROWS, AND IT STAYS A GROUP (UX-67 follow-up). Places leaving for
+  // /schedule/places left this at two, which invites folding it into Studio;
+  // that is the wrong trade. Studio is already the long group (eight rows, and
+  // it is where every "where do I configure X?" hunt ends up), so merging makes
+  // the one list that is actually hard to scan longer in order to spare a
+  // two-row one nobody has to scan at all. The label is also the word a studio
+  // arrives with — someone looking for the booking window looks for
+  // "Scheduling", not for "Studio" — so the group is doing search work, not
+  // just visual grouping. Revisit if it drops to one row: a group of one is a
+  // header with nothing to head.
   { id: 'eventTypes', href: '/settings/event-types', labelKey: 'eventTypes', icon: CalendarRange, group: 'scheduling' },
   // Places is NOT here any more: it moved to /schedule/places, beside the calendar
   // that reads it, and is listed in the main nav's Run section (UX-67). It is not
