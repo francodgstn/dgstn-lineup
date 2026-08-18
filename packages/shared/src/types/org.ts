@@ -12,6 +12,20 @@ export interface Organization {
   description?: string
   plan: 'organization'
   plan_status: SaasStatus
+  /** When the org's trial ends (ORG_TRIAL_DAYS from creation). READ, never
+   *  recomputed, by handleTrialLifecycle's org phase — editing this field is how
+   *  a Linyup operator extends a hand-onboarded customer's trial. */
+  trial_ends_at?: Timestamp
+  /** Set when the org trial lapsed and the org was moved off the tier
+   *  (lapseOrganization). Nothing reads it as state — the status does that; it
+   *  is the "when" for support. */
+  downgraded_from_trial_at?: Timestamp
+  /** Operational flags — same meaning and same exemption as `Team.flags`: an
+   *  internal or pilot organisation is never auto-lapsed by the trial sweep. */
+  flags?: {
+    internal?: boolean
+    pilot?: boolean
+  }
   stripe_customer_id?: string
   // Ranking systems shared across all teams in the org.
   // When set, overrides individual team ranking_systems for all linked teams.
@@ -46,6 +60,12 @@ export interface OrgTeam {
   status: OrgTeamStatus
   joined: Timestamp
   addedBy: string
+  removed_at?: Timestamp
+  /** Why the link ended. Absent = an org admin removed the team by hand
+   *  (removeTeamFromOrg). 'org_lapsed' = the organisation stopped paying and
+   *  the studio was dropped to Free by lapseOrganization — the org admin's
+   *  access to that studio's data ended with it. */
+  removed_reason?: 'org_lapsed'
 }
 
 export type TeamAccessType = 'view' | 'manage'

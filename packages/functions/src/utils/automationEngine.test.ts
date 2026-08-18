@@ -8,7 +8,13 @@
 //   4. resolveContactEvents (exported via test helper) — delta diff logic
 
 import assert from 'node:assert/strict'
-import { evaluateContactConditions, type ContactData } from './automationEngine'
+import {
+  evaluateContactConditions,
+  recordRecipient,
+  RECIPIENT_ID_CAP,
+  type ContactData,
+  type RuleStats,
+} from './automationEngine'
 
 // ---------------------------------------------------------------------------
 // Helpers replicating the pure logic from onContactWrite — we duplicate them
@@ -329,5 +335,43 @@ describe('resolveContactEvents — subscription delta', () => {
     const after = { acquisition_stage: 'trial_booked', subscription_type_id: 'sub-A' }
     const events = resolveContactEvents(before, after)
     assert.equal(events.filter((e) => e.triggerType.startsWith('subscription')).length, 0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// recordRecipient — the run log's "who got it" (decision 14 / UX-48)
+// ---------------------------------------------------------------------------
+
+function freshStats(): RuleStats {
+  return { processed: 0, sent: 0, skipped: 0, errors: 0, recipients: new Set<string>() }
+}
+
+describe('recordRecipient', () => {
+  it('records a contact id', () => {
+    const stats = freshStats()
+    recordRecipient(stats, 'c1')
+    assert.deepEqual([...stats.recipients], ['c1'])
+  })
+
+  it('ignores an empty id — a booking without a contact document is not a recipient', () => {
+    const stats = freshStats()
+    recordRecipient(stats, '')
+    recordRecipient(stats, undefined)
+    assert.equal(stats.recipients.size, 0)
+  })
+
+  it('dedupes — one contact reached twice in a run is one recipient', () => {
+    const stats = freshStats()
+    recordRecipient(stats, 'c1')
+    recordRecipient(stats, 'c1')
+    assert.equal(stats.recipients.size, 1)
+  })
+
+  it('keeps an EXACT total past the cap, so the log can say "50 of 400"', () => {
+    const stats = freshStats()
+    for (let i = 0; i < 400; i++) recordRecipient(stats, `c${i}`)
+    assert.equal(stats.recipients.size, 400)
+    // The cap applies where the log row is built, never to the tally.
+    assert.equal([...stats.recipients].slice(0, RECIPIENT_ID_CAP).length, 50)
   })
 })

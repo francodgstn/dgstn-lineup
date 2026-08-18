@@ -28,6 +28,24 @@
  *         (Premium/Elite only — e.g. contact 2, Premium annual)
  *       • "Strength & Conditioning for Fighters" → draft
  *     Published courses also get a courses/{id}/public_profile/{id} summary.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * PRICED SURFACES need a Stripe TEST connected account.
+ *
+ *   `TeamPublicProfile.payments_enabled` fails CLOSED (UX-33), so a seed with no
+ *   connected account behind it shows NO shop, NO drop-in price, NO priced trial
+ *   and NO priced appointment duration. That is the honest state, not a bug, and
+ *   it is what you get out of the box.
+ *
+ *   To get priced doors (and a checkout that actually completes), export an
+ *   already-onboarded Stripe TEST account id before seeding:
+ *
+ *     export STRIPE_CONNECT_TEST_ACCOUNT=acct_123        # → seed-team-studio
+ *     export STRIPE_CONNECT_TEST_ACCOUNT=acct_123,acct_456   # → studio, then org
+ *
+ *   ONE account backs exactly ONE team (see scripts/lib/connect.ts for why, and
+ *   for the one-time onboarding walk-through). Unset ⇒ silent skip: no error, one
+ *   warning line at the end of the run.
  */
 
 // emulator env vars must be set BEFORE admin.initializeApp().
@@ -69,6 +87,11 @@ import {
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import {
+  planSeedConnectAccounts,
+  linkSeedConnectAccount,
+  reportSeedConnectAccounts,
+} from './lib/connect'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -1896,6 +1919,13 @@ async function seedTeam(opts: {
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
+
+  // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
+  // Links a REAL onboarded test account when STRIPE_CONNECT_TEST_ACCOUNT names
+  // one for this team; silently leaves the team payment-less otherwise. Last,
+  // so it merges onto the public_profile written above rather than being
+  // overwritten by it. See scripts/lib/connect.ts for the one-time setup.
+  await linkSeedConnectAccount({ db, teamId })
 }
 
 // ── kiosk seed ──────────────────────────────────────────────────────────────────
@@ -2964,6 +2994,7 @@ async function main() {
   console.log(
     `   ${'free'.padEnd(16)} →  http://localhost:3000/public/sunrise-yoga-studio  (shows "Powered by Linyup")`
   )
+  reportSeedConnectAccounts()
   console.log('')
 }
 

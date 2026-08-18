@@ -678,6 +678,37 @@ Isolated datasets, never mixed:
 
 `snapshots/` is gitignored. Bootstrap each snapshot once — see `scripts/MIGRATE-HMD.md` for the HMD snapshot and the inline docs in `scripts/emulators-demo.mjs` for the demo snapshot.
 
+### Seeded tenants show priced doors ONLY with a Stripe test account
+
+`TeamPublicProfile.payments_enabled` **fails closed** (UX-33): a studio with no
+chargeable Connect account shows **no shop, no drop-in price, no priced trial and
+no priced appointment duration**. A seed must never fake `connectStatus:
+'enabled'` — that puts a Pay button in front of a prospect that dies with
+`failed-precondition` at the callable, which is the exact defect UX-33 removed.
+
+So the seeders (`seed-emulator.ts`, `seed-sandbox.ts`, `seed-lead.ts`) link a
+**real Stripe TEST connected account** when `STRIPE_CONNECT_TEST_ACCOUNT` names
+one, and write nothing at all when it is unset — CI and a fresh clone keep the
+honest closed state, with one warning line and no error.
+
+**ONE account backs exactly ONE team.** `connect_accounts/{acct}.teamId` is the
+only account → team map the Connect webhook has, so pointing one acct at a second
+team steals the routing from the first. The env var therefore takes a *list*, and
+teams past the end of it stay closed:
+
+```
+export STRIPE_CONNECT_TEST_ACCOUNT=acct_123                    # highest-priority team
+export STRIPE_CONNECT_TEST_ACCOUNT="acct_123,acct_456"         # two teams
+export STRIPE_CONNECT_TEST_ACCOUNT="seed-team-org=acct_123"    # pin one team
+```
+
+One-time setup (onboard once, re-attach forever) and the per-seeder priority
+order are documented in `scripts/lib/connect.ts`; `pnpm connect:test-account
+--list` prints the acct ids on your Stripe test platform, and
+`pnpm connect:test-account --team <id> --account acct_…` re-attaches one to an
+already-seeded team. **Staging is deliberately NOT wired** — see
+`scripts/seed-staging.ts`.
+
 ### Lead demo tenants
 
 Prospective-customer sandboxes (real public business data + synthetic contacts),

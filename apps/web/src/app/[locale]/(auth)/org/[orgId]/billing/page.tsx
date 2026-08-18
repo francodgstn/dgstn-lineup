@@ -219,6 +219,7 @@ export default function OrgBillingPage() {
                   {status === 'trial' ? t('statusTrial')
                     : status === 'active' ? t('statusActive')
                     : status === 'past_due' ? t('statusPastDue')
+                    : status === 'expired' ? t('statusExpired')
                     : t('statusCancelled')}
                 </Badge>
                 {isCancelling && (
@@ -253,6 +254,17 @@ export default function OrgBillingPage() {
                   two org owners must not read two different sentences about the
                   same Stripe field. */}
               <SubscriptionCancellationNote subscription={subscription} audience="self" />
+
+              {/* Trial ended (handleTrialLifecycle phase 2). The studios this
+                  organisation was paying for are on Free and unlinked — say so,
+                  because the org's Studios tab is now empty and nothing else on
+                  this page would explain why. */}
+              {status === 'expired' && (
+                <div className="rounded-md bg-muted px-3 py-2.5 flex items-start gap-2 text-sm text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  {t('expiredNotice')}
+                </div>
+              )}
 
               {/* Past due warning */}
               {status === 'past_due' && (

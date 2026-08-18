@@ -74,6 +74,13 @@ export interface ActivePublicSurfaces {
   // account, kill-switch up) — every shop item, membership / product / course /
   // gift card alike, is bought through Connect. The plugins decide what is on
   // the shelves; this decides whether there is a till (UX-33).
+  //
+  // IT IS NOT THE ROUTING ANSWER, and this is the one flag here where the two
+  // differ: without a till the shop route renders a READ-ONLY PRICE LIST, so it
+  // is still a destination. Anything asking "may I link there?" reads it
+  // through `routableSurfaces` (publicRoutes.ts), which is the only place that
+  // correction is made; anything asking "can this studio be paid?" should read
+  // `TeamPublicProfile.payments_enabled` directly.
   shop?: boolean
   // ≥1 published Custom Form exists (custom-forms plugin active). Optional — forms
   // are reached via their own /public/{slug}/forms/{slug} URLs, not a default

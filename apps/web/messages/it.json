@@ -205,7 +205,8 @@
     "surfaceDocuments": "Documenti",
     "documentsDesc": "Documenti pubblici come liberatorie, termini e informative.",
     "surfaceKiosk": "Kiosk",
-    "kioskDesc": "Uno schermo di check-in su tablet per la reception – membri e walk-in si registrano sul posto."
+    "kioskDesc": "Uno schermo di check-in su tablet per la reception – membri e walk-in si registrano sul posto.",
+    "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -2662,7 +2663,9 @@
     "reactivate": "Riprendi abbonamento",
     "checkoutSuccess": "Abbonamento attivo — benvenuto.",
     "pastDueWarning": "L'ultimo pagamento non è andato a buon fine. Aggiorna il metodo di pagamento per mantenere attiva l'organizzazione.",
-    "updatePayment": "Aggiorna metodo di pagamento"
+    "updatePayment": "Aggiorna metodo di pagamento",
+    "statusExpired": "Prova terminata",
+    "expiredNotice": "La prova è terminata. Gli studi fatturati tramite questa organizzazione sono passati al piano Free e sono stati scollegati. Abbonati per riaprire l'organizzazione, poi invitali di nuovo."
   },
   "OrgSettings": {
     "title": "Impostazioni",
@@ -3683,7 +3686,12 @@
     "giftCardBuyerEmailHelp": "Invieremo qui il codice e la tua conferma.",
     "giftCardBuyerEmailInvalid": "Inserisci un indirizzo email valido.",
     "giftCardGuestNote": "Non serve un account.",
-    "paymentsUnavailable": "Questo studio al momento non accetta pagamenti online. Contattalo direttamente."
+    "paymentsUnavailable": "Questo studio al momento non accetta pagamenti online. Contattalo direttamente.",
+    "priceListEmpty": "Questo studio non ha ancora pubblicato prezzi.",
+    "contactEmail": "Email",
+    "contactPhone": "Chiama",
+    "contactWhatsApp": "WhatsApp",
+    "contactDirections": "Come arrivare"
   },
   "Products": {
     "title": "Prodotti",
@@ -5348,7 +5356,11 @@
       "tier_event": "All'evento",
       "tier_delayed": "Ritardata",
       "tier_scheduled": "Pianificata",
-      "tier_manual": "Manuale"
+      "tier_manual": "Manuale",
+      "recipientsCount": "{count, plural, one {# persona raggiunta} other {# persone raggiunte}}",
+      "recipientsTruncated": "Vengono mostrati i primi {shown} su {total}.",
+      "recipientsGone": "{count, plural, one {# destinatario non è più tra i tuoi contatti} other {# destinatari non sono più tra i tuoi contatti}}",
+      "recipientsNotRecorded": "Per questa esecuzione non sono stati registrati destinatari."
     }
   },
   "SettingsEmails": {

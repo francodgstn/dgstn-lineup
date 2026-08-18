@@ -21,8 +21,9 @@
  *
  *   # Also wire "pay with Linyup" (Stripe Connect) for the seeded team — pass an
  *   # already-onboarded Stripe TEST account (acct_…). Precedence: --connect flag >
- *   # STRIPE_CONNECT_TEST_ACCOUNT env > profile.stripeConnectTestAccount. Grab an
- *   # acct id with `pnpm connect:test-account --list`. Survives reseeds:
+ *   # profile.stripeConnectTestAccount > STRIPE_CONNECT_TEST_ACCOUNT env. Grab an
+ *   # acct id with `pnpm connect:test-account --list`. Survives reseeds. Without
+ *   # any of the three the tenant shows NO priced doors (see scripts/lib/connect.ts):
  *   pnpm lead:seed --lead swimli --target emulator --connect acct_123
  *
  *   # ...or set the hosts yourself (an already-set host wins over --target):
@@ -69,7 +70,11 @@ import {
 } from './lib/affiliations'
 import { buildStorefrontPageLinks } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
-import { linkConnectAccount } from './lib/connect'
+import {
+  planSeedConnectAccounts,
+  linkSeedConnectAccount,
+  reportSeedConnectAccounts,
+} from './lib/connect'
 import { requireConsentExport } from './lib/exportConsentLedger'
 import {
   appointmentOccurrences,
@@ -895,17 +900,14 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // Stripe Connect — wire a TEST connected account so "pay with Linyup" works out
-  // of the box (survives reseeds). Source: --connect flag > env > profile field.
-  // MUST run after the full team set() above, since it merge-adds teams/{id}.payments.
-  const connectAccount = cli.connect ?? process.env.STRIPE_CONNECT_TEST_ACCOUNT ?? profile.stripeConnectTestAccount
-  if (connectAccount) {
-    if (!connectAccount.startsWith('acct_')) {
-      console.warn(`   ⚠️  Ignoring Connect account '${connectAccount}' — expected an acct_… id.`)
-    } else {
-      await linkConnectAccount({ db, teamId, accountId: connectAccount })
-      console.log(`   💳 Wired Stripe Connect (${connectAccount}) — "pay with Linyup" ready.`)
-    }
-  }
+  // of the box (survives reseeds). Source: --connect flag > profile field > the
+  // STRIPE_CONNECT_TEST_ACCOUNT env var; nothing at all => the tenant keeps the
+  // honest closed state (no shop, no prices) and the summary says so. The write
+  // itself happens at the END of this function, after the public_profile set()
+  // below — see linkSeedConnectAccount.
+  planSeedConnectAccounts([teamId], {
+    pinned: { [teamId]: cli.connect ?? profile.stripeConnectTestAccount },
+  })
 
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
   // would produce). price.id must equal the raw subscription_types price id or the
@@ -2215,6 +2217,11 @@ async function seedLeadTenant(profile: LeadProfile) {
       ? { name: `${pool[demoIdx].firstname} ${pool[demoIdx].lastname}`.trim(), emails: demoLoginEmails }
       : null
 
+  // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
+  // Planned above; written here so it merges onto the team public_profile rather
+  // than being overwritten by it. Silent no-op when no account is configured.
+  await linkSeedConnectAccount({ db, teamId })
+
   return { teamId, studentEmail, sessionCount: sessionDefs.length, demoContact }
 }
 
@@ -2894,6 +2901,7 @@ async function main() {
   console.log(
     `\n   Public surfaces: /public/${profile.slug} (bio-link · site · booking · shop · space · appointments)`
   )
+  reportSeedConnectAccounts()
   if (profile.notes?.length) {
     console.log('\n   ⚠ Notes:')
     for (const n of profile.notes) console.log(`     · ${n}`)

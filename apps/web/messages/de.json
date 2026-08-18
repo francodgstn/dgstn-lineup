@@ -205,7 +205,8 @@
     "surfaceDocuments": "Dokumente",
     "documentsDesc": "Öffentliche Dokumente wie Verzichtserklärungen, AGB und Richtlinien.",
     "surfaceKiosk": "Kiosk",
-    "kioskDesc": "Ein Tablet-Check-in für deinen Empfang – Mitglieder und Walk-ins melden sich direkt vor Ort an."
+    "kioskDesc": "Ein Tablet-Check-in für deinen Empfang – Mitglieder und Walk-ins melden sich direkt vor Ort an.",
+    "shopDescPriceList": "Zeigt deine Preise. Online-Zahlungen sind aus, daher werden Besucher gebeten, dich zu kontaktieren."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -2662,7 +2663,9 @@
     "reactivate": "Abo fortsetzen",
     "checkoutSuccess": "Abo aktiv — willkommen an Bord.",
     "pastDueWarning": "Die letzte Zahlung ist fehlgeschlagen. Aktualisiere die Zahlungsmethode, damit die Organisation aktiv bleibt.",
-    "updatePayment": "Zahlungsmethode aktualisieren"
+    "updatePayment": "Zahlungsmethode aktualisieren",
+    "statusExpired": "Testphase beendet",
+    "expiredNotice": "Die Testphase ist beendet. Die über diese Organisation abgerechneten Studios wurden auf den Free-Plan gesetzt und von ihr getrennt. Abonnieren Sie, um die Organisation wieder zu öffnen, und laden Sie die Studios anschliessend erneut ein."
   },
   "OrgSettings": {
     "title": "Einstellungen",
@@ -3683,7 +3686,12 @@
     "giftCardBuyerEmailHelp": "Wir senden den Code und deine Bestätigung hierhin.",
     "giftCardBuyerEmailInvalid": "Bitte gib eine gültige E-Mail-Adresse ein.",
     "giftCardGuestNote": "Kein Konto erforderlich.",
-    "paymentsUnavailable": "Dieses Studio akzeptiert derzeit keine Online-Zahlungen. Bitte wende dich direkt an das Studio."
+    "paymentsUnavailable": "Dieses Studio akzeptiert derzeit keine Online-Zahlungen. Bitte wende dich direkt an das Studio.",
+    "priceListEmpty": "Dieses Studio hat noch keine Preise veröffentlicht.",
+    "contactEmail": "E-Mail",
+    "contactPhone": "Anrufen",
+    "contactWhatsApp": "WhatsApp",
+    "contactDirections": "Anfahrt"
   },
   "Products": {
     "title": "Produkte",
@@ -5348,7 +5356,11 @@
       "tier_event": "Bei Ereignis",
       "tier_delayed": "Verzögert",
       "tier_scheduled": "Geplant",
-      "tier_manual": "Manuell"
+      "tier_manual": "Manuell",
+      "recipientsCount": "{count, plural, one {# Person erreicht} other {# Personen erreicht}}",
+      "recipientsTruncated": "Es werden die ersten {shown} von {total} angezeigt.",
+      "recipientsGone": "{count, plural, one {# Empfänger ist nicht mehr in deinen Kontakten} other {# Empfänger sind nicht mehr in deinen Kontakten}}",
+      "recipientsNotRecorded": "Für diesen Lauf wurden keine Empfänger erfasst."
     }
   },
   "SettingsEmails": {

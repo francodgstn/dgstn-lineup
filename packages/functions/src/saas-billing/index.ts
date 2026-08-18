@@ -6,7 +6,8 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { getSecret } from '../utils/secrets'
 import { hasTeamRole } from '../utils/teams'
 import { getHostingUrl } from '../utils/env'
-import { unpublishSiteForTeam, deleteAllCoursePublicProfiles } from '../utils/plugins'
+import { downgradeTeamToFree } from './downgrade'
+import { lapseOrganization } from '../orgs/lifecycle'
 import { StripeAdapter } from '../utils/gateway/stripe'
 import {
   getPlatformStripeAdapter,
@@ -21,7 +22,9 @@ import {
   PLUGIN_ADDONS,
   pluginIdForAddonLookupKey,
   TEAMS_COLLECTION,
+  ORGANIZATIONS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
+  PLAN_PRICING,
   TENANT_DATA_COLLECTIONS,
   TENANT_TEAM_DOC_COLLECTION,
   tenantStoragePrefix,
@@ -344,15 +347,28 @@ export const handleStripeWebhook = onRequest({ invoker: 'public' }, async (req, 
       entityUpdate.purge_at = FieldValue.delete()
     }
 
-    // A cancelled team subscription lands the team on the Free plan (the sub
-    // doc keeps status 'cancelled' for billing history). Orgs keep the
-    // legacy mirror + propagation below.
+    // A cancelled subscription lands the payer on what it now pays for, and the
+    // TWO TIERS FOLLOW THE SAME RULE (UX-10) — a team lands on Free; an
+    // organisation winds down through `lapseOrganization`, which puts each of
+    // its studios on Free through this very same `downgradeTeamToFree`.
+    //
+    // `past_due` deliberately does NOT tear anything down, on either tier. It is
+    // Stripe's dunning window — a card that failed on the first retry and
+    // recovers two days later — and the teardown is partly ONE-WAY (course
+    // public_profile mirrors are deleted and nothing rewrites them on
+    // re-activation, UX-16). A team on past_due keeps its plan and its installs
+    // and is refused server-side by `requirePlan` ('plan_inactive'); an org now
+    // does exactly the same, propagating the status to its studios and nothing
+    // more. If that answer is wrong it is wrong for both tiers — change it in
+    // one place, not here alone.
     if (entityType === 'team' && update.status === 'cancelled') {
       await downgradeTeamToFree(entityId, { fromTrial: false })
     } else if (entityType === 'org') {
       await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
-      // When org subscription lapses, propagate to linked teams
-      if (update.status === 'cancelled' || update.status === 'past_due') {
+      if (update.status === 'cancelled') {
+        await lapseOrganization(entityId, { reason: 'subscription_cancelled' })
+      } else if (update.status === 'past_due') {
+        // Propagate the status to linked studios so their own gates refuse.
         const orgTeamsSnap = await admin
           .firestore()
           .collection('organizations')
@@ -640,53 +656,11 @@ export const deactivatePluginAddon = onCall(async (request) => {
 // scheduled job. The old wall + 90-day purge are retired.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Move a team onto the Free plan (trial lapsed or paid subscription cancelled).
- * Clears the legacy wall/purge markers and deactivates plugin installs — Free
- * has no plugin access; install config is preserved so a later upgrade can
- * reactivate without losing settings.
- */
-async function downgradeTeamToFree(teamId: string, opts: { fromTrial: boolean }): Promise<void> {
-  const db = admin.firestore()
-  const update: Record<string, unknown> = {
-    plan: 'free',
-    plan_status: 'active',
-    suspended_at: FieldValue.delete(),
-    purge_at: FieldValue.delete(),
-    updated_at: FieldValue.serverTimestamp(),
-  }
-  if (opts.fromTrial) update.downgraded_from_trial_at = FieldValue.serverTimestamp()
-  await db.collection(TEAMS_COLLECTION).doc(teamId).update(update)
-
-  const installs = await db
-    .collection(TEAMS_COLLECTION)
-    .doc(teamId)
-    .collection(INSTALLED_PLUGINS_SUBCOLLECTION)
-    .where('status', '==', 'active')
-    .get()
-
-  const activePluginIds = installs.docs.map((d) => d.id)
-
-  for (const d of installs.docs) {
-    await d.ref.set(
-      { status: 'inactive', updated_at: FieldValue.serverTimestamp() },
-      { merge: true }
-    )
-  }
-
-  // Tear down plugin-specific public artefacts that would otherwise remain
-  // visible after a downgrade (the plugin-status trigger only fires on
-  // installed_plugins writes; it runs in parallel with this path so we also
-  // tear down here to guarantee the artefacts are removed synchronously).
-  const teardowns: Promise<void>[] = []
-  if (activePluginIds.includes('website')) {
-    teardowns.push(unpublishSiteForTeam(teamId))
-  }
-  if (activePluginIds.includes('online-courses')) {
-    teardowns.push(deleteAllCoursePublicProfiles(teamId))
-  }
-  await Promise.all(teardowns)
-}
+// `downgradeTeamToFree` — THE one writer — now lives in ./downgrade.ts, imported
+// above. It moved out of this file so `orgs/lifecycle.ts` can call the SAME
+// function for every studio a lapsed organisation was paying for, without
+// importing a module whose top level registers every billing function. There is
+// one downgrade path for both tiers; do not write a second one.
 
 /**
  * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
@@ -793,7 +767,8 @@ async function sendTrialExpiredEmail(
     title: 'Your Linyup trial has ended',
     body:
       `Your free trial of <strong>${team.name ?? 'Linyup'}</strong> has ended, and your ` +
-      `account is now on the <strong>Free plan</strong> — up to 10 active contacts, single user. ` +
+      `account is now on the <strong>Free plan</strong> — up to ` +
+      `${PLAN_PRICING.free.includedContacts} active contacts, single user. ` +
       `All your data is kept and everything keeps working within those limits. ` +
       `Upgrade any time to lift them.<br><br><a href="${billingUrl}">See plans &amp; upgrade</a>`,
   })
@@ -848,6 +823,41 @@ export const handleTrialLifecycle = onSchedule(
         console.log(`[trial] downgraded lapsed trial ${teamId} to free`)
       } catch (err) {
         console.error(`[trial] downgrade failed ${teamId}:`, err)
+      }
+    }
+
+    // Phase 2 — lapsed ORGANISATION trials (UX-9).
+    //
+    // This sweep reads `organizations`, and it has to: phase 1 above cannot see
+    // an org's trial, and it is forbidden from touching an org's studios (UX-35),
+    // so before this block existed NOTHING ended an org trial. An unpaid
+    // organisation — and every studio it billed — sat on the top tier forever.
+    //
+    // Same shape as phase 1, same exemptions, and the deadline is READ from the
+    // document rather than derived from `created`: extending a hand-onboarded
+    // customer's trial is editing `trial_ends_at`, and `flags.internal` /
+    // `flags.pilot` opt an org out of the sweep altogether.
+    const expiringOrgs = await db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .where('plan_status', '==', 'trial')
+      .where('trial_ends_at', '<=', nowTs)
+      .limit(200)
+      .get()
+    for (const doc of expiringOrgs.docs) {
+      const orgId = doc.id
+      const flags = doc.data().flags as { internal?: boolean; pilot?: boolean } | undefined
+      if (flags?.internal || flags?.pilot) {
+        console.log(`[trial] skipped ${flags.internal ? 'internal' : 'pilot'} org ${orgId}`)
+        continue
+      }
+      try {
+        // The ONE org wind-down: org installs off, org site unpublished, every
+        // member studio moved to Free through `downgradeTeamToFree` and unlinked.
+        // Idempotent and resumable — see orgs/lifecycle.ts.
+        await lapseOrganization(orgId, { reason: 'trial_lapsed' })
+        console.log(`[trial] lapsed org trial ${orgId}`)
+      } catch (err) {
+        console.error(`[trial] org lapse failed ${orgId}:`, err)
       }
     }
 

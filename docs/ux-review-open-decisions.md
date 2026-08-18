@@ -122,13 +122,30 @@ every checkout still refuses server-side, so this changes what a page *shows*, n
 what it can *take*. Tightening the rule would break the bio-link settings editor.
 
 ## 14. Should automation run history name recipients? (UX-48)
-**PARKED — schema decision.** `AutomationLogData` records COUNTS only
-(`contacts_matched`, `actions_executed`, `actions_failed`), so "to whom" is not
-recordable today. The dialog says so plainly rather than implying a roster it does
-not have. Adding it means a capped recipient array on the log, which is three
-questions at once: how many ids, what retention, and whether PII belongs in a log
-any manager can read. *Meanwhile:* the dialog points at Preview, which answers
-"who matches right now".
+**DECIDED AND BUILT — a capped list of contact IDS.** `AutomationLogData` now
+carries `recipient_ids` (≤ `RECIPIENT_ID_CAP` = 50) plus an exact
+`recipients_total`, written on the same row as the counts by `runRule` — the one
+function all four log writers go through, so there is no second write to keep in
+step. The three questions, answered:
+
+- **How many** — 50. A sample, never presented as the whole: when the total
+  exceeds the stored list the dialog leads with "Showing the first 50 of 400".
+- **Retention** — the log row's; nothing new expires or is swept.
+- **PII** — ids only. Names are resolved at READ time from the roster the app
+  already caches (plus a per-row lookup for anyone archived since the run), so
+  the log holds no frozen copy of contact data outside the contact. A recipient
+  deleted since resolves to nothing and is counted as such.
+
+**Which contacts:** the ones an action actually RAN FOR (`executed > 0`), not
+everyone who matched — the studio's question is "who got the mail". Recorded at
+the same seam that stamps `outreach_rules_sent`, so "reached" means one thing.
+
+Rows written before this carry no `recipient_ids` at all, and the dialog
+distinguishes that from an empty array: "not recorded" and "reached nobody" are
+different sentences. No index was needed (a new field on an existing document;
+the `idempotency_key` guard query is untouched). The `history.recipientsNote`
+message key is now orphaned — the copy it held was the "we do not record
+recipients" sentence, which is no longer true.
 
 ## 15. Two indexes must deploy BEFORE the code that queries them
 **ACTION, not a decision — carried into the sandbox tag annotation.**

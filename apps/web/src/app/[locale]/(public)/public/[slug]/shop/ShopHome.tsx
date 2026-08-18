@@ -2,8 +2,21 @@
 
 // Public self-checkout ("shop"): lists what a studio sells — memberships (public
 // subscription types), products (merch/equipment) AND online courses (one-off
-// purchase) — and lets a member pay via Stripe Connect. Branded with the team's
-// bio-link palette. Login-first: a purchase runs as a verified contact of the team,
+// purchase) — and lets a member pay via Stripe Connect.
+//
+// …OR, for a studio whose Connect account cannot be charged, THE SAME PAGE AS A
+// READ-ONLY PRICE LIST: the shelves, the prices, and no way to pay. UX-33
+// removed the buy buttons by removing the whole surface, which also removed the
+// only public place a visitor could see what a membership costs; a studio that
+// takes cash at the desk is a normal business, not a broken one. `priceListMode`
+// below is the switch, and the rule it enforces is that NOTHING MAY LOOK
+// PAYABLE — a control that cannot complete is not rendered at all, never
+// rendered disabled. (The server never depended on any of this:
+// `requireChargeableAccount` refuses every checkout callable regardless.)
+//
+// Branded with the team's bio-link palette.
+//
+// Login-first: a purchase runs as a verified contact of the team,
 // because what it grants (membership fields, a course entitlement, credits) has to
 // attach to a person. Gift cards are the exception — the entitlement is a code, so a
 // guest buys with nothing but an address. The surfaces are separated behind a tab
@@ -39,6 +52,7 @@ import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryErr
 import { publicHref, publicSubHref } from '@/lib/publicRoutes'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
+import PriceListNotice from './PriceListNotice'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
 import { PublicStudioTermsLink } from '../PublicStudioTermsLink'
 import { DEFAULT_ACCENT } from '@/lib/colors'
@@ -413,19 +427,31 @@ export default function ShopHome({
     return () => mq.removeEventListener('change', handler)
   }, [team?.bioLinkTheme])
 
-  // Can this studio BE PAID? Everything on this page — memberships, products,
-  // courses, gift cards — is bought through Stripe Connect, so with no
-  // chargeable account there is nothing here anyone could complete. The surface
-  // is normally already hidden (active_public_surfaces.shop is computed from the
-  // same fact), but the URL is guessable and the mirror can lag a sync, so the
-  // page says so itself rather than rendering a wall of buttons that every
-  // callable would refuse (UX-33). Absent ⇒ closed: fail in the safe direction.
+  // Can this studio BE PAID? Everything BOUGHT on this page — memberships,
+  // products, courses, gift cards — goes through Stripe Connect, so with no
+  // chargeable account there is no purchase here anyone could complete (UX-33).
+  // Absent ⇒ closed: fail in the safe direction, and note that this is a
+  // DISPLAY fact only — `payments_enabled` is a client-writable mirror, and
+  // what actually stops a charge is `requireChargeableAccount` on every
+  // checkout callable.
   const paymentsEnabled = team.payments_enabled === true
+  // The whole page in one word. What follows from it is a PRICE LIST, not a
+  // hidden page: read it below wherever a control would take money (never
+  // rendered — see `startCheckout`) and wherever a price is merely stated
+  // (still rendered, which is the point). The surface itself stays reachable —
+  // `routableSurfaces` in @linyup/shared owns that half.
+  const priceListMode = !paymentsEnabled
 
   const hasSubscriptions = plans.length > 0
   const hasProducts = products.length > 0
   const hasCourses = courses.length > 0
-  const hasGiftCards = giftCardAmounts.length > 0
+  // GIFT CARDS ARE THE ONE SHELF WITH NOTHING TO BROWSE. A membership, a product
+  // and a course all exist off Stripe — the studio can sell them at the desk and
+  // the price list tells the visitor what they cost. A gift card IS the payment:
+  // there is no offline version of a prepaid balance to look at, and a "CHF 50
+  // gift card" card with no way to buy one states a price for a thing that
+  // cannot exist. So the tab is not offered at all without a till.
+  const hasGiftCards = giftCardAmounts.length > 0 && paymentsEnabled
   const catalogueIsEmpty = !hasSubscriptions && !hasProducts && !hasCourses && !hasGiftCards
   // The full-page error is reserved for the case where the CATALOGUE query is the
   // thing that failed — which, here, always means NOTHING loaded: the three reads
@@ -478,6 +504,13 @@ export default function ShopHome({
   // for the receipt.
   const startCheckout = useCallback(
     (c: Checkout) => {
+      // PRICE-LIST MODE: there is no checkout to start. Nothing on the page
+      // calls this (every buy control is unrendered rather than disabled), so
+      // this is the backstop for the two entries that do not come from a click
+      // on it — the `?course=` deep link from the Space, and the resume after
+      // sign-in. Both would otherwise collect an email and open a modal whose
+      // Pay button the callable refuses.
+      if (!paymentsEnabled) return
       if (isAuthenticated || c.kind === 'giftcard') {
         setCheckout(c)
         setError(null)
@@ -486,7 +519,7 @@ export default function ShopHome({
         openSignIn({ allowRegistration: true })
       }
     },
-    [isAuthenticated, openSignIn]
+    [isAuthenticated, openSignIn, paymentsEnabled]
   )
 
   // Deep-link from the Space "Buy" CTA (?course=): open that course's checkout once.
@@ -1074,8 +1107,21 @@ export default function ShopHome({
           </div>
         )}
 
+        {/* No till: the shelves, the prices, and how to reach the studio. Above
+            the tabs because it governs every one of them. */}
+        {priceListMode && !showCatalogueError && (
+          <PriceListNotice
+            team={team}
+            textMain={textMain}
+            textMuted={textMuted}
+            accent={accent}
+            cardBg={cardBg}
+            cardBorder={cardBorder}
+          />
+        )}
+
         {/* Memberships ⇄ Products ⇄ Courses toggle (only when 2+ surfaces exist) */}
-        {showTabs && paymentsEnabled && (
+        {showTabs && (
           <div
             className="mt-6 inline-flex rounded-full p-1"
             style={{ background: onDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}
@@ -1133,18 +1179,14 @@ export default function ShopHome({
             detail={loadFailureDetail(catalogueLoadError)}
             theme={{ textMain, textMuted, accent, border: cardBorder }}
           />
-        ) : !paymentsEnabled ? (
-          // Not "nothing for sale" and not an error — the shelves may be full,
-          // the till is not open. Say which, so the visitor contacts the studio
-          // instead of retrying a checkout that cannot succeed.
-          <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
-            {t('paymentsUnavailable')}
-          </p>
         ) : catalogueIsEmpty ? (
           // The catalogue loaded and is genuinely empty. True regardless of what
-          // else failed — the banner above carries that part.
+          // else failed — the banner above carries that part. Said differently
+          // without a till, where "nothing to buy" would be the wrong half of
+          // the truth: there is nothing to buy HERE either way, and what is
+          // missing is the studio's published prices.
           <p className="mt-10 text-center text-sm" style={{ color: textMuted }}>
-            {t('noItems')}
+            {priceListMode ? t('priceListEmpty') : t('noItems')}
           </p>
         ) : tab === 'subscriptions' ? (
           <section className="mt-6 space-y-4">
@@ -1208,22 +1250,27 @@ export default function ShopHome({
                           </p>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        disabled={!price.id}
-                        onClick={() =>
-                          openMembership(
-                            plan.id,
-                            plan.name,
-                            price,
-                            plan.checkout_contact_mode ?? 'minimal'
-                          )
-                        }
-                        className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-40"
-                        style={{ background: accent, color: '#ffffff' }}
-                      >
-                        {t('buy')}
-                      </button>
+                      {/* UNRENDERED, not disabled, when there is no till: a
+                          greyed-out Buy is a door that still looks like a door.
+                          The price beside it is the whole point of the page. */}
+                      {!priceListMode && (
+                        <button
+                          type="button"
+                          disabled={!price.id}
+                          onClick={() =>
+                            openMembership(
+                              plan.id,
+                              plan.name,
+                              price,
+                              plan.checkout_contact_mode ?? 'minimal'
+                            )
+                          }
+                          className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-40"
+                          style={{ background: accent, color: '#ffffff' }}
+                        >
+                          {t('buy')}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1234,7 +1281,14 @@ export default function ShopHome({
                 always happens in the booking flows). The cross-sell bridge back
                 from booking into a membership: benefit chips resolve plan names
                 from the aggregator already loaded above. */}
-            {payPerVisitActivities.length > 0 && (
+            {/* Dropped entirely without a till, and that is the SAME RULE the
+                website already follows: `sections.tsx` keeps membership prices
+                (terms the studio charges however it collects them) and hides
+                the per-visit drop-in / appointment amounts, because those are
+                doors rather than terms. Every row here is one of those doors —
+                a per-visit price plus a Book CTA that lands on a flow where
+                UX-33 has already suppressed the payable option. */}
+            {!priceListMode && payPerVisitActivities.length > 0 && (
               <div className="mt-2 pt-5 border-t" style={{ borderColor: cardBorder }}>
                 <h3 className="text-sm font-semibold">{t('payPerVisitHeading')}</h3>
                 <p className="mt-0.5 text-xs" style={{ color: textMuted }}>
@@ -1350,19 +1404,29 @@ export default function ShopHome({
                       )}
                       {formatCurrency(fromVariant, currency)}
                     </p>
+                    {/* ONE LINE on the card because the modal holds the rest —
+                        except when there is no modal to hold it. Without a till
+                        the card IS the last screen, and "how do I get it?" is
+                        exactly the question a buyer who must come in and pay
+                        needs answered, so the note is shown whole. */}
                     {collectionNote && (
-                      <p className="text-xs line-clamp-1" style={{ color: textMuted }}>
+                      <p
+                        className={`text-xs ${priceListMode ? '' : 'line-clamp-1'}`}
+                        style={{ color: textMuted }}
+                      >
                         {collectionNote}
                       </p>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => openProduct(product)}
-                      className="mt-2 w-full rounded-full px-4 py-2 text-sm font-semibold"
-                      style={{ background: accent, color: '#ffffff' }}
-                    >
-                      {t('buy')}
-                    </button>
+                    {!priceListMode && (
+                      <button
+                        type="button"
+                        onClick={() => openProduct(product)}
+                        className="mt-2 w-full rounded-full px-4 py-2 text-sm font-semibold"
+                        style={{ background: accent, color: '#ffffff' }}
+                      >
+                        {t('buy')}
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -1424,6 +1488,17 @@ export default function ShopHome({
                     ) : (
                       <p className="mt-1 mb-2 text-xs font-medium" style={{ color: textMuted }}>{badge}</p>
                     )}
+                    {/* A COURSE IS CONSUMED, NOT ONLY BOUGHT — which is why this
+                        tab loses less than the others without a till. Opening
+                        one (a free course, a course this contact already owns,
+                        a course their membership covers) is not a payment path
+                        and keeps working; so does signing in, which is how a
+                        member reaches their own. Only the two money controls go:
+                        Buy, and the "Get subscription" jump — the latter because
+                        the tab it jumps to now sells nothing, so its label would
+                        promise a purchase that is not there. The badge above
+                        still states the price or the tier, which is what a
+                        browsing visitor came for. */}
                     {access === 'open' ? (
                       <Link
                         href={`/public/${slug}/space/courses/${course.slug}?from=shop` as Route}
@@ -1433,16 +1508,18 @@ export default function ShopHome({
                         <Play className="h-3.5 w-3.5" />
                         {t('openCourse')}
                       </Link>
-                    ) : access === 'buy' ? (
-                      <button type="button" onClick={() => openCourse(course)} className={btn} style={{ background: accent, color: '#ffffff' }}>
-                        {t('buy')}
-                      </button>
                     ) : access === 'signin' ? (
                       <button type="button" onClick={() => openSignIn()} className={btn} style={{ background: accent, color: '#ffffff' }}>
                         <LogIn className="h-3.5 w-3.5" />
                         {t('signInToAccess')}
                       </button>
-                    ) : hasSubscriptions ? (
+                    ) : access === 'buy' ? (
+                      priceListMode ? null : (
+                        <button type="button" onClick={() => openCourse(course)} className={btn} style={{ background: accent, color: '#ffffff' }}>
+                          {t('buy')}
+                        </button>
+                      )
+                    ) : hasSubscriptions && !priceListMode ? (
                       <button
                         type="button"
                         onClick={() => { setTab('subscriptions'); setTabTouched(true) }}
@@ -1463,7 +1540,10 @@ export default function ShopHome({
               )
             })}
           </section>
-        ) : (
+        ) : hasGiftCards ? (
+          // `hasGiftCards` already folds in the till (see its definition), so
+          // this whole branch is unreachable in price-list mode — the tab that
+          // selects it is not offered either.
           <section className="mt-6 space-y-4">
             {!showTabs && (
               <h2
@@ -1494,7 +1574,7 @@ export default function ShopHome({
               ))}
             </div>
           </section>
-        )}
+        ) : null}
 
         {/* The studio's own terms — the till had no route to them at all
             (UX-57). Renders nothing for a studio that has published none. */}

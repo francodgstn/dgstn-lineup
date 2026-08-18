@@ -201,7 +201,13 @@ export default function PublicPageHub() {
         : <SetupLink href={pluginSetupHref('website')} label={t('setUp')} />,
     },
     {
-      key: 'shop', icon: ShoppingBag, title: t('surfaceShop'), desc: t('shopDesc'),
+      // The shop is always publishable, but it is TWO pages: a self-checkout
+      // where the studio can be paid, and a read-only price list where it
+      // cannot (visitors are told to get in touch). Say which one this studio
+      // has — the difference is invisible from here otherwise, and a studio
+      // that thinks it has a storefront would find out from a customer.
+      key: 'shop', icon: ShoppingBag, title: t('surfaceShop'),
+      desc: flags.paymentsEnabled ? t('shopDesc') : t('shopDescPriceList'),
       live: flags.shopLive, previewUrl: publicUrl('shop'),
       action: <ManageLink href={'/public-page/shop' as Route} label={t('manage')} />,
     },

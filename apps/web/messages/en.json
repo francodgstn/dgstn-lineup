@@ -205,7 +205,8 @@
     "surfaceDocuments": "Documents",
     "documentsDesc": "Public documents like waivers, terms and policies.",
     "surfaceKiosk": "Kiosk",
-    "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot."
+    "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot.",
+    "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -2662,7 +2663,9 @@
     "reactivate": "Resume subscription",
     "checkoutSuccess": "Subscription active — welcome aboard.",
     "pastDueWarning": "The last payment failed. Update the payment method to keep the organisation active.",
-    "updatePayment": "Update payment method"
+    "updatePayment": "Update payment method",
+    "statusExpired": "Trial ended",
+    "expiredNotice": "The trial has ended. The studios billed through this organisation moved to the Free plan and were unlinked from it. Subscribe to reopen the organisation, then invite them back."
   },
   "OrgSettings": {
     "title": "Settings",
@@ -3683,7 +3686,12 @@
     "giftCardBuyerEmailHelp": "We'll send the code and your receipt here.",
     "giftCardBuyerEmailInvalid": "Please enter a valid email address.",
     "giftCardGuestNote": "No account needed.",
-    "paymentsUnavailable": "This studio is not accepting online payments at the moment. Please get in touch with them directly."
+    "paymentsUnavailable": "This studio is not accepting online payments at the moment. Please get in touch with them directly.",
+    "priceListEmpty": "This studio hasn't published any prices yet.",
+    "contactEmail": "Email",
+    "contactPhone": "Call",
+    "contactWhatsApp": "WhatsApp",
+    "contactDirections": "Find us"
   },
   "Products": {
     "title": "Products",
@@ -5348,7 +5356,11 @@
       "tier_event": "On event",
       "tier_delayed": "Delayed",
       "tier_scheduled": "Scheduled",
-      "tier_manual": "Run now"
+      "tier_manual": "Run now",
+      "recipientsCount": "{count, plural, one {Reached # person} other {Reached # people}}",
+      "recipientsTruncated": "Showing the first {shown} of {total}.",
+      "recipientsGone": "{count, plural, one {# recipient is no longer in your contacts} other {# recipients are no longer in your contacts}}",
+      "recipientsNotRecorded": "Recipients weren't recorded for this run."
     }
   },
   "SettingsEmails": {

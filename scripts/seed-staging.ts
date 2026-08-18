@@ -14,6 +14,22 @@
  * from a clean slate, run `pnpm reset:staging` first.
  *
  * ──────────────────────────────────────────────────────────────────────────────
+ * NOT WIRED FOR STRIPE CONNECT — deliberately, and it is a separate decision.
+ *
+ * seed-emulator / seed-sandbox / seed-lead link a real Stripe TEST connected
+ * account when STRIPE_CONNECT_TEST_ACCOUNT names one, so their priced doors show
+ * (payments_enabled fails closed — UX-33). This script does NOT, because staging
+ * is a REAL deployed project with its own live Connect webhook endpoint on the
+ * same Stripe TEST platform: attaching a developer's shared test acct here moves
+ * `connect_accounts/{acct}.teamId` for staging AND leaves both endpoints
+ * receiving each other's `checkout.session.completed` events. Whether staging
+ * gets its own dedicated onboarded test account is a call to make with the
+ * staging Stripe configuration in front of you, not a seeding default.
+ *
+ * To wire a staging team by hand, on purpose:
+ *   pnpm connect:test-account --team <teamId> --account acct_… --target staging
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
  * What it creates — three SaaS plan tiers, all major features covered:
  *
  *   coach@linyup.com   / linyup123  →  plan: coach        (trial)

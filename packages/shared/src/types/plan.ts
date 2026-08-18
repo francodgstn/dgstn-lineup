@@ -12,6 +12,19 @@ export const TRIAL_DAYS = 30
 // When the trial lapses the team is downgraded to the Free plan (see
 // handleTrialLifecycle); there is no wall or data purge.
 
+// An ORGANISATION's trial (createOrganization). Separate constant, same length
+// today: the org tier is sales-led and its setup is operator-assisted, so the
+// number is expected to move independently of a self-service team's. It was 14
+// while nothing ended it at all — the sweep that ends it (handleTrialLifecycle,
+// phase 2) arrived with this constant.
+//
+// THE LENGTH IS A DEFAULT, NOT A COUNTDOWN. Both sweeps read the stored
+// `trial_ends_at` and never recompute it from `created`, so an operator
+// onboarding a customer by hand extends a trial by editing that one field.
+// `flags.internal` / `flags.pilot` on the entity exempt it from the sweep
+// entirely.
+export const ORG_TRIAL_DAYS = 30
+
 // Base subscription pricing per plan. Declarative source for scripts/stripe-sync.ts
 // (the whole Stripe catalogue — plans + add-ons — lives in the repo).
 // Amounts are INDICATIVE base prices in CHF/month; the authoritative amount is the

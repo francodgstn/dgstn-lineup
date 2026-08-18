@@ -30,6 +30,20 @@
  *
  * Idempotent: deterministic IDs + set(), so re-running overwrites. For a clean
  * slate against the real project, run `pnpm sandbox:reset` first.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * PRICED SURFACES need a Stripe TEST connected account. `payments_enabled` fails
+ * CLOSED (UX-33), so without one the /try tenants show no shop, no drop-in price,
+ * no priced trial and no priced appointment duration. Export an already-onboarded
+ * TEST account id before seeding to light them up (and get a checkout that really
+ * completes):
+ *
+ *   export STRIPE_CONNECT_TEST_ACCOUNT=acct_123               # → sandbox-grappling
+ *   export STRIPE_CONNECT_TEST_ACCOUNT=sandbox-yoga=acct_123  # → pin a tenant
+ *
+ * ONE account backs exactly ONE team — the six tenants are served in profile order
+ * until the configured accounts run out. Unset ⇒ silent skip (one warning line).
+ * Full setup notes: scripts/lib/connect.ts.
  */
 
 import admin from 'firebase-admin'
@@ -49,6 +63,11 @@ import {
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import {
+  planSeedConnectAccounts,
+  linkSeedConnectAccount,
+  reportSeedConnectAccounts,
+} from './lib/connect'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -2623,6 +2642,13 @@ async function seedDemoTeam(profile: SectorProfile) {
     claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
   })
 
+  // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
+  // Links a REAL onboarded test account when STRIPE_CONNECT_TEST_ACCOUNT names
+  // one for this team; silently leaves the team payment-less otherwise. Last, so
+  // it merges onto the public_profile written above rather than being overwritten
+  // by it. See scripts/lib/connect.ts for the one-time setup.
+  await linkSeedConnectAccount({ db, teamId })
+
   console.log(
     `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
   )
@@ -3430,6 +3456,11 @@ async function main() {
 
   if (!USE_EMULATOR) await enableEmailPasswordSignIn()
 
+  // Which teams get a Stripe TEST connected account — one account backs exactly
+  // ONE team (see scripts/lib/connect.ts), so the six /try tenants are served in
+  // profile order until the configured accounts run out.
+  planSeedConnectAccounts(SECTOR_PROFILES.map((p) => `sandbox-${p.key}`))
+
   for (const profile of SECTOR_PROFILES) {
     await seedDemoTeam(profile)
   }
@@ -3449,6 +3480,7 @@ async function main() {
   for (const p of SECTOR_PROFILES) {
     console.log(`   ${p.teamName.padEnd(26)} → /public/${p.teamSlug}`)
   }
+  reportSeedConnectAccounts()
   console.log('')
 }
 

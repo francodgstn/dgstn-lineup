@@ -11,6 +11,7 @@ import {
   parseDateKey,
   parseSlug,
   resolveSiteSurfaceLinks,
+  routableSurfaces,
 } from '@linyup/shared'
 import type { PublishedSite, PublicSurface } from '@linyup/shared'
 import { useRouter } from '@/i18n/navigation'
@@ -162,7 +163,10 @@ export default function PublicSite({ slug }: { slug: string }) {
   // chrome (PublicContactBar opts out of /site), so these render as the site's
   // own palette-styled nav entries rather than the floating pill.
   const surfaceLinks = useMemo(() => {
-    const live = team.active_public_surfaces
+    // `routableSurfaces`, not the raw mirror: the shop route renders a
+    // read-only price list when the studio has no till, so its nav entry is
+    // still a destination.
+    const live = routableSurfaces(team.active_public_surfaces)
     const candidates: PublicSurface[] = ['shop', 'space', 'documents']
     const liveSurfaces = candidates.filter((s) => live?.[s as keyof typeof live])
     // Studio overrides (hide / relabel / reorder) applied over what's live.

@@ -381,13 +381,22 @@ describe('systemLinkIsLive', () => {
     assert.equal(systemLinkIsLive('space', active), true)
   })
 
-  it('takes every shop deep link down with the shop itself', () => {
-    // A tab of a page that is not live is not a destination either — the three
-    // shop-* targets are the shop surface, not surfaces of their own.
+  it('keeps every shop link up when there is no till — the page is a price list', () => {
+    // `shop: false` says "no till", not "no page": the shop route renders a
+    // READ-ONLY PRICE LIST for a studio that takes payment offline, so a link
+    // to it is not a dead end. See `routableSurfaces`, which is the ONE place
+    // that correction is made — and note that the till itself does not move
+    // (the page reads `payments_enabled` and offers no way to pay; every
+    // checkout callable refuses anyway).
+    //
+    // The three shop-* deep links are TABS of that page, not surfaces of their
+    // own, so they follow it — up or down, together.
     const active = { site: true, space: true, booking: true, shop: false }
     for (const t of ['shop', 'shop-subscriptions', 'shop-products', 'shop-courses'] as const) {
-      assert.equal(systemLinkIsLive(t, active), false, t)
+      assert.equal(systemLinkIsLive(t, active), true, t)
     }
+    // …while a genuinely dead surface is still dropped.
+    assert.equal(systemLinkIsLive('site', { ...active, site: false }), false)
   })
 
   it('fails open on an absent map — the admin preview builds its team from the form', () => {

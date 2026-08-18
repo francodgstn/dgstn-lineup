@@ -8,6 +8,8 @@ import {
   TEAMS_COLLECTION,
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
+  ORG_SITE_PUBLISHED_COLLECTION,
+  ORG_SITE_DRAFTS_COLLECTION,
   COURSES_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
 } from '@linyup/shared'
@@ -82,6 +84,25 @@ export async function unpublishSiteForTeam(teamId: string): Promise<void> {
   const db = admin.firestore()
   await db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).delete()
   await db.doc(`${SITE_DRAFTS_COLLECTION}/${teamId}`).set(
+    { enabled: false, updated_at: FieldValue.serverTimestamp() },
+    { merge: true }
+  )
+}
+
+/**
+ * The organisation-level counterpart: removes `org_site_published/{orgId}` and
+ * flags the org draft disabled. Mirrors the core of the unpublishOrgWebsite
+ * callable (orgWebsite/index.ts) without its auth guard.
+ *
+ * It exists because an org has NO `onInstalledPluginStatusChange` trigger — that
+ * trigger is bound to `teams/{teamId}/installed_plugins/{pluginId}` only — so
+ * deactivating an org's `website` install tears nothing down by itself. The org
+ * lapse path (orgs/lifecycle.ts) calls this explicitly.
+ */
+export async function unpublishSiteForOrg(orgId: string): Promise<void> {
+  const db = admin.firestore()
+  await db.doc(`${ORG_SITE_PUBLISHED_COLLECTION}/${orgId}`).delete()
+  await db.doc(`${ORG_SITE_DRAFTS_COLLECTION}/${orgId}`).set(
     { enabled: false, updated_at: FieldValue.serverTimestamp() },
     { merge: true }
   )

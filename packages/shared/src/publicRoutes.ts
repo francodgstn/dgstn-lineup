@@ -297,6 +297,36 @@ export const SYSTEM_LINK_SURFACE: Record<SystemLinkTarget, PublicSurface> = {
 }
 
 /**
+ * `active_public_surfaces` AS A ROUTING QUESTION — "does this route render
+ * something the visitor came for?" — which is what every link, the team root's
+ * redirect, the website header and the studio's own public-pages hub ask.
+ *
+ * For every surface but one it is exactly what the mirror already says.
+ *
+ * THE SHOP IS THE EXCEPTION, and this is the only place that correction is
+ * made. Its flag answers a NARROWER question — "is there a till?"
+ * (`syncTeamPublicProfile` computes `shopActive` straight from
+ * `payments_enabled`, UX-33) — and since a studio that takes payment offline
+ * gets a READ-ONLY PRICE LIST at the same URL, no till is no longer no
+ * destination. Hiding the page hid the only public surface on which a visitor
+ * could see what a membership costs, and a cash-only studio is a normal
+ * business, not a broken one.
+ *
+ * Nothing about the till moves: the shop page reads `payments_enabled` itself
+ * and renders no control that could take money, and every checkout callable
+ * still refuses without a chargeable account (`requireChargeableAccount`).
+ *
+ * The other flags keep their own defaults at each call site — some fail open
+ * (a link), some fail closed (the root redirect), and that difference is
+ * deliberate. This function only ever ADDS `shop`.
+ */
+export function routableSurfaces<T extends Partial<Record<PublicSurface, boolean>>>(
+  active: T | undefined
+): Partial<T> & { shop: true } {
+  return { ...(active ?? ({} as T)), shop: true }
+}
+
+/**
  * Is a bio-link page link's destination actually live?
  *
  * THE SAME RULE THE WEBSITE HEADER ALREADY FOLLOWS (`resolveSiteSurfaceLinks`,
@@ -314,13 +344,16 @@ export const SYSTEM_LINK_SURFACE: Record<SystemLinkTarget, PublicSurface> = {
  * cost of being wrong is asymmetric: a briefly-stale mirror must never blank a
  * studio's links, while a surface that is genuinely down is stated as `false`
  * by `syncTeamPublicProfile` on the very write that took it down.
+ *
+ * The shop's four targets ride on `routableSurfaces` — see there for why a shop
+ * with no till is still a destination.
  */
 export function systemLinkIsLive(
   target: SystemLinkTarget,
   active: Partial<Record<PublicSurface, boolean>> | undefined
 ): boolean {
   if (!active) return true
-  return active[SYSTEM_LINK_SURFACE[target]] !== false
+  return routableSurfaces(active)[SYSTEM_LINK_SURFACE[target]] !== false
 }
 
 /** The set `?from=` accepts. Anything else is ignored rather than rejected. */

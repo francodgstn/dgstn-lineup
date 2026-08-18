@@ -15,6 +15,20 @@
       ]
     },
     {
+      "collectionGroup": "organizations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "plan_status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "trial_ends_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "feedback",
       "queryScope": "COLLECTION",
       "fields": [

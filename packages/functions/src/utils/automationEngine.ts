@@ -225,6 +225,39 @@ export interface RuleStats {
   sent: number
   skipped: number
   errors: number
+  /**
+   * Contact ids an action ACTUALLY RAN FOR — not everyone who matched. A contact
+   * whose every action threw is counted in `errors` and is absent from here, so
+   * the log answers "who got the mail" rather than "who was considered". Held
+   * whole (a Set, deduped — one contact with two no-show bookings is one
+   * recipient) and CAPPED only when written to the log, so `recipients_total` is
+   * exact even when the stored list is a sample.
+   */
+  recipients: Set<string>
+}
+
+/**
+ * How many recipient ids one log row carries. A run that reaches 400 people
+ * stores the first 50 and says so — the row is a sample plus an exact total,
+ * never a roster presented as complete (see RunHistoryDialog's copy).
+ *
+ * IDS, NOT NAMES OR EMAILS: `automation_logs` is readable by every manager, and
+ * a resolved id is a lookup against contacts they can already read. Names in the
+ * log would be a copy of contact data living outside the contact — surviving the
+ * contact's deletion, and unreachable by any correction. A recipient who has
+ * since been deleted therefore resolves to nothing; that is the accepted cost.
+ */
+export const RECIPIENT_ID_CAP = 50
+
+/**
+ * Records one recipient. Called at the single point where an action is known to
+ * have succeeded for a contact, so there is no second definition of "reached".
+ * Ignores an empty id — the booking path can run actions for a booking that
+ * names no contact document, and a booking id in a contact-id list would resolve
+ * to a stranger or to nothing.
+ */
+export function recordRecipient(stats: RuleStats, contactId: string | undefined): void {
+  if (contactId) stats.recipients.add(contactId)
 }
 
 export interface AutomationLogData {
@@ -236,6 +269,15 @@ export interface AutomationLogData {
   contacts_matched: number
   actions_executed: number
   actions_failed: number
+  /**
+   * Up to RECIPIENT_ID_CAP contact ids an action ran for. ALWAYS WRITTEN (an
+   * empty array when nobody was reached) so a reader can tell "this run reached
+   * nobody" from "this row predates recipient recording", which is the
+   * difference between two very different sentences in the UI.
+   */
+  recipient_ids: string[]
+  /** The true number of recipients, which may exceed recipient_ids.length. */
+  recipients_total: number
   error?: string
 }
 
@@ -1317,6 +1359,7 @@ async function runBookingRule(
       )
       stats.sent += executed
       stats.errors += failed
+      if (executed > 0) recordRecipient(stats, contactId)
 
       // Mark booking as processed
       await to(bookingDoc.ref.update({ noShowOutreachSentAt: FieldValue.serverTimestamp() }))
@@ -1441,8 +1484,11 @@ async function runContactRule(
     stats.sent += executed
     stats.errors += failed
 
-    // Mark rule as sent for this contact
+    // Mark rule as sent for this contact — and record them as a recipient. The
+    // two share one condition on purpose: "reached" in the log means exactly
+    // what the dedup window already means by it.
     if (executed > 0) {
+      recordRecipient(stats, contact.id)
       await to(
         db
           .collection('contacts')
@@ -1481,7 +1527,13 @@ export async function runRule(
   options: RunRuleOptions = {}
 ): Promise<AutomationLogData> {
   const now = new Date()
-  const stats: RuleStats = { processed: 0, sent: 0, skipped: 0, errors: 0 }
+  const stats: RuleStats = {
+    processed: 0,
+    sent: 0,
+    skipped: 0,
+    errors: 0,
+    recipients: new Set<string>(),
+  }
   const triggerTier = options.triggerTier || 'scheduled'
 
   if (!rule.actions.length && !rule.template_id && !rule.alert_preset_id) {
@@ -1525,9 +1577,18 @@ export async function runRule(
     contacts_matched: stats.processed,
     actions_executed: stats.sent,
     actions_failed: stats.errors,
+    // Written HERE, on the same row as the counts, by the one function every
+    // trigger tier goes through — the event tier, runScheduledRules,
+    // triggerAutomationRule and executeDelayedRule all persist this object
+    // verbatim, so there is no second write to keep in step.
+    recipient_ids: Array.from(stats.recipients).slice(0, RECIPIENT_ID_CAP),
+    recipients_total: stats.recipients.size,
   }
 
-  console.log(`[automationEngine] runRule complete rule=${rule.id} team=${teamId}`, stats)
+  console.log(`[automationEngine] runRule complete rule=${rule.id} team=${teamId}`, {
+    ...stats,
+    recipients: stats.recipients.size,
+  })
   return log
 }
 

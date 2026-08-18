@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl'
 import { QRCodeCanvas } from 'qrcode.react'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { publicUrl, TEAMS_COLLECTION, PUBLIC_SURFACES } from '@linyup/shared'
+import { publicUrl, TEAMS_COLLECTION, PUBLIC_SURFACES, routableSurfaces } from '@linyup/shared'
 import type { ActivePublicSurfaces, PublicSurface, Team } from '@linyup/shared'
 import { Copy, Download, Check, ExternalLink } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -64,7 +64,11 @@ export function QRDialog({
       try {
         const snap = await getDoc(doc(db, TEAMS_COLLECTION, team.id, 'public_profile', team.id))
         if (cancelled) return
-        const active = (snap.data()?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>
+        // Through `routableSurfaces`: a shop with no till still renders — as a
+        // read-only price list — so a QR to it lands somewhere real.
+        const active = routableSurfaces(
+          (snap.data()?.active_public_surfaces ?? {}) as Partial<ActivePublicSurfaces>
+        )
         // bio-link is the tenant root and always exists; the rest must be live.
         setLive(
           PUBLIC_SURFACES.filter(

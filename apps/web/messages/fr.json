@@ -205,7 +205,8 @@
     "surfaceDocuments": "Documents",
     "documentsDesc": "Documents publics : décharges, conditions et politiques.",
     "surfaceKiosk": "Kiosque",
-    "kioskDesc": "Un écran de check-in sur tablette pour votre accueil – membres et visiteurs s'enregistrent sur place."
+    "kioskDesc": "Un écran de check-in sur tablette pour votre accueil – membres et visiteurs s'enregistrent sur place.",
+    "shopDescPriceList": "Affiche vos tarifs. Les paiements en ligne sont désactivés : les visiteurs sont invités à vous contacter."
   },
   "ShopSettings": {
     "title": "Boutique",
@@ -2662,7 +2663,9 @@
     "reactivate": "Reprendre l'abonnement",
     "checkoutSuccess": "Abonnement actif — bienvenue.",
     "pastDueWarning": "Le dernier paiement a échoué. Mettez à jour le moyen de paiement pour garder l'organisation active.",
-    "updatePayment": "Mettre à jour le moyen de paiement"
+    "updatePayment": "Mettre à jour le moyen de paiement",
+    "statusExpired": "Essai terminé",
+    "expiredNotice": "L'essai est terminé. Les studios facturés via cette organisation sont passés au plan Free et en ont été dissociés. Abonnez-vous pour rouvrir l'organisation, puis invitez-les à nouveau."
   },
   "OrgSettings": {
     "title": "Paramètres",
@@ -3683,7 +3686,12 @@
     "giftCardBuyerEmailHelp": "Nous y enverrons le code et votre confirmation.",
     "giftCardBuyerEmailInvalid": "Veuillez saisir une adresse e-mail valide.",
     "giftCardGuestNote": "Aucun compte nécessaire.",
-    "paymentsUnavailable": "Ce studio n'accepte pas les paiements en ligne pour le moment. Merci de le contacter directement."
+    "paymentsUnavailable": "Ce studio n'accepte pas les paiements en ligne pour le moment. Merci de le contacter directement.",
+    "priceListEmpty": "Ce studio n'a pas encore publié de tarifs.",
+    "contactEmail": "E-mail",
+    "contactPhone": "Appeler",
+    "contactWhatsApp": "WhatsApp",
+    "contactDirections": "Nous trouver"
   },
   "Products": {
     "title": "Produits",
@@ -5348,7 +5356,11 @@
       "tier_event": "Sur événement",
       "tier_delayed": "Différée",
       "tier_scheduled": "Planifiée",
-      "tier_manual": "Manuelle"
+      "tier_manual": "Manuelle",
+      "recipientsCount": "{count, plural, one {# personne atteinte} other {# personnes atteintes}}",
+      "recipientsTruncated": "Affichage des {shown} premiers sur {total}.",
+      "recipientsGone": "{count, plural, one {# destinataire ne figure plus dans vos contacts} other {# destinataires ne figurent plus dans vos contacts}}",
+      "recipientsNotRecorded": "Aucun destinataire n'a été enregistré pour cette exécution."
     }
   },
   "SettingsEmails": {

@@ -18,19 +18,34 @@
  * `last_run_at` says only "something happened once"; this says which runs
  * happened, in which tier, and how many people each one reached.
  *
- * WHAT IT HONESTLY CANNOT ANSWER: "to whom". `AutomationLogData` records
- * COUNTS — matched / executed / failed — and no recipient list, so this dialog
- * states counts and points at the preview (which answers "who does this hit"
- * for the rule as it stands right now) rather than inventing a roster it does
- * not have.
+ * "TO WHOM" — answered as a SAMPLE, and labelled as one. `runRule` stores up to
+ * `RECIPIENT_ID_CAP` (50) contact ids per run plus the exact `recipients_total`,
+ * so a run that reached 400 people renders 50 names UNDER a line that says which
+ * 400 it is showing 50 of. Never present the capped list as the whole set: the
+ * studio's question is "did it reach the right people", and a silently truncated
+ * roster answers it wrongly with more confidence than a count did.
+ *
+ * IDS, NOT NAMES, are what the log holds (a manager-readable log is the wrong
+ * home for a frozen copy of contact data), so names are resolved HERE at read
+ * time — from the shared active-contacts roster the app already caches, with a
+ * per-row fetch for the few ids that roster does not cover (someone archived
+ * since the run). A recipient deleted since the run resolves to nothing and is
+ * counted as such rather than dropped.
+ *
+ * ROWS WRITTEN BEFORE THIS EXISTED carry no `recipient_ids` at all, which is why
+ * the field's absence is distinguished from an empty array: "not recorded" and
+ * "reached nobody" are different sentences and the row says whichever is true.
  */
 
 import { useTranslations, useMessages } from 'next-intl'
 import { useQuery } from '@tanstack/react-query'
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
+import { useMemo, useState } from 'react'
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import type { Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION, AUTOMATION_LOGS_SUBCOLLECTION } from '@linyup/shared'
+import { useActiveContacts } from '@/hooks/useActiveContacts'
+import { TEAMS_COLLECTION, AUTOMATION_LOGS_SUBCOLLECTION, CONTACTS_COLLECTION } from '@linyup/shared'
+import type { Contact } from '@linyup/shared'
 import {
   Dialog,
   DialogBody,
@@ -42,7 +57,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/ui/query-error'
-import { AlertTriangle, History } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, History } from 'lucide-react'
 
 /** How many runs are fetched. A busy team fires several a day; a few weeks of
  *  history is what makes "did last Tuesday's reminder go out?" answerable, and
@@ -58,6 +73,9 @@ interface AutomationLogRow {
   contacts_matched: number
   actions_executed: number
   actions_failed: number
+  /** UNDEFINED means the run predates recipient recording — not "reached nobody". */
+  recipient_ids?: string[]
+  recipients_total: number
   error?: string
   triggered_at?: Timestamp | null
   session_id?: string
@@ -73,6 +91,12 @@ function toRow(id: string, data: Record<string, unknown>): AutomationLogRow {
     contacts_matched: (data.contacts_matched as number) ?? 0,
     actions_executed: (data.actions_executed as number) ?? 0,
     actions_failed: (data.actions_failed as number) ?? 0,
+    // No `?? []` here: the fallback would turn every pre-recording row into an
+    // empty roster, i.e. claim the run reached nobody.
+    recipient_ids: Array.isArray(data.recipient_ids)
+      ? (data.recipient_ids as string[])
+      : undefined,
+    recipients_total: (data.recipients_total as number) ?? 0,
     error: (data.error as string) || undefined,
     triggered_at: (data.triggered_at as Timestamp | undefined) ?? null,
     session_id: (data.session_id as string) || undefined,
@@ -103,6 +127,46 @@ function useAutomationLogs(teamId: string | null, ruleId: string | null) {
         : query(col, orderBy('triggered_at', 'desc'), limit(HISTORY_LIMIT))
       const snap = await getDocs(q)
       return snap.docs.map((d) => toRow(d.id, d.data()))
+    },
+  })
+}
+
+/** How a recipient is named. Email is the fallback for a contact saved without a
+ *  name, not a second identifier offered alongside one. */
+function contactLabel(c: Partial<Contact>): string {
+  const name = [c.firstname, c.lastname].filter(Boolean).join(' ').trim()
+  return name || c.email || ''
+}
+
+/**
+ * Names for the ids the shared roster does not cover — a recipient ARCHIVED
+ * since the run, which is a normal thing for a month-old log to contain.
+ *
+ * Fetched only for the row the studio expanded, so the lookup is bounded by the
+ * cap (≤ 50 ids) and the claim "these ones are gone" is only ever made about ids
+ * that were actually looked for. Each id is read on its own and swallows its own
+ * failure: a single deleted or unreadable contact must not blank the other 49.
+ */
+function useMissingRecipientNames(rowId: string, ids: string[], enabled: boolean) {
+  const key = ids.join(',')
+  return useQuery<Record<string, string>>({
+    queryKey: ['automation_logs', 'recipients', rowId, key],
+    enabled: enabled && ids.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const found: Record<string, string> = {}
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const snap = await getDoc(doc(db, CONTACTS_COLLECTION, id))
+            if (snap.exists()) found[id] = contactLabel(snap.data() as Partial<Contact>)
+          } catch {
+            // Deleted, or outside this manager's scope — left unresolved and
+            // counted as such below.
+          }
+        })
+      )
+      return found
     },
   })
 }
@@ -144,6 +208,17 @@ export function RunHistoryDialog({
     ruleId
   )
 
+  // ONE query for every name in the dialog — the same active-contacts roster the
+  // contacts page and the sidebar search read, so on a warm cache this costs
+  // nothing and never scales with the number of runs on screen. Ids it does not
+  // cover are chased per row (see useMissingRecipientNames).
+  const { data: roster = [] } = useActiveContacts(open ? teamId : null)
+  const rosterNames = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of roster) if (c.id) map.set(c.id, contactLabel(c))
+    return map
+  }, [roster])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -174,14 +249,16 @@ export function RunHistoryDialog({
           ) : (
             <div className="divide-y rounded-lg border">
               {rows.map((row) => (
-                <RunRow key={row.id} row={row} showRuleName={!ruleId} triggerLabel={triggerLabel} />
+                <RunRow
+                  key={row.id}
+                  row={row}
+                  showRuleName={!ruleId}
+                  triggerLabel={triggerLabel}
+                  rosterNames={rosterNames}
+                />
               ))}
             </div>
           )}
-
-          {/* The one thing the log does not record. Said plainly rather than
-              implied by its absence. */}
-          <p className="text-xs text-muted-foreground">{t('history.recipientsNote')}</p>
         </DialogBody>
       </DialogContent>
     </Dialog>
@@ -192,10 +269,12 @@ function RunRow({
   row,
   showRuleName,
   triggerLabel,
+  rosterNames,
 }: {
   row: AutomationLogRow
   showRuleName: boolean
   triggerLabel: (type: string) => string
+  rosterNames: Map<string, string>
 }) {
   const t = useTranslations('Automations')
   // Dates follow the BROWSER locale — the repo's convention for date formatting
@@ -241,11 +320,107 @@ function RunRow({
         )}
       </p>
 
+      <Recipients row={row} rosterNames={rosterNames} />
+
       {row.error && (
         <p className="flex items-start gap-1.5 text-xs text-destructive">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           <span className="break-words">{row.error}</span>
         </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * "Who got it" for ONE run.
+ *
+ * Three states, and each says something different on purpose:
+ *  · no `recipient_ids` field  → the run predates recording. Says exactly that,
+ *    rather than showing an empty list that would read as "reached nobody".
+ *  · `recipients_total === 0`  → nothing rendered; the counts line above already
+ *    says no action ran.
+ *  · otherwise                 → the total, collapsed, expandable into the names.
+ *    When the stored sample is shorter than the total, the expanded panel LEADS
+ *    with "showing the first 50 of 400" — a truncated list that does not say so
+ *    is worse than the count it replaced.
+ */
+function Recipients({
+  row,
+  rosterNames,
+}: {
+  row: AutomationLogRow
+  rosterNames: Map<string, string>
+}) {
+  const t = useTranslations('Automations')
+  const [expanded, setExpanded] = useState(false)
+
+  const ids = row.recipient_ids
+  const missingIds = useMemo(
+    () => (ids ?? []).filter((id) => !rosterNames.has(id)),
+    [ids, rosterNames]
+  )
+  const { data: extraNames, isLoading: loadingExtra } = useMissingRecipientNames(
+    row.id,
+    missingIds,
+    expanded
+  )
+
+  if (!ids) {
+    return <p className="text-xs text-muted-foreground">{t('history.recipientsNotRecorded')}</p>
+  }
+  if (row.recipients_total === 0) return null
+
+  const names: string[] = []
+  let unresolved = 0
+  for (const id of ids) {
+    const name = rosterNames.get(id) ?? extraNames?.[id]
+    if (name) names.push(name)
+    else unresolved++
+  }
+  names.sort((a, b) => a.localeCompare(b))
+
+  const shown = ids.length
+  const truncated = row.recipients_total > shown
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 shrink-0" />
+        ) : (
+          <ChevronRight className="h-3 w-3 shrink-0" />
+        )}
+        {t('history.recipientsCount', { count: row.recipients_total })}
+      </button>
+
+      {expanded && (
+        <div className="space-y-1 rounded-md bg-muted/50 px-2 py-1.5">
+          {truncated && (
+            <p className="text-xs font-medium">
+              {t('history.recipientsTruncated', { shown, total: row.recipients_total })}
+            </p>
+          )}
+          {loadingExtra ? (
+            <Skeleton className="h-4 w-full" />
+          ) : (
+            <>
+              {names.length > 0 && (
+                <p className="break-words text-xs text-muted-foreground">{names.join(', ')}</p>
+              )}
+              {unresolved > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('history.recipientsGone', { count: unresolved })}
+                </p>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   )

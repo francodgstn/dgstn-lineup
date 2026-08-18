@@ -7,6 +7,7 @@ import {
   type PublicSurface,
   publicPath,
   publicSubPath,
+  routableSurfaces,
 } from '@linyup/shared'
 import { getPathname } from '@/i18n/navigation'
 import { routing } from '@/i18n/routing'
@@ -142,9 +143,11 @@ function resolveReturnSurface(
 
   // No usable `from` (cold entry, or a Stripe return): the studio's chosen
   // default. `active_public_surfaces` still guards THAT, because nobody
-  // asserted the visitor came from it.
+  // asserted the visitor came from it — read through `routableSurfaces`, so a
+  // studio that landed visitors on its shop keeps doing so when it loses the
+  // till (the page becomes a price list rather than a dead end).
   const fallback = team.default_public_surface
-  if (fallback && fallback !== 'bio-link' && !team.active_public_surfaces?.[fallback])
+  if (fallback && fallback !== 'bio-link' && !routableSurfaces(team.active_public_surfaces)[fallback])
     return 'bio-link'
   return fallback ?? 'bio-link'
 }
