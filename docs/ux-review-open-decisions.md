@@ -120,3 +120,20 @@ whole team). Say if you want it.
 `public_pages_indexable` before it — can be flipped client-side. Display only:
 every checkout still refuses server-side, so this changes what a page *shows*, not
 what it can *take*. Tightening the rule would break the bio-link settings editor.
+
+## 14. Should automation run history name recipients? (UX-48)
+**PARKED — schema decision.** `AutomationLogData` records COUNTS only
+(`contacts_matched`, `actions_executed`, `actions_failed`), so "to whom" is not
+recordable today. The dialog says so plainly rather than implying a roster it does
+not have. Adding it means a capped recipient array on the log, which is three
+questions at once: how many ids, what retention, and whether PII belongs in a log
+any manager can read. *Meanwhile:* the dialog points at Preview, which answers
+"who matches right now".
+
+## 15. Two indexes must deploy BEFORE the code that queries them
+**ACTION, not a decision — carried into the sandbox tag annotation.**
+- `automation_logs (rule_id ASC, triggered_at DESC)` — new today (UX-48); the
+  per-rule "Run history" item is its only caller.
+- `bookings` collection-group `(teamId, contact, joinedAt DESC)` — from UX-10.
+The emulator hides a missing index; a real project returns 400. Order:
+rules+indexes, then functions, then web.

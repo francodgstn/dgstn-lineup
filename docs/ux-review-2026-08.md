@@ -119,14 +119,14 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 40 | slows | at-setup | Adding one class means meeting 23 fields, one of them required | M2×M5 | web | ▶ Open |
 | 41 | slows | at-setup | Turning on public booking asks 11 questions, at least 3 with a right answer | M7×C2 | web | ▶ Open |
 | 42 | confuses | at-setup | Above-tier settings behave three inconsistent ways; only one reads as "upgrade" | M7 | web | ▶ Open |
-| 43 | slows | at-setup | Discount campaigns are findable only by browsing the plugin catalogue | M8×M5 | web | ▶ Open |
+| 43 | slows | at-setup | Discount campaigns are findable only by browsing the plugin catalogue | M8×M5 | web | ✅ Fixed |
 | 44 | slows | every-session | Contacts sorts by surname and cannot answer "who needs me today" | M4 | functions + web | ▶ Open |
 | 45 | confuses | at-setup | Setup is presented three times, three ways, with three dismissals and no finish line | M2 | web | ▶ Open |
 | 46 | confuses | at-setup | Day one shows 18 dashboard cards, 17 of them empty | M2 | web | ▶ Open |
 | 47 | confuses | once | The product tour never mentions activities, sessions, bookings, contacts or money | M2 | web | ▶ Open |
-| 48 | slows | weekly | `automation_logs` is written by every trigger path and read by nothing | M9 | web | ▶ Open |
-| 49 | confuses | weekly | Unpublishing a surface leaves the bio-link pointing at a dead page | M11 | web + functions | ▶ Open |
-| 50 | slows | weekly | "Take it off the internet" is one unconfirmed click, next to Publish | M11 | web | ▶ Open |
+| 48 | slows | weekly | `automation_logs` is written by every trigger path and read by nothing | M9 | web | ✅ Fixed |
+| 49 | confuses | weekly | Unpublishing a surface leaves the bio-link pointing at a dead page | M11 | web + functions | ✅ Fixed |
+| 50 | slows | weekly | "Take it off the internet" is one unconfirmed click, next to Publish | M11 | web | ✅ Fixed |
 | 51 | confuses | at-setup | "Create alert" is selectable and silently stripped at save | M9 | web | ▶ Open |
 | 52 | confuses | every-session | A purchase-tier course opened by shared link shows a signed-in member a sign-in wall | C4×C3 | web | ▶ Open |
 | 53 | slows | weekly | Class bookings send no calendar invite; the manage link exists only in the email | C2 | functions + web | ▶ Open |
@@ -176,6 +176,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 97 | confuses | weekly | Nine emailed links still drop the locale, so the page answers in English | C2xM9 | functions | ▶ Open |
 | 98 | slows | every-session | A person's name is a dead end on four more lists | M2xM3 | web | ✅ Fixed |
 | 99 | slows | at-setup | Three more "create one first" dead ends, all naming a destination they don't link | M5 | web | ✅ Fixed |
+| 100 | slows | weekly | Four more unpublish buttons take a public page down with no confirmation | M7xM11 | web | ▶ Open |
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
 
@@ -1212,6 +1213,31 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-100 — Four more unpublish buttons, still unconfirmed
+`slows` · weekly · traced · M7×M11 · *found 2026-08-18 while fixing UX-50*
+
+**Now.** UX-50 put a confirmation on `/plugins/website`'s unpublish. The same act — take a
+public page off the internet in one click — is still unconfirmed on:
+
+- `documents/[documentId]` — has an explanatory hint but no confirm, **and** it flips
+  `active_public_surfaces.documents`, so this is the one that can also strip bio-link entries
+  (UX-49's mechanism, from the writing side).
+- `offer/online-courses/[courseId]`
+- `plugins/custom-forms/[formId]`
+- `org/[orgId]/website/page.tsx` — identical to the one UX-50 fixed, in the org tier.
+
+**Cost.** Small per instance, and the pattern is the point: a studio learns from the confirmed
+one that this app asks before taking something public down, then meets three that do not.
+
+**Fix.** The same `AlertDialog` treatment, with the honest framing UX-50 established — these are
+reversible and lossless, so the copy must say so rather than implying destruction; an overstated
+warning trains people to click through. The org website page needs its own copy keys
+(`OrgWebsite` namespace) or to reuse the `Website` ones — it does not currently import them.
+**Build:** S. **Owner:** web-agent.
+**Verify:** unpublish a document; confirm the bio-link entry for Documents stops being offered.
 
 ---
 
