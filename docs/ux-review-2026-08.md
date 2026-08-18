@@ -102,11 +102,11 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 23 | confuses | every-session | Three parallel "remembered destination" mechanisms; "pin" means two things | M1 | web | ✅ Fixed |
 | 24 | slows | weekly | Saving an offer change tells you nothing — the real cause of reported F2 | M5 | web | ✅ Fixed |
 | 25 | blocks | at-setup | A discount cannot be applied to a membership — the highest-value thing in the shop | M5 | functions + web | ✅ Fixed |
-| 26 | confuses | every-session | Public copy leaks back-office vocabulary: 8 `activity` + 4 `drop-in` hits | C1–C4 | web | ▶ Open |
+| 26 | confuses | every-session | Public copy leaks back-office vocabulary: 8 `activity` + 4 `drop-in` hits | C1–C4 | web | ✅ Fixed |
 | 27 | blocks | at-setup | The checklist's "subscriptions" step lands on a page that cannot create one | M2×M5 | web | ✅ Fixed |
 | 28 | slows | weekly | Nine public surfaces managed from six route prefixes across three partial maps | M11×M7×M5×M8 | web | ✅ Fixed |
 | 29 | slows | every-session | Find "Schedule" only after scanning past five less-used items — a regression from `6d94638` | M1 | web | ✅ Fixed |
-| 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ▶ Open |
+| 30 | confuses | every-session | Every published tenant website mixes the owner's language with English chrome | C1 | web | ✅ Fixed |
 | 31 | confuses | every-session | The bio-link — the one artifact meant to be shared — previews as "Linyup" | C1 | web | ▶ Open |
 | 32 | costs-money | weekly | Cancelling from the emailed link answers in English and says nothing about money | C2 | web | ✅ Fixed |
 | 33 | blocks | at-setup | A studio that cannot take money still advertises priced doors | C2×M6 | web + functions | ✅ Fixed |
@@ -130,7 +130,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 51 | confuses | at-setup | "Create alert" is selectable and silently stripped at save | M9 | web | ▶ Open |
 | 52 | confuses | every-session | A purchase-tier course opened by shared link shows a signed-in member a sign-in wall | C4×C3 | web | ▶ Open |
 | 53 | slows | weekly | Class bookings send no calendar invite; the manage link exists only in the email | C2 | functions + web | ▶ Open |
-| 54 | confuses | every-session | Filtering contacts in German reads English — 15 hardcoded strings | M4 | web | ▶ Open |
+| 54 | confuses | every-session | Filtering contacts in German reads English — 15 hardcoded strings | M4 | web | ✅ Fixed |
 | 55 | slows | every-session | The member portal links to the shop four ways and to booking not at all | C4 | web | ▶ Open |
 | 56 | confuses | weekly | Cancelling a class says nothing about the credit, and offers "try again" for a permanent refusal | C4 | web | ✅ Fixed |
 | 57 | confuses | every-session | A prospect on the Shop has no path to the studio's terms | C3 | web | ▶ Open |
