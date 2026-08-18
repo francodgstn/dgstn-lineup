@@ -84,6 +84,31 @@ export interface PaymentLineItem {
    * has an answer on the row itself.
    */
   introOffer?: { periods: number; amount: number } | null
+  /**
+   * This drop-in charge was a PAID TRIAL — a newcomer's first class, charged at
+   * `Activity.trialPriceAmount` through `createDropInCheckout({ trial: true })`
+   * — rather than an ordinary drop-in. A SYSTEM STAMP, with exactly the rules of
+   * `promoCode` and `introOffer` above: written by the Connect webhook from the
+   * Checkout Session metadata (`md.trial`), never read off a client payload by
+   * `normalizePaymentLineItem`, carried forward across a manager's edit by
+   * `updatePaymentRecord`.
+   *
+   * WHAT IT IS FOR. The money side of a paid trial was already complete — a
+   * `member_payments` row, a finance-journal charge row, `payment_status: 'paid'`
+   * on the booking — but every one of them said `drop_in`, so nothing anywhere
+   * connected the studio's revenue to the trial that earned it. The contact side
+   * had the mirror gap: `Contact.trial_used_at` is stamped identically by the
+   * free door (`bookSession`) and the paid one, so after the fact a paid trial
+   * and a free one were indistinguishable. This one stamp closes both, because
+   * the payments table it feeds is also the contact's Payments tab.
+   *
+   * IT IS NOT A CATEGORY. There is no `FinanceCategory` member for a trial and
+   * no journal row of its own: a paid trial is a drop-in sale that happened to
+   * be somebody's first, and the money event is the charge that is already
+   * booked. It is also not a subscription, and nothing here may make it look
+   * like one.
+   */
+  trial?: boolean
 }
 
 /**

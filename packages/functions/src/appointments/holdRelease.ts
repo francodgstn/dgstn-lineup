@@ -99,6 +99,26 @@
 // attempt may own it. They are the ones this file exists for, and they are now
 // one call each.
 //
+// ── NOT A RELEASE, though the recipe's third grep finds it ─────────────────
+//
+// `markAppointmentPaid` (appointments/staffBooking.ts) writes the session and
+// the booking of a hold it did not create. It is not on the census because it
+// SETTLES rather than releases: the session goes to 'full' and the booking to
+// 'confirmed', so the slot is kept, not given back, and no other attempt is
+// deprived of anything. It has an ownership question of its own — a manager may
+// be settling a hold the client is paying for online at that moment — and it
+// answers it the way this file would: re-read inside the transaction, refuse
+// unless the session is still `pending_payment`, then close the Stripe session
+// and refuse to record cash if the close reports the money already moved.
+//
+// It also DEPENDS on this file's ordering, which is why it is named here at all.
+// Closing a Checkout Session makes Stripe deliver `checkout.session.expired`,
+// which is site 3 — carrying this hold's own booking token, so its proof
+// SUCCEEDS. The settlement therefore writes BEFORE it closes: past that write
+// `releaseAppointmentHold` returns `not_a_live_hold` and the event is inert.
+// Reverse the two and a studio's own settlement cancels the appointment it was
+// settling.
+//
 // ── THE PROOF LADDER ────────────────────────────────────────────────────────
 //
 // The primary proof is `booking_token`: minted fresh per attempt and rewritten by

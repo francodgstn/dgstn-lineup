@@ -353,10 +353,15 @@ became a likely one — and it was the release site still cancelling on presence
 
 `handleAppointmentCheckout` (`connect/webhook.ts`), cases in order:
 
-1. Booking already `confirmed` under a **different** `payment_intent_id` → the
-   second charge is a duplicate → `refundDirectCharge` (idempotency key
-   `apt-dup:{pi}`) + `member_payments/{pi}` marked refunded. (Also the idempotent
-   short-circuit for redeliveries of the same charge.)
+1. Booking already `confirmed` and the incoming charge is a **second** payment
+   for it → `refundDirectCharge` (idempotency key `apt-dup:{pi}`) +
+   `member_payments/{pi}` marked refunded. (Also the idempotent short-circuit for
+   redeliveries of the same charge.) "Second payment" is
+   `appointmentChargeIsDuplicate` (`shared/types/session.ts`): a **different**
+   `payment_intent_id`, *or* — the case with no id to compare — a booking stamped
+   `settled_offline`, i.e. one that `markAppointmentPaid` settled in cash. A
+   confirmed booking with neither marker is an ordinary free or `pending_offline`
+   staff booking, and the charge arriving on it is its first.
 2. Live hold → **confirm in place**: session `{ status:'full', hold_expires_at:
    delete }`, booking `{ confirmed, paid, payment_intent_id, fullname }`.
 3. Hold expired or session cancelled (swept, admin-cancelled, Stripe-expired) →
@@ -369,6 +374,57 @@ Post-confirm: the contact's `provisional` flag clears, `member_payments/{pi}`
 contact is stamped, an `appointment_booked` activity_log entry lands, and the same
 booking emails as a free booking go out — from the webhook, since payment is when
 the booking becomes real.
+
+### Settling an awaiting-payment appointment at the desk
+
+`markAppointmentPaid` (`appointments/staffBooking.ts`) is how a manager closes a
+`payment_pending` appointment with money taken in person. It covers **both**
+awaiting-payment modes, and the second one is the one that used to have no exit
+at all:
+
+| Mode | Written by | What settles it |
+|---|---|---|
+| `offline` | `createStaffAppointment({ paymentMode: 'pending_offline' })` | `markAppointmentPaid` — always did |
+| `link` | `createStaffAppointment({ paymentMode: 'payment_link' })` | the Connect webhook **if the client uses the link**; otherwise `markAppointmentPaid` |
+
+**Why the link rail needed this (UX-59).** It deliberately writes no
+`hold_expires_at`, so the daily sweep never sees it and the Stripe Checkout
+Session's own 7-day expiry is its only other ending — and that ending *cancels
+the session and deletes the booking*. A client who paid cash at the door instead
+therefore left a booking that nothing could settle and that vanished a week
+later, with the money recorded nowhere. `markAppointmentPaid` refused the mode by
+name and the payments dashboard did not even offer the button.
+
+**Settling a link-mode hold takes on one extra obligation: kill the link.** The
+callable expires the Checkout Session (`closeTeamCheckoutSession`, whose result
+is three-valued on purpose) and reports what happened — `closed` (the ordinary
+case), `paid` (the client paid online in the seconds before the call, so **no
+cash row is written**: the webhook owns that money), `failed` (Stripe could not
+tell us; the cash *is* recorded and the caller is told the link may still be
+live, so the studio can cancel it in its own dashboard). The Checkout Session id
+is stored on the session as `payment_checkout_session_id` for exactly this — a
+link that cannot be named cannot be closed.
+
+**The orderings below are load-bearing**, and both are asserted in
+`appointments/deskSettlement.test.ts`:
+
+- **Settle, then close.** Expiring a session makes Stripe deliver
+  `checkout.session.expired` — census site 3, holding *this* hold's booking token,
+  so its ownership proof succeeds. Closing first opens a window in which the
+  studio's own settlement cancels the appointment it was settling. Past the
+  settle write the session is no longer `pending_payment` and the event is inert.
+- **Refuse the cash row before writing it.** The `paid` branch returns above
+  `writeManualPaymentEvent`; a cash row on top of Stripe's own doubles the
+  studio's revenue for one appointment.
+
+The booking is stamped `settled_offline: true` alongside `payment_status: 'paid'`
+— the seat really was paid for, so `bookingWasPaidFor` must keep saying so, and
+the extra flag is what lets case 1 of the webhook refund a payment that arrives
+late on a link this call could not close. It is written in the settle
+transaction, as early as possible, because the case it guards is the one where a
+payment may already be on its way; the `paid` outcome is the one branch that
+**retracts** it, since there the incoming charge is the client's real and only
+payment and refunding it would be the defect rather than the guard.
 
 ### Gotchas
 

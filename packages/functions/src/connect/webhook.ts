@@ -30,6 +30,7 @@ import {
   buildConnectRefundTxn,
   buildDisputeTxn,
   buildPayoutTxn,
+  appointmentChargeIsDuplicate,
   countHoldingSeats,
   financeTxnId,
   isExpiredAppointmentHold,
@@ -501,7 +502,18 @@ function baseLineItemFromMetadata(md: Record<string, string>): Record<string, un
     return { kind: 'course', courseId: md.courseId, label: md.courseTitle ?? null }
   }
   if (md.kind === 'drop_in') {
-    return { kind: 'drop_in', label: md.activityName ?? null }
+    // A PAID TRIAL is a drop-in charge whose metadata says it was somebody's
+    // first class (`createDropInCheckout({ trial: true })`). Stamped here, on the
+    // money row, because until this the money and the trial had no field in
+    // common: the payment said `drop_in` and the contact said `trial_used_at`,
+    // and neither named the other. Same class of stamp as `promoCode` below —
+    // system-written, never client-supplied — and, like it, NOT a journal
+    // category: the charge is already booked as the drop-in sale it is.
+    return {
+      kind: 'drop_in',
+      label: md.activityName ?? null,
+      ...(md.trial === 'true' ? { trial: true } : {}),
+    }
   }
   if (md.kind === 'appointment') {
     return { kind: 'appointment', label: md.activityName ?? null }
@@ -2302,7 +2314,21 @@ async function handleAppointmentCheckout(
   // duplicate so the buyer is never charged twice for one appointment.
   if (bSnap.exists && bSnap.data()?.status === 'confirmed') {
     const existingPi = (bSnap.data()?.payment_intent_id as string | undefined) ?? null
-    if (piId && existingPi && existingPi !== piId && accountId) {
+    // THE DESK-SETTLED CASE, and the reason this is not just an id comparison.
+    // `markAppointmentPaid` can settle a link-mode hold in CASH: it expires the
+    // Checkout Session first, but a close can fail (or the hold may predate the
+    // stored session id), and this booking then carries no `payment_intent_id`
+    // for the comparison below to work with. A confirmed, offline-settled seat
+    // meeting an online payment is a SECOND payment for one appointment by
+    // definition — whatever its id — so it refunds on the same terms as any
+    // other duplicate. See appointments/staffBooking.ts → markAppointmentPaid.
+    const settledOffline = bSnap.data()?.settled_offline === true
+    const isDuplicateCharge = appointmentChargeIsDuplicate({
+      payment_intent_id: existingPi,
+      settled_offline: settledOffline,
+      incomingPaymentIntentId: piId ?? null,
+    })
+    if (isDuplicateCharge && accountId) {
       try {
         await refundDirectCharge({
           accountId,
@@ -2314,7 +2340,10 @@ async function handleAppointmentCheckout(
           { contactId, status: 'refunded', updated_at: FieldValue.serverTimestamp() },
           { merge: true }
         )
-        console.log(`[connect] appointment duplicate charge ${piId} refunded (booking already confirmed)`)
+        console.log(
+          `[connect] appointment duplicate charge ${piId} refunded ` +
+            `(booking already confirmed${settledOffline ? ', settled at the desk' : ''})`
+        )
       } catch (err) {
         console.error('[connect] appointment duplicate refund failed:', err)
       }

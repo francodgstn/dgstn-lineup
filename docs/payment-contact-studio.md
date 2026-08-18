@@ -239,6 +239,24 @@ subscription: one per person, newcomer-only, no membership created.
 - **Booking UI.** The activity card shows a **"Trial {price}"** chip next to the type chip
   (a free trial keeps the existing "Free trial" chip), and the newcomer door reads
   "Try your first class for {price}".
+- **The money says it was a trial (UX-66).** The charge was always recorded — a
+  `member_payments/{pi}` row, a finance-journal charge row, `payment_status: 'paid'` on the
+  booking — but every one of them said `drop_in`, and `Contact.trial_used_at` is stamped
+  identically by the free door and the paid one. So after the fact nothing connected the
+  studio's income to the trial that earned it, and nothing said whether a given contact's
+  trial had been paid for. `PaymentLineItem.trial` closes both with one field: a **system
+  stamp**, written by the Connect webhook from `md.trial`, never read off a client payload
+  by `normalizePaymentLineItem`, carried across a manager's edit by `updatePaymentRecord` —
+  the same three rules as `promoCode` and `introOffer`. It surfaces as a "Paid trial" chip
+  in `PaymentsTable`, which is also the contact's Payments tab, so one chip answers both
+  questions.
+  **It is not a category and not a subscription.** No `FinanceCategory` member, no journal
+  row of its own, no CSV column, no arm in `resolvePaymentOptions`: a paid trial is a
+  drop-in sale that happened to be somebody's first, and the money event is the charge that
+  is already booked.
+  *Known gap:* a trial covered in full by a **gift card** creates no payment row at all
+  (that rail books a finance reclass instead), so it carries no chip. That is a property of
+  full-cover gift-card redemption generally, not of trials.
 
 ## Appointments (pay-per-1:1 booking)
 

@@ -85,6 +85,10 @@ function carrySystemStamps(
     ...next,
     ...(stored?.promoCode ? { promoCode: stored.promoCode } : {}),
     ...(stored?.introOffer ? { introOffer: stored.introOffer } : {}),
+    // Whether this drop-in charge was somebody's paid trial is a fact about the
+    // sale, not a manager's choice — and it is the only place the money and the
+    // trial meet, so an edit to "what was paid" must not be able to erase it.
+    ...(stored?.trial ? { trial: true } : {}),
   }
 }
 

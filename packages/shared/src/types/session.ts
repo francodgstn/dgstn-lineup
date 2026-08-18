@@ -189,6 +189,43 @@ export function bookingWasPaidFor(b: SeatHold | null | undefined): boolean {
   return b?.payment_status === 'paid' || b?.payment_status === 'gift_card'
 }
 
+/**
+ * Is an ONLINE payment arriving for an already-confirmed APPOINTMENT a SECOND
+ * payment for it?
+ *
+ * An appointment is exclusive time: one booking per slot, by definition. So a
+ * confirmed booking meeting a Stripe payment is either a redelivery of the
+ * charge that confirmed it, or money taken twice for one thing.
+ *
+ * The id comparison answers that whenever the booking records WHICH payment
+ * bought it. The second arm is the case that has no id to compare: a link-mode
+ * hold settled AT THE DESK (`markAppointmentPaid`) is confirmed and paid for,
+ * but by cash — there is no `payment_intent_id`, and without this arm a client
+ * who later opens the emailed link is charged for an appointment they have
+ * already paid for, and the studio's books count it twice. That settlement
+ * expires the link first, so this is the net under a close that failed or a hold
+ * written before the session id was stored; see appointments/staffBooking.ts.
+ *
+ * DELIBERATELY NOT `!bookingWasPaidFor(...)`-shaped: a confirmed booking with no
+ * payment marker at all is an ordinary free or staff-confirmed appointment
+ * (`createStaffAppointment`'s free and `pending_offline` rails both write one),
+ * and refunding a payment against those would refund the FIRST payment they
+ * ever received. Only an explicit offline settlement claims the slot is bought.
+ */
+export function appointmentChargeIsDuplicate(b: {
+  /** The PaymentIntent the confirmed booking already carries, if any. */
+  payment_intent_id?: string | null
+  /** Settled at the desk — see `Booking.settled_offline`. */
+  settled_offline?: boolean
+  /** The PaymentIntent that has just arrived. */
+  incomingPaymentIntentId?: string | null
+}): boolean {
+  if (!b.incomingPaymentIntentId) return false
+  const existing = b.payment_intent_id ?? null
+  if (existing) return existing !== b.incomingPaymentIntentId
+  return b.settled_offline === true
+}
+
 /** Is this seat actually TAKEN UP — is the person in the class?
  *
  *  Holding a seat and being in the class are not the same question, and a
@@ -421,6 +458,17 @@ export interface Session {
   /** The amount owed for a `payment_pending` hold, in MINOR units (Rappen/cents). */
   payment_amount?: number
   payment_currency?: string
+  /** The Stripe Checkout Session backing a `payment_intent_mode: 'link'` hold.
+   *
+   *  Stored so the link can be CLOSED, not merely watched. A link-mode hold is
+   *  the one rail whose deadline lives entirely at Stripe (7 days, no
+   *  `hold_expires_at`, no sweep), so settling it any other way — the client
+   *  paid cash at the door — has to be able to prove the link can no longer take
+   *  money. `markAppointmentPaid` expires it through `closeTeamCheckoutSession`
+   *  before recording the cash; without this id there is nothing to expire and
+   *  the only protection left is the late-payment refund in
+   *  `handleAppointmentCheckout`. Deleted once the hold is settled. */
+  payment_checkout_session_id?: string | null
   /** True for a manager's calendar block (no client) — see appointments/staffBooking.ts. */
   blocked_time?: boolean
   /** Denormalised booking contact so list views (e.g. the Payments page) can
@@ -526,6 +574,18 @@ export interface Booking {
   // 'paid' + status 'confirmed'. Free bookings leave these unset.
   payment_status?: 'not_required' | 'required' | 'paid'
   payment_intent_id?: string
+  /** The seat was settled AT THE DESK, not through Stripe — `markAppointmentPaid`
+   *  recording cash against a hold that was awaiting an online payment.
+   *
+   *  It rides ALONGSIDE `payment_status: 'paid'` rather than replacing it,
+   *  because the seat really was paid for and `bookingWasPaidFor` must keep
+   *  saying so. What it adds is the one thing that value cannot: a confirmed
+   *  booking carrying no `payment_intent_id` is normally a booking nobody
+   *  charged, so the Connect webhook's duplicate guard (which compares the
+   *  stored PaymentIntent against the incoming one) has nothing to compare and
+   *  keeps a late online payment for a seat already paid for in cash. This flag
+   *  is what turns that into a refund. See `handleAppointmentCheckout`. */
+  settled_offline?: boolean
   expires_at?: Timestamp
   // Waitlist claim hold. A promoted waitlist entry reserves its seat as an
   // ORDINARY booking carrying these two fields rather than as a new kind of

@@ -1634,6 +1634,27 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
                   })
                 )}
               </p>
+              {/* WHICH EVENTS — the half of the wiring that decides whether the
+                  studio's revenue is counted once or twice, and until now it was
+                  written down only in the header of handleTeamStripeWebhook,
+                  where a studio will never see it.
+
+                  It is a real constraint, not a preference: an `invoice.*`
+                  payload can no longer name its PaymentIntent and a
+                  `payment_intent.*` payload can no longer name its invoice, and
+                  this rail holds no Stripe credentials with which to bridge
+                  them. So a subscription to BOTH records every recurring payment
+                  twice, and nothing on our side can merge the two rows. The rows
+                  it does produce are flagged in the payments table
+                  ("may be a duplicate"); this note is how a studio avoids
+                  producing them at all. */}
+              {selectedType === 'stripe' && (
+                <p className="text-[11px] text-muted-foreground">
+                  {t.rich('paymentsWebhookEventsHelp', {
+                    code: (chunks) => <code className="bg-muted px-1 rounded">{chunks}</code>,
+                  })}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t('paymentsDefaultSubscriptionType')}</Label>

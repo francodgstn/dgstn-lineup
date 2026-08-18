@@ -104,6 +104,30 @@ export function PaymentsTable({
                       {t('promoCode', { code: row.promoCode })}
                     </Badge>
                   )}
+                  {/* A PAID TRIAL, on the money side. Without it the row reads
+                      as an ordinary drop-in and the trial it paid for is only
+                      visible on the contact — which is the same row, in the
+                      contact's Payments tab, so one chip answers both "what is
+                      this income" and "did they pay for their trial". */}
+                  {row.trial && (
+                    <Badge variant="outline" className="mt-0.5 font-normal text-muted-foreground">
+                      {t('trialCharge')}
+                    </Badge>
+                  )}
+                  {/* A row a sibling webhook event may have written TWICE. The
+                      duplication is the studio's own Stripe endpoint config and
+                      cannot be fixed from here (handleTeamStripeWebhook's header
+                      explains why), so what it gets instead is the ability to
+                      tell which rows are exposed to it. */}
+                  {row.refKindFallback && (
+                    <Badge
+                      variant="outline"
+                      className="mt-0.5 font-normal text-amber-700 border-amber-300"
+                      title={t('mayDuplicateHelp')}
+                    >
+                      {t('mayDuplicate')}
+                    </Badge>
+                  )}
                   {row.source === 'connect' && row.feeAmount > 0 && (
                     <div className="text-xs text-muted-foreground">
                       {t('fee')} {formatMoneyMinor(row.feeAmount, row.currency)}

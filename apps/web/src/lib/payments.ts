@@ -40,6 +40,19 @@ export interface UnifiedPaymentRow {
    * never client-writable). This is the only place a discount is visible on the
    * money side: a promo writes no journal row and no CSV column. */
   promoCode: string | null
+  /** This drop-in charge was somebody's PAID TRIAL (`PaymentLineItem.trial`, a
+   *  system stamp written by the Connect webhook). The only place a trial and
+   *  the money it earned meet: the payment row said `drop_in` and the contact
+   *  said `trial_used_at`, and neither named the other. Never a category — the
+   *  charge is booked as the drop-in sale it is. */
+  trial: boolean
+  /** The BYO row is keyed on something other than the payment
+   *  (`ExternalPayment.gateway_ref_kind === 'fallback'`), so a sibling webhook
+   *  event about the SAME money would have written a second row that this one
+   *  cannot dedupe against. See `handleTeamStripeWebhook` — a studio subscribed
+   *  to both an invoice event and a payment event gets one payment twice, and
+   *  this is the only thing in the data that says which rows are exposed to it. */
+  refKindFallback: boolean
   /** Studio-configured mode for manual payments (Cash / TWINT / …); null otherwise. */
   paymentMode: string | null
   /** Derived "what was paid" label, used when comment is empty. */
@@ -148,6 +161,12 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     // From the stored line item only — connectLineItem's legacy fallbacks are
     // synthesised from kind/names and can never carry a code.
     promoCode: p.line_item?.promoCode ?? null,
+    // Same source and the same reason as promoCode: the stored line item only.
+    trial: p.line_item?.trial === true,
+    // Connect rows converge on the PaymentIntent by construction — the fallback
+    // key exists only on the BYO rail, which cannot bridge an invoice event to
+    // its payment.
+    refKindFallback: false,
     paymentMode: null,
     defaultLabel: connectDefaultLabel(p),
     createdAt: (p.created_at as unknown as { toDate?: () => Date }) ?? null,
@@ -180,6 +199,12 @@ export function byoToUnified(events: Array<ExternalPayment & { id: string }>): U
       comment: e.comment ?? null,
       lineItem: e.line_item ?? null,
       promoCode: e.line_item?.promoCode ?? null,
+      trial: e.line_item?.trial === true,
+      // ABSENT means 'payment' — the field post-dates the rail, and every rail
+      // but BYO Stripe keys on the payment by construction. Only an explicit
+      // 'fallback' is a warning, so an older row is never accused of a
+      // duplication it is not exposed to.
+      refKindFallback: e.gateway_ref_kind === 'fallback',
       paymentMode: e.payment_mode ?? null,
       defaultLabel:
         e.gateway === 'payrexx'

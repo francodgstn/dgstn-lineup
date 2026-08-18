@@ -112,6 +112,15 @@ silent. A row keyed on anything other than the payment carries
 `gateway_ref_kind: 'fallback'`, and the reader logs `[stripe-shape] MISSING …`.
 The module header states which events a studio should subscribe to.
 
+**Update 2026-08-18 (UX-60).** The marker was previously read by no screen, so a
+doubled row was indistinguishable from a real one to the only person who could
+act on it. `byoToUnified` now carries it as `UnifiedPaymentRow.refKindFallback`
+and `PaymentsTable` renders a "may be a duplicate" chip with the reason on hover.
+ABSENT still means `'payment'` — only an explicit `'fallback'` warns, so rows
+written before the field existed are not accused of a duplication they are not
+exposed to. **This is still not a fix**: the two rows remain, and everything under
+"What would actually close it" is unchanged.
+
 **What would actually close it** (each has a real cost — pick deliberately):
 subscribe BYO studios to `invoice_payment.paid` instead of
 `invoice.payment_succeeded` (it carries both ids, so it converges — but adding it
@@ -119,20 +128,17 @@ subscribe BYO studios to `invoice_payment.paid` instead of
 an addition); or give the rail read-only credentials, which contradicts its
 stated design; or dedupe across keys, which needs a second doc per payment.
 
----
-
-## 2. Nothing tells a BYO studio which webhook events to subscribe to
-
-**Severity: low**, but it is what turns entry 1 from a trap into a live bug.
-
-The correct event set is now written down in the header of
-`packages/functions/src/billing/handleTeamStripeWebhook.ts`, where a studio will
-never see it. The BYO integration settings screen shows the endpoint URL and the
-signing-secret field and says nothing about events.
+"Nothing tells a BYO studio which webhook events to subscribe to" shipped on
+**2026-08-18** (UX-60) and was deleted per the rule above. The event set that
+lived only in the header of
+`packages/functions/src/billing/handleTeamStripeWebhook.ts` is now stated on the
+BYO integration dialog itself (`TeamSettings.paymentsWebhookEventsHelp`, Stripe
+only — Payrexx has no equivalent hazard), naming the three to subscribe to and
+naming `invoice.payment_succeeded` as the one to leave off, with the reason.
 
 ---
 
-## 3. Stripe endpoint drift on staging (ops, not code)
+## 2. Stripe endpoint drift on staging (ops, not code)
 
 Found while auditing the delivery side on 2026-08-16, against live Stripe:
 
@@ -151,10 +157,10 @@ ops work that has not been done.
 
 ---
 
-## 4. The subscription lifecycle backfill has not been run anywhere
+## 3. The subscription lifecycle backfill has not been run anywhere
 
-Ops, not code — the companion to entry 3, and the same shape: the tool exists and
-nobody has run it.
+Ops, not code — the companion to "Stripe endpoint drift on staging", and the same
+shape: the tool exists and nobody has run it.
 
 Every `member_subscriptions` and `saas_subscriptions` doc written before the
 Dahlia readers shipped carries `current_period_end: null`, and none carries
@@ -264,7 +270,8 @@ publish-time freezing and no publish-time validation. See
 
 ### `pnpm backfill:gateway-data` has not been run anywhere
 
-Ops, not code — the same shape as entry 4, and it needs the same treatment.
+Ops, not code — the same shape as "The subscription lifecycle backfill has not
+been run anywhere", and it needs the same treatment.
 
 `saas_subscriptions` docs written before the dotted-key fix keep `subscription_id`,
 `customer_id`, `last_event_id` and friends as **literal top-level fields named**
@@ -274,8 +281,9 @@ where `update()` reads it as a path. Every reader now goes through
 this is outstanding** — this is cleanup, not a live defect. The webhook also
 heals a doc on its next event.
 
-The gap is the same as entry 4's: a `cancelled` or `past_due` subscription may
-never receive another event, so those docs stay in the old shape indefinitely.
+The gap is the same as the lifecycle backfill's: a `cancelled` or `past_due`
+subscription may never receive another event, so those docs stay in the old
+shape indefinitely.
 
 Run: `pnpm backfill:gateway-data --project <id>` (dry-run), then `--apply`.
 Verified end-to-end against the emulator; never run against staging or prod.

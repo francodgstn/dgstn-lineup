@@ -258,11 +258,15 @@ export default function PaymentsDashboardPage() {
                         ? t('awaitingPaymentLinkSent')
                         : t('awaitingPaymentOffline')}
                     </Badge>
-                    {s.payment_intent_mode !== 'link' && (
-                      <Button size="sm" variant="outline" onClick={() => setMarkPaidTarget(s)}>
-                        {t('markPaid')}
-                      </Button>
-                    )}
+                    {/* "Mark paid" is offered on BOTH rails (UX-59). A link that
+                        was never used is the commonest way an appointment ends
+                        up unsettleable: the client pays cash at the door, the
+                        webhook never fires, and Stripe's 7-day expiry silently
+                        deletes the booking. The callable expires the link before
+                        it records the cash, and warns if it could not. */}
+                    <Button size="sm" variant="outline" onClick={() => setMarkPaidTarget(s)}>
+                      {t('markPaid')}
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -672,8 +676,16 @@ function CreatePaymentLinkDialog({ teamId }: { teamId: string }) {
 
 // ─── mark an awaiting-payment appointment as paid (offline) ─────────────────
 // Small confirm: pick the studio-configured method the client actually paid
-// with, then call markAppointmentPaid. Payment-link rows aren't offered this
-// action — the Connect webhook settles those on its own.
+// with, then call markAppointmentPaid.
+//
+// IT COVERS PAYMENT-LINK ROWS TOO (UX-59). They used to be excluded on the
+// theory that "the Connect webhook settles those on its own" — true only if the
+// client actually uses the link. Pay cash at the door instead and nothing
+// settled it: the row sat there until Stripe's 7-day expiry cancelled the
+// appointment, and the money was never recorded at all. The callable expires the
+// link before it records the cash; the three outcomes it can report are all
+// surfaced below, because "recorded, but the link may still be live" is not the
+// same message as "recorded".
 function MarkPaidDialog({
   teamId,
   target,
@@ -708,10 +720,20 @@ function MarkPaidDialog({
     try {
       const fn = httpsCallable<
         { teamId: string; sessionId: string; method: string },
-        { ok: boolean }
+        { ok: boolean; recorded: boolean; reason?: string; linkStillOpen?: boolean }
       >(functions, 'markAppointmentPaid')
-      await fn({ teamId, sessionId: target.id, method })
-      toast.success(t('markPaidSuccess'))
+      const res = await fn({ teamId, sessionId: target.id, method })
+      if (res.data?.recorded === false) {
+        // The client paid the link in the seconds before this call. Nothing was
+        // recorded on purpose — the webhook owns that money — and saying
+        // "recorded" here would send the manager looking for a row that must
+        // never exist.
+        toast.success(t('markPaidAlreadyOnline'))
+      } else if (res.data?.linkStillOpen) {
+        toast.warning(t('markPaidLinkStillOpen'), { duration: 10_000 })
+      } else {
+        toast.success(t('markPaidSuccess'))
+      }
       qc.invalidateQueries({ queryKey: ['sessions'] })
       onClose()
     } catch (err) {
@@ -727,6 +749,11 @@ function MarkPaidDialog({
         <DialogHeader>
           <DialogTitle>{t('markPaidTitle')}</DialogTitle>
         </DialogHeader>
+        {/* Said BEFORE the click, because it is a side effect on something the
+            client already has in their inbox. */}
+        {target?.payment_intent_mode === 'link' && (
+          <p className="text-xs text-muted-foreground">{t('markPaidClosesLink')}</p>
+        )}
         <div className="space-y-1.5">
           <Label>{t('markPaidMethodLabel')}</Label>
           <Select value={method} onValueChange={(v) => setMethod(v ?? '')}>
