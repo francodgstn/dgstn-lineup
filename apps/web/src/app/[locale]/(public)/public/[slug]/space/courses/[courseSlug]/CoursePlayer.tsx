@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { collection, collectionGroup, doc, getDoc, getDocs, query, where, orderBy, limit, FirestoreError } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import {
@@ -15,10 +15,11 @@ import {
   COURSE_MODULES_SUBCOLLECTION,
   COURSE_LESSONS_SUBCOLLECTION,
 } from '@linyup/shared'
+import { formatCurrency } from '@/lib/format'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useSpaceAuth } from '../../SpaceAuthProvider'
-import SignInDialog from '../../SignInDialog'
+import { usePublicTeam } from '../../../PublicTeamProvider'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,19 +105,35 @@ interface Props {
   from?: string
 }
 
-type GateReason = 'registered' | 'subscription' | null
+// WHY 'purchase' IS HERE (UX-52). It was missing — from this union AND from
+// `CourseSummary.accessType` below — and the denied-read branch fell back to
+// 'registered' for anything it did not recognise. So a signed-in member who
+// opened a SOLD course by a shared link was shown the sign-in gate: a padlock,
+// "Sign in to access", and a Sign in button, to somebody already signed in.
+//
+// The LOCK ITSELF WAS CORRECT — `canReadPublishedCourse` refuses a purchase-tier
+// course to anyone without an entitlement at `courses/{id}/purchases/{contactId}`,
+// and she genuinely had not bought it. Only the REASON was wrong, and it sent
+// her to the one action that could not possibly help. The fix is a gate that
+// names the price and links to the till, not a widened read.
+type GateReason = 'registered' | 'subscription' | 'purchase' | null
 
 // Always-readable public summary (from courses/{id}/public_profile/{id}). Lets us
 // render a branded gated screen even when the full course doc read is denied.
 interface CourseSummary {
   title: string
   coverImageUrl?: string
-  accessType: 'free' | 'registered' | 'subscription'
+  accessType: 'free' | 'registered' | 'subscription' | 'purchase'
+  /** 'purchase' tier: the one-off price, major units. */
+  priceAmount?: number
 }
 
 export default function CoursePlayer({ courseSlug, from }: Props) {
   const t = useTranslations('Space')
   const { slug, teamId, isAuthenticated, openSignIn } = useSpaceAuth()
+  const locale = useLocale()
+  const { team } = usePublicTeam()
+  const currency = team?.default_currency ?? 'CHF'
   // Return the visitor to where they came from (shop catalogue vs their Space).
   const backHref = (from === 'shop'
     ? `/public/${slug}/shop?tab=courses`
@@ -135,9 +152,12 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
   const [loadError, setLoadError] = useState<unknown>(null)
   const [retryKey, setRetryKey] = useState(0)
   const [gateReason, setGateReason] = useState<GateReason>(null)
+  // Kept because the BUY gate needs it: the shop takes a course id
+  // (`/shop?tab=courses&course={id}`), and the id is only known here, from the
+  // public_profile lookup that resolved the slug.
+  const [gatedCourseId, setGatedCourseId] = useState<string | null>(null)
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
-  const [signInOpen, setSignInOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -145,6 +165,7 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
     setGateReason(null)
     setNotFound(false)
     setLoadError(null)
+    setGatedCourseId(null)
 
     async function load() {
       // Resolve courseId + public summary (client-side, always readable).
@@ -165,7 +186,13 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
           const pp = ppSnap.docs[0].data() as CourseSummary
           courseId = ppSnap.docs[0].ref.parent.parent?.id ?? null
           accessType = pp.accessType ?? 'registered'
-          setSummary({ title: pp.title, coverImageUrl: pp.coverImageUrl, accessType })
+          setGatedCourseId(courseId)
+          setSummary({
+            title: pp.title,
+            coverImageUrl: pp.coverImageUrl,
+            accessType,
+            priceAmount: pp.priceAmount,
+          })
         }
       } catch (err: unknown) {
         // The slug lookup FAILED — which tells us nothing about whether the
@@ -202,9 +229,17 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
       } catch (err: unknown) {
         if (cancelled) return
         if (err instanceof FirestoreError && err.code === 'permission-denied') {
-          // The ONE justified mapping: the rules refused the read, so the tier is
-          // locked for this visitor. Show the gate that matches it.
-          setGateReason(accessType === 'subscription' ? 'subscription' : 'registered')
+          // The ONE justified mapping: the rules refused the read, so the tier
+          // is locked for this visitor. Show the gate that matches THE TIER —
+          // every tier by name, never a catch-all, because the catch-all was
+          // "sign in" and it was told to people who already had (UX-52).
+          setGateReason(
+            accessType === 'subscription'
+              ? 'subscription'
+              : accessType === 'purchase'
+                ? 'purchase'
+                : 'registered'
+          )
         } else {
           // Anything else (offline, unavailable, aborted) is a failure to READ a
           // course we already resolved by slug. It exists; we just could not
@@ -287,17 +322,87 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
           <div className="rounded-xl border bg-card p-6 text-center space-y-4">
             <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
             <h1 className="text-xl font-bold">{summary?.title}</h1>
-            <p className="text-sm text-muted-foreground">{t('gatedRegisteredTitle')}</p>
-            <p className="text-sm text-muted-foreground">{t('gatedRegisteredDesc')}</p>
-            <button
-              onClick={() => { openSignIn(); setSignInOpen(true) }}
-              className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
-            >
-              {t('signIn')}
-            </button>
+            {/* A visitor who is ALREADY signed in and still refused is not
+                someone to hand a Sign in button to. It means this course belongs
+                to another studio's team, or was unpublished between the summary
+                and the read — so say the course is not available to this account
+                and stop, rather than offering an action that changes nothing. */}
+            {isAuthenticated ? (
+              <p className="text-sm text-muted-foreground">{t('gatedUnavailableForAccount')}</p>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">{t('gatedRegisteredTitle')}</p>
+                <p className="text-sm text-muted-foreground">{t('gatedRegisteredDesc')}</p>
+                <button
+                  onClick={() => openSignIn()}
+                  className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
+                >
+                  {t('signIn')}
+                </button>
+              </>
+            )}
           </div>
         </div>
-        <SignInDialog open={signInOpen} onOpenChange={setSignInOpen} slug={slug} />
+      </div>
+    )
+  }
+
+  // SOLD, and not owned by this visitor. The lock is right; the ACTION is the
+  // till, not the sign-in form. Priced courses are bought in the shop next to
+  // products and memberships, so the CTA deep-links the shop's course checkout
+  // by id (`?course=`) rather than duplicating a second checkout here.
+  if (gateReason === 'purchase') {
+    return (
+      <div className="min-h-screen">
+        <div className="max-w-[640px] mx-auto px-5 py-10 space-y-6">
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {t('backToCourses')}
+          </Link>
+          {summary?.coverImageUrl && (
+            <div className="aspect-video rounded-xl overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={summary.coverImageUrl} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
+          <div className="rounded-xl border bg-card p-6 text-center space-y-4">
+            <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+            <h1 className="text-xl font-bold">{summary?.title}</h1>
+            <p className="text-sm text-muted-foreground">{t('gatedPurchaseTitle')}</p>
+            {/* The price is on the world-readable summary, so it can be named
+                even though the course itself is unreadable. Naming it is the
+                point: "buy" without a figure is the same dead end in a
+                friendlier voice. */}
+            {typeof summary?.priceAmount === 'number' && (
+              <p className="text-lg font-semibold">
+                {formatCurrency(summary.priceAmount, currency, locale)}
+              </p>
+            )}
+            {gatedCourseId && (
+              <Link
+                href={`/public/${slug}/shop?tab=courses&course=${gatedCourseId}` as Route}
+                className="block w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
+              >
+                {t('gatedPurchaseCta')}
+              </Link>
+            )}
+            {/* Signing in does not unlock a course you have not bought — but a
+                buyer arriving on a fresh device is signed OUT, and her purchase
+                is on her account. So the offer stands, quietly, and only for
+                somebody who is not signed in. */}
+            {!isAuthenticated && (
+              <button
+                onClick={() => openSignIn()}
+                className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {t('gatedPurchaseAlreadyBought')}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     )
   }
@@ -444,8 +549,6 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
           </div>
         </div>
       </div>
-
-      <SignInDialog open={signInOpen} onOpenChange={setSignInOpen} slug={slug} />
     </div>
   )
 }

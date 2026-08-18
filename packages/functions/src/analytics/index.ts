@@ -434,7 +434,7 @@ export const trackContacts = onDocumentWritten('contacts/{contactId}', async (ev
 export const trackSessionParticipants = onDocumentWritten(
   'sessions/{sessionId}/participants/{participantId}',
   async (event) => {
-    const { sessionId } = event.params
+    const { sessionId, participantId } = event.params
     const newData = event.data?.after.exists ? event.data.after.data() : null
     const oldData = event.data?.before.exists ? event.data.before.data() : null
 
@@ -446,9 +446,27 @@ export const trackSessionParticipants = onDocumentWritten(
           : null
     if (!activityEvent) return
 
+    // ── THE DOCUMENT ID IS THE CONTACT ID ─────────────────────────────────────
+    // This read used to be `participantData.contactId`, and NOTHING in the
+    // product has ever written that field: every writer — both confirm surfaces,
+    // `checkInContact`, `selfCheckIn`, the manual add — writes `contact`. Only
+    // the seed scripts write `contactId`, which is why this trigger worked
+    // perfectly in a seeded emulator and returned on line one in production.
+    // Dead with it: `total_sessions` (the contact detail's "0 sessions" after a
+    // whole season), `last_session_at`, the trial_booked → trial_attended
+    // promotion, provisional materialisation, and every attendance row in the
+    // activity feed.
+    //
+    // The id comes from the DOCUMENT ID now, which is the invariant every other
+    // reader already relies on (`participants.doc(contactId)` in the waitlist
+    // join, the booking dedupe and `scoreComputation`) and which
+    // `participantDoc` enforces at the writing end. The two fields stay as
+    // fallbacks so a hand-written or migrated row still resolves.
     const participantData = newData ?? oldData!
-    const contactId = participantData.contactId as string | undefined
-    if (!contactId) return
+    const contactId =
+      participantId ||
+      (participantData.contact as string | undefined) ||
+      (participantData.contactId as string | undefined)
 
     const db = admin.firestore()
 
@@ -457,6 +475,25 @@ export const trackSessionParticipants = onDocumentWritten(
     const session = sessionDoc.data()!
     const teamId = (session.teamId || session.teacher) as string | undefined
     if (!teamId) return
+
+    // ── ONE WRITER OF `participants_count` ───────────────────────────────────
+    // An ABSOLUTE recount from the subcollection, exactly as `trackBookings`
+    // owns `bookings_count`. Three client increments used to write it (add,
+    // confirm, remove on the session detail page) while the two check-in
+    // callables wrote nothing at all — so a class filled by QR scan reported
+    // zero attendance and a double-clicked remove drove the number negative.
+    // The dashboard's "attended", the schedule's roster chip and four dashboard
+    // cards all read it.
+    const [, partsSnap] = await to(
+      db.collection('sessions').doc(sessionId).collection(PARTICIPANTS_SUBCOLLECTION).get()
+    )
+    if (partsSnap) {
+      await to(
+        db.collection('sessions').doc(sessionId).update({ participants_count: partsSnap.size })
+      )
+    }
+
+    if (!contactId) return
 
     const [, contactDoc] = await to(db.collection('contacts').doc(contactId).get())
     const contact = contactDoc?.data()

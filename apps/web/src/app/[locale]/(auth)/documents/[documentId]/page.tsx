@@ -75,6 +75,13 @@ export default function DocumentDetailPage() {
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [publishOpen, setPublishOpen] = useState(false)
+  // Taking a document off its public page is REVERSIBLE and LOSSLESS — the
+  // stored draft, every published version and every signature against them
+  // survive — but it is still "take it off the internet in one click", and it
+  // also flips `active_public_surfaces.documents`, which is what removes the
+  // bio-link entry (UX-49's mechanism, from the writing side). So it asks, and
+  // the copy names both halves rather than implying destruction (UX-100).
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
 
   useEffect(() => {
     if (document) setDraft(document)
@@ -243,6 +250,15 @@ export default function DocumentDetailPage() {
   const canShare = draft.status === 'published' && draft.isPublic && !!teamSlug
 
   const urlInvalid = draft.source === 'external_link' && !!draft.externalUrl && !isSafeHttpUrl(draft.externalUrl)
+  // Whether the editor holds anything the server does not. Drives the bar's
+  // one-line status, so "Save" is never a button a studio presses to find out.
+  const dirty =
+    draft.title !== document.title ||
+    draft.kind !== document.kind ||
+    draft.source !== document.source ||
+    (draft.summary ?? '') !== (document.summary ?? '') ||
+    (draft.body ?? '') !== (document.body ?? '') ||
+    (draft.externalUrl ?? '') !== (document.externalUrl ?? '')
   // BOTH SOURCES, and `archived_at` is not belt-and-braces here. `archiveWaiver`
   // now writes `status` as well — it did not, which left an archived waiver
   // showing the Published badge over a Publish button the callable refuses by
@@ -434,13 +450,6 @@ export default function DocumentDetailPage() {
           </div>
         )}
 
-        <Button
-          onClick={handleSave}
-          disabled={saveMutation.isPending || !draft.title.trim() || urlInvalid}
-        >
-          {saveMutation.isPending ? t('saving') : t('save')}
-        </Button>
-
         {/* Publish + public toggle. Saving edits the DRAFT; publishing freezes a
             version of it. Two separate acts, and the copy says which is which —
             a studio that edits and never publishes has changed nothing a visitor
@@ -457,44 +466,23 @@ export default function DocumentDetailPage() {
                     : t('publishFirstHint')}
               </p>
             </div>
-            {/* An archived document offers RESTORE, not publish. The callable
-                refuses an archived document by name, so a Publish button here
-                would be a live control that always errors — and without a
-                restore path an archived document would be unreachable, which the
-                old status tri-state used to provide. */}
-            {isArchived ? (
-              // A WAIVER HAS NO RESTORE. `status` is not part of a waiver's
-              // vocabulary — no callable writes it, and the rules deny a client
-              // write — so a Restore button here would be a live control that
-              // always errors. Archiving a waiver is deliberate and terminal;
-              // its text and every signature against it survive, and the export
-              // still finds them. A studio that wants to ask again authors a new
-              // one, which is also the honest record: a re-opened document would
-              // claim continuity the ledger cannot support.
-              isWaiver ? (
-                <p className="max-w-xs text-xs text-muted-foreground">
-                  {tWaivers('archivedTerminalHint')}
-                </p>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => statusMutation.mutate('draft')}
-                  disabled={statusMutation.isPending}
-                >
-                  {t('restore')}
-                </Button>
-              )
-            ) : (
-              <Button
-                size="sm"
-                variant={isPublished ? 'outline' : 'default'}
-                onClick={() => setPublishOpen(true)}
-                disabled={urlInvalid}
-              >
-                <Upload className="mr-1.5 h-4 w-4" />
-                {isPublished ? t('publishNewVersion') : t('publishAction')}
-              </Button>
+            {/* THE PUBLISH CONTROL ITSELF LIVES IN THE STICKY BAR at the foot of
+                the page (UX-93) — a long document used to push it off-screen,
+                and a control you have to go looking for is one a studio stops
+                using. There is exactly ONE of it: a second copy here would be
+                two buttons minting immutable versions, which is the accident
+                the sticky bar was not supposed to introduce.
+                A WAIVER HAS NO RESTORE — `status` is not part of a waiver's
+                vocabulary (no callable writes it, the rules deny a client
+                write), so archiving one is deliberate and terminal; its text and
+                every signature against it survive, and the export still finds
+                them. A studio that wants to ask again authors a new one, which
+                is also the honest record: a re-opened document would claim
+                continuity the ledger cannot support. */}
+            {isArchived && isWaiver && (
+              <p className="max-w-xs text-xs text-muted-foreground">
+                {tWaivers('archivedTerminalHint')}
+              </p>
             )}
           </div>
 
@@ -533,7 +521,7 @@ export default function DocumentDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => statusMutation.mutate('draft')}
+                onClick={() => setConfirmUnpublish(true)}
                 disabled={statusMutation.isPending}
               >
                 {t('unpublish')}
@@ -582,6 +570,78 @@ export default function DocumentDetailPage() {
           <p className="text-xs text-muted-foreground">{t('deleteBlockedHint')}</p>
         )}
       </div>
+
+      {/* ── The action bar (UX-93) ───────────────────────────────────────────
+          Save and Publish are the two acts this page exists for, and on a long
+          document both used to be somewhere above the fold you had already
+          scrolled past. This is UX-74's dialog rule at page scale: the body
+          scrolls, the controls do not.
+
+          EASIER TO REACH IS NOT EASIER TO HIT BY ACCIDENT. Publishing mints an
+          IMMUTABLE version (`publishDocumentVersion`) that acceptances pin their
+          hash to, so the always-visible control is deliberately the SECOND
+          button, styled quieter than Save, and it still opens the publish
+          chooser rather than publishing on click. Nothing here publishes in one
+          press, and there is only one publish control on the page. */}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-2 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
+        <p className="text-xs text-muted-foreground">
+          {dirty ? t('unsavedChanges') : t('noUnsavedChanges')}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleSave}
+            disabled={saveMutation.isPending || !dirty || !draft.title.trim() || urlInvalid}
+          >
+            {saveMutation.isPending ? t('saving') : t('save')}
+          </Button>
+          {/* An archived document offers RESTORE, not publish: the publish
+              callable refuses an archived document by name, so a Publish button
+              there would be a live control that always errors. A waiver has
+              neither (see the hint in the publishing card). */}
+          {isArchived ? (
+            !isWaiver && (
+              <Button
+                variant="outline"
+                onClick={() => statusMutation.mutate('draft')}
+                disabled={statusMutation.isPending}
+              >
+                {t('restore')}
+              </Button>
+            )
+          ) : (
+            <Button variant="outline" onClick={() => setPublishOpen(true)} disabled={urlInvalid}>
+              <Upload className="mr-1.5 h-4 w-4" />
+              {isPublished ? t('publishNewVersion') : t('publishAction')}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Unpublish confirmation. Says the consequence in the visitor's terms —
+          the public page goes now, and the bio-link stops offering Documents —
+          and then says, equally plainly, that nothing is lost. NOT styled
+          destructive: this deletes no work, and an overstated warning trains
+          people to click through the next one. */}
+      <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unpublishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unpublishConfirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={statusMutation.isPending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={statusMutation.isPending}
+              onClick={() => {
+                setConfirmUnpublish(false)
+                statusMutation.mutate('draft')
+              }}
+            >
+              {t('unpublishConfirmAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Archive confirm */}
       <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>

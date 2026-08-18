@@ -5,7 +5,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
-import { CalendarClock, MapPin, X, LogIn, UserRound, Loader2 } from 'lucide-react'
+import { CalendarClock, MapPin, X, UserRound, Loader2 } from 'lucide-react'
 import type { BookingCancelEffect, CancelBookingResult, MyBooking, MyBookingsResult } from '@linyup/shared'
 import {
   cancelEffectKeys,
@@ -18,6 +18,7 @@ import {
   reportPublicActionFailure,
   reportPublicLoadFailure,
 } from '@/lib/publicQueryError'
+import SpaceSignInWall from '../SpaceSignInWall'
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 
@@ -49,7 +50,7 @@ function formatDate(iso: string | null): Date | null {
 export default function BookingsHome() {
   const t = useTranslations('Space')
   const tCancel = useTranslations('BookingCancellation')
-  const { teamId, contact, isAuthenticated, openSignIn } = useSpaceAuth()
+  const { teamId, contact, isAuthenticated } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const contactId = contact?.id ?? null
   const [cancelling, setCancelling] = useState<string | null>(null)
@@ -168,19 +169,7 @@ export default function BookingsHome() {
   const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
 
   if (!isAuthenticated) {
-    return (
-      <div className="mt-10 rounded-2xl p-8 text-center" style={cardStyle}>
-        <LogIn className="mx-auto h-7 w-7" style={{ color: accent }} />
-        <p className="mt-3 text-sm" style={{ color: textMuted }}>{t('bookingsSignInPrompt')}</p>
-        <button
-          onClick={() => openSignIn()}
-          className="mt-4 text-sm font-medium px-4 py-2 rounded-full"
-          style={{ background: accent, color: '#fff' }}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-    )
+    return <SpaceSignInWall prompt={t('bookingsSignInPrompt')} />
   }
 
   return (

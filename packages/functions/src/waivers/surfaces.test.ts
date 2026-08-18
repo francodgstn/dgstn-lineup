@@ -382,7 +382,12 @@ describe('SPACE — a member can put a superseded signature right', () => {
     // If this link is ever dropped, the surface above stops being the answer to
     // anything and the two halves of this fix come apart.
     const checkIn = code(readFileSync(join(__dirname, '..', 'sessions', 'index.ts'), 'utf8'))
-    assert.match(checkIn, /signUrl: publicUrl\(getHostingUrl\(\), teamSlug, ''\)/)
+    // LOCALE-PINNED since UX-97: the link is built with `localizedPublicUrl` so
+    // the page answers in the studio's language rather than falling through to
+    // English. What this test guards is the DESTINATION, not the builder — so it
+    // matches the space route and the slug, and tolerates the locale argument
+    // between them.
+    assert.match(checkIn, /signUrl: localizedPublicUrl\([\s\S]{0,200}?teamSlug,\s*''/)
   })
 })
 

@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
-import { confirmClearedHoldFields, type SeatHold } from '@linyup/shared'
+import { confirmClearedHoldFields, buildParticipantDoc, type SeatHold } from '@linyup/shared'
 import { to } from '../utils/async'
 import { hasTeamRole, isTeamMember } from '../utils/teams'
 
@@ -215,16 +215,19 @@ export const checkInContact = onCall(async (request) => {
     }
   }
 
-  const participantData = {
-    contact: contactId,
-    session: sessionId,
-    fullname: `${(contact.lastname as string) || ''} ${(contact.firstname as string) || ''}`.trim(),
-    firstname: (contact.firstname as string) || '',
-    lastname: (contact.lastname as string) || '',
-    avatar_url: (contact.avatar_url as string) || null,
-    checkedInAt: FieldValue.serverTimestamp(),
+  // ONE builder — see `selfCheckIn`. Both check-ins and both staff confirm
+  // surfaces write the attendance row through `buildParticipantDoc`.
+  const participantData = buildParticipantDoc({
+    contactId,
+    sessionId,
+    who: {
+      firstname: contact.firstname as string | undefined,
+      lastname: contact.lastname as string | undefined,
+      avatar_url: contact.avatar_url as string | undefined,
+    },
     checkedInBy: 'qr-scan',
-  }
+    checkedInAt: FieldValue.serverTimestamp(),
+  })
 
   const bookingRef = sessionRef.collection('bookings').doc(contactId)
   const [bookingErr, bookingDoc] = await to(bookingRef.get())

@@ -1082,7 +1082,10 @@
     "bookableHours": "Bookable hours",
     "availabilityLegend": "Bookable hours:",
     "deleteEventConfirm": "Delete event \"{title}\"? This cannot be undone.",
-    "places": "Places"
+    "places": "Places",
+    "horizonLabel": "How far ahead",
+    "horizonNext": "Next {months} months",
+    "horizonLast": "Last {months} months"
   },
   "Events": {
     "title": "Events",
@@ -1911,7 +1914,12 @@
     "noCustomLinks": "No custom links yet.",
     "save": "Save",
     "saving": "Saving…",
-    "saved": "Saved"
+    "saved": "Saved",
+    "sharePreview": "When you share the link",
+    "sharePreviewNoImage": "No cover image yet",
+    "sharePreviewNoDescription": "No description yet — this line stays empty in chats.",
+    "sharePreviewEditDescription": "Add one",
+    "sharePreviewHint": "How your link looks when it is pasted into WhatsApp, Instagram or LinkedIn. It uses your cover image, your studio name and your description."
   },
   "Appointments": {
     "title": "Appointments",
@@ -2766,7 +2774,16 @@
     "sectionContactDesc": "Address, hours, map and socials.",
     "unpublishConfirmTitle": "Take your website offline?",
     "unpublishConfirmBody": "Your published site goes offline immediately: visitors see nothing, and any bio-link entry pointing at it stops being shown. Nothing is lost — your draft pages, wording and images are kept exactly as they are, so you can publish again whenever you like.",
-    "unpublishConfirmAction": "Take it offline"
+    "unpublishConfirmAction": "Take it offline",
+    "fieldPricingDisplay": "Pricing on cards",
+    "pricingDisplayList": "Show every line",
+    "pricingDisplayCompact": "Behind a “Prices” link",
+    "pricingDisplayHidden": "Hide prices",
+    "pricingDisplayHint": "This controls amounts only. A card whose activity requires a membership keeps saying so under every setting — otherwise visitors book something they will be refused.",
+    "fieldPricingLayout": "Layout",
+    "pricingLayoutCards": "One card per plan",
+    "pricingLayoutTable": "Comparison table",
+    "pricingLayoutHint": "The table puts your activities in rows and your plans in columns, so a visitor can see what each plan includes."
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -2897,7 +2914,10 @@
     "sectionCoaches": "Coaches",
     "sectionCoachesDesc": "Coach roster aggregated across your clubs.",
     "sectionContact": "Contact",
-    "sectionContactDesc": "Address, hours, map and socials."
+    "sectionContactDesc": "Address, hours, map and socials.",
+    "unpublishConfirmTitle": "Take your website offline?",
+    "unpublishConfirmBody": "Your published site goes offline immediately and visitors see nothing. Nothing is lost — your draft pages, wording and images are kept exactly as they are, so you can publish again whenever you like.",
+    "unpublishConfirmAction": "Take it offline"
   },
   "Courses": {
     "title": "Online Courses",
@@ -2995,7 +3015,10 @@
     "limitAttachments": "You can attach at most {max} files per lesson.",
     "limitAttachmentSize": "Files must be {max} MB or smaller.",
     "limitImageSize": "Images must be {max} MB or smaller.",
-    "optional": "optional"
+    "optional": "optional",
+    "unpublishConfirmTitle": "Take this course offline?",
+    "unpublishConfirmBody": "It leaves the shop immediately, and people who already have access stop seeing it in their space. Nothing is lost: the modules, lessons, media and purchases are kept, and publishing again restores access.",
+    "unpublishConfirmAction": "Take it offline"
   },
   "Auth": {
     "orWithEmail": "or with email",
@@ -3244,7 +3267,19 @@
     "consentDownloadError": "We could not prepare the file. Please try again.",
     "bookingsCancelConfirm": "Yes, cancel",
     "bookingsCancelKeep": "Keep",
-    "bookingsCancelDone": "Booking cancelled."
+    "bookingsCancelDone": "Booking cancelled.",
+    "restoringSession": "Signing you in…",
+    "welcomeBackNamed": "Welcome back, {name}",
+    "nextUpTitle": "Next up",
+    "nextUpNone": "You have nothing booked yet.",
+    "nextUpLoadFailed": "We couldn't load your next booking. It has not been cancelled.",
+    "bookAClass": "Book a class",
+    "bookAnother": "Book another",
+    "gatedUnavailableForAccount": "This course isn't available on your account.",
+    "gatedPurchaseTitle": "This course is sold separately. Buy it once and it's yours for good.",
+    "gatedPurchaseCta": "Buy this course",
+    "gatedPurchaseAlreadyBought": "Already bought it? Sign in",
+    "studioTermsLink": "Terms & policies"
   },
   "FreePlan": {
     "downgradeBannerTitle": "Your trial has ended — you're now on the Free plan",
@@ -3681,7 +3716,10 @@
     "backToBooking": "Back to booking",
     "successBodyBooking": "Payment received — your class is booked. See you there!",
     "backToAppointments": "Back to appointments",
-    "successBodyAppointment": "Payment received — your appointment is booked. You'll receive a confirmation by email."
+    "successBodyAppointment": "Payment received — your appointment is booked. You'll receive a confirmation by email.",
+    "signingIn": "Signing you in…",
+    "signedInAs": "Signed in as {name}",
+    "successBodyCourseSignedIn": "Thank you! You now have lifetime access. Open your Space to start watching."
   },
   "Notifications": {
     "dismiss": "Dismiss"
@@ -3889,7 +3927,10 @@
     "submitting": "Submitting…",
     "submitError": "Could not submit. Please try again.",
     "thankYou": "Thank you!",
-    "thankYouBody": "Your response has been received."
+    "thankYouBody": "Your response has been received.",
+    "unpublishConfirmTitle": "Take this form offline?",
+    "unpublishConfirmBody": "The link you have shared stops working immediately, and any bio-link entry pointing at it stops being shown. Nothing is lost: the fields, the settings and every response collected so far are kept, and you can publish again whenever you like.",
+    "unpublishConfirmAction": "Take it offline"
   },
   "Documents": {
     "title": "Documents",
@@ -4031,7 +4072,13 @@
     "webLinkTextPlaceholder": "What the reader sees",
     "webLinkInvalidUrl": "Enter a web address starting with http:// or https://",
     "webLinkSubmit": "Insert",
-    "webLinkRemove": "Remove link"
+    "webLinkRemove": "Remove link",
+    "surfacesPublishFirst": "Publish this document first",
+    "unsavedChanges": "Unsaved changes",
+    "noUnsavedChanges": "All changes saved",
+    "unpublishConfirmTitle": "Take this document off your public page?",
+    "unpublishConfirmBody": "Its public page goes offline immediately, and the Documents entry on your bio-link stops being shown. Nothing is lost: the text, every published version and every signature against them are kept, and you can publish again whenever you like.",
+    "unpublishConfirmAction": "Take it offline"
   },
   "OfferAffiliations": {
     "title": "Affiliations",
@@ -4714,7 +4761,8 @@
     "waiverGuardianBadge": "Guardian",
     "waiverGuardianBadgeTitle": "Signed by somebody who declared themselves a parent or guardian. Self-declared — check in person.",
     "waiverCheckBadge": "Check age",
-    "waiverCheckBadgeTitle": "This waiver may cover minors and the participant signed for themselves. Check in person."
+    "waiverCheckBadgeTitle": "This waiver may cover minors and the participant signed for themselves. Check in person.",
+    "addContactBooksSeat": "Adding someone books their seat — the class capacity updates and online booking closes when it is full."
   },
   "OrgEvents": {
     "title": "Organization events",
@@ -6167,6 +6215,15 @@
     "navContact": "Contact",
     "navLocations": "Locations",
     "navClubs": "Clubs",
-    "navCoaches": "Coaches"
+    "navCoaches": "Coaches",
+    "pricesShow": "Prices",
+    "pricesHide": "Hide prices",
+    "tableActivityColumn": "Activity",
+    "tableIncluded": "Included",
+    "tableNotIncluded": "Not included",
+    "tableDiscount": "{percent}% off",
+    "tableAnyPlanNote": "With any membership — signing up is free",
+    "tableOpenNote": "Open to everyone",
+    "tableFreeNote": "Free to book"
   }
 }

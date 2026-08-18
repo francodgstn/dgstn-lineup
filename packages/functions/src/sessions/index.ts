@@ -18,7 +18,8 @@ import { enforceWaiverGate } from '../waivers/gate'
 import {
   bookingWasPaidFor,
   confirmClearedHoldFields,
-  publicUrl,
+  buildParticipantDoc,
+  localizedPublicUrl,
   type SeatHold,
 } from '@linyup/shared'
 import {
@@ -280,9 +281,13 @@ async function cancelSingleSession(
         activityName = (actDoc.data()?.name as string) || 'Session'
     }
 
+    // Locale-pinned on the team's language: the cancellation mail below is
+    // written in it, so the booking page this opens must answer in it too.
     const rebookUrl =
       teamData.slug && sessionData.activityId
-        ? publicUrl(getHostingUrl(), teamData.slug, 'booking', { activity: sessionData.activityId })
+        ? localizedPublicUrl(getHostingUrl(), teamData.language, teamData.slug, 'booking', {
+            activity: sessionData.activityId,
+          })
         : null
 
     for (const bookingDoc of bookingsToNotify) {
@@ -962,16 +967,20 @@ export const selfCheckIn = onCall(async (request) => {
     }
   }
 
-  const participantData = {
-    contact: contactId,
-    session: resolvedSessionId,
-    fullname: `${(contact.lastname as string) || ''} ${(contact.firstname as string) || ''}`.trim(),
-    firstname: (contact.firstname as string) || '',
-    lastname: (contact.lastname as string) || '',
-    avatar_url: (contact.avatar_url as string) || null,
-    checkedInAt: FieldValue.serverTimestamp(),
+  // ONE builder — shared with `checkInContact` and both staff confirm surfaces in
+  // the web app, so the same act cannot produce four document shapes. It also
+  // pins the invariant every reader relies on: the DOCUMENT ID IS THE CONTACT ID.
+  const participantData = buildParticipantDoc({
+    contactId,
+    sessionId: resolvedSessionId,
+    who: {
+      firstname: contact.firstname as string | undefined,
+      lastname: contact.lastname as string | undefined,
+      avatar_url: contact.avatar_url as string | undefined,
+    },
     checkedInBy: 'self-scan',
-  }
+    checkedInAt: FieldValue.serverTimestamp(),
+  })
 
   const bookingRef = sessionRef.collection('bookings').doc(contactId)
   const [bErr, bookingDoc] = await to(bookingRef.get())
@@ -1023,7 +1032,16 @@ export const selfCheckIn = onCall(async (request) => {
     if (typeof reason === 'string' && reason.startsWith('waiver_')) {
       throw new HttpsError(e.code ?? 'failed-precondition', e.message, {
         ...(e.details as Record<string, unknown>),
-        signUrl: publicUrl(getHostingUrl(), teamSlug, 'space'),
+        // Locale-pinned on the team's language — this URL is shown on the
+        // studio's own door device and opened on the member's phone, and
+        // nothing in the request carries a locale (the gate is called with
+        // `locale: null`).
+        signUrl: localizedPublicUrl(
+          getHostingUrl(),
+          (teamSnap.data()?.language as string | undefined) ?? null,
+          teamSlug,
+          'space'
+        ),
       })
     }
     throw err

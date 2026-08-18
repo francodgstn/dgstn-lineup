@@ -51,7 +51,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import {
   CONTACTS_COLLECTION,
   DOCUMENTS_COLLECTION,
-  publicUrl,
+  localizedPublicUrl,
   waiverAcceptanceState,
   waiverStateSatisfiesGate,
   type RequiredWaiverEntry,
@@ -158,7 +158,9 @@ export const requestWaiverAcceptance = onCall(async (request: CallableRequest<un
   }
   const lang: Lang = isLang(team.language) ? team.language : 'en'
   const teamName = team.name || 'Your studio'
-  const spaceUrl = publicUrl(getHostingUrl(), team.slug, 'space')
+  // Locale-pinned on the team's language, which is the language the request
+  // mail below is written in (`lang`).
+  const spaceUrl = localizedPublicUrl(getHostingUrl(), lang, team.slug, 'space')
 
   const db = admin.firestore()
   const nowMs = Date.now()

@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  updateDoc, deleteDoc, setDoc, increment, serverTimestamp, deleteField,
+  updateDoc, deleteDoc, increment, serverTimestamp, deleteField, writeBatch,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -28,6 +28,7 @@ import {
   PARTICIPANTS_SUBCOLLECTION, WAITLIST_SUBCOLLECTION, resolveActivityAccessRule,
   activityRequiresSubscription, contactHoldsCoveringSubscription,
   bookingHoldsSeat, confirmClearedHoldFields, seatsFree,
+  bookingContactId, buildParticipantDoc,
 } from '@linyup/shared'
 import type { Session, Booking, Contact, Activity, WaitlistEntry } from '@linyup/shared'
 import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
@@ -294,18 +295,59 @@ function AddParticipantsDialog({
     setConfirming(null)
     setAdding(contact.id)
     try {
-      const participantRef = doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contact.id)
-      await setDoc(participantRef, {
-        contact: contact.id,
-        session: sessionId,
-        firstname: contact.firstname,
-        lastname: contact.lastname,
-        fullname: `${contact.lastname ?? ''} ${contact.firstname ?? ''}`.trim(),
-        avatar_url: contact.avatar_url ?? null,
-        checkedInAt: serverTimestamp(),
-        checkedInBy: 'manual',
-      })
-      await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(1) })
+      // ── THE SEAT AND THE ATTENDANCE ARE TWO DOCUMENTS, AND THIS DOOR OWED BOTH
+      // This is the only way to put a KNOWN person into a class from the admin
+      // (there is no staff class-booking callable — `createStaffAppointment` has
+      // no class twin), and it used to write the attendance row alone. A booking
+      // is what OCCUPIES a seat: `bookingHoldsSeat` counts bookings,
+      // `trackBookings` recounts `bookings_count` from them, and every capacity
+      // gate reads that number. So a manager adding six people to a six-seat
+      // class left it reading "0 booked" and the public form happily sold all
+      // six seats again.
+      //
+      // Written as a CONFIRMED booking, in the shape `confirmClearedHoldFields`
+      // settles every other confirm into, plus `source: 'staff'` so the row says
+      // who put it there. `trackBookings` fires on it and rewrites
+      // `bookings_count` + `status` absolutely — this batch deliberately writes
+      // neither.
+      // Read first: this person may already hold a booking (they were on the
+      // list and the manager admitted them by hand instead of pressing
+      // Confirm). Merging blindly would restamp `created_at` and lose when the
+      // seat was actually taken, so an existing row is CONFIRMED rather than
+      // rewritten — including the hold markers every other confirm clears.
+      const bookingRef = doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, contact.id)
+      const existing = await getDoc(bookingRef)
+      const batch = writeBatch(db)
+      batch.set(
+        bookingRef,
+        {
+          contact: contact.id,
+          session: sessionId,
+          teamId,
+          firstname: contact.firstname ?? '',
+          lastname: contact.lastname ?? '',
+          email: contact.email ?? null,
+          status: 'confirmed',
+          confirmed_at: serverTimestamp(),
+          ...(existing.exists()
+            ? confirmClearedHoldFields(existing.data() as Booking, deleteField())
+            : { source: 'staff', created_at: serverTimestamp() }),
+        },
+        { merge: true }
+      )
+      batch.set(
+        doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contact.id),
+        buildParticipantDoc({
+          contactId: contact.id,
+          sessionId,
+          who: contact,
+          checkedInBy: 'manual',
+          checkedInAt: serverTimestamp(),
+        })
+      )
+      // `participants_count` is `trackSessionParticipants`' to write — see
+      // `confirmBooking`.
+      await batch.commit()
       onAdded()
     } finally {
       setAdding(null)
@@ -334,6 +376,10 @@ function AddParticipantsDialog({
             placeholder={t('searchContactsPlaceholder')}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
+          {/* Adding now takes a SEAT as well as marking attendance, which is a
+              change a manager has to be told about once — before, six manual
+              adds left a six-seat class advertising six free seats. */}
+          <p className="text-xs text-muted-foreground">{t('addContactBooksSeat')}</p>
           {teamRequiresWaiver && (
             <p className="text-xs text-muted-foreground">{t('addParticipantWaiverNote')}</p>
           )}
@@ -658,23 +704,44 @@ export default function SessionDetailPage() {
     // the seat again at the deadline and puts a confirmed booking in
     // `releaseExpiredBookingHolds`' delete query. One shared patch, so all four
     // confirm surfaces settle a booking into the same shape.
-    await updateDoc(bookingRef, {
+    const contactId = bookingContactId(booking)
+    // ONE confirm, whichever page you are standing on. This surface used to omit
+    // `confirmed_at` (so the roster could not say WHEN, and the bookings list
+    // could), skip `conversions_count`, and leave the contact's
+    // `pending_bookings_count` standing — the same act, three fields lighter
+    // than the identical button on /bookings. The two check-in callables write
+    // this same set.
+    const batch = writeBatch(db)
+    batch.update(bookingRef, {
       status: 'confirmed',
+      confirmed_at: serverTimestamp(),
       ...confirmClearedHoldFields(booking, deleteField()),
     })
-    // Add to participants subcollection
-    const participantRef = doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, booking.contact || booking.id)
-    await setDoc(participantRef, {
-      contact: booking.contact || null,
-      session: sessionId,
-      firstname: booking.firstname,
-      lastname: booking.lastname,
-      fullname: `${booking.lastname ?? ''} ${booking.firstname ?? ''}`.trim(),
-      checkedInAt: serverTimestamp(),
-      checkedInBy: 'booking-confirm',
-      confirmedFromBooking: true,
+    batch.set(
+      doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contactId),
+      buildParticipantDoc({
+        contactId,
+        sessionId,
+        who: booking,
+        checkedInBy: 'booking-confirm',
+        checkedInAt: serverTimestamp(),
+        fromBooking: true,
+      })
+    )
+    // No `participants_count` here: `trackSessionParticipants` owns that number
+    // and recounts it absolutely from the subcollection, exactly as
+    // `trackBookings` owns `bookings_count`. Three client increments used to
+    // race it — and the two check-in callables never incremented at all, so a
+    // QR-scanned class silently read zero attendance.
+    batch.update(doc(db, SESSIONS_COLLECTION, sessionId), {
+      conversions_count: increment(1),
     })
-    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(1) })
+    if (booking.contact) {
+      batch.update(doc(db, CONTACTS_COLLECTION, booking.contact), {
+        pending_bookings_count: increment(-1),
+      })
+    }
+    await batch.commit()
     invalidate()
   }
 
@@ -690,7 +757,9 @@ export default function SessionDetailPage() {
 
   const removeParticipant = async (participantId: string) => {
     await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, participantId))
-    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), { participants_count: increment(-1) })
+    // `participants_count` is recounted by `trackSessionParticipants` — see
+    // `confirmBooking`. The blind decrement here could not tell a double click
+    // from two removals, and drove the number negative.
     invalidate()
   }
 

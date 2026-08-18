@@ -47,7 +47,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { confirmClearedHoldFields, type Booking } from '@linyup/shared'
+import {
+  bookingContactId,
+  confirmClearedHoldFields,
+  buildParticipantDoc,
+  type Booking,
+} from '@linyup/shared'
 import {
   Search,
   MoreHorizontal,
@@ -304,17 +309,25 @@ function useBookingAction(teamId: string | null) {
           confirmed_at: serverTimestamp(),
           ...confirmClearedHoldFields(booking, deleteField()),
         })
-        // Add participant from booking data
-        const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
-        batch.set(participantRef, {
-          fullname: `${booking.firstname ?? ''} ${booking.lastname ?? ''}`.trim(),
-          firstname: booking.firstname ?? '',
-          lastname: booking.lastname ?? '',
-          avatar_url: null,
-          contact: booking.contact ?? booking.id,
-          session: booking.session,
-          confirmedFromBooking: true,
-        })
+        // The attendance row — ONE builder, shared with session detail and the
+        // two check-in callables. This page used to key the row by the BOOKING
+        // id, spell `fullname` "firstname lastname" against everyone else's
+        // "lastname firstname", and write neither `checkedInAt` nor
+        // `checkedInBy` — so the same act produced a different document here
+        // than it did one click away on the session.
+        const contactId = bookingContactId(booking)
+        const participantRef = doc(db, 'sessions', booking.session, 'participants', contactId)
+        batch.set(
+          participantRef,
+          buildParticipantDoc({
+            contactId,
+            sessionId: booking.session,
+            who: booking,
+            checkedInBy: 'booking-confirm',
+            checkedInAt: serverTimestamp(),
+            fromBooking: true,
+          })
+        )
         // Conversion only. `bookings_count` is never written from a client:
         // it has one writing style (an absolute value from a server read set,
         // or trackBookings' recount, which this status flip fires) and a blind
@@ -333,8 +346,14 @@ function useBookingAction(teamId: string | null) {
           status: 'pending',
           confirmed_at: null,
         })
-        // Remove participant doc
-        const participantRef = doc(db, 'sessions', booking.session, 'participants', booking.id)
+        // Remove participant doc — same id the confirm above wrote it under.
+        const participantRef = doc(
+          db,
+          'sessions',
+          booking.session,
+          'participants',
+          bookingContactId(booking)
+        )
         batch.delete(participantRef)
         // Undo the conversion only — see the note above.
         batch.update(sessionRef, {

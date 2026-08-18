@@ -47,6 +47,7 @@ import {
   X,
   Eye,
   EyeOff,
+  Share2,
 } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 
@@ -616,6 +617,69 @@ function SocialTab({ register }: { register: ReturnType<typeof useForm<FormData>
 const BIO_TABS = ['appearance', 'links', 'social'] as const
 type Tab = (typeof BIO_TABS)[number]
 
+// ─── share preview (UX-31) ───────────────────────────────────────────────────
+//
+// WHAT THE STUDIO IS ACTUALLY SHARING. The panel beside this one shows the PAGE;
+// this shows the LINK — the card WhatsApp, Instagram, LinkedIn and Slack build
+// from the metadata `(public)/public/[slug]/page.tsx` emits. The two are the
+// same three facts (cover image, name, description) on purpose: a preview that
+// does not look like what a visitor receives is not a preview.
+//
+// It is a faithful mock, not a live unfurl — nothing here fetches the page. It
+// reads the same fields the metadata reads, from the form the studio is editing,
+// so an image swapped a second ago is already reflected.
+function SharePreview({
+  url,
+  name,
+  description,
+  imageUrl,
+}: {
+  url: string
+  name: string
+  description?: string
+  imageUrl: string | null
+}) {
+  const t = useTranslations('BioLink')
+  const host = url.replace(/^https?:\/\//, '').split('/')[0]
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Share2 className="h-3.5 w-3.5" />
+        {t('sharePreview')}
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt="" className="h-32 w-full object-cover" />
+        ) : (
+          <div className="flex h-32 w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+            {t('sharePreviewNoImage')}
+          </div>
+        )}
+        <div className="space-y-0.5 p-3">
+          <p className="text-xs uppercase text-muted-foreground">{host}</p>
+          <p className="truncate text-sm font-semibold">{name}</p>
+          {description ? (
+            <p className="line-clamp-2 text-xs text-muted-foreground">{description}</p>
+          ) : (
+            // An empty description is the common case and it shows as a blank
+            // line in every chat app, so it is named here with the way to fix
+            // it rather than left as a gap the studio has to interpret.
+            <p className="text-xs text-muted-foreground">
+              {t('sharePreviewNoDescription')}{' '}
+              <Link href={'/settings/team' as Route} className="text-primary hover:underline">
+                {t('sharePreviewEditDescription')}
+              </Link>
+            </p>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{t('sharePreviewHint')}</p>
+    </div>
+  )
+}
+
 export default function TeamBioLinkEditorPage() {
   const { currentTeamId } = useAuth()
   const { data: team, isLoading } = useTeam(currentTeamId)
@@ -913,7 +977,16 @@ export default function TeamBioLinkEditorPage() {
         </div>
 
         {/* ── Right: sticky preview ── */}
-        <div className="lg:w-[400px] lg:flex-shrink-0 lg:sticky lg:top-6 lg:self-start space-y-2">
+        <div className="lg:w-[400px] lg:flex-shrink-0 lg:sticky lg:top-6 lg:self-start space-y-4">
+          {/* The LINK first, the PAGE below it: the card is what a prospect sees
+              before they decide whether to tap at all. */}
+          <SharePreview
+            url={bioLinkUrl}
+            name={team.name}
+            description={team.description}
+            imageUrl={heroImageUrl ?? profileImageUrl}
+          />
+          <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               <Eye className="h-3.5 w-3.5" />
@@ -932,6 +1005,7 @@ export default function TeamBioLinkEditorPage() {
           <div className="rounded-xl border overflow-hidden max-h-[calc(100vh-12rem)] overflow-y-auto shadow-sm">
             {/* Links are inert in the preview (onLinkClick prevents navigation). */}
             <BioLinkHome team={previewTeam} slug={team.slug} onLinkClick={() => {}} />
+          </div>
           </div>
         </div>
       </div>

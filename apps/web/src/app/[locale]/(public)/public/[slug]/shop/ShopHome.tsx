@@ -39,6 +39,7 @@ import { publicHref, publicSubHref } from '@/lib/publicRoutes'
 import { resolveActivityTerms, type ActivityTerm } from '@/lib/activityTerms'
 import { usePublicTeam } from '../PublicTeamProvider'
 import { usePublicContactAuth } from '../PublicContactAuthProvider'
+import { PublicStudioTermsLink } from '../PublicStudioTermsLink'
 import { DEFAULT_ACCENT } from '@/lib/colors'
 import {
   PromoCodeField,
@@ -186,7 +187,7 @@ export default function ShopHome({
   const tPromo = useTranslations('Promo')
   const locale = useLocale()
   const { slug, teamId, team } = usePublicTeam()
-  const { isAuthenticated, contact, openSignIn, logout } = usePublicContactAuth()
+  const { isAuthenticated, isRestoring, contact, openSignIn, logout } = usePublicContactAuth()
 
   const [plans, setPlans] = useState<PlanEntry[]>([])
   const [pendingCheckout, setPendingCheckout] = useState<Checkout | null>(null)
@@ -1107,7 +1108,13 @@ export default function ShopHome({
           </div>
         )}
 
-        {loading ? (
+        {/* `isRestoring` joins `loading` deliberately (UX-37): every card on this
+            page prices and unlocks itself from `isAuthenticated`, which is FALSE
+            for the whole of a session restore. Painting first would put "Sign in
+            to access" on a returning member's own courses and the full price on
+            a member's discounted ones — then silently correct itself. A spinner
+            for the same half-second states nothing false. */}
+        {loading || isRestoring ? (
           <div className="mt-10 flex justify-center">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: textMuted }} />
           </div>
@@ -1485,6 +1492,12 @@ export default function ShopHome({
             </div>
           </section>
         )}
+
+        {/* The studio's own terms — the till had no route to them at all
+            (UX-57). Renders nothing for a studio that has published none. */}
+        <div className="mt-10 border-t pt-5 text-center" style={{ borderColor: cardBorder }}>
+          <PublicStudioTermsLink color={textMuted} />
+        </div>
       </div>
 
       {/* Email → checkout modal */}
@@ -1710,6 +1723,13 @@ export default function ShopHome({
                   })
                 : t('continueToPayment')}
             </button>
+            {/* The LAST screen before Stripe is the last moment the terms can
+                still inform the decision — the same reasoning that put
+                BookingTerms above the booking button rather than in the
+                confirmation email. */}
+            <div className="mt-3 text-center">
+              <PublicStudioTermsLink color={textMuted} withIcon={false} />
+            </div>
           </div>
         </div>
       )}

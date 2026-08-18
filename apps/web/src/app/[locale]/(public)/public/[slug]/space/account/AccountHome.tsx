@@ -4,16 +4,15 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
-import { formatCurrency } from '@/lib/format'
-import { CreditCard, BadgeCheck, User, Pencil, Check, LogIn } from 'lucide-react'
-import { QueryErrorState } from '@/components/ui/query-error'
+import { User, Pencil, Check } from 'lucide-react'
 import { loadFailureDetail } from '@/lib/publicQueryError'
 import { SpaceWaiverCard } from '../SpaceWaiverCard'
+import { SpaceMembershipCard } from '../SpaceMembershipCard'
+import SpaceSignInWall from '../SpaceSignInWall'
 import { ConsentHistoryDownload } from './ConsentHistoryDownload'
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 import { useSpaceContact } from '../useSpaceContact'
-import { usePublicTeam } from '../../PublicTeamProvider'
 
 function toDateInputValue(v: unknown): string {
   if (!v) return ''
@@ -32,14 +31,12 @@ function formatDateDisplay(v: unknown): string {
 
 export default function AccountHome() {
   const t = useTranslations('Space')
-  const { isAuthenticated, openSignIn } = useSpaceAuth()
+  const { isAuthenticated } = useSpaceAuth()
   const { accent, onDark, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
-  const { team } = usePublicTeam()
-  const currency = team?.default_currency ?? 'CHF'
-  // Same read, same rule as SpaceHome's membership block: a failure here means we
-  // do not know what this contact holds, which is a different statement from
-  // "they hold nothing" — and this page renders it to the member's own face.
-  const { data: contact, isLoading, isError, error, refetch } = useSpaceContact()
+  // Same read, same rule as the membership card: a failure here means we do not
+  // know what this contact holds, which is a different statement from "they hold
+  // nothing" — and this page renders it to the member's own face.
+  const { data: contact, isLoading, isError, error } = useSpaceContact()
 
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ firstname: '', lastname: '', phone: '', birthdate: '', note: '' })
@@ -65,39 +62,8 @@ export default function AccountHome() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="mt-10 rounded-2xl p-8 text-center" style={cardStyle}>
-        <LogIn className="mx-auto h-7 w-7" style={{ color: accent }} />
-        <p className="mt-3 text-sm" style={{ color: textMuted }}>{t('accountSignInPrompt')}</p>
-        <button
-          onClick={() => openSignIn()}
-          className="mt-4 text-sm font-medium px-4 py-2 rounded-full"
-          style={{ background: accent, color: '#fff' }}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-    )
+    return <SpaceSignInWall prompt={t('accountSignInPrompt')} />
   }
-
-  const subs = contact?.active_subscriptions ?? []
-  const legacy =
-    !subs.length && contact?.subscription_type_id
-      ? [{
-          subscription_type_id: contact.subscription_type_id,
-          subscription_type_name: contact.subscription_type_name ?? null,
-          recurrence: contact.subscription_recurrence ?? null,
-          amount: undefined as number | undefined,
-          status: 'active' as string,
-          // A legacy single-field membership has no Stripe subscription behind
-          // it, so there is no scheduled end to announce.
-          cancels_at_ms: null as number | null,
-          cancelling: false,
-        }]
-      : []
-  const shownSubs = subs.length ? subs : legacy
-  const aff = contact?.affiliation_summary
-  const hasMembership = shownSubs.length > 0 || aff?.has_active === true
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -124,77 +90,10 @@ export default function AccountHome() {
 
   return (
     <div className="mt-6 space-y-4">
-      {/* Membership */}
-      <section className="rounded-2xl p-4" style={cardStyle}>
-        <div className="flex items-center gap-2 mb-3">
-          <CreditCard className="h-4 w-4" style={{ color: accent }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
-            {t('membershipTitle')}
-          </h2>
-        </div>
-        {isLoading ? (
-          <div className="h-5 w-40 rounded animate-pulse" style={{ background: cardBorder }} />
-        ) : isError ? (
-          <QueryErrorState
-            onRetry={() => void refetch()}
-            title={t('membershipLoadFailed')}
-            detail={loadFailureDetail(error)}
-            theme={{ textMain, textMuted, accent, border: cardBorder }}
-          />
-        ) : !hasMembership ? (
-          <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
-        ) : (
-          <div className="space-y-2">
-            {shownSubs.map((s, i) => (
-              <div key={s.subscription_type_id ?? i} className="flex items-start justify-between gap-3">
-                <span className="text-sm font-medium" style={{ color: textMain }}>
-                  {s.subscription_type_name ?? t('membershipActive')}
-                  {s.recurrence ? <span style={{ color: textMuted }}> · {s.recurrence}</span> : null}
-                  {/* A membership that has been cancelled but still runs is a
-                      third state — the member keeps training until this date.
-                      Saying nothing was the old behaviour, and it meant somebody
-                      who cancelled in the billing portal saw no acknowledgement
-                      of it anywhere.
-
-                      THE DATE ONLY, deliberately. The rest of the cancellation
-                      record (reason, churn survey, comment) is stored and shown
-                      to the STUDIO, not read back to the member who wrote it —
-                      and it could not reach here anyway: this list is
-                      Contact.active_subscriptions, which onMemberSubscriptionWrite
-                      builds from LIVE subscriptions only, so a lapsed one is
-                      already gone by the time its reason would matter. */}
-                  {typeof s.cancels_at_ms === 'number' ? (
-                    <span className="block text-xs font-normal" style={{ color: '#b45309' }}>
-                      {t('membershipEndsOn', {
-                        date: new Date(s.cancels_at_ms).toLocaleDateString(),
-                      })}
-                    </span>
-                  ) : s.cancelling ? (
-                    // WITHOUT the date, when that is all we have. A membership
-                    // whose subscription doc predates the Dahlia field migration
-                    // is cancelling with no date stored anywhere, and keying this
-                    // line on the date alone showed that member nothing —
-                    // exactly the acknowledgement gap the date was added to fix.
-                    <span className="block text-xs font-normal" style={{ color: '#b45309' }}>
-                      {t('membershipEndsAtPeriodEnd')}
-                    </span>
-                  ) : null}
-                </span>
-                {typeof s.amount === 'number' && (
-                  <span className="text-sm" style={{ color: textMuted }}>{formatCurrency(s.amount, currency)}</span>
-                )}
-              </div>
-            ))}
-            {aff?.has_active && (
-              <div className="flex items-center gap-1.5 text-sm" style={{ color: textMain }}>
-                <BadgeCheck className="h-4 w-4" style={{ color: '#16a34a' }} />
-                {t('affiliationActive')}
-                {aff.types?.length ? <span style={{ color: textMuted }}> · {aff.types.join(', ')}</span> : null}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {/* Membership — the SAME component Space Home renders, in its detailed
+          variant. It was written twice, and the copies had already diverged:
+          only this one learned to say a membership is cancelling. */}
+      <SpaceMembershipCard variant="full" />
 
       {/* Profile */}
       <section className="rounded-2xl p-4" style={cardStyle}>

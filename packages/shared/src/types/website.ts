@@ -105,6 +105,31 @@ export interface ActivitiesSection extends SectionBase {
   layout?: 'grid' | 'list'
   /** Show a "Book" link on each card → /booking/[activitySlug]. */
   showBooking?: boolean
+  /**
+   * How much of the commercial story each card states.
+   *
+   *  - 'list' (default): every line, one per row — today's behaviour.
+   *  - 'compact': the money collapses behind one "Prices" control that reveals
+   *    the same lines on tap/hover.
+   *  - 'hidden': no amount is rendered at all.
+   *
+   * HIDING A PRICE MUST NEVER HIDE A GATE. Whatever this is set to, a card
+   * whose activity REFUSES a visitor keeps saying so — the members-tier line
+   * and the "included with {plan}" line of a subscription-gated class are
+   * requirements, not prices, and they render under every mode (the latter
+   * without its price under 'hidden'). What this option governs is the money a
+   * visitor could choose to spend: drop-in, appointment prices, member
+   * discounts, and a PAID trial badge (a free-trial badge quotes no amount and
+   * stays). Anything else would sell a click that ends in a refusal.
+   *
+   * Under 'compact' a gate line keeps its price inline rather than moving
+   * behind the control: splitting it would either duplicate the line or strip
+   * the one number that makes the requirement actionable ("Included with
+   * Premium" — at what?). It is the OPTIONAL spend that collapses.
+   *
+   * Absent ⇒ 'list', so existing sites are unaffected.
+   */
+  pricingDisplay?: 'list' | 'compact' | 'hidden'
 }
 
 /** Pulls live data from the team's public_profile.aggregator_subscription_types. */
@@ -114,6 +139,17 @@ export interface PricingSection extends SectionBase {
   subheading?: string
   source: 'subscriptions'
   ctaLabel?: string
+  /**
+   * How the plans are laid out:
+   *  - 'cards' (default): one card per plan — today's behaviour.
+   *  - 'table': the comparison a prospect actually makes — activities as ROWS,
+   *    plans as COLUMNS, each cell saying what that plan gets you for that
+   *    activity. No new data: it is the same activity mirrors + plan list the
+   *    cards already read, resolved through the same access rules.
+   *
+   * Absent ⇒ 'cards'.
+   */
+  layout?: 'cards' | 'table'
 }
 
 /** Pulls upcoming bookable sessions from the session public_profile mirrors. */

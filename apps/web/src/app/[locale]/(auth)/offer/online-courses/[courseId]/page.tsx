@@ -579,6 +579,13 @@ function SettingsTab({
   const [uploading, setUploading] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Unpublishing takes the course out of the shop and out of every buyer's
+  // Space in one click. It is REVERSIBLE and LOSSLESS — modules, lessons, media
+  // and purchases are untouched, and re-publishing restores access — so it asks
+  // once and the copy says exactly that rather than implying deletion (UX-100).
+  // Publishing is not confirmed: it puts something up, and the way back is this
+  // very button.
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const coverRef = useRef<HTMLInputElement>(null)
 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
@@ -802,7 +809,10 @@ function SettingsTab({
         >
           {saveMutation.isPending ? t('saving') : t('saveSettings')}
         </Button>
-        <Button variant="outline" onClick={togglePublish}>
+        <Button
+          variant="outline"
+          onClick={() => (status === 'published' ? setConfirmUnpublish(true) : togglePublish())}
+        >
           {status === 'published' ? t('unpublish') : t('publish')}
         </Button>
       </div>
@@ -815,6 +825,28 @@ function SettingsTab({
           {t('deleteCourse')}
         </Button>
       </div>
+
+      {/* Not styled destructive: this deletes no work, and an overstated
+          warning trains people to click through the next one. */}
+      <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unpublishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unpublishConfirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setConfirmUnpublish(false)
+                await togglePublish()
+              }}
+            >
+              {t('unpublishConfirmAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <AlertDialogContent>

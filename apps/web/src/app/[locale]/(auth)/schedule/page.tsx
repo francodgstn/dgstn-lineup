@@ -11,12 +11,14 @@ import {
   orderBy,
   limit,
   getDocs,
+  getCountFromServer,
   Timestamp,
   doc,
   addDoc,
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore'
+import { addDays, addMonths } from 'date-fns'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -92,6 +94,12 @@ const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), {
 
 type CalendarView = 'calendar' | 'list'
 const TIME_TABS = ['upcoming', 'past'] as const
+
+// How far the list reaches, in months from today. `3` reproduces the window the
+// page was hard-coded to before UX-64; the rest are the zoom-out.
+const HORIZONS = [3, 6, 12] as const
+type Horizon = (typeof HORIZONS)[number]
+const DEFAULT_HORIZON: Horizon = 3
 type TimeTab = (typeof TIME_TABS)[number]
 // Shared type filter, applied to both calendar + list. 'classes' = group
 // classes; 'appointment' = appointment sessions (activityType === 'appointment').
@@ -195,26 +203,103 @@ type EventForm = z.infer<typeof eventSchema>
 
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
-function useAllSessions(teamId: string | null, year: number, month: number) {
+/**
+ * Sessions in an EXPLICIT window.
+ *
+ * This used to be `useAllSessions(teamId, year, month)`, which hard-coded
+ * `[month-1, month+2)` — right for a month grid that wants its neighbours
+ * prefetched, and the reason the LIST could never show more than three months
+ * (UX-64): the list was reading the calendar's cursor window. A studio planning
+ * a season had to page the calendar forward one month at a time and read the
+ * list three months at a time.
+ *
+ * The window is a parameter now, and the two views ask for different ones. Same
+ * query shape as before — `teamId ==` + a `start` range + `orderBy(start)` — so
+ * it runs on the composite index that already exists (`sessions: teamId ASC,
+ * start ASC`). Widening the window needs NO new index; it only costs reads.
+ */
+function useSessionsInRange(
+  teamId: string | null,
+  from: Date,
+  to: Date,
+  { enabled = true }: { enabled?: boolean } = {}
+) {
   return useQuery<Session[]>({
-    queryKey: ['sessions', 'calendar', teamId, year, month],
-    enabled: !!teamId,
+    // Bounds in the key, not a view name: two views asking for the same window
+    // share one cache entry instead of fetching it twice.
+    queryKey: ['sessions', 'range', teamId, from.getTime(), to.getTime()],
+    enabled: !!teamId && enabled,
     staleTime: 60_000,
     queryFn: async () => {
       if (!teamId) return []
-      // Load prev + current + next month so navigation feels instant
-      const from = Timestamp.fromDate(new Date(year, month - 1, 1))
-      const to = Timestamp.fromDate(new Date(year, month + 2, 1))
       const snap = await getDocs(
         query(
           collection(db, SESSIONS_COLLECTION),
           where('teamId', '==', teamId),
-          where('start', '>=', from),
-          where('start', '<', to),
+          where('start', '>=', Timestamp.fromDate(from)),
+          where('start', '<', Timestamp.fromDate(to)),
           orderBy('start', 'asc')
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
+    },
+  })
+}
+
+/**
+ * THE authoritative answer to "how many upcoming?".
+ *
+ * The header used to count the rows the CALENDAR had loaded — a window anchored
+ * to the month cursor, not to now. Page back to March and the grid filled with
+ * March's classes while the header above it read "0 upcoming", because nothing
+ * in the loaded window was still in the future (UX-20). Page forward to
+ * November and it counted November alone, ignoring everything between today and
+ * then.
+ *
+ * Two questions, so two queries: the grid/list ask "what is in this window",
+ * this asks "what is still ahead", anchored to now and to nothing else. A
+ * server-side aggregation, so a studio with a year of sessions pays one count
+ * rather than downloading them to length a filtered array.
+ */
+function useUpcomingCount(teamId: string | null, orgId: string | null | undefined) {
+  return useQuery<number>({
+    queryKey: ['schedule', 'upcoming-count', teamId, orgId],
+    enabled: !!teamId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!teamId) return 0
+      const now = Timestamp.now()
+      const counts = await Promise.all([
+        getCountFromServer(
+          query(
+            collection(db, SESSIONS_COLLECTION),
+            where('teamId', '==', teamId),
+            where('start', '>=', now)
+          )
+        ),
+        getCountFromServer(
+          query(
+            collection(db, EVENTS_COLLECTION),
+            where('teamId', '==', teamId),
+            where('deleted_at', '==', null),
+            where('start', '>=', now)
+          )
+        ),
+        ...(orgId
+          ? [
+              getCountFromServer(
+                query(
+                  collection(db, EVENTS_COLLECTION),
+                  where('orgId', '==', orgId),
+                  where('scope', '==', 'org'),
+                  where('deleted_at', '==', null),
+                  where('start', '>=', now)
+                )
+              ),
+            ]
+          : []),
+      ])
+      return counts.reduce((n, c) => n + c.data().count, 0)
     },
   })
 }
@@ -820,6 +905,10 @@ export default function CalendarPage() {
 
   const [view, setView] = useState<CalendarView>('calendar')
   const [tab, setTab] = useTabParam(TIME_TABS, 'upcoming')
+  // How far the LIST reaches, in months from today. Three was the old hard cap;
+  // it stays the default so nothing gets slower for a studio that never touches
+  // it, and zooming out to a season or a year is now one click (UX-64).
+  const [horizon, setHorizon] = useState<Horizon>(DEFAULT_HORIZON)
   const [filter, setFilter] = useState<ItemFilter>('all')
   const [activityFilter, setActivityFilter] = useState<string | null>(null)
   // 'all' · 'mine' (current user's uid) · a specific coach uid
@@ -846,7 +935,22 @@ export default function CalendarPage() {
   // session directly via the staff-only callable.
   const [appointmentFormOpen, setAppointmentFormOpen] = useState(false)
 
-  const sessionsQ = useAllSessions(currentTeamId, viewYear, viewMonth)
+  // ── the window each view asks for ─────────────────────────────────────────
+  // The calendar wants the month either side of its cursor (instant paging);
+  // the list wants a HORIZON measured from today, which is the thing a studio
+  // planning a season actually asks for and which the cursor window could never
+  // express (UX-64). Both bounds are snapped to midnight so the query key is
+  // stable for the whole day instead of changing on every render.
+  const listAnchor = startOfDay(today)
+  const range =
+    view === 'calendar'
+      ? { from: new Date(viewYear, viewMonth - 1, 1), to: new Date(viewYear, viewMonth + 2, 1) }
+      : tab === 'upcoming'
+        ? { from: listAnchor, to: addMonths(listAnchor, horizon) }
+        : { from: addMonths(listAnchor, -horizon), to: addDays(listAnchor, 1) }
+
+  const sessionsQ = useSessionsInRange(currentTeamId, range.from, range.to)
+  const upcomingCountQ = useUpcomingCount(currentTeamId, orgId)
   const activitiesQ = useActivities(currentTeamId)
   const eventsQ = useAllEvents(currentTeamId, orgId)
   const { data: members = [] } = useTeamMembers(currentTeamId)
@@ -935,7 +1039,16 @@ export default function CalendarPage() {
     )
 
   const isListLoading = sessionsQ.isLoading || eventsQ.isLoading
-  const upcomingCount = allItems.filter((item) => getItemMs(item) >= nowMs).length
+  // ONE query answers this, and it is not this page's window — see
+  // `useUpcomingCount`. Undefined while it loads, so the header says nothing
+  // rather than saying zero.
+  const upcomingCount = upcomingCountQ.data
+
+  // "Next 6 months" vs "Last 6 months" — the same distance reads differently
+  // depending on which way the tab is pointing, and a bare "6 months" beside a
+  // Past tab is ambiguous about which six.
+  const horizonLabel = (h: Horizon) =>
+    tab === 'upcoming' ? t('horizonNext', { months: h }) : t('horizonLast', { months: h })
 
   const TABS: { key: TimeTab; label: string }[] = [
     { key: 'upcoming', label: t('tabUpcoming') },
@@ -957,7 +1070,7 @@ export default function CalendarPage() {
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitle', { count: upcomingCount })}
+            {upcomingCount === undefined ? ' ' : t('subtitle', { count: upcomingCount })}
           </p>
         </div>
         {/* ONE height across this row. The three controls were hand-sized
@@ -1160,21 +1273,43 @@ export default function CalendarPage() {
       {/* List view */}
       {view === 'list' && (
         <>
-          {/* Tabs */}
-          <div className="flex gap-1 border-b">
-            {TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                  tab === key
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          {/* Tabs, and — on the same line — HOW FAR the list reaches.
+              The horizon belongs beside the upcoming/past switch because it
+              modifies exactly that: the tab says which direction from today,
+              this says how far. It is not a filter (it does not narrow what is
+              shown, it decides what is fetched), so it stays out of the chip row
+              above, which is all filters. */}
+          <div className="flex items-end justify-between gap-3 border-b">
+            <div className="flex gap-1">
+              {TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    tab === key
+                      ? 'border-primary text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <Select
+              value={String(horizon)}
+              onValueChange={(v) => setHorizon(Number(v) as Horizon)}
+            >
+              <SelectTrigger className="h-7 text-xs w-[150px] mb-1" aria-label={t('horizonLabel')}>
+                <span className="truncate">{horizonLabel(horizon)}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {HORIZONS.map((h) => (
+                  <SelectItem key={h} value={String(h)}>
+                    {horizonLabel(h)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Activity sub-filter — only when narrowing to group classes.

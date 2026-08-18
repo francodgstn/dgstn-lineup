@@ -1304,6 +1304,11 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+    // Per-IP claims of a completed Stripe Checkout Session (claimCheckoutSession)
+    match /checkout_claim_attempts/{bucketId} {
+      allow read: if false;
+      allow write: if false;
+    }
 
     // The `auth_tokens` collection and its deny-all block were removed 2026-07-17:
     // the mechanism was dead (no writer produced the shape its readers expected).

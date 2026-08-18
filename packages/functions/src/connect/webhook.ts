@@ -40,7 +40,7 @@ import {
   type ConnectOnboardingModel,
   type FinanceCategory,
   type SaasPlan,
-  publicUrl,
+  localizedPublicUrl,
 } from '@linyup/shared'
 import { releaseWaitlistOffer } from '../booking/waitlist/release'
 // The paid CLASS booking's receipt — always on, deliberately outside the
@@ -2549,9 +2549,14 @@ async function handleAppointmentCheckout(
     const td = teamSnap.data()
     if (sd) {
       const teamSlug = (td?.slug as string | undefined) ?? null
+      // Locale-pinned on the TEAM's language — the same rule the booking
+      // confirmation chain already follows. This mail is written in
+      // `td.language`; an unprefixed link would open an English cancel page.
       const cancelUrl =
         teamSlug && bookingToken
-          ? publicUrl(getHostingUrl(), teamSlug, 'appointments/cancel', { token: bookingToken })
+          ? localizedPublicUrl(getHostingUrl(), asLang(td?.language), teamSlug, 'appointments/cancel', {
+              token: bookingToken,
+            })
           : null
       await sendAppointmentBookingEmails({
         teamId: team.teamId,

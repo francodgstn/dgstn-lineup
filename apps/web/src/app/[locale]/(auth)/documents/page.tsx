@@ -7,7 +7,6 @@ import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,15 +18,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { FileText, Plus, Copy, Link2, Globe, Lock, ShieldCheck } from 'lucide-react'
+import { FileText, Plus, Lock, ShieldCheck } from 'lucide-react'
 import { WAIVER_MIN_PLAN } from '@linyup/shared'
-import type { StudioDocument, DocumentKind, DocumentSource, DocumentStatus } from '@linyup/shared'
+import type { StudioDocument, DocumentKind, DocumentSource } from '@linyup/shared'
 import {
   useDocuments, createDocument, createWaiver, duplicateDocument, countDocuments,
   waiverCallableError,
 } from '@/plugins/documents/hooks'
 import { getDocumentsLimits } from '@/plugins/documents/limits'
-import { DocumentSurfaces } from '@/plugins/documents/DocumentSurfaces'
+import { DocumentsList } from '@/plugins/documents/DocumentsList'
 import { usePlan } from '@/hooks/usePlan'
 import { UpgradeModal } from '@/components/plan/UpgradeModal'
 
@@ -47,81 +46,6 @@ const KIND_OPTIONS: DocumentKind[] = ['terms', 'privacy', 'regulation', 'waiver'
 
 /** The `kind` filter's values. `all` is not a kind, so it is not in the union. */
 type KindFilter = DocumentKind | 'all'
-
-const STATUS_BADGE: Record<DocumentStatus, string> = {
-  draft: 'bg-muted text-muted-foreground',
-  published: 'bg-green-100 text-green-700',
-  archived: 'bg-amber-100 text-amber-700',
-}
-
-function DocumentCard({
-  document,
-  onOpen,
-  onDuplicate,
-  duplicating,
-}: {
-  document: StudioDocument
-  onOpen: () => void
-  onDuplicate: () => void
-  duplicating: boolean
-}) {
-  const t = useTranslations('Documents')
-  const tCommon = useTranslations('Common')
-  const SourceIcon = document.source === 'external_link' ? Link2 : FileText
-  const isSharedPublic = document.isPublic && document.status === 'published'
-  // A waiver is callable-only in every direction (see duplicateDocument), so it
-  // gets no copy control rather than one that would be refused by the rules.
-  const canDuplicate = document.kind !== 'waiver'
-
-  return (
-    /* Duplicate sits BESIDE the card's button, not inside it — nesting one
-       button in another is invalid markup. */
-    <div className="relative">
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full text-left rounded-lg border bg-card p-4 hover:shadow-sm hover:border-primary/40 transition-all flex flex-col gap-2"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium line-clamp-2 flex items-center gap-1.5">
-          <SourceIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          {document.title}
-        </span>
-        <span
-          className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[document.status]}`}
-        >
-          {t(`status_${document.status}`)}
-        </span>
-      </div>
-      {/* pr-9 keeps the badges clear of the Duplicate control in the corner. */}
-      <div className="flex flex-wrap items-center gap-2 text-xs pr-9">
-        <Badge variant="secondary">{t(`kind_${document.kind}`)}</Badge>
-        {document.current_version != null && (
-          <Badge variant="outline">{t('versionN', { version: document.current_version })}</Badge>
-        )}
-        {isSharedPublic && (
-          <Badge variant="outline" className="border-green-500/50 text-green-600 gap-1">
-            <Globe className="h-3 w-3" />
-            {t('publicBadge')}
-          </Badge>
-        )}
-      </div>
-    </button>
-      {canDuplicate && (
-        <button
-          type="button"
-          onClick={onDuplicate}
-          disabled={duplicating}
-          title={tCommon('duplicate')}
-          aria-label={tCommon('duplicate')}
-          className="absolute bottom-3 right-3 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-        >
-          <Copy className="h-4 w-4" />
-        </button>
-      )}
-    </div>
-  )
-}
 
 export default function DocumentsPage() {
   const t = useTranslations('Documents')
@@ -230,12 +154,6 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* Where documents are asked for — a PANEL on the page, not a dialog
-          behind a button. Both surfaces side by side is the whole point: the
-          signup column records, the booking column refuses, and until they were
-          in one place nothing in the product said so. */}
-      <DocumentSurfaces />
-
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">
           <Input
@@ -259,12 +177,11 @@ export default function DocumentsPage() {
         </span>
       </div>
 
+      {/* ONE list. A document's consent memberships are switches ON ITS ROW —
+          see DocumentsList for why the second list was removed rather than
+          restyled. */}
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-lg" />
-          ))}
-        </div>
+        <Skeleton className="h-64 w-full rounded-xl" />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border bg-muted/30 p-10 text-center">
           <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
@@ -272,17 +189,12 @@ export default function DocumentsPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t('emptyBody')}</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((document) => (
-            <DocumentCard
-              key={document.id}
-              document={document}
-              onOpen={() => router.push(`/documents/${document.id}` as Route)}
-              onDuplicate={() => duplicateMutation.mutate(document)}
-              duplicating={duplicateMutation.isPending}
-            />
-          ))}
-        </div>
+        <DocumentsList
+          documents={filtered}
+          onOpen={(documentId) => router.push(`/documents/${documentId}` as Route)}
+          onDuplicate={(document) => duplicateMutation.mutate(document)}
+          duplicating={duplicateMutation.isPending}
+        />
       )}
 
       {/* Create dialog */}

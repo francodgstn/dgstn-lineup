@@ -284,6 +284,12 @@ export default function FormDetailPage() {
   // Local editable copy (Build + Settings).
   const [draft, setDraft] = useState<Form | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  // Unpublishing takes the public form off the internet in one click: the link
+  // a studio has already shared starts refusing, and any bio-link entry for it
+  // stops being offered. It is REVERSIBLE and LOSSLESS — the fields, the
+  // settings and every response collected so far are untouched — so it asks
+  // once and says so, rather than implying deletion (UX-100).
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   useEffect(() => {
     if (form) setDraft(form)
   }, [form])
@@ -345,7 +351,7 @@ export default function FormDetailPage() {
           {draft.status !== 'published' ? (
             <Button onClick={() => setStatus('published')}>{t('publish')}</Button>
           ) : (
-            <Button variant="outline" onClick={() => setStatus('draft')}>{t('unpublish')}</Button>
+            <Button variant="outline" onClick={() => setConfirmUnpublish(true)}>{t('unpublish')}</Button>
           )}
         </div>
       </div>
@@ -517,6 +523,28 @@ export default function FormDetailPage() {
           <ResponsesTab form={draft} />
         </TabsContent>
       </Tabs>
+
+      {/* Not styled destructive: this deletes no work. An overstated warning
+          trains people to click through the next one. */}
+      <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('unpublishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('unpublishConfirmBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmUnpublish(false)
+                setStatus('draft')
+              }}
+            >
+              {t('unpublishConfirmAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

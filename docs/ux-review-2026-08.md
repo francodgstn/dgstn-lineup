@@ -177,6 +177,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 98 | slows | every-session | A person's name is a dead end on four more lists | M2xM3 | web | ✅ Fixed |
 | 99 | slows | at-setup | Three more "create one first" dead ends, all naming a destination they don't link | M5 | web | ✅ Fixed |
 | 100 | slows | weekly | Four more unpublish buttons take a public page down with no confirmation | M7xM11 | web | ▶ Open |
+| 101 | costs-money | every-session | A gated class whose plans are not public shows no gate at all | M5xM7 | web | ▶ Open |
 Findings 69+ (per-area tails, each capped at 8 and returned `--brief`) are summarised under
 **Remaining, by area** rather than enumerated individually.
 
@@ -1213,6 +1214,32 @@ while fixing the case where there is nothing to overwrite. Check the session bra
 shape. **Build:** S. **Owner:** functions-agent.
 **Verify:** Buy a subscription in the shop under `minimal` mode, then complete the public signup
 form with that email, then book a members-only class.
+
+---
+
+### UX-101 — A gated class whose plans are not public shows no gate at all
+`costs-money` · every-session · traced · M5×M7 · *found 2026-08-18 while fixing UX-94*
+
+**Now.** `resolveActivityPricingDisplay` builds its `includedWith` rows by resolving each id in
+`accessRule.subscriptionTypeIds` against the **public** plan list
+(`aggregator_subscription_types`). Ids it cannot resolve are dropped. So a `subscription`-gated
+class whose plans are not public renders **no gate line whatever** — not "Members only", not
+"Included with…", nothing. The card looks open.
+
+This predates UX-94 and is unaffected by its display modes: it is broken under `list` too.
+`members` and `open` tiers are unaffected — they need no lookup.
+
+**Cost.** It is the same failure UX-11 fixed from the other side, and the same one UX-94 was
+careful to avoid: **hiding a price must never hide a gate.** A visitor clicks Book on what
+appears to be an open class and meets a refusal. Filtering plans out of the public list is a
+normal thing for a studio to do — a legacy plan it no longer sells still gates its classes.
+
+**Fix.** When every id resolves to nothing, fall back to the generic gate sentence rather than
+silence — the class still requires a membership, and that is true without naming which. The
+`members`-tier wording shipped by UX-11 ("Members only — signing up is free") is close but not
+identical: this tier does require a plan, so it needs its own line. **Build:** S.
+**Owner:** web-agent.
+**Verify:** gate a class on a plan, set that plan `public: false`, open the public card.
 
 ---
 

@@ -44,8 +44,8 @@ import {
   COURSES_COLLECTION,
   PRODUCTS_SUBCOLLECTION,
   TEAMS_COLLECTION,
-  publicUrl,
-  publicSubUrl,
+  localizedPublicUrl,
+  localizedPublicSubUrl,
   resolveProductCollectionNote,
 } from '@linyup/shared'
 import { sendEmail } from '../utils/email'
@@ -99,8 +99,12 @@ async function loadRecipient(contactId: string, fallbackEmail?: string | null): 
   }
 }
 
-function spaceUrlFor(slug: string | null): string | null {
-  return slug ? publicUrl(getHostingUrl(), slug, 'space') : null
+/** Locale-pinned, always: a receipt is written in the studio's language, so the
+ *  page it opens must answer in the same one (see the note above
+ *  `localizedPublicUrl` in @linyup/shared). The default locale stays unprefixed,
+ *  so an English studio's links are byte-identical to before. */
+function spaceUrlFor(slug: string | null, lang: Lang): string | null {
+  return slug ? localizedPublicUrl(getHostingUrl(), lang, slug, 'space') : null
 }
 
 // ─── 1. Credit pack / membership ──────────────────────────────────────────────
@@ -159,7 +163,7 @@ export async function sendMembershipPurchaseReceipt(
       )
       return
     }
-    const spaceUrl = spaceUrlFor(team.slug)
+    const spaceUrl = spaceUrlFor(team.slug, team.lang)
 
     // THE NUMBER COMES FROM THE GRANT THAT WAS JUST WRITTEN, never from
     // `Contact.credit_summary`. That rollup is maintained by the
@@ -308,13 +312,16 @@ export async function sendCoursePurchaseReceipt(p: CoursePurchaseReceiptParams):
     const course = courseSnap.data()
     const title = (course?.title as string | undefined) || p.courseTitle || 'Course'
     const courseSlug = (course?.slug as string | undefined) ?? null
-    const spaceUrl = spaceUrlFor(team.slug)
+    const spaceUrl = spaceUrlFor(team.slug, team.lang)
     // The deep link the Space itself uses (`/public/{slug}/space/courses/{slug}`)
     // — "where to watch it" means the course, not the lobby. Falls back to the
     // Space root for a course with no slug.
     const watchUrl =
       team.slug && courseSlug
-        ? publicSubUrl(getHostingUrl(), team.slug, 'space', ['courses', courseSlug])
+        ? localizedPublicSubUrl(getHostingUrl(), team.lang, team.slug, 'space', [
+            'courses',
+            courseSlug,
+          ])
         : spaceUrl
 
     const mail = buildCourseReceiptEmail({
@@ -426,7 +433,7 @@ export async function sendProductPurchaseReceipt(p: ProductPurchaseReceiptParams
       // the copy falls back to "reply to this email", which the Managed sender's
       // Reply-To makes true.
       teamEmail: (await getTeamContactEmail(p.teamId, team.data)) ?? null,
-      spaceUrl: spaceUrlFor(team.slug),
+      spaceUrl: spaceUrlFor(team.slug, team.lang),
       lang: team.lang,
     })
 

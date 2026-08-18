@@ -229,6 +229,10 @@ export {
   resumeMemberSubscription,
   cancelMemberSubscription,
 } from './connect/payments'
+// Sign the buyer in from the checkout they just completed — the /pay/result
+// success path. Public callable; mints through buildContactSession like every
+// other sign-in. See connect/claimCheckoutSession.ts.
+export { claimCheckoutSession } from './connect/claimCheckoutSession'
 export { refundMemberPayment } from './connect/refunds'
 export { handleConnectWebhook } from './connect/webhook'
 // Gift cards (E3) — public purchase + balance check, manager mint + void.

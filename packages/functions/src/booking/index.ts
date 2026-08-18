@@ -12,6 +12,7 @@ import { hashVerificationCode, verifyCode, generateSecureToken, generateBookingR
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { resolveReferralCode, createReferral } from '../utils/referrals'
+import { fireReferralCreated } from '../referrals/events'
 import {
   buildClassBookingConfirmationMail,
   buildTeacherNotificationEmail,
@@ -1483,7 +1484,16 @@ export const bookSession = onCall(async (request) => {
         .limit(1)
         .get()
       if (existingReferral.empty) {
-        await createReferral(referrerContactId, contactId, data.teamId)
+        const referralId = await createReferral(referrerContactId, contactId, data.teamId)
+        // The plugin's `referral_created` trigger. Fired HERE, at the write that
+        // creates the referral — see referrals/events.ts for why the subject is
+        // the referrer and not the friend who just booked.
+        await fireReferralCreated({
+          teamId: data.teamId,
+          referrerContactId,
+          referredContactId: contactId,
+          referralId,
+        })
       }
     } catch (refErr) {
       console.error('Failed to create referral record:', refErr)

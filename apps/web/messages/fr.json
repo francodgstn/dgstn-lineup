@@ -1082,7 +1082,10 @@
     "bookableHours": "Heures réservables",
     "availabilityLegend": "Heures réservables :",
     "deleteEventConfirm": "Supprimer l'événement « {title} » ? Cette action est irréversible.",
-    "places": "Lieux"
+    "places": "Lieux",
+    "horizonLabel": "Période affichée",
+    "horizonNext": "{months} prochains mois",
+    "horizonLast": "{months} derniers mois"
   },
   "Events": {
     "title": "Événements",
@@ -1911,7 +1914,12 @@
     "noCustomLinks": "Aucun lien personnalisé.",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
-    "saved": "Enregistré"
+    "saved": "Enregistré",
+    "sharePreview": "Quand vous partagez le lien",
+    "sharePreviewNoImage": "Pas encore d'image de couverture",
+    "sharePreviewNoDescription": "Pas encore de description — cette ligne reste vide dans les messageries.",
+    "sharePreviewEditDescription": "En ajouter une",
+    "sharePreviewHint": "Voici l'aspect de votre lien lorsqu'il est collé dans WhatsApp, Instagram ou LinkedIn. Il utilise votre image de couverture, le nom de votre studio et votre description."
   },
   "Appointments": {
     "title": "Rendez-vous",
@@ -2766,7 +2774,16 @@
     "sectionContactDesc": "Adresse, horaires, carte et réseaux sociaux.",
     "unpublishConfirmTitle": "Mettre votre site hors ligne ?",
     "unpublishConfirmBody": "Votre site publié passe hors ligne immédiatement : les visiteurs ne voient plus rien, et toute entrée du bio-link qui y renvoie cesse d'être affichée. Rien n'est perdu — votre brouillon, ses pages, ses textes et ses images sont conservés tels quels, vous pouvez republier quand vous le souhaitez.",
-    "unpublishConfirmAction": "Mettre hors ligne"
+    "unpublishConfirmAction": "Mettre hors ligne",
+    "fieldPricingDisplay": "Tarifs sur les cartes",
+    "pricingDisplayList": "Afficher toutes les lignes",
+    "pricingDisplayCompact": "Derrière un lien « Tarifs »",
+    "pricingDisplayHidden": "Masquer les tarifs",
+    "pricingDisplayHint": "Cela ne concerne que les montants. Une carte dont l'offre exige un abonnement continue de l'indiquer quel que soit le réglage — sinon les visiteurs réservent quelque chose qui leur sera refusé.",
+    "fieldPricingLayout": "Disposition",
+    "pricingLayoutCards": "Une carte par abonnement",
+    "pricingLayoutTable": "Tableau comparatif",
+    "pricingLayoutHint": "Le tableau place vos offres en lignes et vos abonnements en colonnes, pour que le visiteur voie ce que chaque abonnement comprend."
   },
   "Kiosk": {
     "title": "Kiosque",
@@ -2897,7 +2914,10 @@
     "sectionCoaches": "Coachs",
     "sectionCoachesDesc": "Liste des coachs agrégée sur l'ensemble de vos clubs.",
     "sectionContact": "Contact",
-    "sectionContactDesc": "Adresse, horaires, carte et réseaux sociaux."
+    "sectionContactDesc": "Adresse, horaires, carte et réseaux sociaux.",
+    "unpublishConfirmTitle": "Mettre votre site hors ligne ?",
+    "unpublishConfirmBody": "Votre site publié est mis hors ligne immédiatement et les visiteurs ne voient plus rien. Rien n'est perdu — vos pages brouillon, vos textes et vos images sont conservés tels quels, vous pouvez donc republier quand vous voulez.",
+    "unpublishConfirmAction": "Mettre hors ligne"
   },
   "Courses": {
     "title": "Cours en ligne",
@@ -2995,7 +3015,10 @@
     "limitAttachments": "Vous pouvez joindre au maximum {max} fichiers par leçon.",
     "limitAttachmentSize": "Les fichiers doivent faire {max} Mo ou moins.",
     "limitImageSize": "Les images doivent faire {max} Mo ou moins.",
-    "optional": "facultatif"
+    "optional": "facultatif",
+    "unpublishConfirmTitle": "Mettre ce cours hors ligne ?",
+    "unpublishConfirmBody": "Il quitte la boutique immédiatement et les personnes qui y ont déjà accès ne le voient plus dans leur espace. Rien n'est perdu : les modules, les leçons, les médias et les achats sont conservés, et republier rétablit l'accès.",
+    "unpublishConfirmAction": "Mettre hors ligne"
   },
   "Auth": {
     "orWithEmail": "ou avec un e-mail",
@@ -3244,7 +3267,19 @@
     "consentDownloadError": "Le fichier n’a pas pu être préparé. Veuillez réessayer.",
     "bookingsCancelConfirm": "Oui, annuler",
     "bookingsCancelKeep": "Garder",
-    "bookingsCancelDone": "Réservation annulée."
+    "bookingsCancelDone": "Réservation annulée.",
+    "restoringSession": "Connexion en cours…",
+    "welcomeBackNamed": "Bon retour, {name}",
+    "nextUpTitle": "À venir",
+    "nextUpNone": "Vous n'avez encore rien réservé.",
+    "nextUpLoadFailed": "Impossible de charger votre prochaine réservation. Elle n'a pas été annulée.",
+    "bookAClass": "Réserver un cours",
+    "bookAnother": "Réserver un autre",
+    "gatedUnavailableForAccount": "Ce cours n'est pas disponible avec votre compte.",
+    "gatedPurchaseTitle": "Ce cours est vendu séparément. Achetez-le une fois et il est à vous pour toujours.",
+    "gatedPurchaseCta": "Acheter ce cours",
+    "gatedPurchaseAlreadyBought": "Déjà acheté ? Se connecter",
+    "studioTermsLink": "Conditions et règlement"
   },
   "FreePlan": {
     "downgradeBannerTitle": "Votre essai est terminé — vous êtes maintenant sur l'offre Gratuite",
@@ -3681,7 +3716,10 @@
     "backToBooking": "Retour à la réservation",
     "successBodyBooking": "Paiement reçu — votre cours est réservé. À bientôt !",
     "backToAppointments": "Retour aux rendez-vous",
-    "successBodyAppointment": "Paiement reçu — votre rendez-vous est réservé. Vous recevrez une confirmation par e-mail."
+    "successBodyAppointment": "Paiement reçu — votre rendez-vous est réservé. Vous recevrez une confirmation par e-mail.",
+    "signingIn": "Connexion en cours…",
+    "signedInAs": "Connecté en tant que {name}",
+    "successBodyCourseSignedIn": "Merci ! Vous avez désormais un accès à vie. Ouvrez votre Space pour commencer à regarder."
   },
   "Notifications": {
     "dismiss": "Fermer"
@@ -3889,7 +3927,10 @@
     "submitting": "Envoi…",
     "submitError": "Échec de l’envoi. Veuillez réessayer.",
     "thankYou": "Merci !",
-    "thankYouBody": "Votre réponse a bien été reçue."
+    "thankYouBody": "Votre réponse a bien été reçue.",
+    "unpublishConfirmTitle": "Mettre ce formulaire hors ligne ?",
+    "unpublishConfirmBody": "Le lien que vous avez partagé cesse de fonctionner immédiatement et toute entrée de bio-link qui y renvoie n'est plus affichée. Rien n'est perdu : les champs, les réglages et toutes les réponses déjà reçues sont conservés, et vous pouvez republier quand vous voulez.",
+    "unpublishConfirmAction": "Mettre hors ligne"
   },
   "Documents": {
     "title": "Documents",
@@ -4031,7 +4072,13 @@
     "webLinkTextPlaceholder": "Ce que le lecteur voit",
     "webLinkInvalidUrl": "Saisissez une adresse web commençant par http:// ou https://",
     "webLinkSubmit": "Insérer",
-    "webLinkRemove": "Supprimer le lien"
+    "webLinkRemove": "Supprimer le lien",
+    "surfacesPublishFirst": "Publiez d'abord ce document",
+    "unsavedChanges": "Modifications non enregistrées",
+    "noUnsavedChanges": "Toutes les modifications sont enregistrées",
+    "unpublishConfirmTitle": "Retirer ce document de votre page publique ?",
+    "unpublishConfirmBody": "Sa page publique est mise hors ligne immédiatement et l'entrée « Documents » de votre bio-link n'est plus affichée. Rien n'est perdu : le texte, chaque version publiée et chaque signature associée sont conservés, et vous pouvez republier quand vous voulez.",
+    "unpublishConfirmAction": "Mettre hors ligne"
   },
   "OfferAffiliations": {
     "title": "Affiliations",
@@ -4714,7 +4761,8 @@
     "waiverGuardianBadge": "Tuteur",
     "waiverGuardianBadgeTitle": "Signé par une personne qui s’est déclarée parent ou représentant légal. Déclaration — à vérifier sur place.",
     "waiverCheckBadge": "Vérifier l’âge",
-    "waiverCheckBadgeTitle": "Cette décharge peut concerner des mineurs et le participant a signé lui-même. À vérifier sur place."
+    "waiverCheckBadgeTitle": "Cette décharge peut concerner des mineurs et le participant a signé lui-même. À vérifier sur place.",
+    "addContactBooksSeat": "Ajouter une personne réserve sa place — la capacité est mise à jour et la réservation en ligne se ferme lorsque le cours est complet."
   },
   "OrgEvents": {
     "title": "Événements de l'organisation",
@@ -6167,6 +6215,15 @@
     "navContact": "Contact",
     "navLocations": "Lieux",
     "navClubs": "Clubs",
-    "navCoaches": "Coachs"
+    "navCoaches": "Coachs",
+    "pricesShow": "Tarifs",
+    "pricesHide": "Masquer les tarifs",
+    "tableActivityColumn": "Offre",
+    "tableIncluded": "Inclus",
+    "tableNotIncluded": "Non inclus",
+    "tableDiscount": "{percent} % de réduction",
+    "tableAnyPlanNote": "Avec n'importe quel abonnement — l'inscription est gratuite",
+    "tableOpenNote": "Ouvert à tous",
+    "tableFreeNote": "Réservation gratuite"
   }
 }

@@ -36,6 +36,8 @@ import {
   CalendarRange,
   List,
   ArrowRight,
+  Check,
+  Tag,
   User,
   X,
 } from 'lucide-react'
@@ -57,6 +59,7 @@ import {
   browseDurationMinutes,
   compareActivities,
   mergeAvailabilitySlots,
+  resolveActivityAccessRule,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
 } from '@linyup/shared'
@@ -503,6 +506,84 @@ function payPerVisitLine(a: ActivityEntry, currency: string, t: SiteT): string {
     .join(' · ')
 }
 
+// ─── activity card pricing (UX-94: hide / list / compact) ────────────────────
+//
+// A CARD'S LINES COME IN TWO KINDS AND ONLY ONE OF THEM IS OPTIONAL.
+//
+//   • GATE lines say what a visitor MUST have to book at all: "Open to members"
+//     (the members tier — signing up, no money) and "Included with {plan}" on a
+//     subscription-gated CLASS, where the named plan IS the key. These render
+//     under every display mode. A studio that hides them buys itself a card a
+//     prospect clicks and a booking flow that then refuses them, which is worse
+//     than the price it was trying not to show.
+//   • MONEY lines say what a visitor could CHOOSE to spend: drop-in, appointment
+//     prices, a member discount, and an appointment's "included with {plan}"
+//     benefit — an appointment has NO access gate (the price is the gate), so
+//     that line names a saving, not a requirement.
+//
+// `pricingDisplay` governs the second kind only. Under 'hidden' a gate line is
+// still drawn but WITHOUT its price ("Included with Premium", not "… — CHF
+// 89/mo"), which is the honest reduction: the requirement survives, the amount
+// does not. Under 'compact' the gate line keeps its price inline — splitting it
+// would either duplicate the line or strip the one number that makes the
+// requirement actionable — and only the optional spend collapses.
+interface CardPricing {
+  /** Requirements. Always rendered. */
+  gate: string[]
+  /** Optional spend. Inline under 'list', behind the control under 'compact', absent under 'hidden'. */
+  money: string[]
+}
+
+function ActivityPricingLines({
+  pricing,
+  mode,
+  palette,
+  t,
+}: {
+  pricing: CardPricing
+  mode: 'list' | 'compact' | 'hidden'
+  palette: SitePalette
+  t: SiteT
+}) {
+  const [open, setOpen] = useState(false)
+  const { gate, money } = pricing
+  const inlineMoney = mode === 'list' || (mode === 'compact' && open)
+  const rows = [...gate, ...(inlineMoney ? money : [])]
+  const showToggle = mode === 'compact' && money.length > 0
+  if (rows.length === 0 && !showToggle) return null
+
+  return (
+    <div className="mt-3 border-t" style={{ borderColor: palette.border }}>
+      {rows.map((line, i) => (
+        <p
+          key={line + i}
+          className={`py-1.5 text-sm${i > 0 ? ' border-t' : ''}`}
+          style={{ color: palette.muted, borderColor: palette.border }}
+        >
+          {line}
+        </p>
+      ))}
+      {showToggle && (
+        // Icon + tooltip, and ALSO tap-to-open: a `title` alone is invisible on
+        // a phone, which is where most of a studio's visitors read this card.
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title={money.join(' · ')}
+          aria-expanded={open}
+          className={`flex items-center gap-1.5 py-1.5 text-sm transition-opacity hover:opacity-70${
+            rows.length > 0 ? ' border-t' : ''
+          }`}
+          style={{ color: palette.muted, borderColor: palette.border }}
+        >
+          <Tag className="h-3.5 w-3.5 shrink-0" />
+          {open ? t('pricesHide') : t('pricesShow')}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: RenderCtx }) {
   const t = useTranslations('Site')
   // slug/locale/preview are read from `ctx` by activityBookHref and bookProps —
@@ -587,6 +668,8 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
   // box differ — the body (chips, pricing rows, CTA) is shared, so the two can't
   // drift apart.
   const isList = section.layout === 'list'
+  // Hide / list / icon + tooltip (UX-94). Absent ⇒ 'list' — today's cards.
+  const pricingMode = section.pricingDisplay ?? 'list'
   const cols =
     section.columns === 2
       ? '@2xl:grid-cols-2'
@@ -637,35 +720,65 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               // with its price. The one exception is the 'members' tier below,
               // where there is no plan to name because none is required.
               const d = resolveActivityPricingDisplay({ ...a, type: a.activityType }, subLookup)
-              const pricingLines: string[] = []
+              // A price is only advertised where somebody could pay it. `false`
+              // is a resolved "this studio has no chargeable account"; undefined
+              // is "not resolved here" (builder / org site / embed) and keeps
+              // the previous behaviour. See RenderCtx.paymentsEnabled.
+              const showPrices = ctx.paymentsEnabled !== false
+              // TWO INDEPENDENT SWITCHES, kept apart on purpose.
+              //   `amountsShown`  — the STUDIO'S display choice (UX-94).
+              //   `showPrices`    — whether an ONLINE CHECKOUT could open at
+              //                     all; it governed the drop-in and
+              //                     appointment lines before this option
+              //                     existed and still governs only those.
+              // A membership price and a paid-trial badge are terms the studio
+              // charges however it collects them, so they follow the display
+              // choice alone — folding them into `showPrices` would have
+              // silently blanked them for every studio without Stripe.
+              const amountsShown = pricingMode !== 'hidden'
+              const amountsAllowed = amountsShown && showPrices
+              // Whether "Included with {plan}" is a REQUIREMENT here. Only a
+              // class carries an access rule; an appointment's identical-looking
+              // line comes from its member benefit and is a saving.
+              const subscriptionGated =
+                d.type === 'class' &&
+                resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })
+                  .type === 'subscription'
+              const gate: string[] = []
+              const money: string[] = []
               // A 'members'-tier class (the DEFAULT for every new class) used to
               // render nothing at all here: a name, a "Class" chip and a Book
               // link, with no hint that membership is required — on the surface a
               // prospect reaches earliest. It gets a line now, and the line names
               // the gate that is enforced (being signed up) rather than a plan
               // price nobody has to pay to book it. See `signedUpOnly`.
-              if (d.signedUpOnly) pricingLines.push(t('signedUpOnlyLine'))
-              for (const s of d.includedWith)
-                pricingLines.push(
-                  s.priceLabel
+              if (d.signedUpOnly) gate.push(t('signedUpOnlyLine'))
+              for (const s of d.includedWith) {
+                const line =
+                  s.priceLabel && amountsShown
                     ? t('includedWithSubPriced', { name: s.name, price: s.priceLabel })
                     : t('includedWithSub', { name: s.name })
-                )
-              for (const s of d.discountWith)
-                pricingLines.push(t('discountWithSub', { name: s.name, percent: s.percent }))
-              // A price is only advertised where somebody could pay it. `false`
-              // is a resolved "this studio has no chargeable account"; undefined
-              // is "not resolved here" (builder / org site / embed) and keeps
-              // the previous behaviour. See RenderCtx.paymentsEnabled.
-              const showPrices = ctx.paymentsEnabled !== false
-              if (d.dropInAmount != null && showPrices)
-                pricingLines.push(t('termPerClass', { price: formatCurrency(d.dropInAmount, currency) }))
-              if (d.appointmentPrice && showPrices)
-                pricingLines.push(
-                  d.appointmentPrice.min === d.appointmentPrice.max
-                    ? t('termFrom', { price: formatCurrency(d.appointmentPrice.min, currency) })
-                    : `${formatCurrency(d.appointmentPrice.min, currency)}–${formatCurrency(d.appointmentPrice.max, currency)}`
-                )
+                ;(subscriptionGated ? gate : money).push(line)
+              }
+              if (amountsShown)
+                // A percentage off, not an amount to be paid online — this line
+                // never depended on `showPrices` and still does not.
+                for (const s of d.discountWith)
+                  money.push(t('discountWithSub', { name: s.name, percent: s.percent }))
+              if (amountsAllowed) {
+                if (d.dropInAmount != null)
+                  money.push(t('termPerClass', { price: formatCurrency(d.dropInAmount, currency) }))
+                if (d.appointmentPrice)
+                  money.push(
+                    d.appointmentPrice.min === d.appointmentPrice.max
+                      ? t('termFrom', { price: formatCurrency(d.appointmentPrice.min, currency) })
+                      : `${formatCurrency(d.appointmentPrice.min, currency)}–${formatCurrency(d.appointmentPrice.max, currency)}`
+                  )
+              }
+              // A PAID trial badge quotes an amount, so it follows the switch; a
+              // free one quotes none and always shows. It is never re-worded —
+              // a "Trial" badge on a door that costs CHF 15 would read as free.
+              const showTrialBadge = !!d.trial && (d.trial.priceAmount == null || amountsShown)
               return (
                 <div
                   key={a.id}
@@ -693,7 +806,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                         </span>
                       </div>
                     )}
-                    {d.trial && (
+                    {showTrialBadge && d.trial && (
                       <span
                         className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow"
                         style={{ background: palette.accent, color: palette.onAccent }}
@@ -725,20 +838,16 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                     {/* Each way to pay is its own row with a hairline between, so a
                         card offering a subscription AND a drop-in AND a trial reads
                         as a list rather than a paragraph of prices. Rules take the
-                        site palette, not Tailwind's divide-* (colours are per-site). */}
-                    {pricingLines.length > 0 && (
-                      <div className="mt-3 border-t" style={{ borderColor: palette.border }}>
-                        {pricingLines.map((line, i) => (
-                          <p
-                            key={i}
-                            className={`py-1.5 text-sm${i > 0 ? ' border-t' : ''}`}
-                            style={{ color: palette.muted, borderColor: palette.border }}
-                          >
-                            {line}
-                          </p>
-                        ))}
-                      </div>
-                    )}
+                        site palette, not Tailwind's divide-* (colours are per-site).
+                        The gate/money split — and why only one of them is
+                        optional — lives in ActivityPricingLines. */}
+                    <ActivityPricingLines
+                      pricing={{ gate, money }}
+                      mode={pricingMode}
+                      palette={palette}
+                      t={t}
+                    />
+
                     {href && (
                       <a
                         // Both kinds open the overlay: the panel hosts the class
@@ -799,16 +908,194 @@ function recurrenceSuffix(recurrence: string, t: SiteT): string {
   return key ? t(key) : ''
 }
 
+// ─── pricing comparison table (UX-95) ────────────────────────────────────────
+//
+// The comparison a prospect actually makes — WHICH ACTIVITIES DOES EACH PLAN
+// INCLUDE — as activities down the side and plans across the top. It is a
+// rendering variant, not new data: the same activity `public_profile` mirrors
+// and the same `aggregator_subscription_types` the cards already read, resolved
+// through `resolveActivityAccessRule` / the appointment's `memberBenefit`.
+//
+// THE `members` TIER IS TICKED UNDER EVERY PLAN, and that is the whole care
+// point of this block. `members` gates on being SIGNED UP, not on holding any
+// particular plan — so every plan-holder can book it, and so can somebody with
+// no plan at all. Leaving the row blank would say the opposite; picking a plan
+// to tick would invent a rule that does not exist. The row therefore ticks
+// across and carries a note saying why. `open` is the same shape for a
+// different reason (nothing is required at all) and gets its own note.
+type CellKind = 'yes' | 'no' | 'text'
+interface Cell {
+  kind: CellKind
+  text?: string
+}
+
+/** What one plan buys you for one activity. */
+function pricingCell(
+  a: ActivityEntry,
+  planId: string,
+  currency: string,
+  t: SiteT
+): Cell {
+  if (a.activityType === 'appointment') {
+    // An appointment has NO access gate — the price is the gate — so a plan
+    // never unlocks one; it can only make it cheaper (Activity.memberBenefit).
+    const benefit = a.memberBenefit
+    const covered = benefit?.subscriptionTypeIds?.includes(planId) === true
+    if (covered && benefit?.kind === 'included') return { kind: 'yes' }
+    if (covered && benefit?.kind === 'discount')
+      return { kind: 'text', text: t('tableDiscount', { percent: benefit.discountPercent ?? 0 }) }
+    const priced = (a.durations ?? []).filter((d) => typeof d.priceAmount === 'number')
+    if (priced.length === 0) return { kind: 'yes' }
+    const min = Math.min(...priced.map((d) => d.priceAmount as number))
+    return { kind: 'text', text: t('termFrom', { price: formatCurrency(min, currency) }) }
+  }
+
+  const rule = resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })
+  // Open to anyone, or open to anyone signed up: every plan-holder qualifies.
+  if (rule.type === 'open' || rule.type === 'members') return { kind: 'yes' }
+  if (rule.subscriptionTypeIds?.includes(planId)) return { kind: 'yes' }
+  // Not included — but say what a holder of THIS plan can still do rather than
+  // leaving a bare dash where a door exists.
+  if (a.dropIn?.enabled === true && typeof a.dropIn.priceAmount === 'number')
+    return { kind: 'text', text: t('termPerClass', { price: formatCurrency(a.dropIn.priceAmount, currency) }) }
+  return { kind: 'no' }
+}
+
+/** The row's one-line explanation, where the row needs one. */
+function pricingRowNote(a: ActivityEntry, t: SiteT): string | null {
+  if (a.activityType === 'appointment') {
+    const priced = (a.durations ?? []).some((d) => typeof d.priceAmount === 'number')
+    return priced ? null : t('tableFreeNote')
+  }
+  const rule = resolveActivityAccessRule({ accessRule: a.accessRule, isFreeTrial: a.isFreeTrial })
+  if (rule.type === 'members') return t('tableAnyPlanNote')
+  if (rule.type === 'open') return t('tableOpenNote')
+  return null
+}
+
+function PricingTable({
+  plans,
+  activities,
+  currency,
+  palette,
+  t,
+}: {
+  plans: PlanEntry[]
+  activities: ActivityEntry[]
+  currency: string
+  palette: SitePalette
+  t: SiteT
+}) {
+  return (
+    // A wide table scrolls INSIDE its own box — never the page, and never by
+    // squeezing the columns until the plan names wrap to one letter.
+    <div
+      className="mt-10 overflow-x-auto rounded-2xl border"
+      style={{ borderColor: palette.border, background: palette.surface }}
+    >
+      <table className="w-full min-w-[36rem] border-collapse text-sm">
+        <thead>
+          <tr>
+            <th
+              className="border-b p-4 text-left font-semibold"
+              style={{ borderColor: palette.border, color: palette.text }}
+              scope="col"
+            >
+              {t('tableActivityColumn')}
+            </th>
+            {plans.map((p) => {
+              const price = p.prices?.[0]
+              return (
+                <th
+                  key={p.id}
+                  scope="col"
+                  className="border-b border-l p-4 text-center font-semibold"
+                  style={{ borderColor: palette.border, color: palette.text }}
+                >
+                  {p.name}
+                  {price && (
+                    <span className="mt-0.5 block text-xs font-normal" style={{ color: palette.muted }}>
+                      {formatCurrency(price.amount, currency)}
+                      {recurrenceSuffix(price.recurrence, t)}
+                    </span>
+                  )}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {activities.map((a) => {
+            const note = pricingRowNote(a, t)
+            return (
+              <tr key={a.id}>
+                <th
+                  scope="row"
+                  className="border-b p-4 text-left font-medium"
+                  style={{ borderColor: palette.border, color: palette.text }}
+                >
+                  {a.name}
+                  {note && (
+                    <span className="mt-0.5 block text-xs font-normal" style={{ color: palette.muted }}>
+                      {note}
+                    </span>
+                  )}
+                </th>
+                {plans.map((p) => {
+                  const cell = pricingCell(a, p.id, currency, t)
+                  return (
+                    <td
+                      key={p.id}
+                      className="border-b border-l p-4 text-center"
+                      style={{ borderColor: palette.border, color: palette.muted }}
+                    >
+                      {cell.kind === 'yes' ? (
+                        // A tick needs a text alternative; "—" is decorative and
+                        // hidden from the reader who is being read to.
+                        <span style={{ color: palette.accent }}>
+                          <Check className="mx-auto h-4 w-4" aria-hidden="true" />
+                          <span className="sr-only">{t('tableIncluded')}</span>
+                        </span>
+                      ) : cell.kind === 'no' ? (
+                        <>
+                          <span aria-hidden="true">—</span>
+                          <span className="sr-only">{t('tableNotIncluded')}</span>
+                        </>
+                      ) : (
+                        cell.text
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCtx }) {
   const t = useTranslations('Site')
   const { palette, slug, locale, teamId, preview } = ctx
   const [plans, setPlans] = useState<PlanEntry[]>([])
+  // EVERY published activity, kept whole. Two readers want different subsets of
+  // it and neither may narrow the fetch: the pay-per-visit card wants only the
+  // ones with a price (`activityHasMoneyStory`), the comparison table wants all
+  // of them — a members-only class with no price of its own is precisely the row
+  // a prospect is scanning the table for.
+  const [activities, setActivities] = useState<ActivityEntry[]>([])
+  const [currency, setCurrency] = useState('CHF')
+  const [loading, setLoading] = useState(true)
+
   // Pay-per-visit activities (priced drop-ins + priced appointments) — the same
   // "additional lines" the shop shows under Subscriptions, surfaced here as a
   // card so the website's pricing isn't subscriptions-only.
-  const [ppvActivities, setPpvActivities] = useState<ActivityEntry[]>([])
-  const [currency, setCurrency] = useState('CHF')
-  const [loading, setLoading] = useState(true)
+  const ppvActivities = useMemo(
+    () => activities.filter(activityHasMoneyStory),
+    [activities]
+  )
 
   useEffect(() => {
     let alive = true
@@ -847,15 +1134,15 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                 memberBenefit: (d.data().memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
               }) as ActivityEntry
           )
-          .filter((a) => a.name && activityHasMoneyStory(a))
+          .filter((a) => a.name)
           .sort(compareActivities)
-        setPpvActivities(acts)
+        setActivities(acts)
       })
       .catch((err: unknown) => {
         reportPublicLoadFailure('site/pricing', err)
         if (alive) {
           setPlans([])
-          setPpvActivities([])
+          setActivities([])
         }
       })
       .finally(() => {
@@ -875,6 +1162,19 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             {section.subheading}
           </p>
         )}
+        {/* The table is a LAYOUT of the same plans, so it renders in place of the
+            card grid and everything below it (pay-per-visit, "see all options")
+            is untouched. A table with no activities to compare would be an empty
+            grid of ticks, so that case falls back to the cards. */}
+        {!loading && (section.layout ?? 'cards') === 'table' && plans.length > 0 && activities.length > 0 ? (
+          <PricingTable
+            plans={plans}
+            activities={activities}
+            currency={currency}
+            palette={palette}
+            t={t}
+          />
+        ) : (
         <div className="mt-10 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @5xl:grid-cols-3">
           {loading ? (
             <p className="col-span-full text-center text-sm" style={{ color: palette.muted }}>
@@ -950,6 +1250,7 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
             ))
           )}
         </div>
+        )}
         {/* Pay per visit — the drop-in + appointment prices that aren't
             subscriptions. One card, each activity a row with its price line and
             a Book CTA into the right flow (appointments → picker, class → the

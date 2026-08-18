@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { ImageIcon, X, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -281,6 +282,7 @@ function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: str
 }
 
 function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
@@ -315,6 +317,23 @@ function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p:
           </Select>
         </Field>
       )}
+      <Field label={t('fieldPricingDisplay')}>
+        <Select
+          value={s.pricingDisplay ?? 'list'}
+          onValueChange={(v) => onChange({ pricingDisplay: v as ActivitiesSection['pricingDisplay'] })}
+        >
+          <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="list">{t('pricingDisplayList')}</SelectItem>
+            <SelectItem value="compact">{t('pricingDisplayCompact')}</SelectItem>
+            <SelectItem value="hidden">{t('pricingDisplayHidden')}</SelectItem>
+          </SelectContent>
+        </Select>
+        {/* Said on the control, not in a doc comment: a studio picking "Hidden"
+            is entitled to know what it does NOT hide, so it doesn't go looking
+            for the bug. */}
+        <p className="text-xs text-muted-foreground">{t('pricingDisplayHint')}</p>
+      </Field>
       <label className="flex items-center justify-between rounded-lg border p-3">
         <span className="text-sm">Show “Book” link on cards</span>
         <Switch checked={s.showBooking ?? false} onCheckedChange={(v) => onChange({ showBooking: v })} />
@@ -324,6 +343,7 @@ function ActivitiesFields({ s, onChange }: { s: ActivitiesSection; onChange: (p:
 }
 
 function PricingFields({ s, onChange }: { s: PricingSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
@@ -332,6 +352,19 @@ function PricingFields({ s, onChange }: { s: PricingSection; onChange: (p: Patch
       <Field label="Heading"><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder="Membership" className="h-9" /></Field>
       <Field label="Subheading"><Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" /></Field>
       <Field label="Button label"><Input value={s.ctaLabel ?? ''} onChange={(e) => onChange({ ctaLabel: e.target.value })} placeholder="Join now" className="h-9" /></Field>
+      <Field label={t('fieldPricingLayout')}>
+        <Select
+          value={s.layout ?? 'cards'}
+          onValueChange={(v) => onChange({ layout: v as PricingSection['layout'] })}
+        >
+          <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cards">{t('pricingLayoutCards')}</SelectItem>
+            <SelectItem value="table">{t('pricingLayoutTable')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{t('pricingLayoutHint')}</p>
+      </Field>
     </div>
   )
 }

@@ -1,31 +1,26 @@
 'use client'
 
-import { useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { LogOut } from 'lucide-react'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import SpacePortalNav from './SpacePortalNav'
-import SignInDialog from './SignInDialog'
 
 // Portal chrome shared by every module page (home / bookings / account): themed
-// background, team header + sign-in, the module nav, and the sign-in dialog. The
-// course player deliberately does NOT use the shell (it wants full width).
+// background, team header + sign-in, and the module nav. The course player
+// deliberately does NOT use the shell (it wants full width).
+//
+// IT MOUNTS NO SIGN-IN DIALOG (UX-58). The team-root layout mounts exactly one,
+// `PublicContactSignIn`, for EVERY public surface — and this shell used to mount
+// a second one off the same `step`, so pressing "Sign in" anywhere inside the
+// portal opened two stacked modals with two focus traps and two email fields.
+// The shell's copy also predated the `register` step, so it was the WORSE of the
+// two: it stayed blank where the global one shows the registration form. Any
+// trigger anywhere calls `openSignIn()`; the one dialog reacts.
 export default function SpaceShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations('Space')
-  const { slug, step, isAuthenticated, contact, logout, openSignIn, closeSignIn } = useSpaceAuth()
+  const { isRestoring, isAuthenticated, contact, logout, openSignIn } = useSpaceAuth()
   const { team, bgStyle, textMain, textMuted, accent, cardBg, cardBorder } = useSpaceTheme()
-
-  // The sign-in dialog is driven by the auth step, so any trigger (header button
-  // or a course card's "sign in to access") opens it via openSignIn().
-  const signInOpen = step === 'email' || step === 'code' || step === 'selectContact'
-
-  // Must be stable: SignInDialog depends on it in a useEffect, so an inline
-  // arrow would re-fire that effect every render (→ infinite update loop).
-  const onSignInOpenChange = useCallback(
-    (open: boolean) => { if (!open) closeSignIn() },
-    [closeSignIn]
-  )
 
   return (
     <div className="min-h-screen w-full" style={{ background: bgStyle, color: textMain, fontFamily: 'inherit' }}>
@@ -47,7 +42,12 @@ export default function SpaceShell({ children }: { children: React.ReactNode }) 
             <h1 className="text-xl font-bold truncate" style={{ color: textMain }}>{team?.name}</h1>
           </div>
 
-          {isAuthenticated && contact ? (
+          {/* Three states, not two. While a stored session is being checked we
+              do not yet know who this is, so the header offers NOTHING rather
+              than a "Sign in" button to somebody who already is (UX-37). */}
+          {isRestoring ? (
+            <div className="h-8 w-16 rounded-full animate-pulse shrink-0" style={{ background: cardBg }} />
+          ) : isAuthenticated && contact ? (
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs hidden sm:inline" style={{ color: textMuted }}>
                 {t('signedInAs', { name: `${contact.firstname} ${contact.lastname}` })}
@@ -76,8 +76,6 @@ export default function SpaceShell({ children }: { children: React.ReactNode }) 
 
         {children}
       </div>
-
-      <SignInDialog open={signInOpen} onOpenChange={onSignInOpenChange} slug={slug} />
     </div>
   )
 }

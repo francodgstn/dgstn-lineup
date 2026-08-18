@@ -331,6 +331,95 @@ export function confirmClearedHoldFields<D>(
   return { waitlist_claim: deleteSentinel, claim_expires_at: deleteSentinel }
 }
 
+// ─── the attendance row ───────────────────────────────────────────────────────
+
+/**
+ * WHO put this person in the room. Free-text was written at five call sites and
+ * two of them wrote nothing at all, so a roster could not say how someone got
+ * there.
+ */
+export type ParticipantSource =
+  /** A staff confirm of an existing booking (bookings list or session detail). */
+  | 'booking-confirm'
+  /** A manager added a known contact to the class by hand. */
+  | 'manual'
+  /** Coach scanned the member's QR (`checkInContact`). */
+  | 'qr-scan'
+  /** Member scanned the room's kiosk QR (`selfCheckIn`). */
+  | 'self-scan'
+  /** Written by a seeding script, never by the product. */
+  | 'seed'
+
+export interface ParticipantIdentity {
+  firstname?: string | null
+  lastname?: string | null
+  avatar_url?: string | null
+}
+
+/**
+ * THE ATTENDANCE ROW — one shape, one builder.
+ *
+ * **The document id IS the contact id.** Every reader already assumes it —
+ * `scoreComputation` does `participants.doc(contactId)`, the waitlist join and
+ * the booking dedupe both test `participants.doc(contactId).exists`, and
+ * `trackSessionParticipants` recounts by it. Two writers used to disagree (the
+ * bookings list keyed the row by the BOOKING id, which is the contact id only by
+ * convention), so the invariant is enforced here instead of remembered.
+ *
+ * The `contact` field is the same value, denormalised for readers holding the
+ * snapshot rather than the ref. `contactId` is written ALONGSIDE it because the
+ * seed scripts have always written that spelling and one trigger read it — see
+ * `trackSessionParticipants`, which now resolves the id from the document id
+ * first and treats both fields as fallbacks.
+ *
+ * `fullname` is `lastname firstname`, matching the roster sort and the printed
+ * manifest. The bookings list wrote it the other way round, which is why the
+ * same person sorted into two different places depending on which page had
+ * confirmed them.
+ *
+ * Callers pass their own server-timestamp sentinel (`serverTimestamp()` in the
+ * browser, `FieldValue.serverTimestamp()` on the server) so this stays free of
+ * any Firebase import.
+ */
+export function buildParticipantDoc<TS>(params: {
+  contactId: string
+  sessionId: string
+  who: ParticipantIdentity
+  checkedInBy: ParticipantSource
+  checkedInAt: TS
+  /** True when this row exists because a booking was confirmed, which is what
+   *  the roster shows a "confirmed from booking" caption for. */
+  fromBooking?: boolean
+}): Record<string, unknown> {
+  const firstname = params.who.firstname ?? ''
+  const lastname = params.who.lastname ?? ''
+  return {
+    contact: params.contactId,
+    contactId: params.contactId,
+    session: params.sessionId,
+    firstname,
+    lastname,
+    fullname: `${lastname} ${firstname}`.trim(),
+    avatar_url: params.who.avatar_url ?? null,
+    checkedInAt: params.checkedInAt,
+    checkedInBy: params.checkedInBy,
+    ...(params.fromBooking ? { confirmedFromBooking: true } : {}),
+  }
+}
+
+/**
+ * The id of the contact a booking belongs to.
+ *
+ * Server-created bookings are keyed BY the contact id (every `.doc(contactId)`
+ * in `packages/functions/src/booking`), and they also carry it in `contact`. A
+ * confirm surface must land the attendance row on that id and not on the
+ * booking's own — they are the same value today, and the day they are not is the
+ * day one person occupies two roster rows.
+ */
+export function bookingContactId(booking: { id: string; contact?: string | null }): string {
+  return booking.contact || booking.id
+}
+
 /** Has the online booking cutoff passed for this session? `cutoffMinutes` is
  *  how long before start online booking closes (0/absent = no cutoff — bookable
  *  right up to start). Shared by the client (hide/disable slots) and the

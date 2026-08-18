@@ -8,7 +8,6 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CheckCircle2 } from 'lucide-react'
@@ -60,51 +59,36 @@ function usePublicForm(teamId: string, formSlug: string): LoadState {
 
 // ─── Contacts-only sign-in gate ────────────────────────────────────────────────
 
+// ONE SIGN-IN UI (UX-58). This gate used to draw its own inline OTP flow — an
+// email field, a code field, a contact picker — driven by the SAME `auth.step`
+// that the team-root layout's `PublicContactSignIn` modal is driven by. Pressing
+// "Sign in" therefore opened both at once: a modal over the page with an email
+// field, and a second email field on the page beneath it, each submitting the
+// same `sendCode`. Whichever the visitor typed into, the other stayed filled in
+// with the previous step, and a `selectContact` list could appear in one while
+// the other showed the code box.
+//
+// The MODAL is the one kept, and not arbitrarily: it is mounted once for every
+// public surface, so it is the flow a visitor has already met on the shop, the
+// booking page and the bio-link; and it is the only one that implements the
+// `register` step (login-first sign-up for an unknown email), which the inline
+// copy never learned. This gate now states WHY it is asking and delegates.
+
 function ContactsGate({ children }: { children: React.ReactNode }) {
   const t = useTranslations('CustomForms')
   const auth = useSpaceAuth()
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
 
   if (auth.isAuthenticated) return <>{children}</>
+
+  // A stored session is still being checked — do not tell somebody who IS a
+  // contact that this form is for contacts only (UX-37).
+  if (auth.isRestoring) return <Skeleton className="h-32 w-full max-w-xl" />
 
   return (
     <div className="rounded-lg border bg-muted/30 p-5 space-y-3">
       <p className="text-sm font-medium">{t('signInRequired')}</p>
       {auth.error && <p className="text-sm text-destructive">{auth.error}</p>}
-      {auth.step === 'idle' && (
-        <Button onClick={() => auth.openSignIn()}>{t('signIn')}</Button>
-      )}
-      {auth.step === 'email' && (
-        <div className="flex gap-2">
-          <Input
-            type="email"
-            placeholder={t('emailPlaceholder')}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Button onClick={() => auth.sendCode(email)} disabled={!email}>{t('sendCode')}</Button>
-        </div>
-      )}
-      {auth.step === 'code' && (
-        <div className="flex gap-2">
-          <Input
-            placeholder={t('codePlaceholder')}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <Button onClick={() => auth.verifyCode(code)} disabled={!code}>{t('verify')}</Button>
-        </div>
-      )}
-      {auth.step === 'selectContact' && (
-        <div className="space-y-1.5">
-          {auth.matchedContacts.map((c) => (
-            <Button key={c.id} variant="outline" className="w-full justify-start" onClick={() => auth.selectContact(c.id)}>
-              {c.firstname} {c.lastname}
-            </Button>
-          ))}
-        </div>
-      )}
+      <Button onClick={() => auth.openSignIn()}>{t('signIn')}</Button>
     </div>
   )
 }

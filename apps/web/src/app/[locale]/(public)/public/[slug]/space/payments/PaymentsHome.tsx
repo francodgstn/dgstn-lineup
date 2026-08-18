@@ -5,9 +5,10 @@ import { useTranslations, useLocale } from 'next-intl'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { formatCurrency } from '@/lib/format'
-import { CreditCard, Receipt, ExternalLink, LogIn, Loader2 } from 'lucide-react'
+import { CreditCard, Receipt, ExternalLink, Loader2 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
+import SpaceSignInWall from '../SpaceSignInWall'
 import { useSpaceAuth } from '../SpaceAuthProvider'
 import { useSpaceTheme } from '../useSpaceTheme'
 import { usePublicTeam } from '../../PublicTeamProvider'
@@ -21,7 +22,7 @@ function formatDate(ms: number | null): string {
 export default function PaymentsHome() {
   const t = useTranslations('Space')
   const locale = useLocale()
-  const { slug, isAuthenticated, openSignIn } = useSpaceAuth()
+  const { slug, isAuthenticated } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
   const currency = team?.default_currency ?? 'CHF'
@@ -33,19 +34,7 @@ export default function PaymentsHome() {
   const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
 
   if (!isAuthenticated) {
-    return (
-      <div className="mt-10 rounded-2xl p-8 text-center" style={cardStyle}>
-        <LogIn className="mx-auto h-7 w-7" style={{ color: accent }} />
-        <p className="mt-3 text-sm" style={{ color: textMuted }}>{t('accountSignInPrompt')}</p>
-        <button
-          onClick={() => openSignIn()}
-          className="mt-4 text-sm font-medium px-4 py-2 rounded-full"
-          style={{ background: accent, color: '#fff' }}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-    )
+    return <SpaceSignInWall prompt={t('accountSignInPrompt')} />
   }
 
   async function openBillingPortal() {

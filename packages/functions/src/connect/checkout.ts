@@ -160,6 +160,18 @@ export function requireChargeableMinorAmount(amount: unknown): number {
 
 // ─── Result URLs + idempotency ──────────────────────────────────────────────────
 
+/**
+ * Stripe's own template variable, substituted into `success_url` when it
+ * redirects. It is what lets `/pay/result` name the buyer without asking them
+ * to sign in again (UX-88) — the page hands it to `claimCheckoutSession`, which
+ * verifies the session on the studio's connected account and mints a contact
+ * session through `buildContactSession`.
+ *
+ * SUCCESS ONLY, deliberately. A cancelled checkout identifies nobody and took no
+ * money, so there is nothing to claim and no reason to put an id in that URL.
+ */
+const CHECKOUT_SESSION_ID_PARAM = '&cs={CHECKOUT_SESSION_ID}'
+
 /** Default `pay/result` URLs (success/cancel), honouring caller overrides. */
 export function buildResultUrls(
   locale: string,
@@ -175,7 +187,7 @@ export function buildResultUrls(
   const base = `${resolveBaseUrl(opts?.origin)}/${locale}/pay/result`
   const extra = opts?.extraQuery ?? ''
   return {
-    successUrl: opts?.successUrl ?? `${base}?status=success${extra}`,
+    successUrl: opts?.successUrl ?? `${base}?status=success${extra}${CHECKOUT_SESSION_ID_PARAM}`,
     cancelUrl: opts?.cancelUrl ?? `${base}?status=cancelled${extra}`,
   }
 }

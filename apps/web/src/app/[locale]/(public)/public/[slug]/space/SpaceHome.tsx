@@ -9,6 +9,24 @@
 // entitlements the contact already has — linking straight to the player. Anonymous
 // visitors get a sign-in wall (this is a "my account" area), so free-course
 // discovery also flows through the shop.
+//
+// THE ORDER OF THE PAGE IS THE POINT (UX-38 / UX-55). It opens with WHAT'S NEXT
+// — her next booking — because that is the question a member opens a portal to
+// answer. Everything that SELLS her something comes after everything that
+// SERVES her. Before this, home led with her own name, then a membership block
+// duplicated from Account, and offered four separate links into the shop and
+// none into booking.
+//
+// FOUR BLOCKS WERE DUPLICATES AND ARE GONE:
+//   1. the welcome card (name only) — the shell header already names her; the
+//      greeting now rides on the next-up card;
+//   2. the membership section — a second, DIVERGENT copy of Account's (it never
+//      learned to say a membership is cancelling). One component now, two
+//      variants, per `SpaceWaiverCard`;
+//   3. the quick-links grid (Bookings / Account) — the portal nav directly above
+//      it is those same links;
+//   4. the shop's "subscriptions" row when the membership block was already
+//      showing a "choose a plan" CTA to the same URL on the same screen.
 
 import { useEffect, useState, type CSSProperties } from 'react'
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore'
@@ -16,14 +34,15 @@ import { db } from '@/lib/firebase'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { GraduationCap, CreditCard, BadgeCheck, CalendarClock, User, ChevronRight, LogIn, ShoppingBag, Ticket } from 'lucide-react'
+import { GraduationCap, CreditCard, ChevronRight, ShoppingBag, Ticket } from 'lucide-react'
 import { resolvePaymentOptions, heldSubscriptionTypeIds, type CourseAccessRule } from '@linyup/shared'
 import { clientPaymentSnapshot } from '@/lib/paymentSnapshot'
-import { formatCurrency } from '@/lib/format'
 import { QueryErrorState } from '@/components/ui/query-error'
-import { Skeleton } from '@/components/ui/skeleton'
 import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { SpaceWaiverCard } from './SpaceWaiverCard'
+import { SpaceMembershipCard } from './SpaceMembershipCard'
+import { SpaceNextUpCard } from './SpaceNextUpCard'
+import SpaceSignInWall from './SpaceSignInWall'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpaceContact } from './useSpaceContact'
@@ -125,14 +144,12 @@ function CourseCard({
 
 export default function SpaceHome() {
   const t = useTranslations('Space')
-  const { slug, teamId, isAuthenticated, contact, openSignIn } = useSpaceAuth()
+  const { slug, teamId, isAuthenticated, contact } = useSpaceAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { team } = usePublicTeam()
-  const currency = team?.default_currency ?? 'CHF'
   const {
     data: fullContact,
     isError: contactFailed,
-    isPending: contactPending,
     error: contactError,
     refetch: refetchContact,
   } = useSpaceContact()
@@ -243,38 +260,12 @@ export default function SpaceHome() {
   // to be too — app tokens render it near-black on a dark studio theme.
   const errorTheme = { textMain, textMuted, accent, border: cardBorder }
 
-  // Anonymous → sign-in wall. Space is a personal area; discovery lives in the shop.
+  // Anonymous → sign-in wall. Space is a personal area; discovery lives in the
+  // shop. The wall knows the difference between "not signed in" and "not known
+  // yet" — see SpaceSignInWall.
   if (!isAuthenticated || !contact) {
-    return (
-      <div className="mt-10 rounded-2xl p-8 text-center" style={cardStyle}>
-        <LogIn className="mx-auto h-7 w-7" style={{ color: accent }} />
-        <p className="mt-3 text-sm" style={{ color: textMuted }}>{t('accountSignInPrompt')}</p>
-        <button
-          onClick={() => openSignIn()}
-          className="mt-4 text-sm font-medium px-4 py-2 rounded-full"
-          style={{ background: accent, color: '#fff' }}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-    )
+    return <SpaceSignInWall prompt={t('accountSignInPrompt')} />
   }
-
-  // ── Membership summary (subscriptions + affiliation) ──
-  const subs = fullContact?.active_subscriptions ?? []
-  const legacy =
-    !subs.length && fullContact?.subscription_type_id
-      ? [{
-          subscription_type_id: fullContact.subscription_type_id,
-          subscription_type_name: fullContact.subscription_type_name ?? null,
-          recurrence: fullContact.subscription_recurrence ?? null,
-          amount: undefined as number | undefined,
-          status: 'active' as string,
-        }]
-      : []
-  const shownSubs = subs.length ? subs : legacy
-  const aff = fullContact?.affiliation_summary
-  const hasMembership = shownSubs.length > 0 || aff?.has_active === true
 
   // ── My courses = accessible entitlements only (no locked/buy cards here) ──
   // Full held union when the fuller contact doc has loaded (active_subscriptions
@@ -298,12 +289,15 @@ export default function SpaceHome() {
   // The shop is the courses' home and lists every tier, so link to it whenever the
   // studio has any shop-visible course (not just purchasable ones).
   const hasShopCourses = courses.some((c) => c.hideFromShop !== true)
-  const hasActiveSubscription = shownSubs.length > 0
+  // A contact with a live plan is here to CHANGE it, not to start one. Without a
+  // plan the membership block above is already offering exactly this URL, and
+  // two links to one page on one screen is the duplication UX-55 counted.
+  const hasActiveSubscription =
+    (fullContact?.active_subscriptions?.length ?? 0) > 0 || !!fullContact?.subscription_type_id
   const shopLinks = [
-    hasSubscriptions && {
+    hasSubscriptions && hasActiveSubscription && {
       key: 'subscriptions',
-      // A contact with a plan is more likely here to change it than to start one.
-      label: hasActiveSubscription ? t('changeSubscription') : t('shopSubscriptions'),
+      label: t('changeSubscription'),
       icon: CreditCard,
       href: `/public/${slug}/shop?tab=subscriptions`,
     },
@@ -323,13 +317,9 @@ export default function SpaceHome() {
 
   return (
     <div className="mt-6 space-y-4">
-      {/* Welcome */}
-      <div className="rounded-2xl p-4" style={cardStyle}>
-        <p className="text-xs" style={{ color: textMuted }}>{t('welcomeBack')}</p>
-        <p className="text-lg font-semibold" style={{ color: textMain }}>
-          {contact.firstname} {contact.lastname}
-        </p>
-      </div>
+      {/* WHAT'S NEXT — first, above everything, and carrying the greeting the
+          standalone welcome card used to carry on its own. */}
+      <SpaceNextUpCard bookingLive={team?.active_public_surfaces?.booking === true} />
 
       {/* Complete-signup reminder — PROMINENT when a paid 'full'-mode purchase left
           the registration unfinished (pending_signup), light for self-registered
@@ -373,65 +363,10 @@ export default function SpaceHome() {
           everything is in order. */}
       <SpaceWaiverCard variant="banner" />
 
-      {/* Membership */}
-      <section className="rounded-2xl p-4" style={cardStyle}>
-        <div className="flex items-center gap-2 mb-3">
-          <CreditCard className="h-4 w-4" style={{ color: accent }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textMuted }}>
-            {t('membershipTitle')}
-          </h2>
-        </div>
-        {membershipError != null ? (
-          // "You have no membership" is a claim about a paying member's account.
-          // A failed read cannot make it — say the read failed instead.
-          <QueryErrorState
-            onRetry={() => void refetchContact()}
-            title={t('membershipLoadFailed')}
-            detail={loadFailureDetail(membershipError)}
-            theme={errorTheme}
-          />
-        ) : contactPending ? (
-          // Same rule one step earlier: while the read is still in flight we do
-          // not know either, and a paying member should not be told they have
-          // nothing for the duration of every load.
-          <Skeleton className="h-5 w-40" />
-        ) : !hasMembership ? (
-          <div>
-            <p className="text-sm" style={{ color: textMuted }}>{t('membershipNone')}</p>
-            {/* Prompt to pick a plan — only when the studio actually sells subscriptions */}
-            {hasSubscriptions && (
-              <Link
-                href={`/public/${slug}/shop?tab=subscriptions` as Route}
-                className="mt-2 inline-block text-sm font-medium hover:underline"
-                style={{ color: accent }}
-              >
-                {t('membershipNoneCta')} →
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {shownSubs.map((s, i) => (
-              <div key={s.subscription_type_id ?? i} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium" style={{ color: textMain }}>
-                  {s.subscription_type_name ?? t('membershipActive')}
-                  {s.recurrence ? <span style={{ color: textMuted }}> · {s.recurrence}</span> : null}
-                </span>
-                {typeof s.amount === 'number' && (
-                  <span className="text-sm" style={{ color: textMuted }}>{formatCurrency(s.amount, currency)}</span>
-                )}
-              </div>
-            ))}
-            {aff?.has_active && (
-              <div className="flex items-center gap-1.5 text-sm" style={{ color: textMain }}>
-                <BadgeCheck className="h-4 w-4" style={{ color: '#16a34a' }} />
-                {t('affiliationActive')}
-                {aff.types?.length ? <span style={{ color: textMuted }}> · {aff.types.join(', ')}</span> : null}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {/* Membership — ONE implementation, shared with Account (see
+          SpaceMembershipCard). The copy this replaced had already fallen behind
+          Account's: it never said a membership was cancelling. */}
+      <SpaceMembershipCard variant="summary" slug={slug} hasSubscriptionsForSale={hasSubscriptions} />
 
       {/* Lesson credits — compact list of credit-pack balances (denormalised
           Contact.credit_summary). Hidden entirely when the contact holds none —
@@ -556,27 +491,10 @@ export default function SpaceHome() {
         </section>
       )}
 
-      {/* Quick links to the other portal modules */}
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { href: `/public/${slug}/space/bookings`, label: t('navBookings'), icon: CalendarClock },
-          { href: `/public/${slug}/space/account`, label: t('navAccount'), icon: User },
-        ].map((q) => {
-          const Icon = q.icon
-          return (
-            <Link
-              key={q.href}
-              href={q.href as Route}
-              className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
-              style={{ background: `${accent}14`, color: textMain }}
-            >
-              <Icon className="h-4 w-4" style={{ color: accent }} />
-              <span className="flex-1 text-sm font-medium">{q.label}</span>
-              <ChevronRight className="h-4 w-4" style={{ color: textMuted }} />
-            </Link>
-          )
-        })}
-      </div>
+      {/* NO quick-links grid here. It listed "My bookings" and "Account" —
+          the two tabs the portal nav renders a few pixels above it, on every
+          page of the portal. A second copy of a navigation control is not a
+          shortcut; it is the same control twice. */}
 
       {/* Branding */}
       {team?.showBranding === true && (

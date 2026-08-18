@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 import { parseSlug } from '@linyup/shared'
 import { publicHref } from '@/lib/publicRoutes'
 import { RestoreBookingReturn } from './RestoreBookingReturn'
+import { ClaimCheckoutSession } from './ClaimCheckoutSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,15 +15,27 @@ export const dynamic = 'force-dynamic'
 export default async function PayResultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; slug?: string; seg?: string; email?: string }>
+  searchParams: Promise<{
+    status?: string
+    slug?: string
+    seg?: string
+    email?: string
+    cs?: string
+  }>
 }) {
-  const { status, slug: rawSlug, seg, email } = await searchParams
+  const { status, slug: rawSlug, seg, email, cs } = await searchParams
   const t = await getTranslations('PayResult')
   const success = status === 'success'
   // This page is reachable with any query — Stripe redirects here, but so does a
   // hand-crafted link. `slug` is interpolated into the CTA href below, so shape it
   // rather than trusting the round-trip: an unparseable slug just hides the CTA.
   const slug = parseSlug(rawSlug)
+  // `{CHECKOUT_SESSION_ID}`, substituted by Stripe on the success redirect
+  // (connect/checkout.ts). It is what lets this page sign the buyer in instead
+  // of asking them for a credential after they have paid (UX-88). Shaped here
+  // as well as on the server: this URL is reachable by hand, and an id that is
+  // not Stripe's shape has no business being sent to a callable.
+  const checkoutSessionId = /^cs_[A-Za-z0-9_]{10,255}$/.test(cs ?? '') ? cs! : null
   // Course purchases land with seg=space — point the buyer to their Space (where they
   // watch). A 'full' membership lands with seg=signup so the buyer finishes their
   // registration (consent + the studio's required fields). Both only on success.
@@ -74,7 +87,25 @@ export default async function PayResultPage({
         <h1 className="text-xl font-semibold">
           {success ? t('successTitle') : t('cancelledTitle')}
         </h1>
-        <p className="text-sm text-muted-foreground">{body}</p>
+        {success && slug && checkoutSessionId ? (
+          <ClaimCheckoutSession
+            checkoutSessionId={checkoutSessionId}
+            slug={slug}
+            body={body}
+            // A course buyer's copy told them to "sign in with this email to
+            // start watching". Once the claim has signed them in that
+            // instruction is stale, so the signed-in variant drops it. Every
+            // other segment keeps its own body: the payment is the news, and
+            // being signed in does not change what was bought.
+            signedInBody={toSpace ? t('successBodyCourseSignedIn') : body}
+            signupHref={publicHref(slug, 'signup', { from: 'checkout', email })}
+            // The page's own CTA already IS the registration link when the
+            // checkout asked for a full signup — don't offer it twice.
+            showSignupLink={!toSignup}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">{body}</p>
+        )}
         {/* Booking payments came from a flow that may have been running as an
             overlay on the studio's website — put the buyer back there. Falls
             through to the static CTA below when there's nothing to restore. */}

@@ -23,6 +23,7 @@ import {
   serverTimestamp,
   Timestamp,
   limit,
+  documentId,
 } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
@@ -495,8 +496,32 @@ interface BookingSummary {
   sessionLabel: string
   sessionStart: { toDate(): Date } | null
   joinedAt: { toDate(): Date } | null
+  status: string | null
 }
 
+/** How many of a contact's bookings this tab loads. Newest first, so the cap
+ *  trims the oldest history rather than the part anybody is looking at, and it
+ *  bounds the session hydration below to at most one batch per 30 rows. */
+const CONTACT_BOOKINGS_LIMIT = 60
+
+/**
+ * A contact's bookings.
+ *
+ * THE FILTER FIELD IS `contact`, NOT `contactId`. Every writer of a booking
+ * document — `bookSession`, `rebookSession`, `createDropInCheckout`, the
+ * appointment rails — stores the contact id under `contact` (the doc id is the
+ * contact id too, but a collection-group query cannot filter on that). This
+ * query asked for `contactId`, a field no booking has ever carried, so it
+ * matched nothing for everybody, always: a confirmed booking left the contact
+ * record looking like the person had never booked at all (UX-89). The composite
+ * index that was already deployed — `(teamId, contact, joinedAt DESC)` in
+ * firestore.index.json — is the query as it was meant to be written.
+ *
+ * NOT the same question as the header's "Total sessions": that counter is
+ * `contact.total_sessions`, written only by the `sessions/{id}/participants`
+ * trigger, i.e. by ATTENDANCE. Zero attended after a booking is correct; the
+ * number that was missing is this one.
+ */
 function useContactBookings(contactId: string, teamId: string | null) {
   return useQuery<BookingSummary[]>({
     queryKey: ['contact-bookings', contactId],
@@ -506,18 +531,48 @@ function useContactBookings(contactId: string, teamId: string | null) {
         query(
           collectionGroup(db, 'bookings'),
           where('teamId', '==', teamId),
-          where('contactId', '==', contactId),
-          orderBy('joinedAt', 'desc')
+          where('contact', '==', contactId),
+          orderBy('joinedAt', 'desc'),
+          limit(CONTACT_BOOKINGS_LIMIT)
         )
       )
-      return snap.docs.map((d) => {
+      const rows = snap.docs.map((d) => {
         const data = d.data()
         return {
-          id: d.id,
+          id: d.ref.path,
           sessionId: d.ref.parent.parent?.id ?? '',
-          sessionLabel: data.sessionLabel ?? data.activityName ?? 'Session',
-          sessionStart: data.sessionStart ?? null,
-          joinedAt: data.joinedAt ?? null,
+          joinedAt: (data.joinedAt as BookingSummary['joinedAt']) ?? null,
+          status: (data.status as string | undefined) ?? 'pending',
+        }
+      })
+
+      // WHAT and WHEN come from the SESSION, not the booking: a booking document
+      // carries neither an activity name nor a start time (the old code read
+      // `sessionLabel` / `sessionStart`, which no writer has ever set, so every
+      // row would have rendered "Session" and the join date). Batched by
+      // documentId, 30 at a time — Firestore's `in` limit.
+      const ids = [...new Set(rows.map((r) => r.sessionId).filter(Boolean))]
+      const sessions = new Map<string, { label: string; start: BookingSummary['sessionStart'] }>()
+      for (let i = 0; i < ids.length; i += 30) {
+        const batch = ids.slice(i, i + 30)
+        const sSnap = await getDocs(
+          query(collection(db, 'sessions'), where(documentId(), 'in', batch))
+        )
+        sSnap.docs.forEach((sd) => {
+          const s = sd.data()
+          sessions.set(sd.id, {
+            label: (s.activityName as string | undefined) || (s.name as string | undefined) || '',
+            start: (s.start as BookingSummary['sessionStart']) ?? null,
+          })
+        })
+      }
+
+      return rows.map((r) => {
+        const s = sessions.get(r.sessionId)
+        return {
+          ...r,
+          sessionLabel: s?.label || 'Session',
+          sessionStart: s?.start ?? null,
         }
       })
     },
@@ -2244,8 +2299,20 @@ function ProfileTab({
 
 // ─── bookings tab ─────────────────────────────────────────────────────────────
 
+// Booking status → the label the bookings LIST already uses. Reusing that
+// namespace keeps one wording for one fact; a second set of strings here would
+// drift the moment either side was edited.
+const BOOKING_STATUS_KEY: Record<string, string> = {
+  pending: 'statusPending',
+  confirmed: 'statusConfirmed',
+  cancelled: 'statusCancelled',
+  no_show: 'statusNoShow',
+  rebooked: 'statusRebooked',
+}
+
 function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
+  const tBookings = useTranslations('Bookings')
   const { data: bookings = [], isLoading } = useContactBookings(contact.id, teamId)
 
   if (isLoading)
@@ -2275,6 +2342,20 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
                   : '—'}
             </p>
           </div>
+          {b.status && BOOKING_STATUS_KEY[b.status] && (
+            <Badge
+              variant={
+                b.status === 'confirmed'
+                  ? 'default'
+                  : b.status === 'cancelled' || b.status === 'no_show'
+                    ? 'destructive'
+                    : 'secondary'
+              }
+              className="shrink-0"
+            >
+              {tBookings(BOOKING_STATUS_KEY[b.status] as Parameters<typeof tBookings>[0])}
+            </Badge>
+          )}
         </div>
       ))}
     </div>
@@ -3129,9 +3210,12 @@ function GamificationTab({ contact, teamId }: { contact: Contact; teamId: string
         </div>
         <div className="rounded-xl border bg-card p-4 text-center">
           <p className="text-2xl font-bold">{contact.total_sessions ?? 0}</p>
+          {/* `total_sessions` counts ATTENDANCE (the participants trigger), not
+              bookings — it was labelled "Bookings" here, which is the same
+              number answering the wrong question (UX-89). */}
           <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
             <Trophy className="h-3 w-3 text-primary" />
-            {t('tabBookings')}
+            {t('statTotalSessions')}
           </p>
         </div>
       </div>

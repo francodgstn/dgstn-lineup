@@ -33,7 +33,6 @@ export type AutomationTriggerType =
   | 'schedule_daily'
   // Tier 1 — Firestore event triggers (real-time)
   | 'contact_created'
-  | 'contact_updated'
   | 'booking_confirmed'
   | 'booking_no_show'
   | 'booking_cancelled'

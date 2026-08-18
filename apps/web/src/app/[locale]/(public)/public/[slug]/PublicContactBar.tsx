@@ -42,12 +42,17 @@ export function PublicContactSignIn() {
 export function PublicContactBar() {
   const t = useTranslations('Space')
   const pathname = usePathname()
-  const { slug, isAuthenticated, contact, openSignIn, logout } = usePublicContactAuth()
+  const { slug, isAuthenticated, isRestoring, contact, openSignIn, logout } = usePublicContactAuth()
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
 
   // Precise segment match (so a slug like "spacegym" isn't mistaken for /space).
   const onSurface = (s: string) => pathname.endsWith(`/${s}`) || pathname.includes(`/${s}/`)
   if (onSurface('space') || onSurface('site') || onSurface('kiosk')) return null
+  // A returning member's session is still being checked — show nothing rather
+  // than a "Sign in" pill she is about to be told she does not need (UX-37).
+  // Nothing, not a skeleton: this control floats over the page, and a pulsing
+  // placeholder in the corner of every load is worse than a half-second gap.
+  if (isRestoring) return null
 
   return (
     <>

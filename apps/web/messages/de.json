@@ -1082,7 +1082,10 @@
     "bookableHours": "Buchbare Zeiten",
     "availabilityLegend": "Buchbare Zeiten:",
     "deleteEventConfirm": "Event \"{title}\" löschen? Dies kann nicht rückgängig gemacht werden.",
-    "places": "Orte"
+    "places": "Orte",
+    "horizonLabel": "Zeitraum",
+    "horizonNext": "Nächste {months} Monate",
+    "horizonLast": "Letzte {months} Monate"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -1911,7 +1914,12 @@
     "noCustomLinks": "Noch keine eigenen Links.",
     "save": "Speichern",
     "saving": "Wird gespeichert…",
-    "saved": "Gespeichert"
+    "saved": "Gespeichert",
+    "sharePreview": "Wenn Sie den Link teilen",
+    "sharePreviewNoImage": "Noch kein Titelbild",
+    "sharePreviewNoDescription": "Noch keine Beschreibung — diese Zeile bleibt in Chats leer.",
+    "sharePreviewEditDescription": "Hinzufügen",
+    "sharePreviewHint": "So sieht Ihr Link aus, wenn er in WhatsApp, Instagram oder LinkedIn eingefügt wird. Verwendet werden Ihr Titelbild, Ihr Studioname und Ihre Beschreibung."
   },
   "Appointments": {
     "title": "Termine",
@@ -2766,7 +2774,16 @@
     "sectionContactDesc": "Adresse, Öffnungszeiten, Karte und Social Media.",
     "unpublishConfirmTitle": "Website offline nehmen?",
     "unpublishConfirmBody": "Ihre veröffentlichte Website geht sofort offline: Besucher sehen nichts mehr, und ein Bio-Link-Eintrag, der darauf verweist, wird nicht mehr angezeigt. Es geht nichts verloren — Ihr Entwurf mit Seiten, Texten und Bildern bleibt unverändert erhalten, Sie können jederzeit wieder veröffentlichen.",
-    "unpublishConfirmAction": "Offline nehmen"
+    "unpublishConfirmAction": "Offline nehmen",
+    "fieldPricingDisplay": "Preise auf den Karten",
+    "pricingDisplayList": "Alle Zeilen anzeigen",
+    "pricingDisplayCompact": "Hinter einem Link „Preise“",
+    "pricingDisplayHidden": "Preise ausblenden",
+    "pricingDisplayHint": "Das betrifft nur Beträge. Eine Karte, deren Angebot eine Mitgliedschaft voraussetzt, weist bei jeder Einstellung weiterhin darauf hin — sonst buchen Besucher etwas, das ihnen verweigert wird.",
+    "fieldPricingLayout": "Darstellung",
+    "pricingLayoutCards": "Eine Karte pro Abo",
+    "pricingLayoutTable": "Vergleichstabelle",
+    "pricingLayoutHint": "In der Tabelle stehen Ihre Angebote in den Zeilen und Ihre Abos in den Spalten, sodass Besucher sehen, was jedes Abo enthält."
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -2897,7 +2914,10 @@
     "sectionCoaches": "Coaches",
     "sectionCoachesDesc": "Coach-Übersicht über alle deine Vereine hinweg.",
     "sectionContact": "Kontakt",
-    "sectionContactDesc": "Adresse, Öffnungszeiten, Karte und Social Media."
+    "sectionContactDesc": "Adresse, Öffnungszeiten, Karte und Social Media.",
+    "unpublishConfirmTitle": "Website offline nehmen?",
+    "unpublishConfirmBody": "Ihre veröffentlichte Website geht sofort offline und Besucher sehen nichts mehr. Es geht nichts verloren — Ihre Entwurfsseiten, Texte und Bilder bleiben genau so erhalten, sodass Sie jederzeit wieder veröffentlichen können.",
+    "unpublishConfirmAction": "Offline nehmen"
   },
   "Courses": {
     "title": "Online-Kurse",
@@ -2995,7 +3015,10 @@
     "limitAttachments": "Du kannst höchstens {max} Dateien pro Lektion anhängen.",
     "limitAttachmentSize": "Dateien dürfen höchstens {max} MB groß sein.",
     "limitImageSize": "Bilder dürfen höchstens {max} MB groß sein.",
-    "optional": "optional"
+    "optional": "optional",
+    "unpublishConfirmTitle": "Diesen Kurs offline nehmen?",
+    "unpublishConfirmBody": "Er verschwindet sofort aus dem Shop, und Personen mit bestehendem Zugang sehen ihn nicht mehr in ihrem Bereich. Es geht nichts verloren: Module, Lektionen, Medien und Käufe bleiben erhalten, und beim erneuten Veröffentlichen ist der Zugang wieder da.",
+    "unpublishConfirmAction": "Offline nehmen"
   },
   "Auth": {
     "orWithEmail": "oder mit E-Mail",
@@ -3244,7 +3267,19 @@
     "consentDownloadError": "Die Datei konnte nicht erstellt werden. Bitte erneut versuchen.",
     "bookingsCancelConfirm": "Ja, stornieren",
     "bookingsCancelKeep": "Behalten",
-    "bookingsCancelDone": "Buchung storniert."
+    "bookingsCancelDone": "Buchung storniert.",
+    "restoringSession": "Du wirst angemeldet …",
+    "welcomeBackNamed": "Willkommen zurück, {name}",
+    "nextUpTitle": "Als Nächstes",
+    "nextUpNone": "Du hast noch nichts gebucht.",
+    "nextUpLoadFailed": "Deine nächste Buchung konnte nicht geladen werden. Sie wurde nicht storniert.",
+    "bookAClass": "Kurs buchen",
+    "bookAnother": "Weitere buchen",
+    "gatedUnavailableForAccount": "Dieser Kurs ist mit deinem Konto nicht verfügbar.",
+    "gatedPurchaseTitle": "Dieser Kurs wird separat verkauft. Einmal kaufen und er gehört dir dauerhaft.",
+    "gatedPurchaseCta": "Kurs kaufen",
+    "gatedPurchaseAlreadyBought": "Schon gekauft? Anmelden",
+    "studioTermsLink": "Bedingungen & Richtlinien"
   },
   "FreePlan": {
     "downgradeBannerTitle": "Deine Testphase ist beendet — du nutzt jetzt den Free-Plan",
@@ -3681,7 +3716,10 @@
     "backToBooking": "Zurück zur Buchung",
     "successBodyBooking": "Zahlung erhalten — dein Kurs ist gebucht. Bis bald!",
     "backToAppointments": "Zurück zu den Terminen",
-    "successBodyAppointment": "Zahlung erhalten — dein Termin ist gebucht. Du erhältst eine Bestätigung per E-Mail."
+    "successBodyAppointment": "Zahlung erhalten — dein Termin ist gebucht. Du erhältst eine Bestätigung per E-Mail.",
+    "signingIn": "Sie werden angemeldet…",
+    "signedInAs": "Angemeldet als {name}",
+    "successBodyCourseSignedIn": "Vielen Dank! Sie haben jetzt lebenslangen Zugang. Öffnen Sie Ihren Space, um loszulegen."
   },
   "Notifications": {
     "dismiss": "Verwerfen"
@@ -3889,7 +3927,10 @@
     "submitting": "Wird gesendet…",
     "submitError": "Senden fehlgeschlagen. Bitte versuche es erneut.",
     "thankYou": "Vielen Dank!",
-    "thankYouBody": "Deine Antwort ist eingegangen."
+    "thankYouBody": "Deine Antwort ist eingegangen.",
+    "unpublishConfirmTitle": "Dieses Formular offline nehmen?",
+    "unpublishConfirmBody": "Der von Ihnen geteilte Link funktioniert sofort nicht mehr, und ein darauf verweisender Bio-Link-Eintrag wird nicht mehr angezeigt. Es geht nichts verloren: Felder, Einstellungen und alle bisher erhaltenen Antworten bleiben erhalten, und Sie können jederzeit wieder veröffentlichen.",
+    "unpublishConfirmAction": "Offline nehmen"
   },
   "Documents": {
     "title": "Dokumente",
@@ -4031,7 +4072,13 @@
     "webLinkTextPlaceholder": "Was die Leserin sieht",
     "webLinkInvalidUrl": "Gib eine Webadresse ein, die mit http:// oder https:// beginnt",
     "webLinkSubmit": "Einfügen",
-    "webLinkRemove": "Link entfernen"
+    "webLinkRemove": "Link entfernen",
+    "surfacesPublishFirst": "Dieses Dokument zuerst veröffentlichen",
+    "unsavedChanges": "Nicht gespeicherte Änderungen",
+    "noUnsavedChanges": "Alle Änderungen gespeichert",
+    "unpublishConfirmTitle": "Dieses Dokument von der öffentlichen Seite nehmen?",
+    "unpublishConfirmBody": "Die öffentliche Seite geht sofort offline, und der Eintrag „Dokumente“ auf Ihrem Bio-Link wird nicht mehr angezeigt. Es geht nichts verloren: Der Text, alle veröffentlichten Versionen und alle Unterschriften dazu bleiben erhalten, und Sie können jederzeit wieder veröffentlichen.",
+    "unpublishConfirmAction": "Offline nehmen"
   },
   "OfferAffiliations": {
     "title": "Affiliationen",
@@ -4714,7 +4761,8 @@
     "waiverGuardianBadge": "Aufsicht",
     "waiverGuardianBadgeTitle": "Unterschrieben von jemandem, der sich als Elternteil oder erziehungsberechtigte Person angegeben hat. Selbst angegeben — bitte vor Ort prüfen.",
     "waiverCheckBadge": "Alter prüfen",
-    "waiverCheckBadgeTitle": "Diese Verzichtserklärung kann Minderjährige betreffen und die teilnehmende Person hat selbst unterschrieben. Bitte vor Ort prüfen."
+    "waiverCheckBadgeTitle": "Diese Verzichtserklärung kann Minderjährige betreffen und die teilnehmende Person hat selbst unterschrieben. Bitte vor Ort prüfen.",
+    "addContactBooksSeat": "Wer hinzugefügt wird, belegt einen Platz — die Auslastung wird aktualisiert und die Online-Buchung schliesst, sobald die Klasse voll ist."
   },
   "OrgEvents": {
     "title": "Organisationsveranstaltungen",
@@ -6167,6 +6215,15 @@
     "navContact": "Kontakt",
     "navLocations": "Standorte",
     "navClubs": "Clubs",
-    "navCoaches": "Coaches"
+    "navCoaches": "Coaches",
+    "pricesShow": "Preise",
+    "pricesHide": "Preise ausblenden",
+    "tableActivityColumn": "Angebot",
+    "tableIncluded": "Inklusive",
+    "tableNotIncluded": "Nicht inklusive",
+    "tableDiscount": "{percent}% Rabatt",
+    "tableAnyPlanNote": "Mit jeder Mitgliedschaft — die Registrierung ist kostenlos",
+    "tableOpenNote": "Für alle offen",
+    "tableFreeNote": "Kostenlos buchbar"
   }
 }

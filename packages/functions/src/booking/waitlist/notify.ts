@@ -24,7 +24,7 @@
 
 import * as admin from 'firebase-admin'
 import type { Timestamp } from 'firebase-admin/firestore'
-import { ACTIVITIES_COLLECTION, SESSIONS_COLLECTION, publicUrl } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, SESSIONS_COLLECTION, localizedPublicUrl } from '@linyup/shared'
 import {
   buildWaitlistExpiredEmail,
   buildWaitlistJoinedEmail,
@@ -186,7 +186,9 @@ export async function notifyWaitlistOffers(
     }
 
     for (const offer of group) {
-      const claimUrl = publicUrl(getHostingUrl(), ctx.slug, 'waitlist', { token: offer.offerToken })
+      const claimUrl = localizedPublicUrl(getHostingUrl(), ctx.lang, ctx.slug, 'waitlist', {
+        token: offer.offerToken,
+      })
       const expiresAt = offer.offerExpiresAt.toDate()
       // The claim link travels by MAIL only — the SMS below says "check your
       // email" and carries no token — so the mail is what decides whether this
@@ -315,7 +317,7 @@ export async function notifyWaitlistJoined(params: {
       locationName: ctx.locationName,
       position,
       statusUrl: ctx.slug
-        ? publicUrl(getHostingUrl(), ctx.slug, 'waitlist', { token: entryToken })
+        ? localizedPublicUrl(getHostingUrl(), ctx.lang, ctx.slug, 'waitlist', { token: entryToken })
         : null,
       lang: ctx.lang,
     })
@@ -376,7 +378,7 @@ export async function notifyWaitlistOfferExpired(params: {
       activityName: ctx.activityName,
       sessionStart: ctx.sessionStart,
       rejoinUrl: ctx.slug
-        ? publicUrl(getHostingUrl(), ctx.slug, 'booking', { session: sessionId })
+        ? localizedPublicUrl(getHostingUrl(), ctx.lang, ctx.slug, 'booking', { session: sessionId })
         : null,
       lang: ctx.lang,
     })

@@ -484,7 +484,12 @@ export const createStaffAppointment = onCall(async (request) => {
         currency: currency.toLowerCase(),
         applicationFeeAmount,
         productName: `${activity.name} · ${durationMinutes} min`,
-        successUrl: `${base}?status=success${slugQuery}`,
+        // `&cs=…` mirrors `buildResultUrls` (connect/checkout.ts): the success
+        // page claims the checkout and signs the payer in rather than asking
+        // them for a credential after they have paid (UX-88). This rail builds
+        // its own URLs because it is a payment LINK the studio sends, so the
+        // param has to be repeated here — it is not a second mechanism.
+        successUrl: `${base}?status=success${slugQuery}&cs={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${base}?status=cancelled${slugQuery}`,
         customerEmail: client?.email || undefined,
         metadata,
