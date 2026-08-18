@@ -1010,14 +1010,30 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
-// The seam between the pinned run and the recent run inside the Shortcuts group.
-// A hairline, NOT two sub-headings: a pinned row already wears a filled pin at
-// rest while a recent row's pin only appears on hover, so labels would restate
-// what the rows already say — the same "real noise, little gain" that retired the
-// gradient rule. Full row width and no horizontal inset: re-aligning these rows
-// with every other nav row is the point of the change, and a margin here would
-// quietly hint at the indent that was just removed.
-const SHORTCUT_SEAM = <div className="my-1.5 h-px bg-border/60" />
+// Marks the whole Shortcuts area as a region: a thin, flat, brand-violet rule
+// down its left edge, spanning the group heading, both runs and the empty-state
+// hint.
+//
+// IT MUST NOT CONSUME LAYOUT WIDTH. The original marker was a `before:`
+// pseudo-element on a `pl-3` wrapper, which is the half of it that had to go: the
+// padding it needed pushed every shortcut row 12px right of every other nav row.
+// This is an absolutely-positioned sibling instead, so the rows keep the exact
+// left edge and padding of a Features row — both `<a>` boxes start at the nav's
+// content edge, 8px in, with the same px-3 inside. Verified by the box model:
+// neither chain adds horizontal padding between `nav.px-2` and the row link.
+//
+// `z-10` because a row wrapper is `relative`, so its hover background would
+// otherwise paint over a rule that is merely earlier in the DOM.
+//
+// FLAT — no gradient, no ramp. A tint that faded along its length was tried here
+// (as a left-edge rule, then as a horizontal background wash across the whole
+// area) and rejected both times: the wash grew with the list and read as a
+// highlight rather than a boundary. primary/70 measures 2.94:1 against the light
+// sidebar and 3.97:1 against the dark one — present at a glance in both, without
+// the shout of full strength (4.88:1 / 6.89:1) beside rows that are deliberately
+// muted. Drop dark to /60 (3.24:1) if it ever reads hot.
+const SHORTCUTS_RULE =
+  'pointer-events-none absolute inset-y-0 left-0 z-10 w-0.5 rounded-full bg-primary/70'
 
 // How many recently-visited items the Shortcuts group keeps, in addition to the
 // pinned ones.
@@ -1027,32 +1043,38 @@ const MAX_RECENT_SHORTCUTS = 5
 // the recent run.
 const SHORTCUTS_VISIBLE_MIN = 5
 // ...but the recent run never drops below this while it has rows. A heavy pinner
-// would otherwise spend the whole budget and push recents to zero, which hides
-// the seam and leaves "Show more" as the only evidence that half exists.
+// would otherwise spend the whole budget and push recents to zero, leaving "Show
+// more" as the only evidence that half exists — and with no divider drawn any
+// more, a run that renders nothing is a run that is simply gone.
 const RECENT_VISIBLE_MIN = 2
 
 // The "Shortcuts" macro group — Firebase-style: the destinations a studio keeps
-// within reach, shown as TWO RUNS of ONE mechanism separated by a hairline (item
-// 1 of THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx):
+// within reach, held as TWO RUNS of ONE mechanism (item 1 of THE NAV-MEMORY
+// CENSUS in contexts/NavPinsContext.tsx):
 //   · pinned — hand-curated, drag-orderable, never truncated, never ages out.
 //   · recent — the rolling visit history, truncated behind "Show more".
 // The pin on a row PROMOTES a recent into the pinned run (and, turned off,
-// demotes it back); the X removes the row from the group entirely. The seam is
-// what makes that promotion VISIBLE — inside the old merged list a pin re-sorted
-// the row a couple of places and told the user nothing — and it is ALL that
-// communicates it, so pin/unpin must always move the row across it.
+// demotes it back); the X removes the row from the group entirely.
 //
-// ONE heading, and no sub-headings: the runs are named by their own rows (a
-// pinned row wears a filled pin at rest, a recent row's pin appears on hover),
-// and "Clear all" empties both halves in a single action (clearShortcuts), so a
-// second heading would have nothing left to own. The seam is drawn only when
-// both runs have rows — a line above or below nothing means nothing.
+// NOTHING HARD SEPARATES THE TWO RUNS — no headings, no divider. Three signals
+// carry it instead, and every one of them was already there:
+//   1. ORDER. Pinned first, always. `entries` arrives pre-merged that way.
+//   2. THE PIN ITSELF. A pinned row's pin is filled and visible at rest; a recent
+//      row's only appears on hover. Two adjacent rows are tellable apart without
+//      reading anything.
+//   3. THE MOVE. Pinning re-renders the row at the end of the pinned run, so a
+//      promotion is seen happening. With no line to cross, that motion is now the
+//      whole story — which is why `pinned`/`recents` must stay derived from
+//      `alwaysShownIds` on every render rather than snapshotted.
+// A divider and two labels were both tried here first (2026-08-18) and both lost
+// to the same objection: they restate what the rows already say, and they compete
+// with the left rule for the one job of marking this area out.
 //
-// There is deliberately no accent rule down the left edge any more: it signalled
-// "a different kind of row" inline, which the seam plus the pins now do without
-// the noise, and dropping its indent is what re-aligns these rows with every
-// other nav row. Hidden entirely when there is nothing at all. Per-browser
-// (NavPinsContext).
+// SHORTCUTS_RULE marks the region instead — see its comment for why it is
+// absolutely positioned and for the measured values. It covers the whole group,
+// empty state included: a region that stopped being marked exactly when the hint
+// explaining it appears would be marking the wrong thing. Expanded sidebar only.
+// Hidden entirely when there is nothing at all. Per-browser (NavPinsContext).
 function ShortcutsNav({
   entries,
   collapsed,
@@ -1075,7 +1097,8 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div data-tour="nav-shortcuts" className="mt-3">
+      <div data-tour="nav-shortcuts" className="relative mt-3 py-1">
+        <div aria-hidden className={SHORTCUTS_RULE} />
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
         <p className="px-3 py-1 pr-2 text-xs leading-relaxed text-muted-foreground/60">
           {t('navShortcutsEmpty')}
@@ -1085,20 +1108,14 @@ function ShortcutsNav({
   }
 
   // `entries` arrives merged (pinned first, then recents) — split it back into
-  // the two runs it was built from. The icon rail renders the same rows in the
-  // same order, just without the seam.
+  // the two runs it was built from, DERIVED every render so a pin moves the row
+  // immediately (see signal 3 above). The icon rail renders the same rows in the
+  // same order.
   const pinned = entries.filter((e) => alwaysShownIds.includes(e.id))
   const recents = entries.filter((e) => !alwaysShownIds.includes(e.id))
   const recentVisible = Math.max(RECENT_VISIBLE_MIN, SHORTCUTS_VISIBLE_MIN - pinned.length)
   const shownRecents = expanded ? recents : recents.slice(0, recentVisible)
   const hasMore = recents.length > recentVisible
-  // All-pinned and all-recent both render as a plain list: a seam needs a row on
-  // each side of it to mean anything. So a new user (recents only) sees exactly
-  // what they see today, and the line appears at the moment the first pin creates
-  // the distinction — which is itself the clearest demonstration of what the pin
-  // just did. Never drawn in the icon rail (nothing there says which run is which,
-  // and a bare line in a 40px column reads as a section break between features).
-  const showSeam = !collapsed && pinned.length > 0 && recents.length > 0
 
   // Drag is PINNED-ONLY, deliberately, and it now only ever REORDERS:
   //  · Recent is ordered by when you were last there. A manual placement inside
@@ -1155,7 +1172,9 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'mt-3'}>
+    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'relative mt-3 py-1'}>
+      {/* Expanded only: 2px of rule beside a 40px icon rail marks nothing. */}
+      {!collapsed && <div aria-hidden className={SHORTCUTS_RULE} />}
       {/* Header row: the group label, with "clear all" pushed to the right.
           Confirmed, because the pinned rows are hand-curated and drag-ordered —
           rebuilding them is minutes of fiddling, and there is no undo. It clears
@@ -1212,7 +1231,6 @@ function ShortcutsNav({
           </div>
         ))}
         {!collapsed && dragId != null && dropAt === pinned.length && dropLine}
-        {showSeam && SHORTCUT_SEAM}
         {shownRecents.map((entry) => (
           <ShortcutRow key={entry.id} entry={entry} collapsed={collapsed} onClick={onLinkClick} />
         ))}
@@ -1631,8 +1649,21 @@ function NavSearch({
   // its own would break the one illusion the whole control depends on. Before
   // this it wore a transparent bottom border that only appeared on hover — at
   // rest there was no box at all, and nothing said it was a place you can type.
-  // Deliberately no filled background in light mode (Input has none either): it
-  // sits above the nav rows, and a solid block here would out-shout them.
+  //
+  // IT IS FILLED IN LIGHT MODE, which is the one place it departs from Input, and
+  // the numbers say why. Against the sidebar (--sidebar, #f5f5fa) the shared
+  // `border-input` measures 1.23:1 — WCAG 1.4.11 asks 3:1 of a component boundary,
+  // and no tasteful fill can close that gap either: an OPAQUE `bg-muted` is
+  // 1.05:1 and opaque `bg-accent` 1.09:1, so 3:1 would take a violet block. The
+  // boundary is not where this control's identity lives, though — its icon is
+  // 4.88:1 against the sidebar and its label 5.57:1, both well past 3:1, and the
+  // focus ring is 4.88:1. So the fix here is perceptual, not compliance, and it
+  // goes the other way: `bg-card` is pure white, 1.085:1 and ΔL* +3.3 ABOVE the
+  // sidebar rather than below it. A white field on a tinted sidebar is the oldest
+  // search pattern there is, it lifts the label to 6.04:1, and — because the
+  // panel's own input sits on white `--popover` — the trigger is now literally the
+  // same surface as the thing it grows into. Dark keeps `bg-input/30` (1.10:1,
+  // already a legible plate) because there `bg-card` would be weaker at 1.05:1.
   //
   // It stays a <button>. The panel owns the real field; a second focusable input
   // in the sidebar would be two things that look typeable and one that is not.
@@ -1662,7 +1693,7 @@ function NavSearch({
               // user has to be able to find. focus-visible copies Input's ring
               // exactly (the old trigger had NO focus style at all: tabbing to it
               // showed nothing, because its only border was a hover border).
-              'flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-input bg-transparent px-2.5 text-muted-foreground outline-none transition-colors hover:border-ring/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
+              'flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 text-muted-foreground outline-none transition-colors hover:border-ring/50 hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
         }
       >
         {/* Primary, not inherited muted: search is the fastest route to anything

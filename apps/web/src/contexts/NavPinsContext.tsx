@@ -17,7 +17,8 @@
  *      · ALWAYS SHOWN (`alwaysShownIds`) — hand-curated, drag-ordered, never
  *        truncated, never ages out. Added from a sidebar row, a settings-rail
  *        row or a search result. UI verb: "Always show in shortcuts". The row
- *        wears its pin FILLED and at rest — which is the only thing that names
+ *        wears its pin FILLED and at rest — which, with no heading and no divider
+ *        anywhere in the group, is the ONLY thing that marks a row as belonging to
  *        this run (see the vocabulary note at the end of this item).
  *      · RECENT (`recentIds`) — an automatic rolling history of the last
  *        RECENTS_MAX destinations visited, listed under the always-shown ones
@@ -25,36 +26,52 @@
  *    The control on a row PROMOTES a recent to always-shown (and back); the ×
  *    REMOVES the row from Shortcuts entirely. Icon: a pin, filled while on.
  *
- *    SHOWN AS TWO RUNS SEPARATED BY A HAIRLINE since 2026-08-18 — always-shown
- *    above the rule, recent below, inside the one "Shortcuts" heading. This
- *    replaced a single merged list bracketed by a gradient accent rule down the
- *    left edge (removed: it signalled "a different kind of row" inline for real
- *    visual noise, and its indent was what pushed these rows out of line with
- *    every other nav row). They are still ONE mechanism, and the seam is what
- *    makes that visible: a pin now MOVES a row across the line, where before it
- *    re-sorted it a couple of places inside one list and told the user nothing.
- *    Unpinning moves it back rather than dropping it. Consequences worth keeping:
- *      · NO SUB-HEADINGS, deliberately — a rule, not two labels. The rows already
- *        name their own run (a pinned row's pin is filled and visible at rest; a
- *        recent row's appears on hover), so labels would restate the icons, which
- *        is the same little-gain-real-noise trade the gradient lost on. It also
- *        keeps the group at ONE heading level, which "Clear all" needs — it
- *        empties both halves in one action, so it belongs to the group, not to
- *        either run.
- *      · The seam is drawn ONLY when both runs have rows. A line above or below
- *        nothing means nothing; all-pinned and all-recent are plain lists, so a
- *        new user (recents only) sees exactly what they saw before, and the line
- *        appears at the moment the first pin creates the distinction.
+ *    TWO RUNS, ORDERED, MARKED AS ONE REGION BY A LEFT RULE (2026-08-18):
+ *    always-shown first, recent after, under the one "Shortcuts" heading, with a
+ *    thin flat brand-violet rule down the left edge of the whole area — heading,
+ *    both runs and the empty-state hint. NOTHING HARD SEPARATES THE RUNS: no
+ *    sub-headings, no divider. Both were built here first, on the same day, and
+ *    both were removed:
+ *      · sub-headings ("Pinned" / "Recent") — they restate what the rows already
+ *        say, and they put a noun in front of a verb that disagrees with it (see
+ *        the vocabulary note below).
+ *      · a hairline between the runs — it competed with the region marker for the
+ *        one job of marking this area out, and lost.
+ *    THE RULE IS NOT THE ORIGINAL RULE, and the difference is the entire point of
+ *    this pass. The original was a `before:` pseudo-element on a padded wrapper:
+ *    it reserved layout width, so every shortcut row sat 12px right of every other
+ *    nav row, and it carried a vertical gradient that read as noise. The
+ *    replacement is absolutely positioned and flat — same signal, no indent, no
+ *    ramp. (A horizontal background wash over the whole area was tried in between
+ *    and rejected: it grew with the list and read as a highlight rather than a
+ *    boundary.) If anything here is ever re-styled, THAT is the constraint to
+ *    preserve: the marker must not consume width.
+ *
+ *    What carries the split now that no line does — all three already existed:
+ *      1. ORDER. Pinned first, always.
+ *      2. THE PIN. Filled and visible at rest on a pinned row; hover-only on a
+ *         recent one. Two adjacent rows are tellable apart without reading.
+ *      3. THE MOVE. Pinning re-renders the row at the end of the pinned run, so
+ *         the promotion is SEEN. With no line to cross this motion is the whole
+ *         story, which is why the two runs are derived from `alwaysShownIds` on
+ *         every render and never snapshotted. Unpinning moves it back rather than
+ *         dropping it (that is the ×).
+ *    Other consequences worth keeping:
+ *      · ONE heading level, which "Clear all" needs — it empties both halves in
+ *        one action, so it belongs to the group, not to either run.
+ *      · The empty state is ruled too. A region that stopped being marked exactly
+ *        when the hint explaining it appears would be marking the wrong thing.
  *      · DRAG REORDERS WITHIN THE PINNED RUN ONLY. Recent is ordered by last
  *        visit, so a manual placement there could not be stored and the next
- *        navigation would undo it; and dragging across the seam is not offered
- *        because promotion already has one visible, reversible affordance (the
- *        pin), and an accidental drop is a poor second one. A reorder is applied
- *        to the STORED list, so a pinned destination that is currently gated off
- *        (and therefore not rendered) survives it.
+ *        navigation would undo it; and dragging from one run to the other is not
+ *        offered because promotion already has one visible, reversible affordance
+ *        (the pin), and an accidental drop is a poor second one. A reorder is
+ *        applied to the STORED list, so a pinned destination that is currently
+ *        gated off (and therefore not rendered) survives it.
  *      · The collapsed icon rail is unchanged: the same rows in the same order,
- *        no seam (nothing there says which run is which) and no eraser.
- *    Rendered by `ShortcutsNav` in `app/[locale]/(auth)/layout.tsx`.
+ *        no rule (2px beside a 40px column marks nothing) and no eraser.
+ *    Rendered by `ShortcutsNav` in `app/[locale]/(auth)/layout.tsx`; the rule's
+ *    measured contrast values, per theme, are on `SHORTCUTS_RULE` there.
  *
  *    VOCABULARY, recorded: the only words the user reads are still the verbs on
  *    the control — "Always show in shortcuts" / "Stop always showing"
