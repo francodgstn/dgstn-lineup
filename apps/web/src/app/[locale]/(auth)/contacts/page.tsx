@@ -2061,7 +2061,7 @@ function BulkSetRankDialog({
                   <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent>
                     {system.levels.map((l) => (
-                      <SelectItem key={l.value} value={String(l.value)}>
+                      <SelectItem key={l.value} value={String(l.value)} textValue={l.label}>
                         <span className="flex items-center gap-2">
                           {l.color && <span className="inline-block h-2.5 w-2.5 rounded-full border border-border" style={{ background: l.color }} />}
                           {l.label}

@@ -224,7 +224,7 @@ export default function DocumentsPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {KIND_OPTIONS.map((k) => (
-                    <SelectItem key={k} value={k}>
+                    <SelectItem key={k} value={k} textValue={t(`kind_${k}`)}>
                       <span className="flex items-center gap-1.5">
                         {k === 'waiver' && <ShieldCheck className="h-3.5 w-3.5" />}
                         {t(`kind_${k}`)}

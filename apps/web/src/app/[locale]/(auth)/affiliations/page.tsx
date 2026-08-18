@@ -345,7 +345,7 @@ function ContactAffiliationRow({
               </SelectTrigger>
               <SelectContent>
                 {defs.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
+                  <SelectItem key={s.id} value={s.id} textValue={s.label}>
                     <div className="flex items-center gap-2">
                       <span className={`inline-block h-2 w-2 rounded-full ${COLOR_CLASSES[s.color]?.split(' ')[0] ?? ''}`} />
                       <span>{s.label}</span>
