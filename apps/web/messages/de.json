@@ -88,7 +88,8 @@
       "roles": "rollen berechtigungen",
       "billing": "rechnung tarif upgrade abo",
       "plugin:finance:/plugins/finance": "buchhaltung accounting kontenplan hauptbuch berichte export csv treuhänder bilanz erfolgsrechnung buchungen",
-      "promoCodes": "rabatt gutschein coupon kampagne aktion code"
+      "promoCodes": "rabatt gutschein coupon kampagne aktion code",
+      "dashboardPreview": "neues dashboard vorschau alternative start uebersicht"
     },
     "allSettings": "Alle Einstellungen",
     "howTo": "Anleitungen",
@@ -162,7 +163,8 @@
     "navShortcutsClearExplain": "Damit werden die immer angezeigten Seiten und die zuletzt besuchten entfernt. Das lässt sich nicht rückgängig machen; immer angezeigte Seiten behalten ihre Reihenfolge, bis du sie entfernst.",
     "navSearchArchivedBadge": "Archiviert",
     "navRecentContactsGroup": "Zuletzt angesehene Kontakte",
-    "experimentalFeatures": "Experimentelle Funktionen"
+    "experimentalFeatures": "Experimentelle Funktionen",
+    "dashboardPreview": "Dashboard (neu)"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -392,7 +394,8 @@
     "legendPrevPeriod": "Vorheriger Zeitr.",
     "chartTitleSessions": "Einheiten",
     "chartTitleContacts": "Kontakte",
-    "chartTitleTopActivities": "Top-Aktivitäten"
+    "chartTitleTopActivities": "Top-Aktivitäten",
+    "sectionDiscover": "Entdecken"
   },
   "Contacts": {
     "noteColor_none": "Keine Farbe",
@@ -3265,7 +3268,10 @@
       "doneTitle": "Dein Studio ist bereit",
       "doneBody": "Alle Einrichtungsschritte sind erledigt — Leute finden dich und können buchen.",
       "doneAction": "Öffentliche Seiten ansehen",
-      "doneDismiss": "Schliessen"
+      "doneDismiss": "Schliessen",
+      "next": "Weiter",
+      "showSteps": "Alle Schritte anzeigen",
+      "hideSteps": "Schritte ausblenden"
     }
   },
   "SubscriptionCancellation": {
@@ -6445,5 +6451,58 @@
     "engagementMatrixDescription": "Stellt jede Woche danach dar, wie viele Personen kamen und wie oft sie wiederkamen, und teilt das Ergebnis in vier Quadranten. Das Quadrantenmodell wird noch abgestimmt — lesen Sie es als Hinweis, nicht als Urteil.",
     "engagementMatrixSurface": "Dashboard, im Abschnitt Trends.",
     "planNote": "Erfordert den Plan {plan} — in Ihrem Plan ist es daher noch nicht sichtbar."
+  },
+  "NewDashboard": {
+    "greetingMorning": "Guten Morgen",
+    "greetingAfternoon": "Guten Tag",
+    "greetingEvening": "Guten Abend",
+    "actionNewSession": "Neue Einheit",
+    "actionNewContact": "Neuer Kontakt",
+    "dayToday": "Heute",
+    "dayTomorrow": "Morgen",
+    "prevDay": "Vorheriger Tag",
+    "nextDay": "Nächster Tag",
+    "backToToday": "Zurück zu heute",
+    "openSchedule": "Kalender",
+    "metaSessions": "{count, plural, one {# Einheit} other {# Einheiten}}",
+    "metaBooked": "{count} gebucht",
+    "seatsBooked": "gebucht",
+    "seatsTrials": "{count, plural, one {# Probe} other {# Proben}}",
+    "durationMinutes": "{minutes} Min.",
+    "sessionFallback": "Einheit",
+    "startingNow": "Beginnt jetzt",
+    "startsIn": "In {minutes} Min.",
+    "dayEmptyTitle": "Nichts geplant",
+    "dayEmptyAction": "Einheit hinzufügen",
+    "queueTitle": "Wartet auf dich",
+    "queueCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
+    "queueOpenContacts": "Kontakte",
+    "queueMorePeople": "{count, plural, one {# weitere Person} other {# weitere Personen}}",
+    "queueEmptyTitle": "Alles erledigt",
+    "queueEmptyBody": "Heute Morgen wartet nichts auf dich.",
+    "reason_alerts": "Offener Hinweis im Profil",
+    "reason_pending_signup": "Anmeldung zu bearbeiten",
+    "reason_new_lead": "Neuer Lead, noch nicht kontaktiert",
+    "reason_trial_pending": "Probelektion gebucht, noch nicht besucht",
+    "reason_gone_quiet": "War regelmässig da, kommt nicht mehr",
+    "taskPayments": "Zahlungen zuordnen",
+    "taskPaymentsMeta": "{count, plural, one {# Zahlung ohne Kontakt} other {# Zahlungen ohne Kontakt}}",
+    "taskSetup": "Einrichtung abschliessen",
+    "taskSetupMeta": "{count, plural, one {noch # Schritt} other {noch # Schritte}}",
+    "pulseRevenue": "Umsatz",
+    "pulseRevenueDelta": "{percent}% ggü. Vormonat",
+    "pulseRevenueNoBaseline": "diesen Monat",
+    "pulseMembers": "Aktive Mitglieder",
+    "pulseMembersNote": "von {count} Kontakten",
+    "pulseAttended": "Anwesend",
+    "pulseAttendedNote": "diese Woche",
+    "trendsTitle": "Trends",
+    "trendsWeeksOption": "{weeks} Wochen",
+    "trendsCompareNone": "Kein Vergleich",
+    "trendsComparePrev": "ggü. Vorperiode",
+    "trendsCompareLastYear": "ggü. Vorjahr",
+    "trendsNoHistoryTitle": "Noch zu wenig Verlauf",
+    "trendsNoHistoryBody": "Trends erscheinen, sobald du einige Wochen lang Einheiten durchgeführt hast.",
+    "trendsUpsell": "Wöchentliche Trends — Kontakte, Buchungen, Aktivitäten und die stärksten Zeiten."
   }
 }

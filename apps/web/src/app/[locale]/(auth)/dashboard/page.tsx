@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -45,7 +45,6 @@ import type { Route } from 'next'
 import type {
   Contact,
   Session,
-  RankingSystem,
   SubscriptionType,
   UserProfile,
   Team,
@@ -61,15 +60,18 @@ import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { SetupChecklist } from '@/components/onboarding/SetupChecklist'
 import { Figure, FigureNote, FigureNumber, FigureRail } from '@/components/dashboard/Figure'
-import { RosterCard } from '@/components/dashboard/RosterCard'
-import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
+import { ContactsOverviewCard } from '@/components/dashboard/ContactsOverviewCard'
 import { ContactsSummaryCard } from '@/components/dashboard/ContactsSummaryCard'
 import { BookingsTrendCard } from '@/components/dashboard/BookingsTrendCard'
 import { SessionsHeatmapCard } from '@/components/dashboard/SessionsHeatmapCard'
 import { TopActivitiesCard } from '@/components/dashboard/TopActivitiesCard'
 import { EngagementMatrixCard } from '@/components/dashboard/EngagementMatrixCard'
 import { useExperimentalFeatures } from '@/hooks/useExperimentalFeatures'
-import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
+import {
+  DashboardFinanceFigures,
+  DashboardFinanceTrends,
+  DashboardRecentPayments,
+} from '@/components/dashboard/DashboardFinanceSection'
 // Temporarily hidden — restore alongside the commented rows in TrendsSection:
 // import { TrialFunnelCard } from '@/components/dashboard/TrialFunnelCard'
 // import { CorrelationExplorerCard } from '@/components/dashboard/CorrelationExplorerCard'
@@ -78,6 +80,7 @@ import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotification
 import { FirstRunCard } from '@/components/dashboard/FirstRunCard'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { useSetupChecklist } from '@/hooks/useSetupChecklist'
+import { usePlan } from '@/hooks/usePlan'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -206,10 +209,19 @@ function DashboardHero({ profile, team }: { profile: UserProfile | null; team: T
   )
 }
 
+/**
+ * THE SIGN-OFF, and it used to be a claim on the first screen.
+ *
+ * It sat in the greeting row's right half, which is precisely where the quick
+ * actions belong — so the greeting and the actions each got a line of their own
+ * and the pair cost 90px of the best band to say two things that fit on one.
+ * The quote is a mood piece and it is the last word on the page now: zero
+ * vertical cost above the fold, nothing deleted.
+ */
 function DailyQuote() {
   const quote = getDailyQuote()
   return (
-    <p className="shrink-0 text-xs text-muted-foreground/60 italic md:max-w-xs md:pt-1 md:text-right">
+    <p className="text-center text-xs italic text-muted-foreground/60">
       &ldquo;{quote.text}&rdquo; — {quote.author}
     </p>
   )
@@ -331,19 +343,20 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
         : day.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle>{t('agenda')}</CardTitle>
-          <Link
-            href="/schedule"
-            className="text-xs text-primary hover:underline flex items-center gap-0.5"
-          >
-            {t('allSessions')} <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
+    /* THE CARD FILLS ITS COLUMN, in whichever direction it needs to.
+       It is one grid cell beside a column holding TWO stacked figure sections,
+       and which of the two is taller depends on the day: `h-full` + a
+       `flex-1 min-h-0` scroll region means a quiet Tuesday's agenda GROWS to
+       meet the figures column rather than leaving a hole, while a full one is
+       held at the shipped 440px ceiling and the figures column is simply
+       shorter. Neither side is padded to match the other.
+
+       Its title and "all sessions" link are the SECTION BAND above it now — the
+       same idiom as every other block, and ~34px of card chrome back. */
+    <Card className="flex h-full flex-col gap-2 py-3">
+      <CardHeader>
         {/* Day navigator — compact, left-aligned; click the label to jump to today */}
-        <div className="mt-1 flex w-fit items-center gap-0.5">
+        <div className="flex w-fit items-center gap-0.5">
           <button
             type="button"
             onClick={() => shiftDay(-1)}
@@ -370,12 +383,19 @@ function AgendaCard({ teamId }: { teamId: string | null }) {
           </button>
         </div>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent className="flex flex-col p-0 lg:min-h-0 lg:flex-1">
         {/* px-3 here + px-1 on a row puts a session title at 16px from the card
-            edge — the same place CardHeader's px-4 puts the card title. It was
+            edge — the same place CardHeader's px-4 puts the day navigator. It was
             px-6 + px-1, i.e. 28px, so the header and every row it labelled were
             visibly out of line. */}
-        <div className="max-h-[440px] overflow-y-auto px-3 pb-4">
+        {/* `flex-1` is lg-ONLY on purpose. It is what lets the scroll region
+            fill a column stretched by its neighbour — but a `flex-basis: 0` item
+            inside an auto-height flex column is asking the browser to size a box
+            from a box it is sizing, and below `lg` the card HAS no height. There
+            it is an ordinary block. The 440px ceiling applies at EVERY width: it
+            is what stops a twelve-class Saturday from setting a row height the
+            figures beside it could never reach. */}
+        <div className="max-h-[440px] overflow-y-auto px-3 pb-3 lg:min-h-0 lg:flex-1">
           {isLoading ? (
             <div className="space-y-3 pt-2">
               {[1, 2, 3].map((i) => (
@@ -470,44 +490,6 @@ function QuickActions({ teamSlug }: { teamSlug?: string }) {
   )
 }
 
-// ─── contacts snapshot ────────────────────────────────────────────────────────
-//
-// Two cards, and each keeps its frame for the same reason: it owns a view
-// `Select`, so it is a bounded thing you page through rather than a figure. The
-// third cell used to be "Triggered alerts" — see AttentionList below for where
-// it went and why.
-
-function ContactsSnapshot({
-  contacts,
-  loading,
-  rankingSystems,
-  engagementThresholds,
-}: {
-  contacts: Contact[] | undefined
-  loading: boolean
-  rankingSystems?: RankingSystem[]
-  engagementThresholds?: EngagementThresholds
-}) {
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {[1, 2].map((i) => (
-          <Skeleton key={i} className="h-56 rounded-xl" />
-        ))}
-      </div>
-    )
-  }
-
-  const all = contacts ?? []
-
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <RosterCard contacts={all} thresholds={engagementThresholds} />
-      <DemographicsCard contacts={all} rankingSystems={rankingSystems} />
-    </div>
-  )
-}
-
 // ─── needs attention ──────────────────────────────────────────────────────────
 //
 // Replaces `TriggeredAlertsCard`, which was titled "Triggered alerts" and
@@ -537,23 +519,34 @@ const ATTENTION_ROWS = 5
 /** The contacts page's Needs-attention view, entered directly. */
 const ATTENTION_HREF = '/contacts?attention=1' as Route
 
+// TWO LINES, NOT ONE. The block lives in a third of the page now (~330px at
+// 1280, ~244px between `lg` and `xl`), and a name beside a reason chip on one
+// line there is a choice between truncating the person and dropping the reason.
+// Both are the point: a name with no reason is an urgency list nobody trusts,
+// and a reason attached to "Alexandra Baum…" is barely better. So the chip sits
+// under the name — the mobile list-row shape, which is what a narrow column is.
 function AttentionRow({ contact, reason }: { contact: Contact; reason: ContactAttentionReason }) {
   const tc = useTranslations('Contacts')
   const initials = `${contact.firstname?.[0] ?? ''}${contact.lastname?.[0] ?? ''}`.toUpperCase() || '?'
   return (
     <Link
       href={`/contacts/${contact.id}` as Route}
-      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
+      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
     >
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
         <span className="text-xs font-semibold text-amber-600">{initials}</span>
       </div>
-      <p className="min-w-0 flex-1 truncate text-sm font-medium">
-        {contact.firstname} {contact.lastname}
-      </p>
-      <Badge variant="outline" className="shrink-0 border-amber-300 text-xs text-amber-600">
-        {tc(`attention_${reason}` as 'attention_alerts')}
-      </Badge>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium leading-tight">
+          {contact.firstname} {contact.lastname}
+        </p>
+        <Badge
+          variant="outline"
+          className="mt-1 border-amber-300 px-1.5 py-0 text-[11px] font-normal leading-[1.35] text-amber-600"
+        >
+          {tc(`attention_${reason}` as 'attention_alerts')}
+        </Badge>
+      </div>
     </Link>
   )
 }
@@ -588,13 +581,18 @@ function useAttentionRows(
 function AttentionList({ rows, loading }: { rows: AttentionRowData[]; loading: boolean }) {
   const t = useTranslations('Dashboard')
 
+  // ONE COLUMN, always. It was `sm:grid-cols-2` from when it spanned the whole
+  // page; a third of 1035px cannot hold two of these side by side.
   if (loading) {
     return (
-      <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex items-center gap-3 py-2">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <Skeleton className="h-3.5 flex-1" />
+      <div className="space-y-1">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center gap-3 py-1.5">
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
           </div>
         ))}
       </div>
@@ -617,7 +615,7 @@ function AttentionList({ rows, loading }: { rows: AttentionRowData[]; loading: b
   }
 
   return (
-    <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
+    <div className="space-y-0.5">
       {rows.slice(0, ATTENTION_ROWS).map(({ contact, reason }) => (
         <AttentionRow key={contact.id} contact={contact} reason={reason} />
       ))}
@@ -657,6 +655,10 @@ function TrendsUpsell() {
   )
 }
 
+// Finance's refusal now stands in the first screen's figures column, under
+// Highlights, where it is standing in for a 74px figure body. It drops the
+// `sm:p-6` step the standalone panel takes: a gate cannot be as short as two
+// numbers, but it should not be twice them either.
 function FinanceUpsell() {
   const t = useTranslations('Dashboard')
   return (
@@ -664,6 +666,7 @@ function FinanceUpsell() {
       minPlan="studio"
       title={t('sectionFinance')}
       description={t('financeUpsell')}
+      className="sm:p-4"
     />
   )
 }
@@ -821,6 +824,9 @@ export default function DashboardPage() {
   // The attention block's heading and its reason chips reuse the contacts
   // page's copy rather than keeping a second translation of the same words.
   const tContacts = useTranslations('Contacts')
+  // The recent-payments section band reuses the finance block's own strings
+  // rather than keeping a second copy of "Recent payments" / "View all".
+  const tFinance = useTranslations('DashboardFinance')
   const affiliationTerm = useAffiliationTerm()
 
   const { data: contacts, isLoading: contactsLoading } = useContacts(currentTeamId)
@@ -873,6 +879,11 @@ export default function DashboardPage() {
 
   const teamSlug = team?.slug ?? (profile as { slug?: string } | null)?.slug
   const statsLoading = contactsLoading || sessionsLoading
+  // The second row is 2:1 only when there is something in its right third.
+  // `PlanGate` can hide the card, but it cannot tell the row beside it to
+  // reflow — so the plan is read here and the grid is chosen once.
+  const { isAtLeast } = usePlan()
+  const showPayments = isAtLeast('studio')
 
   return (
     <div className="space-y-8">
@@ -883,22 +894,26 @@ export default function DashboardPage() {
       {/* ── 0b. Team notifications (org access requests, etc.) ── */}
       <TeamNotificationsBanner />
 
-      {/* ── 1. Welcome row: greeting left, daily quote right ── */}
+      {/* ── 1. THE HEADER ROW — greeting left, quick actions right ──
+             Two lines became one. The greeting and the actions were stacked
+             with the daily quote parked in the greeting's right half, so the
+             band between the checklist and the first content ran 164px to
+             deliver a name, a date and four pills. The quote is the page's
+             sign-off now (see DailyQuote) and the actions take the space it
+             was holding. */}
       <section className="space-y-5">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
-          <div className="flex items-start gap-1.5 min-w-0">
-            <DashboardHero profile={profile} team={team} />
-          </div>
-          <DailyQuote />
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-6">
+          <DashboardHero profile={profile} team={team} />
+          <QuickActions teamSlug={teamSlug} />
         </div>
-
-        {/* ── 2. Quick actions (single dropdown chip on very small screens) ── */}
-        <QuickActions teamSlug={teamSlug} />
 
         {/* While we're still deciding whether it IS day one. The wait used to
             be paid in a screenful of skeletons; it's one now. */}
         {resolvingFirstRun && <Skeleton className="h-64 w-full rounded-xl" />}
 
+        {/* Day one keeps its own three-card shape, untouched — the Discover
+            panel is the newcomer's second card there, which is the one place it
+            is the point rather than an interruption. */}
         {isFirstRun && (
           <div className="grid grid-cols-1 gap-6 lg:min-h-[380px] lg:grid-cols-3">
             <div className="lg:col-span-2">
@@ -908,127 +923,234 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── 3. Agenda + discovery panel ──
-            min-h gives the row a floor: both cards stretch (h-full), so without
-            it the height collapses to whatever the discovery panel happens to
-            need — around 275px on a quiet day, which reads as cramped. Desktop
-            only; on mobile the cards stack and a floor would just add dead
-            space. The agenda's own max-h (440px) is the ceiling above this. */}
+        {/* ── THE FIRST SCREEN — one row, two columns ──
+            LEFT: the agenda. RIGHT: the figure sections, stacked.
+
+            This shape replaced a pair of figure sections side by side, which
+            Franco read as "even more confusing" — and he was right about why:
+            pairing two sections of the SAME material makes their internal grids
+            each other's problem, so a 2×2 of numbers had to rhyme with a 2×1 of
+            numbers and neither was allowed to be what it wanted. Pairing ONE
+            TALL THING with ONE COLUMN OF STACKED THINGS needs no rhyme at all.
+            The agenda is a scroll region, so it can be any height; the figures
+            underneath each other read top-to-bottom like a panel, which is how
+            numbers are read anyway.
+
+            50/50, and not a 2:1 in the agenda's favour: at half of 1035px every
+            figure on the page lands at ~228px — the same width the old
+            four-across rail gave them — so Highlights, Finance and the roster
+            figures below are all one size. A 2:1 split would have squeezed the
+            figures to ~145px to give width to a list of session names that does
+            not need it. The two columns' section bands then start at the same
+            two x-positions, which is the alignment the stacked strips never had.
+
+            The row is NOT decreed a height. Each column takes the height it
+            wants and the taller one wins: a quiet day's agenda grows to meet the
+            figures (see AgendaCard), a full one is capped at its 440px ceiling
+            and the figures column simply ends earlier. Nothing is padded to
+            match — a stretched figure section stops looking like figures. */}
         {showData && (
-          <div className="grid grid-cols-1 gap-6 lg:min-h-[380px] lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <AgendaCard teamId={currentTeamId} />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* ── the day ── */}
+            <section className="flex flex-col gap-4">
+              <SectionHeading
+                action={
+                  <Link
+                    href={'/schedule' as Route}
+                    className="flex items-center gap-0.5 text-xs text-primary hover:underline"
+                  >
+                    {t('allSessions')} <ArrowRight className="h-3 w-3" />
+                  </Link>
+                }
+              >
+                {t('agenda')}
+              </SectionHeading>
+              <div className="min-h-0 lg:flex-1">
+                <AgendaCard teamId={currentTeamId} />
+              </div>
+            </section>
+
+            {/* ── the numbers ── one gutter: the gap between the two sections in
+                this column is the same 24px as the gap between the columns. */}
+            <div className="space-y-6">
+              <section className="space-y-4">
+                <SectionHeading>{t('sectionHighlights')}</SectionHeading>
+                <FigureRail>
+                  <Figure title={t('statEngaged')} icon={TrendingUp} href="/contacts">
+                    <FigureNumber
+                      value={engagedThisWeek}
+                      subtitle={t('statEngagedSub')}
+                      loading={statsLoading}
+                      note={
+                        <FigureNote>
+                          +{engagedPrevWeek ?? '—'} {t('statEngagedPrev')}
+                        </FigureNote>
+                      }
+                    />
+                  </Figure>
+                  <Figure title={t('statBookings')} icon={BookOpen} href="/bookings">
+                    <FigureNumber
+                      value={upcomingBookingsCount}
+                      subtitle={t('statBookingsSub')}
+                      loading={sessionsLoading}
+                      note={
+                        upcomingTrialsCount !== null ? (
+                          <FigureNote>
+                            +{upcomingTrialsCount} {t('statBookingsTrial')}
+                          </FigureNote>
+                        ) : undefined
+                      }
+                    />
+                  </Figure>
+                  {/* These two used to ask the same question twice — "Subscribed"
+                      (a `subscription_type_id`) beside the affiliation count
+                      (`affiliation_summary.has_active`), both subtitled in terms
+                      of subscriptions, side by side with nothing saying how they
+                      differed. They count DIFFERENT things, and the subtitles now
+                      say which: one of YOUR plans vs an active affiliation. */}
+                  <Figure title={t('statSubscribed')} icon={CreditCard} href="/contacts">
+                    <FigureNumber
+                      value={internalSubCount}
+                      subtitle={t('statSubscriptionsSub')}
+                      loading={statsLoading}
+                      note={
+                        aggregatorSubCount !== null ? (
+                          <FigureNote>
+                            +{aggregatorSubCount} {t('statSubscribedAgg')}
+                          </FigureNote>
+                        ) : undefined
+                      }
+                    />
+                  </Figure>
+                  <Figure title={affiliationTerm} icon={Users} href="/contacts">
+                    <FigureNumber
+                      value={activeMembers}
+                      subtitle={t('statAffiliationSub')}
+                      loading={statsLoading}
+                    />
+                  </Figure>
+                </FigureRail>
+              </section>
+
+              <section className="space-y-4">
+                <SectionHeading>{t('sectionFinance')}</SectionHeading>
+                <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
+                  <DashboardFinanceFigures teamId={currentTeamId} />
+                </PlanGate>
+              </section>
             </div>
-            <DiscoverPanel />
           </div>
         )}
       </section>
 
       {showData && (
         <>
-          {/* ── 4. Highlights ── The four figures. They lost their frames: a
-              number has no interior to page through, so a box around one framed
-              nothing. Hairline rail at lg, two-up below it. */}
-          <section className="space-y-4">
-            <SectionHeading>{t('sectionHighlights')}</SectionHeading>
-            <FigureRail cols={4}>
-              <Figure title={t('statEngaged')} icon={TrendingUp} href="/contacts">
-                <FigureNumber
-                  value={engagedThisWeek}
-                  subtitle={t('statEngagedSub')}
-                  loading={statsLoading}
-                  note={
-                    <FigureNote>
-                      +{engagedPrevWeek ?? '—'} {t('statEngagedPrev')}
-                    </FigureNote>
+          {/* ── THE SECOND ROW — three equal thirds ──
+              Needs attention · Recent payments · Contacts.
+
+              THIRDS RATHER THAN A RATIO, and the merge is what paid for it: the
+              roster and demographics cards were the same component twice, so
+              collapsing them into one `ContactsOverviewCard` freed a column and
+              pulled the last non-analytical block up out of the bottom of the
+              page. What is left down there is four trend charts and nothing
+              else, which is what "analytical" should have meant all along.
+
+              330px A COLUMN, AND IT FITS — checked against what these actually
+              draw. The contacts card is a 144px donut over a vertical legend,
+              not a plot with axes: at 330px it has 298px of content, so the
+              donut has 154px to spare and each legend row gives a label ~212px.
+              A four-chart grid could not go three-up here; this can. The one
+              real cost is in the affiliation and subscription views, where a
+              long subscription-type name now truncates — it carries a `title`
+              attribute so the full name is still reachable.
+
+              MIXED MATERIALS, DELIBERATELY. Attention is a list on the
+              background (it defers to the contacts page and holds no answer);
+              payments and contacts are cards (a bounded list you click into, and
+              a plotting surface). The heights differ — roughly 280 / 165 / 335
+              body pixels — and NOTHING is padded to match: stretching a figure
+              or a five-row ledger to meet a donut is how a block stops looking
+              like what it is. The shortest sits in the middle, so the row reads
+              as a valley rather than a step.
+
+              NO SECTION SPANS TWO ROWS. Finance's figures are in the row above;
+              this ledger is under its OWN band, built from the
+              `recentTitle`/`recentViewAll` strings it already carried as a
+              `CardTitle`. One heading governing content in two places with the
+              agenda in between is a mistake even when it is intentional.
+
+              Below Studio there is no payments card, so the row is two columns
+              rather than three-with-a-hole. It is not offered a second upgrade
+              notice: one for that tier already stands in the figures column. */}
+          <div
+            className={`grid grid-cols-1 gap-6 ${
+              showPayments ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
+            }`}
+          >
+            <section className="space-y-4">
+              <SectionHeading action={<AttentionAction count={attentionRows.length} />}>
+                {tContacts('sort_attention')}
+              </SectionHeading>
+              <AttentionList rows={attentionRows} loading={contactsLoading} />
+            </section>
+
+            {showPayments && (
+              <section className="space-y-4">
+                <SectionHeading
+                  action={
+                    <Link
+                      href={'/payments' as Route}
+                      className="flex items-center gap-0.5 text-xs text-primary hover:underline"
+                    >
+                      {tFinance('recentViewAll')} <ArrowRight className="h-3 w-3" />
+                    </Link>
                   }
-                />
-              </Figure>
-              <Figure title={t('statBookings')} icon={BookOpen} href="/bookings">
-                <FigureNumber
-                  value={upcomingBookingsCount}
-                  subtitle={t('statBookingsSub')}
-                  loading={sessionsLoading}
-                  note={
-                    upcomingTrialsCount !== null ? (
-                      <FigureNote>
-                        +{upcomingTrialsCount} {t('statBookingsTrial')}
-                      </FigureNote>
-                    ) : undefined
-                  }
-                />
-              </Figure>
-              {/* These two used to ask the same question twice — "Subscribed"
-                  (a `subscription_type_id`) beside the affiliation count
-                  (`affiliation_summary.has_active`), both subtitled in terms of
-                  subscriptions, side by side with nothing saying how they
-                  differed. They count DIFFERENT things, and the subtitles now
-                  say which: one of YOUR plans vs an active affiliation. */}
-              <Figure title={t('statSubscribed')} icon={CreditCard} href="/contacts">
-                <FigureNumber
-                  value={internalSubCount}
-                  subtitle={t('statSubscriptionsSub')}
-                  loading={statsLoading}
-                  note={
-                    aggregatorSubCount !== null ? (
-                      <FigureNote>
-                        +{aggregatorSubCount} {t('statSubscribedAgg')}
-                      </FigureNote>
-                    ) : undefined
-                  }
-                />
-              </Figure>
-              <Figure title={affiliationTerm} icon={Users} href="/contacts">
-                <FigureNumber
-                  value={activeMembers}
-                  subtitle={t('statAffiliationSub')}
-                  loading={statsLoading}
-                />
-              </Figure>
-            </FigureRail>
-          </section>
+                >
+                  {tFinance('recentTitle')}
+                </SectionHeading>
+                <DashboardRecentPayments teamId={currentTeamId} />
+              </section>
+            )}
 
-          {/* ── 5. Needs attention ── Above money on purpose: it is the only
-              block on the page that asks the studio to DO something today, and
-              the people in it go cold while the rest of the dashboard is being
-              read. On the background under its heading — no frame, because it
-              defers to the contacts page rather than holding the answer. */}
-          <section className="space-y-4">
-            <SectionHeading action={<AttentionAction count={attentionRows.length} />}>
-              {tContacts('sort_attention')}
-            </SectionHeading>
-            <AttentionList rows={attentionRows} loading={contactsLoading} />
-          </section>
+            <section className="space-y-4">
+              <SectionHeading>{t('sectionContactsSnapshot')}</SectionHeading>
+              {contactsLoading ? (
+                <Skeleton className="h-72 rounded-xl" />
+              ) : (
+                <ContactsOverviewCard
+                  contacts={contacts ?? []}
+                  thresholds={team?.engagement_thresholds}
+                  rankingSystems={team?.ranking_systems}
+                />
+              )}
+            </section>
+          </div>
 
-          {/* ── 6. Finance (Studio+ only) ── the question an owner opens the
-              dashboard to answer, so it outranks the roster breakdown below. */}
-          <section className="space-y-4">
-            <SectionHeading>{t('sectionFinance')}</SectionHeading>
-            <PlanGate minPlan="studio" fallback={<FinanceUpsell />}>
-              <DashboardFinanceSection teamId={currentTeamId} />
-            </PlanGate>
-          </section>
+          {/* The finance plugin's charts — analytical, headless (they carry
+              their own heading), and gated on the plugin inside. */}
+          {showPayments && <DashboardFinanceTrends teamId={currentTeamId} />}
 
-          {/* ── 7. Contacts snapshot ── */}
-          <section className="space-y-4">
-            <SectionHeading>{t('sectionContactsSnapshot')}</SectionHeading>
-            <ContactsSnapshot
-              contacts={contacts}
-              loading={contactsLoading}
-              rankingSystems={team?.ranking_systems}
-              engagementThresholds={team?.engagement_thresholds}
-            />
-          </section>
-
-          {/* ── 8. Trends (Studio+ only) ── */}
+          {/* ── Trends (Studio+ only) ── */}
           <section className="space-y-4">
             <SectionHeading>{t('sectionTrends')}</SectionHeading>
             <PlanGate minPlan="studio" fallback={<TrendsUpsell />}>
               <TrendsSection teamId={currentTeamId} />
             </PlanGate>
           </section>
+
+          {/* ── Discover ── LAST, and that is Franco's call. Tips and plugin
+              upsells owned half the widest row above the fold — the only block
+              on the first screen that asked for nothing and answered nothing.
+              Below the trends it is a shelf you go to, not a thing you are
+              handed. */}
+          <section className="space-y-4">
+            <SectionHeading>{t('sectionDiscover')}</SectionHeading>
+            <DiscoverPanel />
+          </section>
         </>
       )}
+
+      <DailyQuote />
     </div>
   )
 }

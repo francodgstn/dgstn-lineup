@@ -88,7 +88,8 @@
       "roles": "permissions access control",
       "billing": "invoice plan upgrade subscription",
       "plugin:finance:/plugins/finance": "accounting bookkeeping ledger reports export csv accountant balance sheet profit loss entries chart of accounts",
-      "promoCodes": "discount coupon voucher campaign offer code"
+      "promoCodes": "discount coupon voucher campaign offer code",
+      "dashboardPreview": "new dashboard preview alternative home overview"
     },
     "allSettings": "All settings",
     "howTo": "How-to",
@@ -162,7 +163,8 @@
     "navShortcutsClearExplain": "This removes the pages you always show and the ones you recently visited. It can't be undone, and always-shown pages keep their order until you clear them.",
     "navSearchArchivedBadge": "Archived",
     "navRecentContactsGroup": "Recently viewed contacts",
-    "experimentalFeatures": "Experimental features"
+    "experimentalFeatures": "Experimental features",
+    "dashboardPreview": "Dashboard (new)"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -392,7 +394,8 @@
     "legendPrevPeriod": "Prev. period",
     "chartTitleSessions": "Sessions",
     "chartTitleContacts": "Contacts",
-    "chartTitleTopActivities": "Top activities"
+    "chartTitleTopActivities": "Top activities",
+    "sectionDiscover": "Discover"
   },
   "Contacts": {
     "noteColor_none": "No colour",
@@ -3265,7 +3268,10 @@
       "doneTitle": "Your studio is ready",
       "doneBody": "Every setup step is done — people can find you and book.",
       "doneAction": "See your public pages",
-      "doneDismiss": "Close"
+      "doneDismiss": "Close",
+      "next": "Next",
+      "showSteps": "Show all steps",
+      "hideSteps": "Hide steps"
     }
   },
   "SubscriptionCancellation": {
@@ -6445,5 +6451,58 @@
     "engagementMatrixDescription": "Plots each week by how many people came and how often they came back, splitting the result into four quadrants. The quadrant model is still being tuned, so read it as a hint rather than a verdict.",
     "engagementMatrixSurface": "Dashboard, in the Trends section.",
     "planNote": "Needs the {plan} plan, so you will not see it on yours yet."
+  },
+  "NewDashboard": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "actionNewSession": "New session",
+    "actionNewContact": "New contact",
+    "dayToday": "Today",
+    "dayTomorrow": "Tomorrow",
+    "prevDay": "Previous day",
+    "nextDay": "Next day",
+    "backToToday": "Back to today",
+    "openSchedule": "Schedule",
+    "metaSessions": "{count, plural, one {# session} other {# sessions}}",
+    "metaBooked": "{count} booked",
+    "seatsBooked": "booked",
+    "seatsTrials": "{count, plural, one {# trial} other {# trials}}",
+    "durationMinutes": "{minutes} min",
+    "sessionFallback": "Session",
+    "startingNow": "Starting now",
+    "startsIn": "In {minutes} min",
+    "dayEmptyTitle": "Nothing scheduled",
+    "dayEmptyAction": "Add a session",
+    "queueTitle": "Waiting on you",
+    "queueCount": "{count, plural, one {# item} other {# items}}",
+    "queueOpenContacts": "Contacts",
+    "queueMorePeople": "{count, plural, one {# more person} other {# more people}}",
+    "queueEmptyTitle": "All clear",
+    "queueEmptyBody": "Nobody is waiting on you this morning.",
+    "reason_alerts": "Open alert on the record",
+    "reason_pending_signup": "Sign-up request to process",
+    "reason_new_lead": "New lead, nobody has replied",
+    "reason_trial_pending": "Trial booked, not attended yet",
+    "reason_gone_quiet": "Used to come, has stopped",
+    "taskPayments": "Payments to file",
+    "taskPaymentsMeta": "{count, plural, one {# payment has no contact} other {# payments have no contact}}",
+    "taskSetup": "Finish setting up",
+    "taskSetupMeta": "{count, plural, one {# step left} other {# steps left}}",
+    "pulseRevenue": "Revenue",
+    "pulseRevenueDelta": "{percent}% vs last month",
+    "pulseRevenueNoBaseline": "this month",
+    "pulseMembers": "Active members",
+    "pulseMembersNote": "of {count} contacts",
+    "pulseAttended": "Attended",
+    "pulseAttendedNote": "this week",
+    "trendsTitle": "Trends",
+    "trendsWeeksOption": "{weeks} weeks",
+    "trendsCompareNone": "No comparison",
+    "trendsComparePrev": "vs previous period",
+    "trendsCompareLastYear": "vs last year",
+    "trendsNoHistoryTitle": "Not enough history yet",
+    "trendsNoHistoryBody": "Trends appear once you have been running sessions for a few weeks.",
+    "trendsUpsell": "Weekly trends — contacts, bookings, activities and your busiest hours."
   }
 }

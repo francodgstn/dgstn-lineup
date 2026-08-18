@@ -88,7 +88,8 @@
       "roles": "rôles permissions",
       "billing": "facturation forfait abonnement",
       "plugin:finance:/plugins/finance": "comptabilité accounting plan comptable grand livre rapports export csv comptable bilan résultat écritures",
-      "promoCodes": "remise reduction coupon bon campagne offre code"
+      "promoCodes": "remise reduction coupon bon campagne offre code",
+      "dashboardPreview": "nouveau tableau de bord aperçu alternative accueil"
     },
     "allSettings": "Tous les paramètres",
     "howTo": "Guides",
@@ -162,7 +163,8 @@
     "navShortcutsClearExplain": "Cela supprime les pages toujours affichées et celles récemment visitées. L’action est irréversible ; les pages toujours affichées conservent leur ordre jusqu’à ce que vous les effaciez.",
     "navSearchArchivedBadge": "Archivé",
     "navRecentContactsGroup": "Contacts consultés récemment",
-    "experimentalFeatures": "Fonctionnalités expérimentales"
+    "experimentalFeatures": "Fonctionnalités expérimentales",
+    "dashboardPreview": "Tableau de bord (nouveau)"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -392,7 +394,8 @@
     "legendPrevPeriod": "Période préc.",
     "chartTitleSessions": "Séances",
     "chartTitleContacts": "Contacts",
-    "chartTitleTopActivities": "Activités principales"
+    "chartTitleTopActivities": "Activités principales",
+    "sectionDiscover": "Découvrir"
   },
   "Contacts": {
     "noteColor_none": "Sans couleur",
@@ -3265,7 +3268,10 @@
       "doneTitle": "Votre studio est prêt",
       "doneBody": "Toutes les étapes de configuration sont faites — on peut vous trouver et réserver.",
       "doneAction": "Voir vos pages publiques",
-      "doneDismiss": "Fermer"
+      "doneDismiss": "Fermer",
+      "next": "Suivant",
+      "showSteps": "Afficher toutes les étapes",
+      "hideSteps": "Masquer les étapes"
     }
   },
   "SubscriptionCancellation": {
@@ -6445,5 +6451,58 @@
     "engagementMatrixDescription": "Représente chaque semaine selon le nombre de personnes venues et la fréquence de leur retour, en répartissant le résultat en quatre quadrants. Le modèle de quadrants est encore en cours d'ajustement : lisez-le comme une indication, pas comme un verdict.",
     "engagementMatrixSurface": "Tableau de bord, dans la section Tendances.",
     "planNote": "Nécessite le forfait {plan} : vous ne le verrez donc pas encore avec le vôtre."
+  },
+  "NewDashboard": {
+    "greetingMorning": "Bonjour",
+    "greetingAfternoon": "Bon après-midi",
+    "greetingEvening": "Bonsoir",
+    "actionNewSession": "Nouvelle séance",
+    "actionNewContact": "Nouveau contact",
+    "dayToday": "Aujourd'hui",
+    "dayTomorrow": "Demain",
+    "prevDay": "Jour précédent",
+    "nextDay": "Jour suivant",
+    "backToToday": "Revenir à aujourd'hui",
+    "openSchedule": "Agenda",
+    "metaSessions": "{count, plural, one {# séance} other {# séances}}",
+    "metaBooked": "{count, plural, one {# réservation} other {# réservations}}",
+    "seatsBooked": "réservé",
+    "seatsTrials": "{count, plural, one {# essai} other {# essais}}",
+    "durationMinutes": "{minutes} min",
+    "sessionFallback": "Séance",
+    "startingNow": "Commence maintenant",
+    "startsIn": "Dans {minutes} min",
+    "dayEmptyTitle": "Rien de prévu",
+    "dayEmptyAction": "Ajouter une séance",
+    "queueTitle": "En attente de vous",
+    "queueCount": "{count, plural, one {# élément} other {# éléments}}",
+    "queueOpenContacts": "Contacts",
+    "queueMorePeople": "{count, plural, one {# autre personne} other {# autres personnes}}",
+    "queueEmptyTitle": "Tout est à jour",
+    "queueEmptyBody": "Personne n'attend après vous ce matin.",
+    "reason_alerts": "Alerte ouverte sur la fiche",
+    "reason_pending_signup": "Demande d'inscription à traiter",
+    "reason_new_lead": "Nouveau prospect, pas encore contacté",
+    "reason_trial_pending": "Essai réservé, pas encore venu",
+    "reason_gone_quiet": "Venait régulièrement, ne vient plus",
+    "taskPayments": "Paiements à affecter",
+    "taskPaymentsMeta": "{count, plural, one {# paiement sans contact} other {# paiements sans contact}}",
+    "taskSetup": "Terminer la configuration",
+    "taskSetupMeta": "{count, plural, one {# étape restante} other {# étapes restantes}}",
+    "pulseRevenue": "Recettes",
+    "pulseRevenueDelta": "{percent}% vs mois dernier",
+    "pulseRevenueNoBaseline": "ce mois-ci",
+    "pulseMembers": "Membres actifs",
+    "pulseMembersNote": "sur {count} contacts",
+    "pulseAttended": "Présents",
+    "pulseAttendedNote": "cette semaine",
+    "trendsTitle": "Tendances",
+    "trendsWeeksOption": "{weeks} semaines",
+    "trendsCompareNone": "Aucune comparaison",
+    "trendsComparePrev": "vs période précédente",
+    "trendsCompareLastYear": "vs année dernière",
+    "trendsNoHistoryTitle": "Pas encore assez d'historique",
+    "trendsNoHistoryBody": "Les tendances apparaissent après quelques semaines de séances.",
+    "trendsUpsell": "Tendances hebdomadaires — contacts, réservations, activités et heures de pointe."
   }
 }

@@ -103,10 +103,23 @@ export function FigureNote({ children }: { children: React.ReactNode }) {
 /**
  * The figures of one section, as a RAIL rather than a row of boxes.
  *
+ * TWO COLUMNS, ALWAYS. The rail used to take a `cols: 2 | 4`. Every figure
+ * section is half the page wide now — they stack in the first screen's right
+ * column, beside the agenda — and at half of 1035px two figures land at ~228px
+ * each, which is what the four-up rail gave them across the full width. Same
+ * figure width; a quarter of the eye travel, because Highlights now reads as a
+ * 2×2 block rather than a 1035px sweep.
+ *
  * At `lg` the gutter becomes padding either side of a hairline, so the numbers
- * read as one instrument panel. Below `lg` they stack two-up and the grid gap
- * does the separating — a vertical rule between wrapped rows would be a rule to
- * nowhere.
+ * read as one instrument panel. Below `lg` the grid gap does the separating — a
+ * vertical rule between wrapped rows would be a rule to nowhere.
+ *
+ * THE SELECTOR IS ROW-AWARE, and that is not cosmetic: it was `[&>*+*]`, i.e.
+ * "every child but the first", which is only correct for a SINGLE row. Give
+ * that rail four children in two columns and child 3 opens row 2 wearing a left
+ * border — exactly the rule to nowhere the paragraph above forbids. In a
+ * two-column grid, odd children are always column 1 and even always column 2,
+ * so `nth-child(odd|even)` states the geometry rather than the sequence.
  *
  * `lg` and NOT `md`: the finance block used to go three-up at `md` while every
  * other block waited for `lg`, so the page reflowed twice on the way down. One
@@ -114,21 +127,19 @@ export function FigureNote({ children }: { children: React.ReactNode }) {
  * `gap-3`/`gap-4`/`gap-6`).
  */
 export function FigureRail({
-  cols,
   className,
   children,
 }: {
-  cols: 2 | 4
   className?: string
   children: React.ReactNode
 }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-2 gap-6',
-        cols === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-4',
-        'lg:gap-x-0 lg:[&>*]:pr-6 lg:[&>*:last-child]:pr-0',
-        'lg:[&>*+*]:border-l lg:[&>*+*]:border-border lg:[&>*+*]:pl-6',
+        'grid grid-cols-2 gap-6 lg:gap-x-0',
+        'lg:[&>*:nth-child(odd)]:pr-6',
+        'lg:[&>*:nth-child(even)]:border-l lg:[&>*:nth-child(even)]:border-border',
+        'lg:[&>*:nth-child(even)]:pl-6',
         className
       )}
     >

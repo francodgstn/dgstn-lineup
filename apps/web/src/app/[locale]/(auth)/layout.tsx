@@ -134,6 +134,18 @@ const DASHBOARD_ITEM: NavItem = {
   labelKey: 'dashboard',
   icon: LayoutDashboard,
 }
+// A second, from-scratch dashboard, sitting beside the incumbent so the two can
+// be compared on the same data rather than described to each other. Temporary by
+// intent: when one wins, this entry and the losing route go together. It is a
+// plain nav item rather than an experimental-features entry because the point is
+// to meet it without opting in — an experiment you have to switch on is one you
+// forget to compare.
+const DASHBOARD_PREVIEW_ITEM: NavItem = {
+  id: 'dashboardPreview',
+  href: '/dashboard/preview',
+  labelKey: 'dashboardPreview',
+  icon: LayoutTemplate,
+}
 // Plugin catalogue. Was a text link at the FOOT of the features group, which put
 // discovery of most of the product below everything already installed — the one
 // place a new studio, whose nav is nearly empty, is least likely to look. Now an
@@ -2035,7 +2047,7 @@ function SidebarContent({
   // answer to "where do I change this".
   const settingsIds = new Set(SETTINGS_ITEMS.map((i) => i.id))
   const searchEntries: SearchEntry[] = [
-    ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
+    ...[DASHBOARD_ITEM, DASHBOARD_PREVIEW_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
       href: item.href,
       label: t(item.labelKey as Parameters<typeof t>[0]),
@@ -2152,6 +2164,7 @@ function SidebarContent({
             active style; it is a working destination people return to daily, not
             a utility, so it now reads like every other nav row. */}
         <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+        <NavLink item={DASHBOARD_PREVIEW_ITEM} collapsed={collapsed} onClick={onLinkClick} />
 
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
