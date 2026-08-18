@@ -1,84 +1,63 @@
 'use client'
 
 /**
- * THE PREVIEW DASHBOARD — built from the question rather than from the
- * incumbent.
+ * THE PREVIEW DASHBOARD — the incumbent's top-area ARRANGEMENT, in this page's
+ * style.
  *
- * The question: **what should a studio see when it opens this app in the
- * morning?** Three things:
+ * ── THE COMPOSITION ──────────────────────────────────────────────────────────
  *
- *   1. The hours it is about to run, and whether they are filling.
- *   2. The people waiting on a human — because people go cold.
- *   3. Whether the business is alright — a slower question, answered in one
- *      glance rather than studied.
+ *      ┌────────────────────────────┐  Snapshot
+ *      │  TODAY          (accent)   │  ENGAGED    ·  BOOKINGS
+ *      │  7/12 · 280px              │  SUBSCRIBED ·  AFFILIATION
+ *      └────────────────────────────┘  REVENUE    ·  UNASSIGNED
+ *      ┌────────────────────────────┐  Contacts   [view ▾]
+ *      │  WAITING ON YOU (accent)   │   ◕  legend rows
+ *      │  7/12 · 232px              │      beside the ring
+ *      └────────────────────────────┘
+ *                  “ the quote — the working area's sign-off
+ *      ──────────────  Trends (cards, Studio+)  ──────────────
  *
- * Everything else a studio might want to know has a page of its own that owns
- * it properly; putting a lesser copy of it here costs the first screen and
- * teaches nobody where the real one lives.
+ * Row 1: the day beside six figures in two columns. Row 2: the queue beside the
+ * contacts donut. Left column framed (work), right column unframed (reference).
+ * That is the incumbent's layout; everything about how it is drawn is this
+ * page's.
  *
- * ── THE COMPOSITION: TWO COLUMNS, AND THE MATERIALS FOLLOW THEM ──────────────
+ * ── WHAT THIS COST, stated rather than buried ────────────────────────────────
  *
- *      ┌──────────────────────────┐   Snapshot
- *      │  TODAY        (accent)   │   (figures, unframed)
- *      └──────────────────────────┘   revenue · attendance
- *      ┌──────────────────────────┐   subscriptions · affiliation
- *      │  WAITING ON YOU (accent) │   overlap bar
- *      └──────────────────────────┘   “ the quote
+ * **Hierarchy from size is now width-only, and that is a real loss.** The rule
+ * was: exactly one primary block, bigger than everything else in BOTH
+ * dimensions. The day is still the widest single object (594px against 417px)
+ * and still the tallest framed one — but the figure block opposite it is now a
+ * six-cell grid, so the top of the page is a PAIR rather than a subject and its
+ * margin. The frame is what keeps them apart: it still marks WORK, not
+ * importance and not position, which is why six figures and a donut sit
+ * opposite two accent panels without acquiring one.
  *
- *      ───────────────  Trends (cards)  ───────────────
+ * **The "add only by replacing" note was a warning, and the warning came
+ * true.** It said four facts is a glance and eight is a wall between the day
+ * and the people. This is six facts plus a chart, and the queue has moved from
+ * beside the day to beneath it — so the wall is now real: the eye reaches the
+ * people after crossing six numbers. It is still above the fold, at full width,
+ * with one-line rows, which is why this reads as reordering rather than
+ * demotion. But the note is no longer a caution about a hypothetical; it is a
+ * description of the page, and the honest version of it is: **the right-hand
+ * column is full.** Anything further goes below the fold or replaces something.
  *
- * The LEFT column is the work: two bounded lists, both wearing the accent
- * frame. The RIGHT rail is reference: bare figures and an aside, nothing
- * framed. Material and column agree, so the page says what kind of thing each
- * side is before a word of it is read.
+ * ── WHAT IT STILL DROPS ──────────────────────────────────────────────────────
  *
- * The rail does NOT acquire a frame for sitting in the top-right slot. The
- * frame marks work, not position.
- *
- * HIERARCHY COMES FROM SIZE. The day is the widest and tallest thing on the
- * page; the queue is the same width and shorter; the rail is a third of the
- * width. Nothing is ranked by decoration, and a future block must not be given
- * a new border treatment to rank it — make it bigger or smaller.
- *
- * ── THE COST OF THE 2026-08-18 SWAP, stated rather than buried ───────────────
- *
- * The snapshot took the top-right slot and the queue moved beneath the day.
- * This page's original argument was ACTION BEFORE ORIENTATION — the eye lands
- * on the day, then on the people waiting — and putting four numbers in the
- * second-most-prominent slot inverts it.
- *
- * The read after building it: RELOCATED, NOT DEMOTED. The queue is still fully
- * above the fold, it is now the full-width block directly under the primary
- * one, and it gained the width its rows always needed (a one-line row, and a
- * cap of eight instead of five). Four numbers cost one saccade on the way past.
- *
- * The thing that would change that verdict: the rail growing. A snapshot of
- * four facts is a glance; a snapshot of eight becomes a wall between the day
- * and the people, and at that point the queue really is demoted. Add to the
- * rail only by replacing.
- *
- * ── WHAT IT DROPS, and why (each of these is on the incumbent) ───────────────
- *
- *   - **Roster + demographics cards.** Composition analysis, and the contacts
- *     page owns it. Nobody asks about their age distribution before opening the
- *     doors. (The rail's overlap bar is not a re-entry: it decomposes two
- *     figures already in the band rather than opening a new subject — see
- *     `SnapshotColumn`.)
  *   - **Recent payments.** A five-row copy of the /payments list. The one thing
  *     about payments that is a MORNING task — money with nobody attached to it
- *     — is in the queue instead, as a task rather than a statistic.
- *   - **Discover.** Tips and plugin upsells. A shelf you go to, not a thing you
- *     are handed while you are trying to find out whether the 09:00 is full.
+ *     — is a figure AND a queue row, not a table.
+ *   - **Discover.** Tips and plugin upsells: a shelf you go to, not a thing you
+ *     are handed while finding out whether the 09:00 is full.
  *   - **The setup checklist as a band.** On day one it is the whole page (see
- *     `isFirstRun` below — it SUBSTITUTES rather than stacking). After day one
- *     it is one row in the queue, because that is what it is: work waiting on a
- *     human.
- *   - **The "active members" figure.** It counted the same field as the
- *     affiliation figure under a friendlier name.
- *
- * WHAT IT KEEPS: the trend cards, by instruction; the incumbent's two-material
- * rule; and the daily quote, which stopped being a footer nobody scrolls to and
- * became the foot of the rail.
+ *     `isFirstRun` — it SUBSTITUTES rather than stacking). After day one it is
+ *     one row in the queue, because that is what it is: work waiting on a human.
+ *   - **The demographics half of the contacts card**, and the multi-valued
+ *     roster views with it — see `RosterDonut` for why a bar list cannot share
+ *     the chart-left/legend-right geometry.
+ *   - **The subscription/affiliation overlap bar**, removed by decision. Its job
+ *     passes to the two subtitles, which are now load-bearing copy.
  */
 
 import { useTranslations, useLocale } from 'next-intl'
@@ -94,7 +73,9 @@ import { FirstRunCard } from '@/components/dashboard/FirstRunCard'
 import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotificationsBanner'
 import { TodayPanel } from '@/components/dashboard-preview/TodayPanel'
 import { QueuePanel } from '@/components/dashboard-preview/QueuePanel'
-import { SnapshotColumn } from '@/components/dashboard-preview/SnapshotColumn'
+import { FiguresBlock } from '@/components/dashboard-preview/FiguresBlock'
+import { RosterDonut } from '@/components/dashboard-preview/RosterDonut'
+import { DailyAside } from '@/components/dashboard-preview/DailyAside'
 import { WeekSection } from '@/components/dashboard-preview/WeekSection'
 import { usePreviewContacts } from '@/components/dashboard-preview/preview-data'
 
@@ -183,54 +164,71 @@ export default function DashboardPreviewPage() {
         <HeaderAction href={'/contacts' as Route} icon={UserPlus} label={t('actionNewContact')} />
       </Header>
 
-      {resolving && <Skeleton className="h-[320px] w-full rounded-xl" />}
+      {resolving && <Skeleton className="h-[280px] w-full rounded-xl" />}
 
       {/* DAY ONE SUBSTITUTES, it does not stack. A studio with no contacts and
-          no sessions has nothing for the day, the queue, the snapshot or the
-          trends to say, and stacking a checklist on top of four empty blocks
+          no sessions has nothing for the day, the queue, the figures or the
+          donut to say, and stacking a checklist on top of four empty blocks
           teaches a new studio that this page is mostly empty. */}
       {!resolving && isFirstRun && <FirstRunCard steps={setupSteps} />}
 
       {!resolving && !isFirstRun && (
         <>
-          {/* ── THE FIRST SCREEN ──
-              8:4 of twelve — ~683px of work against a ~332px rail.
-
-              THE TWO COLUMNS OWN THEIR OWN HEIGHTS, and that is the mechanism
-              that makes the rail's blank space composition rather than luck.
-              Grid items stretch, so both columns are as tall as the taller one;
-              the work column pins the day at 320px and lets the QUEUE absorb
-              the remainder (`flex-1`), while the rail spreads its content with
-              `justify-between` so the quote lands on the queue's bottom edge.
-              A long quote or a busy queue therefore lengthens the band without
-              either column growing a ragged tail. */}
+          {/* ── ROW 1 — the day, and the six figures ──
+              7:5 of twelve: ~594px against ~417px, which is what puts each
+              figure column at ~196px — the width a value-beside-its-subtitle
+              cell needs, and the reason six of them fit here at all.
+              280px tall (it was 320): the agenda is a bit smaller, by
+              instruction, and still shows five sessions before it scrolls.
+              The figure block opposite runs ~275px, so it fits the row without
+              setting it — the day still owns the height. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* THE WORK — both blocks framed, biggest first. */}
-            <div className="flex flex-col gap-5 lg:col-span-8">
-              <div className="h-[320px] shrink-0">
-                <TodayPanel teamId={currentTeamId} />
-              </div>
-              <div className="min-h-[280px] lg:flex-1">
-                <QueuePanel
-                  teamId={currentTeamId}
-                  contacts={contacts}
-                  contactsLoading={contactsLoading}
-                  engagementThresholds={team?.engagement_thresholds}
-                  setupSteps={setupSteps}
-                  setupLoading={setupLoading}
-                />
-              </div>
+            <div className="lg:col-span-7 lg:h-[280px]">
+              <TodayPanel teamId={currentTeamId} />
             </div>
-
-            {/* THE RAIL — reference, unframed, and deliberately airy. */}
-            <div className="lg:col-span-4">
-              <SnapshotColumn
+            <div className="lg:col-span-5">
+              <FiguresBlock
                 teamId={currentTeamId}
                 contacts={contacts}
                 loading={contactsLoading}
               />
             </div>
           </div>
+
+          {/* ── ROW 2 — the queue, and who the contacts are ──
+              Same 7:5 columns, so the page has ONE vertical seam rather than
+              two: the framed work stacks on the left, the unframed reference
+              stacks on the right, and the eye only has to learn the split once.
+              232px — the queue is smaller too, four one-line rows before it
+              scrolls (the cap is still 8, and the header carries the count),
+              and the 190px donut sits comfortably inside the same height.
+
+              THE WHOLE OF THIS FITS 720px, quote included: 24 + 41 + 20 + 280
+              + 20 + 232 + 20 + ~66 = ~703. The two heights above are the
+              adjustable pair — spend them here, not on the sign-off. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-7 lg:h-[232px]">
+              <QueuePanel
+                teamId={currentTeamId}
+                contacts={contacts}
+                contactsLoading={contactsLoading}
+                engagementThresholds={team?.engagement_thresholds}
+                setupSteps={setupSteps}
+                setupLoading={setupLoading}
+              />
+            </div>
+            <div className="lg:col-span-5">
+              <RosterDonut
+                contacts={contacts}
+                thresholds={team?.engagement_thresholds}
+                loading={contactsLoading}
+              />
+            </div>
+          </div>
+
+          {/* The working area's sign-off — see `DailyAside` for why it lands
+              here rather than under the charts. */}
+          <DailyAside />
 
           {/* Trends are Studio+. The gate is read directly rather than through
               `PlanGate` so the tier's answer can be WAITED FOR: `usePlan`

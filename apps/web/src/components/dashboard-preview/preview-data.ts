@@ -16,7 +16,7 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { collection, getDocs, orderBy, query, where, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, limit, orderBy, query, where, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { CONTACTS_COLLECTION, SESSIONS_COLLECTION } from '@linyup/shared'
 import type { Contact, Session } from '@linyup/shared'
@@ -79,6 +79,31 @@ export function usePreviewSessionsForDay(teamId: string | null, day: Date) {
           where('start', '>=', Timestamp.fromDate(dayStart)),
           where('start', '<', Timestamp.fromDate(dayEnd)),
           orderBy('start', 'asc')
+        )
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
+    },
+  })
+}
+
+/**
+ * The next few sessions from today onward — the denominator behind the
+ * "bookings ahead" figure. Same key and same `limit(8)` as the incumbent's
+ * `useUpcomingSessions`, so the two figures agree and share one cache entry.
+ */
+export function usePreviewUpcomingSessions(teamId: string | null) {
+  return useQuery({
+    queryKey: ['sessions', 'upcoming', teamId],
+    enabled: !!teamId,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, SESSIONS_COLLECTION),
+          where('teamId', '==', teamId),
+          where('start', '>=', Timestamp.fromDate(startOfToday())),
+          orderBy('start', 'asc'),
+          limit(8)
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
