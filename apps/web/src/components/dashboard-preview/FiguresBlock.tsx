@@ -5,11 +5,19 @@
  *
  * ── WHERE THIS CAME FROM ─────────────────────────────────────────────────────
  *
- * The incumbent's six: four stats (engaged, bookings ahead, subscribed,
- * affiliation) plus the two money figures (revenue, unassigned), each with the
- * SUBTITLE AND NOTE that tell it apart from its neighbour. That pairing is the
- * point of the block and the reason it is worth six cells: a bare "84" beside a
- * bare "96" is the confusion this page has now failed to fix twice.
+ * The incumbent's six, now FIVE: four stats (engaged, bookings ahead,
+ * subscribed, affiliation) plus revenue, each with the SUBTITLE AND NOTE that
+ * tell it apart from its neighbour. That pairing is the point of the block and
+ * the reason it is worth the cells: a bare "84" beside a bare "96" is the
+ * confusion this page has now failed to fix twice.
+ *
+ * UNASSIGNED IS GONE FROM HERE, and it did not go anywhere — it was never only
+ * a figure. Money that arrived with nobody attached to it is WORK, so it is a
+ * row in the queue (`QueuePanel`, the `payments` task), which is where this
+ * page put it before it ever adopted the incumbent's figure grid. Dropping the
+ * figure removed a duplicate, not a route: the task row is the one that can be
+ * cleared, and it carries the count. Do not re-add the figure without deleting
+ * the row, or the studio gets told twice and can act once.
  *
  * It replaced a four-fact column whose subscription/affiliation pair was
  * explained by a proportion bar. The bar is GONE by decision (Franco,
@@ -22,9 +30,25 @@
  * ── THE SHAPE ────────────────────────────────────────────────────────────────
  *
  * Value and subtitle share a BASELINE, with the note under the subtitle. That
- * is the incumbent's own figure geometry and it is what makes six of these fit
- * a ~417px column: a caption-over-number-over-two-lines cell costs 85px, this
- * one costs ~56px and wraps to ~72px only for a long money value.
+ * is the incumbent's own figure geometry and it is what makes five of these fit
+ * a ~417px column inside row 1's 264px: a caption-over-number-over-two-lines
+ * cell costs 85px, this one costs ~51px.
+ *
+ * REVENUE LEADS, at the full width of the block and one type size up
+ * (`text-4xl`, against `text-3xl` for the rest). Five figures in two columns
+ * leave an odd cell, and the odd cell is an opportunity: revenue is the figure
+ * an owner opens the app for, and it had been sharing a size with the count of
+ * trials on next week's classes. The full width is not decoration either — it
+ * is what makes the long-currency case behave. `CHF 12'450.00` at `text-4xl`
+ * is ~254px, which overflows a 198px half-column and wrapped its subtitle to a
+ * second line; across 417px it sits on ONE line beside its subtitle with ~50px
+ * to spare, so the block's height stops depending on how much a studio earns.
+ *
+ * The lead cell is the block's only size distinction, and it ranks WITHIN the
+ * reference material — it does not make the block compete with the day. The
+ * whole thing measures ~238px against row 1's 264px; if it ever exceeds that,
+ * the right column starts setting the row height and the day stops being the
+ * page's primary block. Spend the slack carefully.
  *
  * Unframed, on the background — the page's second material. It sits opposite a
  * framed agenda and does NOT take the accent frame: the frame marks work, not
@@ -34,9 +58,9 @@
  * in a different channel from the loudest NUMBERS beneath it. It is the only
  * thing carried over from the column this block replaced.
  *
- * DEGRADATION IS BY SUBTRACTION. The two money figures are Studio-tier, so Free
- * and Coach get a four-figure block — two rows instead of three, and no upgrade
- * nag in a block meant to be read in one glance.
+ * DEGRADATION IS BY SUBTRACTION. Revenue is Studio-tier, so Free and Coach get
+ * the 2x2 with no lead cell above it — a shorter block, not a holed one, and no
+ * upgrade nag in something meant to be read in one glance.
  */
 
 import type React from 'react'
@@ -49,7 +73,6 @@ import {
   CreditCard,
   TrendingDown,
   TrendingUp,
-  UserRoundX,
   Users,
 } from 'lucide-react'
 import type { Contact, SubscriptionType } from '@linyup/shared'
@@ -60,11 +83,7 @@ import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatMoneyMinor } from '@/lib/payments'
 import { cn } from '@/lib/utils'
-import {
-  startOfWeek,
-  useUnassignedPaymentCount,
-  usePreviewUpcomingSessions,
-} from './preview-data'
+import { startOfWeek, usePreviewUpcomingSessions } from './preview-data'
 
 /**
  * One figure: caption, then a value sharing a baseline with its subtitle, then
@@ -79,6 +98,7 @@ function Figure({
   note,
   loading,
   href,
+  lead,
 }: {
   icon: React.ElementType
   caption: string
@@ -87,6 +107,8 @@ function Figure({
   note?: React.ReactNode
   loading?: boolean
   href: Route
+  /** The block's one ranked cell — full width, one type size up. */
+  lead?: boolean
 }) {
   return (
     <Link href={href} className="group/figure block">
@@ -98,9 +120,14 @@ function Figure({
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         {loading ? (
-          <Skeleton className="h-7 w-20" />
+          <Skeleton className={cn('w-20', lead ? 'h-9' : 'h-7')} />
         ) : (
-          <p className="text-3xl font-black leading-none tracking-tight tabular-nums transition-colors group-hover/figure:text-primary">
+          <p
+            className={cn(
+              'font-black leading-none tracking-tight tabular-nums transition-colors group-hover/figure:text-primary',
+              lead ? 'text-4xl' : 'text-3xl'
+            )}
+          >
             {value}
           </p>
         )}
@@ -123,6 +150,7 @@ function RevenueFigure({ teamId }: { teamId: string | null }) {
 
   return (
     <Figure
+      lead
       icon={Banknote}
       caption={t('figRevenue')}
       value={formatMoneyMinor(data?.thisMonth ?? 0, data?.currency ?? 'CHF')}
@@ -139,22 +167,6 @@ function RevenueFigure({ teamId }: { teamId: string | null }) {
           </span>
         ) : undefined
       }
-    />
-  )
-}
-
-function UnassignedFigure({ teamId }: { teamId: string | null }) {
-  const t = useTranslations('NewDashboard')
-  const { count, isLoading } = useUnassignedPaymentCount(teamId)
-  return (
-    <Figure
-      icon={UserRoundX}
-      caption={t('figUnassigned')}
-      value={count}
-      subtitle={count === 0 ? t('figUnassignedEmpty') : t('figUnassignedSub')}
-      loading={isLoading}
-      href={'/payments' as Route}
-      note={count > 0 ? <span className="text-primary">{t('figUnassignedAction')}</span> : undefined}
     />
   )
 }
@@ -217,13 +229,23 @@ export function FiguresBlock({
 
   return (
     <div>
-      <h2 className="font-heading mb-5 text-2xl font-black leading-none tracking-tight text-heading">
+      <h2 className="font-heading mb-4 text-2xl font-black leading-none tracking-tight text-heading">
         {t('snapshotTitle')}
       </h2>
 
-      {/* TWO COLUMNS, three rows of them at Studio (two below it). `gap-y-6`
-          rather than a divider — nothing in this block is ruled off. */}
-      <div className="grid grid-cols-2 gap-x-5 gap-y-6">
+      {/* THE LEAD CELL — full width, above the grid rather than inside it.
+          A `col-span-2` cell would work too; a sibling above says more plainly
+          that this one is not a member of the 2x2 it leads. Studio-only, so
+          below that tier the block simply starts at the grid. */}
+      {seesMoney && (
+        <div className="mb-5">
+          <RevenueFigure teamId={teamId} />
+        </div>
+      )}
+
+      {/* TWO COLUMNS, two rows. `gap-y-5` rather than a divider — nothing in
+          this block is ruled off. */}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-5">
         <Figure
           icon={TrendingUp}
           caption={t('figEngaged')}
@@ -259,12 +281,6 @@ export function FiguresBlock({
           loading={loading}
           href={'/affiliations' as Route}
         />
-        {seesMoney && (
-          <>
-            <RevenueFigure teamId={teamId} />
-            <UnassignedFigure teamId={teamId} />
-          </>
-        )}
       </div>
     </div>
   )

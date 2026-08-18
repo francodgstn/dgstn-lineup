@@ -4,17 +4,23 @@
  * THE QUOTE — the page's one element with no job to do, and therefore the one
  * that has to be placed rather than parked.
  *
- * It has moved twice. It began as the incumbent's last line, below everything,
- * which is a sign-off nobody scrolls to. It was then pinned to the foot of the
- * right-hand figure RAIL, using air that the rail had anyway — the best home it
- * has had. That rail is gone (2026-08-18: six figures in two columns fill the
- * top-right slot, and the block below it is a donut with a legend), so there is
- * no column of spare air left to pin it to.
+ * It has moved three times, and has come back to where it worked. It began as
+ * the incumbent's last line, below everything — a sign-off nobody scrolls to.
+ * It was then pinned to the foot of the right-hand figure RAIL, using air that
+ * the rail had anyway, which was the best home it has had. When the rail became
+ * a two-column figure block there was no spare column of air left, so it spent
+ * a round as a centred full-width band between the working area and the Trends
+ * seam — which cost the page ~86px to say nothing, and the queue was short.
  *
- * So it closes the WORKING AREA instead: one centred line between the second
- * row and the Trends seam. That keeps it on the first screen rather than
- * banishing it under the charts, costs ~36px, and puts it exactly where a pause
- * belongs — after the last thing you act on, before the first thing you study.
+ * It is back at the FOOT OF THE REFERENCE COLUMN (Franco, 2026-08-18): under
+ * the donut, pushed down by the column's `justify-between`, holding the bottom
+ * edge while the queue beside it grew into the 86px the band was using. That is
+ * the whole argument for this placement — the quote occupies air that another
+ * block cannot use, and it costs the layout nothing it wanted.
+ *
+ * LEFT-ALIGNED, not centred: it now lives in a ~417px column under a donut and
+ * a legend that both align left. It was centred only because it used to span
+ * the page.
  *
  * IT MUST NOT READ AS A SYSTEM MESSAGE. Beside real figures, a small italic
  * grey line looks like a status or a warning. The treatment is unmistakably a
@@ -28,7 +34,7 @@ import { getDailyQuote } from '@/data/quotes'
 export function DailyAside() {
   const quote = getDailyQuote()
   return (
-    <figure className="mx-auto max-w-xl text-center">
+    <figure>
       <blockquote className="text-sm leading-relaxed text-muted-foreground">
         <span aria-hidden className="font-heading mr-1 text-base text-primary/25">
           &ldquo;

@@ -199,15 +199,24 @@ export default function DashboardPreviewPage() {
               Same 7:5 columns, so the page has ONE vertical seam rather than
               two: the framed work stacks on the left, the unframed reference
               stacks on the right, and the eye only has to learn the split once.
-              232px — the queue is smaller too, four one-line rows before it
-              scrolls (the cap is still 8, and the header carries the count),
-              and the 190px donut sits comfortably inside the same height.
 
-              THE WHOLE OF THIS FITS 720px, quote included: 24 + 41 + 20 + 264
-              + 20 + 220 + 20 + ~66 = ~655 (MEASURED: quote ends at ~710). The two heights above are the
-              adjustable pair — spend them here, not on the sign-off. */}
+              296px, and ALL of the growth went to the QUEUE. The quote used to
+              be a full-width band under this row costing ~66px plus its 20px
+              gap; it has moved into the right column (see below), and rather
+              than spreading that 86px across the page it was spent here. The
+              queue's body goes 180px -> 256px, which at a 40px one-line row is
+              four visible rows -> SIX. Row 1 is deliberately untouched at
+              264px: the day must keep setting the first row's height.
+
+              THE FOLD STILL GOVERNS, and the arithmetic here has been wrong
+              twice in the same direction. Computed, the bottom of this row is
+              24 + 41 + 20 + 264 + 20 + 296 = 665; MEASURED, this page runs a
+              consistent ~35px longer, so call it ~700 against a 720 fold. That
+              leaves ~20px, and the quote is now the thing sitting on that edge.
+              If it clips again, take rows off the QUEUE — never off the
+              sign-off, which has been the loser twice already. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-7 lg:h-[220px]">
+            <div className="lg:col-span-7 lg:h-[296px]">
               <QueuePanel
                 teamId={currentTeamId}
                 contacts={contacts}
@@ -217,18 +226,25 @@ export default function DashboardPreviewPage() {
                 setupLoading={setupLoading}
               />
             </div>
-            <div className="lg:col-span-5">
-              <RosterDonut
-                contacts={contacts}
-                thresholds={team?.engagement_thresholds}
-                loading={contactsLoading}
-              />
+
+            {/* THE REFERENCE COLUMN HOLDS ITS OWN BOTTOM EDGE. `justify-between`
+                against the row's height, exactly as the old figure rail did:
+                the donut sits at the top, the quote is PUSHED to the foot, and
+                the air between them is whatever the row has spare. Positioning
+                the quote with a margin instead would leave it floating in the
+                middle of the column the moment a donut renders three legend
+                rows instead of four. */}
+            <div className="flex flex-col justify-between gap-5 lg:col-span-5 lg:h-full">
+              <div>
+                <RosterDonut
+                  contacts={contacts}
+                  thresholds={team?.engagement_thresholds}
+                  loading={contactsLoading}
+                />
+              </div>
+              <DailyAside />
             </div>
           </div>
-
-          {/* The working area's sign-off — see `DailyAside` for why it lands
-              here rather than under the charts. */}
-          <DailyAside />
 
           {/* Trends are Studio+. The gate is read directly rather than through
               `PlanGate` so the tier's answer can be WAITED FOR: `usePlan`
