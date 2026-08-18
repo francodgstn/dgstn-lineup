@@ -40,13 +40,35 @@
  * being reset is a per-browser view preference that has existed for a few days,
  * pre-launch. A read-the-old-key shim would be machinery for a hypothesis.
  *
- * THE DEFAULT IS NOT "EVERYTHING". Classes, Appointments and Events are on;
- * **Bookable hours is off**. Published hours are a MANAGEMENT view — the answer
- * to "when am I sellable", asked while setting up a coach — not what a studio
- * wants behind its week every morning, and on a busy week several coaches'
- * windows are the thing most likely to make the grid unreadable. It is one click
- * away and it is remembered, so a studio that does want it every day pays that
- * click exactly once.
+ * TWO SECTIONS, AND THE LINE BETWEEN THEM IS "DOES IT HAPPEN?".
+ *
+ *   Sessions & events — Classes, Appointments, Events: OCCURRENCES. Each is a
+ *     thing that happens, at a time, on a date, that somebody could attend.
+ *   Other — Bookable hours: AVAILABILITY. A `availability/{id}` doc is a
+ *     WINDOW, and nothing exists inside it until somebody books; that is the
+ *     whole appointments design (see CLAUDE.md, "Appointments (1:1) vs
+ *     classes"). It is the answer to "when am I sellable", not to "what is on".
+ *
+ * The tempting split is the DOCUMENT TYPE — classes and appointments are both
+ * `sessions/{id}` docs (`Activity.type` picks the scheduling mechanism,
+ * `Session.activityType` carries it), events are their own primitive, bookable
+ * hours are `availability/{id}`. That split puts Events in "Other" purely
+ * because it is not a session doc, which is a fact about our storage and not
+ * about the studio's week. Occurrence-vs-availability is the line a studio
+ * would draw itself, and it is the one that decides where a FIFTH calendar
+ * goes: ask whether the thing happens, not which collection it lives in.
+ *
+ * THE DEFAULT IS SECTION ONE, EXACTLY — and that is why it has a name ("Only
+ * sessions & events") instead of a generic "reset". Classes, Appointments and
+ * Events are on; **Bookable hours is off**, because published hours are a
+ * MANAGEMENT view — not what a studio wants behind its week every morning, and
+ * on a busy week several coaches' windows are the thing most likely to make the
+ * grid unreadable. It is one click away and it is remembered, so a studio that
+ * does want it every day pays that click exactly once.
+ *
+ * `DEFAULT_VISIBLE_CALENDARS` is therefore DERIVED from the section rather than
+ * re-listed. Re-listing it would let the two drift, and the day they drift the
+ * menu offers a named state that is no longer the state you land on.
  *
  * A CALENDAR IS NEVER A COUNT. Nothing here may feed a header figure: the "N
  * upcoming" in the Schedule header comes from `useUpcomingCount`, its own
@@ -56,15 +78,30 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-export const SCHEDULE_CALENDARS = ['classes', 'appointments', 'bookableHours', 'events'] as const
+/** OCCURRENCES — things that happen, at a time, that somebody could attend. */
+const OCCURRENCE_CALENDARS = ['classes', 'appointments', 'events'] as const
+/** AVAILABILITY — windows in which something COULD be booked. See the header. */
+const AVAILABILITY_CALENDARS = ['bookableHours'] as const
+
+// Composed from the sections, never listed twice: a calendar that is not in a
+// section does not exist, so "which section does the new one go in" is not a
+// question anybody can forget to answer. Declaration order is section order, so
+// the menu, the trigger's list and the hidden-calendars notice all read in the
+// same order without any of them sorting.
+export const SCHEDULE_CALENDARS = [...OCCURRENCE_CALENDARS, ...AVAILABILITY_CALENDARS] as const
 export type ScheduleCalendar = (typeof SCHEDULE_CALENDARS)[number]
 
-/** See the header: everything except Bookable hours. */
-export const DEFAULT_VISIBLE_CALENDARS: readonly ScheduleCalendar[] = [
-  'classes',
-  'appointments',
-  'events',
+export type CalendarSectionKey = 'sessionsAndEvents' | 'other'
+export const CALENDAR_SECTIONS: readonly {
+  key: CalendarSectionKey
+  calendars: readonly ScheduleCalendar[]
+}[] = [
+  { key: 'sessionsAndEvents', calendars: OCCURRENCE_CALENDARS },
+  { key: 'other', calendars: AVAILABILITY_CALENDARS },
 ]
+
+/** See the header: the default IS section one, derived rather than re-listed. */
+export const DEFAULT_VISIBLE_CALENDARS: readonly ScheduleCalendar[] = OCCURRENCE_CALENDARS
 
 const STORAGE_KEY = 'linyup_schedule_calendars'
 
@@ -102,10 +139,10 @@ export interface VisibleCalendarsValue {
   isVisible: (calendar: ScheduleCalendar) => boolean
   /** Show/hide one calendar. */
   toggle: (calendar: ScheduleCalendar) => void
-  /** Shortcut: draw everything. */
+  /** Named state: draw everything ("All calendars"). */
   showAll: () => void
-  /** Shortcut: back to DEFAULT_VISIBLE_CALENDARS. */
-  resetToDefault: () => void
+  /** Named state: DEFAULT_VISIBLE_CALENDARS ("Only sessions & events"). */
+  showOnlyDefault: () => void
   /** In declaration order, so a message listing them reads the same every time. */
   hidden: ScheduleCalendar[]
   allVisible: boolean
@@ -142,7 +179,7 @@ export function useVisibleCalendars(): VisibleCalendarsValue {
   )
 
   const showAll = useCallback(() => write([...SCHEDULE_CALENDARS]), [write])
-  const resetToDefault = useCallback(() => write([...DEFAULT_VISIBLE_CALENDARS]), [write])
+  const showOnlyDefault = useCallback(() => write([...DEFAULT_VISIBLE_CALENDARS]), [write])
 
   const visible = useMemo(() => new Set(calendars), [calendars])
   const isVisible = useCallback((calendar: ScheduleCalendar) => visible.has(calendar), [visible])
@@ -156,7 +193,7 @@ export function useVisibleCalendars(): VisibleCalendarsValue {
     isVisible,
     toggle,
     showAll,
-    resetToDefault,
+    showOnlyDefault,
     hidden,
     allVisible: hidden.length === 0,
     isDefault: sameSet(calendars, DEFAULT_VISIBLE_CALENDARS),

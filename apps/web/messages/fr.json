@@ -1131,9 +1131,12 @@
       "none": "Aucun calendrier",
       "showAll": "Tout afficher",
       "resetDefault": "Rétablir la valeur par défaut",
-      "calendarViewOnly": "Visible uniquement en vue calendrier — une plage réservable n'est pas une entrée de liste",
+      "calendarViewOnly": "Visible uniquement en vue calendrier",
       "hiddenTitle": "Certains calendriers sont masqués",
-      "hiddenBody": "Rien ne s'affiche ici car ces calendriers sont masqués : {calendars}."
+      "hiddenBody": "Rien ne s'affiche ici car ces calendriers sont masqués : {calendars}.",
+      "sectionSessionsAndEvents": "Séances et événements",
+      "sectionOther": "Autre",
+      "onlySessionsAndEvents": "Séances et événements uniquement"
     }
   },
   "Events": {

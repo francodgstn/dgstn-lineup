@@ -1131,9 +1131,12 @@
       "none": "No calendars",
       "showAll": "Show all",
       "resetDefault": "Reset to default",
-      "calendarViewOnly": "Only shown in calendar view — a bookable window is not a list entry",
+      "calendarViewOnly": "Only shown in calendar view",
       "hiddenTitle": "Some calendars are hidden",
-      "hiddenBody": "Nothing is shown here because these calendars are switched off: {calendars}."
+      "hiddenBody": "Nothing is shown here because these calendars are switched off: {calendars}.",
+      "sectionSessionsAndEvents": "Sessions & events",
+      "sectionOther": "Other",
+      "onlySessionsAndEvents": "Only sessions & events"
     }
   },
   "Events": {

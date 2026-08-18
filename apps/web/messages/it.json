@@ -1131,9 +1131,12 @@
       "none": "Nessun calendario",
       "showAll": "Mostra tutto",
       "resetDefault": "Ripristina i valori predefiniti",
-      "calendarViewOnly": "Visibile solo nella vista calendario — una finestra prenotabile non è una voce dell'elenco",
+      "calendarViewOnly": "Visibile solo nella vista calendario",
       "hiddenTitle": "Alcuni calendari sono nascosti",
-      "hiddenBody": "Qui non viene mostrato nulla perché questi calendari sono nascosti: {calendars}."
+      "hiddenBody": "Qui non viene mostrato nulla perché questi calendari sono nascosti: {calendars}.",
+      "sectionSessionsAndEvents": "Sessioni ed eventi",
+      "sectionOther": "Altro",
+      "onlySessionsAndEvents": "Solo sessioni ed eventi"
     }
   },
   "Events": {

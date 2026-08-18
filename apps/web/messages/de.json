@@ -1131,9 +1131,12 @@
       "none": "Keine Kalender",
       "showAll": "Alle anzeigen",
       "resetDefault": "Auf Standard zurücksetzen",
-      "calendarViewOnly": "Nur in der Kalenderansicht sichtbar — ein buchbares Zeitfenster ist kein Listeneintrag",
+      "calendarViewOnly": "Nur in der Kalenderansicht sichtbar",
       "hiddenTitle": "Einige Kalender sind ausgeblendet",
-      "hiddenBody": "Hier wird nichts angezeigt, weil diese Kalender ausgeblendet sind: {calendars}."
+      "hiddenBody": "Hier wird nichts angezeigt, weil diese Kalender ausgeblendet sind: {calendars}.",
+      "sectionSessionsAndEvents": "Einheiten & Veranstaltungen",
+      "sectionOther": "Weiteres",
+      "onlySessionsAndEvents": "Nur Einheiten & Veranstaltungen"
     }
   },
   "Events": {
