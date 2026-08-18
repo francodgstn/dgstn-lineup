@@ -112,7 +112,7 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 33 | blocks | at-setup | A studio that cannot take money still advertises priced doors | C2×M6 | web + functions | ✅ Fixed |
 | 34 | blocks | at-setup | The org Members tab is a fully-styled form whose callables do not exist | M10 | functions + web | ✅ Fixed |
 | 35 | costs-money | weekly | Org plugin installs hand affiliated studios plan-gated features for free | M10 | web | ✅ Fixed |
-| 36 | slows | every-session | The mobile hamburger scrolls away with the page | M1 | web | ▶ Open |
+| 36 | slows | every-session | The mobile hamburger scrolls away with the page | M1 | web | ✅ Fixed |
 | 37 | confuses | every-session | The member portal greets a signed-in member by telling her she is a stranger | C4 | web | ▶ Open |
 | 38 | slows | every-session | Space Home never answers "what's next", and duplicates four blocks that live elsewhere | C4 | web | ▶ Open |
 | 39 | confuses | at-setup | Ranks taxes every studio that does not award them | M7×M4×M2 | web | ✅ Fixed |
@@ -141,13 +141,13 @@ machine identifiers (plan ids, `Course.accessRule.type`), which CLAUDE.md govern
 | 62 | slows | weekly | Contacts cannot be filtered by coach, or by "in no group" | M4 | functions + web | ▶ Open |
 | 63 | slows | every-session | A booking row hides its own contact and session behind an action menu | M3×M4 | web | ✅ Fixed |
 | 64 | slows | weekly | The schedule cannot show a season, only a three-month window | M3 | web | ▶ Open |
-| 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ▶ Open |
+| 65 | slows | every-session | Plugin suggestions clutter the sidebar, and "recommended" isn't a filter where plugins are chosen | M1×M8 | web | ✅ Fixed |
 | 66 | confuses | weekly | A paid trial is recorded as a trial, with no trace that money changed hands | M4×M5 | functions + web | ✅ Fixed |
 | 67 | confuses | at-setup | Places is a scheduling concept filed under Settings | M7×M3 | web | ✅ Fixed |
 | 68 | slows | at-setup | Nothing can be duplicated, so the second of anything costs as much as the first | M5×M2 | web | ▶ Open |
 | 69 | costs-money | weekly | Linking a subscription to an *appointment* writes a field appointments never read | M5 | web | ✅ Fixed |
 | 70 | costs-money | at-setup | An appointment can be free or priced, but not "only with a pack" | M5×C2 | shared + web | ▶ Open |
-| 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ▶ Open |
+| 71 | slows | weekly | A page never points at the one other page that would confirm it worked | M5×M7×M1 | web | ✅ Fixed |
 | 72 | confuses | at-setup | Delete the per-page help popovers — the How-to page replaced them | M2×M1 | web | ✅ Fixed |
 | 73 | slows | weekly | The org billing page repeats every problem UX-5 just fixed, one floor up | M10×M6 | web | ✅ Fixed |
 | 74 | slows | every-session | In 13 dialogs the Save button scrolls away with the form | M5×M7×M9 | web | ✅ Fixed ✓verified |

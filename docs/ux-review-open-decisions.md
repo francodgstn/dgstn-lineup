@@ -183,3 +183,16 @@ with a guessed live state would be worse than an absent one.**
 **NOTED.** Event types and Booking page remain there. Only Places was used
 mid-task while scheduling, so only Places moved — but a two-row group is worth a
 second look.
+
+## 23. One sticky bar still needs the mobile-header offset (UX-36)
+**FOLLOW-UP, one line.** `components/howto/HowToToc.tsx:96` is `sticky top-0 z-20
+… xl:hidden` — the section-tab strip on /how-to. It needs `top-14 md:top-0` or it
+pins behind the now-sticky app header on phones. Reserved by another lane at the
+time. `components/site/WebsiteRenderer.tsx:121` was deliberately left alone: it is
+shared with public routes that have no app header.
+
+## 24. /offer/activities has no quick link yet (UX-71)
+**FOLLOW-UP.** It is the obvious fourth candidate — links now point AT it from
+plans and availability, but it got none of its own because the file was reserved
+by a concurrent lane. Its natural destination is `/schedule` ("See these classes
+on the calendar").
