@@ -97,6 +97,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedTeamMoney } from './lib/fixtures/money'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -1916,6 +1917,12 @@ async function seedTeam(opts: {
   if (plan === 'studio' || plan === 'organization') {
     await seedKiosk(teamId, uid)
   }
+
+  // ── the money ledger (member_subscriptions + member_payments) ────────────────
+  // Seeded AFTER contacts, because it reads their subscription assignment back:
+  // inventing a membership for someone the studio never sold one to would put a
+  // row on /payments that contradicts the contact's own profile.
+  await seedTeamMoney({ teamId })
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)

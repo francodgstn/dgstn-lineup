@@ -92,6 +92,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedTeamMoney } from './lib/fixtures/money'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -2021,6 +2022,11 @@ async function seedTeam(opts: TeamSeed) {
   })
 
   // ── documents (all plans — minPlan 'free') ──────────────────────────────────
+  // The money ledger — seeded after contacts, whose subscription assignment it
+  // reads back. See scripts/lib/fixtures/money.ts for why seeded ledger rows
+  // exist at all.
+  await seedTeamMoney({ teamId })
+
   await seedDocuments(teamId, teamSlug, teamName, uid)
 
   // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──

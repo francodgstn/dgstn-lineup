@@ -77,6 +77,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedTeamMoney } from './lib/fixtures/money'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // Emulator convenience: the Auth host is required alongside Firestore — default
@@ -3172,6 +3173,11 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   }
   await seedStoreProducts(storefront)
   await seedStoreCourses(storefront, { includeFree: false })
+
+  // ── the money ledger (member_subscriptions + member_payments) ──────────────
+  // After contacts, whose subscription assignment it reads back. See
+  // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
+  await seedTeamMoney({ teamId })
 
   // ── documents plugin: 3 published documents (terms, privacy, house rules) ──
   const docSeeds = [

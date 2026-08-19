@@ -85,6 +85,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedTeamMoney } from './lib/fixtures/money'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -2631,6 +2632,11 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     .collection('public_profile')
     .doc(teamId)
     .set({ products: productMirror }, { merge: true })
+
+  // ── the money ledger (member_subscriptions + member_payments) ──────────────
+  // After contacts, whose subscription assignment it reads back. See
+  // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
+  await seedTeamMoney({ teamId, currency: profile.currency })
 
   // ── documents ──────────────────────────────────────────────────────────────
   // Documents + their frozen v1 snapshots + the public mirrors, through the ONE

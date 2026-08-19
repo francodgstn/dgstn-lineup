@@ -217,6 +217,30 @@ describe('EVERY SURFACE THAT SHOWS A SUBSCRIPTION ASKS THE PREDICATE', () => {
     'subscriptionCancellation',
   ]
 
+  // Delegating to the shared ROLLUP counts as asking the predicate, because the
+  // rollup asks it — and the assertion below pins that, so this is a closed
+  // chain rather than a widened hole. It became necessary when the rollup moved
+  // into @linyup/shared to get a second caller: the seed fixture writes
+  // member_subscriptions through the Admin SDK, where no trigger fires, and a
+  // seed computing its own rollup is exactly the divergence this file exists to
+  // prevent.
+  const DELEGATES = ['rollupMemberSubscriptions']
+  const ROLLUP = 'packages/shared/src/utils/subscriptionRollup.ts'
+
+  it(`${ROLLUP} is itself decided through the shared predicate`, () => {
+    const src = code(readRoot(ROLLUP))
+    assert.deepEqual(
+      readReceivers(src, 'cancel_at_period_end'),
+      [],
+      `${ROLLUP} reads the raw boolean — the whole point of delegating to it is that it does not.`
+    )
+    assert.ok(
+      PREDICATES.some((pr) => countCalls(src, pr) > 0),
+      `${ROLLUP} is accepted as a delegate by the surfaces below, so it must call ` +
+        `one of ${PREDICATES.join('/')} itself.`
+    )
+  })
+
   for (const file of SURFACES) {
     it(`${file} decides through the shared predicate`, () => {
       const src = code(readRoot(file))
@@ -230,8 +254,9 @@ describe('EVERY SURFACE THAT SHOWS A SUBSCRIPTION ASKS THE PREDICATE', () => {
           `Ask shared/utils/subscriptionLifecycle.ts instead.`
       )
       assert.ok(
-        PREDICATES.some((p) => countCalls(src, p) > 0),
-        `${file} shows a subscription but calls none of ${PREDICATES.join('/')}`
+        [...PREDICATES, ...DELEGATES].some((p) => countCalls(src, p) > 0),
+        `${file} shows a subscription but calls none of ${PREDICATES.join('/')} — ` +
+          `nor ${DELEGATES.join('/')}, which ask them on its behalf`
       )
     })
   }
