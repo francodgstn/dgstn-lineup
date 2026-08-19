@@ -272,6 +272,10 @@ export async function seedDocumentsSettings(
 
 export interface SeedSignatureSpec {
   contactId: string
+  /** The version the signer actually READ. Defaults to the document's current
+   *  one; pass an older number to produce a `superseded` row once the floor
+   *  moves above it. */
+  version?: number
   contactName: string
   contactEmail: string
   /** Days ago the signature was given. */
@@ -313,6 +317,7 @@ export async function seedWaiverSignature(
   params: {
     teamId: string
     documentId: string
+    /** Fallback when the signature spec names no version of its own. */
     version: number
     bodyHash: string
     validityMonths: number | null
@@ -321,12 +326,13 @@ export async function seedWaiverSignature(
 ): Promise<void> {
   const db = admin.firestore()
   const docRef = db.collection(DOCUMENTS_COLLECTION).doc(params.documentId)
+  const version = sig.version ?? params.version
   const acceptedAt = daysAgo(sig.signedDaysAgo)
   const intentId = `seed-${sig.contactId}-${params.documentId}`
   // waiverAcceptanceId's material is (documentId, version, contactId, intentId);
   // reproduced through the same hasher so a re-run overwrites in place.
   const acceptanceId = `a_${sha256Hex(
-    [params.documentId, String(params.version), sig.contactId, intentId].join(':')
+    [params.documentId, String(version), sig.contactId, intentId].join(':')
   ).slice(0, 32)}`
 
   // The validity rule IN FORCE AT THE TICK, frozen — and DERIVED from
@@ -352,7 +358,7 @@ export async function seedWaiverSignature(
     .set({
       teamId: params.teamId,
       documentId: params.documentId,
-      version: params.version,
+      version,
       body_hash: params.bodyHash,
       kind: 'accepted',
       contactId: sig.contactId,
@@ -387,7 +393,7 @@ export async function seedWaiverSignature(
       teamId: params.teamId,
       documentId: params.documentId,
       contactId: sig.contactId,
-      accepted_version: params.version,
+      accepted_version: version,
       accepted_at: tsOf(acceptedAt),
       valid_until: validUntil,
       acceptance_id: acceptanceId,
@@ -510,35 +516,89 @@ export async function seedTeamWaiver(opts: {
     .limit(6)
     .get()
 
-  // valid, valid, expired, revoked — and everyone after that has NO row, which
-  // is the state the booking gate actually refuses on.
-  const states: SeedSignatureSpec['state'][] = ['valid', 'valid', 'expired', 'revoked']
-  for (let i = 0; i < Math.min(states.length, contacts.docs.length); i++) {
-    const c = contacts.docs[i]
+  // ALL FIVE STATES `waiverAcceptanceState` can return, on one document.
+  //
+  // The studio republished its waiver with `require_resign`, which is the ONLY
+  // way `superseded` is expressible: supersession is DERIVED by comparing a
+  // signer's `accepted_version` against the document's `min_valid_version`, so
+  // producing it means moving ONE number and writing ZERO signer rows.
+  //
+  // The order matters — the state function's precedence is fixed at
+  // none → revoked → superseded → expired → valid — so a v1 row that is ALSO
+  // revoked reads as revoked, and a v1 row that is also expired reads as
+  // superseded. Every row below therefore names the version that makes the
+  // state it is meant to show the one that actually wins.
+  const plan: Array<{
+    state: SeedSignatureSpec['state']
+    version: number
+    guardian?: boolean
+  }> = [
+    { state: 'valid', version: 2 },
+    { state: 'valid', version: 2, guardian: true },
+    // v1 under a floor of 2 — the only row here that is superseded.
+    { state: 'valid', version: 1 },
+    { state: 'revoked', version: 2 },
+    { state: 'expired', version: 2 },
+  ]
+
+  // The v1 signature is written BEFORE the republish, against v1's frozen hash —
+  // a signature pins the text that was actually read, and v2's hash would be a
+  // fingerprint of a document this person never saw.
+  const v1 = plan.findIndex((p) => p.version === 1)
+  if (v1 >= 0 && v1 < contacts.docs.length) {
+    await writeOne(contacts.docs[v1], plan[v1], waiver.bodyHash, waiver.version)
+  }
+
+  const v2 = await publishSecondVersion({
+    teamId,
+    uid,
+    documentId: waiverId,
+    title: waiverSpec.title,
+    slug: waiverSpec.slug,
+    kind: 'waiver',
+    summary: waiverSpec.summary,
+    waiver: waiverSpec.waiver,
+    outcome: 'require_resign',
+    publishedByName: opts.publishedByName,
+    body: `${waiverSpec.body}
+<h3>6. Recording and photography</h3>
+<p>${teamName} occasionally photographs or films classes for its own channels. Tell a coach if you would rather not appear, and we will keep you out of frame.</p>`,
+  })
+
+  for (let i = 0; i < Math.min(plan.length, contacts.docs.length); i++) {
+    if (i === v1) continue
+    await writeOne(contacts.docs[i], plan[i], v2.bodyHash, v2.version)
+  }
+
+  async function writeOne(
+    c: admin.firestore.QueryDocumentSnapshot,
+    row: { state: SeedSignatureSpec['state']; version: number; guardian?: boolean },
+    bodyHash: string,
+    fallbackVersion: number
+  ): Promise<void> {
     const d = c.data() as { firstname?: string; lastname?: string; email?: string }
     const name = [d.firstname, d.lastname].filter(Boolean).join(' ') || 'Member'
-    const state = states[i]
     await seedWaiverSignature(
       {
         teamId,
         documentId: waiverId,
-        version: waiver.version,
-        bodyHash: waiver.bodyHash,
+        version: fallbackVersion,
+        bodyHash,
         validityMonths,
       },
       {
         contactId: c.id,
         contactName: name,
         contactEmail: d.email ?? `${c.id}@example.com`,
+        version: row.version,
         // An 'expired' row is back-dated PAST its own validity window, so
-        // `valid_until` (derived) genuinely falls in the past. With no validity
-        // rule a signature never lapses, so there is no expired row to seed.
-        signedDaysAgo: state === 'expired' ? (validityMonths ?? 0) * 31 + 30 : 40 + i * 10,
-        state,
+        // `valid_until` (derived) genuinely falls in the past.
+        signedDaysAgo: row.state === 'expired' ? (validityMonths ?? 0) * 31 + 30 : 40,
+        state: row.state,
         // One guardian row, because the minors prompt is a self-declaration the
         // studio checks at the door — and a roster with no chip on it never
         // shows that the chip exists.
-        ...(i === 1 && opts.mayIncludeMinors !== false
+        ...(row.guardian && opts.mayIncludeMinors !== false
           ? { signerRole: 'guardian' as const, signerName: `Parent of ${name}` }
           : {}),
       }
@@ -546,4 +606,113 @@ export async function seedTeamWaiver(opts: {
   }
 
   return seeded
+}
+
+/**
+ * Publish a SECOND version of a document and, for a `require_resign` outcome,
+ * move the floor with it.
+ *
+ * This is the only way a seeded signature can ever be `superseded`.
+ * Supersession is NEVER stored on a signer row — `waiverAcceptanceState` derives
+ * it by comparing `accepted_version` against `min_valid_version` — so producing
+ * the state means moving ONE number on the document and writing ZERO signer
+ * rows, which is exactly what a `require_resign` publish does.
+ *
+ * The v1 snapshot is left untouched: versions are immutable, and a signature
+ * pinned to v1's hash must keep resolving against the text that was actually
+ * read.
+ */
+export async function publishSecondVersion(opts: {
+  teamId: string
+  uid: string
+  documentId: string
+  title: string
+  slug: string
+  kind: SeedDocumentKind
+  /** The NEW body. */
+  body: string
+  summary?: string
+  waiver?: WaiverConfig
+  /** 'require_resign' moves `min_valid_version` to 2; 'silent' leaves it alone. */
+  outcome?: 'silent' | 'require_resign'
+  publishedByName?: string
+}): Promise<SeededDocument> {
+  const db = admin.firestore()
+  const outcome = opts.outcome ?? 'require_resign'
+  const version = 2
+  const minValid = outcome === 'require_resign' ? version : null
+  const bodyHtml = sanitizeRichHtml(opts.body)
+  const bodyHash = sha256Hex(bodyHtml)
+  const now = tsOf(new Date())
+  const docRef = db.collection(DOCUMENTS_COLLECTION).doc(opts.documentId)
+
+  await docRef.set(
+    { body: opts.body, current_version: version, min_valid_version: minValid, updated_at: now },
+    { merge: true }
+  )
+
+  await docRef
+    .collection(DOCUMENT_VERSIONS_SUBCOLLECTION)
+    .doc(documentVersionId(version))
+    .set({
+      teamId: opts.teamId,
+      documentId: opts.documentId,
+      version,
+      kind: opts.kind,
+      title: opts.title,
+      bodyHtml,
+      bodyHash,
+      bodyChars: bodyHtml.length,
+      externalUrl: null,
+      mayIncludeMinors: opts.waiver ? opts.waiver.mayIncludeMinors === true : null,
+      publish_outcome: outcome,
+      supersedes: 1,
+      published_at: now,
+      published_by: opts.uid,
+      published_by_name: opts.publishedByName ?? 'Seed',
+      backfilled_at: null,
+    })
+
+  // The mirror COPIES the new frozen snapshot — it never re-sanitizes `body`.
+  await docRef
+    .collection(DOCUMENT_PUBLIC_PROFILE_SUBCOLLECTION)
+    .doc(opts.documentId)
+    .set(
+      { bodyHtml, bodyHash, version, updated_at: now },
+      { merge: true }
+    )
+
+  // The policy carries the new numbers, derived through the same function the
+  // publish callable and the verifier share — never hand-written.
+  const entry = waiverPolicyEntryFor(
+    {
+      documentId: opts.documentId,
+      slug: opts.slug,
+      title: opts.title,
+      kind: opts.kind,
+      status: 'published',
+      archived_at: null,
+      current_version: version,
+      min_valid_version: minValid,
+      waiver: opts.waiver ?? null,
+    },
+    bodyHash
+  )
+  if (entry) {
+    const policyRef = db
+      .collection(TEAMS_COLLECTION)
+      .doc(opts.teamId)
+      .collection(WAIVER_POLICY_SUBCOLLECTION)
+      .doc(WAIVER_POLICY_DOC_ID)
+    const snap = await policyRef.get()
+    const required = ((snap.data()?.required ?? []) as RequiredWaiverEntry[]).filter(
+      (e) => e.documentId !== opts.documentId
+    )
+    await policyRef.set(
+      { teamId: opts.teamId, required: [...required, entry], updated_at: now },
+      { merge: true }
+    )
+  }
+
+  return { id: opts.documentId, slug: opts.slug, kind: opts.kind, bodyHash, version }
 }
