@@ -294,3 +294,71 @@ chose to close, the named screen in its "the screen that proves it" column rende
 real content on a fresh run of the surface. That column was written to be a
 checklist; use it as one, and record the rows Phase 2 deliberately left alone
 rather than quietly dropping them.
+
+## What Phase 2 landed — 2026-08-19
+
+Branch `claude/seed-truth-audit`. Every fixture below was verified by seeding
+into an ISOLATED Firestore-emulator project namespace (`seedcheck-tmp`), so no
+running emulator's data was touched, and the results are quoted in each commit
+message rather than assumed.
+
+**Lane 0 — the extraction.** `scripts/lib/fixtures/documents.ts` is now the one
+writer of a seeded published document (document + frozen `v0001` + public
+mirror), lifted from the emulator rather than re-derived. All four seeders call
+it. `scripts/verify-waiver-ledger.ts` reports clean on freshly seeded data — the
+Lane 0 acceptance criterion.
+
+**Lane 6 — the cross-surface features.**
+
+| Feature | Where it lives now |
+|---|---|
+| Waivers — document, policy, and signatures in valid / guardian / expired / revoked states | `lib/fixtures/documents.ts` → `seedTeamWaiver` |
+| The money ledger — `member_subscriptions` + `member_payments`, one subscription CANCELLING with the whole record, one in dunning | `lib/fixtures/money.ts` |
+| Finance — plugin, chart of accounts, journal replayed from the ledger (sandbox + lead only) | `lib/fixtures/finance.ts` |
+| Promo codes — one live code per storefront tenant | `lib/storefront.ts` → `seedStorePromoCode` |
+| Contact notes, a DYNAMIC contact group, a waitlist queue, an event programme, a course purchase | `lib/fixtures/engagement.ts` |
+
+**Three things that fell out of doing it**, each worth more than the row it came
+from:
+
+- `rollupMemberSubscriptions` moved into `@linyup/shared`, and
+  `onMemberSubscriptionWrite` is now a thin wrapper over it. A seed writing
+  through the Admin SDK fires no trigger, so it must leave the contact in the
+  state the trigger would have produced — and computing that separately is the
+  exact divergence this whole phase is about.
+- `scripts/` was never typechecked (`turbo run typecheck` only sees workspaces,
+  and `scripts/` is not one), which is a root cause of the drift the audit
+  catalogues. `pnpm typecheck:seeds` now covers the four seeders and everything
+  under `scripts/lib/`, and CI runs it.
+- Only the lead seeder ever wrote `max_participants`, so on every other surface
+  no class could be full — the precondition for the waitlist gap, sitting behind
+  it unremarked. The waitlist fixture seeds a capacity when a session has none.
+
+## What Phase 2 deliberately did NOT close
+
+Named so they are deferred rather than silently dropped. All are per-surface
+lane work (Lanes 1-5), which means editing one big seeder file each — the
+contention this plan cuts lanes to avoid.
+
+- **Gift cards on sandbox and staging.** The emulator has a demo card and the
+  lead engine seeds one from a profile; the other two do not. It is not a
+  storefront-helper one-liner: `syncTeamPublicProfile` refuses to mirror
+  `giftCards.enabled` without the plugin, so the team document's
+  `settings.giftCards` and its public-profile mirror have to be written at team
+  creation, in each seeder.
+- **`team_places` and `session_series`** on emulator, sandbox and staging —
+  `/schedule/places` is empty and every session looks like a one-off, which is
+  the most common thing a studio asks about.
+- **The emulator's per-surface list**: `contact_alerts`, `monthly_scores`,
+  `team_activity_log`, `team_weekly_reports`, and the whole automations set
+  (`outreach_templates`, `automation_rules`, `automation_logs`,
+  `alert_presets`) — all present on sandbox and staging and absent here.
+- **`automation_logs` and `alert_presets` on lead** — rules that have apparently
+  never run, and an empty presets picker.
+- **Lane 5 (migration) entirely.** Including the two findings the audit rates
+  highest there: migrated tenants get no documents at all, so no versions and no
+  waiver policy; and `passes/11-team-subcollections.ts` switches the shop surface
+  live while writing no product documents.
+- **`min_valid_version` / a second document version**, so no seeded signature is
+  ever `superseded`. `raiseWaiverFloor` exists and is documented for whoever
+  wants it; producing the state needs a v2 to raise the floor to.
