@@ -203,41 +203,89 @@ one call per seeder. Ranked:
 3. **Waitlist.** One full class with a queue, and one offered seat holding the
    single-deadline invariant (`resolveClaimWindow` computes it once; the seed
    must copy it, never recompute it).
-4. **`course_purchases`.** One contact who has bought the `purchase`-tier course
+4. **The money ledger** (decision 1 below). `member_subscriptions` and
+   `member_payments`, seeded together with the bookings they pay for, in the
+   shapes the Connect webhook writes. At least one subscription seeded as
+   CANCELLING, with the whole record — that is the only way `cancel_at` /
+   `canceled_at` / `cancellation_details` ever render.
+5. **`course_purchases`.** One contact who has bought the `purchase`-tier course
    that already exists in the shop, so the Space unlock state renders.
-5. **`contact_notes`** and a **dynamic contact group** (a group carrying a `rule`,
+6. **Promo codes** (decision 3 below). One active code in the shared storefront
+   helper, so it reaches every tenant that already has a shop from one place.
+7. **Finance** (decision 2 below), sandbox and lead only: the plugin, a journal
+   and a chart of accounts. Never the cron-regenerated rollups.
+8. **`contact_notes`** and a **dynamic contact group** (a group carrying a `rule`,
    with membership never materialised) — two small, high-visibility gaps.
 
-## Parked for Franco — do not decide these inside a lane
+## The five decisions — SETTLED 2026-08-19 by Franco
 
-Each of these would change the shape of the work, and picking one inside a session
-is how four sessions end up with four answers.
+These were parked out of the lanes because settling them inside a session is how
+four sessions end up with four answers. They are now answered. **A lane does not
+reopen them**; if one turns out to be wrong, change it here first and say so.
 
-1. **Do the seeds get fake money?** `member_payments` / `member_subscriptions` are
-   unseeded everywhere, which also leaves `Contact.subscription_status` and
-   `active_subscriptions` unwritten and `/payments` empty. But
-   `scripts/lib/appointments.ts:15-20` states a deliberate rule that seeded
-   bookings are always free-path-shaped, because a paid one needs a
-   webhook-written ledger row. Seeding the ledger by hand contradicts that rule;
-   not seeding it leaves the payments dashboard blank in every demo.
-   **Recommend:** seed the ledger rows — "the payments screen is empty" is the
-   most damaging thing a prospect can see in a payments-first product. But this
-   reverses a written decision, so it needs the call.
-2. **Is the finance plugin in scope for demos at all?** Zero coverage, and never
-   installed by any seeder. Seeding it properly means the journal AND the chart of
-   accounts, while leaving the cron-regenerated rollups alone. **Recommend:** yes
-   for sandbox and lead (where prospects look), no for emulator and staging.
-3. **Promo codes.** Same shape of question, much smaller. `/offer/promo-codes` is
-   empty everywhere. **Recommend:** one active code per storefront tenant, seeded
-   in the shared storefront helper — it is a few lines and it makes a whole
-   feature visible.
-4. **Does staging stay Connect-unwired?** `seed-staging.ts`'s header argues it
-   should, and the reasoning (shared Stripe TEST platform, two webhook endpoints
-   receiving each other's events) still holds. **Recommend:** leave it; the answer
-   changes only if staging gets its own dedicated onboarded test account.
-5. **How far does the `scripts/lib/fixtures/` extraction go?** Lane 0 extracts only
-   the two divergent fixtures. Going further is a large refactor of four big files
-   with no defect behind it. **Recommend:** stop at two.
+### 1. Do the seeds get fake money? — **YES**
+
+Seed `member_payments` and `member_subscriptions`, which also gives
+`Contact.subscription_status` and `Contact.active_subscriptions` real values and
+fills `/payments` and the contact Payments tab.
+
+This **reverses** the rule stated in `scripts/lib/appointments.ts:15-20` ("seeded
+bookings are always free-path-shaped, because a paid one would need a matching
+webhook-written `member_payments` ledger row"). The reason for reversing it is
+that the rule was written to avoid fabricating a half-record, and the answer to a
+half-record is the whole record, not an empty screen — a blank payments dashboard
+is the most damaging thing a prospect can see in a payments-first product.
+
+So the obligation the old rule was protecting still binds, and gets stricter:
+
+- **A paid booking and its ledger row are seeded together or not at all.** Never
+  a `payment_status` on a session with no `member_payments` doc behind it.
+- **Write the shapes the Connect webhook writes** (`packages/functions/src/connect/webhook.ts`),
+  not invented ones — the same discipline the waiver seed needs.
+- **Update the comment in `scripts/lib/appointments.ts`** in the same change that
+  breaks its rule. A stale prohibition next to code that violates it is worse
+  than no comment.
+- A subscription seeded as **cancelling** is the point of the exercise, not a
+  detail: it is the only way `cancel_at` / `canceled_at` / `cancellation_details`
+  and the `payment_failed` vs `cancellation_requested` distinction ever render.
+  Write the record whole, nulls included.
+
+### 2. Finance plugin in demo scope? — **SANDBOX AND LEAD ONLY**
+
+Install the plugin and seed the journal plus the chart of accounts on the two
+surfaces prospects actually look at. Emulator and staging stay lean.
+
+Do **not** seed `finance_monthly_reports` or `accounting_period_summaries`: both
+are regenerated from the journal by cron and always overwritten.
+
+### 3. Promo codes in demo scope? — **YES, ONE PER STOREFRONT TENANT**
+
+Seeded in the shared storefront helper (`scripts/lib/storefront.ts`), so it
+reaches every tenant that already gets a shop, on every surface, from one place.
+Install the `promo-codes` plugin alongside it.
+
+The code is a Stage A **modifier**, so nothing else needs seeding for it to
+show — no redemption ledger, no reservation state. Seed the `promo_codes/{CODE}`
+document and stop; `redemptions/{identityKey}` stays server-written.
+
+### 4. Does staging stay Connect-unwired? — **YES, LEAVE IT OFF**
+
+The reasoning in `seed-staging.ts`'s header still holds: staging is a real
+deployed project sharing one Stripe TEST platform with sandbox, so attaching the
+same test account moves `connect_accounts/{acct}.teamId` away from sandbox and
+leaves both webhook endpoints receiving each other's events.
+
+Staging therefore shows no priced doors, and that is correct rather than broken.
+Sandbox and lead remain the surfaces where payments are demonstrated. This answer
+changes only if staging is given its own dedicated onboarded test account, which
+is a Stripe-side setup task and not a seeding one.
+
+### 5. How far does the fixture extraction go? — **THE TWO DIVERGENT ONES**
+
+Lane 0 as written: `documents` and the appointment activity/availability pair.
+The other five duplications in the register are duplicated but not divergent, and
+extracting them is a refactor of four large files with no defect behind it.
+
 
 ## Acceptance
 
