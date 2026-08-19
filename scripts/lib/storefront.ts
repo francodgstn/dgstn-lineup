@@ -21,11 +21,13 @@
 import admin from 'firebase-admin'
 
 // ── Firestore path constants (mirror @linyup/shared/paths) ─────────────────────
+const TEAMS_COLLECTION = 'teams'
 const PRODUCTS_SUBCOLLECTION = 'products'
 const INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
 const SITE_DRAFTS_COLLECTION = 'site_drafts'
 const SITE_PUBLISHED_COLLECTION = 'site_published'
 const COURSES_COLLECTION = 'courses'
+const PROMO_CODES_SUBCOLLECTION = 'promo_codes'
 
 // ── time helpers (local; avoid coupling to each seed's own ts/daysFromNow) ──────
 const tsOf = (d: Date) => admin.firestore.Timestamp.fromDate(d)
@@ -542,4 +544,74 @@ export async function seedStoreCourses(
         order: 0,
       })
   }
+}
+
+// ── SHOP · Promo codes ────────────────────────────────────────────────────────
+// One live code per storefront tenant, so /offer/promo-codes is not an empty
+// screen and a demo checkout can actually show a discount being applied
+// (Franco's decision 3, 2026-08-19).
+//
+// A promo is a Stage A MODIFIER, not a tender: it changes what a purchase costs,
+// and `resolvePaymentOptions` applies it. So the ONLY thing to seed is the code
+// document. There is deliberately nothing else:
+//
+//   • no `redemptions/{identityKey}` rows — a use is consumed by a completed
+//     SALE, and no seeded sale went through the promo rails;
+//   • no `reservations` — those are live checkout state with a deadline, and a
+//     seeded one would be a reservation nobody can release;
+//   • `usage_count: 0` — its ONE writer is commitPromoRedemption's transaction,
+//     writing an absolute value from its own read set. A seed inventing a count
+//     would be a second writer with no ledger behind it.
+
+export async function seedStorePromoCode(o: {
+  teamId: string
+  uid: string
+  currency?: string
+  installedDaysAgo?: number
+}): Promise<void> {
+  // Takes only what it needs, not the whole StorefrontOpts: the lead seeder
+  // authors its storefront from a profile and has no StorefrontOpts to hand.
+  const db = admin.firestore()
+  const installedDaysAgo = o.installedDaysAgo ?? 30
+  await installPlugin(o.teamId, 'promo-codes', o.uid, installedDaysAgo)
+
+  // The canonical uppercase code IS the doc id — which is what makes "is this
+  // code taken?" a create() rather than a query-then-write race.
+  const code = 'WELCOME10'
+  await db
+    .collection(TEAMS_COLLECTION)
+    .doc(o.teamId)
+    .collection(PROMO_CODES_SUBCOLLECTION)
+    .doc(code)
+    .set({
+      code,
+      teamId: o.teamId,
+      status: 'active',
+      effect: 'percent_off',
+      percent: 10,
+      currency: o.currency ?? 'CHF',
+      valid_from: null,
+      valid_until: null,
+      max_uses: 100,
+      max_uses_per_contact: 1,
+      restrict_to_contact_id: null,
+      // 'new_contacts' would narrow the demo to people with no `joined` — the
+      // broad code is the one a prospect can actually try in the shop.
+      audience: 'all',
+      usage_count: 0,
+      // Every rail a promo is allowed on. Memberships, gift-card purchases, the
+      // priced-trial door and the waitlist claim are NOT rails — the claim path
+      // refuses one server-side, because shortening its deadline would give one
+      // seat two timers.
+      applies_to: ['drop_in', 'appointment', 'course', 'product'],
+      activity_ids: null,
+      course_ids: null,
+      product_ids: null,
+      label: 'Seeded demo code',
+      created_at: tsOf(daysAgo(installedDaysAgo)),
+      updated_at: tsOf(daysAgo(installedDaysAgo)),
+      created_by: o.uid,
+      created_by_name: 'Seed',
+      disabled_at: null,
+    })
 }

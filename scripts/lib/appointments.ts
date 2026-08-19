@@ -13,10 +13,20 @@
  *
  * FREE-PATH ONLY: seeded booked appointments are always free-path-shaped —
  * `status: 'confirmed'`, no payment fields (no payment_status/payment_intent_id,
- * no `pending_payment` holds). Paid bookings are NOT seeded: they would need a
- * matching `member_payments/*` ledger doc (webhook-written in production) and no
- * such seeding pipeline exists. Seed paid demo data by actually paying through
- * Stripe test mode instead.
+ * no `pending_payment` holds).
+ *
+ * The REASON given here used to be "a paid booking would need a matching
+ * `member_payments/*` ledger doc and no such seeding pipeline exists". Half of
+ * that is now false: the pipeline exists, in `scripts/lib/fixtures/money.ts`
+ * (Franco's decision 1, 2026-08-19 — an empty /payments screen was costing more
+ * than a fabricated ledger row). The OBLIGATION is unchanged and stricter: a
+ * paid booking and its ledger row are seeded TOGETHER or not at all. What must
+ * never appear is a session stamped as paid with no money behind it.
+ *
+ * Appointments stay free-path here anyway, because a paid one also implies a
+ * hold that expires, a Checkout Session that can be resumed, and a webhook that
+ * confirms it — none of which a ledger row can stand in for. Seed a paid
+ * appointment by actually paying through Stripe test mode.
  *
  * Path/type constants mirror @linyup/shared (the seed scripts compile under
  * tsconfig.scripts.json, which does not resolve the workspace import — same

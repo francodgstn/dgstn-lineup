@@ -563,8 +563,10 @@ export type WaiverSignerOrderingFacts = WaiverSignerFacts &
  * rots, and this one had rotted already. `grep -rn 'waiverAcceptanceState('` is
  * the census, and it is one line.
  *
- * The checkable half: `waiverValidUntilMs` has exactly one non-test call site
- * (`waivers/accept.ts`), and no code outside this function compares a signer's
+ * The checkable half: `waiverValidUntilMs` is called only where a `valid_until`
+ * is WRITTEN (`waivers/accept.ts`, and the seed fixture that reproduces its
+ * rows), never where one is judged — and no code outside this function compares
+ * a signer's
  * `accepted_version` against a document's `min_valid_version`. What DOES compare
  * versions elsewhere — `decideWaiverGate` on a submitted tick — answers "may
  * this be recorded", which is a question about a payload and not about a signer

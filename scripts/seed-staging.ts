@@ -79,6 +79,7 @@ import {
   buildStorefrontPageLinks,
   buildBasicPageLinks,
   seedStoreProducts,
+  seedStorePromoCode,
   seedStoreWebsite,
   seedStoreCourses,
 } from './lib/storefront'
@@ -88,6 +89,18 @@ import {
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
+import {
+  seedDocumentsSettings,
+  seedTeamWaiver,
+} from './lib/fixtures/documents'
+import {
+  seedContactNotes,
+  seedCoursePurchase,
+  seedDynamicContactGroup,
+  seedEventProgram,
+  seedSessionWaitlist,
+} from './lib/fixtures/engagement'
+import { seedTeamMoney } from './lib/fixtures/money'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -2017,6 +2030,20 @@ async function seedTeam(opts: TeamSeed) {
   })
 
   // ── documents (all plans — minPlan 'free') ──────────────────────────────────
+  // The money ledger — seeded after contacts, whose subscription assignment it
+  // reads back. See scripts/lib/fixtures/money.ts for why seeded ledger rows
+  // exist at all.
+  await seedTeamMoney({ teamId })
+
+  // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
+  // Each of these was a shipped feature with zero data behind it on every
+  // surface. See scripts/lib/fixtures/engagement.ts.
+  await seedContactNotes(teamId, uid)
+  await seedDynamicContactGroup(teamId, uid)
+  await seedEventProgram(teamId, uid)
+  await seedSessionWaitlist({ teamId })
+  await seedCoursePurchase(teamId)
+
   await seedDocuments(teamId, teamSlug, teamName, uid)
 
   // ── storefront (studio+ only — products/website/online-courses are minPlan studio) ──
@@ -2036,6 +2063,7 @@ async function seedTeam(opts: TeamSeed) {
       installedDaysAgo: 120,
     }
     await seedStoreProducts(storefront)
+    await seedStorePromoCode(storefront)
     await seedStoreWebsite(storefront)
     await seedStoreCourses(storefront, { includeFree: true })
   }
@@ -2082,15 +2110,7 @@ async function seedDocuments(
 ) {
   // NO PLUGIN INSTALL — Documents is a default feature on every plan. The
   // signup-consent selection lives in teams/{teamId}/settings/documents.
-  await db
-    .collection('teams')
-    .doc(teamId)
-    .collection('settings')
-    .doc('documents')
-    .set({
-      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      updated_at: ts(daysFromNow(-30)),
-    })
+  await seedDocumentsSettings(teamId, [`${teamId}-doc-terms`, `${teamId}-doc-privacy`], 30)
 
   const docSeeds = [
     {
@@ -2098,7 +2118,6 @@ async function seedDocuments(
       title: 'General Terms & Conditions',
       slug: `terms-${teamSlug.slice(0, 4)}`,
       kind: 'terms' as const,
-      source: 'rich_text' as const,
       summary: `The general terms and conditions governing use of ${teamName}'s services.`,
       body: `<h2>General Terms &amp; Conditions</h2>
 <p>These terms govern the relationship between ${teamName} ("the Studio") and its members. By registering, you agree to the following:</p>
@@ -2119,7 +2138,6 @@ async function seedDocuments(
       title: 'Privacy Policy',
       slug: `privacy-${teamSlug.slice(0, 4)}`,
       kind: 'privacy' as const,
-      source: 'rich_text' as const,
       summary: `How ${teamName} collects, uses, and protects your personal data.`,
       body: `<h2>Privacy Policy</h2>
 <p>${teamName} ("we", "us") is committed to protecting your personal data. This policy explains what we collect and how we use it.</p>
@@ -2142,7 +2160,6 @@ async function seedDocuments(
       title: 'House Rules & Regulations',
       slug: `house-rules-${teamSlug.slice(0, 4)}`,
       kind: 'regulation' as const,
-      source: 'rich_text' as const,
       summary: 'Facility rules, hygiene standards, and training etiquette.',
       body: `<h2>House Rules &amp; Regulations</h2>
 <p>To keep our training environment safe and respectful for everyone, please observe the following rules at all times.</p>
@@ -2168,40 +2185,17 @@ async function seedDocuments(
     },
   ]
 
-  const nowTs = ts(now())
-  for (const doc of docSeeds) {
-    const docRef = db.collection('documents').doc(doc.id)
-    await docRef.set({
-      id: doc.id,
-      teamId,
-      title: doc.title,
-      slug: doc.slug,
-      kind: doc.kind,
-      source: doc.source,
-      body: doc.body,
-      summary: doc.summary,
-      status: 'published',
-      isPublic: true,
-      order: doc.order,
-      created_at: ts(daysFromNow(-25)),
-      updated_at: nowTs,
-      createdBy: uid,
-      archived_at: null,
-    })
-
-    // World-readable public_profile summary (what syncDocumentPublicProfile writes)
-    await docRef.collection('public_profile').doc(doc.id).set({
-      type: 'document',
-      teamId,
-      slug: doc.slug,
-      title: doc.title,
-      kind: doc.kind,
-      source: doc.source,
-      summary: doc.summary,
-      bodyHtml: doc.body,
-      updated_at: nowTs,
-    })
-  }
+  // Documents + the studio's liability WAIVER, each with its frozen v1 snapshot
+  // and public mirror, through the ONE shared writer
+  // (scripts/lib/fixtures/documents.ts).
+  await seedTeamWaiver({
+    teamId,
+    uid,
+    teamName,
+    teamSlug,
+    otherDocuments: docSeeds,
+    createdDaysAgo: 25,
+  })
 }
 
 // ── automations seed (templates + presets + rules + logs) ─────────────────────

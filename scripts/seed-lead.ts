@@ -68,7 +68,7 @@ import {
   buildAffiliationSummary,
   statusCountsAsActive,
 } from './lib/affiliations'
-import { buildStorefrontPageLinks } from './lib/storefront'
+import { buildStorefrontPageLinks, seedStorePromoCode } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 import {
   planSeedConnectAccounts,
@@ -81,6 +81,19 @@ import {
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
+import {
+  seedDocumentsSettings,
+  seedTeamWaiver,
+} from './lib/fixtures/documents'
+import {
+  seedContactNotes,
+  seedCoursePurchase,
+  seedDynamicContactGroup,
+  seedEventProgram,
+  seedSessionWaitlist,
+} from './lib/fixtures/engagement'
+import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamMoney } from './lib/fixtures/money'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -2431,12 +2444,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   }
 
   if (profile.documents.length > 0) {
-    await db
-      .collection('teams')
-      .doc(teamId)
-      .collection('settings')
-      .doc('documents')
-      .set({ signupDocumentIds: signupDocIds, updated_at: ts(daysFromNow(-200)) })
+    await seedDocumentsSettings(teamId, signupDocIds, 200)
   }
 
   // ── website: profile-authored sections with asset resolution ───────────────
@@ -2633,43 +2641,58 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     .doc(teamId)
     .set({ products: productMirror }, { merge: true })
 
+  // One live promo code, so /offer/promo-codes and a discounted checkout are
+  // both demoable. See scripts/lib/storefront.ts for what is deliberately NOT
+  // seeded alongside it.
+  await seedStorePromoCode({ teamId, uid, currency: profile.currency, installedDaysAgo: 200 })
+
+  // ── the money ledger (member_subscriptions + member_payments) ──────────────
+  // After contacts, whose subscription assignment it reads back. See
+  // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
+  await seedTeamMoney({ teamId, currency: profile.currency })
+
+  // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
+  // into the journal through the SAME builders the Connect webhook uses.
+  await seedTeamFinance({ teamId, uid })
+
+  // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
+  // Each of these was a shipped feature with zero data behind it on every
+  // surface. See scripts/lib/fixtures/engagement.ts.
+  await seedContactNotes(teamId, uid)
+  await seedDynamicContactGroup(teamId, uid)
+  await seedEventProgram(teamId, uid)
+  await seedSessionWaitlist({ teamId })
+  await seedCoursePurchase(teamId)
+
   // ── documents ──────────────────────────────────────────────────────────────
-  const docNow = ts(now())
-  for (let i = 0; i < profile.documents.length; i++) {
-    const doc = profile.documents[i]
-    const docId = `${teamId}-doc-${doc.key}`
-    const docRef = db.collection('documents').doc(docId)
-    const isExternal = !!doc.externalUrl
-    await docRef.set({
-      id: docId,
-      teamId,
+  // Documents + their frozen v1 snapshots + the public mirrors, through the ONE
+  // shared writer (scripts/lib/fixtures/documents.ts) — which also sanitizes the
+  // body ONCE and copies that string into the mirror, rather than mirroring the
+  // raw HTML as this block used to.
+  // The waiver is added by the ENGINE, not by the profile: LeadDocument.kind has
+  // no 'waiver' member, and a waiver's text and policy are the same for every
+  // lead. That also keeps it working with no profile edit — a lane-4 constraint,
+  // since scripts/leads/*/profile.ts is gitignored.
+  await seedTeamWaiver({
+    teamId,
+    uid,
+    teamName: profile.teamName,
+    teamSlug: profile.slug,
+    publishedByName: profile.teamName,
+    createdDaysAgo: 180,
+    otherDocuments: profile.documents.map((doc, i) => ({
+      id: `${teamId}-doc-${doc.key}`,
       title: doc.title,
       slug: doc.slug,
       kind: doc.kind,
-      source: isExternal ? 'external_link' : 'rich_text',
-      ...(isExternal ? { externalUrl: doc.externalUrl } : { body: doc.body }),
       summary: doc.summary,
-      status: 'published',
-      isPublic: true,
+      ...(doc.externalUrl ? { externalUrl: doc.externalUrl } : { body: doc.body }),
       order: i,
-      created_at: ts(daysFromNow(-180)),
-      updated_at: docNow,
-      createdBy: uid,
-      archived_at: null,
-    })
-    await docRef.collection('public_profile').doc(docId).set({
-      type: 'document',
-      teamId,
-      slug: doc.slug,
-      title: doc.title,
-      kind: doc.kind,
-      source: isExternal ? 'external_link' : 'rich_text',
-      ...(isExternal ? { externalUrl: doc.externalUrl } : {}),
-      summary: doc.summary,
-      ...(isExternal ? {} : { bodyHtml: doc.body }),
-      updated_at: docNow,
-    })
-  }
+    })),
+  })
+
+
+  const docNow = ts(now())
 
   // ── public forms ───────────────────────────────────────────────────────────
   // Reached only at /public/{slug}/forms/{formSlug} — and that page reads the

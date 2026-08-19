@@ -56,6 +56,12 @@ jobs:
       - name: Locales
         run: pnpm i18n:check
 
+      # scripts/ is not a workspace, so `turbo run typecheck` never saw the four
+      # seeders — which is a root cause of the drift docs/seed-truth-2026-08.md
+      # catalogues. This is the only place they are typechecked.
+      - name: Seed scripts
+        run: pnpm typecheck:seeds
+
   test-functions:
     name: Functions Tests
     runs-on: ubuntu-latest

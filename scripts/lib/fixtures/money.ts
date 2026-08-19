@@ -1,0 +1,383 @@
+/**
+ * Shared money-ledger seeding — `member_subscriptions`, `member_payments`, and
+ * the contact-level rollup they imply.
+ *
+ * ── THE RULE THIS FILE BREAKS, AND WHY ───────────────────────────────────────
+ * `scripts/lib/appointments.ts` says seeded bookings are always free-path-shaped,
+ * "because a paid one would need a matching `member_payments` ledger doc
+ * (webhook-written in production) and no such seeding pipeline exists". That
+ * rule existed to stop a HALF-RECORD: a session stamped as paid with no money
+ * behind it. The answer to a half-record is the whole record, not an empty
+ * screen — and the empty screen was `/payments`, `/contacts/[id]` → Payments,
+ * and `Contact.subscription_status`, on every demo tenant, in a payments-first
+ * product (docs/seed-truth-2026-08.md → decision 1, settled 2026-08-19).
+ *
+ * So the pipeline is here, and the obligation the old rule protected gets
+ * STRICTER rather than dropped:
+ *
+ *   • A paid thing and its ledger row are written TOGETHER or not at all.
+ *   • The shapes are the ones `connect/webhook.ts` writes — amounts in RAPPEN,
+ *     ids shaped like Stripe's, `application_fee_amount` present — so a demo row
+ *     and a real row are the same row.
+ *   • The contact rollup goes through `rollupMemberSubscriptions`
+ *     (@linyup/shared), the SAME function `onMemberSubscriptionWrite` runs, so
+ *     seeded data lands in the state the trigger would have produced. No trigger
+ *     fires on an Admin-SDK write, which is exactly why this must not be a
+ *     second implementation.
+ *
+ * ── WHAT IS NOT SEEDED, DELIBERATELY ─────────────────────────────────────────
+ * No Stripe objects exist behind these rows. A demo cannot open the billing
+ * portal, issue a refund or replay a webhook from them — those need a real test
+ * account (see scripts/lib/connect.ts). These are ledger rows for the screens
+ * that read ledger rows, and nothing more.
+ *
+ * Path constants mirror @linyup/shared (same convention as lib/storefront.ts).
+ */
+
+import admin from 'firebase-admin'
+import { rollupMemberSubscriptions } from '@linyup/shared'
+import type { SubscriptionCancellationDetails } from '@linyup/shared'
+
+// ── Firestore path constants (mirror @linyup/shared/paths) ────────────────────
+const TEAMS_COLLECTION = 'teams'
+const CONTACTS_COLLECTION = 'contacts'
+const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
+const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+
+const tsOf = (d: Date) => admin.firestore.Timestamp.fromDate(d)
+function daysFrom(n: number): Date {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return d
+}
+
+/** Major units → Rappen, the unit every Connect row stores. */
+const rappen = (major: number) => Math.round(major * 100)
+
+/**
+ * The platform fee a seeded charge carries. Kept as a plain percentage rather
+ * than imported from `computePlatformFee`, because that helper reads a team's
+ * plan and take-rate config and a seeded row only needs to look plausible on a
+ * dashboard — the exact number is never reconciled against anything.
+ */
+const SEED_FEE_PERCENT = 0.02
+
+export type SeedSubscriptionState =
+  | 'active'
+  /** Live, but scheduled to stop — the THIRD state, and the only one that
+   *  renders `cancel_at` / `canceled_at` / `cancellation_details` anywhere. */
+  | 'cancelling'
+  | 'past_due'
+  | 'paused'
+
+export interface SeedMemberSubscriptionSpec {
+  contactId: string
+  /** The studio's stable subscription-type id — what the rollup dedupes on. */
+  subscriptionTypeId: string
+  subscriptionTypeName: string
+  recurrence: string
+  /** Major units per period. */
+  amount: number
+  currency?: string
+  state?: SeedSubscriptionState
+  /** How many past invoices to write as `member_payments` rows. Default 3. */
+  invoices?: number
+  /** Days since the subscription started. Default 200. */
+  startedDaysAgo?: number
+}
+
+/**
+ * Write one `member_subscriptions` record plus its past invoice charges.
+ *
+ * A `cancelling` subscription writes the WHOLE cancellation record — `cancel_at`
+ * (when it stops), `canceled_at` (when it was asked for; the two bracket the
+ * win-back window) and `cancellation_details`. That is the entire point of
+ * seeding one: without it, `SubscriptionCancellationNote`, the operator
+ * console's churn-reason column and the member's own Space have no state that
+ * renders them, and the distinction the record exists for — `payment_failed`
+ * versus `cancellation_requested`, the same stored state and completely
+ * different studio actions — is undemoable.
+ */
+export async function seedMemberSubscription(
+  teamId: string,
+  spec: SeedMemberSubscriptionSpec
+): Promise<void> {
+  const db = admin.firestore()
+  const state = spec.state ?? 'active'
+  const currency = (spec.currency ?? 'CHF').toLowerCase()
+  const startedDaysAgo = spec.startedDaysAgo ?? 200
+  const amountRappen = rappen(spec.amount)
+  const subscriptionId = `sub_seed_${spec.contactId}_${spec.subscriptionTypeId}`.slice(0, 60)
+  const periodEnd = daysFrom(18)
+
+  const cancellation: {
+    cancel_at: admin.firestore.Timestamp | null
+    canceled_at: admin.firestore.Timestamp | null
+    cancellation_details: SubscriptionCancellationDetails | null
+  } =
+    state === 'cancelling'
+      ? {
+          cancel_at: tsOf(periodEnd),
+          canceled_at: tsOf(daysFrom(-6)),
+          cancellation_details: {
+            reason: 'cancellation_requested',
+            feedback: 'too_expensive',
+            comment: 'Moving to a smaller plan after the summer.',
+          },
+        }
+      : state === 'past_due'
+        ? {
+            cancel_at: null,
+            canceled_at: null,
+            // A dunning subscription has not been cancelled — but when it is,
+            // this is the reason that will be on it, and it is the one a studio
+            // must be able to tell apart from a member who chose to leave.
+            cancellation_details: null,
+          }
+        : { cancel_at: null, canceled_at: null, cancellation_details: null }
+
+  await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+    .doc(subscriptionId)
+    .set({
+      teamId,
+      subscriptionId,
+      customerId: `cus_seed_${spec.contactId}`.slice(0, 60),
+      contactId: spec.contactId,
+      priceId: `price_seed_${spec.subscriptionTypeId}`.slice(0, 60),
+      subscriptionTypeId: spec.subscriptionTypeId,
+      subscriptionTypeName: spec.subscriptionTypeName,
+      recurrence: spec.recurrence,
+      amount: amountRappen,
+      currency,
+      application_fee_percent: SEED_FEE_PERCENT * 100,
+      status: state === 'cancelling' ? 'active' : state,
+      current_period_end: tsOf(periodEnd),
+      // TRUE for a subscription that will not renew. The billing portal instead
+      // leaves this false and sets `cancel_at`; both shapes are live, and
+      // `subscriptionIsCancelling` is what tells a reader they mean the same
+      // thing — so a seed picks one and never invents a third.
+      cancel_at_period_end: state === 'cancelling',
+      ...cancellation,
+      payment_method_kind: 'card',
+      last_invoice_id: `in_seed_${spec.contactId}`.slice(0, 60),
+      last_payment_status: state === 'past_due' ? 'failed' : 'paid',
+      pause_collection: state === 'paused' ? { behavior: 'void' } : null,
+      created_at: tsOf(daysFrom(-startedDaysAgo)),
+      updated_at: tsOf(daysFrom(-1)),
+    })
+
+  // The invoice charges behind it. A subscription with no payments produces a
+  // membership row on the contact and an empty payments dashboard — half of the
+  // screen this exists to fill.
+  const invoices = spec.invoices ?? 3
+  for (let i = 0; i < invoices; i++) {
+    const daysAgo = 30 * (i + 1)
+    const failed = state === 'past_due' && i === 0
+    // A studio refunding the last month of a member who cancelled is an ordinary
+    // thing that happens, and it is the only way the refund arm of the payments
+    // dashboard and the finance journal has any data behind it. Tying it to the
+    // cancelling member rather than inventing an unrelated refund keeps the two
+    // stories consistent with each other.
+    const refunded = state === 'cancelling' && i === 0
+    await seedMemberPayment(teamId, {
+      contactId: spec.contactId,
+      purpose: 'membership',
+      kind: 'membership',
+      subscriptionTypeName: spec.subscriptionTypeName,
+      amount: spec.amount,
+      currency,
+      daysAgo,
+      status: failed ? 'failed' : refunded ? 'refunded' : 'succeeded',
+      idSuffix: `sub${i}`,
+      lineItem: {
+        kind: 'subscription',
+        label: spec.subscriptionTypeName,
+        subscription_type_id: spec.subscriptionTypeId,
+      },
+    })
+  }
+}
+
+export interface SeedMemberPaymentSpec {
+  contactId: string | null
+  /** Free-form purpose tag. */
+  purpose: string
+  /** Sale kind for display. The union is owned by `handlePaymentIntent`. */
+  kind?: 'product' | 'course' | 'drop_in' | 'membership' | 'appointment' | 'gift_card' | 'policy_fee'
+  /** Major units. */
+  amount: number
+  currency?: string
+  daysAgo: number
+  status?: 'succeeded' | 'failed' | 'refunded'
+  /** Disambiguates the deterministic PaymentIntent id when one contact has many. */
+  idSuffix: string
+  sessionId?: string | null
+  productName?: string | null
+  courseName?: string | null
+  subscriptionTypeName?: string | null
+  lineItem?: Record<string, unknown> | null
+  comment?: string | null
+}
+
+/**
+ * One `member_payments` row, shaped as `handlePaymentIntent` writes it.
+ *
+ * The doc id is the PaymentIntent id in production; here it is a deterministic
+ * `pi_seed_…` so a re-run overwrites in place rather than accumulating.
+ */
+export async function seedMemberPayment(
+  teamId: string,
+  spec: SeedMemberPaymentSpec
+): Promise<void> {
+  const db = admin.firestore()
+  const status = spec.status ?? 'succeeded'
+  const amountRappen = rappen(spec.amount)
+  const paymentIntentId = `pi_seed_${spec.contactId ?? 'anon'}_${spec.idSuffix}`.slice(0, 80)
+  const at = tsOf(daysFrom(-spec.daysAgo))
+  const refunded = status === 'refunded'
+
+  await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_PAYMENTS_SUBCOLLECTION)
+    .doc(paymentIntentId)
+    .set({
+      teamId,
+      paymentIntentId,
+      // A failed intent never produced a charge, so it carries no chargeId —
+      // the one field that separates "we tried" from "money moved".
+      ...(status === 'failed' ? {} : { chargeId: `ch_seed_${spec.idSuffix}` }),
+      contactId: spec.contactId,
+      purpose: spec.purpose,
+      ...(spec.kind ? { kind: spec.kind } : {}),
+      ...(spec.productName ? { productName: spec.productName } : {}),
+      ...(spec.courseName ? { courseName: spec.courseName } : {}),
+      ...(spec.subscriptionTypeName ? { subscriptionTypeName: spec.subscriptionTypeName } : {}),
+      ...(spec.sessionId ? { sessionId: spec.sessionId } : {}),
+      ...(spec.lineItem ? { line_item: spec.lineItem } : {}),
+      ...(spec.comment ? { comment: spec.comment } : {}),
+      amount: amountRappen,
+      currency: (spec.currency ?? 'CHF').toLowerCase(),
+      application_fee_amount: Math.round(amountRappen * SEED_FEE_PERCENT),
+      status,
+      amount_refunded: refunded ? amountRappen : 0,
+      refunds: refunded
+        ? [
+            {
+              refundId: `re_seed_${spec.idSuffix}`,
+              amount: amountRappen,
+              feeReversed: Math.round(amountRappen * SEED_FEE_PERCENT),
+              reason: 'requested_by_customer',
+              created_at: at,
+            },
+          ]
+        : [],
+      created_at: at,
+      updated_at: at,
+    })
+}
+
+/**
+ * Recompute `Contact.subscription_status` and `Contact.active_subscriptions`
+ * from the team's member subscriptions, exactly as `onMemberSubscriptionWrite`
+ * would.
+ *
+ * Call it AFTER seeding subscriptions. It exists because an Admin-SDK write
+ * fires no trigger in a plain seed run — and where triggers ARE running (a local
+ * emulator with functions, or a deployed project), it computes the same answer
+ * through the same function, so it is idempotent rather than conflicting.
+ */
+export async function applySubscriptionRollups(teamId: string): Promise<number> {
+  const db = admin.firestore()
+  const subs = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+    .get()
+
+  const byContact = new Map<string, admin.firestore.DocumentData[]>()
+  for (const d of subs.docs) {
+    const data = d.data()
+    const contactId = data.contactId as string | undefined
+    if (!contactId) continue
+    const list = byContact.get(contactId) ?? []
+    list.push(data)
+    byContact.set(contactId, list)
+  }
+
+  let updated = 0
+  for (const [contactId, records] of byContact) {
+    const { status, activeSubscriptions } = rollupMemberSubscriptions(records)
+    const ref = db.collection(CONTACTS_COLLECTION).doc(contactId)
+    const snap = await ref.get()
+    if (!snap.exists || snap.data()?.teamId !== teamId) continue
+    await ref.update({ subscription_status: status, active_subscriptions: activeSubscriptions })
+    updated += 1
+  }
+  return updated
+}
+
+/**
+ * Give a team a believable money history: a subscription per contact that has a
+ * subscription type, one of them winding down, one in dunning — and the invoice
+ * charges behind all of them.
+ *
+ * Reads the contacts back for the same reason the waiver fixture does: the four
+ * seeders build their pools in four different shapes, and the subscription-type
+ * assignment already lives on the contact document by the time this runs.
+ */
+export async function seedTeamMoney(opts: {
+  teamId: string
+  currency?: string
+  /** Cap on how many contacts get a subscription. Default 8. */
+  limit?: number
+}): Promise<{ subscriptions: number; contactsRolledUp: number }> {
+  const db = admin.firestore()
+  const { teamId } = opts
+  const contacts = await db
+    .collection(CONTACTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .limit(opts.limit ?? 8)
+    .get()
+
+  // Only contacts the seed already gave a subscription type to — inventing a
+  // membership for someone the studio never sold one to would put a row on the
+  // payments dashboard that contradicts the contact's own profile.
+  const withType = contacts.docs.filter((d) => !!d.data().subscription_type_id)
+
+  let subscriptions = 0
+  for (let i = 0; i < withType.length; i++) {
+    const d = withType[i]
+    const c = d.data() as {
+      subscription_type_id: string
+      subscription_type_name?: string
+      subscription_recurrence?: string
+      subscription_amount?: number
+    }
+    // One winding down and one in dunning per team, and only when the team has
+    // enough members that neither is the whole picture.
+    const state: SeedSubscriptionState =
+      withType.length >= 3 && i === 1
+        ? 'cancelling'
+        : withType.length >= 4 && i === 2
+          ? 'past_due'
+          : 'active'
+    await seedMemberSubscription(teamId, {
+      contactId: d.id,
+      subscriptionTypeId: c.subscription_type_id,
+      subscriptionTypeName: c.subscription_type_name ?? 'Membership',
+      recurrence: c.subscription_recurrence ?? 'monthly',
+      amount: c.subscription_amount ?? 89,
+      currency: opts.currency,
+      state,
+      startedDaysAgo: 120 + i * 15,
+    })
+    subscriptions += 1
+  }
+
+  const contactsRolledUp = await applySubscriptionRollups(teamId)
+  return { subscriptions, contactsRolledUp }
+}

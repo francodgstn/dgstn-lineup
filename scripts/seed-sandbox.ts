@@ -60,6 +60,7 @@ import {
 import {
   buildStorefrontPageLinks,
   seedStoreProducts,
+  seedStorePromoCode,
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
@@ -73,6 +74,19 @@ import {
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
+import {
+  seedDocumentsSettings,
+  seedTeamWaiver,
+} from './lib/fixtures/documents'
+import {
+  seedContactNotes,
+  seedCoursePurchase,
+  seedDynamicContactGroup,
+  seedEventProgram,
+  seedSessionWaitlist,
+} from './lib/fixtures/engagement'
+import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamMoney } from './lib/fixtures/money'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // Emulator convenience: the Auth host is required alongside Firestore — default
@@ -2884,15 +2898,7 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   }
 
   // Documents settings — the signup-consent selection, in its post-plugin home.
-  await db
-    .collection('teams')
-    .doc(teamId)
-    .collection('settings')
-    .doc('documents')
-    .set({
-      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      updated_at: ts(daysFromNow(-200)),
-    })
+  await seedDocumentsSettings(teamId, [`${teamId}-doc-terms`, `${teamId}-doc-privacy`], 200)
 
   // ── website plugin: a published one-page site (draft + public snapshot) ──────
   // hero + about + schedule (live sessions) + contact — every section populated.
@@ -3175,7 +3181,26 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     installedDaysAgo: 200,
   }
   await seedStoreProducts(storefront)
+  await seedStorePromoCode(storefront)
   await seedStoreCourses(storefront, { includeFree: false })
+
+  // ── the money ledger (member_subscriptions + member_payments) ──────────────
+  // After contacts, whose subscription assignment it reads back. See
+  // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
+  await seedTeamMoney({ teamId })
+
+  // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
+  // into the journal through the SAME builders the Connect webhook uses.
+  await seedTeamFinance({ teamId, uid })
+
+  // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
+  // Each of these was a shipped feature with zero data behind it on every
+  // surface. See scripts/lib/fixtures/engagement.ts.
+  await seedContactNotes(teamId, uid)
+  await seedDynamicContactGroup(teamId, uid)
+  await seedEventProgram(teamId, uid)
+  await seedSessionWaitlist({ teamId })
+  await seedCoursePurchase(teamId)
 
   // ── documents plugin: 3 published documents (terms, privacy, house rules) ──
   const docSeeds = [
@@ -3251,38 +3276,19 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     },
   ]
 
-  const docNow = ts(new Date())
-  for (const doc of docSeeds) {
-    const docRef = db.collection('documents').doc(doc.id)
-    await docRef.set({
-      id: doc.id,
-      teamId,
-      title: doc.title,
-      slug: doc.slug,
-      kind: doc.kind,
-      source: 'rich_text',
-      body: doc.body,
-      summary: doc.summary,
-      status: 'published',
-      isPublic: true,
-      order: doc.order,
-      created_at: ts(daysFromNow(-180)),
-      updated_at: docNow,
-      createdBy: uid,
-      archived_at: null,
-    })
-    await docRef.collection('public_profile').doc(doc.id).set({
-      type: 'document',
-      teamId,
-      slug: doc.slug,
-      title: doc.title,
-      kind: doc.kind,
-      source: 'rich_text',
-      summary: doc.summary,
-      bodyHtml: doc.body,
-      updated_at: docNow,
-    })
-  }
+  // Documents + the studio's liability WAIVER, each with its frozen v1 snapshot
+  // and public mirror, through the ONE shared writer. A published document with
+  // no versions/v0001 is the exact state backfill-document-versions.ts exists to
+  // clear, and a tenant with no waiver policy silently behaves as if the booking
+  // gate were switched off.
+  await seedTeamWaiver({
+    teamId,
+    uid,
+    teamName,
+    teamSlug,
+    otherDocuments: docSeeds,
+    createdDaysAgo: 180,
+  })
 }
 
 // ── team weekly reports — a year of history so the dashboard trend charts
