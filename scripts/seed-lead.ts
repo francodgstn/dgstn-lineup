@@ -298,6 +298,15 @@ function stageForPoolEntry(type: 'student' | 'trial' | 'external', totalSessions
   return totalSessions > 0 ? 'trial_attended' : 'trial_booked'
 }
 
+/** The tags the seed stamps on a contact. Lifted out of the contacts loop because
+ *  the seeded automation runs below have to agree with them: an `assign_tag` rule
+ *  whose run reached someone the roster shows untagged is a run the demo itself
+ *  contradicts. */
+function seedTagsFor(c: LeadContactDef): string[] {
+  const base = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
+  return c.type === 'external' ? [...base, 'external'] : base
+}
+
 function badgesFor(totalSessions: number, streak: number, seed: string): string[] {
   const out: string[] = []
   if (totalSessions >= 50) out.push('50_sessions')
@@ -1599,8 +1608,7 @@ async function seedLeadTenant(profile: LeadProfile) {
       source: c.source,
       sourceDetail: c.sourceDetail,
     })
-    const baseTags = c.status === 'expired' ? ['win-back'] : c.type === 'trial' ? ['lead'] : []
-    const tags = c.type === 'external' ? [...baseTags, 'external'] : baseTags
+    const tags = seedTagsFor(c)
 
     const writeAffiliation = c.type !== 'external' && c.status !== 'guest'
     const affiliationDoc = writeAffiliation
@@ -1855,26 +1863,17 @@ async function seedLeadTenant(profile: LeadProfile) {
   // ── contact alerts (show_in_app) ───────────────────────────────────────────
   const adultIdxs = pool.map((c, i) => ({ c, i })).filter((x) => !x.c.kid)
   const alertTargets = adultIdxs.slice(0, Math.min(4, adultIdxs.length)).map((x) => contactIds[x.i])
-  const alertDefs = [
-    {
-      schedule_type: 'sessions_countdown' as const,
-      schedule_value: 10,
-      message: 'Progress check-in approaching — review goals together.',
-      show_in_app: true,
-    },
-    {
-      schedule_type: 'datetime' as const,
-      schedule_value: ts(daysFromNow(7)),
-      message: 'Membership renewal due this week.',
-      show_in_app: true,
-    },
-    {
-      schedule_type: 'sessions_countdown' as const,
-      schedule_value: 50,
-      message: '50-session milestone — celebrate in class!',
-      show_in_app: false,
-    },
-  ]
+  // Minted from the team's alert presets (LEAD_ALERT_PRESETS, seeded below), so a
+  // demo's alerts read as instances of the presets in the picker rather than as
+  // unrelated text somebody typed. A preset carries no date — a `datetime` one
+  // stores null and the date is chosen when the alert is minted, which is what
+  // happens here.
+  const alertDefs = LEAD_ALERT_PRESETS.map((p) => ({
+    schedule_type: p.schedule_type,
+    schedule_value: p.schedule_type === 'datetime' ? ts(daysFromNow(7)) : p.schedule_value,
+    message: p.message,
+    show_in_app: p.show_in_app,
+  }))
   for (let i = 0; i < alertTargets.length; i++) {
     const def = alertDefs[i % alertDefs.length]
     await db
@@ -2095,7 +2094,10 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // ── automations (sector-neutral, {{placeholders}}) ─────────────────────────
-  await seedAutomations(profile, teamId, profile.language)
+  // contactIds goes in because the seeded run history names who each run reached,
+  // and the ids have to be the roster's own — a log full of ids that resolve to
+  // nothing is the state RunHistoryDialog renders as "recipient deleted since".
+  await seedAutomations(profile, teamId, profile.language, contactIds)
 
   // ── events ─────────────────────────────────────────────────────────────────
   for (let ei = 0; ei < profile.events.length; ei++) {
@@ -2242,9 +2244,289 @@ async function seedLeadTenant(profile: LeadProfile) {
 // Profile-authored templates + rules when present (profile.automations), else the
 // sector-neutral welcome/win-back pair. The lib_trial_cleanup hygiene rule is
 // always installed (fixed doc id converges with the onTeamCreated trigger).
+//
+// Both branches describe their rules first and hand ONE writer the same list, so
+// the run history below is derived from whatever the tenant actually got. A rule
+// with no `automation_logs` row renders on /automations as one that has never
+// fired, and a studio reads "never fired" as "my automation is broken" — which is
+// the wrong first impression to hand a prospect who is being shown the feature.
 
-async function seedAutomations(profile: LeadProfile, teamId: string, language: string) {
+/** teams/{teamId}/alert_presets — the reusable alert bodies Settings → Team
+ *  writes and the `create_alert` action mints a contact alert FROM, which is what
+ *  makes that action selectable rather than decorative.
+ *
+ *  Engine-provided rather than profile-authored: every studio wants roughly this
+ *  handful, none of them is lead-specific, and a profile that says nothing about
+ *  alerts must still land a non-empty picker. This is also the one definition of
+ *  the contact alerts seeded further up.
+ *
+ *  `schedule_value` follows the Settings → Team form: a countdown carries its
+ *  number of sessions, a `datetime` preset carries null because the date belongs
+ *  to the alert, not to the preset. */
+const LEAD_ALERT_PRESETS: {
+  key: string
+  name: string
+  description: string
+  schedule_type: 'sessions_countdown' | 'datetime'
+  schedule_value: number | null
+  message: string
+  show_in_app: boolean
+}[] = [
+  {
+    key: 'checkin',
+    name: 'Progress check-in',
+    description: 'Fires 10 sessions before the next progress review.',
+    schedule_type: 'sessions_countdown',
+    schedule_value: 10,
+    message: 'Progress check-in approaching — review goals together.',
+    show_in_app: true,
+  },
+  {
+    key: 'renewal',
+    name: 'Membership renewal',
+    description: 'One-off reminder on a chosen date.',
+    schedule_type: 'datetime',
+    schedule_value: null,
+    message: 'Membership renewal due this week.',
+    show_in_app: true,
+  },
+  {
+    key: 'milestone',
+    name: '50-session milestone',
+    description: 'Fires as the 50th session comes into view.',
+    schedule_type: 'sessions_countdown',
+    schedule_value: 50,
+    message: '50-session milestone — celebrate in class!',
+    show_in_app: false,
+  },
+]
+
+/** One rule as either branch describes it, before anything is written. */
+interface SeededAutomationRule {
+  id: string
+  name: string
+  active: boolean
+  trigger: Record<string, unknown>
+  conditions: Record<string, unknown>[]
+  actions: Record<string, unknown>[]
+  systemKey?: string
+}
+
+/** One past run of one rule, as `runRule` would have logged it. */
+interface SeededAutomationRun {
+  tier: 'event' | 'delayed' | 'scheduled'
+  daysAgo: number
+  reached: string[]
+}
+
+/** The default lead-hygiene rule — also installed by the onTeamCreated trigger
+ *  (@linyup/shared TRIAL_CLEANUP_RULE). The fixed doc id 'lib_trial_cleanup'
+ *  converges with the trigger, so there is no duplicate whether or not functions
+ *  are running behind this seed. */
+const TRIAL_CLEANUP_RULE: SeededAutomationRule = {
+  id: 'lib_trial_cleanup',
+  name: 'Archive stale trial bookings',
+  active: true,
+  systemKey: 'lib_trial_cleanup',
+  trigger: { type: 'schedule_daily' },
+  conditions: [
+    { type: 'acquisition_stage', value: 'trial_booked' },
+    { type: 'sessions_attended_exactly', value: 0 },
+    { type: 'days_since_created', value: 30 },
+  ],
+  actions: [{ type: 'archive_contact' }],
+}
+
+/** Actions whose execution would have taken the contact OFF the roster the demo
+ *  shows. `archive_contact` is the one the engine has today; a run claiming to
+ *  have executed it is contradicted by the very first screen a prospect opens, so
+ *  a rule carrying one is seeded as having run and matched NOBODY — which is also
+ *  the truth about a tenant whose trials all showed up. */
+const ROSTER_REMOVING_ACTIONS = new Set(['archive_contact'])
+
+/** How many contacts one seeded daily sweep reached. Deliberately small: the run
+ *  is a fiction either way, and a modest one claims far less than a roster-wide
+ *  one while showing the same thing. */
+const SCHEDULED_RUN_REACH = 4
+
+/** How many past firings an event-triggered rule gets. Each is its own row, since
+ *  an event rule runs for the one contact whose event fired it. */
+const EVENT_RUN_COUNT = 3
+
+/**
+ * Who a seeded run reached. This is NOT a replay of the engine's conditions — it
+ * narrows the seeded roster by facts this seeder has already written, so that the
+ * run and the tenant on screen agree:
+ *
+ *   • `acquisition_stage` — every contact carries the stage `stageForPoolEntry`
+ *     gave it, so a run can only have reached the ones holding the stage the rule
+ *     filters on.
+ *   • `assign_tag` / `remove_tag` — the tag is the visible evidence of the run,
+ *     and `seedTagsFor` settled it at contact creation; the run keeps the
+ *     contacts whose tags already agree with it. (The stock win-back rule works
+ *     out to exactly the lapsed members, who are the ones seeded 'win-back'.)
+ *
+ * Marks left by the other actions — a field edit, a note, an alert, a group move
+ * — are state a studio can have changed in the days since the run, so their
+ * absence contradicts nothing and they are not narrowed on.
+ */
+function runRecipients(
+  rule: SeededAutomationRule,
+  contacts: LeadContactDef[],
+  contactIds: string[]
+): string[] {
+  if (rule.actions.some((a) => ROSTER_REMOVING_ACTIONS.has(a.type as string))) return []
+  const stage = rule.conditions.find((c) => c.type === 'acquisition_stage')?.value
+  const tagOf = (a: Record<string, unknown>) => a.tag as string | undefined
+  const assigned = rule.actions.filter((a) => a.type === 'assign_tag').map(tagOf)
+  const removed = rule.actions.filter((a) => a.type === 'remove_tag').map(tagOf)
+
+  const reached: string[] = []
+  for (let i = 0; i < contacts.length; i++) {
+    const c = contacts[i]
+    if (stage !== undefined && stageForPoolEntry(c.type, c.totalSessions) !== stage) continue
+    const tags = seedTagsFor(c)
+    if (assigned.some((t) => t && !tags.includes(t))) continue
+    if (removed.some((t) => t && tags.includes(t))) continue
+    reached.push(contactIds[i])
+  }
+  return reached
+}
+
+/**
+ * The runs a rule has behind it. An INACTIVE rule gets none — a studio switched
+ * it off, and "paused, last ran on…" is a state worth showing next to the ones
+ * that are live. A rule that reaches nobody still gets one row: "ran, matched
+ * nobody" and "never ran" are different sentences, and only the first is true
+ * here.
+ *
+ * The tier is the rule's own mechanism, not a label: a daily rule is swept by
+ * runScheduledRules ('scheduled'), a rule carrying `delayMinutes` is re-entered
+ * hours later from Cloud Tasks ('delayed'), and everything else fires inline
+ * ('event'). `inbound_webhook` is excluded from the delayed arm because the
+ * engine refuses a delay for any trigger carrying a caller payload — see
+ * resolveEventDelayMinutes.
+ */
+function seededRuns(
+  rule: SeededAutomationRule,
+  contacts: LeadContactDef[],
+  contactIds: string[]
+): SeededAutomationRun[] {
+  if (!rule.active) return []
+  const reached = runRecipients(rule, contacts, contactIds)
+  if (rule.trigger.type === 'schedule_daily')
+    return [{ tier: 'scheduled', daysAgo: 1, reached: reached.slice(0, SCHEDULED_RUN_REACH) }]
+  const delayed =
+    typeof rule.trigger.delayMinutes === 'number' &&
+    rule.trigger.delayMinutes > 0 &&
+    rule.trigger.type !== 'inbound_webhook'
+  const tier = delayed ? ('delayed' as const) : ('event' as const)
+  if (!reached.length) return [{ tier, daysAgo: 2, reached: [] }]
+  return reached.slice(0, EVENT_RUN_COUNT).map((id, i) => ({
+    tier,
+    daysAgo: 2 + i * 3,
+    reached: [id],
+  }))
+}
+
+/**
+ * Writes the rules, the run history behind them, and the `last_run_at` /
+ * `last_run_sent` pair the rule card reads.
+ *
+ * Those three are written together because the engine writes them together:
+ * `runScheduledRules`, `triggerAutomationRule` and `executeDelayedRule` each add
+ * the log row and stamp the rule in one go. A seed that lands one without the
+ * other produces a rule card and a run history that disagree about whether
+ * anything ever happened.
+ */
+async function writeAutomationRules(
+  teamId: string,
+  rules: SeededAutomationRule[],
+  contacts: LeadContactDef[],
+  contactIds: string[]
+) {
   const teamRef = db.collection('teams').doc(teamId)
+  for (const rule of rules) {
+    const runs = seededRuns(rule, contacts, contactIds)
+    // Runs come back newest-first, and the rule card shows the newest one.
+    const latest = runs[0]
+    const actionsPerContact = rule.actions.length
+
+    await teamRef
+      .collection('automation_rules')
+      .doc(rule.id)
+      .set({
+        name: rule.name,
+        active: rule.active,
+        trigger: rule.trigger,
+        conditions: rule.conditions,
+        actions: rule.actions,
+        ...(rule.systemKey ? { system_key: rule.systemKey } : {}),
+        created_at: ts(daysFromNow(-60)),
+        updated_at: ts(daysFromNow(-5)),
+        ...(latest
+          ? {
+              last_run_at: ts(daysFromNow(-latest.daysAgo)),
+              last_run_sent: latest.reached.length * actionsPerContact,
+            }
+          : {}),
+      })
+
+    // Deterministic ids (the engine uses .add()) so a reseed overwrites its own
+    // rows instead of stacking a second history on top of the first.
+    const shortId = rule.id.startsWith(`${teamId}-`) ? rule.id.slice(teamId.length + 1) : rule.id
+    for (let i = 0; i < runs.length; i++) {
+      const run = runs[i]
+      await teamRef
+        .collection('automation_logs')
+        .doc(`${teamId}-alog-${shortId}-${i}`)
+        .set({
+          rule_id: rule.id,
+          rule_name: rule.name,
+          triggered_at: ts(daysFromNow(-run.daysAgo)),
+          trigger_type: rule.trigger.type,
+          trigger_tier: run.tier,
+          contacts_matched: run.reached.length,
+          actions_executed: run.reached.length * actionsPerContact,
+          actions_failed: 0,
+          // Written even when empty, and never omitted: RunHistoryDialog reads an
+          // ABSENT recipient_ids as "this run predates recipient recording" and
+          // an empty one as "reached nobody". Only the second is ever true here.
+          recipient_ids: run.reached,
+          recipients_total: run.reached.length,
+        })
+    }
+  }
+}
+
+/** The alert presets, written per team so the picker in the rule builder and on
+ *  the contact detail page has something in it. */
+async function writeAlertPresets(teamId: string) {
+  const teamRef = db.collection('teams').doc(teamId)
+  for (const p of LEAD_ALERT_PRESETS) {
+    await teamRef
+      .collection('alert_presets')
+      .doc(`${teamId}-preset-${p.key}`)
+      .set({
+        name: p.name,
+        description: p.description,
+        schedule_type: p.schedule_type,
+        schedule_value: p.schedule_value,
+        message: p.message,
+        show_in_app: p.show_in_app,
+        created_at: ts(daysFromNow(-60)),
+      })
+  }
+}
+
+async function seedAutomations(
+  profile: LeadProfile,
+  teamId: string,
+  language: string,
+  contactIds: string[]
+) {
+  const teamRef = db.collection('teams').doc(teamId)
+  const rules: SeededAutomationRule[] = []
 
   if (profile.automations) {
     const tmplIdOf = (key: string) => `${teamId}-tmpl-${key}`
@@ -2265,6 +2547,11 @@ async function seedAutomations(profile: LeadProfile, teamId: string, language: s
         })
     }
     for (const r of profile.automations.rules) {
+      // db.settings has ignoreUndefinedProperties, so a trigger with no `type`
+      // would DROP the field on both the rule and its log rows rather than fail —
+      // an empty trigger badge on /automations and no way to tell why.
+      if (typeof r.trigger.type !== 'string')
+        throw new Error(`Rule '${r.key}' has no trigger.type in '${profile.id}'`)
       const actions = r.actions.map((a) => {
         const { templateKey, ...rest } = a
         if (!templateKey) return rest
@@ -2272,136 +2559,91 @@ async function seedAutomations(profile: LeadProfile, teamId: string, language: s
           throw new Error(`Unknown templateKey '${templateKey}' in rule '${r.key}'`)
         return { ...rest, templateId: tmplIdOf(templateKey) }
       })
+      rules.push({
+        id: `${teamId}-rule-${r.key}`,
+        name: r.name,
+        active: r.active ?? true,
+        trigger: r.trigger,
+        conditions: r.conditions ?? [],
+        actions,
+        systemKey: r.systemKey,
+      })
+    }
+  } else {
+    const templates = [
+      {
+        id: `${teamId}-tmpl-welcome`,
+        system_key: `lib_trial_welcome:${language}`,
+        name: 'Welcome to your first session',
+        body_mode: 'markdown',
+        language,
+        active: true,
+        subject: 'Welcome to {{teamName}}, {{firstname}}!',
+        body: 'Hi {{firstname}},\n\nWe are delighted to welcome you to **{{teamName}}** for your first session!\n\nArrive a few minutes early so we can welcome you and answer any questions — no experience needed, we will guide you through everything.\n\nWe look forward to meeting you!\n\nThe {{teamName}} team',
+      },
+      {
+        id: `${teamId}-tmpl-winback`,
+        system_key: `lib_winback:${language}`,
+        name: 'We miss you',
+        body_mode: 'markdown',
+        language,
+        active: true,
+        subject: '{{firstname}}, we miss you at {{teamName}}',
+        body: 'Hi {{firstname}},\n\nIt has been a while since your last session. Whenever you are ready to come back, we will be here.\n\nReply to this email and we will help you find a time that fits your schedule.\n\nThe {{teamName}} team',
+      },
+    ]
+    for (const t of templates) {
       await teamRef
-        .collection('automation_rules')
-        .doc(`${teamId}-rule-${r.key}`)
+        .collection('outreach_templates')
+        .doc(t.id)
         .set({
-          name: r.name,
-          active: r.active ?? true,
-          trigger: r.trigger,
-          conditions: r.conditions ?? [],
-          actions,
-          ...(r.systemKey ? { system_key: r.systemKey } : {}),
+          name: t.name,
+          subject: t.subject,
+          body: t.body,
+          body_mode: t.body_mode,
+          language: t.language,
+          active: t.active,
+          system_key: t.system_key,
           created_at: ts(daysFromNow(-60)),
-          updated_at: ts(daysFromNow(-5)),
         })
     }
-    // Always keep the default lead-hygiene rule (same doc id as onTeamCreated).
-    await teamRef.collection('automation_rules').doc('lib_trial_cleanup').set({
-      name: 'Archive stale trial bookings',
-      active: true,
-      system_key: 'lib_trial_cleanup',
-      trigger: { type: 'schedule_daily' },
-      conditions: [
-        { type: 'acquisition_stage', value: 'trial_booked' },
-        { type: 'sessions_attended_exactly', value: 0 },
-        { type: 'days_since_created', value: 30 },
-      ],
-      actions: [{ type: 'archive_contact' }],
-      created_at: ts(daysFromNow(-60)),
-      updated_at: ts(daysFromNow(-5)),
-    })
-    return
+
+    rules.push(
+      {
+        id: `${teamId}-rule-welcome`,
+        name: 'Welcome new trial',
+        active: true,
+        systemKey: 'lib_trial_welcome',
+        trigger: { type: 'contact_created' },
+        // Trial-funnel contacts only — off-funnel entries (shop/form, no stage) must
+        // NOT get the "first session" welcome. (The old contact_type condition is dead;
+        // the engine now fails closed on unknown types.)
+        conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
+        actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
+      },
+      {
+        id: `${teamId}-rule-winback`,
+        name: 'Win back inactive members',
+        active: true,
+        systemKey: 'lib_winback',
+        trigger: { type: 'schedule_daily' },
+        conditions: [
+          { type: 'acquisition_stage', value: 'joined' },
+          { type: 'inactivity_days', value: 30 },
+        ],
+        actions: [
+          { type: 'send_email', templateId: `${teamId}-tmpl-winback` },
+          { type: 'assign_tag', tag: 'win-back' },
+        ],
+      }
+    )
   }
 
-  const templates = [
-    {
-      id: `${teamId}-tmpl-welcome`,
-      system_key: `lib_trial_welcome:${language}`,
-      name: 'Welcome to your first session',
-      body_mode: 'markdown',
-      language,
-      active: true,
-      subject: 'Welcome to {{teamName}}, {{firstname}}!',
-      body: 'Hi {{firstname}},\n\nWe are delighted to welcome you to **{{teamName}}** for your first session!\n\nArrive a few minutes early so we can welcome you and answer any questions — no experience needed, we will guide you through everything.\n\nWe look forward to meeting you!\n\nThe {{teamName}} team',
-    },
-    {
-      id: `${teamId}-tmpl-winback`,
-      system_key: `lib_winback:${language}`,
-      name: 'We miss you',
-      body_mode: 'markdown',
-      language,
-      active: true,
-      subject: '{{firstname}}, we miss you at {{teamName}}',
-      body: 'Hi {{firstname}},\n\nIt has been a while since your last session. Whenever you are ready to come back, we will be here.\n\nReply to this email and we will help you find a time that fits your schedule.\n\nThe {{teamName}} team',
-    },
-  ]
-  for (const t of templates) {
-    await teamRef
-      .collection('outreach_templates')
-      .doc(t.id)
-      .set({
-        name: t.name,
-        subject: t.subject,
-        body: t.body,
-        body_mode: t.body_mode,
-        language: t.language,
-        active: t.active,
-        system_key: t.system_key,
-        created_at: ts(daysFromNow(-60)),
-      })
-  }
+  // Always keep the default lead-hygiene rule, whichever branch wrote the rest.
+  rules.push(TRIAL_CLEANUP_RULE)
 
-  const rules = [
-    {
-      id: `${teamId}-rule-welcome`,
-      name: 'Welcome new trial',
-      active: true,
-      system_key: 'lib_trial_welcome',
-      trigger: { type: 'contact_created' },
-      // Trial-funnel contacts only — off-funnel entries (shop/form, no stage) must
-      // NOT get the "first session" welcome. (The old contact_type condition is dead;
-      // the engine now fails closed on unknown types.)
-      conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
-      actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
-    },
-    {
-      id: `${teamId}-rule-winback`,
-      name: 'Win back inactive members',
-      active: true,
-      system_key: 'lib_winback',
-      trigger: { type: 'schedule_daily' },
-      conditions: [
-        { type: 'acquisition_stage', value: 'joined' },
-        { type: 'inactivity_days', value: 30 },
-      ],
-      actions: [
-        { type: 'send_email', templateId: `${teamId}-tmpl-winback` },
-        { type: 'assign_tag', tag: 'win-back' },
-      ],
-    },
-    {
-      // Default lead-hygiene rule — also installed by the onTeamCreated trigger
-      // (@linyup/shared TRIAL_CLEANUP_RULE). Fixed doc id 'lib_trial_cleanup'
-      // converges with the trigger, so no duplicate whether or not functions run.
-      id: 'lib_trial_cleanup',
-      name: 'Archive stale trial bookings',
-      active: true,
-      system_key: 'lib_trial_cleanup',
-      trigger: { type: 'schedule_daily' },
-      conditions: [
-        { type: 'acquisition_stage', value: 'trial_booked' },
-        { type: 'sessions_attended_exactly', value: 0 },
-        { type: 'days_since_created', value: 30 },
-      ],
-      actions: [{ type: 'archive_contact' }],
-    },
-  ]
-  for (const r of rules) {
-    await teamRef
-      .collection('automation_rules')
-      .doc(r.id)
-      .set({
-        name: r.name,
-        active: r.active,
-        trigger: r.trigger,
-        conditions: r.conditions,
-        actions: r.actions,
-        system_key: r.system_key,
-        created_at: ts(daysFromNow(-60)),
-        updated_at: ts(daysFromNow(-5)),
-      })
-  }
+  await writeAutomationRules(teamId, rules, profile.contacts, contactIds)
+  await writeAlertPresets(teamId)
 }
 
 // ── plugins + storefront content ──────────────────────────────────────────────
