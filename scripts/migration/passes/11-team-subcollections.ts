@@ -4,6 +4,7 @@ import { sourceDb, targetDb } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { CANONICAL_SUBSCRIPTION_TYPES } from '../transforms/subscriptions'
 import { transformTeamWeeklyReport } from '../transforms/team-weekly-reports'
+import { transformAutomationRule } from '../transforms/automation-rules'
 import { memberCapsFor, type MemberRole } from '../../lib/roles'
 
 const TEAM_SUBCOLLECTIONS = [
@@ -21,6 +22,51 @@ const TEAM_SUBCOLLECTIONS = [
   'activity_log',
   'team_weekly_reports',
 ]
+
+// Per-subcollection transforms, applied before a doc is written to target.
+// Pulled out of the write loop so the loop body stays a plain read-check-write.
+function transformSubcollectionDoc(
+  sub: string,
+  teamId: string,
+  docId: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  // team_weekly_reports: remap to the new field contract (drop deprecated fields,
+  // derive new affiliation/subscription counts, remap or omit HMD-specific keys).
+  if (sub === 'team_weekly_reports') return transformTeamWeeklyReport(data)
+
+  // team_members: denormalize the capability-model fields (capabilities/scope)
+  // from the migrated role so the granular-role rules gate consistently.
+  if (sub === 'team_members') {
+    return { ...data, ...memberCapsFor(((data as { role?: string }).role ?? 'viewer') as MemberRole) }
+  }
+
+  // automation_rules: rename the one condition type confirmed to silently break
+  // (see transforms/automation-rules.ts for why); loudly flag — never silently
+  // drop — condition types that have no Linyup equivalent to map to.
+  if (sub === 'automation_rules') {
+    const { data: transformed, unmappedConditionTypes } = transformAutomationRule(data)
+    if (unmappedConditionTypes.length > 0) {
+      console.warn(
+        `    ${teamId}: automation_rules/${docId} ('${(data as { name?: string }).name ?? '?'}') ` +
+          `carries condition type(s) [${unmappedConditionTypes.join(', ')}] retired from Linyup — ` +
+          `migrated as-is but will not fire (the engine fails CLOSED on an unrecognised condition). ` +
+          `Review and rebuild it with today's condition types. See scripts/MIGRATE-HMD.md → "Automation rules".`,
+      )
+    }
+    return transformed
+  }
+
+  return data
+}
+
+// `waiver_policy` is deliberately NOT in this list, and not by omission —
+// hmd-lineup has no waiver or documents concept at all (see
+// firebasePaths.js), so there is no source doc to copy. A migrated team
+// starting with no policy is the honest, safe state: the booking gate fails
+// CLOSED on an absent policy, i.e. "no waiver required," never a silently
+// skipped requirement. See scripts/MIGRATE-HMD.md → "Documents / Waivers".
+// A studio that wants one authors it from /plugins/documents post-migration.
 
 export async function pass11TeamSubcollections(
   cfg: MigrationConfig,
@@ -63,20 +109,8 @@ export async function pass11TeamSubcollections(
           if (existing.exists) { bw.skip(); continue }
         }
 
-        // Apply per-subcollection transforms before writing.
-        // team_weekly_reports: remap to the new field contract (drop deprecated fields,
-        // derive new affiliation/subscription counts, remap or omit HMD-specific keys).
-        // team_members: denormalize the capability-model fields (capabilities/scope)
-        // from the migrated role so the granular-role rules gate consistently.
-        const data =
-          sub === 'team_weekly_reports'
-            ? transformTeamWeeklyReport(d.data() as Record<string, unknown>)
-            : sub === 'team_members'
-              ? {
-                  ...d.data(),
-                  ...memberCapsFor((((d.data() as { role?: string }).role ?? 'viewer') as MemberRole)),
-                }
-              : d.data()
+        // Apply per-subcollection transforms before writing — see transformSubcollectionDoc.
+        const data = transformSubcollectionDoc(sub, teamId, d.id, d.data() as Record<string, unknown>)
         bw.set(tgtRef, data)
 
         if (sub === 'team_members' && adminUid && d.id === adminUid) {
@@ -136,13 +170,23 @@ export async function pass11TeamSubcollections(
     }
     console.log(`    ${teamId}: seeded ${CANONICAL_SUBSCRIPTION_TYPES.length} canonical subscription types`)
 
-    // ── Init a shop by default ────────────────────────────────────────────────
+    // ── Make the Products plugin available (but do NOT flip the shop live) ────
     // Migrated studios land on the studio plan, where the storefront is a core
-    // surface. Install the Products plugin and flag the shop surface live so the
-    // public shop works out of the box. syncTeamPublicProfile also derives shop
-    // from installed_plugins, but setting it here means it's live even before that
-    // recomputes. Merge (not set) on public_profile so the copied HMD profile
-    // fields are preserved; idempotent on re-run.
+    // surface, so install the Products plugin eagerly — it costs nothing and
+    // saves the studio a settings trip once they have something to sell.
+    //
+    // `ActivePublicSurfaces.shop` is NOT "has this team installed the products
+    // plugin" — per its doc comment (packages/shared/src/types/team.ts) it means
+    // "can this studio actually be paid", and `syncTeamPublicProfile` computes it
+    // from `payments_enabled` (a chargeable Stripe Connect account) alone (UX-33).
+    // A fresh HMD migration never carries a Connect account, so hand-writing
+    // `shop: true` here would both misreport a fact the flag doesn't track and
+    // put a page of buy buttons in front of a real customer's visitors that the
+    // callable refuses at checkout — the exact defect UX-33 exists to prevent
+    // (see CLAUDE.md → "Seeded tenants show priced doors ONLY with a Stripe test
+    // account"). Leave the flag alone: the sync trigger sets it correctly the
+    // first time anything writes the team doc, and until then "not computed yet"
+    // is the same safe-closed default every other surface starts from.
     const productsRef = tgt
       .collection('teams').doc(teamId)
       .collection('installed_plugins').doc('products')
@@ -154,11 +198,7 @@ export async function pass11TeamSubcollections(
       installedBy: 'migration',
       installedAt: FieldValue.serverTimestamp(),
     })
-    const publicProfileRef = tgt
-      .collection('teams').doc(teamId)
-      .collection('public_profile').doc(teamId)
-    bw.merge(publicProfileRef, { active_public_surfaces: { shop: true } })
-    console.log(`    ${teamId}: initialized shop (products plugin + shop surface)`)
+    console.log(`    ${teamId}: installed products plugin (shop surface stays gated on a chargeable Connect account)`)
 
     await bw.done()
   }

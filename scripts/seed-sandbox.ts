@@ -78,6 +78,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedSessionSeries, seedTeamGiftCards, seedTeamPlaces } from './lib/fixtures/studio'
 import {
   seedContactNotes,
   seedCoursePurchase,
@@ -3187,6 +3188,13 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   // ── the money ledger (member_subscriptions + member_payments) ──────────────
   // After contacts, whose subscription assignment it reads back. See
   // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
+  // ── studio configuration the audit found missing here (Phase 2 Lanes 2/3) ───
+  // Places + a recurring series + gift cards. See scripts/lib/fixtures/studio.ts
+  // for why gift cards need all four writes rather than just a card.
+  await seedTeamPlaces({ teamId, uid, teamName })
+  await seedSessionSeries({ teamId, uid })
+  await seedTeamGiftCards({ teamId, uid })
+
   await seedTeamMoney({ teamId })
 
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
