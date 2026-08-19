@@ -141,6 +141,7 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | Session-level `checkins` | **Skipped** — session-level checkins (docs without `event.id`) are not migrated; the new schema is event-level only |
 | `saas_subscriptions` | **Not migrated** — create one per team manually after migration |
 | `courses` (Online Courses) | **Not migrated** — net-new in Linyup; create courses in-app post-migration |
+| `documents` / `waiver_policy` (Documents & Waivers) | **Not migrated** — hmd-lineup has no equivalent collection (see `firebasePaths.js`); every migrated team starts with zero documents and no waiver policy. This is a safe default, not a gap to fill: the booking gate (`packages/functions/src/waivers/gate.ts`) fails CLOSED on an absent policy, so a migrated team behaves as "no waiver required" until the studio authors one. Studio authors documents/waivers post-migration via `/plugins/documents`; `scripts/backfill-document-versions.ts` only matters once a document exists to backfill, so migration has nothing to run it against. |
 
 ---
 
@@ -186,6 +187,68 @@ Review those counts against the real source data and adjust `KEYWORD_MAP` in
 
 ---
 
+## Team subcollections pass-through (pass 11) — verified vs UNVERIFIED
+
+Pass 11 copies `team_members`, `public_profile`, `subscription_types`,
+`subscription_transitions`, `outreach_templates`, `automation_rules`,
+`team_invitations`, `contact_requests`, `team_alerts`, `alert_presets`,
+`leaderboard`, `activity_log`, `team_weekly_reports` (list:
+`scripts/migration/passes/11-team-subcollections.ts`); everything except
+`team_members`, `team_weekly_reports` and `automation_rules` is written with
+**no transform at all**, so it carries whatever shape hmd-lineup's app wrote.
+
+Checked against the hmd-lineup source (`C:\git\hmd\hmd-lineup`) for this pass:
+
+- **`subscription_types` — SAFE, verified.** HMD writes `{name, description,
+  source: 'internal'|'aggregator', active, created_at, updated_at}`
+  (`hmd-lineup/src/routes/TeamSettings/components/SubscriptionTypesTab/SubscriptionTypesTab.js`).
+  Every one of those fields still exists on Linyup's `SubscriptionType`
+  (`packages/shared/src/types/contact.ts`), and every field Linyup added since
+  (`public`, `order`, `prices`, `checkout_contact_mode`, `limits`,
+  `payoutPerVisit`, `introOffer`) is optional with a documented "absent ⇒ …"
+  default — `prices` absent literally means "the simple 'just a container'
+  flow" per its own doc comment, which is exactly hmd-lineup's shape. No
+  reader trusts a stored `id` field either (every read site does
+  `{ ...d.data(), id: d.id }`), so the Firestore-assigned doc id round-trips
+  correctly. The one soft gap: an `'aggregator'` type migrates with no
+  `payoutPerVisit`, so the partner-visit payout ledger has no rate until the
+  studio sets one — an absent default, not a wrong one.
+- **`automation_rules` — one confirmed break, fixed; one confirmed gap,
+  flagged, not fixed.** See below.
+
+**Left `UNVERIFIED`** (matches `docs/seed-truth-2026-08.md`'s own verdict —
+confirming these needs the same source-vs-target read this session gave the
+two above, which ran out of scope for this pass): `outreach_templates`,
+`subscription_transitions`, `team_invitations`, `contact_requests`,
+`team_alerts`, `alert_presets`, `leaderboard`, `activity_log`, `public_profile`.
+None of these were found broken — they were simply not checked field-by-field
+against a current Linyup reader in this session.
+
+## Automation rules (pass 11) — one confirmed fix, one confirmed manual-review item
+
+`automation_rules` gets one targeted fix
+(`scripts/migration/transforms/automation-rules.ts`), because it was checked
+against the source app and the failure mode is silent:
+
+- **Renamed**: HMD's `{ type: 'portal_booking_no_show', delay_days }` condition
+  → `bio_link_booking_no_show`. Without this, the rule is dispatched down the
+  wrong path in `automationEngine.ts` (`hasBookingCondition` never matches) and
+  then fails the evaluator's fail-closed default case — the rule migrates,
+  looks normal in the UI, and never fires again. Confirmed against
+  `hmd-lineup/src/routes/TeamSettings/components/OutreachTab/{OutreachTab,systemDefaults}.js`.
+- **Flagged, not fixed**: `contact_type` and `membership_status` conditions
+  (both retired from Linyup along with `Contact.type` / `membership_*`) have no
+  safe automatic mapping and are left in place — the rule keeps failing closed
+  rather than firing to a guessed audience, matching `automationEngine.ts`'s
+  own documented reasoning for that default. The pass logs a `WARN` naming
+  every rule this affects; **HMD's own `SYSTEM_RULES` (`sys_rule_noshow_1d`,
+  `sys_rule_noshow_5d`, …) ship `contact_type` alongside the no-show condition**,
+  so expect this warning on real data. Rebuild the flagged rules by hand with
+  today's condition types (`acquisition_stage`, `has_affiliation`,
+  `affiliation_type`) after migration.
+
+---
+
 ## Affiliations (pass 00 + pass 05)
 
 Phase 2 replaced the single-valued membership fields on the contact doc with a
@@ -222,3 +285,16 @@ team and flags each team `affiliations_enabled: true` (the `org_id` /
 > `email` and `subscription_type_id` — so contacts can log in and unlock gated courses. The
 > verify pass already spot-checks contacts; confirm migrated contacts have a non-empty
 > `email` (required for the passwordless contact login).
+
+> **Documents / Waivers:** hmd-lineup has no `documents` collection and no waiver
+> concept at all, so the migration writes none — this is the correct, honest state
+> for a tenant whose source never had it, not a pass waiting to be written. Do
+> **not** "fix" this by fabricating placeholder documents (a real customer's
+> liability waiver is not something a script should author) or by adding
+> `waiver_policy` to pass 11's `TEAM_SUBCOLLECTIONS` (there is nothing in the
+> source to copy from). It is also inert rather than broken: `enforceWaiverGate`
+> fails CLOSED only on a policy that *requires* a document, so an absent policy
+> means "nothing required," never a silently-skipped requirement. The studio
+> authors their first document (and, if desired, a waiver policy) from
+> `/plugins/documents` after migration; `scripts/backfill-document-versions.ts`
+> is a precondition for *that* publish, not for this migration.
