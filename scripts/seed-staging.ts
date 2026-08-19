@@ -79,6 +79,7 @@ import {
   buildStorefrontPageLinks,
   buildBasicPageLinks,
   seedStoreProducts,
+  seedStorePromoCode,
   seedStoreWebsite,
   seedStoreCourses,
 } from './lib/storefront'
@@ -2046,6 +2047,7 @@ async function seedTeam(opts: TeamSeed) {
       installedDaysAgo: 120,
     }
     await seedStoreProducts(storefront)
+    await seedStorePromoCode(storefront)
     await seedStoreWebsite(storefront)
     await seedStoreCourses(storefront, { includeFree: true })
   }

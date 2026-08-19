@@ -176,6 +176,12 @@ export async function seedMemberSubscription(
   for (let i = 0; i < invoices; i++) {
     const daysAgo = 30 * (i + 1)
     const failed = state === 'past_due' && i === 0
+    // A studio refunding the last month of a member who cancelled is an ordinary
+    // thing that happens, and it is the only way the refund arm of the payments
+    // dashboard and the finance journal has any data behind it. Tying it to the
+    // cancelling member rather than inventing an unrelated refund keeps the two
+    // stories consistent with each other.
+    const refunded = state === 'cancelling' && i === 0
     await seedMemberPayment(teamId, {
       contactId: spec.contactId,
       purpose: 'membership',
@@ -184,7 +190,7 @@ export async function seedMemberSubscription(
       amount: spec.amount,
       currency,
       daysAgo,
-      status: failed ? 'failed' : 'succeeded',
+      status: failed ? 'failed' : refunded ? 'refunded' : 'succeeded',
       idSuffix: `sub${i}`,
       lineItem: {
         kind: 'subscription',

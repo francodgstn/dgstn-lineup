@@ -79,6 +79,7 @@ import {
   buildStorefrontPageLinks,
   buildBasicPageLinks,
   seedStoreProducts,
+  seedStorePromoCode,
   seedStoreWebsite,
   seedStoreCourses,
 } from './lib/storefront'
@@ -1905,6 +1906,7 @@ async function seedTeam(opts: {
       installedDaysAgo: 60,
     }
     await seedStoreProducts(storefront)
+    await seedStorePromoCode(storefront)
     await seedStoreWebsite(storefront)
     // Studio already seeds a full course set above (incl. a purchase course); the
     // organization tier has none of its own, so give it a free + sellable course here.

@@ -68,7 +68,7 @@ import {
   buildAffiliationSummary,
   statusCountsAsActive,
 } from './lib/affiliations'
-import { buildStorefrontPageLinks } from './lib/storefront'
+import { buildStorefrontPageLinks, seedStorePromoCode } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
 import {
   planSeedConnectAccounts,
@@ -85,6 +85,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamMoney } from './lib/fixtures/money'
 import type {
   LeadProfile,
@@ -2633,10 +2634,19 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     .doc(teamId)
     .set({ products: productMirror }, { merge: true })
 
+  // One live promo code, so /offer/promo-codes and a discounted checkout are
+  // both demoable. See scripts/lib/storefront.ts for what is deliberately NOT
+  // seeded alongside it.
+  await seedStorePromoCode({ teamId, uid, currency: profile.currency, installedDaysAgo: 200 })
+
   // ── the money ledger (member_subscriptions + member_payments) ──────────────
   // After contacts, whose subscription assignment it reads back. See
   // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
   await seedTeamMoney({ teamId, currency: profile.currency })
+
+  // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
+  // into the journal through the SAME builders the Connect webhook uses.
+  await seedTeamFinance({ teamId, uid })
 
   // ── documents ──────────────────────────────────────────────────────────────
   // Documents + their frozen v1 snapshots + the public mirrors, through the ONE

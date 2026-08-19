@@ -60,6 +60,7 @@ import {
 import {
   buildStorefrontPageLinks,
   seedStoreProducts,
+  seedStorePromoCode,
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
@@ -77,6 +78,7 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamMoney } from './lib/fixtures/money'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
@@ -3172,12 +3174,17 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
     installedDaysAgo: 200,
   }
   await seedStoreProducts(storefront)
+  await seedStorePromoCode(storefront)
   await seedStoreCourses(storefront, { includeFree: false })
 
   // ── the money ledger (member_subscriptions + member_payments) ──────────────
   // After contacts, whose subscription assignment it reads back. See
   // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
   await seedTeamMoney({ teamId })
+
+  // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
+  // into the journal through the SAME builders the Connect webhook uses.
+  await seedTeamFinance({ teamId, uid })
 
   // ── documents plugin: 3 published documents (terms, privacy, house rules) ──
   const docSeeds = [
