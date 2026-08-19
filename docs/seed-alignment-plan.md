@@ -386,7 +386,13 @@ engine already fails closed there for a recorded reason.
   no automation flows and no gamification, so a sparse free tenant is the
   CORRECT demo of the free plan rather than a missing seed.
 
-- **The pass-through subcollections stay UNVERIFIED** apart from
-  `subscription_types` (checked field-by-field against the HMD source and safe)
-  and `automation_rules` (fixed). The rest are recorded as unchecked rather than
-  implied clear.
+- **The pass-through subcollections are no longer UNVERIFIED.** All of them were
+  checked field-by-field against the HMD source; five were broken and are fixed,
+  and the findings are recorded in `scripts/MIGRATE-HMD.md`. The one worth
+  knowing here: `public_profile` was REMOVED from the pass-through, because
+  hmd-lineup stamps `doc_type: 'team'` while every `/public/{slug}/*` route
+  resolves a studio through `where('type', '==', 'team')` — a raw copy 404s the
+  studio's entire public surface. Nothing is lost by dropping it: HMD's own
+  writer builds that document purely from the team doc, which the migration
+  already copies, so `syncTeamPublicProfile` recomputes it. On a local emulator
+  that means functions must run at least once.

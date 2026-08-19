@@ -136,7 +136,7 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `events` + invitations/attendees | Copied as `scope='org', orgId='hmd', teamId=null` |
 | Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |
 | `referrals` | Copied as-is |
-| Team subcollections | Copied from source; **canonical subscription types are seeded** (see below) |
+| Team subcollections | Copied from source (several with a field-rename/flatten transform — see "Team subcollections pass-through" below); **canonical subscription types are seeded** (see below); `public_profile` is deliberately **not** copied — it's fully derived, see that section |
 | `coach_availability` / `coach_slots` | **Skipped** — appointments were preview-only; configure fresh |
 | Session-level `checkins` | **Skipped** — session-level checkins (docs without `event.id`) are not migrated; the new schema is event-level only |
 | `saas_subscriptions` | **Not migrated** — create one per team manually after migration |
@@ -187,42 +187,34 @@ Review those counts against the real source data and adjust `KEYWORD_MAP` in
 
 ---
 
-## Team subcollections pass-through (pass 11) — verified vs UNVERIFIED
+## Team subcollections pass-through (pass 11) — verified
 
-Pass 11 copies `team_members`, `public_profile`, `subscription_types`,
-`subscription_transitions`, `outreach_templates`, `automation_rules`,
-`team_invitations`, `contact_requests`, `team_alerts`, `alert_presets`,
-`leaderboard`, `activity_log`, `team_weekly_reports` (list:
-`scripts/migration/passes/11-team-subcollections.ts`); everything except
-`team_members`, `team_weekly_reports` and `automation_rules` is written with
-**no transform at all**, so it carries whatever shape hmd-lineup's app wrote.
+Pass 11 copies `team_members`, `subscription_types`, `subscription_transitions`,
+`outreach_templates`, `automation_rules`, `team_invitations`, `contact_requests`,
+`team_alerts`, `alert_presets`, `leaderboard`, `activity_log`,
+`team_weekly_reports` (list: `scripts/migration/passes/11-team-subcollections.ts`).
+`public_profile` is deliberately excluded from this list — see its own section
+below. Every remaining subcollection has now been checked field-by-field
+against a current Linyup reader (a component in `apps/web`/`apps/mobile`, a
+callable in `packages/functions`, or `firestore.rules`), following the same
+source-vs-target read `subscription_types` and `automation_rules` got in an
+earlier session.
 
-Checked against the hmd-lineup source (`C:\git\hmd\hmd-lineup`) for this pass:
-
-- **`subscription_types` — SAFE, verified.** HMD writes `{name, description,
-  source: 'internal'|'aggregator', active, created_at, updated_at}`
-  (`hmd-lineup/src/routes/TeamSettings/components/SubscriptionTypesTab/SubscriptionTypesTab.js`).
-  Every one of those fields still exists on Linyup's `SubscriptionType`
-  (`packages/shared/src/types/contact.ts`), and every field Linyup added since
-  (`public`, `order`, `prices`, `checkout_contact_mode`, `limits`,
-  `payoutPerVisit`, `introOffer`) is optional with a documented "absent ⇒ …"
-  default — `prices` absent literally means "the simple 'just a container'
-  flow" per its own doc comment, which is exactly hmd-lineup's shape. No
-  reader trusts a stored `id` field either (every read site does
-  `{ ...d.data(), id: d.id }`), so the Firestore-assigned doc id round-trips
-  correctly. The one soft gap: an `'aggregator'` type migrates with no
-  `payoutPerVisit`, so the partner-visit payout ledger has no rate until the
-  studio sets one — an absent default, not a wrong one.
-- **`automation_rules` — one confirmed break, fixed; one confirmed gap,
-  flagged, not fixed.** See below.
-
-**Left `UNVERIFIED`** (matches `docs/seed-truth-2026-08.md`'s own verdict —
-confirming these needs the same source-vs-target read this session gave the
-two above, which ran out of scope for this pass): `outreach_templates`,
-`subscription_transitions`, `team_invitations`, `contact_requests`,
-`team_alerts`, `alert_presets`, `leaderboard`, `activity_log`, `public_profile`.
-None of these were found broken — they were simply not checked field-by-field
-against a current Linyup reader in this session.
+| Subcollection | Verdict | Evidence |
+|---|---|---|
+| `team_members` | **SAFE** | HMD writes exactly `{userId, teamId, role, joined, addedBy}` (`hmd-lineup/functions/src/utils/teams.js:219-241`, `addTeamMember`) — a strict subset of Linyup's `TeamMember` (`packages/shared/src/types/team.ts:497-519`). Pass 11 already denormalizes `capabilities`/`scope` via `memberCapsFor` (`scripts/lib/roles.ts`) for every HMD role (`owner`/`manager`/`viewer` ⊂ Linyup's `TeamRole`). `is_coach?`/`roleUpdatedAt?` are optional with documented absent-means-default. |
+| `subscription_types` | **SAFE** | Unchanged from the earlier session's finding — see below this table. |
+| `subscription_transitions` | **SAFE** | HMD's `onContactSubscriptionChange` writes `{contact_id, from_subscription_type_id, from_subscription_type_name, to_subscription_type_id, to_subscription_type_name, recurrence, changed_at, termination_reason, team_id}` (`hmd-lineup/functions/src/onContactSubscriptionChange/index.js:122-133`) — a strict subset of Linyup's port (`packages/functions/src/sync/onContactSubscriptionChange.ts:123-135`, which adds `subscription_price_id`/`amount`). No client anywhere reads this collection today (grepped `apps/web`, `apps/mobile`) — it's a write-only analytics log for a dashboard not yet built — so even the two added fields being absent on migrated rows is inert. |
+| `outreach_templates` | **SAFE** | HMD's default/created shape is `{name, subject, body, body_mode: 'text', type: 'general', language: 'en', active: true}` (`hmd-lineup/src/routes/TeamSettings/components/OutreachTab/OutreachTab.js:265-273`, `DEFAULT_TEMPLATE`). Linyup's `OutreachTemplate` (`apps/web/src/app/[locale]/(auth)/settings/emails/TemplateEditor.tsx:47-56`) is `{id, name, subject, body, body_mode?, language, active, system_key?}` — every HMD field is present under the same name; the extra `type` field is unread, harmless. `system_key` absent on a migrated template correctly sorts it as "custom" (`SettingsEmailsPage`, `settings/emails/page.tsx:59-62`), which is the honest classification — an HMD template is not one of Linyup's canonical stock templates. `sendOutreachEmail` (`packages/functions/src/outreach/index.ts:82-88`) reads `template.active`/`.subject`/`.body`/`.name` — all present. |
+| `automation_rules` | **One confirmed break, fixed; one confirmed gap, flagged, not fixed.** | Unchanged from the earlier session's finding — see "Automation rules" below. |
+| `team_invitations` | **BROKEN, fixed** (`scripts/migration/transforms/team-invitations.ts`) | HMD writes `{email, role, token, status:'pending', message, sentAt, sentBy, sentByName, expiresAt, teamId, teamName}` (`hmd-lineup/functions/src/sendTeamInvitation/index.js:202-214`). Linyup's port (`packages/functions/src/teams/sendTeamInvitation.ts:75-86`) renamed three of those fields: `sentAt`→`created`, `sentBy`→`invitedBy`, `expiresAt`→`expires_at`. Three concrete failures from the mismatch: (1) the members list orders `orderBy('created', 'desc')` (`apps/web/src/app/[locale]/(auth)/settings/members/page.tsx:429`) — Firestore excludes docs missing the ordered field, so a migrated pending invite never appears in the list; (2) `acceptTeamInvitation` reads `invitation.expires_at` to refuse an expired link (`packages/functions/src/teams/acceptTeamInvitation.ts:20`) — absent, so `undefined < new Date()` is always `false` and expiry never fires (fails open); (3) the same callable passes `invitation.invitedBy` straight into `addTeamMember`'s `addedBy` (line 35 → `packages/functions/src/utils/teams.ts:264`, `.set({…, addedBy})`) — `addedBy: undefined` is rejected by the Admin SDK's default `.set()` (no `ignoreUndefinedProperties` configured anywhere in `packages/functions`), so **accepting a migrated invitation throws an uncaught internal error** instead of completing. Fixed by renaming the three fields; `status` was already written under the same name on both sides. |
+| `contact_requests` | **SAFE** | HMD's `requestContactUpdate` and Linyup's port write and read an identical shape: `{contact_id, contact_name, contact_email, team_id, request_type, submitted_data, note, status, requested_at}` (`hmd-lineup/functions/src/requestContactUpdate/index.js:261-271` vs `packages/functions/src/contacts/requestContactUpdate.ts:138-148`); `manageContactUpdateRequest.ts:79-95` reads exactly those field names. |
+| `team_alerts` | **SAFE** | The only writer on either side is the same ported function (`requestContactUpdate`'s `contact_request`-type alert), with an identical shape: `{teamId, message, schedule:{type,value}, alert_type, request_id, contact_id, contact_name, created_at, archived_at}` (`hmd-lineup/functions/src/requestContactUpdate/index.js:288-301` vs `packages/functions/src/contacts/requestContactUpdate.ts:159-169`). No client reader exists on either side (grepped `apps/web`, `apps/mobile`) — `firestore.rules:495,1297` grants read access but nothing queries it yet. |
+| `alert_presets` | **BROKEN, fixed** (`scripts/migration/transforms/alert-presets.ts`) | Same bug class as `contact_alerts` (already fixed in pass 05). HMD's `AlertPresetsTab` writes `{name, description, schedule:{type, value}, message, show_in_app}` (`hmd-lineup/src/routes/TeamSettings/components/AlertPresetsTab/AlertPresetsTab.js:63-72`). Linyup's `AlertPreset`/`AlertPresetRecord` (`apps/web/src/app/[locale]/(auth)/settings/team/page.tsx:127-135`, `apps/web/src/app/[locale]/(auth)/contacts/[id]/page.tsx:753-760`) is flat: `schedule_type`/`schedule_value`, no nested `schedule`. `applyPreset` (`contacts/[id]/page.tsx:3909-3926`) reads `preset.schedule_type`/`.schedule_value` directly and writes them into a new `contact_alerts` doc via the client SDK's `addDoc` — with a migrated preset, `schedule_type` is `undefined`, which the client SDK also rejects on write, so **applying a migrated preset throws** instead of creating the alert. Fixed by flattening `schedule.{type,value}` → `schedule_type`/`schedule_value`, mirroring pass05's `contact_alerts` transform. |
+| `leaderboard` | **BROKEN, fixed** (`scripts/migration/transforms/leaderboard.ts`) | **Not dead weight** — it has no `packages/shared/src/paths.ts` constant only because nobody added one; it's actively written by `packages/functions/src/utils/leaderboard.ts`'s `updateTeamLeaderboard` (called from `onSessionUpdate`, the `recalculateScores` callable, and the scores-rebuild job) and read by the mobile app (`apps/mobile/src/services/firestore.ts`'s `getTeamLeaderboard` → `apps/mobile/src/screens/ProfileScreen.tsx`). HMD's writer denormalizes the retired `type` field onto each entry (`hmd-lineup/functions/src/utils/leaderboard.js:49-56`); Linyup's port denormalizes `acquisition_stage` instead (`packages/functions/src/utils/leaderboard.ts:24-35`), a direct consequence of the `Contact.type` → acquisition-axis change. `ProfileScreen.tsx:729-734` reads exactly `entry.acquisition_stage` to anonymize a still-trial contact's name on the leaderboard — a migrated entry has `type` but never `acquisition_stage`, so a trial contact's real name is shown to every team member and every other contact of the team (`firestore.rules:826-835` grants both read) until the cache is next regenerated, which is **not guaranteed to happen soon** (nothing fires on session/participant create or a check-in — only a session's start/activityId being edited, a manual "Recalculate scores," or the monthly reset). Fixed by mapping `type: 'trial'` → `acquisition_stage: 'trial_attended'` (never `'trial_booked'`, since every entry here already has `current_month_score > 0` by the writer's own query filter — the same "hasAttended" signal `transforms/contacts.ts` uses for that exact distinction) and `'student'`/`'external'` → `'joined'`, mirroring `transforms/contacts.ts`'s own mapping — not a new guess. |
+| `activity_log` | **BROKEN, fixed** (`scripts/migration/transforms/activity-log.ts`) | Every hmd-lineup `logActivity(...)` call site (`trackContacts`, `trackBookings`, `trackSessionParticipants`, `trackEventAttendees`, `verifyMembershipCode`, `dailyTasks/tasks/anonymizeDeletedContacts.js`, both `dailyTasks/tasks/send*AutomationEmails.js` — 8 files checked) stamps the timestamp field as `date`, never `created_at`. Linyup's `ActivityLogEntry` requires `created_at`, and its one reader, `useContactActivityLog` (`apps/web/src/app/[locale]/(auth)/contacts/[id]/page.tsx:585-608`), both orders (`orderBy('created_at', 'desc')`) and filters (`where('created_at', '>=', …)`) on it — Firestore silently excludes any doc missing the field, so **a migrated contact's entire historical activity feed is invisible**, not an error. `event` and `refs.{contact,session,user}` are written under the same names/shapes on both sides (checked `trackContacts.js`, `trackBookings.js`, `trackEventAttendees.js`) — not touched. An `event` value with no `EVENT_META` entry (e.g. HMD's `event_checkin_add`/`event_checkin_delete`) already renders with a graceful fallback icon (`contacts/[id]/page.tsx:3377`), so that mismatch was not worth a mapping decision. Fixed by renaming `date` → `created_at`. |
+| `team_weekly_reports` | **SAFE** (re-verified) | The existing transform (`scripts/migration/transforms/team-weekly-reports.ts`, applied since before this session) already documents every kept/derived/omitted field. Re-checked this session: both HMD (`hmd-lineup/functions/src/utils/users.js`) and Linyup (`packages/functions/src/utils/users.ts:80-86`) write `created_at`/`iso_week` under the same names, and the one reader, `useDashboardData.ts` (`apps/web/src/hooks/useDashboardData.ts`), queries `orderBy('iso_week', 'asc')` and reads exactly the field names the transform keeps (`active_contacts_count`, `contacts_count_by_stage`, `sessions_count`, `sessions_count_by_type`, `bookings_count`, `bookings_count_by_type`, `trial_conversions_count`, `trial_dropouts_count`). No new gap found. |
+| `public_profile` | **BROKEN — not fixed via transform; excluded from the pass instead** | See "public_profile is not migrated" below. |
 
 ## Automation rules (pass 11) — one confirmed fix, one confirmed manual-review item
 
@@ -246,6 +238,71 @@ against the source app and the failure mode is silent:
   so expect this warning on real data. Rebuild the flagged rules by hand with
   today's condition types (`acquisition_stage`, `has_affiliation`,
   `affiliation_type`) after migration.
+
+---
+
+## `public_profile` is not migrated
+
+Pass 11 does **not** copy `teams/{teamId}/public_profile/{teamId}` — it was
+removed from `TEAM_SUBCOLLECTIONS` in `scripts/migration/passes/11-team-subcollections.ts`
+rather than given a transform. This is deliberate, not an oversight:
+
+**Everything on it is a computed mirror, not source data.** Every field is
+derived by the live `syncTeamPublicProfile` trigger
+(`packages/functions/src/sync/syncTeamPublicProfile.ts`) from the team doc
+(already migrated and transformed by `transforms/teams.ts`) plus a handful of
+other already-migrated collections. There is nothing on `public_profile` that
+is unique source data needing preservation — unlike `team_members` or
+`subscription_types`, which store real assignments/config nothing else holds.
+
+**A raw copy is not merely stale, it is query-breaking.** hmd-lineup's shape
+(`hmd-lineup/functions/src/syncTeamPublicProfile/index.js`) predates Linyup's
+public-surface model entirely — nested `settings.bookingFlowType` instead of a
+top-level `bookingSettings`, `portalColors`/`legalLinks`/`consentTexts` that no
+longer exist, no `active_public_surfaces`/`default_public_surface` at all — but
+the one fact that actually breaks something is smaller than any of that: hmd-lineup
+stamps `doc_type: 'team'` on the doc (`syncTeamPublicProfile/index.js:155`),
+**never `type`**. Every `/public/{slug}/*` route resolves the team via
+`PublicTeamProvider.tsx:49-52`'s `collectionGroup('public_profile').where('type',
+'==', 'team')`. A raw hmd-lineup copy never matches that query, so **the
+studio's entire public surface — bio-link, booking, signup, space, events,
+appointments — 404s with "Team not found"** for as long as the raw doc stands.
+
+**Why skipping is the fix, not a transform.** Reproducing the trigger's
+computation in the migration script (link `target` derivation, `active_public_surfaces`'s
+several async existence probes, the kiosk-config-minus-PIN mirror, `noShowPolicy`
+via `resolveNoShowPolicy`, …) would mean re-implementing a few hundred lines of
+business logic a second time, which is exactly the kind of duplication this
+codebase's own conventions (see CLAUDE.md → "A cancellation is a RECORD, not a
+boolean" and the Stripe-fields-move rule) warn is how two copies of one
+computation quietly drift. Not writing the doc at all costs nothing a transform
+would have saved: on staging/production, Cloud Functions are deployed and
+`syncTeamPublicProfile` fires the moment pass02 writes the team doc — its own
+`.set(publicProfile, {merge: true})` (`syncTeamPublicProfile.ts:395`) creates the
+correct doc from scratch, independent of whether pass11 wrote anything there
+first. On the recommended **local emulator** workflow
+(`firebase emulators:start --only auth,firestore,storage` — no functions, see
+CLAUDE.md → "Firebase emulators"), the trigger never runs either way, so a
+migrated team's `/public/{slug}` 404s whether pass11 copies hmd-lineup's raw
+doc or writes nothing — skipping just avoids seeding a world-readable doc with
+a decade-old shape and dead fields that a merge-only writer would otherwise
+never clean up.
+
+**To smoke-test public pages against the local emulator**, start the Functions
+emulator too (`firebase emulators:start --only auth,firestore,storage,functions`)
+so `syncTeamPublicProfile` runs at least once after pass02 writes each team doc,
+or manually re-save the team's General settings post-migration to trigger it.
+
+**One field the trigger does NOT backfill, either way: `bookingSettings`.**
+It is written exclusively by the `updateBookingSettings` callable
+(`packages/functions/src/booking/bookingSettings.ts`) — a manager action, not a
+sync — so a migrated studio's actual booking preferences (flow type, window,
+cutoff, contact CTA) do not carry over automatically even once the trigger has
+run; every booking-flow read falls back to its own sane default (`windowMonths
+?? 2`, `showPhone !== false`, etc. — `apps/web/src/app/[locale]/(public)/public/[slug]/booking/BookingForm.tsx:382-413`),
+so this degrades soft rather than breaking, but a studio that had a non-default
+booking configuration in hmd-lineup should revisit Settings → Booking after
+migration.
 
 ---
 

@@ -5,11 +5,14 @@ import { BatchWriter } from '../batch-writer'
 import { CANONICAL_SUBSCRIPTION_TYPES } from '../transforms/subscriptions'
 import { transformTeamWeeklyReport } from '../transforms/team-weekly-reports'
 import { transformAutomationRule } from '../transforms/automation-rules'
+import { transformTeamInvitation } from '../transforms/team-invitations'
+import { transformActivityLogEntry } from '../transforms/activity-log'
+import { transformAlertPreset } from '../transforms/alert-presets'
+import { transformLeaderboardDoc } from '../transforms/leaderboard'
 import { memberCapsFor, type MemberRole } from '../../lib/roles'
 
 const TEAM_SUBCOLLECTIONS = [
   'team_members',          // must come first — rules depend on this for read access
-  'public_profile',        // portal booking settings (ctaLabel, ctaUrl, bookingSettings)
   'subscription_types',
   'subscription_transitions',
   'outreach_templates',
@@ -22,6 +25,32 @@ const TEAM_SUBCOLLECTIONS = [
   'activity_log',
   'team_weekly_reports',
 ]
+
+// `public_profile` is deliberately NOT in this list. Every field on it is a
+// MIRROR that packages/functions/src/sync/syncTeamPublicProfile.ts derives
+// from the team doc (already migrated + transformed by transforms/teams.ts)
+// plus a few other already-migrated collections — nothing on it is source
+// data unique to this subcollection. hmd-lineup's shape
+// (hmd-lineup/functions/src/syncTeamPublicProfile/index.js) predates
+// Linyup's public-surface model and is not merely missing new fields, it is
+// QUERY-BREAKING: hmd-lineup stamps `doc_type: 'team'`, never `type`, and
+// PublicTeamProvider.tsx:49-52 resolves every /public/{slug}/* route via
+// `collectionGroup('public_profile').where('type', '==', 'team')` — so a raw
+// copy makes the studio's ENTIRE public surface (bio-link, booking, signup,
+// space, events, …) 404 with "Team not found" until the live trigger
+// overwrites it. That trigger fires automatically on staging/prod (Cloud
+// Functions are deployed, and pass02 already wrote the team doc earlier in
+// this run) — merge-writing the correct shape regardless of whether this
+// pass wrote anything first. It does NOT fire in the recommended local
+// emulator workflow (`--only auth,firestore,storage`, no functions), which
+// is precisely why writing hmd-lineup's shape there is worse than writing
+// nothing: nothing leaves the SAME "team not found" state (the query is
+// empty either way) without seeding a world-readable doc with a decade-old
+// shape and dead fields (legalLinks, consentTexts, portalColors,
+// aggregator_subscription_types, …) that would otherwise linger forever
+// under a merge-only writer. See scripts/MIGRATE-HMD.md → "public_profile
+// is not migrated" for the local-emulator workaround and the one field
+// (`bookingSettings`) the trigger does NOT backfill either way.
 
 // Per-subcollection transforms, applied before a doc is written to target.
 // Pulled out of the write loop so the loop body stays a plain read-check-write.
@@ -56,6 +85,30 @@ function transformSubcollectionDoc(
     }
     return transformed
   }
+
+  // team_invitations: rename the three fields hmd-lineup wrote under different
+  // names (sentAt/sentBy/expiresAt) to the ones every current reader expects
+  // (created/invitedBy/expires_at) — see transforms/team-invitations.ts for the
+  // concrete failure mode (list exclusion + an uncaught accept-flow error) each
+  // rename closes.
+  if (sub === 'team_invitations') return transformTeamInvitation(data)
+
+  // activity_log: rename the one timestamp field hmd-lineup wrote under a
+  // different name (date → created_at) — see transforms/activity-log.ts. Every
+  // hmd-lineup writer uses `date`; the migrated feed is otherwise invisible
+  // because Firestore's orderBy/where silently drop docs missing the field.
+  if (sub === 'activity_log') return transformActivityLogEntry(data)
+
+  // alert_presets: flatten the nested schedule object hmd-lineup wrote into the
+  // two top-level fields Linyup reads — the same shape change pass05 already
+  // applies to contact_alerts. See transforms/alert-presets.ts.
+  if (sub === 'alert_presets') return transformAlertPreset(data)
+
+  // leaderboard: rename the one per-entry field the mobile app's trial-name
+  // anonymisation reads (type → acquisition_stage) — see
+  // transforms/leaderboard.ts for why this is a direct consequence of the
+  // doc's own write filter, not a guess.
+  if (sub === 'leaderboard') return transformLeaderboardDoc(data)
 
   return data
 }
