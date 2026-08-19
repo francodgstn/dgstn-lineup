@@ -699,7 +699,15 @@ firebase emulators:start --only auth,firestore,storage
 | `pnpm emulators:seed` | Fresh seed (wipes + re-seeds) | Three plan-tier demo accounts |
 | `pnpm emulators:demo` | `snapshots/demo/` | Persistent demo data for live demo; auto-saved on exit |
 | `pnpm emulators:swimli` | `snapshots/swimli/` | Swimli lead-demo rehearsal snapshot (see "Lead demo tenants") |
-| `pnpm emulators:hmd` | `snapshots/hmd-migration/` | Real HMD data after migration; auth+firestore only |
+| `pnpm emulators:hmd` | `snapshots/hmd-migration/` | Real HMD data after migration (+ the four seed tier teams) |
+| `pnpm emulators:all` | `snapshots/all/` | **Everything at once** — 28 teams: 16 HMD + 4 seed tiers + 6 sandbox sectors + 2 leads |
+
+A firebase emulator export is ALL-OR-NOTHING per project namespace — there is no
+per-collection or per-team export — so `snapshots/hmd-migration/` now also
+contains the four seed tier teams that were in the namespace when it was taken.
+They are rounding error beside HMD's 16 teams and 1632 contacts, and a genuinely
+HMD-only snapshot is still reconstructible at any time by wiping the namespace
+and re-running the migration alone.
 
 `snapshots/` is gitignored. Bootstrap each snapshot once — see `scripts/MIGRATE-HMD.md` for the HMD snapshot and the inline docs in `scripts/emulators-demo.mjs` for the demo snapshot.
 

@@ -30,6 +30,8 @@
     "emulators:export:demo": "firebase emulators:export ./snapshots/demo --project demo-linyup",
     "emulators:export:swimli": "firebase emulators:export ./snapshots/swimli --project demo-linyup",
     "emulators:export:hmd": "firebase emulators:export ./snapshots/hmd-migration --project demo-linyup",
+    "emulators:all": "firebase emulators:start --only auth,firestore,functions,storage --import=./snapshots/all --export-on-exit=./snapshots/all --project demo-linyup",
+    "emulators:export:all": "firebase emulators:export ./snapshots/all --project demo-linyup",
     "stripe:listen": "stripe listen --forward-to localhost:5001/demo-linyup/europe-west6/handleStripeWebhook --forward-connect-to localhost:5001/demo-linyup/europe-west6/handleConnectWebhook",
     "stripe:sync": "tsx scripts/stripe-sync.ts",
     "connect:test-account": "tsx scripts/connect-test-account.ts",
