@@ -58,15 +58,11 @@ import admin from 'firebase-admin'
 import {
   DEFAULT_PAYMENT_MODES,
   DEFAULT_KIOSK_CONFIG,
-  documentVersionId,
   toKioskPublicConfig,
 } from '@linyup/shared'
-// The SAME sanitizer and the SAME hasher the publish callable uses — a seeded
-// version snapshot whose hash was computed by a second implementation would
-// make verify-waiver-ledger report a difference between two hashers rather than
-// a difference in the text.
-import { sanitizeRichHtml } from '../packages/functions/src/utils/sanitizeHtml'
-import { sha256Hex } from '../packages/functions/src/utils/crypto'
+// The document/version/mirror writer moved to lib/fixtures/documents.ts, and the
+// sanitizer + hasher moved with it — a stored fingerprint must not depend on
+// which of four seeders wrote it.
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
@@ -97,6 +93,10 @@ import {
   buildAppointmentSessionDocs,
   buildAppointmentBookingDoc,
 } from './lib/appointments'
+import {
+  seedDocumentsSettings,
+  seedTeamWaiver,
+} from './lib/fixtures/documents'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -2457,15 +2457,7 @@ async function seedDocuments(
   // where the panel writes it and where syncTeamPublicProfile reads it (falling
   // back to the retired plugin config only for teams the backfill has not
   // reached — a fresh seed is never one of those).
-  await db
-    .collection('teams')
-    .doc(teamId)
-    .collection('settings')
-    .doc('documents')
-    .set({
-      signupDocumentIds: [`${teamId}-doc-terms`, `${teamId}-doc-privacy`],
-      updated_at: ts(daysFromNow(-30)),
-    })
+  await seedDocumentsSettings(teamId, [`${teamId}-doc-terms`, `${teamId}-doc-privacy`])
 
   const docSeeds = [
     {
@@ -2473,7 +2465,6 @@ async function seedDocuments(
       title: 'General Terms & Conditions',
       slug: `terms-${teamSlug.slice(0, 4)}`,
       kind: 'terms' as const,
-      source: 'rich_text' as const,
       summary: `The general terms and conditions governing use of ${teamName}'s services.`,
       body: `<h2>General Terms &amp; Conditions</h2>
 <p>These terms govern the relationship between ${teamName} ("the Studio") and its members. By registering, you agree to the following:</p>
@@ -2494,7 +2485,6 @@ async function seedDocuments(
       title: 'Privacy Policy',
       slug: `privacy-${teamSlug.slice(0, 4)}`,
       kind: 'privacy' as const,
-      source: 'rich_text' as const,
       summary: `How ${teamName} collects, uses, and protects your personal data.`,
       body: `<h2>Privacy Policy</h2>
 <p>${teamName} ("we", "us") is committed to protecting your personal data. This policy explains what we collect and how we use it.</p>
@@ -2517,7 +2507,6 @@ async function seedDocuments(
       title: 'House Rules & Regulations',
       slug: `house-rules-${teamSlug.slice(0, 4)}`,
       kind: 'regulation' as const,
-      source: 'rich_text' as const,
       summary: 'Facility rules, hygiene standards, and training etiquette.',
       body: `<h2>House Rules &amp; Regulations</h2>
 <p>To keep our training environment safe and respectful for everyone, please observe the following rules at all times.</p>
@@ -2543,70 +2532,22 @@ async function seedDocuments(
     },
   ]
 
-  const now = ts(new Date())
-  for (const doc of docSeeds) {
-    const docRef = db.collection('documents').doc(doc.id)
-    // A PUBLISHED document has a VERSION. Seeding one without a version would
-    // reproduce, on every fresh emulator run, exactly the state
-    // scripts/backfill-document-versions.ts exists to clear — and
-    // scripts/verify-waiver-ledger.ts would fail on clean seed data, which is
-    // how a real alarm gets learned as noise.
-    const bodyHtml = sanitizeRichHtml(doc.body)
-    await docRef.set({
-      id: doc.id,
-      teamId,
-      title: doc.title,
-      slug: doc.slug,
-      kind: doc.kind,
-      source: doc.source,
-      body: doc.body,
-      summary: doc.summary,
-      status: 'published',
-      isPublic: true,
-      order: doc.order,
-      current_version: 1,
-      min_valid_version: null,
-      created_at: ts(daysFromNow(-25)),
-      updated_at: now,
-      createdBy: uid,
-      archived_at: null,
-    })
-
-    // The IMMUTABLE snapshot the mirror copies and an acceptance would pin.
-    await docRef.collection('versions').doc(documentVersionId(1)).set({
-      teamId,
-      documentId: doc.id,
-      version: 1,
-      kind: doc.kind,
-      title: doc.title,
-      bodyHtml,
-      bodyHash: sha256Hex(bodyHtml),
-      bodyChars: bodyHtml.length,
-      externalUrl: null,
-      mayIncludeMinors: null,
-      publish_outcome: 'silent',
-      supersedes: null,
-      published_at: now,
-      published_by: uid,
-      published_by_name: 'Seed',
-      backfilled_at: null,
-    })
-
-    // World-readable public_profile summary (what syncDocumentPublicProfile writes)
-    await docRef.collection('public_profile').doc(doc.id).set({
-      type: 'document',
-      teamId,
-      slug: doc.slug,
-      title: doc.title,
-      kind: doc.kind,
-      source: doc.source,
-      summary: doc.summary,
-      bodyHtml,
-      bodyHash: sha256Hex(bodyHtml),
-      version: 1,
-      updated_at: now,
-    })
-  }
+  // The documents + the studio's liability WAIVER, each with its frozen v1
+  // snapshot and public mirror, through the ONE shared writer
+  // (scripts/lib/fixtures/documents.ts). This block used to live here and was
+  // copied — divergently — into the other three seeders.
+  //
+  // The waiver is what makes teams/{teamId}/waiver_policy/current exist. Without
+  // it the booking gate fails CLOSED onto "nothing to sign", so every seeded
+  // tenant silently behaved as if the whole feature were switched off.
+  await seedTeamWaiver({
+    teamId,
+    uid,
+    teamName,
+    teamSlug,
+    otherDocuments: docSeeds,
+    createdDaysAgo: 25,
+  })
 }
 
 // ── free-plan team ────────────────────────────────────────────────────────────

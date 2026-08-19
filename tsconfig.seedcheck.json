@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": { "@linyup/shared": ["packages/shared/src/index.ts"] }
+  },
+  "include": ["scripts/seed-emulator.ts", "scripts/seed-sandbox.ts", "scripts/seed-staging.ts", "scripts/seed-lead.ts", "scripts/lib/**/*.ts"]
+}
