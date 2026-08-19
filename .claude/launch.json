@@ -4,59 +4,102 @@
     {
       "name": "emulators",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["emulators:start"],
+      "runtimeArgs": [
+        "emulators:start"
+      ],
       "port": 4000,
       "autoPort": false
     },
     {
       "name": "emulators-seed",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["emulators:seed"],
+      "runtimeArgs": [
+        "emulators:seed"
+      ],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "emulators-all",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "emulators:all"
+      ],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "emulators-hmd",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "emulators:hmd"
+      ],
       "port": 4000,
       "autoPort": false
     },
     {
       "name": "stripe-listen",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["stripe:listen"],
+      "runtimeArgs": [
+        "stripe:listen"
+      ],
       "port": 5001,
       "autoPort": true
     },
     {
       "name": "landing",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@linyup/landing", "exec", "astro", "dev", "--port", "4322"],
+      "runtimeArgs": [
+        "--filter",
+        "@linyup/landing",
+        "exec",
+        "astro",
+        "dev",
+        "--port",
+        "4322"
+      ],
       "port": 4322
     },
     {
       "name": "emulators-worktree",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
-        "exec", "firebase", "emulators:start",
-        "--config", "firebase.worktree.json",
-        "--only", "auth,firestore,functions,storage",
-        "--project", "demo-linyup"
+        "exec",
+        "firebase",
+        "emulators:start",
+        "--config",
+        "firebase.worktree.json",
+        "--only",
+        "auth,firestore,functions,storage",
+        "--project",
+        "demo-linyup"
       ],
       "port": 14000
     },
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:web"],
+      "runtimeArgs": [
+        "dev:web"
+      ],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "admin",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:admin"],
+      "runtimeArgs": [
+        "dev:admin"
+      ],
       "port": 3002,
       "autoPort": true
     },
     {
       "name": "admin-sandbox",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:admin:sandbox"],
+      "runtimeArgs": [
+        "dev:admin:sandbox"
+      ],
       "port": 3002,
       "autoPort": true
     }
