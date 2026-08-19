@@ -85,6 +85,13 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import {
+  seedContactNotes,
+  seedCoursePurchase,
+  seedDynamicContactGroup,
+  seedEventProgram,
+  seedSessionWaitlist,
+} from './lib/fixtures/engagement'
 import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamMoney } from './lib/fixtures/money'
 import type {
@@ -2647,6 +2654,15 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
   // into the journal through the SAME builders the Connect webhook uses.
   await seedTeamFinance({ teamId, uid })
+
+  // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
+  // Each of these was a shipped feature with zero data behind it on every
+  // surface. See scripts/lib/fixtures/engagement.ts.
+  await seedContactNotes(teamId, uid)
+  await seedDynamicContactGroup(teamId, uid)
+  await seedEventProgram(teamId, uid)
+  await seedSessionWaitlist({ teamId })
+  await seedCoursePurchase(teamId)
 
   // ── documents ──────────────────────────────────────────────────────────────
   // Documents + their frozen v1 snapshots + the public mirrors, through the ONE

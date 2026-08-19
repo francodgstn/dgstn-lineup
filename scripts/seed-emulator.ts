@@ -98,6 +98,13 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import {
+  seedContactNotes,
+  seedCoursePurchase,
+  seedDynamicContactGroup,
+  seedEventProgram,
+  seedSessionWaitlist,
+} from './lib/fixtures/engagement'
 import { seedTeamMoney } from './lib/fixtures/money'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
@@ -1925,6 +1932,15 @@ async function seedTeam(opts: {
   // inventing a membership for someone the studio never sold one to would put a
   // row on /payments that contradicts the contact's own profile.
   await seedTeamMoney({ teamId })
+
+  // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
+  // Each of these was a shipped feature with zero data behind it on every
+  // surface. See scripts/lib/fixtures/engagement.ts.
+  await seedContactNotes(teamId, uid)
+  await seedDynamicContactGroup(teamId, uid)
+  await seedEventProgram(teamId, uid)
+  await seedSessionWaitlist({ teamId })
+  await seedCoursePurchase(teamId)
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)

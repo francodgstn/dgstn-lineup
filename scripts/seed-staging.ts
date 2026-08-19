@@ -93,6 +93,13 @@ import {
   seedDocumentsSettings,
   seedTeamWaiver,
 } from './lib/fixtures/documents'
+import {
+  seedContactNotes,
+  seedCoursePurchase,
+  seedDynamicContactGroup,
+  seedEventProgram,
+  seedSessionWaitlist,
+} from './lib/fixtures/engagement'
 import { seedTeamMoney } from './lib/fixtures/money'
 
 const PROJECT_ID = 'linyup-staging'
@@ -2027,6 +2034,15 @@ async function seedTeam(opts: TeamSeed) {
   // reads back. See scripts/lib/fixtures/money.ts for why seeded ledger rows
   // exist at all.
   await seedTeamMoney({ teamId })
+
+  // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
+  // Each of these was a shipped feature with zero data behind it on every
+  // surface. See scripts/lib/fixtures/engagement.ts.
+  await seedContactNotes(teamId, uid)
+  await seedDynamicContactGroup(teamId, uid)
+  await seedEventProgram(teamId, uid)
+  await seedSessionWaitlist({ teamId })
+  await seedCoursePurchase(teamId)
 
   await seedDocuments(teamId, teamSlug, teamName, uid)
 
