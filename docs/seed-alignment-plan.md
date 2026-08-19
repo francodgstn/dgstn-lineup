@@ -334,31 +334,50 @@ from:
   no class could be full — the precondition for the waitlist gap, sitting behind
   it unremarked. The waitlist fixture seeds a capacity when a session has none.
 
-## What Phase 2 deliberately did NOT close
+## The lanes — closed 2026-08-19
 
-Named so they are deferred rather than silently dropped. All are per-surface
-lane work (Lanes 1-5), which means editing one big seeder file each — the
-contention this plan cuts lanes to avoid.
+Phase 2's per-surface lanes ran in parallel, one owner per file, and closed most
+of the list this section used to hold.
 
-- **Gift cards on sandbox and staging.** The emulator has a demo card and the
-  lead engine seeds one from a profile; the other two do not. It is not a
-  storefront-helper one-liner: `syncTeamPublicProfile` refuses to mirror
-  `giftCards.enabled` without the plugin, so the team document's
-  `settings.giftCards` and its public-profile mirror have to be written at team
-  creation, in each seeder.
-- **`team_places` and `session_series`** on emulator, sandbox and staging —
-  `/schedule/places` is empty and every session looks like a one-off, which is
-  the most common thing a studio asks about.
-- **The emulator's per-surface list**: `contact_alerts`, `monthly_scores`,
-  `team_activity_log`, `team_weekly_reports`, and the whole automations set
-  (`outreach_templates`, `automation_rules`, `automation_logs`,
-  `alert_presets`) — all present on sandbox and staging and absent here.
-- **`automation_logs` and `alert_presets` on lead** — rules that have apparently
-  never run, and an empty presets picker.
-- **Lane 5 (migration) entirely.** Including the two findings the audit rates
-  highest there: migrated tenants get no documents at all, so no versions and no
-  waiver policy; and `passes/11-team-subcollections.ts` switches the shop surface
-  live while writing no product documents.
+| Lane | File | What landed |
+|---|---|---|
+| 1 | `seed-emulator.ts` | `activity_log`, `monthly_scores`, `contact_alerts`, a year of `team_weekly_reports`, the automations set — plus the `gamification` plugin, without which the seeded scores would have produced a leaderboard nobody can open |
+| 2+3 | `seed-sandbox.ts`, `seed-staging.ts` | places (with the public `mainAddress` mirror), a recurring session series, gift cards — via `lib/fixtures/studio.ts`, because both lanes needed the same helper |
+| 4 | `seed-lead.ts` | `automation_logs` derived from facts the seeder already wrote, and `alert_presets` that are now the ONE definition of the alerts seeded further up |
+| 5 | `scripts/migration/**` | two real defects — see below |
+
+**Lane 5 found bugs, not gaps.** The migration hand-wrote
+`active_public_surfaces.shop = true`, but that flag means "can this studio BE
+PAID" (`shopActive = paymentsEnabled` in `syncTeamPublicProfile`), whose own
+comment records that an earlier version lit it from plugins and put buy buttons
+in front of visitors that the callable refused — UX-33. And a migrated
+automation rule silently never fired: hmd-lineup writes
+`portal_booking_no_show`, the canonical name is `bio_link_booking_no_show`, and
+the engine's legacy alias checks for `portal_booking_pending`, a name hmd-lineup
+itself already retired. Both fixed; the retired `contact_type` /
+`membership_status` conditions are deliberately NOT guessed at, because the
+engine already fails closed there for a recorded reason.
+
+## What is still open
+
+- **`seedFreeTeam` and `seedOrg` in the emulator** get none of Lane 1's work.
+  Free is the at-cap demo, org the multi-team shell; a year of history on either
+  is beyond that lane.
+- **Persistent SNAPSHOTS are stored data and no code change reaches them.**
+  `pnpm emulators:demo` / `:swimli` / `:hmd` import from `snapshots/`, which is
+  gitignored. `snapshots/hmd-migration/` in particular was produced by the OLD
+  migration, so it still carries the forced-live shop and the broken automation
+  rule Lane 5 fixed. Re-bootstrap each snapshot to pick any of this up.
 - **`min_valid_version` / a second document version**, so no seeded signature is
   ever `superseded`. `raiseWaiverFloor` exists and is documented for whoever
   wants it; producing the state needs a v2 to raise the floor to.
+- **NEW DUPLICATION, created by these lanes.** `monthly_scores`,
+  `contact_alerts` and the `seedAutomations` block are now near-verbatim in the
+  emulator, sandbox and staging seeders — copy-pasted, not yet divergent. This
+  is the same shape as the documents block that started this phase, caught
+  before it drifted. `lib/fixtures/engagement.ts` plus a small date-label helper
+  would collapse it.
+- **The pass-through subcollections stay UNVERIFIED** apart from
+  `subscription_types` (checked field-by-field against the HMD source and safe)
+  and `automation_rules` (fixed). The rest are recorded as unchecked rather than
+  implied clear.
