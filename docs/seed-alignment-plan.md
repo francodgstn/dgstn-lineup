@@ -360,24 +360,39 @@ engine already fails closed there for a recorded reason.
 
 ## What is still open
 
-- **`seedFreeTeam` and `seedOrg` in the emulator** get none of Lane 1's work.
-  Free is the at-cap demo, org the multi-team shell; a year of history on either
-  is beyond that lane.
 - **Persistent SNAPSHOTS are stored data and no code change reaches them.**
   `pnpm emulators:demo` / `:swimli` / `:hmd` import from `snapshots/`, which is
   gitignored. `snapshots/hmd-migration/` in particular was produced by the OLD
-  migration, so it still carries the forced-live shop and the broken automation
-  rule Lane 5 fixed. Re-bootstrap each snapshot to pick any of this up.
-- **`min_valid_version` / a second document version**, so no seeded signature is
-  ever `superseded`. `raiseWaiverFloor` exists and is documented for whoever
-  wants it; producing the state needs a v2 to raise the floor to.
-- **NEW DUPLICATION, created by these lanes.** `monthly_scores`,
-  `contact_alerts` and the `seedAutomations` block are now near-verbatim in the
-  emulator, sandbox and staging seeders — copy-pasted, not yet divergent. This
-  is the same shape as the documents block that started this phase, caught
-  before it drifted. `lib/fixtures/engagement.ts` plus a small date-label helper
-  would collapse it.
-- **The pass-through subcollections stay UNVERIFIED** apart from
-  `subscription_types` (checked field-by-field against the HMD source and safe)
-  and `automation_rules` (fixed). The rest are recorded as unchecked rather than
-  implied clear.
+  migration, so it still carries the forced-live shop and the never-firing
+  automation rule Lane 5 fixed. **Re-bootstrap each snapshot to pick any of this
+  up** — nothing in this repo can do it for you.
+
+## Closed since, with what closing it taught
+
+- **The duplication these lanes created is gone.** `monthly_scores`,
+  `contact_alerts` and `seedAutomations` now live once in
+  `lib/fixtures/automations.ts`, with the VOCABULARY (`martial_arts` vs
+  `generic`) as the only parameter — 784 lines out, 33 in. The copies had already
+  diverged on something real: a `datetime` contact alert carried an actual
+  instant in one seeder and `null` in another, which is a dated reminder with no
+  date.
+- **`superseded` is now reachable.** It could not be faked, because supersession
+  is derived rather than stored — so the fixture publishes a real second version
+  with `require_resign`. The precedence order (none → revoked → superseded →
+  expired → valid) decides the fixture's shape: a v1 row that is also expired
+  reads as superseded and the expiry never shows, so only ONE row stays at v1.
+- **`seedFreeTeam` and `seedOrg` needed nothing.** Recorded here because it looks
+  like a gap and is not: `PLAN_FEATURES.free` carries no `outreach_templates`,
+  no automation flows and no gamification, so a sparse free tenant is the
+  CORRECT demo of the free plan rather than a missing seed.
+
+- **The pass-through subcollections are no longer UNVERIFIED.** All of them were
+  checked field-by-field against the HMD source; five were broken and are fixed,
+  and the findings are recorded in `scripts/MIGRATE-HMD.md`. The one worth
+  knowing here: `public_profile` was REMOVED from the pass-through, because
+  hmd-lineup stamps `doc_type: 'team'` while every `/public/{slug}/*` route
+  resolves a studio through `where('type', '==', 'team')` — a raw copy 404s the
+  studio's entire public surface. Nothing is lost by dropping it: HMD's own
+  writer builds that document purely from the team doc, which the migration
+  already copies, so `syncTeamPublicProfile` recomputes it. On a local emulator
+  that means functions must run at least once.

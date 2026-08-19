@@ -109,6 +109,11 @@ import {
   seedTeamWaiver,
 } from './lib/fixtures/documents'
 import {
+  seedAutomations,
+  seedContactAlerts,
+  seedMonthlyScores,
+} from './lib/fixtures/automations'
+import {
   seedContactNotes,
   seedCoursePurchase,
   seedDynamicContactGroup,
@@ -207,18 +212,6 @@ function mondayOfWeeksAgo(n: number): Date {
   const day = d.getDay()
   d.setDate(d.getDate() - (day === 0 ? 6 : day - 1) - n * 7)
   d.setHours(0, 0, 0, 0)
-  return d
-}
-
-// Doc id + `month` field of a monthly_scores row — the format
-// utils/scoreComputation.ts queries on.
-function monthLabel(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function monthsAgo(n: number): Date {
-  const d = new Date()
-  d.setMonth(d.getMonth() - n)
   return d
 }
 
@@ -1628,34 +1621,9 @@ async function seedTeam(opts: {
   // ── monthly scores (gamification) — last 4 months per attending contact ──────
   // Follows the team's gamification switch rather than the plan: the coach tier
   // ships the feature off, and scores under a disabled scoreboard would be data
-  // no screen ever explains. Shape mirrors what recalculateMonthlyScores writes
-  // (functions/src/utils/scoreComputation.ts) — `final_score` is `total_points`
-  // clamped by the team's own monthly_cap, so the cap is visibly doing something.
+  // no screen ever explains.
   if (gamificationSettings.enabled) {
-    for (let i = 0; i < contactSeeds.length; i++) {
-      const c = contactSeeds[i]
-      if (c.totalSessions === 0) continue
-      const contactId = `${teamId}-contact-${i.toString().padStart(3, '0')}`
-      for (let m = 0; m < 4; m++) {
-        const md = monthsAgo(m)
-        const label = monthLabel(md)
-        const sessions = Math.floor(seededRand(`${contactId}mscount${m}`) * 12)
-        const totalPoints = sessions * (10 + Math.floor(seededRand(`${contactId}mp${m}`) * 6))
-        await db
-          .collection('contacts')
-          .doc(contactId)
-          .collection('monthly_scores')
-          .doc(`${contactId}-${label}`)
-          .set({
-            month: label,
-            team_id: teamId,
-            total_points: totalPoints,
-            final_score: Math.min(totalPoints, gamificationSettings.monthly_cap),
-            sessions_count: sessions,
-            updated_at: ts(md),
-          })
-      }
-    }
+    await seedMonthlyScores({ teamId, monthlyCap: gamificationSettings.monthly_cap })
   }
 
   // ── contact alerts — the coach's own reminders on a person ───────────────────
@@ -1663,45 +1631,7 @@ async function seedTeam(opts: {
   // `ContactAlert` shape the admin contact page writes; the server writers use a
   // nested `schedule` map and the page normalises both on read. Seeding the flat
   // one keeps the demo on the shape the admin UI round-trips.
-  const alertDefs = [
-    {
-      schedule_type: 'sessions_countdown' as const,
-      schedule_value: 10,
-      message: 'Next grading approaching — review the curriculum together.',
-      show_in_app: true,
-    },
-    {
-      schedule_type: 'datetime' as const,
-      schedule_value: ts(daysFromNow(7)),
-      message: 'Membership renewal due this week.',
-      show_in_app: true,
-    },
-    {
-      // show_in_app false = a private coach note, invisible in the member app.
-      schedule_type: 'sessions_countdown' as const,
-      schedule_value: 50,
-      message: '50-session milestone — celebrate in class!',
-      show_in_app: false,
-    },
-  ]
-  for (let i = 0; i < 4; i++) {
-    const def = alertDefs[i % alertDefs.length]
-    const contactId = `${teamId}-contact-${i.toString().padStart(3, '0')}`
-    await db
-      .collection('contacts')
-      .doc(contactId)
-      .collection('contact_alerts')
-      .doc(`${contactId}-alert-0`)
-      .set({
-        teamId,
-        schedule_type: def.schedule_type,
-        schedule_value: def.schedule_value,
-        message: def.message,
-        show_in_app: def.show_in_app,
-        archived_at: null,
-        created_at: ts(daysFromNow(-3)),
-      })
-  }
+  await seedContactAlerts({ teamId, vocabulary: 'martial_arts' })
 
   // ── goals & tasks (appointment data) ────────────────────────────────────────────
   const goalDefs = [
@@ -2109,7 +2039,7 @@ async function seedTeam(opts: {
   // Studio features, so the coach tier's empty /automations is the honest tier
   // difference, not a gap) ────────────────────────────────────────────────────
   if (plan !== 'coach') {
-    await seedAutomations(teamId)
+    await seedAutomations({ teamId, vocabulary: 'martial_arts' })
   }
 
   // ── team weekly reports — a year of history behind the dashboard trends ──────
@@ -2271,195 +2201,6 @@ async function seedKiosk(teamId: string, uid: string) {
 // them as English — hence the `:en` template variants the library dialog looks
 // for when matching an installed template to a library item.
 
-async function seedAutomations(teamId: string) {
-  const teamRef = db.collection('teams').doc(teamId)
-  const language = 'en'
-
-  // outreach templates
-  const templates = [
-    {
-      id: `${teamId}-tmpl-welcome`,
-      system_key: `lib_trial_welcome:${language}`,
-      name: 'Welcome to your first session',
-      subject: 'Welcome to {{teamName}}, {{firstname}}!',
-      body: 'Hi {{firstname}},\n\nWe are delighted to welcome you to **{{teamName}}** for your first session!\n\nArrive a few minutes early so we can welcome you and answer any questions — no experience needed, we will guide you through everything.\n\nWe look forward to meeting you!\n\nThe {{teamName}} team',
-    },
-    {
-      id: `${teamId}-tmpl-winback`,
-      system_key: `lib_winback:${language}`,
-      name: 'We miss you',
-      subject: '{{firstname}}, we miss you at {{teamName}}',
-      body: 'Hi {{firstname}},\n\nIt has been a while since your last session. Whenever you are ready to come back, we will be here.\n\nReply to this email and we will help you find a time that fits your schedule.\n\nThe {{teamName}} team',
-    },
-  ]
-  for (const t of templates) {
-    await teamRef
-      .collection('outreach_templates')
-      .doc(t.id)
-      .set({
-        name: t.name,
-        subject: t.subject,
-        body: t.body,
-        body_mode: 'markdown',
-        language,
-        active: true,
-        system_key: t.system_key,
-        created_at: ts(daysFromNow(-60)),
-      })
-  }
-
-  // alert presets — the pickable shapes behind the contact-alert dialog, and the
-  // targets of a rule's `create_alert` action.
-  const presets = [
-    {
-      id: `${teamId}-preset-grading`,
-      name: 'Grading reminder',
-      description: 'Fires 10 sessions before the next grading window.',
-      schedule_type: 'sessions_countdown',
-      schedule_value: 10,
-      message: 'Grading is coming up — review the curriculum together.',
-      show_in_app: true,
-    },
-    {
-      id: `${teamId}-preset-renewal`,
-      name: 'Membership renewal',
-      description: 'One-off reminder on a chosen date.',
-      schedule_type: 'datetime',
-      // A datetime preset carries no value — the coach picks the date when
-      // applying it to a person.
-      schedule_value: null,
-      message: 'Membership renewal is due — confirm payment details.',
-      show_in_app: true,
-    },
-  ]
-  for (const p of presets) {
-    await teamRef
-      .collection('alert_presets')
-      .doc(p.id)
-      .set({
-        name: p.name,
-        description: p.description,
-        schedule_type: p.schedule_type,
-        schedule_value: p.schedule_value,
-        message: p.message,
-        show_in_app: p.show_in_app,
-        created_at: ts(daysFromNow(-60)),
-      })
-  }
-
-  // automation rules
-  const rules = [
-    {
-      id: `${teamId}-rule-welcome`,
-      name: 'Welcome new trial',
-      active: true,
-      system_key: 'lib_trial_welcome',
-      trigger: { type: 'contact_created' },
-      // Trial-funnel contacts only — off-funnel entries (shop/form, no stage) must
-      // NOT get the "first session" welcome (engine fails closed on unknown types).
-      conditions: [{ type: 'acquisition_stage', value: 'trial_booked' }],
-      actions: [{ type: 'send_email', templateId: `${teamId}-tmpl-welcome` }],
-    },
-    {
-      id: `${teamId}-rule-winback`,
-      name: 'Win back inactive members',
-      active: true,
-      system_key: 'lib_winback',
-      trigger: { type: 'schedule_daily' },
-      conditions: [
-        { type: 'acquisition_stage', value: 'joined' },
-        { type: 'inactivity_days', value: 30 },
-      ],
-      actions: [
-        { type: 'send_email', templateId: `${teamId}-tmpl-winback` },
-        { type: 'assign_tag', tag: 'win-back' },
-      ],
-    },
-    {
-      // Paused on purpose: the list needs an inactive row or the active/paused
-      // distinction never shows up in a demo.
-      id: `${teamId}-rule-milestone`,
-      name: 'Celebrate 50-session milestone',
-      active: false,
-      system_key: 'lib_milestone_50',
-      trigger: { type: 'session_ended' },
-      conditions: [{ type: 'sessions_attended_exactly', value: 50 }],
-      actions: [
-        { type: 'create_alert', presetId: `${teamId}-preset-grading` },
-        { type: 'log_activity', message: '{{firstname}} reached 50 sessions' },
-      ],
-    },
-    {
-      // The default lead-hygiene rule onTeamCreated provisions. Taken from the
-      // shared constant and written at its fixed doc id, so the seed CONVERGES
-      // with the trigger instead of racing it into a duplicate.
-      id: TRIAL_CLEANUP_RULE.system_key,
-      name: TRIAL_CLEANUP_RULE.name,
-      active: true,
-      system_key: TRIAL_CLEANUP_RULE.system_key,
-      trigger: TRIAL_CLEANUP_RULE.trigger,
-      conditions: TRIAL_CLEANUP_RULE.conditions,
-      actions: TRIAL_CLEANUP_RULE.actions,
-    },
-  ]
-  for (const r of rules) {
-    await teamRef
-      .collection('automation_rules')
-      .doc(r.id)
-      .set({
-        name: r.name,
-        active: r.active,
-        trigger: r.trigger,
-        conditions: r.conditions,
-        actions: r.actions,
-        system_key: r.system_key,
-        created_at: ts(daysFromNow(-60)),
-        updated_at: ts(daysFromNow(-5)),
-      })
-  }
-
-  // automation logs — the run history behind each rule's "last run" line. Without
-  // them the rules read as though they have never fired.
-  const logs = [
-    {
-      id: `${teamId}-alog-0`,
-      rule_id: `${teamId}-rule-welcome`,
-      rule_name: 'Welcome new trial',
-      trigger_type: 'contact_created',
-      trigger_tier: 'event',
-      contacts_matched: 1,
-      actions_executed: 1,
-      actions_failed: 0,
-      days: 1,
-    },
-    {
-      id: `${teamId}-alog-1`,
-      rule_id: `${teamId}-rule-winback`,
-      rule_name: 'Win back inactive members',
-      trigger_type: 'schedule_daily',
-      trigger_tier: 'scheduled',
-      contacts_matched: 3,
-      actions_executed: 6,
-      actions_failed: 0,
-      days: 2,
-    },
-  ]
-  for (const l of logs) {
-    await teamRef
-      .collection('automation_logs')
-      .doc(l.id)
-      .set({
-        rule_id: l.rule_id,
-        rule_name: l.rule_name,
-        triggered_at: ts(daysFromNow(-l.days)),
-        trigger_type: l.trigger_type,
-        trigger_tier: l.trigger_tier,
-        contacts_matched: l.contacts_matched,
-        actions_executed: l.actions_executed,
-        actions_failed: l.actions_failed,
-      })
-  }
-}
 
 // ── online courses seed ─────────────────────────────────────────────────────────
 
