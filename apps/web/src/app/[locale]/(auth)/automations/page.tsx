@@ -102,6 +102,7 @@ import { RunHistoryDialog } from './RunHistoryDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, flattenGroupTree, isDynamicGroup } from '@/plugins/contact-groups/hooks'
 import type { ContactGroup } from '@linyup/shared'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -544,9 +545,17 @@ function RuleCard({
   onToggle,
   onRunNow,
   onDelete,
+  autoRun,
 }: {
   rule: AutomationRule
   teamId: string
+  /**
+   * Open this card's RUN confirmation on mount — the dashboard's quick action
+   * arrives as `/automations?run={ruleId}`. It opens the SAME dialog the "Run
+   * now" button opens, never the callable: a quick action must not be able to
+   * fire an automation at real contacts without the preview in front of it.
+   */
+  autoRun?: boolean
   templates: OutreachTemplate[]
   alertPresets: AlertPreset[]
   subscriptionTypes: SubscriptionType[]
@@ -561,7 +570,9 @@ function RuleCard({
   // Both entries into PreviewRunDialog: 'preview' is read-only and available on
   // a PAUSED rule too (the moment before arming it is exactly when "who does
   // this hit?" matters); 'run' is the confirmation that used to not exist.
-  const [previewMode, setPreviewMode] = useState<'preview' | 'run' | null>(null)
+  const [previewMode, setPreviewMode] = useState<'preview' | 'run' | null>(
+    autoRun ? 'run' : null
+  )
   // The other half of the same question. Preview answers "who does this hit if it
   // ran now"; history answers "did it run, when, and how many did it reach" —
   // which for a DELAYED rule (fired from a Cloud Task hours or days later) is
@@ -1932,7 +1943,14 @@ function RuleDialog({
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function AutomationsPage() {
+  // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
+  const { confirm, confirmDialog } = useConfirm()
+  const tCommon = useTranslations('Common')
   const t = useTranslations('Automations')
+  // The dashboard's quick action for one rule: `/automations?run={ruleId}`.
+  // Read once — the card it names opens its RUN confirmation on mount, which is
+  // the same dialog its own button opens. Nothing here runs anything.
+  const quickActionRunId = useSearchParams().get('run')
   const planName = usePlanName()
   const { currentTeamId, user } = useAuth()
   const { plan, isAtLeast } = usePlan()
@@ -2079,7 +2097,13 @@ export default function AutomationsPage() {
   }
 
   async function handleDelete(rule: AutomationRule) {
-    if (!currentTeamId || !confirm(t('deleteConfirm', { name: rule.name }))) return
+    if (!currentTeamId) return
+    const ok = await confirm({
+      title: t('deleteConfirmTitle'),
+      description: t('deleteConfirm', { name: rule.name }),
+      confirmLabel: tCommon('delete'),
+    })
+    if (!ok) return
     await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, 'automation_rules', rule.id))
     invalidateRules()
   }
@@ -2224,6 +2248,7 @@ export default function AutomationsPage() {
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  autoRun={rule.id === quickActionRunId}
                   teamId={currentTeamId ?? ''}
                   templates={templates}
                   alertPresets={alertPresets}
@@ -2258,6 +2283,7 @@ export default function AutomationsPage() {
                 <RuleCard
                   key={rule.id}
                   rule={rule}
+                  autoRun={rule.id === quickActionRunId}
                   teamId={currentTeamId ?? ''}
                   templates={templates}
                   alertPresets={alertPresets}
@@ -2338,6 +2364,7 @@ export default function AutomationsPage() {
           )}
         </>
       )}
+      {confirmDialog}
     </>
   )
 }

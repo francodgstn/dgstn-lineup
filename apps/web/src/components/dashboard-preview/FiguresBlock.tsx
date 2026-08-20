@@ -45,18 +45,33 @@
  * to spare, so the block's height stops depending on how much a studio earns.
  *
  * The lead cell is the block's only size distinction, and it ranks WITHIN the
- * reference material — it does not make the block compete with the day. The
- * whole thing measures ~238px against row 1's 264px; if it ever exceeds that,
- * the right column starts setting the row height and the day stops being the
- * page's primary block. Spend the slack carefully.
+ * reference material — it does not make the block compete with the day.
+ *
+ * ── THE HEIGHT BUDGET, AND THE FACT THAT IT IS ALREADY SPENT ─────────────────
+ *
+ * This used to read "~238px against row 1's 264px; if it ever exceeds that, the
+ * right column starts setting the row height". MEASURED 2026-08-21 at 1440px,
+ * before this round touched anything, it was **294px** — so that had already
+ * happened: the grid row is as tall as THIS block, the day's `h-[264px]` no
+ * longer sets it, and the warning had been true for some time without anyone
+ * noticing. It is recorded here rather than quietly corrected because the
+ * arithmetic in this file has been wrong twice before in the same direction.
+ *
+ * This round spent a further ~8px on purpose (gap-y-5 -> 6, and the lead cell's
+ * margin with it) at Franco's request for a less cramped block. So the honest
+ * position: the day is no longer the tallest thing in row 1, and the next
+ * addition here costs the page height directly. Take it out of the figures
+ * before taking it out of the queue or the sign-off, both of which have lost
+ * this argument already.
  *
  * Unframed, on the background — the page's second material. It sits opposite a
  * framed agenda and does NOT take the accent frame: the frame marks work, not
  * position and not importance.
  *
- * "Snapshot" stays set at `text-2xl font-black`, the loudest WORD on the page,
- * in a different channel from the loudest NUMBERS beneath it. It is the only
- * thing carried over from the column this block replaced.
+ * THE "Snapshot" HEADING IS GONE. It was set at `text-2xl font-black` — the
+ * loudest word on the page — and was the last thing carried over from the
+ * column this block replaced. It labelled the one block that needs no label,
+ * and it did so at the top of a column already over its height budget.
  *
  * DEGRADATION IS BY SUBTRACTION. Revenue is Studio-tier, so Free and Coach get
  * the 2x2 with no lead cell above it — a shorter block, not a holed one, and no
@@ -131,13 +146,21 @@ function Figure({
             {value}
           </p>
         )}
-        <div className="min-w-0">
-          <p className="text-xs leading-snug text-muted-foreground">{subtitle}</p>
-          {!loading && note ? (
-            <div className="text-[11px] leading-snug text-muted-foreground/70">{note}</div>
-          ) : null}
-        </div>
+        <p className="min-w-0 text-xs leading-snug text-muted-foreground">{subtitle}</p>
       </div>
+      {/* THE NOTE IS ITS OWN ROW, under the value rather than under the
+          subtitle. Nested inside the baseline row it started at the SUBTITLE's
+          left edge — an indent with nothing above it to justify the indent —
+          and it hung below the value's box, so a cell with a note read as a
+          number floating up and a text block sagging away from it. Out here it
+          starts at the cell's left edge, level with the caption and the value,
+          and every line of a figure lines up on one rule (Franco, 2026-08-21).
+
+          The value and its SUBTITLE still share a baseline; that pairing is
+          the block's geometry and is untouched. */}
+      {!loading && note ? (
+        <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground/70">{note}</div>
+      ) : null}
     </Link>
   )
 }
@@ -229,23 +252,31 @@ export function FiguresBlock({
 
   return (
     <div>
-      <h2 className="font-heading mb-4 text-2xl font-black leading-none tracking-tight text-heading">
-        {t('snapshotTitle')}
-      </h2>
+      {/* NO HEADING (Franco, 2026-08-21). "Snapshot" was the loudest word on the
+          page and it labelled the one block that needs no label: six captioned
+          figures under a greeting are self-evidently a summary, and the word
+          cost a 24px line plus its margin at the top of a column that was
+          already over its height budget. What it used to buy — a name for the
+          right-hand column — is now carried by the figures themselves. */}
 
       {/* THE LEAD CELL — full width, above the grid rather than inside it.
           A `col-span-2` cell would work too; a sibling above says more plainly
           that this one is not a member of the 2x2 it leads. Studio-only, so
           below that tier the block simply starts at the grid. */}
       {seesMoney && (
-        <div className="mb-5">
+        <div className="mb-6">
           <RevenueFigure teamId={teamId} />
         </div>
       )}
 
-      {/* TWO COLUMNS, two rows. `gap-y-5` rather than a divider — nothing in
-          this block is ruled off. */}
-      <div className="grid grid-cols-2 gap-x-5 gap-y-5">
+      {/* TWO COLUMNS, two rows. Gaps rather than a divider — nothing in this
+          block is ruled off.
+
+          `gap-y-6`, up from 5, and the lead cell's margin with it: six figures
+          set tight read as a table of numbers, and this block is meant to be
+          glanced at, not scanned. The cost is real and is stated at the foot of
+          this file — the block already sets row 1's height. */}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-6">
         <Figure
           icon={TrendingUp}
           caption={t('figEngaged')}

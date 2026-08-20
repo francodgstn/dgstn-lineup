@@ -75,6 +75,7 @@ import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { getPrimaryRank } from '@/lib/rank-utils'
+import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -2518,7 +2519,12 @@ export default function ContactsPage() {
   const search = filters.search
   const setSearch = (v: string) => setFilters((f) => ({ ...f, search: v }))
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
+  // initializer, so clearing the param or closing the dialog is not undone by
+  // the next render — the same shape as `openOnAttention` on the contacts list.
+  const [dialogOpen, setDialogOpen] = useState(
+    () => searchParams.get(QUICK_ACTION_PARAM) === '1'
+  )
 
   // The create dialog always opens — at the Free hard cap it restricts the entry
   // choice to 'booking' (a non-counting provisional lead) instead of blocking.

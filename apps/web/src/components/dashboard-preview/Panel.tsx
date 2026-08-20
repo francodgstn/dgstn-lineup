@@ -48,13 +48,22 @@ export function PanelHeader({
   title,
   meta,
   action,
+  lead,
 }: {
   title: React.ReactNode
   meta?: React.ReactNode
   action?: React.ReactNode
+  /**
+   * Controls that belong BEFORE the title — a day stepper, in practice. Kept
+   * separate from `action` (which is the right-hand cluster) because the two
+   * ends of this bar mean different things: `lead` changes WHAT the panel is
+   * showing, `action` is where you go next.
+   */
+  lead?: React.ReactNode
 }) {
   return (
     <div className="flex h-10 shrink-0 items-center gap-3 border-b px-3">
+      {lead ? <div className="-mr-1.5 flex shrink-0 items-center gap-0.5">{lead}</div> : null}
       <h2 className="font-heading truncate text-sm font-bold tracking-tight text-heading">
         {title}
       </h2>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useSearchParams } from 'next/navigation'
 import { useState, useMemo, Fragment } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -95,6 +96,8 @@ import { VisibleCalendarsMenu } from '@/components/schedule/VisibleCalendarsMenu
 import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
 import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
 import { PlacesSheet } from '@/components/schedule/PlacesSheet'
+import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -918,6 +921,8 @@ function ListItemRow({
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
+  // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
+  const { confirm, confirmDialog } = useConfirm()
   const { currentTeamId, user, team, isOrgAdmin } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Calendar')
@@ -942,8 +947,11 @@ export default function CalendarPage() {
   // CoachFilterMenu's header. Multi-select, because "what are Anna and Ben doing
   // this week" is an ordinary question the old single-select could not ask.
   const [coachIds, setCoachIds] = useState<string[]>([])
+  // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
+  // initializer, so closing the dialog is not undone by the next render.
+  const quickActionParams = useSearchParams()
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
-    open: false,
+    open: quickActionParams.get(QUICK_ACTION_PARAM) === '1',
     editing: null,
   })
   const [deletingSession, setDeletingSession] = useState<Session | null>(null)
@@ -1004,7 +1012,12 @@ export default function CalendarPage() {
     : ''
 
   const handleDeleteEvent = async (e: Event) => {
-    if (!window.confirm(t('deleteEventConfirm', { title: e.title }))) return
+    const okDeleteEvent = await confirm({
+      title: t('deleteEventConfirmTitle'),
+      description: t('deleteEventConfirm', { title: e.title }),
+      confirmLabel: tCommon('delete'),
+    })
+    if (!okDeleteEvent) return
     await updateDoc(doc(db, EVENTS_COLLECTION, e.id), { deleted_at: serverTimestamp() })
     invalidateEvents()
   }
@@ -1602,6 +1615,7 @@ export default function CalendarPage() {
           />
         </>
       )}
+      {confirmDialog}
     </div>
   )
 }

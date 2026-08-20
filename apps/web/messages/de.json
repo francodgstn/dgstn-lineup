@@ -18,7 +18,11 @@
     "clearSearch": "Suche löschen",
     "save": "Speichern",
     "saving": "Wird gespeichert…",
-    "saved": "Gespeichert"
+    "saved": "Gespeichert",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "remove": "Entfernen",
+    "reset": "Zurücksetzen"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ Einheiten",
     "filterSessionsMaxOnly": "≤{max} Einheiten",
     "statsContactsCount": "{count, plural, one {# Kontakt} other {# Kontakte}}",
-    "statsActiveCount": "{count} aktiv"
+    "statsActiveCount": "{count} aktiv",
+    "subHistoryDeleteTitle": "Diesen Verlaufseintrag löschen?",
+    "subHistoryDeleteBody": "Damit wird der Nachweis entfernt, dass {name} dieses Abo hatte. Es wird nichts erstattet und der aktuelle Stand ändert sich nicht.",
+    "affiliationRemoveTitle": "Diese Zugehörigkeit entfernen?",
+    "affiliationRemoveBody": "{name} verliert diese Zugehörigkeit und alles, was davon abhängt: Zugang zu geschützten Aktivitäten, Mitgliederpreise und eine anstehende Verlängerung."
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -1090,7 +1098,11 @@
     "deleteBackgroundFailed": "Der Löschvorgang wurde vorzeitig abgebrochen. Einige Termine könnten bestehen bleiben — bitte versuchen Sie es erneut.",
     "deleteAlreadyRunning": "Diese Serie wird bereits gelöscht.",
     "deleteRunInBackground": "Im Hintergrund fortsetzen",
-    "pastItemNotice": "Dies liegt in der Vergangenheit — es hat bereits stattgefunden."
+    "pastItemNotice": "Dies liegt in der Vergangenheit — es hat bereits stattgefunden.",
+    "editConfirmTitle": "Für diese Session sind Personen eingetragen",
+    "editConfirmBody": "{count, plural, one {# Person ist} other {# Personen sind}} dieser Session zugeordnet. Änderungen an Zeit, Ort oder Aktivität betreffen das, was ihnen mitgeteilt wurde.",
+    "editConfirmPast": "Diese Session hat bereits stattgefunden — du bearbeitest also den Nachweis dessen, was war.",
+    "editConfirmAction": "Änderungen speichern"
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -1167,7 +1179,8 @@
     },
     "eventDayOf": "Tag {day} von {total}",
     "eventFrom": "ab",
-    "eventUntil": "bis"
+    "eventUntil": "bis",
+    "deleteEventConfirmTitle": "Dieses Event löschen?"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -5136,7 +5149,17 @@
     "addSelected": "Hinzufügen",
     "addSelectedCount": "{count} hinzufügen",
     "noContactsMatchSearch": "Keine Kontakte entsprechen Ihrer Suche",
-    "noSubConfirmBodyMany": "{count} der ausgewählten Personen haben kein gültiges Abo für diese Aktivität: {names}. Trotzdem hinzufügen?"
+    "noSubConfirmBodyMany": "{count} der ausgewählten Personen haben kein gültiges Abo für diese Aktivität: {names}. Trotzdem hinzufügen?",
+    "removeBookingConfirmTitle": "Diese Buchung entfernen?",
+    "removeCheckInConfirmTitle": "Diesen Check-in entfernen?",
+    "removeConfirmBody": "{name} wird aus dieser Session entfernt.",
+    "removePastWarning": "Diese Session hat bereits stattgefunden. Wer hier entfernt wird, verschwindet aus dem Anwesenheitsnachweis — das zählt für den Verlauf des Kontakts und für deine Auswertungen.",
+    "removeConfirmAction": "Entfernen",
+    "removedToast": "{name} aus dieser Session entfernt",
+    "restoredToast": "{name} wiederhergestellt",
+    "restoreFailed": "Wiederherstellen fehlgeschlagen. Lade neu und prüfe die Teilnehmerliste.",
+    "removeFailed": "Entfernen fehlgeschlagen. Es wurde nichts geändert.",
+    "undo": "Rückgängig"
   },
   "OrgEvents": {
     "title": "Organisationsveranstaltungen",
@@ -5281,7 +5304,8 @@
       "save": "Speichern",
       "saving": "Wird gespeichert…"
     },
-    "deleteConfirm": "Ereignistyp „{name}“ löschen? Bestehende Ereignisse dieses Typs sind davon nicht betroffen."
+    "deleteConfirm": "Ereignistyp „{name}“ löschen? Bestehende Ereignisse dieses Typs sind davon nicht betroffen.",
+    "deleteConfirmTitle": "Diesen Event-Typ löschen?"
   },
   "Referrals": {
     "title": "Empfehlungsprogramm",
@@ -5692,7 +5716,8 @@
       "recipientsTruncated": "Es werden die ersten {shown} von {total} angezeigt.",
       "recipientsGone": "{count, plural, one {# Empfänger ist nicht mehr in deinen Kontakten} other {# Empfänger sind nicht mehr in deinen Kontakten}}",
       "recipientsNotRecorded": "Für diesen Lauf wurden keine Empfänger erfasst."
-    }
+    },
+    "deleteConfirmTitle": "Diese Automation löschen?"
   },
   "SettingsEmails": {
     "title": "E-Mails",
@@ -5729,7 +5754,10 @@
     "reminderOffsetHours": "{hours} Stunden vorher",
     "reminderAddStep": "Erinnerung hinzufügen",
     "reminderRemoveStep": "Erinnerung entfernen",
-    "reminderSmsNote": "SMS-Erinnerungen werden nur zwischen 08:00 und 21:00 Uhr versendet."
+    "reminderSmsNote": "SMS-Erinnerungen werden nur zwischen 08:00 und 21:00 Uhr versendet.",
+    "resetConfirmTitle": "Auf den Standardtext zurücksetzen?",
+    "deactivateConfirmTitle": "Diese Vorlage deaktivieren?",
+    "deactivateAction": "Deaktivieren"
   },
   "Finance": {
     "exportCsv": "CSV exportieren",
@@ -6773,5 +6801,18 @@
     "field_phone": "Telefonnummer",
     "field_birthdate": "Geburtsdatum",
     "field_address": "Adresse"
+  },
+  "QuickActions": {
+    "newSession": "Neue Session",
+    "newContact": "Neuer Kontakt",
+    "recordPayment": "Zahlung erfassen",
+    "newActivity": "Neue Aktivität",
+    "studioQr": "Studio-QR",
+    "configure": "Schnellaktionen wählen",
+    "pickerTitle": "Schnellaktionen",
+    "pickerCount": "{used} von {max}",
+    "pickerHint": "Jede startet etwas. Um zu einer Seite zu gelangen, nutze die Seitenleiste.",
+    "automationsGroup": "Automation ausführen",
+    "unnamedAutomation": "Unbenannte Automation"
   }
 }

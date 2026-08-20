@@ -18,7 +18,11 @@
     "clearSearch": "Cancella la ricerca",
     "save": "Salva",
     "saving": "Salvataggio…",
-    "saved": "Salvato"
+    "saved": "Salvato",
+    "cancel": "Annulla",
+    "delete": "Elimina",
+    "remove": "Rimuovi",
+    "reset": "Reimposta"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ sessioni",
     "filterSessionsMaxOnly": "≤{max} sessioni",
     "statsContactsCount": "{count, plural, one {# contatto} other {# contatti}}",
-    "statsActiveCount": "{count} attivi"
+    "statsActiveCount": "{count} attivi",
+    "subHistoryDeleteTitle": "Eliminare questa voce dello storico?",
+    "subHistoryDeleteBody": "Rimuove la traccia del fatto che {name} ha avuto questo abbonamento. Non rimborsa nulla e non cambia ciò che ha ora.",
+    "affiliationRemoveTitle": "Rimuovere questa affiliazione?",
+    "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -1090,7 +1098,11 @@
     "deleteBackgroundFailed": "L'eliminazione si è interrotta prima di completarsi. Alcune sessioni potrebbero rimanere — riprova.",
     "deleteAlreadyRunning": "Questa serie è già in fase di eliminazione.",
     "deleteRunInBackground": "Continua in background",
-    "pastItemNotice": "Questo elemento è passato — si è già svolto."
+    "pastItemNotice": "Questo elemento è passato — si è già svolto.",
+    "editConfirmTitle": "Ci sono persone iscritte a questa sessione",
+    "editConfirmBody": "{count, plural, one {# persona è} other {# persone sono}} associate a questa sessione. Modificare orario, luogo o attività cambia quanto è stato loro comunicato.",
+    "editConfirmPast": "Questa sessione si è già svolta, quindi stai modificando il registro di ciò che è accaduto.",
+    "editConfirmAction": "Salva le modifiche"
   },
   "Calendar": {
     "title": "Programma",
@@ -1167,7 +1179,8 @@
     },
     "eventDayOf": "Giorno {day} di {total}",
     "eventFrom": "dalle",
-    "eventUntil": "fino alle"
+    "eventUntil": "fino alle",
+    "deleteEventConfirmTitle": "Eliminare questo evento?"
   },
   "Events": {
     "title": "Eventi",
@@ -5136,7 +5149,17 @@
     "addSelected": "Aggiungi",
     "addSelectedCount": "Aggiungi {count}",
     "noContactsMatchSearch": "Nessun contatto corrisponde alla tua ricerca",
-    "noSubConfirmBodyMany": "{count} delle persone selezionate non hanno un abbonamento valido per questa attività: {names}. Aggiungerle comunque?"
+    "noSubConfirmBodyMany": "{count} delle persone selezionate non hanno un abbonamento valido per questa attività: {names}. Aggiungerle comunque?",
+    "removeBookingConfirmTitle": "Rimuovere questa prenotazione?",
+    "removeCheckInConfirmTitle": "Rimuovere questo check-in?",
+    "removeConfirmBody": "{name} verrà rimosso da questa sessione.",
+    "removePastWarning": "Questa sessione si è già svolta. Rimuovere qualcuno modifica il registro delle presenze, che conta per la sua cronologia e per i tuoi report.",
+    "removeConfirmAction": "Rimuovi",
+    "removedToast": "{name} rimosso da questa sessione",
+    "restoredToast": "{name} ripristinato",
+    "restoreFailed": "Impossibile ripristinare. Ricarica e controlla l'elenco.",
+    "removeFailed": "Rimozione non riuscita. Nulla è stato modificato.",
+    "undo": "Annulla"
   },
   "OrgEvents": {
     "title": "Eventi dell'organizzazione",
@@ -5281,7 +5304,8 @@
       "save": "Salva",
       "saving": "Salvataggio…"
     },
-    "deleteConfirm": "Eliminare il tipo di evento «{name}»? Gli eventi di questo tipo non saranno interessati."
+    "deleteConfirm": "Eliminare il tipo di evento «{name}»? Gli eventi di questo tipo non saranno interessati.",
+    "deleteConfirmTitle": "Eliminare questo tipo di evento?"
   },
   "Referrals": {
     "title": "Programma di referral",
@@ -5692,7 +5716,8 @@
       "recipientsTruncated": "Vengono mostrati i primi {shown} su {total}.",
       "recipientsGone": "{count, plural, one {# destinatario non è più tra i tuoi contatti} other {# destinatari non sono più tra i tuoi contatti}}",
       "recipientsNotRecorded": "Per questa esecuzione non sono stati registrati destinatari."
-    }
+    },
+    "deleteConfirmTitle": "Eliminare questa automazione?"
   },
   "SettingsEmails": {
     "title": "Email",
@@ -5729,7 +5754,10 @@
     "reminderOffsetHours": "{hours} ore prima",
     "reminderAddStep": "Aggiungi promemoria",
     "reminderRemoveStep": "Rimuovi promemoria",
-    "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00."
+    "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00.",
+    "resetConfirmTitle": "Reimpostare il testo predefinito?",
+    "deactivateConfirmTitle": "Disattivare questo modello?",
+    "deactivateAction": "Disattiva"
   },
   "Finance": {
     "exportCsv": "Esporta CSV",
@@ -6773,5 +6801,18 @@
     "field_phone": "Numero di telefono",
     "field_birthdate": "Data di nascita",
     "field_address": "Indirizzo"
+  },
+  "QuickActions": {
+    "newSession": "Nuova sessione",
+    "newContact": "Nuovo contatto",
+    "recordPayment": "Registra pagamento",
+    "newActivity": "Nuova attività",
+    "studioQr": "QR dello studio",
+    "configure": "Scegli le azioni rapide",
+    "pickerTitle": "Azioni rapide",
+    "pickerCount": "{used} di {max}",
+    "pickerHint": "Ognuna avvia qualcosa. Per aprire una pagina, usa la barra laterale.",
+    "automationsGroup": "Esegui un'automazione",
+    "unnamedAutomation": "Automazione senza nome"
   }
 }

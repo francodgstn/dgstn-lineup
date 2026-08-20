@@ -25,8 +25,11 @@ import { BookingInstructionsCard } from './BookingInstructionsCard'
 import { SmsSenderCard } from './SmsSenderCard'
 import { TemplateEditor, type OutreachTemplate } from './TemplateEditor'
 import { templateDefault } from './templateDefaults'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 export default function SettingsEmailsPage() {
+  // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
+  const { confirm, confirmDialog } = useConfirm()
   const t = useTranslations('SettingsEmails')
   const ta = useTranslations('Automations')
   const tCommon = useTranslations('Common')
@@ -80,7 +83,12 @@ export default function SettingsEmailsPage() {
     if (!currentTeamId) return
     const def = templateDefault(tmpl.system_key, tmpl.language)
     if (!def) return
-    if (!confirm(t('resetConfirm', { name: tmpl.name }))) return
+    const okReset = await confirm({
+      title: t('resetConfirmTitle'),
+      description: t('resetConfirm', { name: tmpl.name }),
+      confirmLabel: tCommon('reset'),
+    })
+    if (!okReset) return
     await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId, 'outreach_templates', tmpl.id), {
       name: def.name,
       subject: def.subject,
@@ -92,7 +100,12 @@ export default function SettingsEmailsPage() {
 
   const onDeactivate = async (tmpl: OutreachTemplate) => {
     if (!currentTeamId) return
-    if (!confirm(t('deactivateConfirm', { name: tmpl.name }))) return
+    const okDeactivate = await confirm({
+      title: t('deactivateConfirmTitle'),
+      description: t('deactivateConfirm', { name: tmpl.name }),
+      confirmLabel: t('deactivateAction'),
+    })
+    if (!okDeactivate) return
     await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId, 'outreach_templates', tmpl.id), {
       active: false,
     })
@@ -242,6 +255,7 @@ export default function SettingsEmailsPage() {
           onSaved={invalidate}
         />
       )}
+      {confirmDialog}
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  updateDoc, deleteDoc, increment, serverTimestamp, deleteField, writeBatch,
+  updateDoc, deleteDoc, setDoc, increment, serverTimestamp, deleteField, writeBatch,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -45,6 +45,7 @@ import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
 import { useWaiverPolicy, useWaiverRoster } from '@/hooks/useWaiverStates'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
+import { toast } from 'sonner'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -870,17 +871,88 @@ export default function SessionDetailPage() {
     invalidate()
   }
 
-  const removeBooking = async (bookingId: string) => {
-    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, bookingId))
-    invalidate()
-  }
+  // ── TAKING SOMEBODY OFF A SESSION ─────────────────────────────────────────
+  //
+  // Both removals used to be one unguarded `deleteDoc` behind a small icon
+  // button: no question asked, no way back, and on a class that already ran no
+  // signal that this is a different act from tidying up tomorrow's roster
+  // (Franco, 2026-08-21).
+  //
+  // TWO GUARDS, because they answer different failures:
+  //
+  //   1. A CONFIRM STEP, which exists mainly for the PAST session. The dialog
+  //      says which it is, because removing a booking from a class that has
+  //      already happened edits the record of who was there — attendance, the
+  //      contact's history, and every count derived from them.
+  //
+  //   2. AN UNDO, which is the honest answer to a misclick: the document is
+  //      read BEFORE it is deleted and written back verbatim under the same id,
+  //      so the restored row is the row that was there — same status, same
+  //      timestamps, same credit stamps. `bookings_count` and
+  //      `participants_count` are recounted by their triggers either way, so a
+  //      restore needs no counter arithmetic (and must not attempt any — see
+  //      the seat-writer rule).
+  //
+  // WHAT NEITHER GUARD DOES, stated so nobody assumes otherwise: this is still
+  // a raw document delete, not `cancelBooking`. The callable refunds a spent
+  // class credit and a usage-limit window unit; this path refunds neither, and
+  // never did. That is a real gap, and it is not one a confirm dialog closes.
+  const [pendingRemoval, setPendingRemoval] = useState<
+    { kind: 'booking' | 'participant'; id: string; name: string } | null
+  >(null)
+  const [removing, setRemoving] = useState(false)
+  // Read off the END where there is one, so a class still running is not
+  // called past. Evaluated at render rather than stored: a dialog opened at
+  // 18:59 on a 19:00 session should not still claim the future at 19:05.
+  const sessionHasEnded = (() => {
+    const s = sessionQ.data
+    if (!s) return false
+    const endMs = (s.end ?? s.start)?.toMillis?.()
+    return typeof endMs === 'number' && endMs < Date.now()
+  })()
 
-  const removeParticipant = async (participantId: string) => {
-    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, participantId))
-    // `participants_count` is recounted by `trackSessionParticipants` — see
-    // `confirmBooking`. The blind decrement here could not tell a double click
-    // from two removals, and drove the number negative.
-    invalidate()
+  const removalSub = (kind: 'booking' | 'participant') =>
+    kind === 'booking' ? BOOKINGS_SUB : PARTICIPANTS_SUBCOLLECTION
+
+  const performRemoval = async () => {
+    const target = pendingRemoval
+    if (!target) return
+    setRemoving(true)
+    const ref = doc(db, SESSIONS_COLLECTION, sessionId, removalSub(target.kind), target.id)
+    try {
+      // READ BEFORE DELETE — this snapshot IS the undo. Taken inside the same
+      // click so nothing can have changed between the two.
+      const snap = await getDoc(ref)
+      const restore = snap.exists() ? snap.data() : null
+      await deleteDoc(ref)
+      // `participants_count` is recounted by `trackSessionParticipants` and
+      // `bookings_count` by `trackBookings` — see `confirmBooking`. A blind
+      // decrement here could not tell a double click from two removals, and
+      // drove the number negative.
+      invalidate()
+      setPendingRemoval(null)
+      toast(t('removedToast', { name: target.name }), {
+        duration: 12000,
+        action: restore
+          ? {
+              label: t('undo'),
+              onClick: async () => {
+                try {
+                  await setDoc(ref, restore)
+                  invalidate()
+                  toast.success(t('restoredToast', { name: target.name }))
+                } catch {
+                  toast.error(t('restoreFailed'))
+                }
+              },
+            }
+          : undefined,
+      })
+    } catch {
+      toast.error(t('removeFailed'))
+    } finally {
+      setRemoving(false)
+    }
   }
 
   // ── waitlist actions ──────────────────────────────────────────────────────────
@@ -1212,7 +1284,7 @@ export default function SessionDetailPage() {
                 <button onClick={() => markNoShow(b.id)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
                   <UserX className="h-4 w-4" />
                 </button>
-                <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
+                <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -1240,7 +1312,7 @@ export default function SessionDetailPage() {
                     <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('overrideConfirmAttendanceTitle')}>
                       <Check className="h-4 w-4" />
                     </button>
-                    <button onClick={() => removeBooking(b.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeTitle')}>
+                    <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeTitle')}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -1378,7 +1450,7 @@ export default function SessionDetailPage() {
                 this reads the signer row. */}
             <WaiverChip state={waiverStateOf(p.contact)} />
             <WaiverDoorCheckChip check={waiverCheckOf(p.contact)} />
-            <button onClick={() => removeParticipant(p.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
+            <button onClick={() => setPendingRemoval({ kind: 'participant', id: p.id, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -1469,6 +1541,46 @@ export default function SessionDetailPage() {
               {t('waitlistRemoveCancel')}
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* THE CONFIRM STEP. One dialog for both kinds of removal — a booking and
+          a check-in are different records but the same question, and two
+          dialogs saying nearly the same thing is how their copy drifts apart. */}
+      <Dialog open={pendingRemoval !== null} onOpenChange={(o) => !o && setPendingRemoval(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingRemoval?.kind === 'participant'
+                ? t('removeCheckInConfirmTitle')
+                : t('removeBookingConfirmTitle')}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3 text-sm text-muted-foreground">
+            <p>{t('removeConfirmBody', { name: pendingRemoval?.name ?? '' })}</p>
+            {/* THE PAST IS THE CASE THIS DIALOG EXISTS FOR. Removing somebody
+                from tomorrow's class frees a seat; removing them from last
+                Tuesday's edits the record of who was there. The warning only
+                appears when that is what is happening. */}
+            {sessionHasEnded && (
+              <p className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{t('removePastWarning')}</span>
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            {/* `SessionDetail.noSubConfirmCancel`, not `Common.cancel` — the
+                Common namespace has no `cancel`, and next-intl renders a
+                missing key as its own id. This page already owns a "Cancel". */}
+            <Button variant="ghost" onClick={() => setPendingRemoval(null)} disabled={removing}>
+              {t('noSubConfirmCancel')}
+            </Button>
+            <Button variant="destructive" onClick={performRemoval} disabled={removing}>
+              {removing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              {t('removeConfirmAction')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

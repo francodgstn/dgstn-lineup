@@ -2298,6 +2298,10 @@ function SidebarContent({
     Nav?: { searchKeywords?: Record<string, string> }
   }
   const kwOf = (id: string) => messages.Nav?.searchKeywords?.[id] ?? ''
+  // Has the nav been scrolled off its top? Drives the seam shadow below, and
+  // nothing else — it is a boolean, not a scroll position, so the re-render is
+  // bounded to the two frames that cross the boundary.
+  const [navScrolled, setNavScrolled] = useState(false)
   const inOrg = !!team?.org_id
   // Show the Payments dashboard once a team has started Connect onboarding (an
   // account exists, not operator-disabled) OR has any BYO gateway configured —
@@ -2488,9 +2492,9 @@ function SidebarContent({
         </div>
       )}
 
-      {/* Utility row — search, then plugins / settings / how-to. Occasional,
-          deliberate destinations, so icons rather than rows competing with the
-          working areas below.
+      {/* Utility row — search, then the "⋯" utilities. First of the two pinned
+          rows; the head pair sits under it, and the scroll area starts below
+          them both.
 
           Search is a mini-input rather than the full-width field it used to be a
           row above: the field cost a whole row for something used in bursts, and
@@ -2498,14 +2502,13 @@ function SidebarContent({
           as an overlay anchored to itself, and ⌘K/Ctrl+K opens it too — behind an
           icon it would otherwise lose the discoverability a permanent field had.
 
-          Closed by a rule that separates it from Dashboard, the first working
-          row. In icon-only mode they stack as centred icons. */}
+          In icon-only mode the row stacks as centred icons. */}
       <div
-        // No bottom rule: the row already reads as part of the header block
-        // above it, and a second line so close to the studio row's was clutter.
-        // The padding stays, so the spacing below is unchanged.
+        // No bottom rule: this row reads as part of the header block above it,
+        // and a second line so close to the studio row's was clutter. The same
+        // went for the head pair below — see the seam there.
         data-tour="nav-utilities"
-        className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 ${
+        className={`mx-2 pt-2 pb-1.5 shrink-0 flex gap-1 ${
           collapsed ? 'flex-col items-center' : 'items-center'
         }`}
       >
@@ -2530,27 +2533,43 @@ function SidebarContent({
         <UtilityFlyout onLinkClick={onLinkClick} includeQr={collapsed} />
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* THE HEAD PAIR — where things stand, and what is on today.
-            Two tiles on one row, icon over label, which gives the top of the
-            nav a shape its body does not have: the eye finds them by silhouette
-            before it reads anything. Schedule earns the second slot by being
-            the surface a studio opens every single session — it was Run's first
-            row, one section header and a fold away from here.
+      {/* THE HEAD PAIR — where things stand, and what is on today.
+          Two tiles on one row, icon over label, which gives the top of the nav a
+          shape its body does not have: the eye finds them by silhouette before
+          it reads anything. Schedule earns the second slot by being the surface
+          a studio opens every single session.
 
-            COLLAPSED FALLS BACK TO ROWS. At w-14 there is no second column to
-            put anything in, and two 28px half-tiles would be unreadable — so the
-            rail keeps the ordinary icon-only rows it already knows how to draw. */}
-        {/* THE TOUR TREATS THESE TWO AS ONE REGION. The head tiles and the
-            Shortcuts group are separate mechanisms (census items 5 and 1) but
-            they answer the same question for a reader meeting the nav for the
-            first time — "where do the things I use most live?" — so the tour
-            frames them together rather than spending two steps on the
-            distinction. A plain wrapper: no positioning, so the Shortcuts rule
-            still measures against its own `relative` parent, and no padding, so
-            margins collapse exactly as before. */}
-        <div data-tour="nav-quick-access">
+          PINNED (Franco, 2026-08-20). These two and the search above them are
+          the three things reached from anywhere, so they are the three that must
+          never be scrolled away: the scroll area starts BELOW this block rather
+          than above it. The order — search, then tiles — is the original one,
+          tried the other way round and put back.
+
+          It is safe to pin only because everything here is fixed-height by
+          construction: one search row plus one tile row (or two icon rows
+          collapsed). Shortcuts stayed in the scroll area precisely because they
+          are NOT — a studio with a dozen pinned pages would push the working
+          areas off-screen and have nothing give way.
+
+          COLLAPSED FALLS BACK TO ROWS. At w-14 there is no second column to put
+          anything in, and two 28px half-tiles would be unreadable — so the rail
+          keeps the ordinary icon-only rows it already knows how to draw.
+
+          THE TOUR ANCHOR STAYS ON THE TILES. It used to wrap the tiles AND the
+          Shortcuts group, framing them as one "where do the things I use most
+          live?" region. They are no longer in the same box — one is pinned, the
+          other scrolls — and a highlight cannot span a scroll boundary, so the
+          anchor keeps the half that is a fixed, always-visible target. */}
+      <div
+        // The seam between what is pinned and what scrolls. It carries NO rule:
+        // the header block already has the studio row's line, and a second one
+        // two rows below it drew a box around the top of the pane rather than
+        // separating anything (Franco, 2026-08-21). What marks the boundary is
+        // on the scroller instead — a shadow that only appears once something
+        // is actually scrolled under it.
+        data-tour="nav-quick-access"
+        className="mx-2 shrink-0 pt-1 pb-2"
+      >
         {collapsed ? (
           // At w-14 there is no second column, and a chooser on a 28px target is
           // not a control — the rail keeps the ordinary icon-only rows it already
@@ -2574,10 +2593,40 @@ function SidebarContent({
             onLinkClick={onLinkClick}
           />
         )}
+      </div>
 
-        {/* Shortcuts — pinned + recently visited (hidden when empty) */}
+      {/* Nav — the scrolling half of the pane.
+          `min-h-0` on the wrapper because a flex child will not shrink below its
+          content without it, and the nav has to be allowed to shrink for
+          `overflow-y-auto` to mean anything. */}
+      <div className="relative min-h-0 flex-1">
+        {/* THE SEAM, DRAWN ONLY WHEN THERE IS SOMETHING TO SEPARATE.
+            A rule here was a permanent line boxing in the top of the pane even
+            with nothing scrolled under it. This is the same information —
+            "content continues above" — but it is only true sometimes, so it is
+            only drawn then: a short gradient that fades in on the first pixel of
+            scroll and back out at the top.
+
+            Absolutely positioned OVER the scroller rather than inside it, so it
+            does not move with the content it is shading, and
+            `pointer-events-none` so it never eats a click on the row beneath. */}
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-3 bg-gradient-to-b from-black/10 to-transparent transition-opacity duration-200 dark:from-black/40 ${
+            navScrolled ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+        <nav
+          // Cheap: React bails out of a re-render when the boolean is unchanged,
+          // so this only costs a render on the two frames that actually cross
+          // the boundary, not on every scroll event.
+          onScroll={(e) => setNavScrolled(e.currentTarget.scrollTop > 0)}
+          className="h-full overflow-y-auto py-2 px-2"
+        >
+        {/* Shortcuts — pinned + recently visited (hidden when empty). THE FIRST
+            SCROLLING THING: unlike the head pair above the search, this list
+            grows with use, so it is what gives way when the pane runs short. */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
-        </div>
 
         {/* Features — the Run / Offer / Grow working areas. Extra top margin on
             the sections: unlike the other macro groups, the first thing here is
@@ -2726,7 +2775,8 @@ function SidebarContent({
           onDismiss={dismissSuggestion}
         />
         <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
-      </nav>
+        </nav>
+      </div>
 
       {/* User account + QR at bottom */}
       <div className="border-t py-2 px-2 shrink-0">

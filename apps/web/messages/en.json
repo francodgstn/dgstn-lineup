@@ -18,7 +18,11 @@
     "clearSearch": "Clear search",
     "save": "Save",
     "saving": "Saving…",
-    "saved": "Saved"
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "remove": "Remove",
+    "reset": "Reset"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ sessions",
     "filterSessionsMaxOnly": "≤{max} sessions",
     "statsContactsCount": "{count, plural, one {# contact} other {# contacts}}",
-    "statsActiveCount": "{count} active"
+    "statsActiveCount": "{count} active",
+    "subHistoryDeleteTitle": "Delete this history entry?",
+    "subHistoryDeleteBody": "This removes the record that {name} held this subscription. It does not refund anything or change what they hold now.",
+    "affiliationRemoveTitle": "Remove this affiliation?",
+    "affiliationRemoveBody": "{name} loses this affiliation and anything that depends on it — access to gated activities, member pricing and any renewal it was due."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1090,7 +1098,11 @@
     "deleteBackgroundFailed": "The deletion stopped before it finished. Some sessions may remain — please try again.",
     "deleteAlreadyRunning": "This series is already being deleted.",
     "deleteRunInBackground": "Continue in background",
-    "pastItemNotice": "This is in the past — it has already taken place."
+    "pastItemNotice": "This is in the past — it has already taken place.",
+    "editConfirmTitle": "People are booked on this session",
+    "editConfirmBody": "{count, plural, one {# person is} other {# people are}} attached to this session. Changing its time, place or activity affects what they were told.",
+    "editConfirmPast": "This session has already taken place, so you are editing the record of what happened.",
+    "editConfirmAction": "Save changes"
   },
   "Calendar": {
     "title": "Schedule",
@@ -1167,7 +1179,8 @@
     },
     "eventDayOf": "Day {day} of {total}",
     "eventFrom": "from",
-    "eventUntil": "until"
+    "eventUntil": "until",
+    "deleteEventConfirmTitle": "Delete this event?"
   },
   "Events": {
     "title": "Events",
@@ -5136,7 +5149,17 @@
     "addSelected": "Add",
     "addSelectedCount": "Add {count}",
     "noContactsMatchSearch": "No contacts match your search",
-    "noSubConfirmBodyMany": "{count} of the people you selected hold no valid subscription for this activity: {names}. Add them anyway?"
+    "noSubConfirmBodyMany": "{count} of the people you selected hold no valid subscription for this activity: {names}. Add them anyway?",
+    "removeBookingConfirmTitle": "Remove this booking?",
+    "removeCheckInConfirmTitle": "Remove this check-in?",
+    "removeConfirmBody": "{name} will be taken off this session.",
+    "removePastWarning": "This session has already taken place. Removing someone edits the record of who was there, which counts towards their history and your reports.",
+    "removeConfirmAction": "Remove",
+    "removedToast": "{name} removed from this session",
+    "restoredToast": "{name} put back",
+    "restoreFailed": "Could not put that back. Reload and check the roster.",
+    "removeFailed": "Could not remove that. Nothing was changed.",
+    "undo": "Undo"
   },
   "OrgEvents": {
     "title": "Organization events",
@@ -5281,7 +5304,8 @@
       "save": "Save",
       "saving": "Saving…"
     },
-    "deleteConfirm": "Delete event type \"{name}\"? Events of this type won't be affected."
+    "deleteConfirm": "Delete event type \"{name}\"? Events of this type won't be affected.",
+    "deleteConfirmTitle": "Delete this event type?"
   },
   "Referrals": {
     "title": "Referral Program",
@@ -5692,7 +5716,8 @@
       "recipientsTruncated": "Showing the first {shown} of {total}.",
       "recipientsGone": "{count, plural, one {# recipient is no longer in your contacts} other {# recipients are no longer in your contacts}}",
       "recipientsNotRecorded": "Recipients weren't recorded for this run."
-    }
+    },
+    "deleteConfirmTitle": "Delete this automation?"
   },
   "SettingsEmails": {
     "title": "Emails",
@@ -5729,7 +5754,10 @@
     "reminderOffsetHours": "{hours} hours before",
     "reminderAddStep": "Add reminder",
     "reminderRemoveStep": "Remove reminder",
-    "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only."
+    "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only.",
+    "resetConfirmTitle": "Reset to the default text?",
+    "deactivateConfirmTitle": "Deactivate this template?",
+    "deactivateAction": "Deactivate"
   },
   "Finance": {
     "exportCsv": "Export CSV",
@@ -6773,5 +6801,18 @@
     "field_phone": "Phone number",
     "field_birthdate": "Date of birth",
     "field_address": "Address"
+  },
+  "QuickActions": {
+    "newSession": "New session",
+    "newContact": "New contact",
+    "recordPayment": "Record payment",
+    "newActivity": "New activity",
+    "studioQr": "Studio QR",
+    "configure": "Choose quick actions",
+    "pickerTitle": "Quick actions",
+    "pickerCount": "{used} of {max}",
+    "pickerHint": "Each one starts something. To reach a page, use the sidebar.",
+    "automationsGroup": "Run an automation",
+    "unnamedAutomation": "Untitled automation"
   }
 }

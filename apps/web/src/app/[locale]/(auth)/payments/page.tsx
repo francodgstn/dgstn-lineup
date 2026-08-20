@@ -4,6 +4,7 @@
 // current team (read-only mirror of Stripe, reconciled by the webhook). Managers
 // and owners can refund one-off payments here; dispute status is surfaced inline.
 
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -67,6 +68,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 
 // ─── awaiting-payment appointments ───────────────────────────────────────────
 // Manually booked appointments (AppointmentFormDialog → createStaffAppointment)
@@ -146,7 +148,13 @@ export default function PaymentsDashboardPage() {
   const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
   const [voidTarget, setVoidTarget] = useState<UnifiedPaymentRow | null>(null)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
-  const [recordOpen, setRecordOpen] = useState(false)
+  // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
+  // initializer, so clearing the param or closing the dialog is not undone by
+  // the next render — the same shape as `openOnAttention` on the contacts list.
+  const quickActionParams = useSearchParams()
+  const [recordOpen, setRecordOpen] = useState(
+    () => quickActionParams.get(QUICK_ACTION_PARAM) === '1'
+  )
   const [markPaidTarget, setMarkPaidTarget] = useState<PendingAppointment | null>(null)
   const [filter, setFilter] = useState<'all' | 'unassigned'>('all')
   const [search, setSearch] = useState('')

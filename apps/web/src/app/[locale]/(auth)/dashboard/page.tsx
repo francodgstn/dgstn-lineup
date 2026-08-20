@@ -73,9 +73,6 @@
  */
 
 import { useTranslations, useLocale } from 'next-intl'
-import { Link } from '@/i18n/navigation'
-import type { Route } from 'next'
-import { CalendarPlus, UserPlus } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import { useSetupChecklist } from '@/hooks/useSetupChecklist'
@@ -87,6 +84,7 @@ import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotification
 import { TodayPanel } from '@/components/dashboard-preview/TodayPanel'
 import { QueuePanel } from '@/components/dashboard-preview/QueuePanel'
 import { FiguresBlock } from '@/components/dashboard-preview/FiguresBlock'
+import { QuickActionsBar } from '@/components/dashboard/QuickActionsBar'
 import { RosterDonut } from '@/components/dashboard-preview/RosterDonut'
 import { DailyAside } from '@/components/dashboard-preview/DailyAside'
 import { WeekSection } from '@/components/dashboard-preview/WeekSection'
@@ -132,26 +130,6 @@ function Header({ children }: { children: React.ReactNode }) {
   )
 }
 
-function HeaderAction({
-  href,
-  icon: Icon,
-  label,
-}: {
-  href: Route
-  icon: React.ElementType
-  label: string
-}) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-muted/60"
-    >
-      <Icon className="h-3.5 w-3.5 text-primary" />
-      {label}
-    </Link>
-  )
-}
-
 export default function DashboardPage() {
   const t = useTranslations('NewDashboard')
   const { currentTeamId, team } = useAuth()
@@ -173,12 +151,7 @@ export default function DashboardPage() {
       <TeamNotificationsBanner />
 
       <Header>
-        <HeaderAction
-          href={'/schedule' as Route}
-          icon={CalendarPlus}
-          label={t('actionNewSession')}
-        />
-        <HeaderAction href={'/contacts' as Route} icon={UserPlus} label={t('actionNewContact')} />
+        <QuickActionsBar />
       </Header>
 
       {resolving && <Skeleton className="h-[264px] w-full rounded-xl" />}
@@ -200,7 +173,7 @@ export default function DashboardPage() {
               The figure block opposite runs ~275px, so it fits the row without
               setting it — the day still owns the height. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-7 lg:h-[264px]">
+            <div className="lg:col-span-7 lg:h-full lg:min-h-[264px]">
               <TodayPanel teamId={currentTeamId} />
             </div>
             <div className="lg:col-span-5">
@@ -231,8 +204,21 @@ export default function DashboardPage() {
               consistent ~35px longer, so call it ~700 against a 720 fold. That
               leaves ~20px, and the quote is now the thing sitting on that edge.
               If it clips again, take rows off the QUEUE — never off the
-              sign-off, which has been the loser twice already. */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              sign-off, which has been the loser twice already.
+
+              `pt-2.5` — 10px ON TOP of the wrapper's `space-y-5`, so the seam
+              between the two rows is 30px rather than 20 (Franco, 2026-08-21).
+              It is PADDING rather than a margin because `space-y` already owns
+              `margin-top` on this child and would win the specificity contest.
+
+              Applied to the ROW, not to the right-hand column, deliberately.
+              The ask was for air between the figures and the donut, but this
+              page has ONE vertical seam by design — the queue's top edge and
+              the donut's are the same line, and buying the right column 10px
+              on its own would bend that line for the sake of one gap. The
+              whole row steps down together and the seam stays straight; the
+              10px comes off the fold, which is stated rather than hidden. */}
+          <div className="grid grid-cols-1 gap-6 pt-2.5 lg:grid-cols-12">
             <div className="lg:col-span-7 lg:h-[296px]">
               <QueuePanel
                 teamId={currentTeamId}
@@ -270,14 +256,28 @@ export default function DashboardPage() {
               that flashes an upgrade notice at a paying studio every morning is
               worse than one that waits 200ms. Below Studio the page simply gets
               shorter — one notice, and no hole where four charts were. */}
-          {planLoading ? null : isAtLeast('studio') ? (
-            <WeekSection teamId={currentTeamId} />
-          ) : (
-            <PlanUpgradeNotice
-              minPlan="studio"
-              title={t('trendsTitle')}
-              description={t('trendsUpsell')}
-            />
+          {/* `pt-4` ON TOP of the wrapper's `space-y-5`, so the working area
+              above and the trends below are 36px apart rather than 20 (Franco,
+              2026-08-21). Everything above this line answers "what is happening
+              now"; everything below is history. That is the biggest change of
+              subject on the page, and it was reading as one more row.
+
+              Padding, because `space-y` owns `margin-top` on these children.
+              INSIDE the not-loading branch, so the gap does not sit there on
+              its own while the plan resolves. Costs the fold nothing — the
+              seam is already below it. */}
+          {planLoading ? null : (
+            <div className="pt-4">
+              {isAtLeast('studio') ? (
+                <WeekSection teamId={currentTeamId} />
+              ) : (
+                <PlanUpgradeNotice
+                  minPlan="studio"
+                  title={t('trendsTitle')}
+                  description={t('trendsUpsell')}
+                />
+              )}
+            </div>
           )}
 
           {/* The parked shelf. Gated on the EXPERIMENT ONLY, not on the plan:

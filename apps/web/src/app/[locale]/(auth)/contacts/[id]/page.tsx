@@ -1,5 +1,6 @@
 'use client'
 
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { useState, use, useMemo, useEffect } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useRecentContacts } from '@/contexts/RecentContactsContext'
@@ -2465,6 +2466,9 @@ function MembershipTab({
 // ─── subscriptions tab ────────────────────────────────────────────────────────
 
 function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+  // Styled confirmation — this delete had none at all before.
+  const { confirm, confirmDialog } = useConfirm()
+  const tCommon = useTranslations('Common')
   const t = useTranslations('Contacts')
   const tPayments = useTranslations('PaymentsDashboard')
   const qc = useQueryClient()
@@ -2631,6 +2635,19 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
                   </div>
                   <button
                     onClick={async () => {
+                      // A history row is the evidence that somebody held a
+                      // plan. Deleting it refunds nothing and changes nothing
+                      // they hold now — it just removes the record, which is
+                      // why the body says exactly that rather than "are you
+                      // sure".
+                      const ok = await confirm({
+                        title: t('subHistoryDeleteTitle'),
+                        description: t('subHistoryDeleteBody', {
+                          name: `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim(),
+                        }),
+                        confirmLabel: tCommon('delete'),
+                      })
+                      if (!ok) return
                       await deleteDoc(
                         doc(
                           db,
@@ -2670,6 +2687,7 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
         subTypes={subTypes}
         onGranted={invalidateContact}
       />
+      {confirmDialog}
     </div>
   )
 }
@@ -4582,6 +4600,9 @@ function AffiliationsTab({
   orgId?: string | null
   membershipFieldLocked?: boolean
 }) {
+  // Styled confirmation, replacing nothing — this action had none.
+  const { confirm, confirmDialog } = useConfirm()
+  const tCommonAff = useTranslations('Common')
   const t = useTranslations('Affiliations')
   const qc = useQueryClient()
 
@@ -4601,6 +4622,17 @@ function AffiliationsTab({
     qc.invalidateQueries({ queryKey: ['contact-affiliations', contact.id] })
 
   const handleRemove = async (affiliationId: string) => {
+    // Not a record-keeping delete like the subscription history above: this one
+    // takes away access, member pricing and any renewal that was due, so the
+    // body names those rather than the row.
+    const ok = await confirm({
+      title: t('affiliationRemoveTitle'),
+      description: t('affiliationRemoveBody', {
+        name: `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim(),
+      }),
+      confirmLabel: tCommonAff('remove'),
+    })
+    if (!ok) return
     setRemoving(affiliationId)
     try {
       const fn = httpsCallable(functions, 'removeAffiliation')
@@ -4839,6 +4871,7 @@ function AffiliationsTab({
           {toast}
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }
