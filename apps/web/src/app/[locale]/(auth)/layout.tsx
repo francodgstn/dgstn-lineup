@@ -528,7 +528,18 @@ function NavTile({
 // how-to) that sit in their own row under the search bar rather than in the nav
 // list. Always shows its label as a tooltip, since there's no text beside the
 // icon.
-function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
+function UtilityIconLink({
+  item,
+  onClick,
+  showLabel,
+}: {
+  item: NavItem
+  onClick?: () => void
+  /** Inside the utilities menu, where there is room for a name. A bare icon is
+   *  right on a rail, where the tooltip is the contract; inside an opened menu
+   *  it makes the reader hover four things to find one. */
+  showLabel?: boolean
+}) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
   const Icon = item.icon
@@ -540,34 +551,52 @@ function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => voi
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+      className={`flex h-8 items-center rounded-lg transition-colors ${
+        showLabel ? 'w-full gap-2 px-2 text-sm' : 'w-8 justify-center'
+      } ${
         isActive
           ? 'bg-primary/10 text-primary'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground'
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" />
+      {showLabel && <span className="truncate">{label}</span>}
     </Link>
   )
 }
 
 /**
- * The four occasional utilities — QR, Plugins, Settings, How-to — behind ONE
- * icon, used only when the sidebar is collapsed.
+ * The occasional utilities — Plugins, Settings, How-to, plus the studio QR when
+ * the sidebar is collapsed — behind ONE "⋯" control. Used in BOTH modes.
  *
- * WHY IT EXISTS: expanded, these are a horizontal strip costing one 32px row.
- * Collapsed, the same markup stacks vertically and costs ~144px, which put
- * Dashboard 36% of the way down a 720px rail with five occasional destinations
- * above it. The collapse inverted the hierarchy on its own; this restores it.
+ * WHY IT EXISTS: collapsed, the icons stack vertically and cost ~144px, which
+ * put Dashboard 36% of the way down a 720px rail with five occasional
+ * destinations above it — a hierarchy inversion produced by the collapse rather
+ * than by any decision. Expanded, space was never the problem; attention was.
+ * They sat permanently beside the search field, at the top of the pane, ahead of
+ * the working areas a studio actually opens (see the utility row for the rest).
  *
- * The panel repeats the EXPANDED layout — a horizontal row of the same icon
- * buttons — rather than inventing a vertical menu, so the two states are the
- * same object drawn at two sizes and nothing has to be relearned.
+ * ONE SHAPE IN BOTH MODES — a labelled column. The panel used to repeat the
+ * expanded layout (a horizontal icon strip) because the expanded row WAS the
+ * canonical form; now that the row is this control in both modes there is no
+ * second form to mirror, and inside an opened menu a name beats a tooltip.
  *
  * Search is deliberately NOT in here: it is a primary action with a keyboard
  * shortcut, not an occasional destination.
  */
-function UtilityFlyout({ onLinkClick }: { onLinkClick?: () => void }) {
+function UtilityFlyout({
+  onLinkClick,
+  includeQr,
+}: {
+  onLinkClick?: () => void
+  /**
+   * COLLAPSED ONLY. Expanded, the QR sits on the studio-name row above, because
+   * it encodes THAT studio's links — listing it here as well would put one
+   * control in two places on the same screen. Collapsed there is no studio row
+   * (no text at w-14), so the menu is where it lives.
+   */
+  includeQr?: boolean
+}) {
   const t = useTranslations('Nav')
   const label = t('utilities')
   return (
@@ -584,11 +613,13 @@ function UtilityFlyout({ onLinkClick }: { onLinkClick?: () => void }) {
         </button>
       }
     >
-      <div className="flex items-center gap-1">
-        <TeamQrButton collapsed />
-        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
-        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
-        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
+      {/* A labelled column, not the icon strip this used to be: once the menu is
+          open there is room for names, and the same shape serves both modes. */}
+      <div className="flex min-w-40 flex-col gap-0.5">
+        {includeQr && <TeamQrButton showLabel />}
+        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} showLabel />
+        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} showLabel />
+        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} showLabel />
       </div>
     </NavFlyout>
   )
@@ -2473,36 +2504,30 @@ function SidebarContent({
         // No bottom rule: the row already reads as part of the header block
         // above it, and a second line so close to the studio row's was clutter.
         // The padding stays, so the spacing below is unchanged.
+        data-tour="nav-utilities"
         className={`mx-2 pt-2 pb-2 shrink-0 flex gap-1 ${
           collapsed ? 'flex-col items-center' : 'items-center'
         }`}
       >
         <NavSearch entries={searchEntries} onNavigate={onLinkClick} collapsed={collapsed} />
-        {collapsed ? (
-          // ── COLLAPSED: THE FOUR OCCASIONAL UTILITIES BECOME ONE ────────────
-          // Expanded, these are a HORIZONTAL strip — one 32px row. Collapsed,
-          // the same markup stacks VERTICALLY and costs ~144px, which pushed
-          // Dashboard to y=256 of a 720px rail: five occasional destinations
-          // physically above the two a studio opens every session. That is a
-          // hierarchy inversion produced entirely by the collapse, not a
-          // decision anybody made.
-          //
-          // Grouping them behind one control restores the order at the cost of
-          // one click on QR/Plugins/Settings/How-to — all of which are reached
-          // deliberately, minutes apart, never mid-task. Search stays out of the
-          // group: it is a primary action (and ⌘K), not an occasional one.
-          //
-          // This is what `NavFlyout` is FOR — several items that cannot stack in
-          // a 56px column. The head tiles deliberately do NOT use it: two icons
-          // stack fine, and Dashboard must never be a hover away.
-          <UtilityFlyout onLinkClick={onLinkClick} />
-        ) : (
-          <>
-            <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
-            <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
-            <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
-          </>
-        )}
+        {/* ── THE OCCASIONAL UTILITIES, BEHIND ONE CONTROL, IN BOTH MODES ─────
+            Collapsed, this was forced: the icons stack VERTICALLY and cost
+            ~144px, pushing Dashboard to y=256 of a 720px rail — five occasional
+            destinations physically above the two a studio opens every session,
+            a hierarchy inversion produced by the collapse rather than by any
+            decision.
+
+            Expanded they cost only one 32px row, so nothing forced it there —
+            but the same argument holds for ATTENTION rather than for space.
+            Plugins, Settings and How-to are reached deliberately, minutes
+            apart, never mid-task; sitting permanently beside the search field
+            they compete with the working areas below for the top of the pane.
+            Behind "⋯" they cost one click and stop competing (Franco,
+            2026-08-20).
+
+            Search stays out of the group in both modes: it is a primary action
+            (and ⌘K), not an occasional one. */}
+        <UtilityFlyout onLinkClick={onLinkClick} includeQr={collapsed} />
       </div>
 
       {/* Nav */}
@@ -2517,6 +2542,15 @@ function SidebarContent({
             COLLAPSED FALLS BACK TO ROWS. At w-14 there is no second column to
             put anything in, and two 28px half-tiles would be unreadable — so the
             rail keeps the ordinary icon-only rows it already knows how to draw. */}
+        {/* THE TOUR TREATS THESE TWO AS ONE REGION. The head tiles and the
+            Shortcuts group are separate mechanisms (census items 5 and 1) but
+            they answer the same question for a reader meeting the nav for the
+            first time — "where do the things I use most live?" — so the tour
+            frames them together rather than spending two steps on the
+            distinction. A plain wrapper: no positioning, so the Shortcuts rule
+            still measures against its own `relative` parent, and no padding, so
+            margins collapse exactly as before. */}
+        <div data-tour="nav-quick-access">
         {collapsed ? (
           // At w-14 there is no second column, and a chooser on a 28px target is
           // not a control — the rail keeps the ordinary icon-only rows it already
@@ -2543,6 +2577,7 @@ function SidebarContent({
 
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
+        </div>
 
         {/* Features — the Run / Offer / Grow working areas. Extra top margin on
             the sections: unlike the other macro groups, the first thing here is
