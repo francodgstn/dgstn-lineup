@@ -197,7 +197,51 @@ function generateLeadPassword(): string {
   for (const b of bytes) out += alphabet[b % alphabet.length]
   return out
 }
-const DEMO_PASSWORD = cli.password || generateLeadPassword()
+// Resolved in main(), once the profile is loaded. It cannot be a module-level
+// const any more, because the profile is not read until main() runs.
+let DEMO_PASSWORD = ''
+/** Where the password came from — the run summary says so, and only a RANDOM
+ *  one is worth shouting about. */
+let passwordSource: 'flag' | 'env' | 'profile' | 'random' = 'random'
+
+/**
+ * Secrets for lead seeding, read from an UNTRACKED env file.
+ *
+ * `scripts/leads/.env.local` is ignored by the root `*.local` rule, so this is
+ * a place for values that must never reach the repo — a lead's staff password
+ * is a working credential for a real person's address on a cloud sandbox.
+ *
+ * Keys are per lead, because the accounts are:
+ *
+ *   LEAD_DEMO_PASSWORD_SWIMLI=...
+ *   STRIPE_CONNECT_TEST_ACCOUNT_SWIMLI=acct_...
+ *
+ * Deliberately a tiny parser rather than a dotenv dependency: the file holds a
+ * handful of KEY=value lines and nothing that needs quoting rules or expansion.
+ * Values are NOT trimmed of inner whitespace — a password may legitimately
+ * contain some — only of the line's own padding.
+ */
+function loadLeadEnv(): void {
+  const envPath = path.join(__dirname, 'leads', '.env.local')
+  if (!fs.existsSync(envPath)) return
+  // Split on the newline CHARACTER; each line is trimmed below, which also
+  // removes a trailing CR on Windows-authored files.
+  for (const raw of fs.readFileSync(envPath, 'utf8').split(String.fromCharCode(10))) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq < 1) continue
+    const key = line.slice(0, eq).trim()
+    // An already-set process env wins: an explicit `FOO=x pnpm lead:seed` is a
+    // deliberate override of the file.
+    if (process.env[key] === undefined) process.env[key] = line.slice(eq + 1).trim()
+  }
+}
+
+/** Per-lead env key, e.g. LEAD_DEMO_PASSWORD_SWIMLI. */
+function leadEnvKey(prefix: string, lead: string): string {
+  return `${prefix}_${lead.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+}
 
 // ── generic helpers (mirroring seed-sandbox.ts) ─────────────────────────────
 
@@ -928,7 +972,12 @@ async function seedLeadTenant(profile: LeadProfile) {
   // itself happens at the END of this function, after the public_profile set()
   // below — see linkSeedConnectAccount.
   planSeedConnectAccounts([teamId], {
-    pinned: { [teamId]: cli.connect ?? profile.stripeConnectTestAccount },
+    pinned: {
+      [teamId]:
+        cli.connect ??
+        process.env[leadEnvKey('STRIPE_CONNECT_TEST_ACCOUNT', profile.id)] ??
+        profile.stripeConnectTestAccount,
+    },
   })
 
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
@@ -3083,6 +3132,15 @@ async function main() {
     process.exit(1)
   }
   process.env.TZ = profile.timezone
+
+  // Staff-login password: the flag wins, then the untracked env file, then the
+  // profile's pinned default, then a fresh random one.
+  loadLeadEnv()
+  const envPassword = process.env[leadEnvKey('LEAD_DEMO_PASSWORD', profile.id)]
+  if (cli.password) { DEMO_PASSWORD = cli.password; passwordSource = 'flag' }
+  else if (envPassword) { DEMO_PASSWORD = envPassword; passwordSource = 'env' }
+  else if (profile.demoPassword) { DEMO_PASSWORD = profile.demoPassword; passwordSource = 'profile' }
+  else { DEMO_PASSWORD = generateLeadPassword(); passwordSource = 'random' }
   assetsDir = path.join(__dirname, 'leads', LEAD!, 'assets')
 
   const teamId = `lead-${profile.id}`
@@ -3145,8 +3203,13 @@ async function main() {
     `\n✅ Lead tenant seeded — ${profile.contacts.length} contacts, ${sessionCount} sessions\n`
   )
   console.log('   Logins (password: ' + DEMO_PASSWORD + '):')
-  if (!cli.password) {
-    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it (pin with --password).')
+  if (passwordSource === 'random') {
+    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it.')
+    console.log("     Pin it with --password, or set `demoPassword` in the lead's profile.")
+  } else if (passwordSource === 'env') {
+    console.log('   Pinned by scripts/leads/.env.local — stable across reseeds, never committed.')
+  } else if (passwordSource === 'profile') {
+    console.log("   Pinned by the profile's `demoPassword` — stable across reseeds.")
   }
   for (const s of profile.staff) {
     console.log(

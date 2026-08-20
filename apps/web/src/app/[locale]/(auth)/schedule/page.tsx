@@ -28,8 +28,10 @@ import {
   TEAMS_COLLECTION,
   TEAM_MEMBERS_SUBCOLLECTION,
   compareActivities,
+  isPastSession,
 } from '@linyup/shared'
 import type { Session, Activity, Event } from '@linyup/shared'
+import { PastItemNotice } from '@/components/sessions/PastItemNotice'
 import { useEventTypes } from '@/hooks/useEventTypes'
 import { useCoaches } from '@/hooks/useCoaches'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
@@ -92,6 +94,7 @@ import { useVisibleCalendars, type ScheduleCalendar } from '@/hooks/useVisibleCa
 import { VisibleCalendarsMenu } from '@/components/schedule/VisibleCalendarsMenu'
 import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
 import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
+import { PlacesSheet } from '@/components/schedule/PlacesSheet'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -511,6 +514,12 @@ function EventFormDialog({
           <DialogTitle>{editing ? t('editEvent') : t('newEvent')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+          {/* Editing something that already happened — same notice, same rule
+              and the same component as the session dialog. An event runs for
+              days, so `isPastSession`'s `(end ?? start)` matters more here than
+              anywhere: a camp is not history until its last day is over. */}
+          {editing && isPastSession(editing) && <PastItemNotice />}
+
           {/* Scope toggle — org admin + new only */}
           {isOrgAdmin && !editing && (
             <Controller
@@ -952,6 +961,9 @@ export default function CalendarPage() {
   // the /schedule/availability route renders, so there is one writer and the
   // route stays a working deep link (see BookableHoursSheet's header).
   const [hoursSheetOpen, setHoursSheetOpen] = useState(false)
+  // PLACES — the same arrangement one button along, for the same reason. The
+  // route stays live and the sheet's footer links to it.
+  const [placesSheetOpen, setPlacesSheetOpen] = useState(false)
   const [appointmentSlot, setAppointmentSlot] = useState<Session | null>(null)
   // Manual booking — a manager books an appointment for a client (or blocks
   // time) on the spot, e.g. a phone booking. Distinct from "Appointment
@@ -1187,15 +1199,21 @@ export default function CalendarPage() {
               the scheduling reference data this page consumes, both are edited
               from here. Label hidden below `sm` only — the icon is a map pin next
               to a labelled sibling, so it does not have to carry the meaning
-              alone on a narrow screen. */}
-          <Link
-            href={'/schedule/places' as Route}
+              alone on a narrow screen.
+              It now opens a SIDE SHEET, for the reason its sibling above already
+              gives: the moment a room is needed is the moment somebody is
+              scheduling into it, and a full page takes away the week they were
+              reading. The route still exists and the sheet's footer links to it. */}
+          <Button
+            variant="outline"
+            className="shrink-0"
             title={t('places')}
-            className={cn(buttonVariants({ variant: 'outline' }), 'shrink-0')}
+            onClick={() => setPlacesSheetOpen(true)}
+            disabled={!currentTeamId || !user}
           >
             <MapPin className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('places')}</span>
-          </Link>
+          </Button>
           {/* Add dropdown */}
           {currentTeamId && user && (
             <DropdownMenu>
@@ -1543,6 +1561,16 @@ export default function CalendarPage() {
             onShowCalendar={() => {
               if (!calendars.isVisible('bookableHours')) calendars.toggle('bookableHours')
             }}
+          />
+          {/* Places — locations and rooms, over this calendar. Shares the
+              `['places', teamId, orgId]` query key with the session form's place
+              picker, so a room added here shows up in an open form. */}
+          <PlacesSheet
+            open={placesSheetOpen}
+            onOpenChange={setPlacesSheetOpen}
+            teamId={currentTeamId}
+            userId={user.uid}
+            orgId={team?.org_id ?? null}
           />
           {/* Availability CREATE — one new schedule ("+ New → Add bookable
               hours"). Managing them lives in the sheet above, or at

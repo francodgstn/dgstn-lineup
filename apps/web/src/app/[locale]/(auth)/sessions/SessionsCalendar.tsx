@@ -16,7 +16,13 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react'
-import { resolveAppointmentDurations, isExpiredAppointmentHold } from '@linyup/shared'
+import {
+  resolveAppointmentDurations,
+  isExpiredAppointmentHold,
+  dayKey,
+  daySpans,
+  spanOnDay,
+} from '@linyup/shared'
 import type { Session, Activity, Event, Availability } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
 import { EventPeekSheet } from '@/components/events/EventPeekSheet'
@@ -65,7 +71,10 @@ function buildMonthGrid(year: number, month: number): Date[][] {
   return weeks
 }
 
-const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+// `dayKey` and the interval→days translation live in shared/utils/calendarSpan,
+// so this grid and the public planner cannot disagree about which day an item is
+// on. `sameDay` stays local — it answers "is this the selected column", a
+// question about the grid's own state, not about any item's extent.
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -286,8 +295,30 @@ function SessionCard({ session, activities, onOpen, onEdit, onDelete }: SessionC
 
 // ─── EventCard ────────────────────────────────────────────────────────────────
 
-function EventCard({ event, onOpen }: { event: Event; onOpen: (e: Event) => void }) {
+function EventCard({
+  event,
+  day,
+  onOpen,
+}: {
+  event: Event
+  /** Which day's agenda this card is in — an event now appears on all of them. */
+  day: Date
+  onOpen: (e: Event) => void
+}) {
+  const t = useTranslations('Calendar')
   const color = EVENT_TYPE_COLOR[event.type] ?? '#6B7280'
+
+  // "09:00 – 17:00" is a lie on a four-day camp: those are the clock times of
+  // two different days, three days apart, and printed together they read as one
+  // afternoon. A spanning event says which day of how many it is instead, and
+  // keeps the clock only for the two days where a clock time is true — the day
+  // it starts and the day it ends.
+  const start = (event.start as unknown as { toDate(): Date }).toDate()
+  const end = (event.end as unknown as { toDate(): Date } | undefined)?.toDate() ?? null
+  const spans = daySpans(start, end)
+  const isMultiDay = spans.length > 1
+  const index = spans.findIndex((s) => s.key === dayKey(day))
+  const here = index >= 0 ? spans[index] : null
 
   return (
     <div
@@ -308,8 +339,20 @@ function EventCard({ event, onOpen }: { event: Event; onOpen: (e: Event) => void
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            {formatTs(event.start as unknown as { toDate(): Date })}
-            {event.end && ` – ${formatTs(event.end as unknown as { toDate(): Date })}`}
+            {!isMultiDay ? (
+              <>
+                {formatTs(event.start as unknown as { toDate(): Date })}
+                {event.end && ` – ${formatTs(event.end as unknown as { toDate(): Date })}`}
+              </>
+            ) : (
+              <>
+                {t('eventDayOf', { day: index + 1, total: spans.length })}
+                {here?.isFirstDay && ` · ${t('eventFrom')} ${formatTs({ toDate: () => start })}`}
+                {here?.isLastDay &&
+                  end &&
+                  ` · ${t('eventUntil')} ${formatTs({ toDate: () => end })}`}
+              </>
+            )}
           </span>
           {event.location && (
             <span className="flex items-center gap-1 max-w-[200px] truncate">
@@ -354,9 +397,16 @@ interface PositionedSession {
  * Position a day's sessions on the time grid. Transitively-overlapping
  * sessions form a cluster; within a cluster each session is greedily assigned
  * the first free column and all cluster members share the column count.
+ *
+ * `day` is which column is being drawn, and it is REQUIRED: a session reaching
+ * this list may have started yesterday. Its minutes on this day come from
+ * `spanOnDay`, so a 22:00→01:00 class draws 22:00→24:00 in one column and
+ * 00:00→01:00 in the next, rather than the flat sixty-minute block the old
+ * `sameDay(end, start)` clamp substituted whenever the end was on another day.
  */
 function layoutDaySessions(
   daySessions: Session[],
+  day: Date,
   rangeStartHour: number,
   rangeEndHour: number
 ): PositionedSession[] {
@@ -365,9 +415,10 @@ function layoutDaySessions(
   const items = daySessions
     .map((s) => {
       const st = (s.start as { toDate(): Date }).toDate()
-      const startMin = st.getHours() * 60 + st.getMinutes()
-      const en = (s.end as { toDate(): Date } | undefined)?.toDate()
-      let endMin = en && sameDay(en, st) ? en.getHours() * 60 + en.getMinutes() : startMin + 60
+      const en = (s.end as { toDate(): Date } | undefined)?.toDate() ?? null
+      const span = spanOnDay(st, en, day)
+      const startMin = span ? span.startMin : st.getHours() * 60 + st.getMinutes()
+      let endMin = span ? span.endMin : startMin + 60
       endMin = Math.min(Math.max(endMin, startMin + 30), rangeEndMin) // ≥30min visual, clamp to grid
       return { s, startMin, endMin }
     })
@@ -577,31 +628,41 @@ export default function SessionsCalendar({
     }
   }
 
-  // Index sessions by date key
+  // ── THE INDEXES, and the one thing to know about them ──────────────────────
+  // An item is filed under EVERY day it touches, not just the day it starts.
+  // That single change is what makes a four-day camp appear on four days, and it
+  // is why nothing downstream needs to know about spanning: the mini-month dots,
+  // the day agenda, the week strip and the week grid all read these maps and all
+  // become correct together. `daySpans` owns the interval→days translation.
   const sessionsByDate = useMemo(() => {
     const map = new Map<string, Session[]>()
     for (const s of sessions) {
       if (!s.start) continue
-      const k = dateKey((s.start as { toDate(): Date }).toDate())
-      map.set(k, [...(map.get(k) ?? []), s])
+      const st = (s.start as { toDate(): Date }).toDate()
+      const en = (s.end as { toDate(): Date } | undefined)?.toDate() ?? null
+      for (const span of daySpans(st, en)) {
+        map.set(span.key, [...(map.get(span.key) ?? []), s])
+      }
     }
     return map
   }, [sessions])
 
-  // Index events by date key
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Event[]>()
     for (const e of events) {
       if (!e.start) continue
-      const k = dateKey((e.start as unknown as { toDate(): Date }).toDate())
-      map.set(k, [...(map.get(k) ?? []), e])
+      const st = (e.start as unknown as { toDate(): Date }).toDate()
+      const en = (e.end as unknown as { toDate(): Date } | undefined)?.toDate() ?? null
+      for (const span of daySpans(st, en)) {
+        map.set(span.key, [...(map.get(span.key) ?? []), e])
+      }
     }
     return map
   }, [events])
 
   const daySessions = useMemo(
     () =>
-      (sessionsByDate.get(dateKey(selected)) ?? [])
+      (sessionsByDate.get(dayKey(selected)) ?? [])
         .slice()
         .sort(
           (a, b) => itemMs({ kind: 'session', data: a }) - itemMs({ kind: 'session', data: b })
@@ -610,7 +671,7 @@ export default function SessionsCalendar({
   )
   const dayEvents = useMemo(
     () =>
-      (eventsByDate.get(dateKey(selected)) ?? [])
+      (eventsByDate.get(dayKey(selected)) ?? [])
         .slice()
         .sort((a, b) => itemMs({ kind: 'event', data: a }) - itemMs({ kind: 'event', data: b })),
     [eventsByDate, selected]
@@ -636,13 +697,20 @@ export default function SessionsCalendar({
     // the grid to show it in full.
     const dayRawBands = weekDays.map((day) => expandAvailabilityForDay(day, availability, activities))
 
+    // The hours the grid must open, asked PER DAY through the same span the
+    // blocks are drawn from. Reading the session's own clock times here was the
+    // clamp's second home: a session continuing from yesterday would report its
+    // start hour (23:00) on today's column and the grid would stretch backwards
+    // to open an hour nothing is drawn in, while never opening the 00:00 the
+    // continuation actually occupies.
     for (const d of weekDays) {
-      for (const s of sessionsByDate.get(dateKey(d)) ?? []) {
+      for (const s of sessionsByDate.get(dayKey(d)) ?? []) {
         const st = (s.start as { toDate(): Date }).toDate()
-        startHour = Math.min(startHour, st.getHours())
-        const en = (s.end as { toDate(): Date } | undefined)?.toDate()
-        const endH =
-          en && sameDay(en, st) ? en.getHours() + (en.getMinutes() > 0 ? 1 : 0) : st.getHours() + 1
+        const en = (s.end as { toDate(): Date } | undefined)?.toDate() ?? null
+        const span = spanOnDay(st, en, d)
+        if (!span) continue
+        startHour = Math.min(startHour, Math.floor(span.startMin / 60))
+        const endH = Math.ceil(span.endMin / 60)
         endHour = Math.max(endHour, Math.min(endH, 24))
       }
     }
@@ -660,8 +728,8 @@ export default function SessionsCalendar({
     const rangeStartMin = startHour * 60
     const days = weekDays.map((day, i) => ({
       day,
-      events: eventsByDate.get(dateKey(day)) ?? [],
-      blocks: layoutDaySessions(sessionsByDate.get(dateKey(day)) ?? [], startHour, endHour),
+      events: eventsByDate.get(dayKey(day)) ?? [],
+      blocks: layoutDaySessions(sessionsByDate.get(dayKey(day)) ?? [], day, startHour, endHour),
       bands: dayRawBands[i].map(
         (b): PositionedAvailabilityBand => ({
           key: b.key,
@@ -782,8 +850,8 @@ export default function SessionsCalendar({
                   key={di}
                   day={day}
                   count={
-                    (sessionsByDate.get(dateKey(day))?.length ?? 0) +
-                    (eventsByDate.get(dateKey(day))?.length ?? 0)
+                    (sessionsByDate.get(dayKey(day))?.length ?? 0) +
+                    (eventsByDate.get(dayKey(day))?.length ?? 0)
                   }
                   isSelected={sameDay(day, selected)}
                   isToday={sameDay(day, today)}
@@ -814,7 +882,7 @@ export default function SessionsCalendar({
           ) : (
             <div className="-mx-2 space-y-0.5 max-h-[28rem] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
               {dayEvents.map((e) => (
-                <EventCard key={e.id} event={e} onOpen={openEventPeek} />
+                <EventCard key={e.id} event={e} day={selected} onOpen={openEventPeek} />
               ))}
               {daySessions.map((s) => (
                 <SessionCard
@@ -897,7 +965,7 @@ export default function SessionsCalendar({
                   const isSelected = sameDay(day, selected)
                   return (
                     <button
-                      key={dateKey(day)}
+                      key={dayKey(day)}
                       onClick={() => selectDate(day)}
                       className={cn(
                         'flex flex-col items-center gap-0.5 py-2 border-l group min-w-0 transition-colors',
@@ -935,23 +1003,53 @@ export default function SessionsCalendar({
                   <div />
                   {weekGrid.days.map(({ day, events: dayEvts }) => (
                     <div
-                      key={dateKey(day)}
+                      key={dayKey(day)}
+                      // NO horizontal padding: a spanning event's bar must reach
+                      // both edges of its cell so the run in the next column
+                      // touches it. With `px-1` here every day boundary opened a
+                      // 8px gutter and one camp read as a row of separate chips.
+                      // The text inset lives on the bar instead.
                       className={cn(
-                        'border-l px-1 py-1 space-y-1 min-w-0',
+                        'border-l py-1 space-y-1 min-w-0',
                         sameDay(day, selected) && 'bg-primary/[0.07]'
                       )}
                     >
                       {dayEvts.map((e) => {
                         const color = EVENT_TYPE_COLOR[e.type] ?? '#6B7280'
+                        // A multi-day event now appears in every day's cell.
+                        // Squaring off the inner edges is what turns seven
+                        // separate chips into one continuous bar; the label is
+                        // printed only on the day it starts, and on a
+                        // continuation the bar carries the colour alone —
+                        // repeating the title in every column reads as seven
+                        // events, which is the bug this fix exists to remove.
+                        const span = spanOnDay(
+                          (e.start as unknown as { toDate(): Date }).toDate(),
+                          (e.end as unknown as { toDate(): Date } | undefined)?.toDate() ?? null,
+                          day
+                        )
+                        const isFirst = span?.isFirstDay ?? true
+                        const isLast = span?.isLastDay ?? true
                         return (
                           <button
                             key={e.id}
                             onClick={() => openEventPeek(e)}
-                            className="w-full truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-left transition-opacity hover:opacity-80"
+                            // `w-full`, NOT `w-auto`: a <button> shrink-to-fits
+                            // on `width: auto` even at `display: block` (it
+                            // sizes like a replaced element), so a continuation
+                            // bar carrying only a space collapsed to 10px.
+                            className={cn(
+                              'block w-full truncate px-1.5 py-0.5 text-[10px] font-semibold text-left transition-opacity hover:opacity-80',
+                              isFirst ? 'rounded-l-md' : 'rounded-l-none',
+                              isLast ? 'rounded-r-md' : 'rounded-r-none'
+                            )}
                             style={{ backgroundColor: `${color}1F`, color }}
                             title={e.title}
                           >
-                            {e.title}
+                            {/* Non-breaking space, not an empty string: the bar
+                                must keep its height on a continuation day or the
+                                run of it goes ragged. */}
+                            {isFirst ? e.title : ' '}
                           </button>
                         )
                       })}
@@ -984,7 +1082,7 @@ export default function SessionsCalendar({
                     ((now.getHours() * 60 + now.getMinutes()) / 60 - weekGrid.startHour) * HOUR_PX
                   return (
                     <div
-                      key={dateKey(day)}
+                      key={dayKey(day)}
                       className={cn(
                         'relative border-l',
                         // Selected day (from the mini calendar) gets a stronger tint than today.

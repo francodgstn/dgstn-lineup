@@ -128,7 +128,11 @@ describe('the catalogue census', () => {
   const CATALOGUE = [
     'app/[locale]/(auth)/settings/plugins/page.tsx',
     'app/[locale]/(auth)/org/[orgId]/plugins/page.tsx',
-    'components/dashboard/DiscoverPanel.tsx',
+    // components/dashboard/DiscoverPanel.tsx was the third. It was deleted with
+    // the incumbent dashboard (the new page drops Discover by decision — a shelf
+    // you go to, not a thing you are handed while finding out whether the 09:00
+    // is full). Plugin discovery now happens only on the two marketplace pages
+    // above and through the sidebar's Explore link, all of which are covered.
   ]
 
   // Files that touch PLUGIN_REGISTRY but resolve an ALREADY-INSTALLED plugin, or

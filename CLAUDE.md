@@ -694,16 +694,49 @@ firebase emulators:start --only auth,firestore,storage
 
 ### Emulator data modes
 
-Isolated datasets, never mixed:
-
 | Command | Dataset | Notes |
 |---|---|---|
 | `pnpm emulators:seed` | Fresh seed (wipes + re-seeds) | Three plan-tier demo accounts |
 | `pnpm emulators:demo` | `snapshots/demo/` | Persistent demo data for live demo; auto-saved on exit |
 | `pnpm emulators:swimli` | `snapshots/swimli/` | Swimli lead-demo rehearsal snapshot (see "Lead demo tenants") |
-| `pnpm emulators:hmd` | `snapshots/hmd-migration/` | Real HMD data after migration; auth+firestore only |
+| `pnpm emulators:hmd` | `snapshots/hmd-migration/` | Real HMD data after migration (+ the four seed tier teams) |
+| `pnpm emulators:all` | `snapshots/all/` | **Everything at once** — 28 teams: 16 HMD + 4 seed tiers + 6 sandbox sectors + 2 leads |
+
+A firebase emulator export is ALL-OR-NOTHING per project namespace — there is no
+per-collection or per-team export — so `snapshots/hmd-migration/` now also
+contains the four seed tier teams that were in the namespace when it was taken.
+They are rounding error beside HMD's 16 teams and 1632 contacts, and a genuinely
+HMD-only snapshot is still reconstructible at any time by wiping the namespace
+and re-running the migration alone.
 
 `snapshots/` is gitignored. Bootstrap each snapshot once — see `scripts/MIGRATE-HMD.md` for the HMD snapshot and the inline docs in `scripts/emulators-demo.mjs` for the demo snapshot.
+
+**These datasets MAY be loaded together** (Franco, 2026-08-19). The old rule here
+said "isolated datasets, never mixed"; it was caution rather than a constraint,
+and a single emulator holding the seed tiers + the six sandbox sectors + the lead
+tenants + real migrated HMD data is a far better test of how the app behaves with
+many teams than any of them alone. Everything that matters is `teamId`-scoped, so
+mixing exercises the tenant boundary rather than crossing it.
+
+What was actually checked before allowing it, because a silent collision is worse
+than no test at all:
+
+- **Contact emails are namespaced by team** (`{name}.{teamId}@example.com`), so no
+  two datasets can produce the same one.
+- **Login emails are disjoint** — the emulator seed owns `coach@` / `studio@` /
+  `org@` / `free@ / manager@ / coach2@linyup.com`, the sandbox owns
+  `{teamSlug}@linyup.com`, leads own theirs, and HMD brings its own real users.
+- **Team slugs are disjoint**, which matters because `/public/{slug}` resolves a
+  studio through a `collectionGroup('public_profile')` query with `limit(1)` — two
+  teams sharing a slug would resolve arbitrarily.
+- **Org ids are distinct**: `seed-org` vs `hmd`.
+
+**THE ONE PAIR THAT MUST NOT BE COMBINED is the emulator seed and the STAGING
+seed.** `seed-staging.ts` deliberately reuses the emulator's team slugs
+(`samurai-fight-academy`, `iron-circle-gym`, `titan-combat-sports`) AND its login
+emails, so loading both into one namespace collides on both axes. In practice
+they never meet — staging targets a real project — but do not "helpfully" point
+`seed:staging` at the emulator.
 
 ### Seeded tenants show priced doors ONLY with a Stripe test account
 
@@ -853,7 +886,7 @@ Or run the scripts directly (start the backend in one terminal, then each app in
 ```bash
 pnpm install            # root — installs all workspaces (once)
 
-# ── Terminal 1: backend (pick ONE dataset — see "Emulator data modes") ──
+# ── Terminal 1: backend (datasets may be combined — see "Emulator data modes") ──
 pnpm emulators:seed     # fresh seed: emulators (auth+firestore+functions+storage) + 3 demo accounts
 pnpm emulators:demo     # persistent demo snapshot
 pnpm emulators:hmd      # HMD migration snapshot (auth+firestore+storage)

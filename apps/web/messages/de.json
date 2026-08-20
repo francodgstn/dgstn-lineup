@@ -14,7 +14,11 @@
     "errorRetry": "Erneut versuchen",
     "back": "Zurück",
     "duplicate": "Duplizieren",
-    "copyName": "{name} (Kopie)"
+    "copyName": "{name} (Kopie)",
+    "clearSearch": "Suche löschen",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert"
   },
   "Plans": {
     "free": "Free",
@@ -165,7 +169,14 @@
     "navRecentContactsGroup": "Zuletzt angesehene Kontakte",
     "experimentalFeatures": "Experimentelle Funktionen",
     "dashboardPreview": "Dashboard (neu)",
-    "programTemplates": "Programmvorlagen"
+    "programTemplates": "Programmvorlagen",
+    "headTileChange": "Diese Verknüpfung ändern",
+    "headTileAdd": "Verknüpfung hinzufügen",
+    "headTileAddShort": "Neu",
+    "headTileSearch": "Seiten suchen…",
+    "headTileNoMatch": "Keine Treffer",
+    "headTileRemove": "Verknüpfung entfernen",
+    "utilities": "Mehr"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -1070,7 +1081,16 @@
     "noClassActivitiesHint": "Noch keine Kurs-Aktivitäten. Ein Kurs wird auf Basis einer Aktivität geplant – erstelle also zuerst eine.",
     "createActivityAction": "Aktivität erstellen",
     "deleteAppointmentPaidInWindow": "Die Kundin oder der Kunde hat soeben bezahlt, daher wurde nichts gelöscht. Der Termin ist bestätigt — erstatte den Betrag in Stripe, wenn du ihn trotzdem entfernen willst.",
-    "deleteAppointmentLinkStillOpen": "Der Zahlungslink konnte nicht geschlossen werden — er ist möglicherweise noch bezahlbar. Beende ihn in deinem Stripe-Dashboard."
+    "deleteAppointmentLinkStillOpen": "Der Zahlungslink konnte nicht geschlossen werden — er ist möglicherweise noch bezahlbar. Beende ihn in deinem Stripe-Dashboard.",
+    "deleteBackgroundTitle": "Serie wird gelöscht",
+    "deleteBackgroundDescription": "{total} Termine werden abgesagt. Sie können dieses Fenster schließen — die Arbeit läuft im Hintergrund weiter.",
+    "deleteBackgroundProgress": "{processed} von {total} Terminen",
+    "deleteBackgroundDone": "{count} Termine gelöscht",
+    "deleteBackgroundPartial": "{count} Termine gelöscht, {failed} konnten nicht entfernt werden",
+    "deleteBackgroundFailed": "Der Löschvorgang wurde vorzeitig abgebrochen. Einige Termine könnten bestehen bleiben — bitte versuchen Sie es erneut.",
+    "deleteAlreadyRunning": "Diese Serie wird bereits gelöscht.",
+    "deleteRunInBackground": "Im Hintergrund fortsetzen",
+    "pastItemNotice": "Dies liegt in der Vergangenheit — es hat bereits stattgefunden."
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -1144,7 +1164,10 @@
       "sectionSessionsAndEvents": "Einheiten & Veranstaltungen",
       "sectionOther": "Weiteres",
       "onlySessionsAndEvents": "Nur Einheiten & Veranstaltungen"
-    }
+    },
+    "eventDayOf": "Tag {day} von {total}",
+    "eventFrom": "ab",
+    "eventUntil": "bis"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -1599,7 +1622,17 @@
     "sectionBookingTitle": "Buchung und Preise",
     "sectionBookingSubtitle": "Wer das buchen kann und was es kostet.",
     "moreOptionsLabel": "Weitere Optionen",
-    "moreOptionsHint": "Farbe, Niveau und die Angaben auf deiner öffentlichen Seite"
+    "moreOptionsHint": "Farbe, Niveau und die Angaben auf deiner öffentlichen Seite",
+    "viewSchedule": "Zeitplan ansehen",
+    "scheduleSheetSubtitle": "Wann diese Aktivität stattfindet.",
+    "scheduleSheetRecurring": "Wiederkehrend",
+    "scheduleSheetRecurringFallback": "Teil einer wiederkehrenden Serie",
+    "scheduleSheetOneOff": "Einzeltermine",
+    "scheduleSheetMore": "+ {count} weitere",
+    "scheduleSheetEmptyTitle": "Nicht im Kalender",
+    "scheduleSheetEmptyBody": "Für diese Aktivität sind keine Termine geplant — niemand kann sie sehen oder buchen.",
+    "scheduleSheetEmptyCta": "Termin planen",
+    "scheduleSheetOpenSchedule": "Zum Zeitplan"
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -4843,7 +4876,8 @@
     "roomCount": "{count, plural, one {# Raum} other {# Räume}}",
     "openInMaps": "In Maps öffnen",
     "setAsMainAddress": "Als Hauptadresse festlegen",
-    "backToSchedule": "Zurück zum Zeitplan"
+    "backToSchedule": "Zurück zum Zeitplan",
+    "openFullPage": "Ganze Seite öffnen"
   },
   "EngagementMatrix": {
     "cardTitle": "Engagement-Matrix",
@@ -4939,7 +4973,10 @@
     "markPending": "Als ausstehend markieren",
     "markConfirmed": "Als bestätigt markieren",
     "sheetTitleAdd": "Check-in hinzufügen",
-    "sheetTitleUpdate": "Check-in aktualisieren"
+    "sheetTitleUpdate": "Check-in aktualisieren",
+    "addCheckinBaseNote": "Sie werden sofort eingecheckt. Die Details jeder Person können Sie danach in der Liste ergänzen.",
+    "addCheckinConfirm": "Einchecken",
+    "addCheckinConfirmCount": "{count} einchecken"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Auf {label} upgraden",
@@ -5063,7 +5100,11 @@
     "waiverGuardianBadgeTitle": "Unterschrieben von jemandem, der sich als Elternteil oder erziehungsberechtigte Person angegeben hat. Selbst angegeben — bitte vor Ort prüfen.",
     "waiverCheckBadge": "Alter prüfen",
     "waiverCheckBadgeTitle": "Diese Verzichtserklärung kann Minderjährige betreffen und die teilnehmende Person hat selbst unterschrieben. Bitte vor Ort prüfen.",
-    "addContactBooksSeat": "Wer hinzugefügt wird, belegt einen Platz — die Auslastung wird aktualisiert und die Online-Buchung schliesst, sobald die Klasse voll ist."
+    "addContactBooksSeat": "Wer hinzugefügt wird, belegt einen Platz — die Auslastung wird aktualisiert und die Online-Buchung schliesst, sobald die Klasse voll ist.",
+    "addSelected": "Hinzufügen",
+    "addSelectedCount": "{count} hinzufügen",
+    "noContactsMatchSearch": "Keine Kontakte entsprechen Ihrer Suche",
+    "noSubConfirmBodyMany": "{count} der ausgewählten Personen haben kein gültiges Abo für diese Aktivität: {names}. Trotzdem hinzufügen?"
   },
   "OrgEvents": {
     "title": "Organisationsveranstaltungen",
@@ -6587,7 +6628,10 @@
     "engagementMatrixName": "Engagement-Matrix",
     "engagementMatrixDescription": "Stellt jede Woche danach dar, wie viele Personen kamen und wie oft sie wiederkamen, und teilt das Ergebnis in vier Quadranten. Das Quadrantenmodell wird noch abgestimmt — lesen Sie es als Hinweis, nicht als Urteil.",
     "engagementMatrixSurface": "Dashboard, im Abschnitt Trends.",
-    "planNote": "Erfordert den Plan {plan} — in Ihrem Plan ist es daher noch nicht sichtbar."
+    "planNote": "Erfordert den Plan {plan} — in Ihrem Plan ist es daher noch nicht sichtbar.",
+    "extraDashboardName": "Zusätzliche Dashboard-Komponenten",
+    "extraDashboardDescription": "Fügt am Ende des Dashboards zusätzliche Panels hinzu: Finanzkennzahlen und letzte Zahlungen, die Engagement-Matrix, Probestunden-Conversion und den Korrelations-Explorer. Sie funktionieren, aber ihre Form steht noch nicht fest und jedes davon kann sich ändern oder entfallen.",
+    "extraDashboardSurface": "Dashboard, unter „Trends“"
   },
   "NewDashboard": {
     "greetingMorning": "Guten Morgen",
@@ -6682,6 +6726,8 @@
     "demoAgeYouth": "Jugend (10–14)",
     "demoAgeTeens": "Teens (15–17)",
     "demoAgeAdults": "Erwachsene (18–39)",
-    "demoAgeMasters": "Masters (40+)"
+    "demoAgeMasters": "Masters (40+)",
+    "extraTitle": "Extras",
+    "extraSubtitle": "Geparkte Panels, aktiviert unter Einstellungen → Experimentell."
   }
 }

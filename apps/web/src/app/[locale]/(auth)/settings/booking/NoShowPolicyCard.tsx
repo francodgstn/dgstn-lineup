@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { AlertTriangle, Loader2 } from 'lucide-react'
+import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
 
 const DEFAULT_THRESHOLD = 3
 
@@ -129,12 +130,7 @@ export function NoShowPolicyCard() {
       )}
 
       {canEdit && (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={save} disabled={!dirty || !valid || saving}>
-            {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {t('save')}
-          </Button>
-        </div>
+        <SettingsSaveBar onSave={save} saving={saving} disabled={!dirty || !valid} />
       )}
     </div>
   )

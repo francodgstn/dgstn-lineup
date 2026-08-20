@@ -126,8 +126,25 @@ export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
   { key: 'studio', labelKey: 'groupStudio' },
 ]
 
-// Always shown in the sidebar's Shortcuts group by default — the settings that matter
-// most while setting up a new studio. Users add/remove them from the rail; the choice
-// is per-browser. (The STORED name of this list stays `defaultNavPins` — see the
-// census in contexts/NavPinsContext.tsx for why.)
-export const DEFAULT_SHORTCUT_IDS = ['publicPages', 'bookingPage', 'plugins']
+/**
+ * The always-shown shortcuts a browser starts with. Users add/remove them from
+ * the rail; the choice is per-browser. (The STORED name of this list stays
+ * `defaultNavPins` — see the census in contexts/NavPinsContext.tsx for why.)
+ *
+ * EMPTY, DELIBERATELY. It used to seed `['publicPages','bookingPage','plugins']`
+ * — a guess at what a new studio needs, arriving pre-pinned without being asked
+ * for. An empty group with a visible hint ("Pages you open show up here") says
+ * more than three rows nobody chose, and the recents half fills it within a
+ * session of ordinary use anyway.
+ */
+export const DEFAULT_SHORTCUT_IDS: string[] = []
+
+/**
+ * The destination in the head tile beside Dashboard before the studio picks one.
+ *
+ * Schedule: it is the surface a studio opens every session, and the tile exists
+ * to put exactly that one click from anywhere. Census item 5 in
+ * contexts/NavPinsContext.tsx owns the storage and the absent-vs-cleared rule —
+ * this constant is only the fallback for "never chosen".
+ */
+export const DEFAULT_HEAD_TILE_ID = 'calendar'

@@ -14,7 +14,11 @@
     "errorRetry": "Riprova",
     "back": "Indietro",
     "duplicate": "Duplica",
-    "copyName": "{name} (copia)"
+    "copyName": "{name} (copia)",
+    "clearSearch": "Cancella la ricerca",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "saved": "Salvato"
   },
   "Plans": {
     "free": "Free",
@@ -165,7 +169,14 @@
     "navRecentContactsGroup": "Contatti visti di recente",
     "experimentalFeatures": "Funzionalità sperimentali",
     "dashboardPreview": "Dashboard (nuova)",
-    "programTemplates": "Modelli di programma"
+    "programTemplates": "Modelli di programma",
+    "headTileChange": "Cambia questa scorciatoia",
+    "headTileAdd": "Aggiungi una scorciatoia",
+    "headTileAddShort": "Aggiungi",
+    "headTileSearch": "Cerca pagine…",
+    "headTileNoMatch": "Nessun risultato",
+    "headTileRemove": "Rimuovi questa scorciatoia",
+    "utilities": "Altro"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -1070,7 +1081,16 @@
     "noClassActivitiesHint": "Nessuna attività di tipo corso. Un corso si pianifica a partire da un'attività: creane una prima.",
     "createActivityAction": "Crea un'attività",
     "deleteAppointmentPaidInWindow": "Il cliente ha appena pagato, quindi non è stato eliminato nulla. L'appuntamento è confermato — rimborsalo in Stripe se vuoi comunque rimuoverlo.",
-    "deleteAppointmentLinkStillOpen": "Il link di pagamento non è stato chiuso — potrebbe essere ancora pagabile. Fallo scadere nella tua dashboard Stripe."
+    "deleteAppointmentLinkStillOpen": "Il link di pagamento non è stato chiuso — potrebbe essere ancora pagabile. Fallo scadere nella tua dashboard Stripe.",
+    "deleteBackgroundTitle": "Eliminazione della serie",
+    "deleteBackgroundDescription": "{total} sessioni sono in fase di annullamento. Puoi chiudere questa finestra — l'operazione continua in background.",
+    "deleteBackgroundProgress": "{processed} di {total} sessioni",
+    "deleteBackgroundDone": "{count} sessioni eliminate",
+    "deleteBackgroundPartial": "{count} sessioni eliminate, {failed} non è stato possibile rimuoverle",
+    "deleteBackgroundFailed": "L'eliminazione si è interrotta prima di completarsi. Alcune sessioni potrebbero rimanere — riprova.",
+    "deleteAlreadyRunning": "Questa serie è già in fase di eliminazione.",
+    "deleteRunInBackground": "Continua in background",
+    "pastItemNotice": "Questo elemento è passato — si è già svolto."
   },
   "Calendar": {
     "title": "Programma",
@@ -1144,7 +1164,10 @@
       "sectionSessionsAndEvents": "Sessioni ed eventi",
       "sectionOther": "Altro",
       "onlySessionsAndEvents": "Solo sessioni ed eventi"
-    }
+    },
+    "eventDayOf": "Giorno {day} di {total}",
+    "eventFrom": "dalle",
+    "eventUntil": "fino alle"
   },
   "Events": {
     "title": "Eventi",
@@ -1599,7 +1622,17 @@
     "sectionBookingTitle": "Prenotazione e prezzi",
     "sectionBookingSubtitle": "Chi può prenotare e quanto paga.",
     "moreOptionsLabel": "Altre opzioni",
-    "moreOptionsHint": "Colore, livello e i dettagli mostrati sulla tua pagina pubblica"
+    "moreOptionsHint": "Colore, livello e i dettagli mostrati sulla tua pagina pubblica",
+    "viewSchedule": "Vedi la programmazione",
+    "scheduleSheetSubtitle": "Quando è programmata questa attività.",
+    "scheduleSheetRecurring": "Ricorrente",
+    "scheduleSheetRecurringFallback": "Parte di una serie ricorrente",
+    "scheduleSheetOneOff": "Singole",
+    "scheduleSheetMore": "+ altre {count}",
+    "scheduleSheetEmptyTitle": "Non a calendario",
+    "scheduleSheetEmptyBody": "Questa attività non ha sessioni in programma, quindi nessuno può vederla o prenotarla.",
+    "scheduleSheetEmptyCta": "Programma una sessione",
+    "scheduleSheetOpenSchedule": "Apri la programmazione"
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -4843,7 +4876,8 @@
     "roomCount": "{count, plural, one {# sala} other {# sale}}",
     "openInMaps": "Apri in Maps",
     "setAsMainAddress": "Imposta come indirizzo principale",
-    "backToSchedule": "Torna al programma"
+    "backToSchedule": "Torna al programma",
+    "openFullPage": "Apri la pagina completa"
   },
   "EngagementMatrix": {
     "cardTitle": "Matrice di coinvolgimento",
@@ -4939,7 +4973,10 @@
     "markPending": "Segna come in attesa",
     "markConfirmed": "Segna come confermato",
     "sheetTitleAdd": "Aggiungi check-in",
-    "sheetTitleUpdate": "Aggiorna check-in"
+    "sheetTitleUpdate": "Aggiorna check-in",
+    "addCheckinBaseNote": "Vengono registrate subito. I dettagli di ciascuna persona si completano poi dall'elenco.",
+    "addCheckinConfirm": "Registra",
+    "addCheckinConfirmCount": "Registra {count}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Passa al piano {label}",
@@ -5063,7 +5100,11 @@
     "waiverGuardianBadgeTitle": "Firmato da chi si è dichiarato genitore o tutore. Autodichiarazione — verificare di persona.",
     "waiverCheckBadge": "Verifica età",
     "waiverCheckBadgeTitle": "Questa liberatoria può riguardare minorenni e il partecipante ha firmato per sé. Verificare di persona.",
-    "addContactBooksSeat": "Aggiungere una persona prenota il suo posto — la capienza si aggiorna e le prenotazioni online si chiudono quando la classe è piena."
+    "addContactBooksSeat": "Aggiungere una persona prenota il suo posto — la capienza si aggiorna e le prenotazioni online si chiudono quando la classe è piena.",
+    "addSelected": "Aggiungi",
+    "addSelectedCount": "Aggiungi {count}",
+    "noContactsMatchSearch": "Nessun contatto corrisponde alla tua ricerca",
+    "noSubConfirmBodyMany": "{count} delle persone selezionate non hanno un abbonamento valido per questa attività: {names}. Aggiungerle comunque?"
   },
   "OrgEvents": {
     "title": "Eventi dell'organizzazione",
@@ -6587,7 +6628,10 @@
     "engagementMatrixName": "Matrice di coinvolgimento",
     "engagementMatrixDescription": "Rappresenta ogni settimana in base a quante persone sono venute e con quale frequenza sono tornate, dividendo il risultato in quattro quadranti. Il modello a quadranti è ancora in fase di messa a punto: leggilo come un'indicazione, non come un verdetto.",
     "engagementMatrixSurface": "Dashboard, nella sezione Tendenze.",
-    "planNote": "Richiede il piano {plan}, quindi con il tuo non lo vedrai ancora."
+    "planNote": "Richiede il piano {plan}, quindi con il tuo non lo vedrai ancora.",
+    "extraDashboardName": "Componenti aggiuntivi della dashboard",
+    "extraDashboardDescription": "Aggiunge una serie di pannelli extra in fondo alla dashboard: dati finanziari e pagamenti recenti, matrice di coinvolgimento, conversione delle prove e esploratore di correlazioni. Funzionano, ma la loro forma non è ancora definita e ognuno può cambiare o essere rimosso.",
+    "extraDashboardSurface": "Dashboard, sotto «Tendenze»"
   },
   "NewDashboard": {
     "greetingMorning": "Buongiorno",
@@ -6682,6 +6726,8 @@
     "demoAgeYouth": "Giovani (10–14)",
     "demoAgeTeens": "Teenager (15–17)",
     "demoAgeAdults": "Adulti (18–39)",
-    "demoAgeMasters": "Masters (40+)"
+    "demoAgeMasters": "Masters (40+)",
+    "extraTitle": "Extra",
+    "extraSubtitle": "Pannelli in sospeso, attivati in Impostazioni → Sperimentale."
   }
 }

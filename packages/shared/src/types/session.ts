@@ -433,6 +433,34 @@ export function isPastBookingCutoff(
   return nowMs >= sessionStart.toMillis() - cutoffMinutes * 60_000
 }
 
+/**
+ * Is this scheduled item OVER?
+ *
+ * ONE PREDICATE, because there were six divergent inline copies of this question
+ * across the app and they did not agree with each other. The public site and the
+ * public weekly calendar tested `(end ?? start)`; the schedule's own
+ * upcoming/past tab tests `start` alone; three more surfaces each rolled their
+ * own. That is fine while the answer only dims a card, and not fine the moment
+ * it is used to warn somebody they are editing history.
+ *
+ * THE RULE IS `(end ?? start) < now` — an item is past when it has FINISHED, not
+ * when it has begun. A class that started twenty minutes ago is in progress, and
+ * telling a coach mid-session that they are editing something in the past is
+ * both wrong and the kind of wrong that teaches people to ignore the warning.
+ * `end` is optional across older documents, hence the fallback.
+ *
+ * NOT a booking gate — `isPastBookingCutoff` above answers whether booking has
+ * closed, which happens on its own schedule and usually earlier.
+ */
+export function isPastSession(
+  item: { start?: { toMillis(): number } | null; end?: { toMillis(): number } | null },
+  nowMs: number = Date.now()
+): boolean {
+  const finish = item.end ?? item.start
+  if (!finish) return false
+  return finish.toMillis() < nowMs
+}
+
 export interface Session {
   id: string
   teamId: string

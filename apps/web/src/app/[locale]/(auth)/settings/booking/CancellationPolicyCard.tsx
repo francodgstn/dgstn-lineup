@@ -18,7 +18,7 @@ import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheck, Loader2} from 'lucide-react'
 
 interface TeamPolicySettings {
   settings?: { bookingCancellationPolicy?: string }
@@ -88,6 +88,7 @@ export function CancellationPolicyCard() {
             <span className="text-xs text-muted-foreground">{t('policySaved')}</span>
           )}
           <Button size="sm" onClick={save} disabled={!canEdit || saving || !dirty}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? t('policySaving') : t('policySave')}
           </Button>
         </div>

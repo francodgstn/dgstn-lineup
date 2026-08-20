@@ -51,6 +51,9 @@ import {
   Ticket,
   MapPin,
   LayoutTemplate,
+  Plus,
+  Check,
+  MoreHorizontal,
 } from 'lucide-react'
 import { Eraser } from 'lucide-react'
 import type { Route } from 'next'
@@ -75,6 +78,8 @@ import { useHasByoGateway } from '@/hooks/useConnect'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Logo } from '@/components/Logo'
 import { ProductTour } from '@/components/onboarding/ProductTour'
 import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
@@ -114,23 +119,43 @@ type NavItem = {
 
 type NavSection = { labelKey: string; icon: React.ElementType; items: NavItem[] }
 
+// ── THE HEAD ROW ─────────────────────────────────────────────────────────────
+// Two tiles at the top of the nav: Dashboard, then one destination the studio
+// chooses (see `HeadTiles`). Giving the head of the nav a different shape from
+// its body is what makes them findable without reading.
+//
+// Dashboard is the fixed one and is declared here because it is not a section
+// row and never has been. SCHEDULE_ITEM is declared here too but is rendered
+// FROM `NAV_SECTIONS` — it is Run's first item, and the head tile it fills by
+// default reaches it the same way every other shortcut does, through the
+// catalogue. Declaring it once here and referencing it there keeps one
+// definition of the id, href and icon.
 const DASHBOARD_ITEM: NavItem = {
   id: 'dashboard',
   href: '/dashboard',
   labelKey: 'dashboard',
   icon: LayoutDashboard,
+  // `/dashboard` used to be special-cased BY HREF inside the active-state test,
+  // so the second dashboard at /dashboard/preview could not light this row up.
+  // That route is now a redirect and the rule belongs on the item, not in a
+  // generic component that had one destination's path written into it.
+  exact: true,
 }
-// A second, from-scratch dashboard, sitting beside the incumbent so the two can
-// be compared on the same data rather than described to each other. Temporary by
-// intent: when one wins, this entry and the losing route go together. It is a
-// plain nav item rather than an experimental-features entry because the point is
-// to meet it without opting in — an experiment you have to switch on is one you
-// forget to compare.
-const DASHBOARD_PREVIEW_ITEM: NavItem = {
-  id: 'dashboardPreview',
-  href: '/dashboard/preview',
-  labelKey: 'dashboardPreview',
-  icon: LayoutTemplate,
+const SCHEDULE_ITEM: NavItem = {
+  id: 'calendar',
+  href: '/schedule',
+  labelKey: 'calendar',
+  icon: Calendar,
+}
+
+/**
+ * Is this row the page we are on? Prefix match, so `/schedule/places` keeps the
+ * Schedule row lit, unless the item asks for an exact one. Shared by the full
+ * rows and the head tiles — two answers to "am I here" is how a nav ends up
+ * highlighting two places at once.
+ */
+function navItemIsActive(item: NavItem, pathname: string): boolean {
+  return item.exact ? pathname === item.href : pathname.startsWith(item.href)
 }
 // Plugin catalogue. Was a text link at the FOOT of the features group, which put
 // discovery of most of the product below everything already installed — the one
@@ -178,7 +203,14 @@ const NAV_SECTIONS: NavSection[] = [
     labelKey: 'sectionRun',
     icon: Activity,
     items: [
-      { id: 'calendar', href: '/schedule', labelKey: 'calendar', icon: Calendar },
+      // Schedule KEEPS ITS HOME ROW even though it is also the default head
+      // tile. A tile is a shortcut, and a shortcut has always been a duplicate
+      // of a row that exists elsewhere — pinning Contacts shows it in Shortcuts
+      // AND in Run. It briefly lived only as a tile, back when that tile was
+      // fixed; now that a studio can swap it out, removing the tile would have
+      // deleted the destination from the nav altogether and left it reachable
+      // only through search.
+      SCHEDULE_ITEM,
       // The printable day sheet — what a coach carries to the door. Sits next
       // to the calendar because it answers the same question ("what's on
       // today?") for the one context the calendar can't serve: paper.
@@ -372,11 +404,7 @@ function NavLink({
 
   const isLocked = !!item.minPlan && !isAtLeast(item.minPlan)
 
-  const isActive =
-    !isLocked &&
-    (item.href === '/dashboard' || item.exact
-      ? pathname === item.href
-      : pathname.startsWith(item.href))
+  const isActive = !isLocked && navItemIsActive(item, pathname)
 
   if (isLocked) {
     return (
@@ -431,6 +459,71 @@ function NavLink({
   return link
 }
 
+/**
+ * The head-pair tile: icon over label, sized to sit two-across.
+ *
+ * Same active vocabulary as NavLink — `bg-primary/10 text-primary font-semibold`
+ * — minus its 3px inset left bar. That bar marks a row in a list by its leading
+ * edge; on a tile it reads as a stray rule down one side, and the tint alone
+ * already carries the state.
+ *
+ * The icon steps up to `h-5 w-5`. At `h-4` it looks like a row icon that has
+ * lost its label rather than the subject of the tile, which is the whole reason
+ * this shape exists.
+ *
+ * NO LOCKED VARIANT, deliberately: neither of the two head items carries a
+ * `minPlan`, and writing an upgrade path for a case that cannot occur is a
+ * branch nothing would ever exercise. If a gated destination is ever promoted
+ * up here, take NavLink's locked button and give it this geometry.
+ */
+function NavTile({
+  href,
+  label,
+  icon: Icon,
+  exact,
+  dataTour,
+  onClick,
+  children,
+}: {
+  href: string
+  /** Already translated — a tile is fed either a NavItem's labelKey resolved by
+   *  the caller, or a catalogue entry whose label was resolved when it was
+   *  built (plugin rows use a different namespace, which is why the catalogue
+   *  pre-translates). */
+  label: string
+  icon: React.ElementType
+  exact?: boolean
+  dataTour?: string
+  onClick?: () => void
+  /** The edit affordance on an adjustable tile. Rendered as a sibling overlay so
+   *  it is not inside the <Link> — a button inside an anchor is invalid, and
+   *  clicking it must not navigate. */
+  children?: React.ReactNode
+}) {
+  const pathname = usePathname()
+  const isActive = navItemIsActive({ href, exact } as NavItem, pathname)
+
+  return (
+    <div className="group/tile relative">
+      <Link
+        href={href as Route}
+        onClick={onClick}
+        data-tour={dataTour}
+        title={label}
+        className={`flex flex-col items-center justify-center gap-1.5 rounded-lg px-2 py-3 text-center text-xs transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        }`}
+      >
+        <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        <span className="w-full truncate leading-none">{label}</span>
+      </Link>
+      {children}
+    </div>
+  )
+}
+
 // A compact icon-only link for the utility destinations (plugins, settings,
 // how-to) that sit in their own row under the search bar rather than in the nav
 // list. Always shows its label as a tooltip, since there's no text beside the
@@ -455,6 +548,49 @@ function UtilityIconLink({ item, onClick }: { item: NavItem; onClick?: () => voi
     >
       <Icon className="h-4 w-4 shrink-0" />
     </Link>
+  )
+}
+
+/**
+ * The four occasional utilities — QR, Plugins, Settings, How-to — behind ONE
+ * icon, used only when the sidebar is collapsed.
+ *
+ * WHY IT EXISTS: expanded, these are a horizontal strip costing one 32px row.
+ * Collapsed, the same markup stacks vertically and costs ~144px, which put
+ * Dashboard 36% of the way down a 720px rail with five occasional destinations
+ * above it. The collapse inverted the hierarchy on its own; this restores it.
+ *
+ * The panel repeats the EXPANDED layout — a horizontal row of the same icon
+ * buttons — rather than inventing a vertical menu, so the two states are the
+ * same object drawn at two sizes and nothing has to be relearned.
+ *
+ * Search is deliberately NOT in here: it is a primary action with a keyboard
+ * shortcut, not an occasional destination.
+ */
+function UtilityFlyout({ onLinkClick }: { onLinkClick?: () => void }) {
+  const t = useTranslations('Nav')
+  const label = t('utilities')
+  return (
+    <NavFlyout
+      label={label}
+      trigger={
+        <button
+          type="button"
+          title={label}
+          aria-label={label}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <MoreHorizontal className="h-4 w-4 shrink-0" />
+        </button>
+      }
+    >
+      <div className="flex items-center gap-1">
+        <TeamQrButton collapsed />
+        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
+        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
+        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
+      </div>
+    </NavFlyout>
   )
 }
 
@@ -929,6 +1065,200 @@ type ResolvedNavEntry = {
   label: string
   icon: React.ElementType
   exact?: boolean
+}
+
+/**
+ * THE HEAD ROW — Dashboard, and one tile the studio sets.
+ *
+ * ── IT IS ITS OWN SETTING, NOT THE TOP OF THE SHORTCUTS LIST ─────────────────
+ * The tile was first built as "the first always-shown shortcut, promoted". That
+ * stored nothing new, which is why it was tried, and it was wrong: pinning a
+ * shortcut or dragging the pinned run reordered the head tile as a side effect.
+ * A list you curate and a slot you set once are different controls, and fusing
+ * them means the fixed part of the nav is not fixed. It now has its own single
+ * value — census item 5 in `contexts/NavPinsContext.tsx`, which owns the storage
+ * and the absent-vs-cleared rule.
+ *
+ * A destination may be both the head tile and a shortcut. That duplicate is
+ * asked for twice and is not deduplicated: silently hiding a row because it
+ * happens to match the tile would make the Shortcuts group lie about its
+ * contents.
+ *
+ * ── WHY DASHBOARD IS NOT ADJUSTABLE ─────────────────────────────────────────
+ * It is where the product starts, and a nav whose first tile can be swapped away
+ * has no fixed point to navigate from.
+ *
+ * ── THE EMPTY SLOT IS A CONTROL, NOT A GAP ──────────────────────────────────
+ * Cleared, the second slot renders as a dashed "+" rather than letting Dashboard
+ * span the row. A head row that changes shape depending on whether it is
+ * configured makes the one fixed tile move under the cursor, and the placeholder
+ * is the only thing that says the slot can be filled again.
+ */
+function HeadTiles({
+  tile,
+  choices,
+  onSet,
+  onClear,
+  onLinkClick,
+}: {
+  /** The chosen destination, or undefined when cleared (or gated out of view). */
+  tile: ResolvedNavEntry | undefined
+  /** Everything the tile may be set to (the visible catalogue). */
+  choices: ResolvedNavEntry[]
+  onSet: (id: string) => void
+  onClear: () => void
+  onLinkClick?: () => void
+}) {
+  const t = useTranslations('Nav')
+
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      <NavTile
+        href={DASHBOARD_ITEM.href}
+        label={t(DASHBOARD_ITEM.labelKey as Parameters<typeof t>[0])}
+        icon={DASHBOARD_ITEM.icon}
+        exact={DASHBOARD_ITEM.exact}
+        dataTour={`nav-${DASHBOARD_ITEM.labelKey}`}
+        onClick={onLinkClick}
+      />
+      {tile ? (
+        <NavTile
+          href={tile.href}
+          label={tile.label}
+          icon={tile.icon}
+          exact={tile.exact}
+          dataTour="nav-headTile"
+          onClick={onLinkClick}
+        >
+          <HeadTilePicker
+            choices={choices}
+            currentId={tile.id}
+            onPick={onSet}
+            onClear={onClear}
+            trigger={
+              // Hover-revealed on a pointer device, always present for touch
+              // (where there is no hover and an invisible control is no
+              // control). Tiny and cornered so it never crowds the label.
+              <button
+                type="button"
+                aria-label={t('headTileChange')}
+                className="absolute right-0.5 top-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/tile:opacity-100 max-md:opacity-60"
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            }
+          />
+        </NavTile>
+      ) : (
+        <HeadTilePicker
+          choices={choices}
+          currentId={null}
+          onPick={onSet}
+          trigger={
+            <button
+              type="button"
+              aria-label={t('headTileAdd')}
+              title={t('headTileAdd')}
+              className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-input px-2 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground"
+            >
+              <Plus className="h-5 w-5 shrink-0" />
+              <span className="w-full truncate leading-none">{t('headTileAddShort')}</span>
+            </button>
+          }
+        />
+      )}
+    </div>
+  )
+}
+
+/** The destination chooser behind a tile's control. Reuses the sidebar's own
+ *  catalogue, so a tile can be set to anything the nav can reach — including
+ *  settings screens and plugin pages. */
+function HeadTilePicker({
+  choices,
+  currentId,
+  onPick,
+  onClear,
+  trigger,
+}: {
+  choices: ResolvedNavEntry[]
+  currentId: string | null
+  onPick: (id: string) => void
+  onClear?: () => void
+  trigger: React.ReactElement
+}) {
+  const t = useTranslations('Nav')
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const visible = q ? choices.filter((c) => c.label.toLowerCase().includes(q)) : choices
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v)
+        if (!v) setQuery('')
+      }}
+    >
+      <PopoverTrigger render={trigger} />
+      <PopoverContent align="start" className="w-60 p-0">
+        <div className="border-b p-2">
+          <SearchInput
+            value={query}
+            onValueChange={setQuery}
+            placeholder={t('headTileSearch')}
+            autoFocus
+            className="h-8 text-sm"
+          />
+        </div>
+        <div className="max-h-72 overflow-y-auto p-1">
+          {visible.length === 0 && (
+            <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+              {t('headTileNoMatch')}
+            </p>
+          )}
+          {visible.map((c) => {
+            const Icon = c.icon
+            const isCurrent = c.id === currentId
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  onPick(c.id)
+                  setOpen(false)
+                }}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                  isCurrent ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                {isCurrent && <Check className="h-3.5 w-3.5 shrink-0" />}
+              </button>
+            )
+          })}
+        </div>
+        {onClear && (
+          <div className="border-t p-1">
+            <button
+              type="button"
+              onClick={() => {
+                onClear()
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="h-4 w-4 shrink-0" />
+              {t('headTileRemove')}
+            </button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 // Native HTML5 drag-and-drop wiring passed down from ShortcutsNav (expanded
@@ -1930,7 +2260,7 @@ function SidebarContent({
   const { isAtLeast } = usePlan()
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
   const canEditTeamSettings = useCapabilities().can('team.settings')
-  const { alwaysShownIds, recentIds, recordVisit } = useNavPins()
+  const { alwaysShownIds, recentIds, recordVisit, headTileId, setHeadTile } = useNavPins()
   // Raw message tree — used to read the per-locale `Nav.searchKeywords` synonym
   // map without a t() call per id (ids without keywords are simply label-only).
   const messages = useMessages() as unknown as {
@@ -2014,6 +2344,12 @@ function SidebarContent({
       icon: PLUGIN_ICON_MAP[nav.icon] ?? Puzzle,
     })
   }
+  // The head tile is NOT taken from this list — it is census item 5, stored on
+  // its own (see NavPinsContext). Shortcuts are rendered whole; a destination
+  // that is both a tile and a shortcut is a duplicate the studio asked for
+  // twice.
+  const headTileEntry = headTileId ? catalogue.get(headTileId) : undefined
+
   // Shortcuts = always shown (permanent, stored order) + recently visited
   // (rolling history, newest first, minus anything already always shown).
   const alwaysShownEntries = alwaysShownIds
@@ -2026,14 +2362,19 @@ function SidebarContent({
     .slice(0, MAX_RECENT_SHORTCUTS)
   const shortcutEntries = [...alwaysShownEntries, ...recentEntries]
 
-  // The search index: everything in the catalogue plus the three fixed General
+  // The search index: everything in the catalogue plus the fixed head/utility
   // items (searchable but not shortcut-able — they're always visible anyway).
   // A settings destination is tagged as such rather than listed among ordinary
   // pages (UX-90) — including the /settings hub itself, which IS the settings
   // answer to "where do I change this".
+  //
+  // Schedule is NOT listed here: it is back in NAV_SECTIONS, so it reaches the
+  // index — and the shortcut catalogue, and therefore the head-tile picker —
+  // through the ordinary path with everything else. Dashboard stays here because
+  // it is the one destination that is not a section row and never was.
   const settingsIds = new Set(SETTINGS_ITEMS.map((i) => i.id))
   const searchEntries: SearchEntry[] = [
-    ...[DASHBOARD_ITEM, DASHBOARD_PREVIEW_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
+    ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
       href: item.href,
       label: t(item.labelKey as Parameters<typeof t>[0]),
@@ -2137,20 +2478,68 @@ function SidebarContent({
         }`}
       >
         <NavSearch entries={searchEntries} onNavigate={onLinkClick} collapsed={collapsed} />
-        {collapsed && <TeamQrButton collapsed />}
-        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
-        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
-        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
+        {collapsed ? (
+          // ── COLLAPSED: THE FOUR OCCASIONAL UTILITIES BECOME ONE ────────────
+          // Expanded, these are a HORIZONTAL strip — one 32px row. Collapsed,
+          // the same markup stacks VERTICALLY and costs ~144px, which pushed
+          // Dashboard to y=256 of a 720px rail: five occasional destinations
+          // physically above the two a studio opens every session. That is a
+          // hierarchy inversion produced entirely by the collapse, not a
+          // decision anybody made.
+          //
+          // Grouping them behind one control restores the order at the cost of
+          // one click on QR/Plugins/Settings/How-to — all of which are reached
+          // deliberately, minutes apart, never mid-task. Search stays out of the
+          // group: it is a primary action (and ⌘K), not an occasional one.
+          //
+          // This is what `NavFlyout` is FOR — several items that cannot stack in
+          // a 56px column. The head tiles deliberately do NOT use it: two icons
+          // stack fine, and Dashboard must never be a hover away.
+          <UtilityFlyout onLinkClick={onLinkClick} />
+        ) : (
+          <>
+            <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} />
+            <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} />
+            <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} />
+          </>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
-        {/* Dashboard — a full menu row of its own, directly under the utility
-            icons. It used to share the toolbar with them and wear their quiet
-            active style; it is a working destination people return to daily, not
-            a utility, so it now reads like every other nav row. */}
-        <NavLink item={DASHBOARD_ITEM} collapsed={collapsed} onClick={onLinkClick} />
-        <NavLink item={DASHBOARD_PREVIEW_ITEM} collapsed={collapsed} onClick={onLinkClick} />
+        {/* THE HEAD PAIR — where things stand, and what is on today.
+            Two tiles on one row, icon over label, which gives the top of the
+            nav a shape its body does not have: the eye finds them by silhouette
+            before it reads anything. Schedule earns the second slot by being
+            the surface a studio opens every single session — it was Run's first
+            row, one section header and a fold away from here.
+
+            COLLAPSED FALLS BACK TO ROWS. At w-14 there is no second column to
+            put anything in, and two 28px half-tiles would be unreadable — so the
+            rail keeps the ordinary icon-only rows it already knows how to draw. */}
+        {collapsed ? (
+          // At w-14 there is no second column, and a chooser on a 28px target is
+          // not a control — the rail keeps the ordinary icon-only rows it already
+          // knows how to draw, in the same order.
+          <>
+            <NavLink item={DASHBOARD_ITEM} collapsed onClick={onLinkClick} />
+            {/* ShortcutRow, not NavLink: a catalogue entry carries an already
+                translated `label` (plugin rows resolve from the `Plugins`
+                namespace, not `Nav`), and collapsed it renders as a bare icon
+                link with the label as its tooltip. */}
+            {headTileEntry && (
+              <ShortcutRow entry={headTileEntry} collapsed onClick={onLinkClick} />
+            )}
+          </>
+        ) : (
+          <HeadTiles
+            tile={headTileEntry}
+            choices={[...catalogue.values()]}
+            onSet={(id) => setHeadTile(id)}
+            onClear={() => setHeadTile(null)}
+            onLinkClick={onLinkClick}
+          />
+        )}
 
         {/* Shortcuts — pinned + recently visited (hidden when empty) */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
@@ -2212,7 +2601,20 @@ function SidebarContent({
 
               // Icon-only sidebar: one icon per section; hover pops a flyout of its rows.
               if (collapsed) {
-                const sectionActive =
+                // CONTAINS the active page — which is NOT the same as BEING it.
+                // This used to wear `bg-primary/10 text-primary`, the exact
+                // treatment a real destination wears (NavLink, NavTile,
+                // ShortcutRow all use it), so a section icon read as the current
+                // page while actually being a container you have to hover to
+                // open. In the collapsed rail there is no label to disambiguate
+                // it, so the pill was the whole message and the message was
+                // wrong.
+                //
+                // The tint stays — knowing which section holds you is useful —
+                // but the PILL goes. Filled = you are here; coloured glyph
+                // alone = it is in here. Three steps, no new vocabulary:
+                // muted (resting) → primary glyph (contains) → filled pill (is).
+                const sectionHoldsActive =
                   items.some((i) => pathname.startsWith(i.href)) ||
                   secPlugins.some((e) => pathname.startsWith(e.href))
                 return (
@@ -2223,10 +2625,11 @@ function SidebarContent({
                         <button
                           type="button"
                           title={label}
-                          className={`flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors ${
-                            sectionActive
-                              ? 'bg-primary/10 text-primary'
-                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          aria-current={sectionHoldsActive ? 'true' : undefined}
+                          className={`flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors hover:bg-accent ${
+                            sectionHoldsActive
+                              ? 'text-primary hover:text-primary'
+                              : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
                           <SectionIcon className="h-4 w-4 shrink-0" />

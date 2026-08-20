@@ -43,6 +43,12 @@
  * error belongs in the pinned footer, where it stays visible with the button
  * it blocks.
  *
+ * THE SLOT ALSO DECIDES MOBILE POSITION. A dialog carrying a `DialogBody` is
+ * pinned near the TOP of a phone screen instead of being centred — see the note
+ * beside that rule in `DialogContent`. So opting into the scroll behaviour and
+ * opting into the mobile placement are one decision, made once, by the same
+ * signal: this dialog can be tall.
+ *
  * `AlertDialog` (./alert-dialog.tsx) deliberately does NOT share this — see the
  * note there.
  */
@@ -105,6 +111,22 @@ function DialogContent({
           // column: the body scrolls, the header/footer/close button do not.
           // Without one the popup is untouched — see THE SCROLL RULE above.
           "has-data-[slot=dialog-body]:flex has-data-[slot=dialog-body]:max-h-[calc(100dvh-2rem)] has-data-[slot=dialog-body]:flex-col has-data-[slot=dialog-body]:overflow-hidden",
+          // ── ON A PHONE, A TALL DIALOG RISES TO THE TOP ─────────────────────
+          // Centring is right for a two-line confirm and wrong for anything
+          // that scrolls. A picker with a search field, centred on a phone,
+          // puts that field near the middle of the screen — and the moment it
+          // is focused the keyboard covers the bottom half, so the list you are
+          // filtering is mostly gone. `position: fixed` measures the LAYOUT
+          // viewport, which the keyboard does not shrink, so the popup does not
+          // move out of the way on its own.
+          //
+          // Gated on the same `DialogBody` signal as the height rule above,
+          // deliberately: that slot is already this file's declaration of "this
+          // dialog can outgrow the viewport", which is exactly the set that
+          // benefits. A short confirm keeps the centring it should have.
+          // (The height cap above is already `100dvh - 2rem`, which is exactly
+          // what a 1rem top inset leaves — so it needs no mobile variant.)
+          "has-data-[slot=dialog-body]:max-sm:top-4 has-data-[slot=dialog-body]:max-sm:translate-y-0",
           className
         )}
         {...props}
@@ -156,6 +178,15 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * The pinned footer. `-mx-4 -mb-4` bleeds it to the dialog's edges, which
+ * ASSUMES the content is padded `p-4` (the default).
+ *
+ * ON A `p-0` DIALOG, PASS `mx-0 mb-0`. Without it the footer is laid out 1rem
+ * outside the content box on three sides, and since a dialog carrying a
+ * `DialogBody` is also `overflow-hidden`, that rim is clipped — the trailing
+ * button loses its corner and looks jammed into the edge.
+ */
 function DialogFooter({
   className,
   showCloseButton = false,

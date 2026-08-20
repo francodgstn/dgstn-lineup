@@ -1252,6 +1252,20 @@ service cloud.firestore {
       allow delete: if belongsToUserTeam(resource) || hasRole('admin');
     }
 
+    // Series teardown jobs — the progress record for a background "delete this
+    // and all following". The studio READS its own to follow a run (the client
+    // holds the jobId the callable returned, so this is a get, never a list).
+    //
+    // Every client write is denied. The document is the job's own state machine:
+    // a client that could edit `status` or `processed` could park a job as
+    // finished while a worker was still deleting, or restart a terminal one.
+    // Only the Admin SDK writes it — cancelSession mints it, runSeriesTeardown
+    // advances it.
+    match /session_series_jobs/{jobId} {
+      allow read:  if belongsToUserTeam(resource) || hasRole('admin');
+      allow write: if false;
+    }
+
     // Activities (class types)
     match /activities/{activityId} {
       // Writes require the activities.manage capability (viewers are read-only).

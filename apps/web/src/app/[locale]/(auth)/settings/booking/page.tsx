@@ -29,9 +29,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, BookingSettings } from '@linyup/shared'
-import { MoreOptions } from '@/components/forms/MoreOptions'
 import { NoShowPolicyCard } from './NoShowPolicyCard'
 import { CancellationPolicyCard } from './CancellationPolicyCard'
+import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
 
 // ─── schema ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +101,12 @@ function getDefaults(stored: Partial<BookingSettings> | undefined): FormData {
       windowMonths,
       showPhone: rawBooking.showPhone === true,
       showActivityDescription: rawBooking.showActivityDescription !== false,
-      showFitnessAppField: rawBooking.showFitnessAppField === true,
+      // Defaults ON, like showActivityDescription above and unlike showPhone:
+      // `!== false` so an absent flag reads as shown. A studio that does not
+      // want the field switches it off; a studio that has never opened this
+      // page still collects the answer, which is the useful default for a
+      // field that only ever adds context to a booking.
+      showFitnessAppField: rawBooking.showFitnessAppField !== false,
       ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
       appointmentsEnabled: rawBooking.appointmentsEnabled === true,
@@ -169,9 +174,16 @@ function FlowPreview({
   )
 }
 
-// One switch row. Extracted from the old inline map because the waitlist row
-// now nests a control inside itself, and two shapes of the same row rendered
-// two different ways is how they drift apart.
+// One switch row — a ROW IN A GROUP, not a card. It carries no border of its
+// own: the `divide-y rounded-lg border` wrapper draws the box and the hairlines
+// between rows, exactly as the activity and subscription forms do. Fourteen
+// separately-outlined boxes stacked down a settings pane read as fourteen
+// unrelated decisions; one box with dividers reads as one panel, which is what
+// it is.
+//
+// Extracted from the old inline map because the waitlist row nests a control
+// inside itself, and two shapes of the same row rendered two different ways is
+// how they drift apart.
 function ToggleRow({
   control,
   name,
@@ -187,7 +199,7 @@ function ToggleRow({
   children?: React.ReactNode
 }) {
   return (
-    <div className="rounded-lg border">
+    <div>
       <div className="flex items-center justify-between gap-4 p-3">
         <div>
           <p className="text-sm font-medium">{label}</p>
@@ -288,12 +300,32 @@ function BookingForm({
         />
       </div>
 
-      {/* ── What you offer ──────────────────────────────────────────────────
-          Two switches that decide what the public booking page CONTAINS.
-          Neither has a safe silent answer — turning appointments on publishes a
-          picker, turning the queue on changes what happens to the person who
-          finds a full class — so they stay in front of the studio rather than
-          behind the disclosure below. */}
+      {/* ── ONE PANEL, NOT FOURTEEN CARDS ──────────────────────────────────
+          Everything that configures the public booking page now sits in a
+          single outlined group with hairlines between rows — the shape the
+          activity and subscription forms already use. It replaces a stack of
+          individually-bordered cards plus a "More options" disclosure.
+
+          THE DISCLOSURE IS GONE, DELIBERATELY. It was hiding settings that were
+          already answered sensibly by default — which is a good reason to
+          DEMOTE them (put them lower) and a poor reason to HIDE them: a studio
+          looking for the booking window had to guess that a collapsed grey bar
+          contained it. Ordering carries that weight instead. What the page
+          OFFERS comes first (appointments, waitlist), then how the form BEHAVES
+          (window, cutoff, which fields to ask for), then the optional custom
+          button last.
+
+          Each of these still has a default that is right for a studio that
+          never opens this panel, so none of them is a question it must answer
+          to go live:
+            • booking window   -> 2 months ahead
+            • booking cutoff   -> none, i.e. bookable up to the start
+            • ask for a phone  -> off (one less field on the public form)
+            • show description -> on (what the studio wrote is what visitors see)
+            • fitness-app field-> on
+            • custom button    -> empty, so no extra button is rendered
+          Nothing here changes what anybody is charged or who may book. */}
+      <div className="divide-y rounded-lg border">
       <ToggleRow
         control={control}
         name="booking.appointmentsEnabled"
@@ -344,26 +376,12 @@ function BookingForm({
           </div>
         )}
       </ToggleRow>
-
-      {/* ── Everything already answered ──────────────────────────────────────
-          Each of these is stored with a default that is right for a studio that
-          never opens this panel, so none of them is a question it has to answer
-          to go live:
-            • booking window   → 2 months ahead
-            • booking cutoff   → none, i.e. bookable up to the start. A
-              restriction that defaults OFF is the safe direction to demote: the
-              studio is never surprised by a booking the product refused on its
-              behalf.
-            • ask for a phone  → off (one less field on the public form)
-            • show description → on (what the studio wrote is what visitors see)
-            • fitness-app field→ off
-            • custom button    → empty, so no extra button is rendered
-          Nothing here changes what anybody is charged or who may book. */}
-      <MoreOptions label={t('moreOptionsLabel')} hint={t('moreOptionsHint')}>
         {/* Booking window */}
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t('windowTitle')}</p>
-          <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
+        <div className="flex items-center justify-between gap-4 p-3">
+          <div>
+            <p className="text-sm font-medium">{t('windowTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('windowSubtitle')}</p>
+          </div>
           <Controller
             control={control}
             name="booking.windowMonths"
@@ -386,9 +404,11 @@ function BookingForm({
         </div>
 
         {/* Booking cutoff */}
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t('cutoffTitle')}</p>
-          <p className="text-xs text-muted-foreground">{t('cutoffSubtitle')}</p>
+        <div className="flex items-center justify-between gap-4 p-3">
+          <div>
+            <p className="text-sm font-medium">{t('cutoffTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('cutoffSubtitle')}</p>
+          </div>
           <Controller
             control={control}
             name="booking.cutoffMinutes"
@@ -431,8 +451,10 @@ function BookingForm({
           desc={t('toggleShowFitnessAppDesc')}
         />
 
-        {/* CTA button */}
-        <div className="space-y-3">
+        {/* CTA button — a STACKED row: two labelled inputs cannot sit opposite
+            their own title the way a switch or a select can, so this row keeps
+            the group's padding and lets its content run full width. */}
+        <div className="space-y-3 p-3">
           <div>
             <p className="text-sm font-medium">{t('ctaTitle')}</p>
             <p className="text-xs text-muted-foreground">{t('ctaSubtitle')}</p>
@@ -457,7 +479,7 @@ function BookingForm({
             </div>
           </div>
         </div>
-      </MoreOptions>
+      </div>
     </div>
   )
 }
@@ -550,16 +572,20 @@ export default function BookingSettingsPage() {
           <h1 className="text-2xl font-semibold">{t('pageTitle')}</h1>
           <p className="text-sm text-muted-foreground">{t('pageSubtitle')}</p>
         </div>
-        <Button
-          onClick={handleSubmit(onSubmit)}
-          disabled={!isDirty || isSubmitting}
-        >
-          {isSubmitting ? t('saving') : t('save')}
-        </Button>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl">
+      {/* The save sits at the END of the form, not in the page header. It was
+          the only header save in settings — default-size where every other one
+          is small, and in a position nothing else used — so it read as a
+          different kind of action from the save on the two policy cards
+          directly below it. */}
+      <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-5">
         <BookingForm control={control} register={register} />
+        <SettingsSaveBar
+          onSave={handleSubmit(onSubmit)}
+          saving={isSubmitting}
+          disabled={!isDirty}
+        />
       </form>
 
       <div className="max-w-2xl space-y-4">

@@ -4,22 +4,14 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { addMonths, getDay } from 'date-fns'
 import { to } from '../utils/async'
 import { calculateOccurrences, validateRecurrence } from '../utils/recurrence'
-import { sendEmail, buildEmailTemplate } from '../utils/email'
-import { ctaButton } from '../utils/emailLayout'
-import { systemEmailEnabledFor } from '../utils/systemEmails'
 import { getHostingUrl } from '../utils/env'
-import { closeSessionWaitlist } from '../booking/waitlist/teardown'
-import {
-  DISPOSED_BOOKING_STATUSES,
-  replacedBookingWasCounted,
-  type ReplacedBookingShape,
-} from '../booking'
 import { enforceWaiverGate } from '../waivers/gate'
 import {
-  bookingWasPaidFor,
   confirmClearedHoldFields,
   buildParticipantDoc,
   localizedPublicUrl,
+  SERIES_TEARDOWN_INLINE_MAX,
+  SERIES_TEARDOWN_STALE_MS,
   type SeatHold,
 } from '@linyup/shared'
 import {
@@ -29,6 +21,20 @@ import {
   materializeOccurrences,
   seriesHorizonUpdate,
 } from './series'
+// Cancelling a class lives in ./teardown — ONE definition, shared by the inline
+// path below and the background worker, so "delete three" and "delete two
+// hundred" cannot mean two different things.
+import {
+  cancelSingleSession,
+  countTeardownScope,
+  createTeardownJob,
+  endSeriesAfterTeardown,
+  enqueueTeardownRound,
+  freezeSeriesForTeardown,
+  getTeamData,
+  jobRef,
+  teardownScopeQuery,
+} from './teardown'
 
 const TEAMS_COLLECTION = 'teams'
 const ACTIVITIES_COLLECTION = 'activities'
@@ -62,6 +68,14 @@ export const generateRecurringSessions = onCall(async (request) => {
     )
   }
 
+  // The explicit half of the teardown freeze. `rollSessionSeries` is stopped by
+  // construction (it rolls `status == 'active'` and a frozen series is
+  // 'deleting'), but this callable names a series directly and would happily
+  // re-materialise the occurrences a running job is deleting.
+  if (seriesData.teardown_job_id) {
+    throw new HttpsError('failed-precondition', 'teardown-in-progress')
+  }
+
   const validation = validateRecurrence(seriesData.recurrence)
   if (!validation.valid) {
     throw new HttpsError(
@@ -92,291 +106,37 @@ export const generateRecurringSessions = onCall(async (request) => {
 
 // ─── cancelSession ────────────────────────────────────────────────────────────
 
-async function getTeamData(db: admin.firestore.Firestore, teamId: string) {
-  const [teamErr, teamDoc] = await to(db.collection(TEAMS_COLLECTION).doc(teamId).get())
-  if (!teamErr && teamDoc && teamDoc.exists) {
-    const team = teamDoc.data()!
-    return {
-      name: (team.name as string) || 'Our Team',
-      language: (team.language as string) || 'en',
-      slug: (team.slug as string) || null,
-      ctaUrl: (team.settings?.trialBookingCtaUrl as string) || null,
-    }
-  }
-  return { name: 'Our Team', language: 'en', slug: null, ctaUrl: null }
-}
-
-function buildCancellationEmail(params: {
-  firstname: string
-  teamName: string
-  activityName: string
-  sessionStart: Date
-  sessionEnd: Date
-  rebookUrl: string | null
-}): { subject: string; html: string; text: string } {
-  const dateStr = params.sessionStart.toLocaleDateString('en', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  const timeStr = `${params.sessionStart.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })} – ${params.sessionEnd.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
-  const rebookLine = params.rebookUrl
-    ? `<p style="text-align:center;margin-top:24px;">${ctaButton(params.rebookUrl, 'Book another session')}</p>`
-    : ''
-  const subject = `Session Cancelled – ${params.activityName}`
-  const { html } = buildEmailTemplate({
-    title: 'Session cancelled',
-    body: `<p>Hi ${params.firstname},</p><p>Your session <strong>${params.activityName}</strong> on ${dateStr} at ${timeStr} has been cancelled by ${params.teamName}.</p><p>We apologise for the inconvenience.</p>${rebookLine}`,
-  })
-  const text = `Hi ${params.firstname},\n\nYour session ${params.activityName} on ${dateStr} at ${timeStr} has been cancelled by ${params.teamName}.\n${params.rebookUrl ? `Book another session: ${params.rebookUrl}\n` : ''}We apologise for the inconvenience.`
-  return { subject, html, text }
-}
-
-async function cancelSingleSession(
-  db: admin.firestore.Firestore,
-  sessionId: string,
-  sessionRef: admin.firestore.DocumentReference,
-  sessionData: admin.firestore.DocumentData,
-  teamData: { name: string; language: string; slug: string | null; ctaUrl: string | null },
-  markAsException: boolean
-): Promise<{ sent: number; failed: number }> {
-  let sent = 0
-  let failed = 0
-
-  // THE SESSION IS MARKED CALLED-OFF FIRST, before anything touches the queue.
-  // Closing the queue releases claim holds, and every release writes
-  // `bookings_count` — which is precisely the `seatFreedEdge` that
-  // `promoteWaitlistOnSeatFreed` watches. With the marker not yet written the
-  // promoter re-reads a session that still looks bookable and cheerfully mails
-  // "A place has opened up" for a class being called off as it does so; a join
-  // landing mid-teardown survives it for the same reason. `joinWaitlist` and the
-  // promoter both refuse on `isSessionCancelled` / `allowBooking`, so the marker
-  // is all the ordering constraint they need.
-  if (markAsException) {
-    // The exception pair IS the cancellation record for an occurrence of a
-    // series (status and allowBooking are deliberately left alone — see
-    // isSessionCancelled). Unguarded on purpose: if this write fails the class
-    // is NOT cancelled, and mailing everyone that it was would be the worse
-    // outcome.
-    await sessionRef.update({
-      isException: true,
-      exceptionType: 'cancelled',
-      cancelled_at: FieldValue.serverTimestamp(),
-    })
-  } else {
-    // The delete branch has no marker to write — the document is going away at
-    // the end of this function — so it borrows the one every waitlist path
-    // already tests. Best-effort: the session is about to be deleted, and a
-    // cancellation must complete even if this does not.
-    const [markErr] = await to(sessionRef.update({ allowBooking: false }))
-    if (markErr) {
-      console.error(`cancelSingleSession: could not close bookings on ${sessionId}:`, markErr) // eslint-disable-line no-console
-    }
-  }
-
-  // BEFORE the bookings are read, because closing the queue deletes the claim
-  // holds it owns: a hold is an ordinary `pending` booking, so a teardown that
-  // ran afterwards would decrement `pending_bookings_count` twice for the same
-  // person (once here, once inside the release). That constraint is about the
-  // BOOKINGS READ below, not about the marker above — the two orderings are
-  // independent and both hold. The people whose offer was withdrawn come back as
-  // `offerHolders` and are mailed alongside the real bookings below — they are
-  // the ones who believed they had a seat.
-  const offerHolders = await closeSessionWaitlist(sessionRef)
-
-  const [bookingsErr, bookingsSnap] = await to(sessionRef.collection('bookings').get())
-  const bookings = bookingsErr ? [] : (bookingsSnap?.docs ?? [])
-
-  // ── THE COUNTER IS A FACT ABOUT THE BOOKING; THE MAIL IS A MESSAGE ABOUT IT ──
-  // `pending_bookings_count` used to be decremented INSIDE the notification loop
-  // below, so a studio that switched `session_cancellation` off cancelled classes
-  // without anybody's counter moving — and the contacts list went on saying those
-  // people needed chasing for a session that no longer exists. (UX-76 then made
-  // paid bookings notify regardless, which left free and paid decrementing
-  // differently: an improvement and an inconsistency.) It is settled here, once
-  // per booking, before a single mail is built: no toggle, no delivery outcome
-  // and no missing email address can reach it.
-  //
-  // WHICH documents own a count — decided by the ledger's existing seams, never a
-  // fresh expression of the question (booking/index.ts, shape table in
-  // docs/waitlist.md, fixtures in booking/pendingBookingsCount.test.ts):
-  //  • a DISPOSED booking (cancelled / no_show / rebooked) owns none — whoever
-  //    disposed of it already gave the count back, and these documents are still
-  //    sitting in the subcollection this read just returned.
-  //  • a PLAIN drop-in payment hold (`payment_status: 'required'` without
-  //    `waitlist_claim`) is uncounted for its whole life — `replacedBookingWasCounted`
-  //    is the one predicate that knows that, and decrementing it here drove a real
-  //    person's counter negative, which is the failure somebody notices.
-  // A CLAIM hold that was still unclaimed never reaches this read at all:
-  // `closeSessionWaitlist` above deleted it and gave its count back, which is
-  // exactly why that call has to come first.
-  //
-  // `increment(-1)`, deliberately, and against the standing preference for an
-  // absolute value: this counter is per CONTACT and spans every session they hold
-  // a seat in, so this function's read set (one session's bookings) cannot
-  // produce the true total, and nothing recounts it. Every writer of the field
-  // moves it the same way — see the ledger note in booking/index.ts, which owns
-  // that rule (`bookings_count`, which IS recountable, is the one that must be
-  // written absolute, and this function does not touch it). Best-effort per
-  // contact rather than batched: a purged provisional contact makes `update`
-  // throw, and one missing document must not stop the rest of the roster moving.
-  for (const bookingDoc of bookings) {
-    const booking = bookingDoc.data()
-    if (!booking.contact) continue
-    if (booking.status && DISPOSED_BOOKING_STATUSES.has(booking.status as string)) continue
-    if (!replacedBookingWasCounted(booking as ReplacedBookingShape)) continue
-    const [countErr] = await to(
-      db
-        .collection('contacts')
-        .doc(booking.contact as string)
-        .update({ pending_bookings_count: FieldValue.increment(-1) })
-    )
-    if (countErr) {
-      console.error( // eslint-disable-line no-console
-        `cancelSingleSession: pending_bookings_count decrement failed for contact ${booking.contact}:`,
-        countErr
-      )
-    }
-  }
-
-  let bookingsToNotify = bookings
-
-  // Member cancellation notices are per-team toggleable (Automations → System
-  // emails) — EXCEPT for someone who paid.
-  //
-  // Same test as the paid booking's receipt (booking/paidConfirmation.ts) and as
-  // the waitlist offer (booking/waitlist/notify.ts): does switching it off
-  // quieten the feature, or break it? For a FREE booking it quietens a courtesy
-  // — the person loses nothing but news. For a PAID one it breaks it: they have
-  // been charged for a class the studio has just called off, and silence means
-  // they travel to a locked door and only then start asking for their money
-  // back. So a paid seat is notified whatever the toggle says, and the toggle
-  // keeps its meaning for everybody else.
-  const cancellationTeamId = (sessionData.teamId || sessionData.teacher) as string | undefined
-  const cancellationEmailsEnabled =
-    bookingsToNotify.length > 0 || offerHolders.length > 0
-      ? !!cancellationTeamId &&
-        (await systemEmailEnabledFor(cancellationTeamId, 'session_cancellation'))
-      : false
-  if (bookingsToNotify.length > 0 && !cancellationEmailsEnabled) {
-    const paidOnly = bookingsToNotify.filter((d) => bookingWasPaidFor(d.data() as SeatHold))
-    console.log( // eslint-disable-line no-console
-      `cancelSingleSession: cancellation emails disabled for team ${cancellationTeamId} — ` +
-        `notifying ${paidOnly.length} of ${bookingsToNotify.length} booking(s) anyway (they paid)`
-    )
-    bookingsToNotify = paidOnly
-  }
-
-  if (bookingsToNotify.length > 0 || (offerHolders.length > 0 && cancellationEmailsEnabled)) {
-    let activityName = 'Session'
-    if (sessionData.activityId) {
-      const [actErr, actDoc] = await to(
-        db
-          .collection(ACTIVITIES_COLLECTION)
-          .doc(sessionData.activityId as string)
-          .get()
-      )
-      if (!actErr && actDoc && actDoc.exists)
-        activityName = (actDoc.data()?.name as string) || 'Session'
-    }
-
-    // Locale-pinned on the team's language: the cancellation mail below is
-    // written in it, so the booking page this opens must answer in it too.
-    const rebookUrl =
-      teamData.slug && sessionData.activityId
-        ? localizedPublicUrl(getHostingUrl(), teamData.language, teamData.slug, 'booking', {
-            activity: sessionData.activityId,
-          })
-        : null
-
-    for (const bookingDoc of bookingsToNotify) {
-      const booking = bookingDoc.data()
-      if (!booking.email) continue
-      try {
-        const email = buildCancellationEmail({
-          firstname: (booking.firstname as string) || 'Guest',
-          teamName: teamData.name,
-          activityName,
-          sessionStart: (sessionData.start as Timestamp).toDate(),
-          sessionEnd: (sessionData.end as Timestamp).toDate(),
-          rebookUrl,
-        })
-        await sendEmail({
-          to: booking.email as string,
-          teamId: (sessionData.teamId || sessionData.teacher) as string,
-          subject: email.subject,
-          html: email.html,
-          text: email.text,
-        })
-        // No counter write here — it was settled above, for every booking this
-        // cancellation resolves, whether or not this mail goes out or lands.
-        sent++
-      } catch (err) {
-        console.error(`Error sending cancellation to ${booking.email}:`, err)
-        failed++
-      }
-    }
-
-    // The withdrawn offers. Same class, same story — but their seat was a hold
-    // this function already gave back, so the loop above cannot reach them, and
-    // being told nothing is the one outcome they would notice: a claim link that
-    // silently stops working reads as a bug. No counter to move here; the
-    // release decremented it when it deleted the hold.
-    if (cancellationEmailsEnabled) {
-      for (const holder of offerHolders) {
-        if (!holder.email) continue
-        try {
-          const email = buildCancellationEmail({
-            firstname: holder.firstname,
-            teamName: teamData.name,
-            activityName,
-            sessionStart: (sessionData.start as Timestamp).toDate(),
-            sessionEnd: (sessionData.end as Timestamp).toDate(),
-            rebookUrl,
-          })
-          await sendEmail({
-            to: holder.email,
-            teamId: (sessionData.teamId || sessionData.teacher) as string,
-            subject: email.subject,
-            html: email.html,
-            text: email.text,
-          })
-          sent++
-        } catch (err) {
-          console.error(`Error sending cancellation to waitlist offer ${holder.email}:`, err)
-          failed++
-        }
-      }
-    }
-  }
-
-  // The exception marker was written at the top of this function; only the
-  // delete branch has work left.
-  if (!markAsException) {
-    // Delete bookings subcollection
-    const [allBookErr, allBookSnap] = await to(sessionRef.collection('bookings').get())
-    if (!allBookErr && allBookSnap && !allBookSnap.empty) {
-      const bk = db.batch()
-      allBookSnap.docs.forEach((d) => bk.delete(d.ref))
-      await bk.commit()
-    }
-    // Delete participants subcollection
-    const [partErr, partSnap] = await to(sessionRef.collection('participants').get())
-    if (!partErr && partSnap && !partSnap.empty) {
-      const bk = db.batch()
-      partSnap.docs.forEach((d) => bk.delete(d.ref))
-      await bk.commit()
-    }
-    // The queue's own documents are removed by the session-delete trigger
-    // (`teardownWaitlistOnSessionDeleted`), which owns that job because a
-    // standalone session is deleted client-side and never reaches this function.
-    await sessionRef.delete()
-  }
-
-  return { sent, failed }
-}
-
+/**
+ * Call off a session — one occurrence, or this one and every later occurrence of
+ * its series.
+ *
+ * A SMALL SCOPE STAYS INLINE. A studio deleting a handful of classes gets the
+ * same synchronous answer it always had, with counts to put in a toast. Nothing
+ * about that path changed, and making a manager watch a progress bar to delete
+ * three sessions would be a worse product.
+ *
+ * A LARGE SCOPE BECOMES A JOB, because the walk is unbounded: every future
+ * occurrence closes a waitlist, hands seats back, moves per-contact counters and
+ * mails everybody holding a booking. Past SERIES_TEARDOWN_INLINE_MAX that does
+ * not fit in a callable — and timing out halfway is the worst available outcome,
+ * because the studio sees a failure and cannot tell which classes were actually
+ * called off.
+ *
+ * THE ORDER OF THE THREE WRITES BELOW IS THE SAFETY PROPERTY (the full
+ * concurrency contract lives on SeriesTeardownJob in
+ * packages/shared/src/types/sessionSeriesJob.ts):
+ *
+ *   1. PIN the scope — `cutoff` is the anchor occurrence's start, captured now,
+ *      so "and following" means the same set of sessions ten minutes into the
+ *      run as it did at the click.
+ *   2. FREEZE the series — one synchronous write, BEFORE anything is enqueued.
+ *      Enqueue first and there is a window in which the daily roller is still
+ *      free to re-materialise the very occurrences the job is deleting.
+ *   3. ENQUEUE.
+ *
+ * Returns `mode` so the client knows whether it is looking at a finished result
+ * or a job to follow.
+ */
 export const cancelSession = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'User must be authenticated')
 
@@ -397,20 +157,105 @@ export const cancelSession = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'You do not have permission to cancel this session')
   }
 
+  const seriesId = session.seriesId as string | undefined
+  const isSeriesWide = deleteScope === 'future' && !!seriesId
+
+  // ── The background path ────────────────────────────────────────────────────
+  if (isSeriesWide) {
+    const cutoff = session.start as Timestamp
+
+    // A series already being torn down must not acquire a second job: two
+    // chains over one scope would claim sessions from each other and, worse,
+    // double-mail the rosters they raced on.
+    //
+    // THE MARKER IS NOT THE ANSWER — THE JOB'S STATUS IS. A run that stopped
+    // early leaves the series frozen on purpose (nothing may regenerate into a
+    // half-removed future), so keying the refusal on `teardown_job_id` alone
+    // would make a FAILED teardown permanent: the studio could never retry, and
+    // the only way out would be editing Firestore by hand. So the marker is
+    // followed to the job it names, and only a job that is still `running`
+    // refuses. A terminal one is history, and the series is frozen exactly the
+    // way a fresh attempt wants it.
+    const [frozenErr, frozenDoc] = await to(
+      db.collection(SESSION_SERIES_COLLECTION).doc(seriesId).get()
+    )
+    if (frozenErr) throw new HttpsError('internal', 'Failed to read the series')
+    const priorJobId = frozenDoc?.exists
+      ? (frozenDoc.data()?.teardown_job_id as string | undefined)
+      : undefined
+    if (priorJobId) {
+      const [priorErr, priorDoc] = await to(jobRef(db, priorJobId).get())
+      // A marker we cannot resolve is treated as LIVE. Guessing the other way
+      // starts a second chain over a scope that may still be draining, and that
+      // is the one mistake here that reaches a member's inbox.
+      if (priorErr) {
+        throw new HttpsError('failed-precondition', 'teardown-already-running', {
+          jobId: priorJobId,
+        })
+      }
+      const prior = priorDoc?.exists
+        ? (priorDoc.data() as { status?: string; updated_at?: Timestamp })
+        : undefined
+      // A chain can die outright — one round exhausting its Cloud Tasks retries
+      // leaves `running` with nothing behind it. So "running" is believed only
+      // while the job is still BEATING; past the stale window a fresh attempt is
+      // allowed, which is safe because the per-session claim, not this guard, is
+      // what stops a roster being mailed twice.
+      const beatMs = prior?.updated_at?.toMillis?.() ?? 0
+      const stale = Date.now() - beatMs > SERIES_TEARDOWN_STALE_MS
+      if ((prior?.status ?? 'running') === 'running' && prior && !stale) {
+        throw new HttpsError('failed-precondition', 'teardown-already-running', {
+          jobId: priorJobId,
+        })
+      }
+    }
+
+    const [countErr, total] = await to(countTeardownScope(db, seriesId, cutoff))
+    if (countErr) throw new HttpsError('internal', 'Failed to measure the series')
+
+    if ((total ?? 0) > SERIES_TEARDOWN_INLINE_MAX) {
+      const jobId = await createTeardownJob({
+        db,
+        teamId,
+        seriesId,
+        anchorSessionId: sessionId,
+        cutoff,
+        total: total!,
+        createdBy: request.auth.uid,
+      })
+
+      // Freeze BEFORE enqueue — see the note above. If the enqueue then fails we
+      // are left with a frozen series and a `running` job that nothing drains:
+      // visible, recoverable, and strictly safer than a live series racing a
+      // worker. The job is failed explicitly so it never shows as in-flight.
+      await freezeSeriesForTeardown(db, seriesId, jobId)
+      const [enqueueErr] = await to(enqueueTeardownRound(jobId, 1))
+      if (enqueueErr) {
+        await to(
+          jobRef(db, jobId).update({
+            status: 'failed',
+            error: 'could not be queued',
+            finished_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp(),
+          })
+        )
+        throw new HttpsError('internal', 'Could not start the deletion job')
+      }
+
+      return { success: true, mode: 'background' as const, jobId, total }
+    }
+  }
+
+  // ── The inline path ────────────────────────────────────────────────────────
   let sessionsToCancel: Array<{
     id: string
     ref: admin.firestore.DocumentReference
     data: admin.firestore.DocumentData
   }> = []
 
-  if (deleteScope === 'future' && session.seriesId) {
+  if (isSeriesWide) {
     const [futureErr, futureSnap] = await to(
-      db
-        .collection(SESSIONS_COLLECTION)
-        .where('seriesId', '==', session.seriesId)
-        .where('start', '>=', session.start)
-        .where('isException', '==', false)
-        .get()
+      teardownScopeQuery(db, seriesId!, session.start as Timestamp).get()
     )
     if (futureErr) throw new HttpsError('internal', 'Failed to fetch future sessions')
     sessionsToCancel = (futureSnap?.docs ?? []).map((doc) => ({
@@ -433,14 +278,21 @@ export const cancelSession = onCall(async (request) => {
       s.ref,
       s.data,
       teamData,
-      deleteScope === 'single' && !!session.seriesId
+      deleteScope === 'single' && !!seriesId
     )
     totalSent += sent
     totalFailed += failed
   }
 
+  // "This and all following" ENDS the series, on the inline path exactly as on
+  // the background one. Leaving it active was a real defect: rollSessionSeries
+  // resumes from `lastGeneratedUntil`, so a few months later the deleted class
+  // quietly reappeared beyond the old horizon and nothing had asked for it.
+  if (isSeriesWide) await endSeriesAfterTeardown(db, seriesId!)
+
   return {
     success: true,
+    mode: 'inline' as const,
     cancelledCount: sessionsToCancel.length,
     notificationsSent: totalSent,
     notificationsFailed: totalFailed,
@@ -484,6 +336,19 @@ export const updateRecurringSession = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'You do not have permission to update this session')
   }
   if (!session.seriesId) throw new HttpsError('invalid-argument', 'This is not a recurring session')
+
+  // Read the series UP FRONT, for both scopes, so the teardown freeze can be
+  // enforced on both. 'single' looks harmless — it only marks one occurrence as
+  // an exception — but `isException: true` is exactly what removes a session
+  // from the teardown's scope query, so an edit landing mid-run would leave one
+  // orphaned occurrence standing in a series the studio deleted.
+  const seriesRef = db.collection(SESSION_SERIES_COLLECTION).doc(session.seriesId as string)
+  const [seriesErr, seriesDoc] = await to(seriesRef.get())
+  if (seriesErr || !seriesDoc || !seriesDoc.exists)
+    throw new HttpsError('not-found', 'Recurrence series not found')
+  if (seriesDoc.data()?.teardown_job_id) {
+    throw new HttpsError('failed-precondition', 'teardown-in-progress')
+  }
 
   // Whitelist allowed update fields — prevents overwriting privileged fields
   // like teacher, teamId, seriesId, isException, createdBy, etc.
@@ -535,12 +400,8 @@ export const updateRecurringSession = onCall(async (request) => {
     return { success: true, message: 'Session updated as exception.', updatedCount: 1 }
   }
 
-  // editScope === 'future'
-  const seriesRef = db.collection(SESSION_SERIES_COLLECTION).doc(session.seriesId as string)
-  const [seriesErr, seriesDoc] = await to(seriesRef.get())
-  if (seriesErr || !seriesDoc || !seriesDoc.exists)
-    throw new HttpsError('not-found', 'Recurrence series not found')
-
+  // editScope === 'future' — `seriesRef` / `seriesDoc` were read above, where
+  // the teardown freeze is enforced for both scopes.
   const [futureErr, futureSnap] = await to(
     db
       .collection(SESSIONS_COLLECTION)

@@ -29,7 +29,7 @@ import type { SaasPlan } from './team'
  * Stable machine identifier for one experiment. Kebab-case, matching plugin ids.
  * These are stored in Firestore, so a rename is a migration, not an edit.
  */
-export type ExperimentalFeatureId = 'engagement-matrix'
+export type ExperimentalFeatureId = 'extra-dashboard'
 
 export interface ExperimentalFeature {
   id: ExperimentalFeatureId
@@ -62,14 +62,23 @@ export interface ExperimentalFeature {
  */
 export const EXPERIMENTAL_FEATURES: readonly ExperimentalFeature[] = [
   {
-    // Reader: apps/web/src/app/[locale]/(auth)/dashboard/page.tsx (TrendsSection).
-    // The card and its data are untouched — this gates visibility only.
-    id: 'engagement-matrix',
-    nameKey: 'engagementMatrixName',
-    descriptionKey: 'engagementMatrixDescription',
-    surfaceKey: 'engagementMatrixSurface',
-    // The Trends section is Studio+ (PlanGate on the dashboard); the toggle is
-    // not, and never was.
+    // Reader: apps/web/src/components/dashboard-preview/ExtraSection.tsx,
+    // mounted at the foot of the dashboard. Visibility only — every card inside
+    // is untouched working code, which is the point: this is the shelf for work
+    // that is BUILT and deliberately not shown.
+    //
+    // It replaced the narrower `engagement-matrix` id when the two dashboards
+    // were consolidated. The matrix now lives INSIDE this section, so a second
+    // per-card flag would have been two switches for one card. Studios that had
+    // the old id switched on read as off — `resolveExperimentalFeatures` drops
+    // ids it does not recognise, which is the safe direction for an opt-in.
+    id: 'extra-dashboard',
+    nameKey: 'extraDashboardName',
+    descriptionKey: 'extraDashboardDescription',
+    surfaceKey: 'extraDashboardSurface',
+    // A NOTE, not a gate: the cards inside read the trends dataset and the
+    // finance plugin, both Studio+ surfaces. The switch itself stays live below
+    // the tier — refusing it would read as an upsell for something never sold.
     minPlan: 'studio',
   },
 ]

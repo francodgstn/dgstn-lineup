@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -17,13 +17,15 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import { SearchInput, useListKeyboardNav } from '@/components/ui/search-input'
+import { cn } from '@/lib/utils'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Check, Search, Download, UserPlus, ClipboardList } from 'lucide-react'
-import { CONTACTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
+import { Check, Search, Download, UserPlus, ClipboardList, Loader2 } from 'lucide-react'
+import { CONTACTS_COLLECTION, CHECKINS_COLLECTION, isCheckinCompleted } from '@linyup/shared'
 import type { Contact, EventCheckin, RankingSystem, EventType, Team } from '@linyup/shared'
 import { GenericCheckinForm } from './forms/GenericCheckinForm'
 import { CampCheckinForm } from './forms/CampCheckinForm'
@@ -120,19 +122,67 @@ function useOrgTeams(orgId: string | undefined, enabled: boolean) {
 // ─── add checkin dialog ───────────────────────────────────────────────────────
 // Loads contacts lazily — only when the dialog is open.
 
+/**
+ * Admit people to an event — several at once.
+ *
+ * ── WHY THIS ADMITS RATHER THAN COMPLETES ────────────────────────────────────
+ * Picking a contact used to open the check-in form immediately, so a queue of
+ * twenty at a competition desk was twenty rounds of search → click → fill a form
+ * → submit, with the queue waiting through every form.
+ *
+ * That is the wrong order for a door. Getting people IN is the urgent part;
+ * their belt, weight or division is paperwork that can follow. So this dialog
+ * writes a BASE check-in for everyone picked — `checkinData: {}` — and each is
+ * finalised individually afterwards by tapping its row, which opens the same
+ * form it always did.
+ *
+ * ── AND FOR SOME EVENT TYPES THERE IS NOTHING TO FINALISE ────────────────────
+ * `is_completed` is not ours to assert: the server derives it from the SAME
+ * `isCheckinCompleted(eventType, checkinData)` this file imports. With empty
+ * data that is `false` for `exam`, `camp` and the plugin types — which do
+ * collect something — and `true` for `competition`, `seminar` and `workshop`,
+ * which collect nothing at all.
+ *
+ * That is the right answer rather than a gap: an event type with no form has no
+ * second step, so those people are done the moment they are admitted. It is why
+ * the footer note is conditional — promising "fill in their details afterwards"
+ * on a seminar would point at a screen that does not exist.
+ *
+ * Nothing on the server changed: `is_completed`, the pending count and the
+ * per-row form were already the model. This only stops the door waiting on the
+ * paperwork.
+ */
 function AddCheckinDialog({
   teamId,
+  eventType,
   checkedInIds,
-  onSelect,
+  onAdd,
   onClose,
 }: {
   teamId: string
+  /** Decides whether a base check-in leaves anything to finalise — see below. */
+  eventType: EventType
   checkedInIds: Set<string>
-  onSelect: (contact: Contact) => void
+  /** Writes a base (incomplete) check-in for each contact. */
+  onAdd: (contacts: Contact[]) => Promise<void>
   onClose: () => void
 }) {
   const t = useTranslations('CheckinPanel')
   const [search, setSearch] = useState('')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [adding, setAdding] = useState(false)
+  // ArrowDown out of the search field lands on the first row; ArrowUp off the
+  // first row comes back. See useListKeyboardNav.
+  const searchRef = useRef<HTMLInputElement>(null)
+  const { listRef, focusFirst, onListKeyDown } = useListKeyboardNav<HTMLDivElement>(searchRef)
+
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const contactsQ = useQuery<Contact[]>({
     queryKey: ['contacts', 'active', teamId],
@@ -162,25 +212,48 @@ function AddCheckinDialog({
       )
   }, [contactsQ.data, checkedInIds, search])
 
+  async function commit() {
+    const chosen = (contactsQ.data ?? []).filter((c) => picked.has(c.id))
+    if (chosen.length === 0) return
+    setAdding(true)
+    try {
+      await onAdd(chosen)
+      onClose()
+    } finally {
+      setAdding(false)
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      {/* FIXED HEIGHT, NOT MAX-HEIGHT — the search field must not move.
+          `DialogBody` alone gives a max-height, so the popup grew and shrank
+          with the result count; and because a desktop dialog is CENTRED
+          (-translate-y-1/2), a changing height moves the TOP edge, so the
+          search box climbed and dropped on every keystroke while being typed
+          into. A fixed height makes the list the only thing that changes.
+
+          Two values, one rule: on a phone, fill the screen the dialog is
+          already pinned to the top of (see the max-sm rule in ui/dialog.tsx);
+          on desktop, hold roughly the 18rem of list this had before
+          `DialogBody` replaced its own `max-h-72` scroller. */}
+      <DialogContent className="sm:max-w-md h-[calc(100dvh-2rem)] sm:h-[32rem]">
         <DialogHeader>
           <DialogTitle>{t('addCheckinDialogTitle')}</DialogTitle>
         </DialogHeader>
 
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            className="pl-9"
+        <div className="mb-3">
+          <SearchInput
             placeholder={t('searchContactsPlaceholder')}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
+            inputRef={searchRef}
+            onArrowDown={focusFirst}
             autoFocus
           />
         </div>
 
-        <div className="max-h-72 overflow-y-auto rounded-lg border divide-y">
+        <DialogBody ref={listRef} onKeyDown={onListKeyDown} className="rounded-lg border divide-y p-0">
           {contactsQ.isLoading && (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3">
@@ -194,22 +267,60 @@ function AddCheckinDialog({
               {search ? t('noContactsMatch') : t('allContactsCheckedIn')}
             </p>
           )}
-          {!contactsQ.isLoading && visible.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { onSelect(c); onClose() }}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
-            >
-              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold shrink-0">
-                {initials(c)}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
-                {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
-              </div>
-            </button>
-          ))}
-        </div>
+          {!contactsQ.isLoading && visible.map((c) => {
+            const isPicked = picked.has(c.id)
+            return (
+              <button
+                key={c.id}
+                type="button"
+                data-list-row
+                onClick={() => toggle(c.id)}
+                aria-pressed={isPicked}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-3 transition-colors text-left',
+                  isPicked ? 'bg-primary/5' : 'hover:bg-muted/50',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                    isPicked ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                  )}
+                >
+                  {isPicked && <Check className="h-3 w-3" />}
+                </span>
+                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold shrink-0">
+                  {initials(c)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
+                  {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
+                </div>
+              </button>
+            )
+          })}
+        </DialogBody>
+
+        <DialogFooter className="flex-col items-stretch gap-2 sm:flex-col sm:items-stretch">
+          {/* Said before the click, not discovered after it.
+              THE PROMISE IS CONDITIONAL, because the outcome is: an empty
+              `checkinData` runs through the SAME `isCheckinCompleted` the server
+              uses, and for an event type that collects nothing (competition,
+              seminar, workshop) that returns true — those people are simply
+              done, and there is no second step to send them to. Only exam, camp
+              and the plugin types leave anything to finalise. Printing "fill in
+              their details afterwards" on a seminar would describe a screen that
+              does not exist. */}
+          {!isCheckinCompleted(eventType, {}) && (
+            <p className="text-xs text-muted-foreground">{t('addCheckinBaseNote')}</p>
+          )}
+          <Button onClick={commit} disabled={picked.size === 0 || adding}>
+            {adding && <Loader2 className="h-4 w-4 animate-spin" />}
+            {picked.size === 0
+              ? t('addCheckinConfirm')
+              : t('addCheckinConfirmCount', { count: picked.size })}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -319,6 +430,35 @@ export function CheckinPanel({
     } finally {
       setBusy(false)
     }
+  }
+
+  /**
+   * Admit everyone picked, as BASE check-ins — `checkinData: {}`, which
+   * `addEventCheckin` resolves to `is_completed: false`. They appear in the
+   * pending list and are finalised one at a time from there.
+   *
+   * `allSettled`, not `all`: one contact failing (a permission edge on an org
+   * event, a dropped request) must not discard the twenty that succeeded, and
+   * the roster refresh below shows exactly who got in. The callable is
+   * idempotent per (event, contact), so a retry of a partial run is safe.
+   */
+  async function handleAddBaseCheckins(chosen: Contact[]) {
+    const fn = httpsCallable<unknown, { id: string; is_completed: boolean }>(
+      functions, 'addEventCheckin',
+    )
+    const teamIdForCheckin = selectedAddTeamId || currentTeamId || ''
+    await Promise.allSettled(
+      chosen.map((c) =>
+        fn({
+          eventId,
+          contactId: c.id,
+          contact: { firstname: c.firstname, lastname: c.lastname },
+          checkinData: {},
+          checkinTeamId: teamIdForCheckin,
+        }),
+      ),
+    )
+    await invalidate()
   }
 
   async function toggleComplete(checkin: EventCheckin, e: React.MouseEvent) {
@@ -500,14 +640,9 @@ export function CheckinPanel({
       {addDialogOpen && currentTeamId && (
         <AddCheckinDialog
           teamId={selectedAddTeamId || currentTeamId}
+          eventType={eventType}
           checkedInIds={checkedInIds}
-          onSelect={(contact) => {
-            setSheetTarget({
-              contact,
-              existing: undefined,
-              teamId: selectedAddTeamId || currentTeamId,
-            })
-          }}
+          onAdd={handleAddBaseCheckins}
           onClose={() => setAddDialogOpen(false)}
         />
       )}
