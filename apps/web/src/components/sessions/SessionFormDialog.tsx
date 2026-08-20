@@ -20,7 +20,8 @@ import { usePlaces } from '@/hooks/usePlaces'
 import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
 import { SeriesSummary } from '@/components/sessions/SeriesSummary'
-import { SESSIONS_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
+import { PastItemNotice } from '@/components/sessions/PastItemNotice'
+import { SESSIONS_COLLECTION, resolveAutoConfirm, isPastSession } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
 import { Loader2, Repeat2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -342,7 +343,7 @@ function ResponsiveModal({ open, onOpenChange, title, children }: {
   if (isDesktop) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl p-0 gap-0 max-h-[92vh] flex flex-col overflow-hidden">
+        <DialogContent className="sm:max-w-3xl p-0 gap-0 max-h-[92dvh] flex flex-col overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
@@ -353,7 +354,7 @@ function ResponsiveModal({ open, onOpenChange, title, children }: {
   }
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="p-0 gap-0 max-h-[92vh] flex flex-col rounded-t-2xl overflow-hidden">
+      <SheetContent side="bottom" className="p-0 gap-0 max-h-[92dvh] flex flex-col rounded-t-2xl overflow-hidden">
         <SheetHeader className="px-5 py-4 border-b flex-shrink-0">
           <SheetTitle>{title}</SheetTitle>
         </SheetHeader>
@@ -698,6 +699,13 @@ export function SessionFormDialog({
         // ── main form ──
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
+            {/* Editing something that already happened. Above the series banner
+                on purpose: which occurrence this is matters before what pattern
+                it belongs to, and a past occurrence shows both. Only on a real
+                edit — `duplicating` seeds a NEW session from an old one, which
+                is exactly how a finished class gets repeated and is not history. */}
+            {editing && isPastSession(editing) && <PastItemNotice />}
+
             {isSeries && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
                 <Repeat2 className="h-3.5 w-3.5 shrink-0" />

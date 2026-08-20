@@ -59,7 +59,8 @@ import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Plus, Pencil, Copy, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Copy, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react'
+import { ActivityScheduleSheet } from '@/components/activities/ActivityScheduleSheet'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
 
@@ -1419,6 +1420,7 @@ function ActivityCard({
   onEdit,
   onDuplicate,
   onArchive,
+  onViewSchedule,
   sortable,
   currency,
   subscriptionTypes,
@@ -1427,6 +1429,7 @@ function ActivityCard({
   onEdit: () => void
   onDuplicate: () => void
   onArchive: () => void
+  onViewSchedule: () => void
   sortable: SortableRenderProps
   currency: string
   subscriptionTypes: SubscriptionType[]
@@ -1514,6 +1517,17 @@ function ActivityCard({
       </div>
 
       <div className="flex items-center gap-0.5 flex-shrink-0">
+        {/* FIRST, before edit: viewing precedes changing, and "is this actually
+            on the calendar?" is the question this row could never answer about
+            itself — an activity with no sessions behind it is invisible to every
+            visitor while looking perfectly configured. */}
+        <button
+          onClick={onViewSchedule}
+          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+          title={t('viewSchedule')}
+        >
+          <CalendarDays className="h-4 w-4" />
+        </button>
         <button
           onClick={onEdit}
           className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
@@ -1554,6 +1568,11 @@ export default function ActivitiesPage() {
   const [editing, setEditing] = useState<Activity | null>(null)
   const [duplicating, setDuplicating] = useState<Activity | null>(null)
   const [archiving, setArchiving] = useState<Activity | null>(null)
+  // "When does this actually run?" — a read-only peek, deliberately NOT a section
+  // inside the editor: that dialog is a long scroll with a rule about what may
+  // sit above its disclosure, and this answers a question you ask BEFORE
+  // deciding to change anything.
+  const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
 
   function openNew() { setEditing(null); setDuplicating(null); setDialogOpen(true) }
   function openEdit(a: Activity) { setDuplicating(null); setEditing(a); setDialogOpen(true) }
@@ -1638,6 +1657,7 @@ export default function ActivitiesPage() {
                         onEdit={() => openEdit(a)}
                         onDuplicate={() => openDuplicate(a)}
                         onArchive={() => setArchiving(a)}
+                        onViewSchedule={() => setSchedulePreview(a)}
                         sortable={sortable}
                         currency={currency}
                         subscriptionTypes={subscriptionTypes}
@@ -1710,6 +1730,13 @@ export default function ActivitiesPage() {
         activity={archiving}
         onConfirm={handleArchiveConfirm}
         onCancel={() => setArchiving(null)}
+      />
+
+      <ActivityScheduleSheet
+        activity={schedulePreview}
+        open={!!schedulePreview}
+        onOpenChange={(v) => { if (!v) setSchedulePreview(null) }}
+        teamId={currentTeamId}
       />
     </div>
   )

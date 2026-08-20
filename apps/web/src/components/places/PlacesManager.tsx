@@ -52,6 +52,19 @@ export interface PlacesManagerProps {
   onUpdate: (id: string, data: PlaceFormValues) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onSetPrimary?: (id: string) => Promise<void>
+  /**
+   * Where this is mounted.
+   *
+   * `'page'` (default) keeps the standalone route's chrome: an `<h1>` + subtitle
+   * and a `max-w-3xl` measure. `'sheet'` drops both — a side panel supplies its
+   * own `SheetTitle`, so the heading would be printed twice, and the width cap
+   * fights a column that is already narrow.
+   *
+   * A PROP RATHER THAN A FORK, matching `AppointmentAvailabilityManager`, which
+   * took the same prop for the same reason when bookable hours moved into a
+   * sheet. Two copies of a places editor would be two places to fix a rooms bug.
+   */
+  variant?: 'page' | 'sheet'
 }
 
 function newRoom(): PlaceRoom {
@@ -74,8 +87,10 @@ export function PlacesManager({
   onUpdate,
   onDelete,
   onSetPrimary,
+  variant = 'page',
 }: PlacesManagerProps) {
   const t = useTranslations('SettingsPlaces')
+  const inSheet = variant === 'sheet'
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<PlaceFormValues>(EMPTY)
@@ -125,14 +140,19 @@ export function PlacesManager({
   }
 
   return (
-    <div className="max-w-3xl space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{title}</h1>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
-        </div>
+    <div className={inSheet ? 'space-y-4' : 'max-w-3xl space-y-5'}>
+      {/* In a sheet the title and subtitle are the SheetHeader's job, so only
+          the action survives — and it moves to its own row, because there is no
+          longer a heading for it to sit opposite. */}
+      <div className={`flex items-start gap-3 ${inSheet ? 'justify-end' : 'justify-between'}`}>
+        {!inSheet && (
+          <div>
+            <h1 className="text-2xl font-semibold">{title}</h1>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          </div>
+        )}
         {canManage && (
-          <Button onClick={openCreate} disabled={atCap}>
+          <Button onClick={openCreate} disabled={atCap} size={inSheet ? 'sm' : 'default'}>
             <Plus className="mr-1.5 h-4 w-4" />
             {t('addPlace')}
           </Button>

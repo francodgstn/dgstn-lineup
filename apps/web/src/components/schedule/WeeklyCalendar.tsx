@@ -13,6 +13,7 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { dayKey, daySpans, spanOnDay } from '@linyup/shared'
 
 /** Firestore-Timestamp-like — the public session mirror provides `{ toDate() }`. */
 interface TimestampLike {
@@ -48,7 +49,8 @@ const GRID_COLS = { gridTemplateColumns: '2.75rem repeat(7, minmax(6.5rem, 1fr))
 
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+// `dayKey` was a local copy; it and the interval→days translation now live in
+// shared/utils/calendarSpan, shared with the admin grid.
 const fmtTime = (d: Date) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
 function colorFor(s: PlannerSession, accent?: string): string {
@@ -72,15 +74,26 @@ interface Positioned {
  * form a cluster; within it each session takes the first free column and all
  * cluster members share the column count. (Ported from SessionsCalendar.)
  */
-function layoutDay(day: PlannerSession[], startHour: number, endHour: number): Positioned[] {
+function layoutDay(
+  day: PlannerSession[],
+  date: Date,
+  startHour: number,
+  endHour: number
+): Positioned[] {
   const rangeStartMin = startHour * 60
   const rangeEndMin = endHour * 60
   const items = day
     .map((s) => {
       const st = s.start.toDate()
-      const startMin = st.getHours() * 60 + st.getMinutes()
-      const en = s.end?.toDate()
-      let endMin = en && sameDay(en, st) ? en.getHours() * 60 + en.getMinutes() : startMin + 60
+      const en = s.end?.toDate() ?? null
+      // Was `en && sameDay(en, st) ? … : startMin + 60` — which threw away the
+      // end time of anything crossing midnight and drew a flat hour instead.
+      // Shared with the admin grid now (lib/calendar-span), because these two
+      // files carried hand-ported copies of that clamp and only one of them
+      // would ever have been fixed.
+      const span = spanOnDay(st, en, date)
+      const startMin = span ? span.startMin : st.getHours() * 60 + st.getMinutes()
+      let endMin = span ? span.endMin : startMin + 60
       endMin = Math.min(Math.max(endMin, startMin + 30), rangeEndMin)
       return { s, startMin, endMin }
     })
@@ -175,20 +188,24 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
     const byDay = new Map<string, PlannerSession[]>()
     let sh = 8
     let eh = 20
+    // Filed under every day it touches, and the hour range opened from the
+    // minutes it occupies ON each of those days — not from its own clock times,
+    // which belong to the day it started.
     for (const s of sessions) {
       const st = s.start.toDate()
-      const arr = byDay.get(dateKey(st))
-      if (arr) arr.push(s)
-      else byDay.set(dateKey(st), [s])
-      sh = Math.min(sh, st.getHours())
-      const en = s.end?.toDate()
-      const endH = en && sameDay(en, st) ? en.getHours() + (en.getMinutes() > 0 ? 1 : 0) : st.getHours() + 1
-      eh = Math.max(eh, Math.min(endH, 24))
+      const en = s.end?.toDate() ?? null
+      for (const span of daySpans(st, en)) {
+        const arr = byDay.get(span.key)
+        if (arr) arr.push(s)
+        else byDay.set(span.key, [s])
+        sh = Math.min(sh, Math.floor(span.startMin / 60))
+        eh = Math.max(eh, Math.min(Math.ceil(span.endMin / 60), 24))
+      }
     }
     const days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date(start)
       date.setDate(start.getDate() + i)
-      return { date, blocks: layoutDay(byDay.get(dateKey(date)) ?? [], sh, eh) }
+      return { date, blocks: layoutDay(byDay.get(dayKey(date)) ?? [], date, sh, eh) }
     })
     return { weekDays: days, startHour: sh, endHour: eh }
   }, [sessions, weekOffset])
@@ -236,7 +253,7 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
           const isToday = sameDay(date, today)
           return (
             <div
-              key={dateKey(date)}
+              key={dayKey(date)}
               className={`border-b border-l px-1 py-1.5 text-center ${isToday ? 'bg-primary/5' : ''}`}
             >
               <p className="text-xs font-bold">{date.toLocaleDateString(undefined, { weekday: 'short' })}</p>
@@ -270,7 +287,7 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
           const isToday = sameDay(date, today)
           return (
             <div
-              key={dateKey(date)}
+              key={dayKey(date)}
               className={`relative border-l ${isToday ? 'bg-primary/[0.03]' : ''}`}
               style={{ height: gridHeight }}
             >
