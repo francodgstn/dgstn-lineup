@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_QUICK_ACTION_IDS, QUICK_ACTION_MAX } from '@/lib/quickActions'
+import { DEFAULT_QUICK_ACTION_IDS } from '@/lib/quickActions'
 
 const STORAGE_KEY = 'linyup_dashboard_quick_actions'
 
@@ -66,18 +66,26 @@ export function useQuickActions() {
     }
   }, [])
 
-  /** Add or remove one. Adding past the cap is REFUSED rather than silently
-   *  dropping the oldest: the picker disables the unticked rows at the cap, so
-   *  a click that got here anyway is a race, not an instruction. */
+  /**
+   * Add or remove one. NO CAP IS ENFORCED HERE, deliberately.
+   *
+   * This hook stores ids; it cannot resolve them. A stored id may name an
+   * automation that is currently paused, and such an id renders nothing — so a
+   * cap counted here would say "5 of 5" while four pills are on screen and
+   * refuse to let the freed slot be reused. The bar knows what actually
+   * resolves, so the cap lives there, on `resolvedAll`.
+   *
+   * Storage stays bounded because the picker disables the unticked rows at the
+   * cap; there is exactly one caller.
+   */
   const toggle = useCallback(
     (id: string) => {
       const prev = idsRef.current
       const has = prev.includes(id)
-      if (!has && prev.length >= QUICK_ACTION_MAX) return
       persist(has ? prev.filter((v) => v !== id) : [...prev, id])
     },
     [persist]
   )
 
-  return { ids, toggle, hydrated, atMax: ids.length >= QUICK_ACTION_MAX }
+  return { ids, toggle, hydrated }
 }

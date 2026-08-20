@@ -13,16 +13,19 @@
  * there is one per rule the studio wrote, so they are read from the team and
  * appended to the picker beneath a separator.
  *
- * ONLY ACTIVE RULES ARE OFFERED. `triggerAutomationRule` refuses a paused rule
- * outright, so a pill for one would be a button that always fails — and the
- * failure would arrive on the automations page, two clicks from here, with no
- * hint that the dashboard sent a request that never had a chance.
+ * TWO FILTERS ON WHICH RULES ARE OFFERED, and they answer different questions.
+ * ACTIVE, because `triggerAutomationRule` refuses a paused rule outright, so a
+ * pill for one would be a button that always fails — and the failure would
+ * arrive on the automations page, two clicks from here, with no hint that the
+ * dashboard sent a request that never had a chance. MANUAL TRIGGER, because
+ * that is the only kind whose "run now" a studio can predict from the label;
+ * see the filter itself for the rest.
  *
- * A SELECTED RULE THAT LATER DISAPPEARS (deleted, or paused) simply stops
- * rendering: `resolved` drops any id that no longer resolves to something
- * runnable, and the stored id is left alone rather than pruned. Un-pausing the
- * rule brings its pill back, which is what somebody who paused a rule for a
- * fortnight expects.
+ * A SELECTED RULE THAT LATER DISAPPEARS (deleted, paused, or re-pointed at an
+ * event trigger) simply stops rendering: `resolved` drops any id that no longer
+ * resolves to something runnable, and the stored id is left alone rather than
+ * pruned. Putting the rule back the way it was brings its pill back, which is
+ * what somebody who paused a rule for a fortnight expects.
  */
 
 import { useState } from 'react'
@@ -55,19 +58,46 @@ const PILL =
 export function QuickActionsBar() {
   const t = useTranslations('QuickActions')
   const { currentTeamId, team } = useAuth()
-  const { ids, toggle, atMax } = useQuickActions()
+  const { ids, toggle } = useQuickActions()
   const { data: rules = [] } = useAutomationRules(currentTeamId)
   const [qrOpen, setQrOpen] = useState(false)
 
+  // MANUAL-TRIGGER RULES ONLY, and active ones (Franco, 2026-08-21).
+  //
+  // `triggerAutomationRule` will happily run any rule, but "run now" means
+  // something different for each kind of trigger, and for most of them it is
+  // not a question a studio can answer from a pill. A `contact_created` rule
+  // asked to run on demand sweeps EVERY contact who still matches; a
+  // `schedule_daily` one does its whole daily pass out of turn. Both are
+  // defensible and neither is obvious, so offering them here would be handing
+  // somebody a button whose blast radius they cannot predict from its label.
+  //
+  // A rule the studio built with a MANUAL trigger is the one case with no
+  // ambiguity: running it on demand is the only way it ever runs. The rest wait
+  // for a design that explains itself — deliberately deferred, not forgotten.
   const automationActions = rules
-    .filter((r) => r.active)
+    .filter((r) => r.active && r.trigger?.type === 'manual')
     .map((r) => quickActionForAutomation(r.id, r.name || t('unnamedAutomation')))
 
   const available: QuickActionDef[] = [...QUICK_ACTION_CATALOGUE, ...automationActions]
   const byId = new Map(available.map((a) => [a.id, a]))
   // The studio's ORDER, not the catalogue's — the bar reads the way it was
   // built. Anything that no longer resolves is dropped for this render only.
-  const resolved = ids.map((id) => byId.get(id)).filter((a): a is QuickActionDef => !!a)
+  const resolvedAll = ids.map((id) => byId.get(id)).filter((a): a is QuickActionDef => !!a)
+  /**
+   * THE CAP COUNTS WHAT RESOLVES, not what is stored.
+   *
+   * A stored id whose automation has been paused renders nothing. Counting the
+   * stored list instead would say "5 of 5" over four pills and refuse to let
+   * the empty slot be reused — which is exactly what happened the moment
+   * event-triggered rules stopped being offered.
+   *
+   * The render is sliced to the cap as well, so the other direction is covered
+   * too: a studio who filled the freed slot and then un-paused the rule gets
+   * five pills, not six.
+   */
+  const atMax = resolvedAll.length >= QUICK_ACTION_MAX
+  const resolved = resolvedAll.slice(0, QUICK_ACTION_MAX)
 
   const labelOf = (a: QuickActionDef) =>
     a.label ?? t(a.labelKey as Parameters<typeof t>[0])
@@ -120,7 +150,7 @@ export function QuickActionsBar() {
             <div className="flex items-baseline justify-between gap-2 px-2 py-1.5 text-sm font-medium">
               <span>{t('pickerTitle')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
-                {t('pickerCount', { used: ids.length, max: QUICK_ACTION_MAX })}
+                {t('pickerCount', { used: resolvedAll.length, max: QUICK_ACTION_MAX })}
               </span>
             </div>
             <DropdownMenuSeparator />
