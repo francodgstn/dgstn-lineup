@@ -55,10 +55,11 @@ interface FieldFormState {
   type: CustomFieldType
   options: string[]
   required: boolean
+  publicOnBookingForm: boolean
 }
 
 function emptyForm(): FieldFormState {
-  return { id: '', label: '', type: 'text', options: [''], required: false }
+  return { id: '', label: '', type: 'text', options: [''], required: false, publicOnBookingForm: false }
 }
 
 // ─── Add / edit dialog ────────────────────────────────────────────────────────
@@ -174,6 +175,24 @@ function CustomFieldDialog({
               onCheckedChange={(v) => setForm((f) => ({ ...f, required: v }))}
             />
           </label>
+
+          {/* Opt-in, and off by default: ticking this MIRRORS the field's label
+              and options into the world-readable team profile so the anonymous
+              book form can render it. The helper text says so plainly — a
+              studio should never discover after the fact that "Payment risk"
+              became public. */}
+          <label className="flex items-start justify-between gap-3 cursor-pointer">
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium">{t('customFieldPublicOnBooking')}</span>
+              <span className="block text-xs text-muted-foreground">
+                {t('customFieldPublicOnBookingHint')}
+              </span>
+            </span>
+            <Switch
+              checked={form.publicOnBookingForm}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, publicOnBookingForm: v }))}
+            />
+          </label>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -224,6 +243,7 @@ export function CustomFieldsTab({ teamId, team }: { teamId: string; team: Team }
       type: form.type,
       ...(form.type === 'select' ? { options: form.options } : {}),
       required: form.required,
+      publicOnBookingForm: form.publicOnBookingForm,
     }
     const next = editing
       ? defs.map((d) => (d.id === editing.id ? def : d))
@@ -256,6 +276,7 @@ export function CustomFieldsTab({ teamId, team }: { teamId: string; team: Team }
       type: d.type,
       options: d.options && d.options.length > 0 ? [...d.options] : [''],
       required: d.required ?? false,
+      publicOnBookingForm: d.publicOnBookingForm ?? false,
     })
     setDialogOpen(true)
   }

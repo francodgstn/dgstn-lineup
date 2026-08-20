@@ -1874,7 +1874,9 @@
     "paymentsWebhookEventsTitle": "Choose the events carefully",
     "paymentsDoubleRecordingTitle": "This Stripe endpoint is recording payments twice",
     "paymentsDoubleRecordingBody": "In the last {days} days it delivered {invoiceCount} invoice events and {paymentCount} payment events. Stripe no longer links an invoice to its payment, so a recurring payment that arrives as both is written down twice — and nothing here can tell which two rows are the same money.",
-    "paymentsDoubleRecordingFix": "Fix it in Stripe: edit this endpoint and remove <code>invoice.payment_succeeded</code>. Keep <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code> — they record everything, renewals included. Rows already written stay as they are; the payments list flags the ones at risk."
+    "paymentsDoubleRecordingFix": "Fix it in Stripe: edit this endpoint and remove <code>invoice.payment_succeeded</code>. Keep <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code> — they record everything, renewals included. Rows already written stay as they are; the payments list flags the ones at risk.",
+    "customFieldPublicOnBooking": "Ask on the booking form",
+    "customFieldPublicOnBookingHint": "Makes this field's name and options publicly visible so it can be shown on your booking page. Leave off for anything private."
   },
   "Bookings": {
     "title": "Bookings",
@@ -3038,10 +3040,10 @@
     "unpublishConfirmBody": "Your published site goes offline immediately: visitors see nothing, and any bio-link entry pointing at it stops being shown. Nothing is lost — your draft pages, wording and images are kept exactly as they are, so you can publish again whenever you like.",
     "unpublishConfirmAction": "Take it offline",
     "fieldPricingDisplay": "Pricing on cards",
-    "pricingDisplayList": "Show every line",
+    "pricingDisplayList": "Show pricing list",
     "pricingDisplayCompact": "Behind a “Prices” link",
     "pricingDisplayHidden": "Hide prices",
-    "pricingDisplayHint": "This controls amounts only. A card whose activity requires a membership keeps saying so under every setting — otherwise visitors book something they will be refused.",
+    "pricingDisplayHint": "A card whose activity requires a membership always says so — otherwise visitors book something they will be refused. What changes is the detail: the plan's name and price show inline, move behind the link, or go away.",
     "fieldPricingLayout": "Layout",
     "pricingLayoutCards": "One card per plan",
     "pricingLayoutTable": "Comparison table",
@@ -3109,7 +3111,27 @@
     "editorPlacesHeadingPlaceholder": "Find us",
     "editorPlacesToShow": "Places to show",
     "editorNoPlaces": "No places yet — add them on the Places page.",
-    "editorPlaceOrgScope": "org"
+    "editorPlaceOrgScope": "org",
+    "tabMenu": "Menu",
+    "menuHint": "Drag a row to reorder it, and use the indent arrows to nest it under the one above. Sections, your other public pages and outside links all live in one list.",
+    "menuEmpty": "No menu items yet. Add sections, pages or links below.",
+    "menuAdd": "Add item",
+    "menuAddLink": "External link",
+    "menuAddGroup": "Submenu group",
+    "menuMoveUp": "Move up",
+    "menuMoveDown": "Move down",
+    "menuIndent": "Nest under the row above",
+    "menuOutdent": "Move out one level",
+    "menuRemove": "Remove from menu",
+    "menuDepth": "{depth} of {max} levels",
+    "menuMissingSection": "Deleted section",
+    "menuLinkUntitled": "Untitled link",
+    "menuGroupUntitled": "Untitled group",
+    "menuLinkTargets": "Link addresses",
+    "addToMenu": "Add this section to the menu",
+    "previewDesktop": "Desktop",
+    "previewMobile": "Mobile",
+    "menuReorder": "Drag to reorder"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -3379,7 +3401,7 @@
       "themeLangTitle": "Make it yours",
       "themeLangBody": "Open the account menu to switch language or toggle light and dark mode.",
       "featuresTitle": "Your working areas",
-      "featuresBody": "Everything you run day-to-day lives here — schedule, contacts, payments, plus what you sell and how you grow. Open a section to see its pages.",
+      "featuresBody": "Everything you run day-to-day: activities (what you teach), sessions (when they happen), bookings (who's coming) and payments. Plus what you sell and how you grow. Open a section to see its pages.",
       "shortcutsTitle": "Shortcuts",
       "shortcutsBody": "Pages you open show up here. Hover a row and click the pin to keep your most-used ones at the top.",
       "searchTitle": "Quick search",
@@ -3400,7 +3422,11 @@
       "checklistTitle": "Your setup checklist",
       "helpTitle": "Stuck? Look for the question mark",
       "helpBody": "The question-mark icon at the top of the sidebar opens How-to: how the pieces fit together, what everything costs, and this tour again whenever you want it.",
-      "checklistBody": "That same path, with your own data filled in. It ticks itself off as you go and lives at the top of the dashboard until you're open for business."
+      "checklistBody": "That same path, with your own data filled in. It ticks itself off as you go and lives at the top of the dashboard until you're open for business.",
+      "quickAccessTitle": "Kept within reach",
+      "quickAccessBody": "The two tiles at the top are your fastest way back — Dashboard, plus one page you choose. Under them, pages you open collect as shortcuts; pin the ones you use most.",
+      "utilitiesTitle": "Search and the rest",
+      "utilitiesBody": "Search jumps anywhere in a keystroke — try \"Act\" for Activities. Beside it: your studio QR code, plugins, settings, and How-to for guides and this tour again."
     },
     "setup": {
       "title": "Get set up",
@@ -4633,7 +4659,13 @@
     "waitlistAlreadyBooked": "You already have a place in this class.",
     "waitlistSeatAvailable": "A seat has just opened up — you can book this class right away, no waitlist needed.",
     "waitlistEmailRequired": "We need an email address to hold your place — a free seat is offered by email. Please add one to your profile and try again.",
-    "waitlistQueueLength": "{count, plural, one {# person is already waiting} other {# people are already waiting}}"
+    "waitlistQueueLength": "{count, plural, one {# person is already waiting} other {# people are already waiting}}",
+    "contactField_birthdate": "Date of birth",
+    "contactField_address": "Address",
+    "contactFieldAddressRoute": "Street",
+    "contactFieldAddressNumber": "No.",
+    "contactFieldAddressPostalCode": "Postcode",
+    "contactFieldAddressLocality": "Town"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Book a Trial Class",
@@ -6729,5 +6761,17 @@
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extra",
     "extraSubtitle": "Parked panels, switched on in Settings → Experimental."
+  },
+  "BookingContactFields": {
+    "title": "Contact details to collect",
+    "descriptionTeam": "Asked on every booking form. Answers are saved to the contact, so you only ask once.",
+    "descriptionActivity": "Asked in addition to what you collect on every booking — this list adds to the team settings, it does not replace them.",
+    "required": "Required",
+    "inheritedFromTeam": "Already collected on every booking",
+    "notPublicHint": "Turn on \"Ask on the booking form\" for this field first, in Settings → Custom fields.",
+    "versusBookingQuestions": "These are saved to the contact and can be filtered later. For something that only matters for one booking, use the activity's booking questions instead.",
+    "field_phone": "Phone number",
+    "field_birthdate": "Date of birth",
+    "field_address": "Address"
   }
 }

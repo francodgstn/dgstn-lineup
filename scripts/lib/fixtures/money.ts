@@ -43,6 +43,9 @@ const TEAMS_COLLECTION = 'teams'
 const CONTACTS_COLLECTION = 'contacts'
 const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
 const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+const SESSIONS_COLLECTION = 'sessions'
+const COURSES_COLLECTION = 'courses'
+const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
 
 const tsOf = (d: Date) => admin.firestore.Timestamp.fromDate(d)
 function daysFrom(n: number): Date {
@@ -214,6 +217,9 @@ export interface SeedMemberPaymentSpec {
   status?: 'succeeded' | 'failed' | 'refunded'
   /** Disambiguates the deterministic PaymentIntent id when one contact has many. */
   idSuffix: string
+  /** Override the derived id — used when an entitlement already cites one and
+   *  the payment must match it rather than the other way round. */
+  paymentIntentId?: string
   sessionId?: string | null
   productName?: string | null
   courseName?: string | null
@@ -235,7 +241,8 @@ export async function seedMemberPayment(
   const db = admin.firestore()
   const status = spec.status ?? 'succeeded'
   const amountRappen = rappen(spec.amount)
-  const paymentIntentId = `pi_seed_${spec.contactId ?? 'anon'}_${spec.idSuffix}`.slice(0, 80)
+  const paymentIntentId =
+    spec.paymentIntentId ?? `pi_seed_${spec.contactId ?? 'anon'}_${spec.idSuffix}`.slice(0, 80)
   const at = tsOf(daysFrom(-spec.daysAgo))
   const refunded = status === 'refunded'
 
@@ -380,4 +387,152 @@ export async function seedTeamMoney(opts: {
 
   const contactsRolledUp = await applySubscriptionRollups(teamId)
   return { subscriptions, contactsRolledUp }
+}
+
+// ── One-off sales: drop-ins, course purchases, product orders ─────────────────
+
+/**
+ * The NON-MEMBERSHIP rails.
+ *
+ * `seedTeamMoney` only ever wrote membership invoices, so `/payments` showed a
+ * studio that had never sold a drop-in, a course or a T-shirt — and the finance
+ * journal inherited that same single-category shape. This fills the other rails.
+ *
+ * EVERY PAYMENT IS SEEDED WITH THE THING IT PAID FOR, in the same pass:
+ *
+ *   • a drop-in payment stamps its BOOKING `payment_status: 'paid'` +
+ *     `payment_intent_id`, exactly as the Connect webhook's confirm effect does;
+ *   • a course payment is written to match an entitlement that already exists,
+ *     so `CoursePurchase.paymentIntentId` names a row that is really there.
+ *
+ * That second one is a repair, not a nicety: `seedCoursePurchase` wrote an
+ * entitlement citing `pi_seed_…_course` while nothing wrote the payment, so the
+ * provenance field pointed at a document that did not exist. Same half-record as
+ * the phantom `bookings_count` — a reference no query can resolve.
+ *
+ * NOT SEEDED: paid APPOINTMENTS. A paid one is not just a row — it is a hold
+ * that expires, a Checkout Session that can be resumed, and a webhook that
+ * confirms it, and a ledger row cannot stand in for any of that. See
+ * scripts/lib/appointments.ts.
+ *
+ * Run AFTER the fixtures that create bookings and entitlements, and BEFORE
+ * `seedTeamFinance`, which replays every `member_payments` row into the journal.
+ */
+export async function seedTeamSales(opts: {
+  teamId: string
+  currency?: string
+}): Promise<{ dropIns: number; courses: number; products: number }> {
+  const db = admin.firestore()
+  const { teamId } = opts
+  const currency = opts.currency ?? 'CHF'
+  let dropIns = 0
+  let courses = 0
+  let products = 0
+
+  // ── drop-ins ────────────────────────────────────────────────────────────────
+  // A drop-in is a seat someone paid for per class, so it needs a real booking
+  // underneath. Take bookings the seeders already wrote rather than inventing
+  // attendees nobody else knows about.
+  // DETERMINISTIC selection, so a reseed overwrites the same rows instead of
+  // adding more. An earlier version skipped bookings that were already paid,
+  // which meant every rerun found NEW ones and the drop-in count grew — a seed
+  // that is not idempotent, against this repo's own rule that deterministic ids
+  // plus set() make a rerun an overwrite.
+  const sessionDocs = (await db.collection(SESSIONS_COLLECTION).where('teamId', '==', teamId).get())
+    .docs.filter((d) => d.data().activityType !== 'appointment')
+    .sort((a, b) => a.id.localeCompare(b.id))
+  for (const session of sessionDocs) {
+    if (dropIns >= 3) break
+    const sd = session.data()
+    const bookings = (await session.ref.collection('bookings').get()).docs.sort((a, b) =>
+      a.id.localeCompare(b.id)
+    )
+    // ONE per session. Three people paying a drop-in for the same class reads as
+    // a glitch; spread across classes it reads as a studio that sells drop-ins.
+    for (const b of bookings.slice(0, 1)) {
+      const bd = b.data()
+      const contactId = bd.contact as string | undefined
+      if (!contactId) continue
+      const amount = typeof sd.dropInPriceAmount === 'number' ? sd.dropInPriceAmount : 25
+      const paymentIntentId = `pi_seed_${contactId}_dropin_${session.id}`.slice(0, 80)
+      await seedMemberPayment(teamId, {
+        contactId,
+        purpose: 'drop_in',
+        kind: 'drop_in',
+        amount,
+        currency,
+        daysAgo: 5 + dropIns * 3,
+        idSuffix: `dropin${dropIns}`,
+        sessionId: session.id,
+        comment: 'Drop-in class',
+        lineItem: { kind: 'drop_in', label: 'Drop-in class', session_id: session.id },
+        paymentIntentId,
+      })
+      // The booking's half of the pair — the same fields the webhook stamps.
+      await b.ref.set(
+        { status: 'confirmed', payment_status: 'paid', payment_intent_id: paymentIntentId },
+        { merge: true }
+      )
+      dropIns += 1
+    }
+  }
+
+  // ── course purchases ────────────────────────────────────────────────────────
+  const courseDocs = await db.collection(COURSES_COLLECTION).where('teamId', '==', teamId).get()
+  for (const c of courseDocs.docs) {
+    const purchases = await c.ref.collection(COURSE_PURCHASES_SUBCOLLECTION).get()
+    for (const p of purchases.docs) {
+      const pd = p.data()
+      const paymentIntentId = pd.paymentIntentId as string | undefined
+      if (!paymentIntentId) continue
+      await seedMemberPayment(teamId, {
+        contactId: p.id,
+        purpose: 'course',
+        kind: 'course',
+        // The entitlement stores Rappen; member_payments takes major units.
+        amount: ((pd.amount as number | undefined) ?? 0) / 100,
+        currency: (pd.currency as string | undefined) ?? currency,
+        daysAgo: 21,
+        idSuffix: `course_${c.id}`,
+        courseName: (c.data().title as string | undefined) ?? null,
+        comment: 'Online course',
+        lineItem: { kind: 'course', label: (c.data().title as string) ?? 'Course', course_id: c.id },
+        paymentIntentId,
+      })
+      courses += 1
+    }
+  }
+
+  // ── product orders ──────────────────────────────────────────────────────────
+  const productDocs = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection('products')
+    .limit(2)
+    .get()
+  const buyers = await db
+    .collection(CONTACTS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .limit(4)
+    .get()
+  for (let i = 0; i < productDocs.docs.length && i < buyers.docs.length; i++) {
+    const prod = productDocs.docs[i]
+    const price = prod.data().priceAmount as number | undefined
+    if (typeof price !== 'number') continue
+    await seedMemberPayment(teamId, {
+      contactId: buyers.docs[i].id,
+      purpose: 'shop',
+      kind: 'product',
+      amount: price,
+      currency,
+      daysAgo: 9 + i * 4,
+      idSuffix: `product_${prod.id}`,
+      productName: (prod.data().name as string | undefined) ?? null,
+      comment: 'Shop order',
+      lineItem: { kind: 'product', label: (prod.data().name as string) ?? 'Product', product_id: prod.id },
+    })
+    products += 1
+  }
+
+  return { dropIns, courses, products }
 }

@@ -19,9 +19,12 @@ import { QRDialog } from '@/components/layout/QRDialog'
  *
  * Styled to match UtilityIconLink deliberately — the row must read as one
  * cluster, and this being a button that opens a dialog rather than a link is an
- * implementation detail, not something to telegraph.
+ * implementation detail, not something to telegraph. That includes `showLabel`,
+ * which UtilityIconLink also takes: inside the utilities menu every entry is a
+ * labelled row, and one bare icon among them would read as a different kind of
+ * thing.
  */
-export function TeamQrButton({ collapsed }: { collapsed?: boolean }) {
+export function TeamQrButton({ showLabel }: { showLabel?: boolean }) {
   // 'TopBar' is where `qrTitle` actually lives — the button moved out of
   // UserMenu, but the message did not move with it.
   const t = useTranslations('TopBar')
@@ -35,9 +38,12 @@ export function TeamQrButton({ collapsed }: { collapsed?: boolean }) {
         onClick={() => setOpen(true)}
         title={t('qrTitle')}
         aria-label={t('qrTitle')}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className={`flex h-8 shrink-0 items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
+          showLabel ? 'w-full gap-2 px-2 text-sm' : 'w-8 justify-center'
+        }`}
       >
-        <QrCode className="h-4 w-4" />
+        <QrCode className="h-4 w-4 shrink-0" />
+        {showLabel && <span className="truncate">{t('qrTitle')}</span>}
       </button>
       <QRDialog open={open} onClose={() => setOpen(false)} team={team} />
     </>

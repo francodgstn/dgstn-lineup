@@ -6,12 +6,14 @@ import { httpsCallable, type FunctionsError } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import {
   resolvePaymentOptions,
+  resolveBookingContactFields,
   heldSubscriptionTypeIds,
   parseDateKey,
   parseDocId,
   parsePositiveInt,
   type ActivityMemberBenefit,
   type Benefit,
+  type BookingContactField,
   type PublicFrom,
 } from '@linyup/shared'
 import {
@@ -80,6 +82,10 @@ interface AvailActivity {
   /** Per-activity override of the team's cancellation terms, from
    *  `listAvailability`. Display-only; falls back to the team default. */
   cancellationPolicy: string | null
+  /** The activity's own CONTACT fields, which EXTEND the team-wide list.
+   *  Unlike the policy above this is not display-only — the same resolver runs
+   *  on the server, so the guest step asks for exactly what will be accepted. */
+  contactFields: BookingContactField[] | null
   location: string | null
   onlineUrl: string | null
   days: { dayMs: number; slotsByDuration: Record<string, number[]> }[]
@@ -108,6 +114,7 @@ interface WindowBooking {
   memberBenefit: ActivityMemberBenefit | Benefit | null
   /** Carried to the booking step so the terms are on the screen that commits. */
   cancellationPolicy: string | null
+  contactFields: BookingContactField[] | null
 }
 
 // The booking form is now an in-page step (not a modal), so it joins the funnel.
@@ -142,6 +149,9 @@ type BookArgs = {
    *  Recorded before Stripe on the paid arm and not conditional on payment: they
    *  read the text and ticked, and that is true whether or not the card clears. */
   waiverAcceptances?: WaiverAcceptancePayload[]
+  /** Answers to the studio's book-form contact fields — about the PERSON, so
+   *  stored on the contact rather than the booking. */
+  contactFieldAnswers?: Record<string, unknown>
 }
 
 // ─── WHO IS BOOKING ──────────────────────────────────────────────────────────
@@ -235,6 +245,9 @@ function bodyIdentity(caller: Caller, guest?: GuestDetailsValues): BookArgs {
       email: guest?.email ?? '',
       ...(guest?.phone ? { phone: guest.phone } : {}),
     },
+    // The studio's own contact fields, answered on the guest step. Narrowed
+    // again server side against the resolved list — see booking/contactFields.ts.
+    ...(guest?.contactFieldAnswers ? { contactFieldAnswers: guest.contactFieldAnswers } : {}),
   }
 }
 
@@ -361,6 +374,7 @@ function SlotBookingForm({
   priceAmount,
   memberBenefit,
   cancellationPolicy,
+  activityContactFields,
   durationMinutes,
   providerId,
   activityId,
@@ -390,6 +404,8 @@ function SlotBookingForm({
   memberBenefit: ActivityMemberBenefit | Benefit | null
   /** The activity's own cancellation terms, or null to fall back to the team's. */
   cancellationPolicy: string | null
+  /** Extends the team-wide contact-field list on the guest step. */
+  activityContactFields: BookingContactField[] | null
   durationMinutes: number
   /** The three ids the promo preview needs — its per-rail target key is
    *  `apt:{providerId}:{startMs}:{durationMinutes}`, and preview and checkout
@@ -414,6 +430,14 @@ function SlotBookingForm({
   const tPromo = useTranslations('Promo')
   const tWaiver = useTranslations('Waiver')
   const { team: publicTeam } = usePublicTeam()
+  // The studio's contact fields for THIS booking — team-wide, extended by the
+  // activity's own. The same resolver the callables run, so the guest step and
+  // the server never disagree about what is being asked.
+  const contactFields = useMemo(
+    () => resolveBookingContactFields(publicTeam?.bookingSettings, activityContactFields),
+    [publicTeam?.bookingSettings, activityContactFields]
+  )
+  const publicCustomFields = publicTeam?.publicCustomFields
   // THE SESSION THIS RAIL USED TO IGNORE. `PublicContactAuthProvider` is mounted
   // at the team root, so it wraps every `/public/{slug}/…` surface including this
   // one — a contact signed in from the Space, the shop or the corner pill is in
@@ -1431,6 +1455,8 @@ function SlotBookingForm({
       <GuestDetailsForm
         ref={guestFormRef}
         showPhone
+        contactFields={contactFields}
+        customFieldDefinitions={publicCustomFields}
         submitting={submittingGuest}
         error={error}
         onSubmit={onSubmitGuest}
@@ -1557,6 +1583,7 @@ function buildWindowBooking(
     benefitOnly: chosen?.benefitOnly === true,
     memberBenefit: activity.memberBenefit,
     cancellationPolicy: activity.cancellationPolicy,
+    contactFields: activity.contactFields,
   }
 }
 
@@ -2167,6 +2194,7 @@ export default function AppointmentPicker({
               priceAmount={windowBooking.priceAmount}
               memberBenefit={windowBooking.memberBenefit}
               cancellationPolicy={windowBooking.cancellationPolicy}
+              activityContactFields={windowBooking.contactFields}
               durationMinutes={windowBooking.durationMinutes}
               providerId={windowBooking.providerId}
               activityId={windowBooking.activityId}

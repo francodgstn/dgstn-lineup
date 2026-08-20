@@ -364,6 +364,51 @@ person via `Contact.trial_used_at`. A trial is never a subscription. Kiosk
 walk-in is class-only too. Full docs: `docs/appointments.md` → "Paid
 appointments"; `docs/payment-contact-studio.md` → "Paid trial".
 
+### Book-form fields — a QUESTION is about the booking, a FIELD is about the person
+
+Two lists sit side by side on an activity and they are not interchangeable:
+
+| | Booking question | Contact field |
+|---|---|---|
+| Asks about | this booking ("any injuries today?") | the person ("date of birth") |
+| Stored on | `Booking.question_answers` | the CONTACT (`phone`, `birthdate`, `address`, `custom_fields.*`) |
+| Authored in | `Activity.bookingQuestions` | `BookingSettings.contactFields` + `Activity.contactFields` |
+| Asked | every booking | once — a stored answer is never re-asked |
+
+**ONE resolver**: `resolveBookingContactFields(bookingSettings, activityFields)`
+(`packages/shared/src/types/team.ts`), run identically by the public form and by
+every callable. The activity list **EXTENDS** the team default (it never
+replaces it) and dedupes by key with the ACTIVITY winning, so a kids class can
+promote a team-optional field to required without restating the rest. The legacy
+`BookingSettings.showPhone` boolean is read **there and nowhere else**, as a
+fallback while `contactFields` is absent; the settings form derives it on save so
+the two can never disagree.
+
+**The payload is NARROWED, never merged** — `buildContactFieldPatch`
+(`packages/functions/src/booking/contactFields.ts`). The public form is
+anonymous and is writing to a contact document, so the server decides which keys
+exist: only keys the resolved list names survive, and a `custom:` key survives
+only when its definition sets `publicOnBookingForm` (off by default — asking it
+publicly means mirroring its label and options into the world-readable team
+profile). Three rules learned the hard way, all pinned by tests:
+
+- **An empty answer never blanks a stored value.** A member with a phone on file
+  books, leaves the box untouched, the client posts `''` — treating that as an
+  edit deletes a number the studio collected months ago.
+- **`birthdate` is a Timestamp and `address` is a four-part map.** Writing the
+  raw string in either case stores something no reader looks at — no error, no
+  failing test. Both are special-cased; an address MERGES over the stored one.
+- **`set()` vs `update()` are not interchangeable.** `update()` reads
+  `custom_fields.x` as a path, `set()` as a literal key with a dot in it. The
+  create branches go through `expandContactFieldPatch`.
+
+Mounted on the rails that own a contact write: `bookSession`,
+`createDropInCheckout`, `bookAppointment` and `createAppointmentCheckout` (the
+appointment pair share one seam, `resolveOrCreateAppointmentContact`).
+**`joinWaitlist` deliberately asks for none** — it stores none, and a form that
+asks and discards is worse than one that never asked; the fields are collected
+on the claim, which goes through the paid or free rail like any other booking.
+
 ### Waitlist — class-only, one deadline, one seat writer
 
 A queue for a seat in a full **class**; entries live at

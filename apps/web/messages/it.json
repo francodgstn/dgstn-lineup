@@ -1874,7 +1874,9 @@
     "paymentsWebhookEventsTitle": "Scegli gli eventi con attenzione",
     "paymentsDoubleRecordingTitle": "Questo endpoint Stripe registra i pagamenti due volte",
     "paymentsDoubleRecordingBody": "Negli ultimi {days} giorni ha consegnato {invoiceCount} eventi di fattura e {paymentCount} eventi di pagamento. Stripe non collega più una fattura al suo pagamento: un pagamento ricorrente che arriva in entrambe le forme viene quindi registrato due volte e qui non è possibile sapere quali due righe siano lo stesso denaro.",
-    "paymentsDoubleRecordingFix": "Da correggere in Stripe: modifica questo endpoint e rimuovi <code>invoice.payment_succeeded</code>. Mantieni <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> e <code>checkout.session.completed</code> — registrano tutto, rinnovi compresi. Le righe già scritte restano come sono; l'elenco dei pagamenti segnala quelle a rischio."
+    "paymentsDoubleRecordingFix": "Da correggere in Stripe: modifica questo endpoint e rimuovi <code>invoice.payment_succeeded</code>. Mantieni <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> e <code>checkout.session.completed</code> — registrano tutto, rinnovi compresi. Le righe già scritte restano come sono; l'elenco dei pagamenti segnala quelle a rischio.",
+    "customFieldPublicOnBooking": "Chiedi nel modulo di prenotazione",
+    "customFieldPublicOnBookingHint": "Rende il nome e le opzioni di questo campo visibili pubblicamente, così può comparire nella tua pagina di prenotazione. Lascia disattivato per i dati riservati."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -3038,10 +3040,10 @@
     "unpublishConfirmBody": "Il tuo sito pubblicato va offline immediatamente: i visitatori non vedono più nulla e ogni voce del bio-link che vi rimanda smette di essere mostrata. Non si perde niente — la bozza con pagine, testi e immagini resta esattamente com'è, puoi ripubblicare quando vuoi.",
     "unpublishConfirmAction": "Metti offline",
     "fieldPricingDisplay": "Prezzi sulle schede",
-    "pricingDisplayList": "Mostra tutte le righe",
+    "pricingDisplayList": "Mostra il listino prezzi",
     "pricingDisplayCompact": "Dietro un link “Prezzi”",
     "pricingDisplayHidden": "Nascondi i prezzi",
-    "pricingDisplayHint": "Riguarda solo gli importi. Una scheda la cui offerta richiede un abbonamento continua a segnalarlo con qualsiasi impostazione — altrimenti i visitatori prenotano qualcosa che verrà rifiutato.",
+    "pricingDisplayHint": "Una scheda la cui attività richiede un abbonamento lo dice sempre — altrimenti i visitatori prenotano qualcosa che verrà loro rifiutato. Ciò che cambia è il dettaglio: nome e prezzo del piano appaiono in linea, dietro il link, o per niente.",
     "fieldPricingLayout": "Disposizione",
     "pricingLayoutCards": "Una scheda per abbonamento",
     "pricingLayoutTable": "Tabella comparativa",
@@ -3109,7 +3111,27 @@
     "editorPlacesHeadingPlaceholder": "Dove trovarci",
     "editorPlacesToShow": "Luoghi da mostrare",
     "editorNoPlaces": "Ancora nessun luogo — aggiungili nella pagina Luoghi.",
-    "editorPlaceOrgScope": "org"
+    "editorPlaceOrgScope": "org",
+    "tabMenu": "Menu",
+    "menuHint": "Trascina una riga per riordinarla e usa le frecce di rientro per annidarla sotto quella sopra. Sezioni, le altre pagine pubbliche e link esterni stanno tutti in un unico elenco.",
+    "menuEmpty": "Nessuna voce di menu. Aggiungi sezioni, pagine o link qui sotto.",
+    "menuAdd": "Aggiungi voce",
+    "menuAddLink": "Link esterno",
+    "menuAddGroup": "Gruppo di sottomenu",
+    "menuMoveUp": "Sposta su",
+    "menuMoveDown": "Sposta giù",
+    "menuIndent": "Annida sotto la riga sopra",
+    "menuOutdent": "Sposta fuori di un livello",
+    "menuRemove": "Rimuovi dal menu",
+    "menuDepth": "{depth} di {max} livelli",
+    "menuMissingSection": "Sezione eliminata",
+    "menuLinkUntitled": "Link senza titolo",
+    "menuGroupUntitled": "Gruppo senza titolo",
+    "menuLinkTargets": "Indirizzi dei link",
+    "addToMenu": "Aggiungi questa sezione al menu",
+    "previewDesktop": "Desktop",
+    "previewMobile": "Mobile",
+    "menuReorder": "Trascina per riordinare"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -3379,7 +3401,7 @@
       "themeLangTitle": "Rendilo tuo",
       "themeLangBody": "Apri il menu account per cambiare lingua o passare tra modalità chiara e scura.",
       "featuresTitle": "Le tue aree di lavoro",
-      "featuresBody": "Qui trovi tutto il lavoro quotidiano — calendario, contatti, pagamenti, oltre a ciò che vendi e come cresci. Apri una sezione per vedere le sue pagine.",
+      "featuresBody": "Tutto ciò che gestisci ogni giorno: attività (cosa offri), sessioni (quando si tengono), prenotazioni (chi viene) e pagamenti. Più cosa vendi e come cresci. Apri una sezione per vederne le pagine.",
       "shortcutsTitle": "Scorciatoie",
       "shortcutsBody": "Le pagine che apri compaiono qui. Passa su una riga e clicca la puntina per tenere in alto quelle che usi di più.",
       "searchTitle": "Ricerca rapida",
@@ -3400,7 +3422,11 @@
       "checklistTitle": "La tua lista di configurazione",
       "helpTitle": "Bloccato? Cerca il punto interrogativo",
       "helpBody": "Il punto interrogativo in alto nella barra laterale apre la guida: come si incastrano i pezzi, quanto costa cosa e questo tour quando vuoi.",
-      "checklistBody": "Lo stesso percorso, con i tuoi dati. Si spunta da sola e resta in cima alla dashboard finché non sei operativo."
+      "checklistBody": "Lo stesso percorso, con i tuoi dati. Si spunta da sola e resta in cima alla dashboard finché non sei operativo.",
+      "quickAccessTitle": "Sempre a portata",
+      "quickAccessBody": "I due riquadri in alto sono il ritorno più rapido — la dashboard e una pagina a tua scelta. Sotto, le pagine aperte si raccolgono come scorciatoie; fissa quelle che usi di più.",
+      "utilitiesTitle": "Ricerca e il resto",
+      "utilitiesBody": "La ricerca ti porta ovunque con un tasto — prova \"Att\" per Attività. Accanto: il QR code del tuo studio, i plugin, le impostazioni e How-to per le guide e questo tour."
     },
     "setup": {
       "title": "Configurazione",
@@ -4633,7 +4659,13 @@
     "waitlistAlreadyBooked": "Hai già un posto in questa lezione.",
     "waitlistSeatAvailable": "Si è appena liberato un posto: puoi prenotare subito questa lezione, senza lista d'attesa.",
     "waitlistEmailRequired": "Per tenerti un posto in lista d'attesa serve un indirizzo e-mail: un posto libero viene offerto via e-mail. Aggiungine uno al tuo profilo e riprova.",
-    "waitlistQueueLength": "{count, plural, one {# persona è già in attesa} other {# persone sono già in attesa}}"
+    "waitlistQueueLength": "{count, plural, one {# persona è già in attesa} other {# persone sono già in attesa}}",
+    "contactField_birthdate": "Data di nascita",
+    "contactField_address": "Indirizzo",
+    "contactFieldAddressRoute": "Via",
+    "contactFieldAddressNumber": "N.",
+    "contactFieldAddressPostalCode": "CAP",
+    "contactFieldAddressLocality": "Località"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",
@@ -6729,5 +6761,17 @@
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extra",
     "extraSubtitle": "Pannelli in sospeso, attivati in Impostazioni → Sperimentale."
+  },
+  "BookingContactFields": {
+    "title": "Dati di contatto da raccogliere",
+    "descriptionTeam": "Richiesto in ogni modulo di prenotazione. Le risposte vengono salvate sul contatto, quindi lo chiedi una sola volta.",
+    "descriptionActivity": "Richiesto in aggiunta a quanto raccogli in ogni prenotazione — questo elenco si somma alle impostazioni del team, non le sostituisce.",
+    "required": "Obbligatorio",
+    "inheritedFromTeam": "Già raccolto in ogni prenotazione",
+    "notPublicHint": "Attiva prima «Chiedi nel modulo di prenotazione» per questo campo, in Impostazioni → Campi personalizzati.",
+    "versusBookingQuestions": "Questi dati vengono salvati sul contatto e possono essere filtrati in seguito. Per informazioni che valgono solo per una prenotazione, usa invece le domande di prenotazione dell'attività.",
+    "field_phone": "Numero di telefono",
+    "field_birthdate": "Data di nascita",
+    "field_address": "Indirizzo"
   }
 }

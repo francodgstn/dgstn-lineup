@@ -14,6 +14,8 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslations } from 'next-intl'
+import { bookingContactFieldCustomId } from '@linyup/shared'
+import type { BookingContactField, PublicCustomFieldDefinition } from '@linyup/shared'
 import {
   Select,
   SelectContent,
@@ -31,6 +33,49 @@ export function createNewGuestSchema(t: ReturnType<typeof useTranslations>) {
     email: z.string().email(t('errorInvalidEmail')),
     phone: z.string().max(30).optional(),
     aggregatorApp: z.string().optional(),
+    /**
+     * The studio's own contact fields — whatever `resolveBookingContactFields`
+     * resolved for this booking, keyed exactly as the server expects them
+     * (`birthdate`, `custom:swim_level`, …). Required-ness is enforced in
+     * `superRefine` below rather than in the shape, because which keys exist is
+     * a runtime answer.
+     *
+     * `phone` stays a first-class field above even when it arrives through the
+     * list, so every existing caller keeps reading `values.phone`.
+     */
+    contactFieldAnswers: z.record(z.string(), z.unknown()).optional(),
+  })
+}
+
+/** The same schema, with the studio's required fields actually required. */
+function createGuestSchema(
+  t: ReturnType<typeof useTranslations>,
+  contactFields: BookingContactField[]
+) {
+  return createNewGuestSchema(t).superRefine((values, ctx) => {
+    for (const field of contactFields) {
+      if (field.required !== true) continue
+      const raw =
+        field.key === 'phone' ? values.phone : (values.contactFieldAnswers ?? {})[field.key]
+      // An address is a map, so "did they answer" is about its parts. Street
+      // and town are the ones that make it an address at all — a lone postcode
+      // is not what a studio asking for one wants.
+      const empty =
+        field.key === 'address'
+          ? (() => {
+              const a = (raw ?? {}) as Record<string, unknown>
+              return !['route', 'locality'].every(
+                (k) => typeof a[k] === 'string' && (a[k] as string).trim()
+              )
+            })()
+          : raw === undefined || raw === null || raw === '' || (typeof raw === 'string' && !raw.trim())
+      if (!empty) continue
+      ctx.addIssue({
+        code: 'custom',
+        message: t('errorRequired'),
+        path: field.key === 'phone' ? ['phone'] : ['contactFieldAnswers', field.key],
+      })
+    }
   })
 }
 
@@ -43,7 +88,24 @@ export interface GuestDetailsFormHandle {
 }
 
 export interface GuestDetailsFormProps {
+  /**
+   * Whether to ask for a phone number. Callers that resolve the studio's
+   * contact-field list pass `contactFields` instead and leave this to follow
+   * from it; the appointment picker still passes it on its own.
+   */
   showPhone: boolean
+  /**
+   * The studio's contact fields for THIS booking — already resolved
+   * (`resolveBookingContactFields(bookingSettings, activity.contactFields)`).
+   * `phone` in this list drives the phone input above; every other key renders
+   * below and is submitted under `contactFieldAnswers`, where the server
+   * narrows it again before it reaches the contact document.
+   */
+  contactFields?: BookingContactField[]
+  /** Public mirrors of the team's custom-field definitions — label + options
+   *  for any `custom:` key in the list. A key with no definition here renders
+   *  nothing: it was never opted in to being asked publicly. */
+  customFieldDefinitions?: PublicCustomFieldDefinition[]
   showAggregatorField?: boolean
   submitting: boolean
   error?: string | null
@@ -62,11 +124,37 @@ export interface GuestDetailsFormProps {
 
 export const GuestDetailsForm = forwardRef<GuestDetailsFormHandle, GuestDetailsFormProps>(
   function GuestDetailsForm(
-    { showPhone, showAggregatorField, submitting, error, onSubmit, submitLabel, submittingLabel, accentColor },
+    {
+      showPhone,
+      contactFields,
+      customFieldDefinitions,
+      showAggregatorField,
+      submitting,
+      error,
+      onSubmit,
+      submitLabel,
+      submittingLabel,
+      accentColor,
+    },
     ref
   ) {
     const t = useTranslations('PublicBooking')
-    const schema = useMemo(() => createNewGuestSchema(t), [t])
+    // Every row except phone, which has its own input above and predates the
+    // list. A `custom:` key with no public definition is dropped here — the
+    // studio never opted it in, so there is nothing to label it with.
+    const extraFields = useMemo(() => {
+      const defs = new Map((customFieldDefinitions ?? []).map((d) => [d.id, d]))
+      return (contactFields ?? [])
+        .filter((f) => f.key !== 'phone')
+        .map((f) => {
+          const customId = bookingContactFieldCustomId(f.key)
+          return { field: f, def: customId ? defs.get(customId) : undefined, customId }
+        })
+        .filter((row) => !row.customId || !!row.def)
+    }, [contactFields, customFieldDefinitions])
+    const askPhone = contactFields ? contactFields.some((f) => f.key === 'phone') : showPhone
+    const phoneRequired = contactFields?.some((f) => f.key === 'phone' && f.required) ?? false
+    const schema = useMemo(() => createGuestSchema(t, contactFields ?? []), [t, contactFields])
     const form = useForm<GuestDetailsValues>({ resolver: zodResolver(schema) })
 
     useImperativeHandle(ref, () => ({
@@ -123,10 +211,15 @@ export const GuestDetailsForm = forwardRef<GuestDetailsFormHandle, GuestDetailsF
           )}
         </div>
 
-        {showPhone && (
+        {askPhone && (
           <div className="space-y-1">
             <label className="text-sm font-medium">
-              {t('labelPhone')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
+              {t('labelPhone')}{' '}
+              {phoneRequired ? (
+                <span className="text-destructive">*</span>
+              ) : (
+                <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
+              )}
             </label>
             <input
               type="tel"
@@ -134,8 +227,107 @@ export const GuestDetailsForm = forwardRef<GuestDetailsFormHandle, GuestDetailsF
               autoComplete="tel"
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
+            {form.formState.errors.phone && (
+              <p className="text-xs text-destructive">{form.formState.errors.phone.message}</p>
+            )}
           </div>
         )}
+
+        {/* The studio's own contact fields. Rendered from the RESOLVED list, so
+            a team-wide field and an activity's own extra field look identical
+            to the person filling the form — which is the point: they are
+            answering about themselves, not about this class. */}
+        {extraFields.map(({ field, def }) => {
+          const label = def?.label ?? t(`contactField_${field.key}` as Parameters<typeof t>[0])
+          // An address error is attached to the GROUP, not to one of its four
+          // inputs, so this reads a message only where one was set.
+          const errNode = (
+            form.formState.errors.contactFieldAnswers as Record<string, { message?: unknown }> | undefined
+          )?.[field.key]
+          const error = typeof errNode?.message === 'string' ? errNode.message : undefined
+          const inputClass =
+            'w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary'
+          return (
+            <div key={field.key} className="space-y-1">
+              <label className="text-sm font-medium">
+                {label}{' '}
+                {field.required ? (
+                  <span className="text-destructive">*</span>
+                ) : (
+                  <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
+                )}
+              </label>
+              {field.key === 'address' ? (
+                // The four parts of ContactAddress, because that is what the
+                // contact stores — a single line would land in a key no reader
+                // looks at.
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    {...form.register('contactFieldAnswers.address.route')}
+                    placeholder={t('contactFieldAddressRoute')}
+                    autoComplete="address-line1"
+                    className={`${inputClass} col-span-2`}
+                  />
+                  <input
+                    {...form.register('contactFieldAnswers.address.street_number')}
+                    placeholder={t('contactFieldAddressNumber')}
+                    autoComplete="address-line2"
+                    className={inputClass}
+                  />
+                  <input
+                    {...form.register('contactFieldAnswers.address.postal_code')}
+                    placeholder={t('contactFieldAddressPostalCode')}
+                    autoComplete="postal-code"
+                    className={inputClass}
+                  />
+                  <input
+                    {...form.register('contactFieldAnswers.address.locality')}
+                    placeholder={t('contactFieldAddressLocality')}
+                    autoComplete="address-level2"
+                    className={`${inputClass} col-span-2`}
+                  />
+                </div>
+              ) : def?.type === 'select' ? (
+                <select
+                  {...form.register(`contactFieldAnswers.${field.key}`)}
+                  className={inputClass}
+                  defaultValue=""
+                >
+                  <option value="">—</option>
+                  {(def.options ?? []).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              ) : def?.type === 'checkbox' ? (
+                <input
+                  type="checkbox"
+                  {...form.register(`contactFieldAnswers.${field.key}`)}
+                  className="h-4 w-4 accent-primary"
+                />
+              ) : (
+                <input
+                  type={
+                    def?.type === 'number'
+                      ? 'number'
+                      : def?.type === 'date' || field.key === 'birthdate'
+                        ? 'date'
+                        : 'text'
+                  }
+                  // A number field posts a STRING without this, and the server
+                  // stores what it is given.
+                  {...form.register(`contactFieldAnswers.${field.key}`, {
+                    valueAsNumber: def?.type === 'number',
+                  })}
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              )}
+              {error && <p className="text-xs text-destructive">{error}</p>}
+            </div>
+          )
+        })}
 
         {showAggregatorField && (
           <div className="space-y-1">

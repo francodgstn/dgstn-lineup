@@ -186,6 +186,123 @@ export interface CustomFieldDefinition {
   type: CustomFieldType
   options?: string[] // for type 'select'
   required?: boolean
+  /**
+   * May this field be ASKED on the public booking form?
+   *
+   * OFF BY DEFAULT, AND THAT IS THE WHOLE POINT. A custom field is a studio's
+   * private annotation on a person — "payment risk", "complaint history" — and
+   * the definitions live on the team document, which only members can read. The
+   * public booking form is anonymous, so asking one there means MIRRORING its
+   * label, type and options into the world-readable public profile.
+   *
+   * Blanket mirroring would publish the SHAPE of a studio's private notes even
+   * with no values attached, and publishing is not reversible for anyone who
+   * already scraped it. So each definition opts in explicitly, and
+   * `publicCustomFields` on the team's public profile carries only the ticked
+   * ones (Franco's call, 2026-08-20).
+   */
+  publicOnBookingForm?: boolean
+}
+
+/** The world-readable half of a custom field definition — mirrored to
+ *  `TeamPublicProfile.publicCustomFields` for exactly those definitions that set
+ *  `publicOnBookingForm`. Carries what the form needs to RENDER the input and
+ *  nothing else; never a stored value. */
+export interface PublicCustomFieldDefinition {
+  id: string
+  label: string
+  type: CustomFieldType
+  options?: string[]
+}
+
+// ─── Booking form: CONTACT fields ─────────────────────────────────────────────
+//
+// TWO KINDS OF QUESTION SHARE THE BOOK FORM, and they are told apart by WHERE
+// THE ANSWER LIVES — not by how they look:
+//
+//   · a CONTACT FIELD is a fact about the PERSON. The answer is written to the
+//     contact, survives the booking, is filterable on /contacts and readable by
+//     the automation engine. Phone, address, swim level, a ranking.
+//   · a BOOKING QUESTION (`Activity.bookingQuestions`) is a fact about THIS
+//     SEAT. It is stored on the booking, shows on the day sheet, and is never
+//     copied to the contact. "How old is the child today", "which lane".
+//
+// Nothing converts one into the other, deliberately. Asking a per-person fact as
+// a booking question is the mistake this split exists to prevent: the answer
+// lands on a booking, the studio can never filter by it, and it is re-asked at
+// every booking.
+
+/** One field the book form collects INTO THE CONTACT. */
+export interface BookingContactField {
+  /**
+   * A base contact field name (`phone`, `address`, `birthdate`), or a custom
+   * field as `custom:{definitionId}`.
+   *
+   * The prefix is what keeps the two namespaces from colliding: a studio may
+   * legitimately create a custom field called "phone", and without it that
+   * definition would silently take over the base field's slot.
+   */
+  key: string
+  /** Blocks submit when unanswered. A value already on the contact satisfies it
+   *  — the form prefills and does not re-ask. */
+  required?: boolean
+}
+
+export const BOOKING_CONTACT_FIELD_CUSTOM_PREFIX = 'custom:'
+
+/** Base contact fields a studio may add to the book form. Deliberately small:
+ *  firstname/lastname/email are always collected and are not listed here. */
+export const BOOKING_CONTACT_BASE_FIELDS = ['phone', 'birthdate', 'address'] as const
+export type BookingContactBaseField = (typeof BOOKING_CONTACT_BASE_FIELDS)[number]
+
+/**
+ * THE resolution of "what does this activity's book form ask for", and the only
+ * place the team default and the activity list are combined.
+ *
+ * The activity EXTENDS the team default rather than replacing it (Franco's call,
+ * 2026-08-20): a studio asks phone + level everywhere, and a kids class ADDS the
+ * child's name. That differs from `confirmationInstructions`, which overrides —
+ * the difference is deliberate, because a list of fields composes and a block of
+ * prose does not.
+ *
+ * Dedupe is by key, ACTIVITY WINS, so an activity can promote a team-optional
+ * field to required without restating the rest.
+ *
+ * `showPhone` is read here as a FALLBACK and nowhere else. It predates this list
+ * and says the same thing a `phone` entry says; two writers for one fact is the
+ * drift this codebase keeps paying for. A team that has never edited the new
+ * list still gets its phone behaviour from the old boolean; one that has, does
+ * not consult it again.
+ */
+export function resolveBookingContactFields(
+  // Deliberately accepts a PARTIAL: callers hand it whatever
+  // `loadBookingSettings` returned, and an absent `showPhone` means the same
+  // thing here as everywhere else — true, ask for a phone number.
+  bookingSettings:
+    | { contactFields?: BookingContactField[]; showPhone?: boolean }
+    | null
+    | undefined,
+  activityFields?: BookingContactField[] | null
+): BookingContactField[] {
+  const teamFields = bookingSettings?.contactFields
+  const base: BookingContactField[] = teamFields?.length
+    ? teamFields
+    : // Legacy shape: showPhone !== false meant "ask for a phone number".
+      bookingSettings?.showPhone !== false
+      ? [{ key: 'phone' }]
+      : []
+
+  const byKey = new Map<string, BookingContactField>()
+  for (const f of base) if (f?.key) byKey.set(f.key, f)
+  for (const f of activityFields ?? []) if (f?.key) byKey.set(f.key, f)
+  return [...byKey.values()]
+}
+
+/** Is this key a custom field, and which definition does it name? */
+export function bookingContactFieldCustomId(key: string): string | null {
+  return key.startsWith(BOOKING_CONTACT_FIELD_CUSTOM_PREFIX)
+    ? key.slice(BOOKING_CONTACT_FIELD_CUSTOM_PREFIX.length) || null
+    : null
 }
 
 // ─── Booking reminders ────────────────────────────────────────────────────────
@@ -533,7 +650,12 @@ export interface TeamMember {
 export interface BookingSettings {
   flowType: 'activity-first' | 'date-first'
   windowMonths: number
+  /** LEGACY. Superseded by `contactFields`; read only as a fallback, and only
+   *  through `resolveBookingContactFields`. Never read it directly. */
   showPhone: boolean
+  /** Contact fields the book form collects team-wide. An activity's own list
+   *  EXTENDS this one — see `resolveBookingContactFields`. */
+  contactFields?: BookingContactField[]
   showActivityDescription?: boolean
   showFitnessAppField?: boolean
   ctaUrl?: string | null
@@ -590,6 +712,9 @@ export interface TeamPublicProfile {
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
+  /** Opt-in custom field definitions the public book form may render — only
+   *  those flagged `publicOnBookingForm`. See CustomFieldDefinition. */
+  publicCustomFields?: PublicCustomFieldDefinition[]
   // Team-wide cancellation policy shown on public booking pages and appended to
   // confirmation emails when the activity has no `cancellationPolicy` of its
   // own. Denormalized by syncTeamPublicProfile from
