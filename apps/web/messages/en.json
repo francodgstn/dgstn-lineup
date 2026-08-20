@@ -14,7 +14,11 @@
     "errorRetry": "Try again",
     "back": "Back",
     "duplicate": "Duplicate",
-    "copyName": "{name} (copy)"
+    "copyName": "{name} (copy)",
+    "clearSearch": "Clear search",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved"
   },
   "Plans": {
     "free": "Free",
@@ -165,7 +169,14 @@
     "navRecentContactsGroup": "Recently viewed contacts",
     "experimentalFeatures": "Experimental features",
     "dashboardPreview": "Dashboard (new)",
-    "programTemplates": "Programme templates"
+    "programTemplates": "Programme templates",
+    "headTileChange": "Change this shortcut",
+    "headTileAdd": "Add a shortcut",
+    "headTileAddShort": "Add",
+    "headTileSearch": "Search pages…",
+    "headTileNoMatch": "Nothing matches",
+    "headTileRemove": "Remove this shortcut",
+    "utilities": "More"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1070,7 +1081,16 @@
     "noClassActivitiesHint": "No class activities yet. A class is scheduled from one, so create one first.",
     "createActivityAction": "Create an activity",
     "deleteAppointmentPaidInWindow": "The client paid just now, so nothing was deleted. The appointment is confirmed — refund them in Stripe if you still want to remove it.",
-    "deleteAppointmentLinkStillOpen": "The payment link could not be closed — it may still be payable. Expire it in your Stripe dashboard."
+    "deleteAppointmentLinkStillOpen": "The payment link could not be closed — it may still be payable. Expire it in your Stripe dashboard.",
+    "deleteBackgroundTitle": "Deleting the series",
+    "deleteBackgroundDescription": "{total} sessions are being cancelled. You can close this window — the work carries on in the background.",
+    "deleteBackgroundProgress": "{processed} of {total} sessions",
+    "deleteBackgroundDone": "{count} sessions deleted",
+    "deleteBackgroundPartial": "{count} sessions deleted, {failed} could not be removed",
+    "deleteBackgroundFailed": "The deletion stopped before it finished. Some sessions may remain — please try again.",
+    "deleteAlreadyRunning": "This series is already being deleted.",
+    "deleteRunInBackground": "Continue in background",
+    "pastItemNotice": "This is in the past — it has already taken place."
   },
   "Calendar": {
     "title": "Schedule",
@@ -1144,7 +1164,10 @@
       "sectionSessionsAndEvents": "Sessions & events",
       "sectionOther": "Other",
       "onlySessionsAndEvents": "Only sessions & events"
-    }
+    },
+    "eventDayOf": "Day {day} of {total}",
+    "eventFrom": "from",
+    "eventUntil": "until"
   },
   "Events": {
     "title": "Events",
@@ -1599,7 +1622,17 @@
     "sectionBookingTitle": "Booking and pricing",
     "sectionBookingSubtitle": "Who can book this, and what it costs them.",
     "moreOptionsLabel": "More options",
-    "moreOptionsHint": "Colour, level, and the details shown on your public page"
+    "moreOptionsHint": "Colour, level, and the details shown on your public page",
+    "viewSchedule": "View schedule",
+    "scheduleSheetSubtitle": "When this activity is scheduled to run.",
+    "scheduleSheetRecurring": "Recurring",
+    "scheduleSheetRecurringFallback": "Part of a recurring series",
+    "scheduleSheetOneOff": "One-off",
+    "scheduleSheetMore": "+ {count} more",
+    "scheduleSheetEmptyTitle": "Not on the calendar",
+    "scheduleSheetEmptyBody": "This activity has no upcoming sessions, so nobody can see or book it.",
+    "scheduleSheetEmptyCta": "Schedule a session",
+    "scheduleSheetOpenSchedule": "Open the schedule"
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -4843,7 +4876,8 @@
     "roomCount": "{count, plural, one {# room} other {# rooms}}",
     "openInMaps": "Open in maps",
     "setAsMainAddress": "Set as main address",
-    "backToSchedule": "Back to schedule"
+    "backToSchedule": "Back to schedule",
+    "openFullPage": "Open the full page"
   },
   "EngagementMatrix": {
     "cardTitle": "Engagement matrix",
@@ -4939,7 +4973,10 @@
     "markPending": "Mark pending",
     "markConfirmed": "Mark confirmed",
     "sheetTitleAdd": "Add checkin",
-    "sheetTitleUpdate": "Update checkin"
+    "sheetTitleUpdate": "Update checkin",
+    "addCheckinBaseNote": "They are checked in straight away. Fill in each person's details afterwards from the list.",
+    "addCheckinConfirm": "Check in",
+    "addCheckinConfirmCount": "Check in {count}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Upgrade to {label}",
@@ -5063,7 +5100,11 @@
     "waiverGuardianBadgeTitle": "Signed by somebody who declared themselves a parent or guardian. Self-declared — check in person.",
     "waiverCheckBadge": "Check age",
     "waiverCheckBadgeTitle": "This waiver may cover minors and the participant signed for themselves. Check in person.",
-    "addContactBooksSeat": "Adding someone books their seat — the class capacity updates and online booking closes when it is full."
+    "addContactBooksSeat": "Adding someone books their seat — the class capacity updates and online booking closes when it is full.",
+    "addSelected": "Add",
+    "addSelectedCount": "Add {count}",
+    "noContactsMatchSearch": "No contacts match your search",
+    "noSubConfirmBodyMany": "{count} of the people you selected hold no valid subscription for this activity: {names}. Add them anyway?"
   },
   "OrgEvents": {
     "title": "Organization events",
@@ -6587,7 +6628,10 @@
     "engagementMatrixName": "Engagement matrix",
     "engagementMatrixDescription": "Plots each week by how many people came and how often they came back, splitting the result into four quadrants. The quadrant model is still being tuned, so read it as a hint rather than a verdict.",
     "engagementMatrixSurface": "Dashboard, in the Trends section.",
-    "planNote": "Needs the {plan} plan, so you will not see it on yours yet."
+    "planNote": "Needs the {plan} plan, so you will not see it on yours yet.",
+    "extraDashboardName": "Extra dashboard components",
+    "extraDashboardDescription": "Adds a shelf of extra panels at the foot of the dashboard: finance figures and recent payments, the engagement matrix, trial conversion and the correlation explorer. They work, but their shape is still being decided and any of them may change or be withdrawn.",
+    "extraDashboardSurface": "Dashboard, below Trends"
   },
   "NewDashboard": {
     "greetingMorning": "Good morning",
@@ -6682,6 +6726,8 @@
     "demoAgeYouth": "Youth (10–14)",
     "demoAgeTeens": "Teens (15–17)",
     "demoAgeAdults": "Adults (18–39)",
-    "demoAgeMasters": "Masters (40+)"
+    "demoAgeMasters": "Masters (40+)",
+    "extraTitle": "Extra",
+    "extraSubtitle": "Parked panels, switched on in Settings → Experimental."
   }
 }
