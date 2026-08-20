@@ -5136,7 +5136,17 @@
     "addSelected": "Add",
     "addSelectedCount": "Add {count}",
     "noContactsMatchSearch": "No contacts match your search",
-    "noSubConfirmBodyMany": "{count} of the people you selected hold no valid subscription for this activity: {names}. Add them anyway?"
+    "noSubConfirmBodyMany": "{count} of the people you selected hold no valid subscription for this activity: {names}. Add them anyway?",
+    "removeBookingConfirmTitle": "Remove this booking?",
+    "removeCheckInConfirmTitle": "Remove this check-in?",
+    "removeConfirmBody": "{name} will be taken off this session.",
+    "removePastWarning": "This session has already taken place. Removing someone edits the record of who was there, which counts towards their history and your reports.",
+    "removeConfirmAction": "Remove",
+    "removedToast": "{name} removed from this session",
+    "restoredToast": "{name} put back",
+    "restoreFailed": "Could not put that back. Reload and check the roster.",
+    "removeFailed": "Could not remove that. Nothing was changed.",
+    "undo": "Undo"
   },
   "OrgEvents": {
     "title": "Organization events",

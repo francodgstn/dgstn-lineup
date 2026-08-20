@@ -5136,7 +5136,17 @@
     "addSelected": "Hinzufügen",
     "addSelectedCount": "{count} hinzufügen",
     "noContactsMatchSearch": "Keine Kontakte entsprechen Ihrer Suche",
-    "noSubConfirmBodyMany": "{count} der ausgewählten Personen haben kein gültiges Abo für diese Aktivität: {names}. Trotzdem hinzufügen?"
+    "noSubConfirmBodyMany": "{count} der ausgewählten Personen haben kein gültiges Abo für diese Aktivität: {names}. Trotzdem hinzufügen?",
+    "removeBookingConfirmTitle": "Diese Buchung entfernen?",
+    "removeCheckInConfirmTitle": "Diesen Check-in entfernen?",
+    "removeConfirmBody": "{name} wird aus dieser Session entfernt.",
+    "removePastWarning": "Diese Session hat bereits stattgefunden. Wer hier entfernt wird, verschwindet aus dem Anwesenheitsnachweis — das zählt für den Verlauf des Kontakts und für deine Auswertungen.",
+    "removeConfirmAction": "Entfernen",
+    "removedToast": "{name} aus dieser Session entfernt",
+    "restoredToast": "{name} wiederhergestellt",
+    "restoreFailed": "Wiederherstellen fehlgeschlagen. Lade neu und prüfe die Teilnehmerliste.",
+    "removeFailed": "Entfernen fehlgeschlagen. Es wurde nichts geändert.",
+    "undo": "Rückgängig"
   },
   "OrgEvents": {
     "title": "Organisationsveranstaltungen",

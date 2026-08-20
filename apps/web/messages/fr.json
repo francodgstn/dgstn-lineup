@@ -5136,7 +5136,17 @@
     "addSelected": "Ajouter",
     "addSelectedCount": "Ajouter {count}",
     "noContactsMatchSearch": "Aucun contact ne correspond à votre recherche",
-    "noSubConfirmBodyMany": "{count} des personnes sélectionnées n'ont pas d'abonnement valide pour cette activité : {names}. Les ajouter quand même ?"
+    "noSubConfirmBodyMany": "{count} des personnes sélectionnées n'ont pas d'abonnement valide pour cette activité : {names}. Les ajouter quand même ?",
+    "removeBookingConfirmTitle": "Supprimer cette réservation ?",
+    "removeCheckInConfirmTitle": "Supprimer cet enregistrement ?",
+    "removeConfirmBody": "{name} sera retiré de cette séance.",
+    "removePastWarning": "Cette séance a déjà eu lieu. Retirer quelqu'un modifie le relevé des présences, qui compte pour son historique et pour vos rapports.",
+    "removeConfirmAction": "Supprimer",
+    "removedToast": "{name} retiré de cette séance",
+    "restoredToast": "{name} rétabli",
+    "restoreFailed": "Impossible de rétablir. Rechargez et vérifiez la liste.",
+    "removeFailed": "Suppression impossible. Rien n'a été modifié.",
+    "undo": "Annuler"
   },
   "OrgEvents": {
     "title": "Événements de l'organisation",
