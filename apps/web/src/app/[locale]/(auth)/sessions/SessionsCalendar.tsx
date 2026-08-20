@@ -372,17 +372,23 @@ const HOUR_PX = 48
 const MIN_BLOCK_PX = 22
 const WEEK_GRID_COLS = { gridTemplateColumns: '3.25rem repeat(7, minmax(0, 1fr))' } as const
 // Left-hand gutter reserved in every day column (only when availability is shown)
-// so bands stay visible even under an overlapping session: blocks stop short of
-// it and each band's solid left spine sits in it. When availability is hidden the
-// gutter collapses and blocks take the full column width.
+// so the rules stay visible even under an overlapping session: blocks stop short
+// of it and each coach's rule sits in it. When availability is hidden the gutter
+// collapses and blocks take the full column width.
 //
-// With more than one coach in scope the gutter widens slightly and is split into
-// one sub-lane per coach, so two coaches free at the same hour read as two ticks
+// With more than one coach in scope the gutter widens and is split into one
+// sub-lane per coach, so two coaches free at the same hour read as two ticks
 // rather than one. Beyond MAX_AVAIL_LANES coaches share the last lane — the week
 // grid is a "who is sellable when" hint, and the coach filter is the precise
 // answer.
-const AVAIL_GUTTER_PX = 10
-const AVAIL_GUTTER_MULTI_PX = 16
+//
+// NARROWED with the fill (10→6, 16→12). A day column is `minmax(0, 1fr)` of a
+// seven-way split and is the scarcest space on this screen, and the old widths
+// were sized for a translucent band beside the rule. A 2px rule plus breathing
+// room needs 6; three of them need 12. Every pixel saved goes back to the
+// session blocks, which is where the words are.
+const AVAIL_GUTTER_PX = 6
+const AVAIL_GUTTER_MULTI_PX = 12
 const MAX_AVAIL_LANES = 3
 
 interface PositionedSession {
@@ -1111,11 +1117,19 @@ export default function SessionsCalendar({
                         />
                       ))}
 
-                      {/* Availability bands — a compact coloured segment in the
-                          left gutter, one sub-lane per coach, so a band still
-                          reads under an overlapping session and never fights a
-                          session's fill. Tooltip carries the coach + schedule
-                          name; the legend above the grid names the colours. */}
+                      {/* Availability bands — A LINE, NOT A BAND. Each is a
+                          coloured rule in the left gutter spanning the bookable
+                          window, one sub-lane per coach, so it still reads under
+                          an overlapping session and never fights a session's
+                          fill. Tooltip carries the coach + schedule name; the
+                          legend above the grid names the colours.
+
+                          The translucent fill beside the rule is gone (Franco,
+                          2026-08-21). A lane is a handful of pixels wide, so the
+                          fill was never an area anybody could read as one — it
+                          was a smudge next to a 2px line that already carried
+                          the same colour and the same extent. Dropping it is
+                          what let the gutter narrow. */}
                       {bands.map((band) => {
                         const c = providerColor(band.providerId)
                         // Coaches past the third share the last lane (see
@@ -1128,14 +1142,15 @@ export default function SessionsCalendar({
                           <div
                             key={band.key}
                             title={`${band.providerName} · ${band.title}`}
-                            className="absolute z-[2] rounded-r-sm"
+                            className="absolute z-[2]"
                             style={{
                               top: band.top,
                               height: band.height,
                               left: laneIdx * laneWidthPx,
-                              width: Math.max(laneWidthPx - 1, 3),
-                              backgroundColor: `${c}66`,
-                              borderLeft: `2px solid ${c}`,
+                              // The rule IS the element now — no box behind it,
+                              // so nothing rounds and nothing fills.
+                              width: 2,
+                              backgroundColor: c,
                             }}
                           />
                         )
