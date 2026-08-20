@@ -1,5 +1,10 @@
-// Rolling "tips & tricks" shown in the dashboard DiscoverPanel. Title/body text
-// lives in the `Discover` i18n namespace under tip_{id}_title / tip_{id}_body.
+// Rolling "tips & tricks". Title/body text lives in the `Discover` i18n
+// namespace under tip_{id}_title / tip_{id}_body.
+//
+// The dashboard's DiscoverPanel was their original home and is gone — the new
+// dashboard dropped Discover by decision (a shelf you go to, not a thing you are
+// handed while finding out whether the 09:00 is full). The remaining reader is
+// components/howto/HowToUtilities.tsx, which is that shelf.
 export interface DiscoverTip {
   id: string
   icon: string // lucide icon name (resolved via DynamicIcon)
