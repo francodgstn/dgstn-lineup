@@ -197,7 +197,13 @@ function generateLeadPassword(): string {
   for (const b of bytes) out += alphabet[b % alphabet.length]
   return out
 }
-const DEMO_PASSWORD = cli.password || generateLeadPassword()
+// Resolved in main(), once the profile is loaded: `--password` > the profile's
+// own `demoPassword` > a fresh random one. It cannot be a module-level const
+// any more, because the profile is not read until main() runs.
+let DEMO_PASSWORD = ''
+/** Where the password came from — the run summary says so, and only a RANDOM
+ *  one is worth shouting about. */
+let passwordSource: 'flag' | 'profile' | 'random' = 'random' 
 
 // ── generic helpers (mirroring seed-sandbox.ts) ─────────────────────────────
 
@@ -3083,6 +3089,12 @@ async function main() {
     process.exit(1)
   }
   process.env.TZ = profile.timezone
+
+  // Staff-login password: the flag wins, then the profile's pinned default,
+  // then a fresh random one.
+  if (cli.password) { DEMO_PASSWORD = cli.password; passwordSource = 'flag' }
+  else if (profile.demoPassword) { DEMO_PASSWORD = profile.demoPassword; passwordSource = 'profile' }
+  else { DEMO_PASSWORD = generateLeadPassword(); passwordSource = 'random' }
   assetsDir = path.join(__dirname, 'leads', LEAD!, 'assets')
 
   const teamId = `lead-${profile.id}`
@@ -3145,8 +3157,11 @@ async function main() {
     `\n✅ Lead tenant seeded — ${profile.contacts.length} contacts, ${sessionCount} sessions\n`
   )
   console.log('   Logins (password: ' + DEMO_PASSWORD + '):')
-  if (!cli.password) {
-    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it (pin with --password).')
+  if (passwordSource === 'random') {
+    console.log('   ⚠ Randomly generated — SAVE IT NOW; every reseed rotates it.')
+    console.log("     Pin it with --password, or set `demoPassword` in the lead's profile.")
+  } else if (passwordSource === 'profile') {
+    console.log("   Pinned by the profile's `demoPassword` — stable across reseeds.")
   }
   for (const s of profile.staff) {
     console.log(

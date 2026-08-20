@@ -671,6 +671,19 @@ export interface LeadProfile {
    * must already be onboarded in Stripe test mode (see scripts/connect-test-account.ts).
    */
   stripeConnectTestAccount?: string
+  /**
+   * Pins the staff-login password for this lead instead of generating a random
+   * one per run — the same value `--password` would pass.
+   *
+   * THE FIELD IS DECLARED HERE; THE VALUE BELONGS IN THE PROFILE, which is
+   * gitignored. A lead's owner login is a real person's address on a cloud
+   * sandbox, so the password is a working credential and must not reach a
+   * tracked file. That is also why this is not a constant in seed-lead.ts,
+   * which is committed.
+   *
+   * Precedence: `--password` > this > a fresh random one.
+   */
+  demoPassword?: string
 
   /** Caveats printed after seeding (e.g. which prices are assumptions). */
   notes?: string[]

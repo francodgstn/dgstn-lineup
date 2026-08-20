@@ -183,22 +183,60 @@ export async function seedSessionWaitlist(opts: {
       ? (session.max_participants as number)
       : 8
 
-  // FULL means bookings_count === capacity, written ABSOLUTE. There is no
-  // FieldValue.increment on this field anywhere, and a seed is not the place to
-  // introduce the first one.
-  await target.ref.update({ max_participants: capacity, bookings_count: capacity })
-
   const contacts = await db
     .collection(CONTACTS_COLLECTION)
     .where('teamId', '==', teamId)
-    .limit(20)
+    .limit(60)
     .get()
-  // Queue people who are NOT already booked into it — a waitlist entry for
-  // somebody holding a seat is a contradiction the UI would render as one.
-  // Booking doc ids are seeder-specific, so match on the `contact` FIELD.
+
+  // Whoever already holds a seat here. Booking doc ids are seeder-specific, so
+  // match on the `contact` FIELD.
   const bookings = await target.ref.collection('bookings').get()
   const booked = new Set(bookings.docs.map((d) => d.data().contact as string).filter(Boolean))
-  const queue = contacts.docs.filter((d) => !booked.has(d.id)).slice(0, count)
+
+  // FILL THE CLASS WITH REAL BOOKINGS, one document per seat.
+  //
+  // An earlier version of this fixture just wrote `bookings_count: capacity` and
+  // stopped, which is the exact half-record this repo keeps paying for: the
+  // agenda read the counter and showed 20/20, the session detail read the
+  // `bookings` subcollection and showed nobody, and the two disagreed on every
+  // seeded tenant. A counter is a CACHE of the rows; seeding one without the
+  // other states something no query can confirm.
+  const free = contacts.docs.filter((d) => !booked.has(d.id))
+  const fillers = free.slice(0, Math.max(0, capacity - booked.size))
+  for (let i = 0; i < fillers.length; i++) {
+    const c = fillers[i]
+    const d = c.data() as { firstname?: string; lastname?: string; email?: string; phone?: string }
+    await target.ref
+      .collection('bookings')
+      .doc(`${target.id}-wlfill-${c.id}`)
+      .set({
+        teamId,
+        contact: c.id,
+        session: target.id,
+        email: d.email ?? `${c.id}@example.com`,
+        firstname: d.firstname ?? 'Member',
+        lastname: d.lastname ?? '',
+        phone: d.phone ?? '',
+        is_new_contact: false,
+        joinedAt: tsOf(daysFrom(-3 - i)),
+        // A settled seat, not a trial hold — `bookingHoldsSeat` counts it, which
+        // is what makes the class genuinely full rather than nominally full.
+        status: 'confirmed',
+        booking_token: `wlfill-${target.id}-${c.id}`,
+      })
+  }
+
+  // ABSOLUTE, and recounted from the rows that now exist — never `capacity`
+  // asserted independently of them, and never FieldValue.increment.
+  const seated = booked.size + fillers.length
+  await target.ref.update({ max_participants: capacity, bookings_count: seated })
+
+  // Queue people who are NOT holding a seat — a waitlist entry for somebody
+  // already booked is a contradiction the UI would render as one.
+  const seatedIds = new Set([...booked, ...fillers.map((f) => f.id)])
+  const queue = free.filter((d) => !seatedIds.has(d.id)).slice(0, count)
+
 
   let queued = 0
   for (let i = 0; i < queue.length; i++) {
