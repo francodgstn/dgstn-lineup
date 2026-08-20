@@ -87,6 +87,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Loader2,
 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
@@ -100,6 +101,7 @@ import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useByoStripeDoubleRecording } from '@/hooks/useConnect'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
+import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -320,12 +322,7 @@ function EngagementThresholdsForm({
       </div>
       <p className="text-xs text-muted-foreground">{t('engagementDaysHint')}</p>
       {!valid && <p className="text-xs text-destructive">{t('engagementInvalid')}</p>}
-      <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !valid}>
-          {saving ? t('saving') : t('save')}
-        </Button>
-        {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
-      </div>
+      <SettingsSaveBar onSave={onSave} saving={saving} saved={saved} disabled={!canEdit || !valid} />
     </div>
   )
 }
@@ -483,13 +480,20 @@ function GeneralForm({
       </div>
 
       <div className="flex items-center gap-3 pt-2">
+        {/* Kept as a real submit button (this section IS a <form>), but sized
+            and coloured like SettingsSaveBar so it does not read as a different
+            kind of action from every other save in settings. */}
+        {saved && !isSubmitting && (
+          <span className="text-xs text-muted-foreground">{t('saved')}</span>
+        )}
         <Button
+          size="sm"
           type="submit"
           disabled={!canEdit || isSubmitting || !isDirty || !!slugError || slugChecking}
         >
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSubmitting ? t('saving') : t('save')}
         </Button>
-        {saved && <span className="text-sm text-green-600">{t('saved')}</span>}
       </div>
     </form>
   )
@@ -2241,9 +2245,13 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
 
         {saveError && <p className="text-xs text-destructive">{saveError}</p>}
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-3">
+          {saved && !saving && (
+            <span className="text-xs text-muted-foreground">{t('customVariablesSaved')}</span>
+          )}
           <Button size="sm" onClick={onSave} disabled={saving}>
-            {saving ? t('customVariablesSaving') : saved ? t('customVariablesSaved') : t('customVariablesSaveButton')}
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? t('customVariablesSaving') : t('customVariablesSaveButton')}
           </Button>
         </div>
         </CardContent>

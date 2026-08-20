@@ -279,9 +279,9 @@ export default function EventTypesPage() {
       {/* Built-in types */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('builtin.heading')}</h2>
-        <div className="space-y-2">
+        <div className="divide-y rounded-lg border">
           {BUILTIN_EVENT_TYPES.map((type) => (
-            <div key={type} className="flex items-center gap-3 rounded-lg border p-3">
+            <div key={type} className="flex items-center gap-3 p-3">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">
                   {BUILTIN_LABEL_KEYS[type] ? t(BUILTIN_LABEL_KEYS[type] as Parameters<typeof t>[0]) : type}
@@ -299,9 +299,9 @@ export default function EventTypesPage() {
       {pluginTypes.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('fromPlugins.heading')}</h2>
-          <div className="space-y-2">
+          <div className="divide-y rounded-lg border">
             {pluginTypes.map(({ p: plugin, card }) => (
-              <div key={plugin.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <div key={plugin.id} className="flex items-center gap-3 p-3">
                 <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{plugin.eventType!.id}</p>
@@ -336,9 +336,9 @@ export default function EventTypesPage() {
         )}
 
         {!isLoading && customTypes.length > 0 && (
-          <div className="space-y-2">
+          <div className="divide-y rounded-lg border">
             {customTypes.map((type) => (
-              <div key={type.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <div key={type.id} className="flex items-center gap-3 p-3">
                 {type.color && (
                   <span className="w-3 h-3 rounded-full shrink-0" style={{ background: type.color }} />
                 )}

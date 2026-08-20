@@ -410,7 +410,10 @@ export default function BookingForm({
   const bookingWindowMonths = bookingSettings?.windowMonths ?? 2
   const showPhone = bookingSettings?.showPhone !== false
   const showDesc = bookingSettings?.showActivityDescription !== false
-  const showFitnessApp = bookingSettings?.showFitnessAppField === true
+  // `!== false`, matching the settings form's default: absent means SHOWN. The
+  // two must agree — the admin toggle reading one way and the public form the
+  // other is a field a studio believes is on and visitors never see.
+  const showFitnessApp = bookingSettings?.showFitnessAppField !== false
 
   // Data loading
   const [activities, setActivities] = useState<ActivityProfile[]>([])

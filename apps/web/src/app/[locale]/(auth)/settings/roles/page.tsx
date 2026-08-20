@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
 
 // Owner/manager editor for the customizable Coach role's capability set. Writes
 // teams/{id}/role_config/coach; the syncMemberCapabilities Cloud Function then
@@ -191,12 +192,7 @@ export default function RolePermissionsPage() {
       </Card>
 
       {canEdit && (
-        <div className="flex items-center gap-3">
-          <Button onClick={save} disabled={!dirty || saving}>
-            {saving ? t('saving') : t('save')}
-          </Button>
-          {saved && <span className="text-sm text-muted-foreground">{t('saved')}</span>}
-        </div>
+        <SettingsSaveBar onSave={save} saving={saving} saved={saved} disabled={!dirty} />
       )}
     </div>
   )

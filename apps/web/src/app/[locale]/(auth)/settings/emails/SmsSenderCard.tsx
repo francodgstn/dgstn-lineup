@@ -20,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { MessageSquareText } from 'lucide-react'
+import { MessageSquareText, Loader2} from 'lucide-react'
 
 interface SmsSenderConfig {
   senderName?: string
@@ -145,6 +145,7 @@ export function SmsSenderCard() {
         <div className="flex items-center gap-2 shrink-0">
           {saved && !dirty && <span className="text-xs text-muted-foreground">{t('instructionsSaved')}</span>}
           <Button size="sm" onClick={save} disabled={saving || !dirty}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {saving ? t('instructionsSaving') : t('instructionsSave')}
           </Button>
         </div>
