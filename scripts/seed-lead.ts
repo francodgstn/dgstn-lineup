@@ -93,7 +93,7 @@ import {
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
 import { seedTeamFinance } from './lib/fixtures/finance'
-import { seedTeamMoney } from './lib/fixtures/money'
+import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -2944,7 +2944,6 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
 
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
   // into the journal through the SAME builders the Connect webhook uses.
-  await seedTeamFinance({ teamId, uid })
 
   // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
   // Each of these was a shipped feature with zero data behind it on every
@@ -2954,6 +2953,14 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   await seedEventProgram(teamId, uid)
   await seedSessionWaitlist({ teamId })
   await seedCoursePurchase(teamId)
+
+  // ── one-off sales, then the journal ────────────────────────────────────────
+  // ORDER MATTERS. Sales read back the bookings and course entitlements the
+  // fixtures above just wrote, and seedTeamFinance replays every member_payments
+  // row into the journal — so it has to be last, or the rails it cannot see are
+  // simply missing from finance.
+  await seedTeamSales({ teamId, currency: profile.currency })
+  await seedTeamFinance({ teamId, uid })
 
   // ── documents ──────────────────────────────────────────────────────────────
   // Documents + their frozen v1 snapshots + the public mirrors, through the ONE
