@@ -2489,8 +2489,8 @@ function SidebarContent({
       )}
 
       {/* Utility row — search, then the "⋯" utilities. First of the two pinned
-          rows; the head pair sits under it and carries the rule that closes
-          them both off from the scroll area.
+          rows; the head pair sits under it, and the scroll area starts below
+          them both.
 
           Search is a mini-input rather than the full-width field it used to be a
           row above: the field cost a whole row for something used in bursts, and
@@ -2501,9 +2501,8 @@ function SidebarContent({
           In icon-only mode the row stacks as centred icons. */}
       <div
         // No bottom rule: this row reads as part of the header block above it,
-        // and a second line so close to the studio row's was clutter. The rule
-        // that matters is the one under the head pair below — the seam where
-        // pinned stops and scrolling starts.
+        // and a second line so close to the studio row's was clutter. The same
+        // went for the head pair below — see the seam there.
         data-tour="nav-utilities"
         className={`mx-2 pt-2 pb-1.5 shrink-0 flex gap-1 ${
           collapsed ? 'flex-col items-center' : 'items-center'
@@ -2558,11 +2557,13 @@ function SidebarContent({
           other scrolls — and a highlight cannot span a scroll boundary, so the
           anchor keeps the half that is a fixed, always-visible target. */}
       <div
-        // THE SEAM between what is pinned and what scrolls, so it carries the
-        // rule. `mx-2`, matching the studio row's, so the two lines are the same
-        // line at the same inset rather than two near-misses.
+        // The seam between what is pinned and what scrolls. It carries NO rule:
+        // the header block already has the studio row's line, and a second one
+        // two rows below it drew a box around the top of the pane rather than
+        // separating anything (Franco, 2026-08-21). The boundary is legible
+        // without it — content scrolling up to this point simply stops.
         data-tour="nav-quick-access"
-        className="mx-2 shrink-0 border-b pt-1 pb-2"
+        className="mx-2 shrink-0 pt-1 pb-2"
       >
         {collapsed ? (
           // At w-14 there is no second column, and a chooser on a 28px target is
