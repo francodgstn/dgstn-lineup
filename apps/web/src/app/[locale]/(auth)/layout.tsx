@@ -2298,6 +2298,10 @@ function SidebarContent({
     Nav?: { searchKeywords?: Record<string, string> }
   }
   const kwOf = (id: string) => messages.Nav?.searchKeywords?.[id] ?? ''
+  // Has the nav been scrolled off its top? Drives the seam shadow below, and
+  // nothing else — it is a boolean, not a scroll position, so the re-render is
+  // bounded to the two frames that cross the boundary.
+  const [navScrolled, setNavScrolled] = useState(false)
   const inOrg = !!team?.org_id
   // Show the Payments dashboard once a team has started Connect onboarding (an
   // account exists, not operator-disabled) OR has any BYO gateway configured —
@@ -2560,8 +2564,9 @@ function SidebarContent({
         // The seam between what is pinned and what scrolls. It carries NO rule:
         // the header block already has the studio row's line, and a second one
         // two rows below it drew a box around the top of the pane rather than
-        // separating anything (Franco, 2026-08-21). The boundary is legible
-        // without it — content scrolling up to this point simply stops.
+        // separating anything (Franco, 2026-08-21). What marks the boundary is
+        // on the scroller instead — a shadow that only appears once something
+        // is actually scrolled under it.
         data-tour="nav-quick-access"
         className="mx-2 shrink-0 pt-1 pb-2"
       >
@@ -2590,8 +2595,34 @@ function SidebarContent({
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2">
+      {/* Nav — the scrolling half of the pane.
+          `min-h-0` on the wrapper because a flex child will not shrink below its
+          content without it, and the nav has to be allowed to shrink for
+          `overflow-y-auto` to mean anything. */}
+      <div className="relative min-h-0 flex-1">
+        {/* THE SEAM, DRAWN ONLY WHEN THERE IS SOMETHING TO SEPARATE.
+            A rule here was a permanent line boxing in the top of the pane even
+            with nothing scrolled under it. This is the same information —
+            "content continues above" — but it is only true sometimes, so it is
+            only drawn then: a short gradient that fades in on the first pixel of
+            scroll and back out at the top.
+
+            Absolutely positioned OVER the scroller rather than inside it, so it
+            does not move with the content it is shading, and
+            `pointer-events-none` so it never eats a click on the row beneath. */}
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-3 bg-gradient-to-b from-black/10 to-transparent transition-opacity duration-200 dark:from-black/40 ${
+            navScrolled ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+        <nav
+          // Cheap: React bails out of a re-render when the boolean is unchanged,
+          // so this only costs a render on the two frames that actually cross
+          // the boundary, not on every scroll event.
+          onScroll={(e) => setNavScrolled(e.currentTarget.scrollTop > 0)}
+          className="h-full overflow-y-auto py-2 px-2"
+        >
         {/* Shortcuts — pinned + recently visited (hidden when empty). THE FIRST
             SCROLLING THING: unlike the head pair above the search, this list
             grows with use, so it is what gives way when the pane runs short. */}
@@ -2744,7 +2775,8 @@ function SidebarContent({
           onDismiss={dismissSuggestion}
         />
         <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
-      </nav>
+        </nav>
+      </div>
 
       {/* User account + QR at bottom */}
       <div className="border-t py-2 px-2 shrink-0">
