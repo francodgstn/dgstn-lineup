@@ -47,6 +47,23 @@ export interface LeadCustomFieldDef {
   type: 'text' | 'number' | 'date' | 'select' | 'checkbox'
   options?: string[] // for type 'select'
   required?: boolean
+  /** Opt in to being ASKED on the public book form. Off by default, because
+   *  asking it publicly mirrors this field's label and options into the
+   *  world-readable team profile. A field listed in `bookingContactFields`
+   *  without this is refused at the write — see booking/contactFields.ts. */
+  publicOnBookingForm?: boolean
+}
+
+/**
+ * A field the public book form collects ABOUT THE PERSON (stored on the
+ * contact), as opposed to a booking QUESTION (stored on the booking).
+ *
+ * Keys are the shared vocabulary: 'phone' | 'birthdate' | 'address', or
+ * `custom:{id}` naming a `LeadCustomFieldDef`.
+ */
+export interface LeadBookingContactField {
+  key: string
+  required?: boolean
 }
 
 export interface LeadReminderStep {
@@ -93,6 +110,9 @@ export interface LeadActivityDef {
   imageAsset?: string
   /** Display-only entry requirements shown on the public booking page. */
   prerequisites?: string
+  /** Contact fields this activity asks for IN ADDITION to the team-wide list
+   *  (LeadTeamProfile.bookingContactFields) — it extends, never replaces. */
+  contactFields?: LeadBookingContactField[]
   /** Per-activity confirmation-email note (overrides the team-wide one). */
   confirmationInstructions?: string
   /** Paid-access gate; defaults derived from isFreeTrial when unset. */
@@ -566,6 +586,12 @@ export interface LeadProfile {
   places?: LeadPlaceDef[]
   /** Account-wide extra contact fields (installs the custom-fields plugin). */
   customFieldDefinitions?: LeadCustomFieldDef[]
+  /**
+   * What EVERY book form asks about the person, on top of name + email.
+   * Unset keeps the historical default (phone only). An empty array asks for
+   * nothing beyond name + email.
+   */
+  bookingContactFields?: LeadBookingContactField[]
   /** Contact Groups plugin — nested member groups (e.g. by discipline/area).
    *  Installs the contact-groups plugin; membership is set via
    *  LeadContactDef.groupKeys. */

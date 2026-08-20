@@ -791,11 +791,19 @@ async function seedLeadTenant(profile: LeadProfile) {
   // flow, the mobile app, the booking callables and the admin Settings → Booking
   // form all read it there. (There used to be a team-doc mirror at
   // settings.booking; it is gone — see packages/functions/src/booking/bookingSettings.ts.)
+  // What every book form asks about the PERSON. Unset keeps the historical
+  // default (phone only) so every already-seeded lead profile is unchanged.
+  const bookingContactFields = profile.bookingContactFields ?? [{ key: 'phone' }]
   const bookingSettings = {
     flowType: 'activity-first',
     // Cover the materialized future window so the booking page shows it all.
     windowMonths: bookingWindowMonths,
-    showPhone: true,
+    // DERIVED from the list below, exactly as Settings → Booking derives it:
+    // showPhone is only ever read as a fallback while `contactFields` is
+    // absent, and two writers for one fact is the drift this repo keeps paying
+    // for.
+    showPhone: bookingContactFields.some((f) => f.key === 'phone'),
+    contactFields: bookingContactFields,
     ctaUrl: null,
     ctaLabel: null,
     showActivityDescription: true,
@@ -1029,6 +1037,19 @@ async function seedLeadTenant(profile: LeadProfile) {
       socialLinks: profile.socialLinks,
       links: portalLinks,
       bookingSettings,
+      // OPT-IN ONLY, exactly as syncTeamPublicProfile filters it: a definition
+      // reaches the world-readable mirror (label + options, never a stored
+      // value) only when the profile ticked `publicOnBookingForm`. Without this
+      // the book form has no label to render a `custom:` field with, and the
+      // server refuses the answer anyway.
+      publicCustomFields: (profile.customFieldDefinitions ?? [])
+        .filter((f) => f.publicOnBookingForm === true)
+        .map((f) => ({
+          id: f.id,
+          label: f.label,
+          type: f.type,
+          ...(f.options?.length ? { options: f.options } : {}),
+        })),
       showBranding: false, // studio plan carries no "Powered by Linyup" badge
       default_currency: profile.currency,
       default_public_surface: 'bio-link',
@@ -1181,6 +1202,10 @@ async function seedLeadTenant(profile: LeadProfile) {
         level: a.level,
         description: a.description,
         ...(a.prerequisites ? { prerequisites: a.prerequisites } : {}),
+        // EXTENDS the team-wide list — never restates it. Mirrored the same way
+        // syncActivityPublicProfile does, so the public form asks for exactly
+        // what the callables accept.
+        ...(a.contactFields?.length ? { contactFields: a.contactFields } : {}),
         ...(a.confirmationInstructions
           ? { confirmationInstructions: a.confirmationInstructions }
           : {}),
@@ -1220,6 +1245,10 @@ async function seedLeadTenant(profile: LeadProfile) {
         color: a.color,
         description: a.description,
         ...(a.prerequisites ? { prerequisites: a.prerequisites } : {}),
+        // EXTENDS the team-wide list — never restates it. Mirrored the same way
+        // syncActivityPublicProfile does, so the public form asks for exactly
+        // what the callables accept.
+        ...(a.contactFields?.length ? { contactFields: a.contactFields } : {}),
         image_url: imageUrl,
         isFreeTrial: accessRule.type === 'open',
         accessRule,
