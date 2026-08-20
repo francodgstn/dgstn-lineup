@@ -19,6 +19,7 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
+import { buildContactFieldPatch, expandContactFieldPatch } from './contactFields'
 import { memberCanCancel } from './myBookings'
 import { isSessionCancelled } from './waitlist/constants'
 import { loadBookingSettings } from './bookingSettings'
@@ -54,6 +55,9 @@ import {
   type BookingCancelEffect,
   type BookingCancelRefusal,
   type CancelBookingResult,
+  resolveBookingContactFields,
+  type BookingContactField,
+  type CustomFieldDefinition,
 } from '@linyup/shared'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -514,6 +518,10 @@ export const bookSession = onCall(async (request) => {
     source?: string
     /** Answers to the activity's bookingQuestions, keyed by field id. */
     questionAnswers?: Record<string, unknown>
+    /** Answers to the book form's CONTACT fields, keyed the same way the fields
+     *  are (`phone`, `custom:{id}`). Narrowed server-side against the resolved
+     *  list — see booking/contactFields.ts. */
+    contactFieldAnswers?: Record<string, unknown>
     /** Ticks from the waiver step, each echoing the version and text hash the
      *  visitor was actually shown. Coerced by `parseWaiverSubmissions`; anything
      *  malformed is dropped and the gate refuses in the ordinary way. */
@@ -749,6 +757,10 @@ export const bookSession = onCall(async (request) => {
   // The activity's own book-form questions — the allow-list the submitted
   // answers get narrowed to (see sanitizeBookingAnswers).
   let activityBookingQuestions: FormField[] = []
+  // The activity's own CONTACT fields — extended onto the team-wide list by
+  // resolveBookingContactFields. Distinct from the questions above: these
+  // answers are written to the CONTACT, not to the booking.
+  let activityContactFields: BookingContactField[] = []
   let activityAutoConfirm: boolean | undefined
   let activityTypeVal: ActivityType | undefined
   // CLASS-ONLY (Activity.trialEnabled, @linyup/shared). Independent of
@@ -778,6 +790,9 @@ export const bookSession = onCall(async (request) => {
         activityCancellationPolicy = (actData.cancellationPolicy as string) || null
         activityBookingQuestions = Array.isArray(actData.bookingQuestions)
           ? (actData.bookingQuestions as FormField[])
+          : []
+        activityContactFields = Array.isArray(actData.contactFields)
+          ? (actData.contactFields as BookingContactField[])
           : []
         activityAutoConfirm = actData.autoConfirm as boolean | undefined
         activityTypeVal = actData.type as ActivityType | undefined
@@ -873,7 +888,8 @@ export const bookSession = onCall(async (request) => {
   // (teams/{id}/public_profile/{id}.bookingSettings — see bookingSettings.ts),
   // which is the same document the public booking page reads, so the page and
   // this refusal can no longer disagree.
-  const { cutoffMinutes } = await loadBookingSettings(data.teamId)
+  const bookingSettings = await loadBookingSettings(data.teamId)
+  const { cutoffMinutes } = bookingSettings
   if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
     throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
   }
@@ -1024,6 +1040,25 @@ export const bookSession = onCall(async (request) => {
   })
 
   // Resolve or create contact
+  // CONTACT FIELDS. Resolved from the team's book settings extended by the
+  // activity's own list, then NARROWED against that list — the payload is
+  // anonymous and is writing to a contact document, so the server decides which
+  // keys exist. See booking/contactFields.ts.
+  const resolvedContactFields = resolveBookingContactFields(
+    // Reuses the settings already loaded for the booking cutoff — one read, and
+    // the same document the callables enforce the cutoff from.
+    bookingSettings,
+    activityContactFields
+  )
+  const contactFieldPatch = buildContactFieldPatch({
+    fields: resolvedContactFields,
+    answers: data.contactFieldAnswers,
+    definitions: (team.custom_field_definitions ?? null) as CustomFieldDefinition[] | null,
+    // Read ONLY to merge an address over the stored one — an answer that names
+    // a street and a town must not take the postcode with it.
+    existing: authenticatedContact,
+  })
+
   let contactId: string
   let isNewContact = false
 
@@ -1101,6 +1136,10 @@ export const bookSession = onCall(async (request) => {
       if (isTrialDoor) {
         exactMatchUpdate.trial_used_at = FieldValue.serverTimestamp()
       }
+      // Contact fields the form collected. Merged onto whatever else this
+      // branch is already updating, so an existing member's booking is still
+      // one write.
+      Object.assign(exactMatchUpdate, contactFieldPatch)
       if (Object.keys(exactMatchUpdate).length) {
         await exactMatch.ref.update(exactMatchUpdate)
       }
@@ -1128,6 +1167,12 @@ export const bookSession = onCall(async (request) => {
         pending_bookings_count: 1,
         // One-trial-per-person enforcement (see the exactMatch branch above).
         ...(isTrialDoor ? { trial_used_at: FieldValue.serverTimestamp() } : {}),
+        // Contact fields from the book form. `set()` treats a dotted key as a
+        // LITERAL field name — it is `update()` that reads it as a path — so
+        // the custom entries are nested here rather than written as
+        // "custom_fields.swim_level", which would create a field with a dot in
+        // its name that nothing can ever read back.
+        ...expandContactFieldPatch(contactFieldPatch),
       })
       contactId = newContactRef.id
       console.log(`New trial contact created: ${contactId}`)

@@ -21,6 +21,8 @@ import {
   activityRequiresSubscription,
   planGiftCardRedemption,
   resolvePaymentOptions,
+  resolveBookingContactFields,
+  type BookingContactField,
   type ActivityAccessRule,
   type ActivityMemberBenefit,
   type Benefit,
@@ -114,6 +116,9 @@ interface ActivityProfile {
   cancellationPolicy?: string
   /** Per-activity book-form questions (shared FormField schema). */
   bookingQuestions?: FormField[]
+  /** Per-activity CONTACT fields, which EXTEND the team-wide list. Questions
+   *  are about the booking; these are about the person. */
+  contactFields?: BookingContactField[]
 }
 
 interface SessionProfile {
@@ -505,6 +510,17 @@ export default function BookingForm({
 
   const bookingQuestions = selectedActivity?.bookingQuestions ?? []
 
+  // TWO different things, deliberately side by side. A booking QUESTION is
+  // about this booking ("any injuries today?") and is stored on the booking; a
+  // contact FIELD is about the person ("date of birth") and is stored on the
+  // contact, so it is asked once and never again. The list is the team's
+  // extended by this activity's — the resolver is the one that decides, here
+  // and on the server both.
+  const contactFields = resolveBookingContactFields(
+    bookingSettings,
+    selectedActivity?.contactFields ?? null
+  )
+
   /** Every required question answered? Gates submit on both booking paths. */
   function missingRequiredAnswer(): boolean {
     return bookingQuestions.some((q) => q.required && !isFieldAnswered(q, answers[q.id]))
@@ -577,6 +593,9 @@ export default function BookingForm({
               cancellationPolicy: data.cancellationPolicy ?? undefined,
               bookingQuestions: Array.isArray(data.bookingQuestions)
                 ? (data.bookingQuestions as FormField[])
+                : undefined,
+              contactFields: Array.isArray(data.contactFields)
+                ? (data.contactFields as BookingContactField[])
                 : undefined,
             }
           })
@@ -954,6 +973,9 @@ export default function BookingForm({
           email: values.email,
           phone: showPhone ? values.phone || null : null,
         },
+        ...(values.contactFieldAnswers
+          ? { contactFieldAnswers: values.contactFieldAnswers }
+          : {}),
         slug,
         locale,
         origin: typeof window !== 'undefined' ? window.location.origin : undefined,
@@ -1021,6 +1043,9 @@ export default function BookingForm({
           phone: showPhone ? values.phone || null : null,
           aggregatorApp: showFitnessApp ? values.aggregatorApp || null : null,
         },
+        ...(values.contactFieldAnswers
+          ? { contactFieldAnswers: values.contactFieldAnswers }
+          : {}),
         // Free path only — createDropInCheckout takes no referral code, which is
         // right: a referral link invites a newcomer to their first free booking.
         ...(referral ? { referralCode: referral } : {}),
@@ -2524,6 +2549,8 @@ export default function BookingForm({
         <GuestDetailsForm
           ref={guestFormRef}
           showPhone={showPhone}
+          contactFields={contactFields}
+          customFieldDefinitions={team.publicCustomFields}
           showAggregatorField={showFitnessApp}
           submitting={isSubmitting}
           error={bookingError}
@@ -2588,6 +2615,11 @@ export default function BookingForm({
           <GuestDetailsForm
             ref={guestFormRef}
             showPhone={showPhone}
+            // No `contactFields` here on purpose: `joinWaitlist` stores none of
+            // them, and a form that asks for a date of birth and then discards
+            // it is worse than one that never asked. Joining a queue is not
+            // booking — the fields are collected on the claim, which goes
+            // through createDropInCheckout or bookSession like any other.
             submitting={isSubmitting}
             error={bookingError}
             onSubmit={onJoinWaitlist}

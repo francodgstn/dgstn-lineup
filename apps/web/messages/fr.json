@@ -1874,7 +1874,9 @@
     "paymentsWebhookEventsTitle": "Choisissez les événements avec soin",
     "paymentsDoubleRecordingTitle": "Ce point de terminaison Stripe enregistre les paiements en double",
     "paymentsDoubleRecordingBody": "Au cours des {days} derniers jours, il a livré {invoiceCount} événements de facture et {paymentCount} événements de paiement. Stripe ne relie plus une facture à son paiement : un paiement récurrent qui arrive sous les deux formes est donc enregistré deux fois, et rien ici ne peut dire quelles deux lignes correspondent au même argent.",
-    "paymentsDoubleRecordingFix": "À corriger dans Stripe : modifiez ce point de terminaison et retirez <code>invoice.payment_succeeded</code>. Gardez <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code> — ils enregistrent tout, renouvellements compris. Les lignes déjà écrites restent telles quelles ; la liste des paiements signale celles qui sont concernées."
+    "paymentsDoubleRecordingFix": "À corriger dans Stripe : modifiez ce point de terminaison et retirez <code>invoice.payment_succeeded</code>. Gardez <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code> — ils enregistrent tout, renouvellements compris. Les lignes déjà écrites restent telles quelles ; la liste des paiements signale celles qui sont concernées.",
+    "customFieldPublicOnBooking": "Demander dans le formulaire de réservation",
+    "customFieldPublicOnBookingHint": "Rend le nom et les options de ce champ visibles publiquement afin qu'il puisse figurer sur votre page de réservation. Laissez désactivé pour toute information confidentielle."
   },
   "Bookings": {
     "title": "Réservations",
@@ -3038,10 +3040,10 @@
     "unpublishConfirmBody": "Votre site publié passe hors ligne immédiatement : les visiteurs ne voient plus rien, et toute entrée du bio-link qui y renvoie cesse d'être affichée. Rien n'est perdu — votre brouillon, ses pages, ses textes et ses images sont conservés tels quels, vous pouvez republier quand vous le souhaitez.",
     "unpublishConfirmAction": "Mettre hors ligne",
     "fieldPricingDisplay": "Tarifs sur les cartes",
-    "pricingDisplayList": "Afficher toutes les lignes",
+    "pricingDisplayList": "Afficher la liste des prix",
     "pricingDisplayCompact": "Derrière un lien « Tarifs »",
     "pricingDisplayHidden": "Masquer les tarifs",
-    "pricingDisplayHint": "Cela ne concerne que les montants. Une carte dont l'offre exige un abonnement continue de l'indiquer quel que soit le réglage — sinon les visiteurs réservent quelque chose qui leur sera refusé.",
+    "pricingDisplayHint": "Une carte dont l'activité exige un abonnement l'indique toujours — sinon les visiteurs réservent quelque chose qui leur sera refusé. Ce qui change, c'est le détail : le nom et le prix de la formule s'affichent en ligne, derrière le lien, ou pas du tout.",
     "fieldPricingLayout": "Disposition",
     "pricingLayoutCards": "Une carte par abonnement",
     "pricingLayoutTable": "Tableau comparatif",
@@ -3109,7 +3111,27 @@
     "editorPlacesHeadingPlaceholder": "Nous trouver",
     "editorPlacesToShow": "Lieux à afficher",
     "editorNoPlaces": "Aucun lieu pour l'instant — ajoutez-les sur la page Lieux.",
-    "editorPlaceOrgScope": "org"
+    "editorPlaceOrgScope": "org",
+    "tabMenu": "Menu",
+    "menuHint": "Glissez une ligne pour la réordonner, et utilisez les flèches de retrait pour l'imbriquer sous celle du dessus. Sections, vos autres pages publiques et liens externes sont tous dans une seule liste.",
+    "menuEmpty": "Aucun élément de menu. Ajoutez des sections, des pages ou des liens ci-dessous.",
+    "menuAdd": "Ajouter un élément",
+    "menuAddLink": "Lien externe",
+    "menuAddGroup": "Groupe de sous-menu",
+    "menuMoveUp": "Monter",
+    "menuMoveDown": "Descendre",
+    "menuIndent": "Imbriquer sous la ligne du dessus",
+    "menuOutdent": "Remonter d'un niveau",
+    "menuRemove": "Retirer du menu",
+    "menuDepth": "{depth} sur {max} niveaux",
+    "menuMissingSection": "Section supprimée",
+    "menuLinkUntitled": "Lien sans titre",
+    "menuGroupUntitled": "Groupe sans titre",
+    "menuLinkTargets": "Adresses des liens",
+    "addToMenu": "Ajouter cette section au menu",
+    "previewDesktop": "Ordinateur",
+    "previewMobile": "Mobile",
+    "menuReorder": "Glisser pour réordonner"
   },
   "Kiosk": {
     "title": "Kiosque",
@@ -3379,7 +3401,7 @@
       "themeLangTitle": "Personnalisez",
       "themeLangBody": "Ouvrez le menu du compte pour changer de langue ou basculer entre les modes clair et sombre.",
       "featuresTitle": "Vos espaces de travail",
-      "featuresBody": "Tout votre quotidien se trouve ici — agenda, contacts, paiements, ainsi que ce que vous vendez et votre croissance. Ouvrez une section pour voir ses pages.",
+      "featuresBody": "Tout votre quotidien : activités (ce que vous proposez), séances (quand elles ont lieu), réservations (qui vient) et paiements. Ainsi que ce que vous vendez et comment vous vous développez. Ouvrez une section pour voir ses pages.",
       "shortcutsTitle": "Raccourcis",
       "shortcutsBody": "Les pages que vous ouvrez apparaissent ici. Survolez une ligne et cliquez sur l'épingle pour garder vos préférées en haut.",
       "searchTitle": "Recherche rapide",
@@ -3400,7 +3422,11 @@
       "checklistTitle": "Votre liste de configuration",
       "helpTitle": "Bloqué ? Cherchez le point d'interrogation",
       "helpBody": "Le point d'interrogation en haut de la barre latérale ouvre le guide : comment tout s'articule, ce que coûte quoi, et cette visite à tout moment.",
-      "checklistBody": "Le même parcours, avec vos données. Elle se coche toute seule et reste en haut du tableau de bord jusqu'à ce que vous soyez prêt."
+      "checklistBody": "Le même parcours, avec vos données. Elle se coche toute seule et reste en haut du tableau de bord jusqu'à ce que vous soyez prêt.",
+      "quickAccessTitle": "Toujours à portée",
+      "quickAccessBody": "Les deux tuiles en haut sont votre retour le plus rapide — le tableau de bord, plus une page de votre choix. En dessous, les pages ouvertes s'accumulent en raccourcis ; épinglez celles que vous utilisez le plus.",
+      "utilitiesTitle": "La recherche et le reste",
+      "utilitiesBody": "La recherche vous emmène partout en une frappe — essayez « Act » pour Activités. À côté : le QR code de votre studio, les plugins, les réglages et How-to pour les guides et cette visite."
     },
     "setup": {
       "title": "Configuration",
@@ -4633,7 +4659,13 @@
     "waitlistAlreadyBooked": "Vous avez déjà une place dans ce cours.",
     "waitlistSeatAvailable": "Une place vient de se libérer — vous pouvez réserver ce cours directement, sans liste d'attente.",
     "waitlistEmailRequired": "Une adresse e-mail est nécessaire pour vous inscrire sur la liste d'attente : une place libérée est proposée par e-mail. Ajoutez-en une à votre profil, puis réessayez.",
-    "waitlistQueueLength": "{count, plural, one {# personne attend déjà} other {# personnes attendent déjà}}"
+    "waitlistQueueLength": "{count, plural, one {# personne attend déjà} other {# personnes attendent déjà}}",
+    "contactField_birthdate": "Date de naissance",
+    "contactField_address": "Adresse",
+    "contactFieldAddressRoute": "Rue",
+    "contactFieldAddressNumber": "N°",
+    "contactFieldAddressPostalCode": "NPA",
+    "contactFieldAddressLocality": "Localité"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",
@@ -6729,5 +6761,17 @@
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extras",
     "extraSubtitle": "Panneaux en attente, activés dans Paramètres → Expérimental."
+  },
+  "BookingContactFields": {
+    "title": "Coordonnées à collecter",
+    "descriptionTeam": "Demandé sur chaque formulaire de réservation. Les réponses sont enregistrées sur le contact, vous ne demandez donc qu'une fois.",
+    "descriptionActivity": "Demandé en plus de ce que vous collectez à chaque réservation — cette liste complète les paramètres de l'équipe, elle ne les remplace pas.",
+    "required": "Obligatoire",
+    "inheritedFromTeam": "Déjà collecté à chaque réservation",
+    "notPublicHint": "Activez d'abord « Demander dans le formulaire de réservation » pour ce champ, dans Paramètres → Champs personnalisés.",
+    "versusBookingQuestions": "Ces informations sont enregistrées sur le contact et peuvent être filtrées ensuite. Pour ce qui ne concerne qu'une seule réservation, utilisez plutôt les questions de réservation de l'activité.",
+    "field_phone": "Numéro de téléphone",
+    "field_birthdate": "Date de naissance",
+    "field_address": "Adresse"
   }
 }

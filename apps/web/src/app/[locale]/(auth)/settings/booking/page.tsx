@@ -28,7 +28,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
-import type { Team, BookingSettings } from '@linyup/shared'
+import { resolveBookingContactFields } from '@linyup/shared'
+import type {
+  Team,
+  BookingSettings,
+  BookingContactField,
+  CustomFieldDefinition,
+} from '@linyup/shared'
+import { BookingContactFieldsEditor } from '@/components/booking/BookingContactFieldsEditor'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { NoShowPolicyCard } from './NoShowPolicyCard'
 import { CancellationPolicyCard } from './CancellationPolicyCard'
 import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
@@ -47,6 +55,7 @@ function createBookingSchema(t: ReturnType<typeof useTranslations>) {
     flowType: z.enum(['activity-first', 'date-first']),
     windowMonths: z.number().int().min(1).max(6),
     showPhone: z.boolean(),
+    contactFields: z.array(z.object({ key: z.string(), required: z.boolean().optional() })),
     showActivityDescription: z.boolean(),
     showFitnessAppField: z.boolean(),
     ctaUrl: createSafeUrlSchema(t),
@@ -100,6 +109,13 @@ function getDefaults(stored: Partial<BookingSettings> | undefined): FormData {
       flowType,
       windowMonths,
       showPhone: rawBooking.showPhone === true,
+      // Seeded from the legacy flag while the list is absent, through the SAME
+      // shared fallback the callables and the public form use — so a studio
+      // that never opens this page sees exactly what its visitors already get.
+      contactFields: resolveBookingContactFields(
+        rawBooking as { contactFields?: BookingContactField[]; showPhone?: boolean },
+        null
+      ),
       showActivityDescription: rawBooking.showActivityDescription !== false,
       // Defaults ON, like showActivityDescription above and unlike showPhone:
       // `!== false` so an absent flag reads as shown. A studio that does not
@@ -192,7 +208,7 @@ function ToggleRow({
   children,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
-  name: 'booking.showPhone' | 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled' | 'booking.waitlistEnabled'
+  name: 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled' | 'booking.waitlistEnabled'
   label: string
   desc: string
   /** Rendered under the row, inside its border — the settings this switch owns. */
@@ -235,9 +251,12 @@ function ToggleRow({
 function BookingForm({
   control,
   register,
+  customFieldDefinitions,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
   register: ReturnType<typeof useForm<FormData>>['register']
+  /** Already gated on the custom-fields plugin by the page. */
+  customFieldDefinitions: CustomFieldDefinition[]
 }) {
   const t = useTranslations('SettingsBooking')
   // Subscribed, not read once: the claim window below appears the moment the
@@ -432,12 +451,24 @@ function BookingForm({
           />
         </div>
 
-        <ToggleRow
-          control={control}
-          name="booking.showPhone"
-          label={t('toggleShowPhoneLabel')}
-          desc={t('toggleShowPhoneDesc')}
-        />
+        {/* Contact fields — a STACKED row (see the CTA block below for the same
+            shape). This replaced the old single "ask for a phone number"
+            switch: phone is now one row of this list, so there is one place
+            that answers "what does the book form ask for" rather than a
+            switch here and a list somewhere else. */}
+        <div className="p-3">
+          <Controller
+            control={control}
+            name="booking.contactFields"
+            render={({ field }) => (
+              <BookingContactFieldsEditor
+                value={field.value ?? []}
+                onChange={field.onChange}
+                definitions={customFieldDefinitions}
+              />
+            )}
+          />
+        </div>
         <ToggleRow
           control={control}
           name="booking.showActivityDescription"
@@ -493,6 +524,14 @@ export default function BookingSettingsPage() {
   // profile — the one store this form both reads and writes.
   const { data: team, isLoading: teamLoading } = useTeam(currentTeamId)
   const { data: stored, isLoading: settingsLoading } = useBookingSettings(currentTeamId)
+  // Gated the same way the contacts list gates them: custom fields are a
+  // plugin, and offering rows a studio cannot manage sends them looking for a
+  // settings page they do not have.
+  const { isInstalled } = useInstalledPlugins()
+  const customFieldDefinitions = useMemo(
+    () => (isInstalled('custom-fields') ? team?.custom_field_definitions ?? [] : []),
+    [isInstalled, team?.custom_field_definitions]
+  )
   const isLoading = teamLoading || settingsLoading
   const qc = useQueryClient()
   const t = useTranslations('SettingsBooking')
@@ -525,7 +564,12 @@ export default function BookingSettingsPage() {
     const bookingSettings: BookingSettings = {
       flowType: data.booking.flowType,
       windowMonths: data.booking.windowMonths,
-      showPhone: data.booking.showPhone,
+      // DERIVED, never edited: the legacy flag is only ever read as a fallback
+      // while `contactFields` is absent, and saving this form makes it present.
+      // Keeping the two in agreement means an older reader (or a rollback)
+      // still sees the studio's actual choice rather than a stale switch.
+      showPhone: data.booking.contactFields.some((f) => f.key === 'phone'),
+      contactFields: data.booking.contactFields,
       showActivityDescription: data.booking.showActivityDescription,
       showFitnessAppField: data.booking.showFitnessAppField,
       ctaUrl: data.booking.ctaUrl || null,
@@ -580,7 +624,11 @@ export default function BookingSettingsPage() {
           different kind of action from the save on the two policy cards
           directly below it. */}
       <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-5">
-        <BookingForm control={control} register={register} />
+        <BookingForm
+          control={control}
+          register={register}
+          customFieldDefinitions={customFieldDefinitions}
+        />
         <SettingsSaveBar
           onSave={handleSubmit(onSubmit)}
           saving={isSubmitting}

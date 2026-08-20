@@ -29,8 +29,8 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
-import { resolveDurationSale } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField } from '@linyup/shared'
+import { resolveDurationSale, resolveBookingContactFields } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField, BookingContactField } from '@linyup/shared'
 
 /** The waitlist's plan gate, mirroring the server side of it
  *  (`requirePlan(teamId, 'coach')` in joinWaitlist). One constant, because a
@@ -38,11 +38,13 @@ import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationS
  *  than no toggle at all. */
 const WAITLIST_MIN_PLAN: SaasPlan = 'coach'
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
+import { BookingContactFieldsEditor } from '@/components/booking/BookingContactFieldsEditor'
 import { MoreOptions } from '@/components/forms/MoreOptions'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { usePlan } from '@/hooks/usePlan'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { usePlanName } from '@/hooks/usePlanName'
 import { resolveActivityTerms } from '@/lib/activityTerms'
 import {
@@ -186,6 +188,7 @@ function createActivitySchema(
     // the editor constrains type/count, and blank-labelled rows are dropped on
     // save rather than blocking it.
     bookingQuestions: z.array(z.any()),
+    contactFields: z.array(z.object({ key: z.string(), required: z.boolean().optional() })),
     type: z.enum(['class', 'appointment'] as const).default('class'),
     // OPTIONAL. It was mandatory only because the legacy import always had a
     // value; `Activity.level` has always been optional in the type, and the list
@@ -335,7 +338,20 @@ function ActivityDialog({
   // useBookingSettings), never the team doc: the mirror that used to hold it was
   // owner-only, so a manager's save never reached it (UX-6).
   const { data: bookingSettings } = useBookingSettings(teamId)
+  const { team } = useAuth()
+  const { isInstalled } = useInstalledPlugins()
   const waitlistOffered = bookingSettings?.waitlistEnabled === true
+  // What the studio already asks for on EVERY booking — shown here as
+  // "already collected" rather than as an unticked row, because this list adds
+  // to the team default and never replaces it.
+  const teamContactFieldKeys = useMemo(
+    () => resolveBookingContactFields(bookingSettings, null).map((f) => f.key),
+    [bookingSettings]
+  )
+  const customFieldDefinitions = useMemo(
+    () => (isInstalled('custom-fields') ? team?.custom_field_definitions ?? [] : []),
+    [isInstalled, team?.custom_field_definitions]
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   // A copy keeps the cover image: `image_url` is a download URL for a file that
@@ -377,6 +393,7 @@ function ActivityDialog({
           faq: seed.faq ?? '',
           cancellationPolicy: seed.cancellationPolicy ?? '',
           bookingQuestions: seed.bookingQuestions ?? [],
+          contactFields: seed.contactFields ?? [],
           type: (seed.type ?? 'class') as ActivityType,
           level: seed.level ?? undefined,
           color: seed.color ?? '',
@@ -395,6 +412,7 @@ function ActivityDialog({
           name: '', description: '', prerequisites: '', confirmationInstructions: '',
           meetingPoint: '', whatsIncluded: '', whatsNotIncluded: '', faq: '', cancellationPolicy: '',
           bookingQuestions: [],
+          contactFields: [],
           type: 'class' as ActivityType, level: undefined,
           // Defaults for a NEW activity. 'members' rather than 'open': a studio
           // sells memberships, so a class its members can book is the ordinary
@@ -445,7 +463,8 @@ function ActivityDialog({
       !!seed.whatsNotIncluded ||
       !!seed.faq ||
       !!seed.cancellationPolicy ||
-      (seed.bookingQuestions?.length ?? 0) > 0)
+      (seed.bookingQuestions?.length ?? 0) > 0 ||
+      (seed.contactFields?.length ?? 0) > 0)
 
   function toggleDuration(minutes: number) {
     setValue(
@@ -563,6 +582,13 @@ function ActivityDialog({
       bookingQuestions: (data.bookingQuestions ?? [])
         .filter((q: FormField) => q?.label?.trim())
         .map((q: FormField, i: number) => ({ ...q, label: q.label.trim(), order: i })),
+      // EXTENDS the team-wide list, never replaces it — so a row already asked
+      // for team-wide is not stored again here (the resolver would dedupe it
+      // anyway; not storing it means the activity does not silently pin a
+      // choice the studio later changes team-wide).
+      contactFields: (data.contactFields ?? []).filter(
+        (f: BookingContactField) => !teamContactFieldKeys.includes(f.key)
+      ),
       type: data.type,
       level: data.level ?? null,
       color: data.color ?? '',
@@ -1354,6 +1380,20 @@ function ActivityDialog({
                   <BookingQuestionsEditor
                     value={(field.value ?? []) as FormField[]}
                     onChange={field.onChange}
+                  />
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="contactFields"
+                render={({ field }) => (
+                  <BookingContactFieldsEditor
+                    value={(field.value ?? []) as BookingContactField[]}
+                    onChange={field.onChange}
+                    definitions={customFieldDefinitions}
+                    extendsTeamDefault
+                    inheritedKeys={teamContactFieldKeys}
                   />
                 )}
               />

@@ -22,6 +22,7 @@ import {
   normalizeKioskConfig,
   resolveAppointmentDurations,
   resolveDurationSale,
+  type CustomFieldDefinition,
 } from '@linyup/shared'
 import type {
   Activity,
@@ -296,6 +297,19 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       // resolveSystemLinkTarget also maps pre-refactor boolean flags.
       target: resolveSystemLinkTarget(link) || null,
     })),
+    // OPT-IN ONLY. A custom field definition is a studio's private annotation
+    // shape; the public book form can render one only when the studio ticked
+    // `publicOnBookingForm` on it. Everything else stays on the team document,
+    // which is members-only. Label/type/options are all the form needs — a
+    // stored VALUE is never mirrored here.
+    publicCustomFields: ((data.custom_field_definitions ?? []) as CustomFieldDefinition[])
+      .filter((f) => f?.publicOnBookingForm === true)
+      .map((f) => ({
+        id: f.id,
+        label: f.label,
+        type: f.type,
+        ...(f.options?.length ? { options: f.options } : {}),
+      })),
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!data.settings?.referral?.enabled,

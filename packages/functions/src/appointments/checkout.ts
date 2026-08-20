@@ -50,6 +50,7 @@ import {
   runAppointmentSlotTransaction,
 } from './booking'
 import { releaseAppointmentHold } from './holdRelease'
+import { resolveContactFieldPatchForBooking } from '../booking/contactFields'
 
 const HOLD_MINUTES = 30
 
@@ -120,6 +121,9 @@ export const createAppointmentCheckout = onCall(
       startMs?: number
       durationMinutes?: number
       contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
+      /** Answers to the studio's book-form contact fields — narrowed server
+       *  side against the resolved list. See booking/contactFields.ts. */
+      contactFieldAnswers?: Record<string, unknown>
       authenticatedContactId?: string
       verificationCodeId?: string
       slug?: string
@@ -287,6 +291,15 @@ export const createAppointmentCheckout = onCall(
       plan: ctx.plan,
       sanitized: caller.sanitized,
       authenticatedContact: caller.authenticatedContact,
+      // The book form's contact-field answers, already narrowed against the
+      // team + activity list. `{}` — and no extra read — when none were sent.
+      contactFieldPatch: await resolveContactFieldPatchForBooking({
+        teamId,
+        team: ctx.team,
+        activityContactFields: ctx.activity.contactFields,
+        answers: data.contactFieldAnswers,
+        existing: caller.authenticatedContact,
+      }),
     })
     waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
 

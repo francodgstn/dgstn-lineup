@@ -24,6 +24,12 @@ import {
 } from '@linyup/shared'
 import { buildDropInTarget, resolveDropInForContact } from './dropInPricing'
 import { loadBookingSettings } from './bookingSettings'
+import {
+  buildContactFieldPatch,
+  expandContactFieldPatch,
+} from './contactFields'
+import { resolveBookingContactFields } from '@linyup/shared'
+import type { CustomFieldDefinition } from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
   assertQuotedAmount,
@@ -98,6 +104,9 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     teamId?: string
     sessionId?: string
     contactDetails?: { firstname?: string; lastname?: string; email?: string; phone?: string }
+    /** Answers to the studio's book-form contact fields — narrowed server side
+     *  against the resolved list. See booking/contactFields.ts. */
+    contactFieldAnswers?: Record<string, unknown>
     slug?: string
     locale?: string
     origin?: string
@@ -190,7 +199,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
   // Online booking cutoff — same guard as the free path (bookSession); a
   // member paying instead of using the free door must not be able to route
   // around it.
-  const { cutoffMinutes } = await loadBookingSettings(teamId)
+  const bookingSettings = await loadBookingSettings(teamId)
+  const { cutoffMinutes } = bookingSettings
   if (isPastBookingCutoff(sessionData.start as Timestamp, cutoffMinutes)) {
     throw new HttpsError('failed-precondition', 'Online booking has closed for this session.')
   }
@@ -463,6 +473,18 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
     // valid-signature path is the whole of it.)
   })
 
+  // CONTACT FIELDS — the studio's own questions about the PERSON, resolved from
+  // its book settings extended by this activity's list and narrowed against it.
+  // Computed once, applied to whichever branch below owns the contact, so a
+  // paid drop-in collects exactly what the free path collects.
+  const contactFieldPatch = buildContactFieldPatch({
+    // Reuses the settings already read for the cutoff above — one read.
+    fields: resolveBookingContactFields(bookingSettings, activity.contactFields),
+    answers: data.contactFieldAnswers,
+    definitions: (team.data.custom_field_definitions ?? null) as CustomFieldDefinition[] | null,
+    existing: contactDoc,
+  })
+
   if (pendingGuestContact) {
     isNewContact = true
     const ref = db.collection('contacts').doc()
@@ -471,6 +493,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       lastname,
       email,
       phone,
+      // Nested, never dotted — see expandContactFieldPatch.
+      ...expandContactFieldPatch(contactFieldPatch),
       acquisition_stage: 'trial_booked',
       acquisition_stage_updated_at: FieldValue.serverTimestamp(),
       entry: 'booking',
@@ -483,6 +507,8 @@ export const createDropInCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFORCE 
       created_at: FieldValue.serverTimestamp(),
     })
     contactId = ref.id
+  } else if (contactId && Object.keys(contactFieldPatch).length > 0) {
+    await db.collection('contacts').doc(contactId).update(contactFieldPatch)
   }
   if (!contactId) throw new HttpsError('internal', 'The buyer could not be resolved')
   waiverOutcome = attachWaiverContact(waiverOutcome, contactId)

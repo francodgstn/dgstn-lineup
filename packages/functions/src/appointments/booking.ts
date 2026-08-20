@@ -25,6 +25,7 @@ import {
 import { getTeam } from '../utils/teams'
 import { resolveSingleContact } from '../utils/contacts'
 import { canCreateContact } from '../utils/contactCap'
+import { expandContactFieldPatch } from '../booking/contactFields'
 import { optionalContactSessionFromRequest } from '../utils/contactSession'
 import {
   commitWaiverLedgerWrites,
@@ -324,13 +325,33 @@ export async function resolveOrCreateAppointmentContact(params: {
   plan: SaasPlan
   sanitized: { firstname: string; lastname: string; email: string; phone: string | null }
   authenticatedContact: (admin.firestore.DocumentData & { id: string }) | null
+  /**
+   * Already narrowed by `buildContactFieldPatch` — the book form's answers to
+   * the contact fields the studio asks for. `{}` for every caller that sent
+   * none, which is the whole pre-existing world.
+   *
+   * Applied HERE rather than at each callable because both appointment rails
+   * (free and checkout) come through this one function, and an answer that
+   * lands on one rail and not the other is the kind of gap nobody notices
+   * until a studio asks why the paid bookings have no phone numbers.
+   */
+  contactFieldPatch?: Record<string, unknown>
 }): Promise<{ contactId: string; isNewContact: boolean }> {
   const { teamId, plan, sanitized, authenticatedContact } = params
-  if (authenticatedContact) return { contactId: authenticatedContact.id, isNewContact: false }
-
+  const patch = params.contactFieldPatch ?? {}
+  const hasPatch = Object.keys(patch).length > 0
   const db = admin.firestore()
+
+  if (authenticatedContact) {
+    if (hasPatch) await db.collection('contacts').doc(authenticatedContact.id).update(patch)
+    return { contactId: authenticatedContact.id, isNewContact: false }
+  }
+
   const match = await resolveSingleContact(teamId, sanitized.email)
-  if (match.contactId) return { contactId: match.contactId, isNewContact: false }
+  if (match.contactId) {
+    if (hasPatch) await db.collection('contacts').doc(match.contactId).update(patch)
+    return { contactId: match.contactId, isNewContact: false }
+  }
 
   if (!(await canCreateContact(teamId, plan)))
     throw new HttpsError('resource-exhausted', 'Contact limit reached — please contact the studio.')
@@ -340,6 +361,9 @@ export async function resolveOrCreateAppointmentContact(params: {
     lastname: sanitized.lastname,
     email: sanitized.email,
     phone: sanitized.phone,
+    // Nested, never dotted — a `set()` reads `custom_fields.x` as a literal
+    // field name. See expandContactFieldPatch.
+    ...expandContactFieldPatch(patch),
     acquisition_stage: 'trial_booked',
     acquisition_stage_updated_at: FieldValue.serverTimestamp(),
     entry: 'booking',

@@ -1874,7 +1874,9 @@
     "paymentsWebhookEventsTitle": "Wählen Sie die Ereignisse sorgfältig aus",
     "paymentsDoubleRecordingTitle": "Dieser Stripe-Endpunkt erfasst Zahlungen doppelt",
     "paymentsDoubleRecordingBody": "In den letzten {days} Tagen hat er {invoiceCount} Rechnungsereignisse und {paymentCount} Zahlungsereignisse geliefert. Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung — eine wiederkehrende Zahlung, die als beides eintrifft, wird deshalb doppelt erfasst, und hier lässt sich nicht erkennen, welche zwei Zeilen dasselbe Geld sind.",
-    "paymentsDoubleRecordingFix": "In Stripe beheben: Bearbeiten Sie diesen Endpunkt und entfernen Sie <code>invoice.payment_succeeded</code>. Behalten Sie <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code> — sie erfassen alles, auch Verlängerungen. Bereits erfasste Zeilen bleiben bestehen; die Zahlungsliste markiert die betroffenen."
+    "paymentsDoubleRecordingFix": "In Stripe beheben: Bearbeiten Sie diesen Endpunkt und entfernen Sie <code>invoice.payment_succeeded</code>. Behalten Sie <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code> — sie erfassen alles, auch Verlängerungen. Bereits erfasste Zeilen bleiben bestehen; die Zahlungsliste markiert die betroffenen.",
+    "customFieldPublicOnBooking": "Im Buchungsformular abfragen",
+    "customFieldPublicOnBookingHint": "Macht Name und Optionen dieses Feldes öffentlich sichtbar, damit es auf deiner Buchungsseite erscheinen kann. Für Vertrauliches ausgeschaltet lassen."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -3038,10 +3040,10 @@
     "unpublishConfirmBody": "Ihre veröffentlichte Website geht sofort offline: Besucher sehen nichts mehr, und ein Bio-Link-Eintrag, der darauf verweist, wird nicht mehr angezeigt. Es geht nichts verloren — Ihr Entwurf mit Seiten, Texten und Bildern bleibt unverändert erhalten, Sie können jederzeit wieder veröffentlichen.",
     "unpublishConfirmAction": "Offline nehmen",
     "fieldPricingDisplay": "Preise auf den Karten",
-    "pricingDisplayList": "Alle Zeilen anzeigen",
+    "pricingDisplayList": "Preisliste anzeigen",
     "pricingDisplayCompact": "Hinter einem Link „Preise“",
     "pricingDisplayHidden": "Preise ausblenden",
-    "pricingDisplayHint": "Das betrifft nur Beträge. Eine Karte, deren Angebot eine Mitgliedschaft voraussetzt, weist bei jeder Einstellung weiterhin darauf hin — sonst buchen Besucher etwas, das ihnen verweigert wird.",
+    "pricingDisplayHint": "Eine Karte, deren Aktivität eine Mitgliedschaft erfordert, sagt das immer — sonst buchen Besucher etwas, das ihnen verweigert wird. Was sich ändert, sind die Details: Name und Preis des Plans erscheinen direkt, hinter dem Link oder gar nicht.",
     "fieldPricingLayout": "Darstellung",
     "pricingLayoutCards": "Eine Karte pro Abo",
     "pricingLayoutTable": "Vergleichstabelle",
@@ -3109,7 +3111,27 @@
     "editorPlacesHeadingPlaceholder": "So findest du uns",
     "editorPlacesToShow": "Anzuzeigende Orte",
     "editorNoPlaces": "Noch keine Orte — lege sie auf der Seite «Orte» an.",
-    "editorPlaceOrgScope": "Org"
+    "editorPlaceOrgScope": "Org",
+    "tabMenu": "Menü",
+    "menuHint": "Ziehen Sie eine Zeile zum Umsortieren, und nutzen Sie die Einzugspfeile, um sie der Zeile darüber unterzuordnen. Abschnitte, Ihre anderen öffentlichen Seiten und externe Links liegen alle in einer Liste.",
+    "menuEmpty": "Noch keine Menüpunkte. Fügen Sie unten Abschnitte, Seiten oder Links hinzu.",
+    "menuAdd": "Element hinzufügen",
+    "menuAddLink": "Externer Link",
+    "menuAddGroup": "Untermenü-Gruppe",
+    "menuMoveUp": "Nach oben",
+    "menuMoveDown": "Nach unten",
+    "menuIndent": "Unter der Zeile darüber einordnen",
+    "menuOutdent": "Eine Ebene nach außen",
+    "menuRemove": "Aus dem Menü entfernen",
+    "menuDepth": "{depth} von {max} Ebenen",
+    "menuMissingSection": "Gelöschter Abschnitt",
+    "menuLinkUntitled": "Unbenannter Link",
+    "menuGroupUntitled": "Unbenannte Gruppe",
+    "menuLinkTargets": "Link-Adressen",
+    "addToMenu": "Diesen Abschnitt zum Menü hinzufügen",
+    "previewDesktop": "Desktop",
+    "previewMobile": "Mobil",
+    "menuReorder": "Zum Umsortieren ziehen"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -3379,7 +3401,7 @@
       "themeLangTitle": "Mach es zu deinem",
       "themeLangBody": "Öffne das Kontomenü, um die Sprache zu wechseln oder zwischen hellem und dunklem Modus umzuschalten.",
       "featuresTitle": "Deine Arbeitsbereiche",
-      "featuresBody": "Hier liegt dein Tagesgeschäft — Kalender, Kontakte, Zahlungen sowie dein Angebot und dein Wachstum. Öffne einen Bereich, um seine Seiten zu sehen.",
+      "featuresBody": "Alles für den Alltag: Aktivitäten (was Sie anbieten), Termine (wann sie stattfinden), Buchungen (wer kommt) und Zahlungen. Dazu, was Sie verkaufen und wie Sie wachsen. Öffnen Sie einen Bereich, um die Seiten zu sehen.",
       "shortcutsTitle": "Shortcuts",
       "shortcutsBody": "Geöffnete Seiten erscheinen hier. Fahre über eine Zeile und klicke die Pinnadel, um deine meistgenutzten oben zu behalten.",
       "searchTitle": "Schnellsuche",
@@ -3400,7 +3422,11 @@
       "checklistTitle": "Deine Einrichtungs-Checkliste",
       "helpTitle": "Nicht weiter? Achte auf das Fragezeichen",
       "helpBody": "Das Fragezeichen oben in der Seitenleiste öffnet die Anleitung: wie alles zusammenspielt, was was kostet — und diese Tour, wann immer du willst.",
-      "checklistBody": "Derselbe Weg, mit deinen eigenen Daten. Sie hakt sich selbst ab und steht oben im Dashboard, bis du startklar bist."
+      "checklistBody": "Derselbe Weg, mit deinen eigenen Daten. Sie hakt sich selbst ab und steht oben im Dashboard, bis du startklar bist.",
+      "quickAccessTitle": "Immer griffbereit",
+      "quickAccessBody": "Die beiden Kacheln oben sind Ihr schnellster Weg zurück — das Dashboard und eine Seite Ihrer Wahl. Darunter sammeln sich geöffnete Seiten als Verknüpfungen; heften Sie die meistgenutzten an.",
+      "utilitiesTitle": "Suche und der Rest",
+      "utilitiesBody": "Die Suche bringt Sie mit einem Tastendruck überallhin — probieren Sie „Akt“ für Aktivitäten. Daneben: der QR-Code Ihres Studios, Plugins, Einstellungen und How-to für Anleitungen und diese Tour."
     },
     "setup": {
       "title": "Einrichtung",
@@ -4633,7 +4659,13 @@
     "waitlistAlreadyBooked": "Sie haben bereits einen Platz in dieser Einheit.",
     "waitlistSeatAvailable": "Gerade ist ein Platz frei geworden – Sie können diese Einheit direkt buchen, ganz ohne Warteliste.",
     "waitlistEmailRequired": "Für einen Platz auf der Warteliste brauchen wir eine E-Mail-Adresse – ein frei gewordener Platz wird per E-Mail angeboten. Bitte hinterlegen Sie eine in Ihrem Profil und versuchen Sie es erneut.",
-    "waitlistQueueLength": "{count, plural, one {# Person wartet bereits} other {# Personen warten bereits}}"
+    "waitlistQueueLength": "{count, plural, one {# Person wartet bereits} other {# Personen warten bereits}}",
+    "contactField_birthdate": "Geburtsdatum",
+    "contactField_address": "Adresse",
+    "contactFieldAddressRoute": "Strasse",
+    "contactFieldAddressNumber": "Nr.",
+    "contactFieldAddressPostalCode": "PLZ",
+    "contactFieldAddressLocality": "Ort"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",
@@ -6729,5 +6761,17 @@
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extras",
     "extraSubtitle": "Geparkte Panels, aktiviert unter Einstellungen → Experimentell."
+  },
+  "BookingContactFields": {
+    "title": "Zu erfassende Kontaktdaten",
+    "descriptionTeam": "Wird bei jeder Buchung abgefragt. Die Antworten werden beim Kontakt gespeichert, du fragst also nur einmal.",
+    "descriptionActivity": "Wird zusätzlich zu den allgemeinen Buchungsfeldern abgefragt — diese Liste ergänzt die Team-Einstellungen, sie ersetzt sie nicht.",
+    "required": "Pflichtfeld",
+    "inheritedFromTeam": "Wird bereits bei jeder Buchung erfasst",
+    "notPublicHint": "Aktiviere für dieses Feld zuerst «Im Buchungsformular abfragen» unter Einstellungen → Eigene Felder.",
+    "versusBookingQuestions": "Diese Angaben werden beim Kontakt gespeichert und lassen sich später filtern. Für Angaben, die nur für eine einzelne Buchung zählen, nutze stattdessen die Buchungsfragen der Aktivität.",
+    "field_phone": "Telefonnummer",
+    "field_birthdate": "Geburtsdatum",
+    "field_address": "Adresse"
   }
 }

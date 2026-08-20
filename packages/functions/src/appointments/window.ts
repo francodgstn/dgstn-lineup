@@ -31,6 +31,7 @@ import {
   resolveDurationSale,
   resolvePaymentOptions,
   type Activity,
+  type BookingContactField,
   type ActivityDuration,
   type ActivityMemberBenefit,
   type Availability,
@@ -49,6 +50,7 @@ import {
 } from './booking'
 import { sendAppointmentBookingEmails } from './emails'
 import { getDatePartsInTz, localTimeToUtc } from './index'
+import { resolveContactFieldPatchForBooking } from '../booking/contactFields'
 
 const DEFAULT_RANGE_DAYS = 28
 const MAX_RANGE_DAYS = 60
@@ -78,6 +80,10 @@ interface ActivityInfo {
    *  Display-only, and the same text the confirmation email appends — the point
    *  is that the visitor reads it BEFORE the button, not after. */
   cancellationPolicy?: string | null
+  /** The activity's own CONTACT fields, which extend the team-wide list. Sent
+   *  to the picker so the guest step asks for exactly what the booking
+   *  callables will accept — the resolver runs on both sides. */
+  contactFields?: BookingContactField[]
 }
 
 function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
@@ -89,6 +95,7 @@ function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
     durations,
     memberBenefit: a.memberBenefit,
     cancellationPolicy: a.cancellationPolicy?.trim() || null,
+    contactFields: a.contactFields,
   }
 }
 
@@ -251,6 +258,7 @@ export const listAvailability = onCall(async (request) => {
     durations: ActivityDuration[]
     memberBenefit?: ActivityMemberBenefit | Benefit
     cancellationPolicy: string | null
+    contactFields: BookingContactField[] | null
     location: string | null
     onlineUrl: string | null
     daysMap: Map<number, Record<string, Set<number>>>
@@ -308,6 +316,7 @@ export const listAvailability = onCall(async (request) => {
             durations: info.durations,
             memberBenefit: info.memberBenefit,
             cancellationPolicy: info.cancellationPolicy ?? null,
+            contactFields: info.contactFields ?? null,
             location: tpl.location ?? null,
             onlineUrl: tpl.onlineUrl ?? null,
             daysMap: new Map(),
@@ -350,6 +359,8 @@ export const listAvailability = onCall(async (request) => {
           memberBenefit: acc.memberBenefit ?? null,
           // Display-only; the picker falls back to the team-wide default.
           cancellationPolicy: acc.cancellationPolicy,
+          // Extends the team-wide contact-field list on the guest step.
+          contactFields: acc.contactFields,
           location: acc.location,
           onlineUrl: acc.onlineUrl,
           days,
@@ -384,6 +395,9 @@ export const bookAppointment = onCall(async (request) => {
     verificationCodeId?: string
     /** Ticks from the waiver step — see waivers/gate.ts. */
     waiverAcceptances?: unknown
+    /** Answers to the studio's book-form contact fields — narrowed server side
+     *  against the resolved list. See booking/contactFields.ts. */
+    contactFieldAnswers?: Record<string, unknown>
   }
   if (
     !data?.teamId ||
@@ -489,6 +503,15 @@ export const bookAppointment = onCall(async (request) => {
     plan: ctx.plan,
     sanitized: caller.sanitized,
     authenticatedContact: caller.authenticatedContact,
+    // The book form's contact-field answers, already narrowed against the
+    // team + activity list. `{}` — and no extra read — when none were sent.
+    contactFieldPatch: await resolveContactFieldPatchForBooking({
+      teamId,
+      team: ctx.team,
+      activityContactFields: ctx.activity.contactFields,
+      answers: data.contactFieldAnswers,
+      existing: caller.authenticatedContact,
+    }),
   })
   waiverOutcome = attachWaiverContact(waiverOutcome, contactId)
 

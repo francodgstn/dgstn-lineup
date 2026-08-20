@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { BookingContactField } from './team'
 import type { Benefit } from './benefit'
 // Type-only — form.ts imports nothing from here, so no runtime cycle. Booking
 // questions deliberately REUSE the Custom Forms field schema rather than
@@ -268,6 +269,11 @@ export interface Activity {
    *  time is part of booking, not a separate product. Capped by
    *  MAX_BOOKING_QUESTIONS (a book form is not a survey). */
   bookingQuestions?: FormField[]
+  /** Contact fields this activity's book form collects, ON TOP of the team-wide
+   *  list. Answers are written to the CONTACT — that is the whole distinction
+   *  from `bookingQuestions`, whose answers stay on the booking. Combine the two
+   *  lists ONLY through `resolveBookingContactFields` (types/team.ts). */
+  contactFields?: BookingContactField[]
   isActive?: boolean
   image_url?: string
   // Display order (lower = first), respected by the manager list, the public
@@ -342,6 +348,10 @@ export interface ActivityPublicProfile {
   /** Mirrored verbatim from `Activity.bookingQuestions` so the public book form
    *  can render them. Public-safe: these are the questions, never the answers. */
   bookingQuestions?: FormField[]
+  /** Mirrored verbatim from `Activity.contactFields`. Public-safe: it names
+   *  fields, never values, and a custom field only renders when its definition
+   *  also opted in (TeamPublicProfile.publicCustomFields). */
+  contactFields?: BookingContactField[]
 }
 
 /** A book form is not a survey — keep it short enough that it doesn't cost the

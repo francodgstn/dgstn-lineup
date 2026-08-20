@@ -127,6 +127,12 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     ...(Array.isArray(data.bookingQuestions) && data.bookingQuestions.length
       ? { bookingQuestions: data.bookingQuestions }
       : {}),
+    // Contact fields the book form collects into the CONTACT. Public-safe: it
+    // names fields, never values — and a `custom:` entry only renders if its
+    // definition separately opted in via publicCustomFields on the team.
+    ...(Array.isArray(data.contactFields) && data.contactFields.length
+      ? { contactFields: data.contactFields }
+      : {}),
   }
 
   await afterRef.collection('public_profile').doc(activityId).set(publicProfile)
