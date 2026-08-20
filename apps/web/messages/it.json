@@ -1090,7 +1090,11 @@
     "deleteBackgroundFailed": "L'eliminazione si è interrotta prima di completarsi. Alcune sessioni potrebbero rimanere — riprova.",
     "deleteAlreadyRunning": "Questa serie è già in fase di eliminazione.",
     "deleteRunInBackground": "Continua in background",
-    "pastItemNotice": "Questo elemento è passato — si è già svolto."
+    "pastItemNotice": "Questo elemento è passato — si è già svolto.",
+    "editConfirmTitle": "Ci sono persone iscritte a questa sessione",
+    "editConfirmBody": "{count, plural, one {# persona è} other {# persone sono}} associate a questa sessione. Modificare orario, luogo o attività cambia quanto è stato loro comunicato.",
+    "editConfirmPast": "Questa sessione si è già svolta, quindi stai modificando il registro di ciò che è accaduto.",
+    "editConfirmAction": "Salva le modifiche"
   },
   "Calendar": {
     "title": "Programma",

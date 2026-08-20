@@ -1090,7 +1090,11 @@
     "deleteBackgroundFailed": "The deletion stopped before it finished. Some sessions may remain — please try again.",
     "deleteAlreadyRunning": "This series is already being deleted.",
     "deleteRunInBackground": "Continue in background",
-    "pastItemNotice": "This is in the past — it has already taken place."
+    "pastItemNotice": "This is in the past — it has already taken place.",
+    "editConfirmTitle": "People are booked on this session",
+    "editConfirmBody": "{count, plural, one {# person is} other {# people are}} attached to this session. Changing its time, place or activity affects what they were told.",
+    "editConfirmPast": "This session has already taken place, so you are editing the record of what happened.",
+    "editConfirmAction": "Save changes"
   },
   "Calendar": {
     "title": "Schedule",

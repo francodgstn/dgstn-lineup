@@ -1090,7 +1090,11 @@
     "deleteBackgroundFailed": "Der Löschvorgang wurde vorzeitig abgebrochen. Einige Termine könnten bestehen bleiben — bitte versuchen Sie es erneut.",
     "deleteAlreadyRunning": "Diese Serie wird bereits gelöscht.",
     "deleteRunInBackground": "Im Hintergrund fortsetzen",
-    "pastItemNotice": "Dies liegt in der Vergangenheit — es hat bereits stattgefunden."
+    "pastItemNotice": "Dies liegt in der Vergangenheit — es hat bereits stattgefunden.",
+    "editConfirmTitle": "Für diese Session sind Personen eingetragen",
+    "editConfirmBody": "{count, plural, one {# Person ist} other {# Personen sind}} dieser Session zugeordnet. Änderungen an Zeit, Ort oder Aktivität betreffen das, was ihnen mitgeteilt wurde.",
+    "editConfirmPast": "Diese Session hat bereits stattgefunden — du bearbeitest also den Nachweis dessen, was war.",
+    "editConfirmAction": "Änderungen speichern"
   },
   "Calendar": {
     "title": "Zeitplan",

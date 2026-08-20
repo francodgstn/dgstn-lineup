@@ -23,7 +23,7 @@ import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { PastItemNotice } from '@/components/sessions/PastItemNotice'
 import { SESSIONS_COLLECTION, resolveAutoConfirm, isPastSession } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
-import { Loader2, Repeat2, Plus } from 'lucide-react'
+import { Loader2, Repeat2, Plus, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Route } from 'next'
 import { Link } from '@/i18n/navigation'
@@ -404,6 +404,26 @@ export function SessionFormDialog({
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurrence, setRecurrence] = useState<RecurrencePattern>(() => defaultRecurrence())
   const [busyMsg, setBusyMsg] = useState<string | null>(null)
+  /**
+   * THE CONFIRM STEP FOR A SESSION THAT HAS PEOPLE ON IT.
+   *
+   * `PastItemNotice` argues against exactly this, and its argument is right as
+   * far as it goes: a guard that fires on every legitimate back-fill is
+   * dismissed without reading within a week. So this one does NOT fire on every
+   * back-fill — it fires only when somebody is attached (Franco, 2026-08-21).
+   *
+   * That is the case worth stopping for. Editing an empty session is moving a
+   * placeholder; editing one with bookings or check-ins moves a time people
+   * were told about, and on a past session it edits the record of who was
+   * there. Setting up next term's timetable — the common case, dozens of empty
+   * sessions — never sees this dialog, which is what keeps it worth reading on
+   * the day it is right.
+   *
+   * The notice stays: it answers "which occurrence is this?" on sight, before
+   * anything is typed. This answers "are you sure?" at the commit. Different
+   * questions, different moments.
+   */
+  const [confirmStep, setConfirmStep] = useState(false)
   // Edit-scope chooser shown when saving a session that belongs to a series.
   const [scopeStep, setScopeStep] = useState(false)
   const [pendingValues, setPendingValues] = useState<SessionFormValues | null>(null)
@@ -641,9 +661,26 @@ export function SessionFormDialog({
     }
   }
 
+  // Bookings and check-ins are different records of the same fact — somebody is
+  // expected here — and either one is reason enough to ask.
+  const attendeeCount = (editing?.bookings_count ?? 0) + (editing?.participants_count ?? 0)
+  const needsEditConfirm = !!editing && attendeeCount > 0
+
   const onSubmit = async (values: SessionFormValues) => {
     if (!editing) { await runCreate(values); return }
+    if (needsEditConfirm) { setPendingValues(values); setConfirmStep(true); return }
     if (isSeries) { setPendingValues(values); setScopeStep(true); return }
+    await runSingleSessionEdit(values)
+  }
+
+  /** Past the confirm, into whatever the save actually needed — the series
+   *  scope chooser, or the write. The two steps STACK rather than replace: a
+   *  recurring class with people on it asks both, in that order. */
+  async function confirmEdit() {
+    const values = pendingValues
+    if (!values) return
+    setConfirmStep(false)
+    if (isSeries) { setScopeStep(true); return }
     await runSingleSessionEdit(values)
   }
 
@@ -661,6 +698,37 @@ export function SessionFormDialog({
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">{busyMsg}</p>
+        </div>
+      ) : confirmStep ? (
+        // ── "there are people on this one" ──
+        // Same geometry as the scope chooser below, on purpose: they are two
+        // steps of one save, and a reader should not have to re-learn the
+        // furniture between them.
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              {t('editConfirmTitle')}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t('editConfirmBody', { count: attendeeCount })}
+            </p>
+            {/* The past adds a second fact, so it gets a second line rather
+                than a reworded first one — the count is true either way. */}
+            {editing && isPastSession(editing) && (
+              <p className="text-sm text-muted-foreground">{t('editConfirmPast')}</p>
+            )}
+          </div>
+          <div className="border-t bg-muted/30 px-6 py-3 flex justify-end gap-2 flex-shrink-0">
+            <button type="button" onClick={() => { setConfirmStep(false); setPendingValues(null) }}
+              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+              {t('cancel')}
+            </button>
+            <button type="button" onClick={confirmEdit}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+              {t('editConfirmAction')}
+            </button>
+          </div>
         </div>
       ) : scopeStep ? (
         // ── edit-scope chooser ──

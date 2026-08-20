@@ -1090,7 +1090,11 @@
     "deleteBackgroundFailed": "La suppression s'est arrêtée avant la fin. Certaines séances peuvent subsister — veuillez réessayer.",
     "deleteAlreadyRunning": "Cette série est déjà en cours de suppression.",
     "deleteRunInBackground": "Continuer en arrière-plan",
-    "pastItemNotice": "Cet élément est passé — il a déjà eu lieu."
+    "pastItemNotice": "Cet élément est passé — il a déjà eu lieu.",
+    "editConfirmTitle": "Des personnes sont inscrites à cette séance",
+    "editConfirmBody": "{count, plural, one {# personne est} other {# personnes sont}} rattachées à cette séance. Modifier l'heure, le lieu ou l'activité change ce qui leur a été annoncé.",
+    "editConfirmPast": "Cette séance a déjà eu lieu : vous modifiez donc le relevé de ce qui s'est passé.",
+    "editConfirmAction": "Enregistrer les modifications"
   },
   "Calendar": {
     "title": "Planning",
