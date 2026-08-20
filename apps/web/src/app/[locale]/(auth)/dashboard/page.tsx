@@ -256,14 +256,28 @@ export default function DashboardPage() {
               that flashes an upgrade notice at a paying studio every morning is
               worse than one that waits 200ms. Below Studio the page simply gets
               shorter — one notice, and no hole where four charts were. */}
-          {planLoading ? null : isAtLeast('studio') ? (
-            <WeekSection teamId={currentTeamId} />
-          ) : (
-            <PlanUpgradeNotice
-              minPlan="studio"
-              title={t('trendsTitle')}
-              description={t('trendsUpsell')}
-            />
+          {/* `pt-4` ON TOP of the wrapper's `space-y-5`, so the working area
+              above and the trends below are 36px apart rather than 20 (Franco,
+              2026-08-21). Everything above this line answers "what is happening
+              now"; everything below is history. That is the biggest change of
+              subject on the page, and it was reading as one more row.
+
+              Padding, because `space-y` owns `margin-top` on these children.
+              INSIDE the not-loading branch, so the gap does not sit there on
+              its own while the plan resolves. Costs the fold nothing — the
+              seam is already below it. */}
+          {planLoading ? null : (
+            <div className="pt-4">
+              {isAtLeast('studio') ? (
+                <WeekSection teamId={currentTeamId} />
+              ) : (
+                <PlanUpgradeNotice
+                  minPlan="studio"
+                  title={t('trendsTitle')}
+                  description={t('trendsUpsell')}
+                />
+              )}
+            </div>
           )}
 
           {/* The parked shelf. Gated on the EXPERIMENT ONLY, not on the plan:
