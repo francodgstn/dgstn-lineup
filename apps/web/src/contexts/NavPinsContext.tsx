@@ -78,6 +78,8 @@
  *    Rendered by `ShortcutsNav` in `app/[locale]/(auth)/layout.tsx`; the rule's
  *    measured contrast values, per theme, are on `SHORTCUTS_RULE` there.
  *
+ *    NOT THE HEAD TILE — that is item 5 below, and it is deliberately separate.
+ *
  *    VOCABULARY, recorded: the only words the user reads are still the verbs on
  *    the control — "Always show in shortcuts" / "Stop always showing"
  *    (`Nav.shortcutAlwaysShow`, `shortcutStopAlwaysShowing`, shared with the
@@ -120,6 +122,28 @@
  *    VOCABULARY: in code it is `recentContact*`, never `recent*` bare — that
  *    word is spent on the recents half of Shortcuts above (item 1).
  *
+ * 5. THE HEAD TILE — this file too, but its OWN single-value key
+ *    (`linyup_nav_head_tile`). The one adjustable tile beside Dashboard at the
+ *    top of the nav, rendered by `HeadTiles` in
+ *    `app/[locale]/(auth)/layout.tsx`.
+ *
+ *    IT WAS BUILT AS THE TOP OF ITEM 1 AND THAT WAS WRONG (2026-08-20). Deriving
+ *    the tile from the first always-shown shortcut stored nothing new, which is
+ *    why it was tried — but it fused two controls: pinning a shortcut, or
+ *    dragging the pinned run into a different order, silently changed which
+ *    destination sat in the head tile. The two look like one question ("what do
+ *    I keep in reach") and are not: SHORTCUTS is a LIST you curate and scan, the
+ *    HEAD TILE is ONE SLOT you set once and stop thinking about. A list whose
+ *    first element is also a fixed chrome element has no stable first element.
+ *
+ *    So the tile is set and unset on its own, and its value never appears in
+ *    `alwaysShownIds`. A destination may be both a head tile and a shortcut;
+ *    that is a duplicate the user asked for twice, not a bug. Precedence matches
+ *    item 1: an ABSENT key means "not chosen yet" and falls back to
+ *    DEFAULT_HEAD_TILE_ID (Schedule); a stored `null` means "I cleared it" and
+ *    renders the dashed placeholder, which is the affordance for setting it
+ *    again. No verb: the control is a chooser on the tile itself.
+ *
  * STORED NAMES KEEP THE OLD WORD, deliberately — same policy as plan IDs vs
  * plan display names (see CLAUDE.md): `linyup_nav_pins`, `linyup_settings_pins`
  * and `TeamNavDefaults.defaultNavPins` are machine identifiers written by
@@ -140,7 +164,7 @@
  */
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { DEFAULT_SHORTCUT_IDS } from '@/lib/settings-nav'
+import { DEFAULT_SHORTCUT_IDS, DEFAULT_HEAD_TILE_ID } from '@/lib/settings-nav'
 import { useAuth } from '@/contexts/AuthContext'
 import type { TeamNavDefaults } from '@linyup/shared'
 
@@ -148,10 +172,29 @@ const STORAGE_KEY = 'linyup_nav_pins'
 const LEGACY_KEY = 'linyup_settings_pins'
 const RECENTS_KEY = 'linyup_nav_recents'
 const RECENTS_MAX = 10
+/** Census item 5. Single value, not a list — see the header. */
+const HEAD_TILE_KEY = 'linyup_nav_head_tile'
 
 function persistAlwaysShown(ids: string[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * The head tile's THREE states are why this is not just a string:
+ *   · key absent      → not chosen yet, fall back to DEFAULT_HEAD_TILE_ID
+ *   · key = 'null'    → deliberately cleared, render the placeholder
+ *   · key = '"someId"'→ that destination
+ * Storing `null` rather than removing the key is what stops the default flowing
+ * back in and making the clear button look broken — the same distinction item 1
+ * draws between a stored `[]` and no key at all.
+ */
+function persistHeadTile(id: string | null) {
+  try {
+    localStorage.setItem(HEAD_TILE_KEY, JSON.stringify(id))
   } catch {
     /* ignore */
   }
@@ -179,6 +222,10 @@ interface NavPinsValue {
   removeShortcut: (id: string) => void
   /** Empty Shortcuts: nothing always shown, no recents. */
   clearShortcuts: () => void
+  /** Census item 5 — the single adjustable tile beside Dashboard. `null` = the
+   *  studio cleared it and wants the placeholder. Never overlaps alwaysShownIds. */
+  headTileId: string | null
+  setHeadTile: (id: string | null) => void
 }
 
 const NavPinsContext = createContext<NavPinsValue | null>(null)
@@ -187,6 +234,7 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
   // Start from defaults; hydrate from localStorage after mount (avoids SSR mismatch).
   const [alwaysShownIds, setAlwaysShownIds] = useState<string[]>(DEFAULT_SHORTCUT_IDS)
   const [recentIds, setRecentIds] = useState<string[]>([])
+  const [headTileId, setHeadTileId] = useState<string | null>(DEFAULT_HEAD_TILE_ID)
   // recordVisit can fire (from the sidebar's pathname effect) before the hydration
   // effect below has loaded stored recents — merge from storage in that window so
   // the first visit of a session never clobbers the history.
@@ -220,6 +268,11 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
           hasUserChoiceRef.current = true
         }
       }
+      // Census item 5. `JSON.parse` so a stored `null` (cleared) is telling apart
+      // from an absent key (never chosen) — see persistHeadTile.
+      const head = localStorage.getItem(HEAD_TILE_KEY)
+      if (head !== null) setHeadTileId(JSON.parse(head) as string | null)
+
       const recents = localStorage.getItem(RECENTS_KEY)
       if (recents) {
         const stored = JSON.parse(recents) as string[]
@@ -325,6 +378,11 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
 
   const isAlwaysShown = useCallback((id: string) => alwaysShownIds.includes(id), [alwaysShownIds])
 
+  const setHeadTile = useCallback((id: string | null) => {
+    setHeadTileId(id)
+    persistHeadTile(id)
+  }, [])
+
   return (
     <NavPinsContext.Provider
       value={{
@@ -336,6 +394,8 @@ export function NavPinsProvider({ children }: { children: React.ReactNode }) {
         recordVisit: pushRecent,
         removeShortcut,
         clearShortcuts,
+        headTileId,
+        setHeadTile,
       }}
     >
       {children}
