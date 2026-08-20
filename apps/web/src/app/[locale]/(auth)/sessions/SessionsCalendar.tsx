@@ -1121,8 +1121,9 @@ export default function SessionsCalendar({
                           coloured rule in the left gutter spanning the bookable
                           window, one sub-lane per coach, so it still reads under
                           an overlapping session and never fights a session's
-                          fill. Tooltip carries the coach + schedule name; the
-                          legend above the grid names the colours.
+                          fill, and capped round at both ends. Tooltip carries
+                          the coach + schedule name; the legend above the grid
+                          names the colours.
 
                           The translucent fill beside the rule is gone (Franco,
                           2026-08-21). A lane is a handful of pixels wide, so the
@@ -1142,13 +1143,19 @@ export default function SessionsCalendar({
                           <div
                             key={band.key}
                             title={`${band.providerName} · ${band.title}`}
-                            className="absolute z-[2]"
+                            // `rounded-full` on a 2px-wide element clamps to a
+                            // 1px radius, which is exactly a pill cap: the rule
+                            // ends in a soft dome instead of a cut edge. At this
+                            // width it is one pixel of difference and it still
+                            // shows — a flat end reads as something clipped by
+                            // the row above it, a domed one reads as finished.
+                            className="absolute z-[2] rounded-full"
                             style={{
                               top: band.top,
                               height: band.height,
                               left: laneIdx * laneWidthPx,
                               // The rule IS the element now — no box behind it,
-                              // so nothing rounds and nothing fills.
+                              // nothing to fill.
                               width: 2,
                               backgroundColor: c,
                             }}
