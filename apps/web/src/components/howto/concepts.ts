@@ -119,7 +119,7 @@ export interface PublicPage {
 
 // A TEACHING SUBSET, not the census. The authoritative list of public surfaces —
 // and of where each one is managed — is the `surfaces` array in
-// (auth)/public-page/(hub)/page.tsx; this list exists to explain the idea, so it
+// (auth)/public-page/page.tsx; this list exists to explain the idea, so it
 // carries only the surfaces that have a wireframe and a paragraph written for
 // them in the `HowTo.publicPages.surfaces` copy. It therefore differs from the
 // census in both directions (it has appointments, which the hub does not; the hub

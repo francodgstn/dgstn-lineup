@@ -1,9 +1,18 @@
 'use client'
 
-// Shop settings — the storefront's home under Public pages. Holds the sellable
-// channels (subscriptions / products / courses) that used to crowd the hub card,
-// plus payments (Stripe Connect) and the storefront currency. Content itself is
-// still managed under Offer; this page is about the shop as a public surface.
+// Shop settings — the storefront, as a SECTION of Public pages. Holds the
+// sellable channels (subscriptions / products / courses) that used to crowd the
+// hub card, plus payments (Stripe Connect) and the storefront currency. Content
+// itself is still managed under Offer; this is about the shop as a public
+// surface.
+//
+// It renders inside the settings shell (see ../layout.tsx) alongside the hub and
+// Space. That pane is narrower than the full page this used to be, so the two
+// sections STACK rather than sitting side by side — a two-column grid of
+// three-row lists inside a detail pane gives each column about half the width it
+// needs and reads as cramped, which is the opposite of the problem the move was
+// solving. Each section's rows are gathered into one divided panel, the shape
+// settings/booking and the activity form use.
 
 import { useTranslations } from 'next-intl'
 import { useQuery } from '@tanstack/react-query'
@@ -17,7 +26,6 @@ import type { Route } from 'next'
 import { TEAMS_COLLECTION, PRODUCTS_SUBCOLLECTION, COURSES_COLLECTION } from '@linyup/shared'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
-import { Card } from '@/components/ui/card'
 import { Tag, Package, GraduationCap, ExternalLink, ChevronRight, Plus, CreditCard, ArrowUpRight } from 'lucide-react'
 
 function pluginSetupHref(pluginId: string): Route {
@@ -40,7 +48,7 @@ function ChannelRow({
   return (
     <Link
       href={enabled ? manageHref : pluginSetupHref(setupPluginId!)}
-      className="group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 hover:bg-muted/50 transition-colors"
+      className="group flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted/50 transition-colors"
     >
       <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
       <span className="flex-1 text-sm font-medium">{label}</span>
@@ -101,15 +109,14 @@ export default function ShopSettingsPage() {
         action={<PaymentSettingsLink />}
       />
 
-      {/* Two sections side-by-side (½ each) from md up; stacked on small screens.
-          items-start so the shorter Payments column doesn't stretch to match. */}
-      <div className="grid gap-6 md:grid-cols-2 md:items-start">
+      {/* Stacked, not side-by-side — see the note at the top of this file. */}
+      <div className="space-y-6">
         {/* Sellable channels */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {t('channelsTitle')}
           </h2>
-          <div className="space-y-2">
+          <div className="divide-y rounded-lg border">
             <ChannelRow
               icon={Tag}
               label={t('subscriptions')}
@@ -141,7 +148,8 @@ export default function ShopSettingsPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {t('paymentsTitle')}
           </h2>
-          <Card className="flex items-center justify-between gap-4 p-4">
+          <div className="divide-y rounded-lg border">
+          <div className="flex items-center justify-between gap-4 p-4">
             <div className="flex min-w-0 items-center gap-3">
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                 <CreditCard className="h-[18px] w-[18px]" />
@@ -160,7 +168,8 @@ export default function ShopSettingsPage() {
               {t('openSettings')}
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
-          </Card>
+          </div>
+          </div>
         </section>
       </div>
     </div>

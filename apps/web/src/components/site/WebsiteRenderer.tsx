@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { Globe, Menu, X } from 'lucide-react'
-import type { SiteMeta, WebsiteSection, OrgSiteSection, OrgSiteTeamRef, SocialLink } from '@linyup/shared'
+import { ChevronDown, Globe, Menu, X } from 'lucide-react'
+import type {
+  SiteMeta,
+  SiteMenuItem,
+  PublicSurface,
+  WebsiteSection,
+  OrgSiteSection,
+  OrgSiteTeamRef,
+  SocialLink,
+} from '@linyup/shared'
+import { deriveSiteMenu } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, bookProps, SOCIAL_ICONS, type RenderCtx } from './sections'
 import type { BookIntent } from '@/components/booking/BookingOverlay'
@@ -18,6 +27,8 @@ export interface RenderableSite {
   slug: string
   meta: SiteMeta
   sections: (WebsiteSection | OrgSiteSection)[]
+  /** The stored header menu. Absent ⇒ derived — see the note in the header. */
+  menu?: SiteMenuItem[]
   socialLinks?: SocialLink[]
   showBranding?: boolean
 }
@@ -48,7 +59,9 @@ export default function WebsiteRenderer({
    * `active_public_surfaces`. Optional so the builder canvas, the org site and
    * the embed — none of which resolve a team — are untouched.
    */
-  surfaceLinks?: { href: string; label: string }[]
+  /** Live cross-surface links. `surface` is carried so a stored menu item can
+   *  resolve its own href — the label and href stay the caller's job. */
+  surfaceLinks?: { surface?: PublicSurface; href: string; label: string }[]
   /** "Sign in" / "Hi Anna" — the host owns the contact session. */
   memberControl?: { label: string; onClick: () => void }
   /** Whether the studio has a chargeable Stripe Connect account. Passed only by
@@ -88,13 +101,123 @@ export default function WebsiteRenderer({
     onBook: preview ? undefined : onBook,
   }
 
-  const navItems = site.meta.header.showNav
-    ? site.sections
-        .filter((s) => s.type !== 'hero' && s.showInNav !== false)
-        .map((s) => ({ id: s.id, label: sectionNavLabel(s, t) }))
-        .filter((n) => n.label)
+  // ── THE MENU ────────────────────────────────────────────────────────────
+  // ONE tree, from `site.menu`. A site that has never been edited in the menu
+  // tab has no stored tree, so `deriveSiteMenu` reproduces exactly what this
+  // header used to draw — section anchors in section order, then the live
+  // surface links. Nothing changes until a studio saves a menu of their own.
+  //
+  // Before this the two runs were rendered by two separate `.map`s and could
+  // not interleave, which is why a Shop link could never sit between two
+  // sections however either list was ordered.
+  const menuTree: SiteMenuItem[] = site.meta.header.showNav
+    ? (site.menu?.length
+        ? site.menu
+        : deriveSiteMenu({
+            sections: site.sections,
+            surfaceLinks: (surfaceLinks ?? []).flatMap((l) => (l.surface ? [{ surface: l.surface }] : [])),
+          }))
     : []
-  const hasMenu = navItems.length > 0 || !!site.meta.header.ctaLabel
+
+  const surfaceByKey = new Map((surfaceLinks ?? []).flatMap((l) => (l.surface ? [[l.surface, l] as const] : [])))
+  const sectionById = new Map(site.sections.map((sec) => [sec.id, sec]))
+
+  /** Resolve one stored item to what the header actually needs to draw. A null
+   *  href is a GROUP — a row that only opens its children. Items pointing at a
+   *  deleted section or an unavailable surface resolve to nothing and are
+   *  dropped, so removing a section never leaves a dead link behind. */
+  function resolveItem(item: SiteMenuItem): { href: string | null; label: string } | null {
+    switch (item.target.kind) {
+      case 'section': {
+        const sec = sectionById.get(item.target.sectionId)
+        if (!sec) return null
+        return { href: `#${sec.id}`, label: item.label?.trim() || sectionNavLabel(sec, t) }
+      }
+      case 'surface': {
+        const link = surfaceByKey.get(item.target.surface)
+        if (!link) return null
+        return { href: link.href, label: item.label?.trim() || link.label }
+      }
+      case 'url':
+        if (!item.target.url.trim()) return null
+        return { href: item.target.url, label: item.label?.trim() || item.target.url }
+      case 'none':
+        return item.label?.trim() ? { href: null, label: item.label.trim() } : null
+    }
+  }
+
+  /** Drop unresolvable items, but KEEP a group whose children survived. */
+  function prune(items: readonly SiteMenuItem[]): { item: SiteMenuItem; resolved: { href: string | null; label: string }; children: ReturnType<typeof prune> }[] {
+    return items.flatMap((item) => {
+      const children = prune(item.children ?? [])
+      const resolved = resolveItem(item)
+      if (!resolved) return children.length ? [] : []
+      return [{ item, resolved, children }]
+    })
+  }
+
+  type Branch = ReturnType<typeof prune>
+
+  /** Levels 2..4, as indented rows. `depth` is 0 at the top of a panel. */
+  function renderBranch(branch: Branch, depth: number): React.ReactNode {
+    return branch.map((node) => (
+      <div key={node.item.id}>
+        {node.resolved.href ? (
+          <a
+            href={preview ? undefined : node.resolved.href}
+            onClick={preview ? inert : undefined}
+            className="block rounded-lg px-3 py-1.5 text-sm transition-opacity hover:opacity-70"
+            style={{ color: palette.muted, paddingLeft: `${0.75 + depth * 0.75}rem` }}
+          >
+            {node.resolved.label}
+          </a>
+        ) : (
+          // A group deeper in the tree is a LABEL, not a control: its children
+          // are already visible beneath it, so there is nothing to open.
+          <p
+            className="px-3 pb-0.5 pt-2 text-xs font-semibold uppercase tracking-wide"
+            style={{ color: palette.text, opacity: 0.55, paddingLeft: `${0.75 + depth * 0.75}rem` }}
+          >
+            {node.resolved.label}
+          </p>
+        )}
+        {node.children.length > 0 && renderBranch(node.children, depth + 1)}
+      </div>
+    ))
+  }
+
+  /** The same tree in the mobile sheet — indented rows, every level visible,
+   *  and each tap closes the sheet. */
+  function renderMobileBranch(branch: Branch, depth: number): React.ReactNode {
+    return branch.map((node) => (
+      <div key={node.item.id}>
+        {node.resolved.href ? (
+          <a
+            href={preview ? undefined : node.resolved.href}
+            onClick={(e) => {
+              if (preview) inert(e)
+              setMobileOpen(false)
+            }}
+            className="block rounded-md py-2 text-sm transition-opacity hover:opacity-70"
+            style={{ color: palette.muted, paddingLeft: `${depth * 0.875}rem` }}
+          >
+            {node.resolved.label}
+          </a>
+        ) : (
+          <p
+            className="pb-0.5 pt-2 text-xs font-semibold uppercase tracking-wide"
+            style={{ color: palette.text, opacity: 0.55, paddingLeft: `${depth * 0.875}rem` }}
+          >
+            {node.resolved.label}
+          </p>
+        )}
+        {node.children.length > 0 && renderMobileBranch(node.children, depth + 1)}
+      </div>
+    ))
+  }
+
+  const menu = prune(menuTree)
+  const hasMenu = menu.length > 0 || !!site.meta.header.ctaLabel
 
   const inert = (e: React.MouseEvent) => e.preventDefault()
 
@@ -132,17 +255,73 @@ export default function WebsiteRenderer({
             {site.meta.title || site.name}
           </a>
           <nav className="hidden items-center gap-5 @3xl:flex">
-            {navItems.map((n) => (
-              <a
-                key={n.id}
-                href={preview ? undefined : `#${n.id}`}
-                onClick={preview ? inert : undefined}
-                className="text-sm transition-opacity hover:opacity-70"
-                style={{ color: palette.muted }}
-              >
-                {n.label}
-              </a>
-            ))}
+            {/* ── LEVELS 1 AND 2+, DRAWN DIFFERENTLY ──────────────────────
+                A top-level row with children opens ONE dropdown panel, and
+                everything below it — levels 3 and 4 — renders as indented
+                groups INSIDE that panel rather than as cascading flyouts.
+                Cascades are hard to keep open with a pointer, impossible on
+                touch, and need a keyboard path of their own; one panel needs
+                none of that and shows the whole branch at once.
+                CSS-only (group-hover + focus-within), so a menu still opens
+                for a keyboard and costs no JS on a marketing page. */}
+            {menu.map((top) =>
+              top.children.length === 0 ? (
+                <a
+                  key={top.item.id}
+                  href={preview || !top.resolved.href ? undefined : top.resolved.href}
+                  onClick={preview ? inert : undefined}
+                  className="text-sm transition-opacity hover:opacity-70"
+                  style={{ color: palette.muted }}
+                >
+                  {top.resolved.label}
+                </a>
+              ) : (
+                <div key={top.item.id} className="group relative">
+                  {/* A group row is a button, not a link: it has no destination
+                      of its own, and an <a href="#"> would jump the page. */}
+                  {/* THE CHEVRON IS THE ONLY THING THAT SAYS THIS OPENS.
+                      Without it a parent row is indistinguishable from a plain
+                      link, so a visitor either never discovers the submenu or
+                      clicks expecting a page. It rotates with the panel, so the
+                      same glyph also says "this is open" — and it is
+                      `aria-hidden`, because `aria-expanded` on the control
+                      already carries that to a screen reader. */}
+                  {top.resolved.href ? (
+                    <a
+                      href={preview ? undefined : top.resolved.href}
+                      onClick={preview ? inert : undefined}
+                      className="inline-flex items-center gap-1 text-sm transition-opacity hover:opacity-70"
+                      style={{ color: palette.muted }}
+                    >
+                      {top.resolved.label}
+                      <ChevronDown
+                        aria-hidden
+                        className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:rotate-180 group-focus-within:rotate-180"
+                      />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-expanded={false}
+                      className="inline-flex items-center gap-1 text-sm transition-opacity hover:opacity-70"
+                      style={{ color: palette.muted }}
+                    >
+                      {top.resolved.label}
+                      <ChevronDown
+                        aria-hidden
+                        className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:rotate-180 group-focus-within:rotate-180"
+                      />
+                    </button>
+                  )}
+                  <div
+                    className="invisible absolute left-0 top-full z-30 min-w-48 rounded-xl border p-2 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                    style={{ background: palette.headerBg, borderColor: palette.border }}
+                  >
+                    {renderBranch(top.children, 0)}
+                  </div>
+                </div>
+              ),
+            )}
             {site.meta.header.ctaLabel && (
               <a
                 {...(headerBookProps ?? headerLinkProps)}
@@ -152,19 +331,9 @@ export default function WebsiteRenderer({
                 {site.meta.header.ctaLabel}
               </a>
             )}
-            {/* Derived from active_public_surfaces — a member on the website
-                previously had no route to their Space or the shop at all. */}
-            {surfaceLinks?.map((l) => (
-              <a
-                key={l.href}
-                href={preview ? undefined : l.href}
-                onClick={preview ? inert : undefined}
-                className="text-sm transition-opacity hover:opacity-70"
-                style={{ color: palette.muted }}
-              >
-                {l.label}
-              </a>
-            ))}
+            {/* The cross-surface links are IN the menu tree above now — they
+                used to be a second run here, which is exactly why they could
+                never sit between two sections. */}
             {memberControl && (
               <button
                 type="button"
@@ -199,20 +368,12 @@ export default function WebsiteRenderer({
             style={{ background: palette.bg, borderTop: `1px solid ${palette.border}` }}
           >
             <nav className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-3">
-              {navItems.map((n) => (
-                <a
-                  key={n.id}
-                  href={preview ? undefined : `#${n.id}`}
-                  onClick={(e) => {
-                    if (preview) inert(e)
-                    setMobileOpen(false)
-                  }}
-                  className="rounded-md py-2 text-sm transition-opacity hover:opacity-70"
-                  style={{ color: palette.muted }}
-                >
-                  {n.label}
-                </a>
-              ))}
+              {/* THE WHOLE TREE, FLAT AND INDENTED — no dropdowns on a phone.
+                  A tap-to-open submenu inside an already-open sheet is two
+                  gestures to reach one page, and it hides the shape of the menu
+                  behind the thing you are trying to understand. Indentation
+                  says the same thing and costs nothing. */}
+              {renderMobileBranch(menu, 0)}
               {site.meta.header.ctaLabel && (
                 <a
                   {...(headerBookProps ?? headerLinkProps)}
@@ -229,20 +390,7 @@ export default function WebsiteRenderer({
                   {site.meta.header.ctaLabel}
                 </a>
               )}
-              {surfaceLinks?.map((l) => (
-                <a
-                  key={l.href}
-                  href={preview ? undefined : l.href}
-                  onClick={(e) => {
-                    if (preview) inert(e)
-                    setMobileOpen(false)
-                  }}
-                  className="rounded-md py-2 text-sm transition-opacity hover:opacity-70"
-                  style={{ color: palette.muted }}
-                >
-                  {l.label}
-                </a>
-              ))}
+              {/* Cross-surface links are part of the tree above now. */}
               {memberControl && (
                 <button
                   type="button"

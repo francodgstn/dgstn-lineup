@@ -36,6 +36,26 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 // ─── image field ────────────────────────────────────────────────────────────
 
+/**
+ * The image box, filled or empty — ONE definition, so the form does not move
+ * when a picture arrives.
+ *
+ * TWO THINGS WERE WRONG. The wide variant was `h-28 w-full`: a fixed 112px tall
+ * band stretched across whatever the column happened to be, which after the
+ * preview pane moved into an overlay is roughly 5:1 — a letterbox that shows
+ * almost nothing of a photograph and looks broken beside the fields around it.
+ * And the empty state was `h-20` against the filled `h-28`, so uploading an
+ * image shifted every field below it down by 32px.
+ *
+ * `aspect-video` because that is what these images ARE — a hero background and a
+ * section side image both publish wide — and a width cap so the box sits inline
+ * with the inputs above it rather than spanning the panel.
+ */
+const BOX = {
+  wide: 'aspect-video w-full max-w-xs',
+  square: 'aspect-square w-20',
+} as const
+
 function ImageField({
   label, url, teamId, sectionId, onChange, aspect = 'wide',
 }: {
@@ -72,7 +92,7 @@ function ImageField({
   return (
     <Field label={label}>
       {url ? (
-        <div className={`relative overflow-hidden rounded-lg border bg-muted ${aspect === 'wide' ? 'h-28 w-full' : 'h-20 w-20'}`}>
+        <div className={`relative overflow-hidden rounded-lg border bg-muted ${BOX[aspect]}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt="" className="h-full w-full object-cover" />
           <button
@@ -88,7 +108,7 @@ function ImageField({
           type="button"
           onClick={() => ref.current?.click()}
           disabled={uploading}
-          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground disabled:opacity-50 ${aspect === 'wide' ? 'h-20 w-full' : 'h-20 w-20'}`}
+          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground disabled:opacity-50 ${BOX[aspect]}`}
         >
           <ImageIcon className="h-4 w-4" />
           {uploading ? t('editorUploading') : t('editorUpload')}

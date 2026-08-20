@@ -1,9 +1,17 @@
 'use client'
 
-// Space settings — the members' portal home under Public pages. Lightweight
-// today (the portal's only module is the course library, managed under Offer),
-// but it gives the surface a home: live status, the theme it inherits from the
-// bio-link, and a content summary. The seam for future portal modules.
+// Space settings — the members' portal, as a SECTION of Public pages.
+//
+// It is small on purpose: the portal's only module is the course library, which
+// is managed under Offer, so this holds one real control (the signup reminder)
+// beside a status readout and two signposts. That is a section, not a page, and
+// it used to be drawn as a page — four full-width cards spread across a desktop
+// viewport, reading as something unfinished rather than something small.
+//
+// It now renders inside the settings shell (see ../layout.tsx) and gathers its
+// rows into ONE panel with dividers, the same shape settings/booking and the
+// activity form use. Still the seam for future portal modules — a row is a
+// cheaper thing to add than a page is to justify.
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -16,7 +24,6 @@ import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { COURSES_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Card } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { ExternalLink, GraduationCap, Palette, ChevronRight, UserCheck } from 'lucide-react'
 
@@ -85,8 +92,11 @@ export default function SpaceSettingsPage() {
         }
       />
 
+      {/* ONE PANEL. Status first because it answers "is this on?", then the one
+          setting, then the two signposts to where the rest is managed. */}
+      <div className="divide-y rounded-lg border">
       {/* Status */}
-      <Card className="flex items-start gap-3 p-4">
+      <div className="flex items-start gap-3 p-4">
         <span
           className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
             flags.spaceLive ? 'bg-emerald-500' : 'bg-muted-foreground/40'
@@ -98,10 +108,10 @@ export default function SpaceSettingsPage() {
             {flags.spaceLive ? t('statusLiveHint') : t('statusSetupHint')}
           </p>
         </div>
-      </Card>
+      </div>
 
       {/* Content */}
-      <Card className="flex items-center justify-between gap-4 p-4">
+      <div className="flex items-center justify-between gap-4 p-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
             <GraduationCap className="h-[18px] w-[18px]" />
@@ -118,10 +128,10 @@ export default function SpaceSettingsPage() {
           {t('manageContent')}
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
-      </Card>
+      </div>
 
       {/* Complete-signup reminder */}
-      <Card className="flex items-center justify-between gap-4 p-4">
+      <div className="flex items-center justify-between gap-4 p-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
             <UserCheck className="h-[18px] w-[18px]" />
@@ -132,10 +142,10 @@ export default function SpaceSettingsPage() {
           </div>
         </div>
         <Switch checked={nudge} disabled={!canEdit || savingNudge} onCheckedChange={toggleNudge} />
-      </Card>
+      </div>
 
       {/* Appearance */}
-      <Card className="flex items-center justify-between gap-4 p-4">
+      <div className="flex items-center justify-between gap-4 p-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
             <Palette className="h-[18px] w-[18px]" />
@@ -152,7 +162,8 @@ export default function SpaceSettingsPage() {
           {t('editTheme')}
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
-      </Card>
+      </div>
+      </div>
     </div>
   )
 }

@@ -523,12 +523,26 @@ function payPerVisitLine(a: ActivityEntry, currency: string, t: SiteT): string {
 //     benefit — an appointment has NO access gate (the price is the gate), so
 //     that line names a saving, not a requirement.
 //
-// `pricingDisplay` governs the second kind only. Under 'hidden' a gate line is
-// still drawn but WITHOUT its price ("Included with Premium", not "… — CHF
-// 89/mo"), which is the honest reduction: the requirement survives, the amount
-// does not. Under 'compact' the gate line keeps its price inline — splitting it
-// would either duplicate the line or strip the one number that makes the
-// requirement actionable — and only the optional spend collapses.
+// `pricingDisplay` governs the second kind — and, for a subscription-gated
+// class, HOW MUCH OF THE GATE IS SAID INLINE:
+//
+//   list     the gate names its plan and price ("Included with Premium — CHF
+//            89/mo"); every money line is inline too.
+//   compact  the card is decluttered to the GENERIC requirement ("Requires an
+//            active subscription") and the named, priced version moves behind
+//            the link with the rest of the money.
+//   hidden   the generic requirement only; nothing names a plan or an amount.
+//
+// The REQUIREMENT therefore survives every mode — a studio that hid it would buy
+// itself a card a prospect clicks and a booking flow that then refuses them —
+// while the plan's identity and price do not, which is what "hide" and "behind a
+// link" were being asked for.
+//
+// An earlier version kept the gate line priced and inline under 'compact', on
+// the reasoning that splitting it would duplicate the line or strip the number
+// that made it actionable. That left `money` empty on any site whose priced
+// activities were all gated, so the link never appeared and 'compact' did
+// nothing at all.
 interface CardPricing {
   /** Requirements. Always rendered. */
   gate: string[]
@@ -759,12 +773,42 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               // all before this — the card looked open. Hiding a price must
               // never hide a gate, so the requirement is stated generically.
               if (d.planRequired) gate.push(t('planRequiredLine'))
+
+              // THE INLINE LINE NAMES A PLAN ONLY UNDER 'list'.
+              //
+              // Both other modes exist to DECLUTTER THE CARD, and "Included with
+              // Premium" is the clutter: it is the plan's identity, and under
+              // 'compact' its price too. So they fall back to the generic
+              // requirement — the same line a gated class already shows when its
+              // plans are not public — and the named detail moves behind the
+              // link ('compact') or goes away ('hidden').
+              //
+              // This is what makes 'compact' work at all. `showToggle` needs a
+              // non-empty `money`, and on a site whose priced activities are all
+              // subscription-gated EVERY line used to land in `gate` — so the
+              // link never rendered and the mode was indistinguishable from
+              // 'list'. Reported by Franco.
+              const gateNamesPlans = pricingMode === 'list'
               for (const s of d.includedWith) {
                 const line =
                   s.priceLabel && amountsShown
                     ? t('includedWithSubPriced', { name: s.name, price: s.priceLabel })
                     : t('includedWithSub', { name: s.name })
-                ;(subscriptionGated ? gate : money).push(line)
+                // An appointment has no access gate, so its "included with" is a
+                // saving, not a requirement — it was always money and stays there.
+                if (!subscriptionGated) {
+                  money.push(line)
+                  continue
+                }
+                if (gateNamesPlans) {
+                  gate.push(line)
+                  continue
+                }
+                // Deduped: two plans that both include this class are still ONE
+                // requirement, and `planRequired` above may have said it already.
+                const generic = t('planRequiredLine')
+                if (!gate.includes(generic)) gate.push(generic)
+                if (pricingMode === 'compact') money.push(line)
               }
               if (amountsShown)
                 // A percentage off, not an amount to be paid online — this line

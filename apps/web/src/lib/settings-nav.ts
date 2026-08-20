@@ -97,10 +97,10 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // The route stays at /public-page — it is bookmarked, and its siblings
   // /public-page/shop and /public-page/space are linked from the main nav — but it
   // now RENDERS inside the settings shell (rail + detail pane) via a route-group
-  // layout at (auth)/public-page/(hub)/layout.tsx, so it reads like every other
+  // layout at (auth)/public-page/layout.tsx, so it reads like every other
   // settings section instead of dumping the reader onto a bare full page (UX-61).
-  // The `(hub)` group scopes that shell to this page only; shop/space keep their
-  // own full-width layout. It is ALSO listed in the main nav's Grow section under
+  // That shell now covers /public-page/shop and /public-page/space too — they are
+  // sections of this one, and drawn full-width they read as unfinished pages. It is ALSO listed in the main nav's Grow section under
   // the same id, so the map is reachable from where public surfaces are worked on
   // (UX-28) — one destination, one shortcut star, listed twice.
   { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },

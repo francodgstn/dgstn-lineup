@@ -236,6 +236,93 @@ export interface SiteSurfaceLinkConfig {
   order?: number
 }
 
+/**
+ * ─── THE SITE MENU ──────────────────────────────────────────────────────────
+ *
+ * A STORED TREE, replacing two derived lists that could never interleave.
+ *
+ * Before this the header nav was assembled from two independent sources:
+ *   • section anchors — `sections` filtered by `showInNav`, in section order;
+ *   • surface links   — derived from `active_public_surfaces`, ordered only
+ *     among THEMSELVES by `SiteSurfaceLinkConfig.order`.
+ * They were rendered as two runs, so "Shop" could never sit between two section
+ * anchors however the studio ordered either list. That is why the system links
+ * read as fixed, and why their settings had washed up in the appearance panel:
+ * there was nowhere else for them to live.
+ *
+ * ABSENT MEANS DERIVE. A site with no `menu` renders exactly what it rendered
+ * before — see `deriveSiteMenu`. No backfill, no migration, and a studio that
+ * never opens the menu editor is unaffected; the first edit stores a tree and
+ * that tree wins from then on.
+ */
+export type SiteMenuTarget =
+  | { kind: 'section'; sectionId: string }
+  | { kind: 'surface'; surface: PublicSurface }
+  | { kind: 'url'; url: string }
+  /** A parent that only opens its children — no destination of its own. */
+  | { kind: 'none' }
+
+export interface SiteMenuItem {
+  /** Stable id — React key and the handle the editor moves around. */
+  id: string
+  /** Overrides the label derived from the target. Absent ⇒ derived. */
+  label?: string
+  target: SiteMenuTarget
+  children?: SiteMenuItem[]
+}
+
+/**
+ * How deep the tree may nest, root included.
+ *
+ * Four is a CAP, not a target: a header menu that needs four levels is usually
+ * a site that needs fewer pages. The editor refuses an indent past this rather
+ * than silently flattening it, so the limit is met as a message instead of as
+ * a surprise on the published site.
+ */
+export const SITE_MENU_MAX_DEPTH = 4
+
+/** Depth of the deepest branch, 0 for an empty tree. */
+export function siteMenuDepth(items: readonly SiteMenuItem[] | undefined): number {
+  if (!items || items.length === 0) return 0
+  return 1 + Math.max(0, ...items.map((i) => siteMenuDepth(i.children)))
+}
+
+/** Every item in the tree, depth-first — the order it is read in. */
+export function flattenSiteMenu(
+  items: readonly SiteMenuItem[] | undefined,
+  depth = 1
+): { item: SiteMenuItem; depth: number }[] {
+  return (items ?? []).flatMap((item) => [
+    { item, depth },
+    ...flattenSiteMenu(item.children, depth + 1),
+  ])
+}
+
+/**
+ * The menu a site with no stored tree gets: exactly today's behaviour, as data.
+ *
+ * Section anchors first, in section order, then the live surface links — which
+ * is the two-run layout the header already drew. Producing it here rather than
+ * in the renderer means the editor can open it, the studio can reorder it, and
+ * the first save turns it into an ordinary stored tree.
+ */
+export function deriveSiteMenu(params: {
+  sections: readonly { id: string; type: string; showInNav?: boolean }[]
+  surfaceLinks: readonly { surface: PublicSurface }[]
+}): SiteMenuItem[] {
+  const anchors = params.sections
+    .filter((s) => s.type !== 'hero' && s.showInNav !== false)
+    .map((s): SiteMenuItem => ({
+      id: `section:${s.id}`,
+      target: { kind: 'section', sectionId: s.id },
+    }))
+  const surfaces = params.surfaceLinks.map((l): SiteMenuItem => ({
+    id: `surface:${l.surface}`,
+    target: { kind: 'surface', surface: l.surface },
+  }))
+  return [...anchors, ...surfaces]
+}
+
 export interface SiteHeader {
   /** Sticky top bar with in-page anchor nav. */
   showNav: boolean
@@ -316,6 +403,8 @@ export interface SiteDraft {
   enabled: boolean
   meta: SiteMeta
   sections: WebsiteSection[]
+  /** The header menu. Absent ⇒ derived from sections + live surfaces. */
+  menu?: SiteMenuItem[]
   updated_at?: Timestamp
   updatedBy?: string
 }
@@ -328,6 +417,8 @@ export interface PublishedSite {
   name: string
   meta: SiteMeta
   sections: WebsiteSection[]
+  /** The header menu. Absent ⇒ derived from sections + live surfaces. */
+  menu?: SiteMenuItem[]
   /** Denormalised from the team at publish time, for footer/contact icons. */
   socialLinks?: SocialLink[]
   /** Denormalised from the plan — true on the free plan ("Powered by Linyup"). */
