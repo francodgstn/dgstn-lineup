@@ -119,6 +119,11 @@ export {
   selfCheckIn,
 } from './sessions'
 export { setSessionLocation } from './sessions/setSessionLocation'
+// The background drain for "delete this and all following" on a large series.
+// Enqueued by cancelSession; chains itself batch by batch. The Cloud Tasks queue
+// is created by Firebase with this function's name, which is why the enqueuer
+// addresses it as locations/europe-west6/functions/runSeriesTeardown.
+export { runSeriesTeardown } from './sessions/teardownWorker'
 export { setSessionTags } from './sessions/setSessionTags'
 
 // Contacts

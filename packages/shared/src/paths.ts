@@ -141,6 +141,10 @@ export const WAITLIST_SUBCOLLECTION = 'waitlist'
 export const MONTHLY_SCORES_SUBCOLLECTION = 'monthly_scores'
 export const ACTIVITIES_COLLECTION = 'activities'
 export const SESSION_SERIES_COLLECTION = 'session_series'
+// Background teardown of a series' future sessions — one doc per run, written
+// only by Cloud Functions. The client polls it for progress; see
+// types/sessionSeriesJob.ts.
+export const SESSION_SERIES_JOBS_COLLECTION = 'session_series_jobs'
 
 export const REFERRALS_COLLECTION = 'referrals'
 export const REFERRAL_CODES_COLLECTION = 'referral_codes'
