@@ -15,13 +15,23 @@ import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { SearchInput, useListKeyboardNav } from '@/components/ui/search-input'
+import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link, useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Copy, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
-  Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send,
+  Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send, Loader2,
 } from 'lucide-react'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
@@ -251,9 +261,20 @@ function AddParticipantsDialog({
   const { data: waiverPolicy = [] } = useWaiverPolicy(open ? teamId : null)
   const teamRequiresWaiver = waiverPolicy.length > 0
   const [search, setSearch] = useState('')
-  const [adding, setAdding] = useState<string | null>(null)
-  // Contact awaiting the "no valid subscription — add anyway?" confirmation.
-  const [confirming, setConfirming] = useState<Contact | null>(null)
+  // ── PICK MANY, COMMIT ONCE ────────────────────────────────────────────────
+  // This used to add on click and then CLOSE, so putting six people in a class
+  // was: open, search, click, closed — six times over, retyping the filter each
+  // round. Selection is now held here and spent by the footer button.
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  // ArrowDown out of the search field lands on the first row; ArrowUp off the
+  // first row comes back. See useListKeyboardNav.
+  const searchRef = useRef<HTMLInputElement>(null)
+  const { listRef, focusFirst, onListKeyDown } = useListKeyboardNav<HTMLDivElement>(searchRef)
+  const [adding, setAdding] = useState(false)
+  // True once the manager has been shown, and accepted, that some of the picked
+  // people hold no covering subscription. ONE question about the whole
+  // selection — asking per person would restore the drip this change removes.
+  const [confirmingUncovered, setConfirmingUncovered] = useState(false)
 
   const isCovered = (c: Contact) =>
     !requiredSubscriptionTypeIds?.length ||
@@ -287,13 +308,31 @@ function AddParticipantsDialog({
     )
   })
 
-  const add = async (contact: Contact, { force = false } = {}) => {
-    if (!force && !isCovered(contact)) {
-      setConfirming(contact)
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const pickedContacts = contacts.filter((c) => picked.has(c.id))
+  const uncovered = pickedContacts.filter((c) => !isCovered(c))
+
+  /** Firestore caps a batch at 500 writes and this door writes TWO per person
+   *  (the seat and the attendance), so a batch may carry 250. Chunked well under
+   *  that: a roster never approaches it, and the alternative to chunking is a
+   *  hard failure at the exact moment somebody is adding a big group. */
+  const CHUNK = 200
+
+  const addPicked = async ({ force = false } = {}) => {
+    if (pickedContacts.length === 0) return
+    if (!force && uncovered.length > 0) {
+      setConfirmingUncovered(true)
       return
     }
-    setConfirming(null)
-    setAdding(contact.id)
+    setConfirmingUncovered(false)
+    setAdding(true)
     try {
       // ── THE SEAT AND THE ATTENDANCE ARE TWO DOCUMENTS, AND THIS DOOR OWED BOTH
       // This is the only way to put a KNOWN person into a class from the admin
@@ -315,42 +354,55 @@ function AddParticipantsDialog({
       // Confirm). Merging blindly would restamp `created_at` and lose when the
       // seat was actually taken, so an existing row is CONFIRMED rather than
       // rewritten — including the hold markers every other confirm clears.
-      const bookingRef = doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, contact.id)
-      const existing = await getDoc(bookingRef)
-      const batch = writeBatch(db)
-      batch.set(
-        bookingRef,
-        {
-          contact: contact.id,
-          session: sessionId,
-          teamId,
-          firstname: contact.firstname ?? '',
-          lastname: contact.lastname ?? '',
-          email: contact.email ?? null,
-          status: 'confirmed',
-          confirmed_at: serverTimestamp(),
-          ...(existing.exists()
-            ? confirmClearedHoldFields(existing.data() as Booking, deleteField())
-            : { source: 'staff', created_at: serverTimestamp() }),
-        },
-        { merge: true }
-      )
-      batch.set(
-        doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contact.id),
-        buildParticipantDoc({
-          contactId: contact.id,
-          sessionId,
-          who: contact,
-          checkedInBy: 'manual',
-          checkedInAt: serverTimestamp(),
+      //
+      // The reads go out together and the writes land in ONE batch per chunk:
+      // a seat that half-exists is worse than a slow dialog, and a batch is the
+      // only way to be sure the whole group either took its seats or did not.
+      for (let i = 0; i < pickedContacts.length; i += CHUNK) {
+        const slice = pickedContacts.slice(i, i + CHUNK)
+        const existingRows = await Promise.all(
+          slice.map((c) => getDoc(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, c.id)))
+        )
+        const batch = writeBatch(db)
+        slice.forEach((contact, n) => {
+          const existing = existingRows[n]
+          batch.set(
+            doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, contact.id),
+            {
+              contact: contact.id,
+              session: sessionId,
+              teamId,
+              firstname: contact.firstname ?? '',
+              lastname: contact.lastname ?? '',
+              email: contact.email ?? null,
+              status: 'confirmed',
+              confirmed_at: serverTimestamp(),
+              ...(existing.exists()
+                ? confirmClearedHoldFields(existing.data() as Booking, deleteField())
+                : { source: 'staff', created_at: serverTimestamp() }),
+            },
+            { merge: true }
+          )
+          batch.set(
+            doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, contact.id),
+            buildParticipantDoc({
+              contactId: contact.id,
+              sessionId,
+              who: contact,
+              checkedInBy: 'manual',
+              checkedInAt: serverTimestamp(),
+            })
+          )
         })
-      )
-      // `participants_count` is `trackSessionParticipants`' to write — see
-      // `confirmBooking`.
-      await batch.commit()
+        // `participants_count` is `trackSessionParticipants`' to write — see
+        // `confirmBooking`.
+        await batch.commit()
+      }
+      setPicked(new Set())
+      setSearch('')
       onAdded()
     } finally {
-      setAdding(null)
+      setAdding(false)
     }
   }
 
@@ -358,23 +410,49 @@ function AddParticipantsDialog({
     return `${c.firstname?.[0] ?? ''}${c.lastname?.[0] ?? ''}`.toUpperCase() || '?'
   }
 
+  // A fresh open starts from nothing chosen. Leaving the previous selection
+  // standing would re-add people the manager already committed.
   useEffect(() => {
-    if (!open) setConfirming(null)
+    if (!open) {
+      setConfirmingUncovered(false)
+      setPicked(new Set())
+      setSearch('')
+    }
   }, [open])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+      {/* FIXED HEIGHT, NOT MAX-HEIGHT — the search field must not move.
+          `DialogBody` alone gives a max-height, so the popup grew and shrank
+          with the result count; and because a desktop dialog is CENTRED
+          (-translate-y-1/2), a changing height moves the TOP edge, so the
+          search box climbed and dropped on every keystroke while being typed
+          into. A fixed height makes the list the only thing that changes.
+
+          Two values, one rule: on a phone, fill the screen the dialog is
+          already pinned to the top of (see the max-sm rule in ui/dialog.tsx);
+          on desktop, hold roughly the 18rem of list this had before
+          `DialogBody` replaced its own `max-h-72` scroller. */}
+      <DialogContent
+        className={cn(
+          'max-w-sm p-0 gap-0',
+          // ONLY the list state is fixed-height. The uncovered-contacts confirm
+          // below replaces the list with three lines of prose, and holding 32rem
+          // for it would open a dialog that is mostly empty space.
+          !confirmingUncovered && 'h-[calc(100dvh-2rem)] sm:h-[32rem]',
+        )}
+      >
         <DialogHeader className="px-4 pt-4 pb-3 border-b">
           <DialogTitle className="text-base">{t('addContactToSession')}</DialogTitle>
         </DialogHeader>
         <div className="px-3 pt-3 pb-2 space-y-2">
-          <input
+          <SearchInput
             autoFocus
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
+            inputRef={searchRef}
+            onArrowDown={focusFirst}
             placeholder={t('searchContactsPlaceholder')}
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {/* Adding now takes a SEAT as well as marking attendance, which is a
               change a manager has to be told about once — before, six manual
@@ -384,27 +462,34 @@ function AddParticipantsDialog({
             <p className="text-xs text-muted-foreground">{t('addParticipantWaiverNote')}</p>
           )}
         </div>
-        {confirming ? (
+
+        {confirmingUncovered ? (
           <div className="px-4 py-4 space-y-3">
             <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
               <div className="space-y-1">
                 <p className="text-sm font-medium text-amber-900">{t('noSubConfirmTitle')}</p>
+                {/* NAMED, not counted. "3 people have no subscription" makes the
+                    manager cancel and re-check who; the names let them decide
+                    without leaving the dialog. */}
                 <p className="text-xs text-amber-800">
-                  {t('noSubConfirmBody', { name: `${confirming.firstname} ${confirming.lastname}` })}
+                  {t('noSubConfirmBodyMany', {
+                    count: uncovered.length,
+                    names: uncovered.map((c) => `${c.firstname} ${c.lastname}`.trim()).join(', '),
+                  })}
                 </p>
               </div>
             </div>
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setConfirming(null)}
+                onClick={() => setConfirmingUncovered(false)}
                 className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
               >
                 {t('noSubConfirmCancel')}
               </button>
               <button
-                onClick={() => add(confirming, { force: true })}
-                disabled={adding === confirming.id}
+                onClick={() => addPicked({ force: true })}
+                disabled={adding}
                 className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-50"
               >
                 {t('noSubConfirmAddAnyway')}
@@ -412,39 +497,74 @@ function AddParticipantsDialog({
             </div>
           </div>
         ) : (
-        <div className="overflow-y-auto max-h-80">
-          {isLoading && (
-            <div className="px-4 py-3 space-y-2">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          )}
-          {!isLoading && filtered.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('noContactsFound')}</p>
-          )}
-          {!isLoading && filtered.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => add(c)}
-              disabled={adding === c.id}
-              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left disabled:opacity-50"
-            >
-              <div className="h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                {initials(c)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
-                {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
-              </div>
-              {!isCovered(c) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0">
-                  <AlertTriangle className="h-3 w-3" />
-                  {t('noSubBadge')}
-                </span>
+          <>
+            <DialogBody ref={listRef} onKeyDown={onListKeyDown} className="p-0">
+              {isLoading && (
+                <div className="px-4 py-3 space-y-2">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
               )}
-              {adding === c.id && <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
-            </button>
-          ))}
-        </div>
+              {!isLoading && filtered.length === 0 && (
+                <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  {search.trim() ? t('noContactsMatchSearch') : t('noContactsFound')}
+                </p>
+              )}
+              {!isLoading && filtered.map((c) => {
+                const isPicked = picked.has(c.id)
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    data-list-row
+                    onClick={() => toggle(c.id)}
+                    aria-pressed={isPicked}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left',
+                      isPicked ? 'bg-primary/5' : 'hover:bg-muted'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                        isPicked ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
+                      )}
+                    >
+                      {isPicked && <Check className="h-3 w-3" />}
+                    </span>
+                    <div className="h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {initials(c)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{c.firstname} {c.lastname}</p>
+                      {c.email && <p className="text-xs text-muted-foreground truncate">{c.email}</p>}
+                    </div>
+                    {!isCovered(c) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0">
+                        <AlertTriangle className="h-3 w-3" />
+                        {t('noSubBadge')}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </DialogBody>
+
+            {/* The footer is the whole point of the change: it is where a
+                selection becomes seats, and it stays put while the list
+                scrolls. Disabled at zero rather than hidden, so the button
+                that will finish the job is visible from the start. */}
+            {/* mx-0 mb-0 CANCELS the base footer's `-mx-4 -mb-4`. That bleed
+                exists to reach the edges of a dialog padded with `p-4`; this
+                one is `p-0`, so the negative margins pushed the footer OUTSIDE
+                the box, and the `overflow-hidden` that comes with `DialogBody`
+                clipped the bottom-right corner of the button. */}
+            <DialogFooter className="mx-0 mb-0 border-t px-4 py-3">
+              <Button onClick={() => addPicked()} disabled={picked.size === 0 || adding}>
+                {adding && <Loader2 className="h-4 w-4 animate-spin" />}
+                {picked.size === 0 ? t('addSelected') : t('addSelectedCount', { count: picked.size })}
+              </Button>
+            </DialogFooter>
+          </>
         )}
       </DialogContent>
     </Dialog>

@@ -21,6 +21,7 @@ import type { Contact, OrgAffiliationStatusDef, Affiliation, AffiliationType } f
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -29,7 +30,7 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { Search, IdCard } from 'lucide-react'
+import { IdCard } from 'lucide-react'
 import { renewAffiliationCall } from '@/components/affiliations/renew'
 import { AffiliationBulkBar, RenewConfirmDialog } from '@/components/affiliations/RenewUI'
 
@@ -654,13 +655,12 @@ export default function TeamAffiliationsPage() {
       )}
 
       {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          className="pl-9 h-9 text-sm"
+      <div className="max-w-xs">
+        <SearchInput
+          className="h-9 text-sm"
           placeholder={t('searchPlaceholder')}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
         />
       </div>
 

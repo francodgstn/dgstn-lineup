@@ -26,6 +26,7 @@ import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -69,12 +70,7 @@ import { setGroupRule } from '@/plugins/contact-groups/hooks'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import {
-  Search, UserPlus, X, Plus,
-  AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw,
-  MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag,
-  Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck,
-} from 'lucide-react'
+import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
@@ -2826,26 +2822,17 @@ export default function ContactsPage() {
 
       {/* Search — sticky, clears with ×. `top-14` on mobile clears the sticky
           app header (h-14, see components/layout/MobileHeader.tsx); on desktop
-          there is no top bar, so it pins to 0. */}
+          there is no top bar, so it pins to 0.
+          This field's markup was the ONLY one in the app with a clear button;
+          it is now `SearchInput`, and the other six contact searches use the
+          same component rather than six more copies of it. */}
       <div className="sticky top-14 md:top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-sm border-b border-border/40">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder={t('searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-9 h-11 bg-white dark:bg-zinc-900"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          placeholder={t('searchPlaceholder')}
+          value={search}
+          onValueChange={setSearch}
+          className="h-11 bg-white dark:bg-zinc-900"
+        />
       </div>
 
       {/* Editing a dynamic group's rule — adjust the filters, then save back. */}

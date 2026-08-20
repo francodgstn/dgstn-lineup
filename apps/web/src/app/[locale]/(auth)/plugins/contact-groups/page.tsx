@@ -14,15 +14,13 @@ import type { Route } from 'next'
 import { CONTACTS_COLLECTION } from '@linyup/shared'
 import type { Contact, ContactGroup } from '@linyup/shared'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from 'sonner'
-import {
-  FolderTree, Plus, ChevronRight, MoreHorizontal, Pencil, Trash2, FolderPlus,
-  Users, Search, X, Check, FolderOpen, Zap,
-} from 'lucide-react'
+import { FolderTree, Plus, ChevronRight, MoreHorizontal, Pencil, Trash2, FolderPlus, Users, X, Check, FolderOpen, Zap } from 'lucide-react'
 import { GroupPickerPopover } from '@/plugins/contact-groups/GroupPickerPopover'
 import {
   useContactGroups, useInvalidateContactGroups, buildGroupTree, groupWithDescendantIds,
@@ -195,11 +193,11 @@ function AddMembersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{t('addMembersTitle', { name: group.name })}</DialogTitle></DialogHeader>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('searchContacts')} className="pl-9" />
-        </div>
+        <SearchInput
+          value={search}
+          onValueChange={setSearch}
+          placeholder={t('searchContacts')}
+        />
         <div className="max-h-64 overflow-y-auto space-y-0.5 -mx-1 px-1">
           {candidates.map((c) => (
             <button key={c.id} type="button" onClick={() => toggle(c.id)}
@@ -596,11 +594,12 @@ export default function ContactGroupsPage() {
                 )}
               </div>
               <div className="px-4 py-2 border-b">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
-                    placeholder={t('searchMembers')} className="pl-8 h-8 text-sm" />
-                </div>
+                <SearchInput
+                  value={memberSearch}
+                  onValueChange={setMemberSearch}
+                  placeholder={t('searchMembers')}
+                  className="h-8 text-sm"
+                />
               </div>
               <div className="max-h-[28rem] overflow-y-auto">
                 {contactsLoading && (
