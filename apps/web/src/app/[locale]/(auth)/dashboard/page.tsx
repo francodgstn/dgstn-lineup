@@ -231,8 +231,21 @@ export default function DashboardPage() {
               consistent ~35px longer, so call it ~700 against a 720 fold. That
               leaves ~20px, and the quote is now the thing sitting on that edge.
               If it clips again, take rows off the QUEUE — never off the
-              sign-off, which has been the loser twice already. */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              sign-off, which has been the loser twice already.
+
+              `pt-2.5` — 10px ON TOP of the wrapper's `space-y-5`, so the seam
+              between the two rows is 30px rather than 20 (Franco, 2026-08-21).
+              It is PADDING rather than a margin because `space-y` already owns
+              `margin-top` on this child and would win the specificity contest.
+
+              Applied to the ROW, not to the right-hand column, deliberately.
+              The ask was for air between the figures and the donut, but this
+              page has ONE vertical seam by design — the queue's top edge and
+              the donut's are the same line, and buying the right column 10px
+              on its own would bend that line for the sake of one gap. The
+              whole row steps down together and the seam stays straight; the
+              10px comes off the fold, which is stated rather than hidden. */}
+          <div className="grid grid-cols-1 gap-6 pt-2.5 lg:grid-cols-12">
             <div className="lg:col-span-7 lg:h-[296px]">
               <QueuePanel
                 teamId={currentTeamId}
