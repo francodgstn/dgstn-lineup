@@ -178,18 +178,15 @@ export function TodayPanel({ teamId }: { teamId: string | null }) {
       <PanelHeader
         title={<span className="capitalize">{dayLabel}</span>}
         meta={meta}
-        action={
-          <div className="flex shrink-0 items-center gap-0.5">
-            {offset !== 0 && (
-              <button
-                type="button"
-                onClick={() => setOffset(0)}
-                aria-label={t('backToToday')}
-                className={navButton}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
-            )}
+        // THE STEPPER LEADS, before the day it steps (Franco, 2026-08-21).
+        // It sat on the right, sharing a cluster with "back to today" and the
+        // link out — three controls that do three different things. The
+        // schedule calendar has always put `[<] [>]` in front of the range
+        // label it moves and left `Today` on the other side, so this is the
+        // same bar arranged the same way, and a chevron in front of a date now
+        // means the same thing on both screens.
+        lead={
+          <>
             <button
               type="button"
               onClick={() => setOffset((o) => o - 1)}
@@ -206,6 +203,22 @@ export function TodayPanel({ teamId }: { teamId: string | null }) {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+          </>
+        }
+        action={
+          <div className="flex shrink-0 items-center gap-0.5">
+            {/* Stays on the RIGHT, with the way out — it is the calendar's
+                `Today` button, which lives on that side there too. */}
+            {offset !== 0 && (
+              <button
+                type="button"
+                onClick={() => setOffset(0)}
+                aria-label={t('backToToday')}
+                className={navButton}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            )}
             <Link
               href={'/schedule' as Route}
               className="ml-1 flex items-center gap-0.5 text-xs text-primary hover:underline"
