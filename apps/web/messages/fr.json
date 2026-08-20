@@ -18,7 +18,11 @@
     "clearSearch": "Effacer la recherche",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
-    "saved": "Enregistré"
+    "saved": "Enregistré",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "remove": "Retirer",
+    "reset": "Réinitialiser"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ séances",
     "filterSessionsMaxOnly": "≤{max} séances",
     "statsContactsCount": "{count, plural, one {# contact} other {# contacts}}",
-    "statsActiveCount": "{count} actifs"
+    "statsActiveCount": "{count} actifs",
+    "subHistoryDeleteTitle": "Supprimer cette entrée d'historique ?",
+    "subHistoryDeleteBody": "Cela supprime la trace du fait que {name} a eu cet abonnement. Aucun remboursement n'est effectué et l'abonnement actuel n'est pas modifié.",
+    "affiliationRemoveTitle": "Retirer cette affiliation ?",
+    "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1171,7 +1179,8 @@
     },
     "eventDayOf": "Jour {day} sur {total}",
     "eventFrom": "à partir de",
-    "eventUntil": "jusqu'à"
+    "eventUntil": "jusqu'à",
+    "deleteEventConfirmTitle": "Supprimer cet événement ?"
   },
   "Events": {
     "title": "Événements",
@@ -5295,7 +5304,8 @@
       "save": "Enregistrer",
       "saving": "Enregistrement…"
     },
-    "deleteConfirm": "Supprimer le type d'événement « {name} » ? Les événements de ce type ne seront pas affectés."
+    "deleteConfirm": "Supprimer le type d'événement « {name} » ? Les événements de ce type ne seront pas affectés.",
+    "deleteConfirmTitle": "Supprimer ce type d'événement ?"
   },
   "Referrals": {
     "title": "Programme de parrainage",
@@ -5706,7 +5716,8 @@
       "recipientsTruncated": "Affichage des {shown} premiers sur {total}.",
       "recipientsGone": "{count, plural, one {# destinataire ne figure plus dans vos contacts} other {# destinataires ne figurent plus dans vos contacts}}",
       "recipientsNotRecorded": "Aucun destinataire n'a été enregistré pour cette exécution."
-    }
+    },
+    "deleteConfirmTitle": "Supprimer cette automatisation ?"
   },
   "SettingsEmails": {
     "title": "E-mails",
@@ -5743,7 +5754,10 @@
     "reminderOffsetHours": "{hours} heures avant",
     "reminderAddStep": "Ajouter un rappel",
     "reminderRemoveStep": "Supprimer le rappel",
-    "reminderSmsNote": "Les rappels SMS ne sont envoyés qu'entre 08h00 et 21h00."
+    "reminderSmsNote": "Les rappels SMS ne sont envoyés qu'entre 08h00 et 21h00.",
+    "resetConfirmTitle": "Réinitialiser au texte par défaut ?",
+    "deactivateConfirmTitle": "Désactiver ce modèle ?",
+    "deactivateAction": "Désactiver"
   },
   "Finance": {
     "exportCsv": "Exporter CSV",

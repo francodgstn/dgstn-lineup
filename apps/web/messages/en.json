@@ -18,7 +18,11 @@
     "clearSearch": "Clear search",
     "save": "Save",
     "saving": "Saving…",
-    "saved": "Saved"
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "remove": "Remove",
+    "reset": "Reset"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ sessions",
     "filterSessionsMaxOnly": "≤{max} sessions",
     "statsContactsCount": "{count, plural, one {# contact} other {# contacts}}",
-    "statsActiveCount": "{count} active"
+    "statsActiveCount": "{count} active",
+    "subHistoryDeleteTitle": "Delete this history entry?",
+    "subHistoryDeleteBody": "This removes the record that {name} held this subscription. It does not refund anything or change what they hold now.",
+    "affiliationRemoveTitle": "Remove this affiliation?",
+    "affiliationRemoveBody": "{name} loses this affiliation and anything that depends on it — access to gated activities, member pricing and any renewal it was due."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1171,7 +1179,8 @@
     },
     "eventDayOf": "Day {day} of {total}",
     "eventFrom": "from",
-    "eventUntil": "until"
+    "eventUntil": "until",
+    "deleteEventConfirmTitle": "Delete this event?"
   },
   "Events": {
     "title": "Events",
@@ -5295,7 +5304,8 @@
       "save": "Save",
       "saving": "Saving…"
     },
-    "deleteConfirm": "Delete event type \"{name}\"? Events of this type won't be affected."
+    "deleteConfirm": "Delete event type \"{name}\"? Events of this type won't be affected.",
+    "deleteConfirmTitle": "Delete this event type?"
   },
   "Referrals": {
     "title": "Referral Program",
@@ -5706,7 +5716,8 @@
       "recipientsTruncated": "Showing the first {shown} of {total}.",
       "recipientsGone": "{count, plural, one {# recipient is no longer in your contacts} other {# recipients are no longer in your contacts}}",
       "recipientsNotRecorded": "Recipients weren't recorded for this run."
-    }
+    },
+    "deleteConfirmTitle": "Delete this automation?"
   },
   "SettingsEmails": {
     "title": "Emails",
@@ -5743,7 +5754,10 @@
     "reminderOffsetHours": "{hours} hours before",
     "reminderAddStep": "Add reminder",
     "reminderRemoveStep": "Remove reminder",
-    "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only."
+    "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only.",
+    "resetConfirmTitle": "Reset to the default text?",
+    "deactivateConfirmTitle": "Deactivate this template?",
+    "deactivateAction": "Deactivate"
   },
   "Finance": {
     "exportCsv": "Export CSV",

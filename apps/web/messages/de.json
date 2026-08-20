@@ -18,7 +18,11 @@
     "clearSearch": "Suche löschen",
     "save": "Speichern",
     "saving": "Wird gespeichert…",
-    "saved": "Gespeichert"
+    "saved": "Gespeichert",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "remove": "Entfernen",
+    "reset": "Zurücksetzen"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ Einheiten",
     "filterSessionsMaxOnly": "≤{max} Einheiten",
     "statsContactsCount": "{count, plural, one {# Kontakt} other {# Kontakte}}",
-    "statsActiveCount": "{count} aktiv"
+    "statsActiveCount": "{count} aktiv",
+    "subHistoryDeleteTitle": "Diesen Verlaufseintrag löschen?",
+    "subHistoryDeleteBody": "Damit wird der Nachweis entfernt, dass {name} dieses Abo hatte. Es wird nichts erstattet und der aktuelle Stand ändert sich nicht.",
+    "affiliationRemoveTitle": "Diese Zugehörigkeit entfernen?",
+    "affiliationRemoveBody": "{name} verliert diese Zugehörigkeit und alles, was davon abhängt: Zugang zu geschützten Aktivitäten, Mitgliederpreise und eine anstehende Verlängerung."
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -1171,7 +1179,8 @@
     },
     "eventDayOf": "Tag {day} von {total}",
     "eventFrom": "ab",
-    "eventUntil": "bis"
+    "eventUntil": "bis",
+    "deleteEventConfirmTitle": "Dieses Event löschen?"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -5295,7 +5304,8 @@
       "save": "Speichern",
       "saving": "Wird gespeichert…"
     },
-    "deleteConfirm": "Ereignistyp „{name}“ löschen? Bestehende Ereignisse dieses Typs sind davon nicht betroffen."
+    "deleteConfirm": "Ereignistyp „{name}“ löschen? Bestehende Ereignisse dieses Typs sind davon nicht betroffen.",
+    "deleteConfirmTitle": "Diesen Event-Typ löschen?"
   },
   "Referrals": {
     "title": "Empfehlungsprogramm",
@@ -5706,7 +5716,8 @@
       "recipientsTruncated": "Es werden die ersten {shown} von {total} angezeigt.",
       "recipientsGone": "{count, plural, one {# Empfänger ist nicht mehr in deinen Kontakten} other {# Empfänger sind nicht mehr in deinen Kontakten}}",
       "recipientsNotRecorded": "Für diesen Lauf wurden keine Empfänger erfasst."
-    }
+    },
+    "deleteConfirmTitle": "Diese Automation löschen?"
   },
   "SettingsEmails": {
     "title": "E-Mails",
@@ -5743,7 +5754,10 @@
     "reminderOffsetHours": "{hours} Stunden vorher",
     "reminderAddStep": "Erinnerung hinzufügen",
     "reminderRemoveStep": "Erinnerung entfernen",
-    "reminderSmsNote": "SMS-Erinnerungen werden nur zwischen 08:00 und 21:00 Uhr versendet."
+    "reminderSmsNote": "SMS-Erinnerungen werden nur zwischen 08:00 und 21:00 Uhr versendet.",
+    "resetConfirmTitle": "Auf den Standardtext zurücksetzen?",
+    "deactivateConfirmTitle": "Diese Vorlage deaktivieren?",
+    "deactivateAction": "Deaktivieren"
   },
   "Finance": {
     "exportCsv": "CSV exportieren",

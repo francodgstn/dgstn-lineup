@@ -30,6 +30,7 @@ import type { EventTypeConfig, EventTypeField, EventTypeFieldType } from '@linyu
 import { PLUGIN_REGISTRY, containerManifestFor } from '@/plugins/registry'
 import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
 import { useTranslations } from 'next-intl'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,9 @@ function EventTypeFormDialog({
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function EventTypesPage() {
+  // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
+  const { confirm, confirmDialog } = useConfirm()
+  const tCommon = useTranslations('Common')
   const t = useTranslations('EventTypesSettings')
   // Plugin display names live in the Plugins namespace, beside the manifests'
   // nameKeys — this page credits a plugin without owning its copy.
@@ -239,7 +243,12 @@ export default function EventTypesPage() {
 
   async function handleDelete(type: EventTypeConfig) {
     if (!currentTeamId) return
-    if (!window.confirm(t('deleteConfirm', { name: type.name }))) return
+    const okDeleteType = await confirm({
+      title: t('deleteConfirmTitle'),
+      description: t('deleteConfirm', { name: type.name }),
+      confirmLabel: tCommon('delete'),
+    })
+    if (!okDeleteType) return
     await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, EVENT_TYPES_SUBCOLLECTION, type.id))
     invalidate()
   }
@@ -377,6 +386,7 @@ export default function EventTypesPage() {
           onClose={() => { setFormOpen(false); setEditing(null) }}
         />
       )}
+      {confirmDialog}
     </div>
   )
 }

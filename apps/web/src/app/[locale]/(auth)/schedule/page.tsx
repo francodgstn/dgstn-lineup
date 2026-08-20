@@ -97,6 +97,7 @@ import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
 import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
 import { PlacesSheet } from '@/components/schedule/PlacesSheet'
 import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -920,6 +921,8 @@ function ListItemRow({
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
+  // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
+  const { confirm, confirmDialog } = useConfirm()
   const { currentTeamId, user, team, isOrgAdmin } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Calendar')
@@ -1009,7 +1012,12 @@ export default function CalendarPage() {
     : ''
 
   const handleDeleteEvent = async (e: Event) => {
-    if (!window.confirm(t('deleteEventConfirm', { title: e.title }))) return
+    const okDeleteEvent = await confirm({
+      title: t('deleteEventConfirmTitle'),
+      description: t('deleteEventConfirm', { title: e.title }),
+      confirmLabel: tCommon('delete'),
+    })
+    if (!okDeleteEvent) return
     await updateDoc(doc(db, EVENTS_COLLECTION, e.id), { deleted_at: serverTimestamp() })
     invalidateEvents()
   }
@@ -1607,6 +1615,7 @@ export default function CalendarPage() {
           />
         </>
       )}
+      {confirmDialog}
     </div>
   )
 }

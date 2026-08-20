@@ -18,7 +18,11 @@
     "clearSearch": "Cancella la ricerca",
     "save": "Salva",
     "saving": "Salvataggio…",
-    "saved": "Salvato"
+    "saved": "Salvato",
+    "cancel": "Annulla",
+    "delete": "Elimina",
+    "remove": "Rimuovi",
+    "reset": "Reimposta"
   },
   "Plans": {
     "free": "Free",
@@ -926,7 +930,11 @@
     "filterSessionsMinOnly": "{min}+ sessioni",
     "filterSessionsMaxOnly": "≤{max} sessioni",
     "statsContactsCount": "{count, plural, one {# contatto} other {# contatti}}",
-    "statsActiveCount": "{count} attivi"
+    "statsActiveCount": "{count} attivi",
+    "subHistoryDeleteTitle": "Eliminare questa voce dello storico?",
+    "subHistoryDeleteBody": "Rimuove la traccia del fatto che {name} ha avuto questo abbonamento. Non rimborsa nulla e non cambia ciò che ha ora.",
+    "affiliationRemoveTitle": "Rimuovere questa affiliazione?",
+    "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -1171,7 +1179,8 @@
     },
     "eventDayOf": "Giorno {day} di {total}",
     "eventFrom": "dalle",
-    "eventUntil": "fino alle"
+    "eventUntil": "fino alle",
+    "deleteEventConfirmTitle": "Eliminare questo evento?"
   },
   "Events": {
     "title": "Eventi",
@@ -5295,7 +5304,8 @@
       "save": "Salva",
       "saving": "Salvataggio…"
     },
-    "deleteConfirm": "Eliminare il tipo di evento «{name}»? Gli eventi di questo tipo non saranno interessati."
+    "deleteConfirm": "Eliminare il tipo di evento «{name}»? Gli eventi di questo tipo non saranno interessati.",
+    "deleteConfirmTitle": "Eliminare questo tipo di evento?"
   },
   "Referrals": {
     "title": "Programma di referral",
@@ -5706,7 +5716,8 @@
       "recipientsTruncated": "Vengono mostrati i primi {shown} su {total}.",
       "recipientsGone": "{count, plural, one {# destinatario non è più tra i tuoi contatti} other {# destinatari non sono più tra i tuoi contatti}}",
       "recipientsNotRecorded": "Per questa esecuzione non sono stati registrati destinatari."
-    }
+    },
+    "deleteConfirmTitle": "Eliminare questa automazione?"
   },
   "SettingsEmails": {
     "title": "Email",
@@ -5743,7 +5754,10 @@
     "reminderOffsetHours": "{hours} ore prima",
     "reminderAddStep": "Aggiungi promemoria",
     "reminderRemoveStep": "Rimuovi promemoria",
-    "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00."
+    "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00.",
+    "resetConfirmTitle": "Reimpostare il testo predefinito?",
+    "deactivateConfirmTitle": "Disattivare questo modello?",
+    "deactivateAction": "Disattiva"
   },
   "Finance": {
     "exportCsv": "Esporta CSV",

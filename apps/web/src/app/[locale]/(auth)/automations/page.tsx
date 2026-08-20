@@ -102,6 +102,7 @@ import { RunHistoryDialog } from './RunHistoryDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useContactGroups, flattenGroupTree, isDynamicGroup } from '@/plugins/contact-groups/hooks'
 import type { ContactGroup } from '@linyup/shared'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -1942,6 +1943,9 @@ function RuleDialog({
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function AutomationsPage() {
+  // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
+  const { confirm, confirmDialog } = useConfirm()
+  const tCommon = useTranslations('Common')
   const t = useTranslations('Automations')
   // The dashboard's quick action for one rule: `/automations?run={ruleId}`.
   // Read once — the card it names opens its RUN confirmation on mount, which is
@@ -2093,7 +2097,13 @@ export default function AutomationsPage() {
   }
 
   async function handleDelete(rule: AutomationRule) {
-    if (!currentTeamId || !confirm(t('deleteConfirm', { name: rule.name }))) return
+    if (!currentTeamId) return
+    const ok = await confirm({
+      title: t('deleteConfirmTitle'),
+      description: t('deleteConfirm', { name: rule.name }),
+      confirmLabel: tCommon('delete'),
+    })
+    if (!ok) return
     await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, 'automation_rules', rule.id))
     invalidateRules()
   }
@@ -2354,6 +2364,7 @@ export default function AutomationsPage() {
           )}
         </>
       )}
+      {confirmDialog}
     </>
   )
 }
