@@ -200,7 +200,7 @@ export default function DashboardPage() {
               The figure block opposite runs ~275px, so it fits the row without
               setting it — the day still owns the height. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            <div className="lg:col-span-7 lg:h-[264px]">
+            <div className="lg:col-span-7 lg:h-full lg:min-h-[264px]">
               <TodayPanel teamId={currentTeamId} />
             </div>
             <div className="lg:col-span-5">
