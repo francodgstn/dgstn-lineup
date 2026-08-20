@@ -22,11 +22,24 @@
  * a legend that both align left. It was centred only because it used to span
  * the page.
  *
- * IT MUST NOT READ AS A SYSTEM MESSAGE. Beside real figures, a small italic
- * grey line looks like a status or a warning. The treatment is unmistakably a
- * quotation and nothing else: a muted quote glyph, upright text (no italic), an
- * em-dashed attribution — and `figure`/`blockquote`/`figcaption` markup, so it
- * announces itself as an aside to a screen reader too.
+ * IT MUST NOT READ AS A SYSTEM MESSAGE. Beside real figures, a small grey line
+ * looks like a status or a warning. The treatment is unmistakably a quotation
+ * and nothing else: a muted quote glyph, an em-dashed attribution set to the
+ * RIGHT, and `figure`/`blockquote`/`figcaption` markup, so it announces itself
+ * as an aside to a screen reader too.
+ *
+ * ITALIC, REVERSED (Franco, 2026-08-21). This comment used to say "upright text
+ * (no italic)" and gave the reason above — that italic grey reads as a system
+ * notice. Seen on the page it does the opposite: with the glyph opening it and
+ * the attribution closing it right-aligned, the slant is what makes it read as
+ * a pull-quote rather than as a caption nobody placed. The old reasoning is
+ * kept here because it is still the right worry; it just turned out not to
+ * describe this treatment.
+ *
+ * NO RULE ABOVE IT. One was tried this same day and removed: the Trends seam
+ * already draws a divider a few rows below, and two horizontal lines that close
+ * to each other rule off nothing — they just box the column in. Whitespace and
+ * the glyph carry the separation.
  */
 
 import { getDailyQuote } from '@/data/quotes'
@@ -34,25 +47,22 @@ import { getDailyQuote } from '@/data/quotes'
 export function DailyAside() {
   const quote = getDailyQuote()
   return (
-    // RULED OFF FROM THE DONUT ABOVE IT (Franco, 2026-08-21). The quote sits at
-    // the foot of a column whose other occupant is a chart with a legend, and
-    // with only air between them a reader coming down the column meets the
-    // quote as if it were one more legend row. A muted rule says "different
-    // kind of thing" in a way that whitespace at this scale cannot.
-    //
-    // The rule and its padding are paid for out of the column's OWN slack: the
-    // column is `justify-between` at a fixed height, so a taller quote eats the
-    // free air above it rather than pushing the page down. That matters because
-    // this element already sits on the fold — see the dashboard page's row 2
-    // note, and never let this be the block that gives way.
-    <figure className="border-t pt-4">
-      <blockquote className="text-sm leading-relaxed text-muted-foreground">
-        <span aria-hidden className="font-heading mr-1 text-base text-primary/25">
+    <figure>
+      <blockquote className="text-sm italic leading-relaxed text-muted-foreground">
+        {/* The glyph stays UPRIGHT while the text slants — a slanted quotation
+            mark beside slanted text loses the shape that identifies it. */}
+        <span aria-hidden className="font-heading mr-1 text-base not-italic text-primary/25">
           &ldquo;
         </span>
         {quote.text}
       </blockquote>
-      <figcaption className="mt-1 text-xs text-muted-foreground/60">— {quote.author}</figcaption>
+      {/* Right-aligned, which is where an attribution goes when the thing it
+          attributes is a quotation rather than a caption: it closes the block
+          instead of starting a new left-aligned line under a column of other
+          left-aligned lines. */}
+      <figcaption className="mt-1 text-right text-xs text-muted-foreground/60">
+        — {quote.author}
+      </figcaption>
     </figure>
   )
 }
