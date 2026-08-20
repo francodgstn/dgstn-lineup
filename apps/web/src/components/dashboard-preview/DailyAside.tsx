@@ -34,7 +34,18 @@ import { getDailyQuote } from '@/data/quotes'
 export function DailyAside() {
   const quote = getDailyQuote()
   return (
-    <figure>
+    // RULED OFF FROM THE DONUT ABOVE IT (Franco, 2026-08-21). The quote sits at
+    // the foot of a column whose other occupant is a chart with a legend, and
+    // with only air between them a reader coming down the column meets the
+    // quote as if it were one more legend row. A muted rule says "different
+    // kind of thing" in a way that whitespace at this scale cannot.
+    //
+    // The rule and its padding are paid for out of the column's OWN slack: the
+    // column is `justify-between` at a fixed height, so a taller quote eats the
+    // free air above it rather than pushing the page down. That matters because
+    // this element already sits on the fold — see the dashboard page's row 2
+    // note, and never let this be the block that gives way.
+    <figure className="border-t pt-4">
       <blockquote className="text-sm leading-relaxed text-muted-foreground">
         <span aria-hidden className="font-heading mr-1 text-base text-primary/25">
           &ldquo;
