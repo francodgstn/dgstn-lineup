@@ -12,9 +12,11 @@ import {
   ORGANIZATIONS_COLLECTION,
   ORG_PLACES_SUBCOLLECTION,
   isPublicSurface,
+  SITE_MENU_MAX_DEPTH,
 } from '@linyup/shared'
 import type {
   PublishedSite,
+  SiteMenuItem,
   SiteMeta,
   SiteSurfaceLinkConfig,
   WebsiteSection,
@@ -140,6 +142,67 @@ export function sanitizeContactSection(d: Dict, id: string): ContactSection {
     mapQuery: optStr(d.mapQuery, 400),
     showSocial: bool(d.showSocial),
   }) as unknown as ContactSection
+}
+
+/**
+ * The header menu tree.
+ *
+ * EVERY FIELD IS RE-DERIVED, like every other published field — the draft is
+ * authored by a manager but `site_published` is world-readable, so a stored menu
+ * is untrusted input. Three things this enforces that the editor also enforces,
+ * because the editor is not the only thing that can write a draft:
+ *
+ *  • DEPTH. Recursion stops at SITE_MENU_MAX_DEPTH; anything deeper is dropped
+ *    rather than flattened, so a hand-edited draft cannot publish a menu the
+ *    renderer would have to guess at.
+ *  • URL TARGETS go through `safeUrl`, the same guard every other published link
+ *    uses — an unchecked one here would be a `javascript:` URL in a public header.
+ *  • BREADTH. A cap per level, so a malformed draft cannot publish thousands of
+ *    rows into a header.
+ *
+ * A section target is NOT checked against the published sections here: the
+ * renderer already drops an item whose section is missing, and doing it twice
+ * would mean this function had to run after `enrichSectionsWithPlaces`.
+ */
+const MENU_MAX_PER_LEVEL = 24
+
+function sanitizeMenu(raw: unknown, depth = 1): SiteMenuItem[] | undefined {
+  if (!Array.isArray(raw) || depth > SITE_MENU_MAX_DEPTH) return undefined
+  const items = raw
+    .slice(0, MENU_MAX_PER_LEVEL)
+    .map((entry): SiteMenuItem | null => {
+      const d = asDict(entry)
+      const id = optStr(d.id, 64)
+      if (!id) return null
+      const t = asDict(d.target)
+      let target: SiteMenuItem['target'] | null = null
+      if (t.kind === 'section') {
+        const sectionId = optStr(t.sectionId, 64)
+        if (sectionId) target = { kind: 'section', sectionId }
+      } else if (t.kind === 'surface') {
+        // The real guard, not a cast: an unknown surface would publish a menu
+        // row the renderer cannot resolve, and it would render as nothing with
+        // no way to tell why.
+        const surface = optStr(t.surface, 32)
+        if (surface && isPublicSurface(surface)) target = { kind: 'surface', surface }
+      } else if (t.kind === 'url') {
+        const url = safeUrl(t.url)
+        if (url) target = { kind: 'url', url }
+      } else if (t.kind === 'none') {
+        target = { kind: 'none' }
+      }
+      if (!target) return null
+      const label = optStr(d.label, 120)
+      const children = sanitizeMenu(d.children, depth + 1)
+      return clean({
+        id,
+        target,
+        label: label || undefined,
+        children: children?.length ? children : undefined,
+      }) as SiteMenuItem
+    })
+    .filter((x): x is SiteMenuItem => x !== null)
+  return items.length ? items : undefined
 }
 
 function sanitizeSection(raw: unknown): WebsiteSection | null {
@@ -427,6 +490,9 @@ export const publishWebsite = onCall(async (request) => {
     name,
     meta: sanitizeMeta(draft.meta, name),
     sections,
+    // Absent ⇒ the renderer derives the old two-run header, so a site that has
+    // never opened the menu editor publishes exactly what it published before.
+    menu: sanitizeMenu(draft.menu),
     socialLinks: socialLinks.length ? socialLinks : undefined,
     showBranding: plan === 'free' ? true : undefined,
     published_at: FieldValue.serverTimestamp() as unknown as PublishedSite['published_at'],

@@ -15,6 +15,8 @@ import {
   Copy,
   Trash2,
   Eye,
+  ListTree,
+  ListPlus,
   EyeOff,
   ExternalLink,
   Check,
@@ -53,10 +55,20 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DynamicIcon } from '@/components/ui/icon-picker'
-import { SurfaceLinksEditor } from './SurfaceLinksEditor'
 import { ColorPicker } from '@/components/ui/color-picker'
-import type { SiteDraft, SiteMeta, WebsiteSection, WebsiteSectionType } from '@linyup/shared'
-import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
+import type {
+  PublicSurface,
+  SiteDraft,
+  SiteMenuItem,
+  SiteMeta,
+  WebsiteSection,
+  WebsiteSectionType,
+} from '@linyup/shared'
+import { deriveSiteMenu } from '@linyup/shared'
+import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
+import { type RenderableSite } from '@/components/site/WebsiteRenderer'
+import { PreviewOverlay } from '@/plugins/website/PreviewOverlay'
+import { MenuPanel } from '@/plugins/website/MenuPanel'
 import { sectionNavLabel } from '@/components/site/sections'
 import { SectionEditor } from '@/plugins/website/SectionEditor'
 import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugins/website/hooks'
@@ -194,14 +206,15 @@ function AppearancePanel({
           </p>
         </div>
 
-        {/* Links to the studio's other public pages. The list is derived from
-            what's actually live (shop, Space, documents), so a newly-enabled
-            plugin appears here without editing the site — these controls only
-            record the studio's deviations from that. */}
-        <SurfaceLinksEditor
-          links={meta.header.surfaceLinks}
-          onChange={(surfaceLinks) => setHeader({ surfaceLinks })}
-        />
+        {/* Shop / My space / Documents USED TO BE CONFIGURED HERE, as a list of
+            per-surface hide/relabel/reorder overrides. They were only ever in
+            appearance because there was nowhere else: they were derived links in
+            a run of their own, orderable among themselves and nothing else.
+            They are ordinary menu items now — added, renamed, nested and ordered
+            beside everything else in the Menu editor, which is where a studio
+            looks for them. `SiteHeader.surfaceLinks` stays in the type and is
+            still honoured when deriving a menu for a site that has never been
+            edited, so no existing header changes. */}
       </div>
 
       <label className="flex items-center justify-between rounded-lg border p-3">
@@ -269,6 +282,9 @@ export default function WebsiteBuilderPage() {
   // last-resort nav labels a visitor would see when a section has no heading.
   const tSite = useTranslations('Site')
   const tCommon = useTranslations('Common')
+  // Same namespace the live site nav uses, so a menu row reads as it will publish.
+  const tSurface = useTranslations('PublicSurfaceNav')
+  const { flags: surfaceFlags } = usePublicSurfaces()
   const { user, currentTeamId, team } = useAuth()
   const qc = useQueryClient()
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
@@ -279,6 +295,7 @@ export default function WebsiteBuilderPage() {
   const [dirty, setDirty] = useState(false)
   const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
   const [openId, setOpenId] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -448,12 +465,47 @@ export default function WebsiteBuilderPage() {
     : draft.enabled
       ? t('statusPublished')
       : t('statusDraft')
+  // THE MENU THE EDITOR WORKS ON. Absent in storage ⇒ derive today's layout, so
+  // a studio that has never opened this tab sees exactly the menu their site
+  // already has and can start rearranging it rather than rebuilding it. The
+  // first save stores a tree and that wins from then on.
+  // The linkable surfaces that are actually live — booking is excluded because it
+  // has its own header CTA. Same list and same source as SurfaceLinksEditor.
+  const liveSurfaces: PublicSurface[] = (['shop', 'space', 'documents'] as const).filter(
+    (sf) =>
+      sf === 'shop'
+        ? surfaceFlags.shopLive
+        : sf === 'space'
+          ? surfaceFlags.spaceLive
+          : surfaceFlags.documentsLive
+  )
+
+  const menu: SiteMenuItem[] =
+    draft?.menu ??
+    deriveSiteMenu({ sections: draft?.sections ?? [], surfaceLinks: liveSurfaces.map((surface) => ({ surface })) })
+
+  function setMenu(next: SiteMenuItem[]) {
+    setDraft((d) => (d ? { ...d, menu: next } : d))
+    setDirty(true)
+  }
+
+  /** Append a section to the end of the menu, from the section editor's button. */
+  function addSectionToMenu(section: WebsiteSection) {
+    setMenu([
+      ...menu,
+      { id: `m${Date.now().toString(36)}`, target: { kind: 'section', sectionId: section.id } },
+    ])
+  }
+
   const previewSite: RenderableSite = {
     teamId: draft.teamId,
     name: draft.name,
     slug: draft.slug,
     meta: draft.meta,
     sections: draft.sections,
+    // The menu being edited, so the overlay previews the tree as it stands —
+    // not the derived fallback it would show from an unsaved draft.
+    menu,
     socialLinks: team?.socialLinks,
   }
 
@@ -495,6 +547,13 @@ export default function WebsiteBuilderPage() {
               {t('unpublish')}
             </Button>
           )}
+          {/* Opens the overlay. It sits with Save and Publish rather than over the
+              editor because preview is now a deliberate act, not a thing in the
+              corner of your eye — see PreviewOverlay for why the column went. */}
+          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+            <Eye className="h-4 w-4" />
+            {t('preview')}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleSave} disabled={!dirty || saving}>
             {saving ? t('saving') : t('saveDraft')}
           </Button>
@@ -585,6 +644,24 @@ export default function WebsiteBuilderPage() {
                               </p>
                             </button>
                             <div className="flex items-center gap-0.5">
+                              {/* Adding a section to the menu is a ROW ACTION,
+                                  beside edit and duplicate, not a control buried
+                                  in the expanded body — you decide a section
+                                  belongs in the menu while looking at the list,
+                                  and it cost an expand-and-scroll to reach.
+                                  Never for the hero: it is the top of the page
+                                  and is not a menu destination. */}
+                              {s.type !== 'hero' && (
+                                <button
+                                  type="button"
+                                  onClick={() => addSectionToMenu(s)}
+                                  title={t('addToMenu')}
+                                  aria-label={t('addToMenu')}
+                                  className="rounded p-1 hover:bg-muted"
+                                >
+                                  <ListPlus className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => updateSection(s.id, { hidden: !s.hidden })}
@@ -628,32 +705,18 @@ export default function WebsiteBuilderPage() {
                                 teamId={currentTeamId}
                                 onChange={(patch) => updateSection(s.id, patch)}
                               />
-                              {s.type !== 'hero' && (
-                                <>
-                                  <label className="flex items-center justify-between rounded-lg border p-3">
-                                    <span className="text-sm">{t('showInMenu')}</span>
-                                    <Switch
-                                      checked={s.showInNav !== false}
-                                      onCheckedChange={(v) => updateSection(s.id, { showInNav: v })}
-                                    />
-                                  </label>
-                                  {s.showInNav !== false && (
-                                    <div className="space-y-1.5">
-                                      <Label className="text-sm">{t('menuLabel')}</Label>
-                                      <Input
-                                        value={s.menuLabel ?? ''}
-                                        onChange={(e) =>
-                                          updateSection(s.id, { menuLabel: e.target.value || undefined })
-                                        }
-                                        placeholder={sectionNavLabel(s, tSite)}
-                                        maxLength={120}
-                                        className="h-9"
-                                      />
-                                      <p className="text-xs text-muted-foreground">{t('menuLabelHint')}</p>
-                                    </div>
-                                  )}
-                                </>
-                              )}
+                              {/* NO "menu label" FIELD HERE ANY MORE. A menu
+                                  ENTRY carries its own label, and a section can
+                                  now appear in the menu more than once — so a
+                                  single field on the section could not say which
+                                  entry it was naming, and two places to write one
+                                  name is how they drift. The name is edited where
+                                  the entry is.
+
+                                  `SectionBase.menuLabel` survives in the type as
+                                  the fallback `sectionNavLabel` reads when an
+                                  entry has no label of its own; it is no longer
+                                  authored here. */}
                             </div>
                           )}
                         </div>
@@ -693,17 +756,46 @@ export default function WebsiteBuilderPage() {
           )}
         </div>
 
-        {/* Right: sticky preview */}
-        <div className="space-y-2 lg:sticky lg:top-6 lg:w-[420px] lg:flex-shrink-0 lg:self-start">
-          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <Eye className="h-3.5 w-3.5" />
-            {t('preview')}
+        {/* ── THE MENU, BESIDE THE PAGE IT ORDERS ────────────────────────────
+            This is the column the sticky preview used to occupy. It earns the
+            space better: arranging a menu means looking at the sections it
+            points at, and a separate tab made that a round trip. It shows only
+            with the Sections tab for the same reason — beside Appearance or the
+            embed snippets it would be answering a question nobody asked. */}
+        {tab === 'sections' && (
+          <div className="space-y-2 lg:w-[420px] lg:flex-shrink-0 lg:self-start">
+            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <ListTree className="h-3.5 w-3.5" />
+              {t('tabMenu')}
+            </div>
+            <MenuPanel
+              menu={menu}
+              sections={draft.sections}
+              surfaces={liveSurfaces}
+              surfaceLabel={(sf) => tSurface(sf as Parameters<typeof tSurface>[0])}
+              sectionLabel={(sec) => sectionNavLabel(sec, tSite)}
+              onChange={setMenu}
+            />
           </div>
-          <div className="max-h-[calc(100vh-9rem)] overflow-y-auto rounded-xl border shadow-sm">
-            <WebsiteRenderer site={previewSite} preview />
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* The preview opens over the page rather than living beside it — see the
+          note on PreviewOverlay for why a 420px column was showing the wrong
+          rendering, and what that column's width is now spent on. */}
+      <PreviewOverlay
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        site={previewSite}
+        // Labels are what a preview is read for; the hrefs are inert under
+        // `preview` anyway, so they point at the real public paths without
+        // needing the locale-aware builder the live site uses.
+        surfaceLinks={liveSurfaces.map((surface) => ({
+          surface,
+          href: `/public/${slug}/${surface}`,
+          label: tSurface(surface as Parameters<typeof tSurface>[0]),
+        }))}
+      />
 
       {/* Delete confirm */}
       <AlertDialog

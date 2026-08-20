@@ -34,7 +34,7 @@
 // prefix above is off the table — these URLs are in bookmarks, bio-links and
 // printed QR codes.
 //
-// It RENDERS inside the settings shell (see (hub)/layout.tsx) — it is a settings
+// It RENDERS inside the settings shell (see ./layout.tsx) — it is a settings
 // section, and was the only one that read as a bare full page (UX-61).
 //
 // Layout is hero + list:

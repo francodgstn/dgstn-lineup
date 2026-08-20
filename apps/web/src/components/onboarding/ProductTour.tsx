@@ -15,26 +15,34 @@ let autoStartedThisSession = false
 /**
  * The first-run product tour.
  *
- * WHAT IT TEACHES (UX-47). It used to spend its steps on the CHROME — theme and
- * language, the nav container, the shortcuts block, quick search, How-to — and
- * never once said the words activities, sessions, bookings or payments. A
- * studio finished it knowing how to recolour the sidebar and nothing about the
- * product. It now walks the path a studio actually walks:
+ * WHAT IT TEACHES. Three steps over the sidebar's three regions, in the order a
+ * reader meets them:
  *
- *     activity → session → booking → payment
+ *     the working areas -> quick access -> search and the utilities
  *
- * and ends at the setup checklist, which is that same path with the studio's
- * own data filled in.
+ * It is deliberately SHORT. An earlier version spent seven steps walking
+ * activity -> session -> booking -> payment with a step each; the substance of
+ * that path now lives in the working-areas step's copy, which names it, while
+ * the steps themselves stay on the one thing a first run has to deliver — where
+ * things are. (UX-47's objection was that a tour taught the CHROME and never
+ * said the words activities, sessions, bookings or payments. Naming them here is
+ * what keeps that fixed; the copy keys for the per-stage steps are retained, so
+ * they can come back as steps if this proves too thin.)
  *
- * WHY THE ANCHORS ARE OPTIONAL. The nav's working areas are an ACCORDION — only
- * one of Run / Offer / Grow is open at a time, and the closed ones sit inside a
- * `grid-rows-[0fr]` panel, present in the DOM at zero height. Highlighting one
- * of those would frame nothing, so each product step attaches to its nav row
- * only when that row is actually visible, and otherwise runs as a centred card
- * (driver.js renders a step with no `element` that way). The tour therefore
- * says the same thing whatever the reader last had open — which is the property
- * a first-run explanation needs most.
- */
+ * WHY THE ANCHORS ARE STILL OPTIONAL. Every region below is always rendered, so
+ * in practice all three anchor. `anchor()` stays because the sidebar is hidden
+ * under `md` and because a future step may point at something conditional —
+ * driver.js renders a step with no `element` as a centred card, which is a
+ * degradation worth keeping rather than a crash.
+ *
+ * TWO ANCHORS DIED WHEN THE NAV AND DASHBOARD CHANGED, and both are gone from
+ * the step list rather than left to silently centre themselves:
+ *   - `setup-checklist` — the component was deleted when the new dashboard
+ *     replaced the old one, so its step described a card that no longer exists.
+ *   - `nav-howTo` — How-to has been an icon in the utility row for a while, and
+ *     is now inside the collapsed "More" flyout as well. It is covered by the
+ *     utilities step instead.
+  */
 
 /** A step anchors to `selector` only if it is on screen — see the note above. */
 function anchor(selector: string): { element?: string } {
@@ -82,60 +90,41 @@ export function ProductTour() {
         steps: [
           { popover: { title: t('tour.welcomeTitle'), description: t('tour.welcomeBody') } },
           {
-            ...anchor('[data-tour="nav-activities"]'),
+            // THE WORKING AREAS, as one region. Anchored to the container, not
+            // to a row inside it: Run / Offer / Grow is an accordion, so any
+            // single row may be collapsed to zero height, and a step that
+            // frames nothing is worse than one that frames the whole group.
+            // Naming the path in the copy is how this keeps UX-47's lesson —
+            // the reader is told what the sections are FOR, not just that they
+            // exist.
+            ...anchor('[data-tour="nav-features"]'),
             popover: {
-              title: t('tour.activitiesTitle'),
-              description: t('tour.activitiesBody'),
+              title: t('tour.featuresTitle'),
+              description: t('tour.featuresBody'),
               side,
               align,
             },
           },
           {
-            ...anchor('[data-tour="nav-calendar"]'),
+            // The head tiles and Shortcuts, framed together — see the wrapper's
+            // note in the sidebar. Always present, so this step always anchors.
+            ...anchor('[data-tour="nav-quick-access"]'),
             popover: {
-              title: t('tour.sessionsTitle'),
-              description: t('tour.sessionsBody'),
+              title: t('tour.quickAccessTitle'),
+              description: t('tour.quickAccessBody'),
               side,
               align,
             },
           },
           {
-            ...anchor('[data-tour="nav-bookings"]'),
+            // Search plus the three occasional destinations beside it. One step,
+            // because they are one row — and because collapsing the sidebar
+            // folds the last three behind a single "More" control, which a step
+            // per icon could not describe.
+            ...anchor('[data-tour="nav-utilities"]'),
             popover: {
-              title: t('tour.bookingsTitle'),
-              description: t('tour.bookingsBody'),
-              side,
-              align,
-            },
-          },
-          {
-            ...anchor('[data-tour="nav-payments"]'),
-            popover: {
-              title: t('tour.paymentsTitle'),
-              description: t('tour.paymentsBody'),
-              side,
-              align,
-            },
-          },
-          {
-            // The dashboard card — present on /dashboard until it's finished or
-            // dismissed; a centred card anywhere else.
-            ...anchor('[data-tour="setup-checklist"]'),
-            popover: {
-              title: t('tour.checklistTitle'),
-              description: t('tour.checklistBody'),
-              side: 'bottom',
-              align,
-            },
-          },
-          {
-            // `nav-howTo` has had no element since How-to moved into the
-            // utility icon row, so this step reads as a centred card and its
-            // copy names where the icon is rather than saying "here".
-            ...anchor('[data-tour="nav-howTo"]'),
-            popover: {
-              title: t('tour.helpTitle'),
-              description: t('tour.helpBody'),
+              title: t('tour.utilitiesTitle'),
+              description: t('tour.utilitiesBody'),
               side,
               align,
             },

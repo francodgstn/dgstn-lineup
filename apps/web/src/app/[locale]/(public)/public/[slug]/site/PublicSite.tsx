@@ -172,6 +172,9 @@ export default function PublicSite({ slug }: { slug: string }) {
     // Studio overrides (hide / relabel / reorder) applied over what's live.
     return resolveSiteSurfaceLinks(site?.meta.header, liveSurfaces, (s) => tSurfaces(s)).map(
       ({ surface, label }) => ({
+        // `surface` is carried so a stored menu item can resolve its own href —
+        // the renderer looks links up by it rather than re-deriving URLs.
+        surface,
         href: publicHrefLocalized(locale, slug, surface, { from: 'site' }),
         label,
       })
