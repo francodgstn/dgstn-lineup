@@ -73,9 +73,6 @@
  */
 
 import { useTranslations, useLocale } from 'next-intl'
-import { Link } from '@/i18n/navigation'
-import type { Route } from 'next'
-import { CalendarPlus, UserPlus } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import { useSetupChecklist } from '@/hooks/useSetupChecklist'
@@ -87,6 +84,7 @@ import { TeamNotificationsBanner } from '@/components/dashboard/TeamNotification
 import { TodayPanel } from '@/components/dashboard-preview/TodayPanel'
 import { QueuePanel } from '@/components/dashboard-preview/QueuePanel'
 import { FiguresBlock } from '@/components/dashboard-preview/FiguresBlock'
+import { QuickActionsBar } from '@/components/dashboard/QuickActionsBar'
 import { RosterDonut } from '@/components/dashboard-preview/RosterDonut'
 import { DailyAside } from '@/components/dashboard-preview/DailyAside'
 import { WeekSection } from '@/components/dashboard-preview/WeekSection'
@@ -132,26 +130,6 @@ function Header({ children }: { children: React.ReactNode }) {
   )
 }
 
-function HeaderAction({
-  href,
-  icon: Icon,
-  label,
-}: {
-  href: Route
-  icon: React.ElementType
-  label: string
-}) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-muted/60"
-    >
-      <Icon className="h-3.5 w-3.5 text-primary" />
-      {label}
-    </Link>
-  )
-}
-
 export default function DashboardPage() {
   const t = useTranslations('NewDashboard')
   const { currentTeamId, team } = useAuth()
@@ -173,12 +151,7 @@ export default function DashboardPage() {
       <TeamNotificationsBanner />
 
       <Header>
-        <HeaderAction
-          href={'/schedule' as Route}
-          icon={CalendarPlus}
-          label={t('actionNewSession')}
-        />
-        <HeaderAction href={'/contacts' as Route} icon={UserPlus} label={t('actionNewContact')} />
+        <QuickActionsBar />
       </Header>
 
       {resolving && <Skeleton className="h-[264px] w-full rounded-xl" />}

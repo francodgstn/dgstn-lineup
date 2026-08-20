@@ -1,5 +1,6 @@
 'use client'
 
+import { useSearchParams } from 'next/navigation'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
@@ -63,6 +64,7 @@ import { SortableList, SortableItem, type SortableRenderProps } from '@/componen
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { Plus, Pencil, Copy, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react'
 import { ActivityScheduleSheet } from '@/components/activities/ActivityScheduleSheet'
+import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 
 // ─── archive confirm dialog ───────────────────────────────────────────────────
 
@@ -1604,7 +1606,13 @@ export default function ActivitiesPage() {
   const qc = useQueryClient()
   const t = useTranslations('Activities')
   const tq = useTranslations('QuickLinks')
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
+  // initializer, so clearing the param or closing the dialog is not undone by
+  // the next render — the same shape as `openOnAttention` on the contacts list.
+  const quickActionParams = useSearchParams()
+  const [dialogOpen, setDialogOpen] = useState(
+    () => quickActionParams.get(QUICK_ACTION_PARAM) === '1'
+  )
   const [editing, setEditing] = useState<Activity | null>(null)
   const [duplicating, setDuplicating] = useState<Activity | null>(null)
   const [archiving, setArchiving] = useState<Activity | null>(null)

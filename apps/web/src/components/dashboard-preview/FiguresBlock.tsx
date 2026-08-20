@@ -68,9 +68,10 @@
  * framed agenda and does NOT take the accent frame: the frame marks work, not
  * position and not importance.
  *
- * "Snapshot" stays set at `text-2xl font-black`, the loudest WORD on the page,
- * in a different channel from the loudest NUMBERS beneath it. It is the only
- * thing carried over from the column this block replaced.
+ * THE "Snapshot" HEADING IS GONE. It was set at `text-2xl font-black` — the
+ * loudest word on the page — and was the last thing carried over from the
+ * column this block replaced. It labelled the one block that needs no label,
+ * and it did so at the top of a column already over its height budget.
  *
  * DEGRADATION IS BY SUBTRACTION. Revenue is Studio-tier, so Free and Coach get
  * the 2x2 with no lead cell above it — a shorter block, not a holed one, and no
@@ -251,9 +252,12 @@ export function FiguresBlock({
 
   return (
     <div>
-      <h2 className="font-heading mb-4 text-2xl font-black leading-none tracking-tight text-heading">
-        {t('snapshotTitle')}
-      </h2>
+      {/* NO HEADING (Franco, 2026-08-21). "Snapshot" was the loudest word on the
+          page and it labelled the one block that needs no label: six captioned
+          figures under a greeting are self-evidently a summary, and the word
+          cost a 24px line plus its margin at the top of a column that was
+          already over its height budget. What it used to buy — a name for the
+          right-hand column — is now carried by the figures themselves. */}
 
       {/* THE LEAD CELL — full width, above the grid rather than inside it.
           A `col-span-2` cell would work too; a sibling above says more plainly

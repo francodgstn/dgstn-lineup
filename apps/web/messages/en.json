@@ -6783,5 +6783,18 @@
     "field_phone": "Phone number",
     "field_birthdate": "Date of birth",
     "field_address": "Address"
+  },
+  "QuickActions": {
+    "newSession": "New session",
+    "newContact": "New contact",
+    "recordPayment": "Record payment",
+    "newActivity": "New activity",
+    "studioQr": "Studio QR",
+    "configure": "Choose quick actions",
+    "pickerTitle": "Quick actions",
+    "pickerCount": "{used} of {max}",
+    "pickerHint": "Each one starts something. To reach a page, use the sidebar.",
+    "automationsGroup": "Run an automation",
+    "unnamedAutomation": "Untitled automation"
   }
 }

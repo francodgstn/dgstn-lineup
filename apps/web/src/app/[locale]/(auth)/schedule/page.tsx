@@ -1,5 +1,6 @@
 'use client'
 
+import { useSearchParams } from 'next/navigation'
 import { useState, useMemo, Fragment } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -95,6 +96,7 @@ import { VisibleCalendarsMenu } from '@/components/schedule/VisibleCalendarsMenu
 import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
 import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
 import { PlacesSheet } from '@/components/schedule/PlacesSheet'
+import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -942,8 +944,11 @@ export default function CalendarPage() {
   // CoachFilterMenu's header. Multi-select, because "what are Anna and Ben doing
   // this week" is an ordinary question the old single-select could not ask.
   const [coachIds, setCoachIds] = useState<string[]>([])
+  // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
+  // initializer, so closing the dialog is not undone by the next render.
+  const quickActionParams = useSearchParams()
   const [sessionDialog, setSessionDialog] = useState<{ open: boolean; editing: Session | null }>({
-    open: false,
+    open: quickActionParams.get(QUICK_ACTION_PARAM) === '1',
     editing: null,
   })
   const [deletingSession, setDeletingSession] = useState<Session | null>(null)
