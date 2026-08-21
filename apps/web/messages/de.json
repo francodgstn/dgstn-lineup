@@ -6557,8 +6557,6 @@
     "availabilityToActivities": "Terminarten und Dauern festlegen, die diese Zeiten anbieten",
     "promoCodesToPricing": "Aktive Codes neben den Preisen sehen, die sie reduzieren",
     "activitiesToSchedule": "Diese Lektionen im Kalender ansehen",
-    "activitiesToCatalogue": "Welche Abos das freischalten",
-    "plansToCatalogue": "Was jedes Abo freischaltet",
     "pricingToActivities": "Die Aktivitäten hinter diesen Preisen bearbeiten",
     "pricingToSubscriptions": "Die Abos hinter diesen Preisen bearbeiten"
   },
@@ -6848,16 +6846,18 @@
     "deadEndsClear": "Wieder alles anzeigen",
     "summaryClass": "{gated, plural, =0 {Für alle offen} one {# Abo kann buchen} other {# Abos können buchen}} · {rated, plural, =0 {kein Mitgliederpreis} one {# Mitgliederpreis} other {# mit Mitgliederpreis}}",
     "summaryAppointment": "Der Preis ist die Hürde · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
-    "summaryPlan": "{count, plural, =0 {Schaltet noch nichts frei} one {Mit # Aktivität verknüpft} other {Mit # Aktivitäten verknüpft}}"
+    "summaryPlan": "{count, plural, =0 {Schaltet noch nichts frei} one {Mit # Aktivität verknüpft} other {Mit # Aktivitäten verknüpft}}",
+    "backToActivities": "Zurück zu Aktivitäten",
+    "backToSubscriptions": "Zurück zu Abos"
   },
   "PagePurpose": {
     "activities": "Was du anbietest",
     "schedule": "Wann du es anbietest",
-    "subscriptions": "Wie du bezahlt wirst",
+    "subscriptions": "Was du verkaufst",
     "pricing": "Was Leute tatsächlich zahlen",
-    "activitiesNote": "Die Kurse und Termine, die du anbietest — einmal hier definiert und dann beliebig oft angesetzt.",
-    "scheduleNote": "Alle Termine im Kalender, einmalig oder wiederkehrend, mit den jeweiligen Buchungen.",
-    "subscriptionsNote": "Mitgliedschaften, Pakete und Abos — was sie kosten, wie oft sie verlängert werden und was sie freischalten.",
+    "activitiesNote": "Die Kurse und Termine, die du anbietest. Einmal hier definiert, dann beliebig oft angesetzt.",
+    "scheduleNote": "Alle Termine im Kalender, einzeln oder wiederkehrend, mit den jeweiligen Buchungen.",
+    "subscriptionsNote": "Mitgliedschaften, Pakete und Abos. Was sie kosten, wie oft sie verlängert werden und was sie freischalten.",
     "pricingNote": "Was jede Art von Kontakt zahlt — mit denselben Regeln berechnet wie bei einer echten Buchung."
   }
 }

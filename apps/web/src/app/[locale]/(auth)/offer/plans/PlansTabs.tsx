@@ -2,6 +2,9 @@
 
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
+import { Waypoints } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import { buttonVariants } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SubscriptionsPanel } from '@/components/subscriptions/SubscriptionsPanel'
 
@@ -18,19 +21,30 @@ import { SubscriptionsPanel } from '@/components/subscriptions/SubscriptionsPane
 export function PlansTabs() {
   const t = useTranslations('Nav')
   const tq = useTranslations('QuickLinks')
+  const tCat = useTranslations('OfferCatalogue')
 
-  // Quick links (UX-71). A plan's price is set here and proved somewhere else:
-  // the Catalogue is where it is attached to what it unlocks (replacing the
-  // picker that used to sit inside this page's dialog), and Pricing replays the
-  // result through the real resolver for each persona.
-  const quickLinks = [
-    { href: '/offer/catalogue' as Route, label: tq('plansToCatalogue') },
-    { href: '/offer/pricing' as Route, label: tq('plansToPricing') },
-  ]
+  // Quick link (UX-71): a plan's price is set here and proved on Pricing, which
+  // replays it through the real resolver for each persona. The catalogue is NOT
+  // in this line — it is a button, because "what does this plan actually open"
+  // is asked far too often to be muted text.
+  const quickLinks = [{ href: '/offer/pricing' as Route, label: tq('plansToPricing') }]
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('subscriptions')} purpose="subscriptions" quickLinks={quickLinks} />
+      <PageHeader
+        title={t('subscriptions')}
+        purpose="subscriptions"
+        quickLinks={quickLinks}
+        action={
+          <Link
+            href={'/offer/catalogue' as Route}
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            <Waypoints className="h-4 w-4 mr-1.5" />
+            {tCat('title')}
+          </Link>
+        }
+      />
       <SubscriptionsPanel />
     </div>
   )

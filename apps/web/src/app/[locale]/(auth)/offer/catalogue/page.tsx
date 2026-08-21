@@ -150,10 +150,28 @@ export default function CataloguePage() {
   const selectedPlan =
     selection?.kind === 'plan' ? plans.find((p) => p.id === selection.id) : undefined
 
+  // ── the way back ──
+  // Same markup as the course and document detail pages, but the target is NOT
+  // a fixed parent: this page has TWO of them. It is reached from Activities,
+  // from Subscriptions, from either editor's dialog and from a pricing warning,
+  // and it has no nav row of its own — so the sidebar cannot be the way back the
+  // way it is everywhere else, and a hardcoded parent would be wrong for half
+  // of the arrivals.
+  //
+  // Following the SELECTION is deterministic, never leaves the app (unlike
+  // history.back() on a deep link), and matches what the studio was just
+  // looking at: a plan in the pane means Subscriptions is where they came from,
+  // or at least where they were thinking.
+  const backToPlans = selection?.kind === 'plan'
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={t('title')}
+        back={{
+          href: (backToPlans ? '/offer/plans' : '/offer/activities') as Route,
+          label: backToPlans ? t('backToSubscriptions') : t('backToActivities'),
+        }}
         subtitle={t('subtitle')}
         quickLinks={[
           { href: '/offer/pricing' as Route, label: t('toPricing') },

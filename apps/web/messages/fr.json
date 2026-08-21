@@ -6557,8 +6557,6 @@
     "availabilityToActivities": "Définir les types de rendez-vous et les durées proposés par ces horaires",
     "promoCodesToPricing": "Voir vos codes actifs à côté des prix qu'ils réduisent",
     "activitiesToSchedule": "Voir ces cours dans le calendrier",
-    "activitiesToCatalogue": "Quels abonnements y donnent accès",
-    "plansToCatalogue": "Ce que chaque abonnement ouvre",
     "pricingToActivities": "Modifier les activités derrière ces prix",
     "pricingToSubscriptions": "Modifier les abonnements derrière ces prix"
   },
@@ -6848,16 +6846,18 @@
     "deadEndsClear": "Tout afficher à nouveau",
     "summaryClass": "{gated, plural, =0 {Ouvert à tous} one {# abonnement peut réserver} other {# abonnements peuvent réserver}} · {rated, plural, =0 {aucun tarif membre} one {# tarif membre} other {# avec tarif membre}}",
     "summaryAppointment": "Le prix fait office de porte · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
-    "summaryPlan": "{count, plural, =0 {N'ouvre encore rien} one {Lié à # activité} other {Lié à # activités}}"
+    "summaryPlan": "{count, plural, =0 {N'ouvre encore rien} one {Lié à # activité} other {Lié à # activités}}",
+    "backToActivities": "Retour aux activités",
+    "backToSubscriptions": "Retour aux abonnements"
   },
   "PagePurpose": {
     "activities": "Ce que vous proposez",
     "schedule": "Quand vous le proposez",
-    "subscriptions": "Comment vous êtes payé",
+    "subscriptions": "Ce que vous vendez",
     "pricing": "Ce que les gens paient vraiment",
-    "activitiesNote": "Les cours et rendez-vous que vous proposez — définis une fois ici, puis planifiés autant de fois que vous voulez.",
-    "scheduleNote": "Toutes les séances au calendrier, ponctuelles ou récurrentes, avec leurs réservations.",
-    "subscriptionsNote": "Adhésions, cartes et forfaits — leur prix, leur fréquence de renouvellement et ce qu'ils débloquent.",
+    "activitiesNote": "Les cours et rendez-vous que vous proposez. Définis une fois ici, puis planifiés autant de fois que vous voulez.",
+    "scheduleNote": "Toutes les séances au calendrier, uniques ou récurrentes, avec leurs réservations.",
+    "subscriptionsNote": "Adhésions, cartes et forfaits. Leur prix, leur fréquence de renouvellement et ce qu'ils débloquent.",
     "pricingNote": "Ce que paie chaque type de contact, recalculé avec les règles d'une vraie réservation."
   }
 }

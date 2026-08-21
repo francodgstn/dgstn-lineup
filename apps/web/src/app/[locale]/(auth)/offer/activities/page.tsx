@@ -55,7 +55,19 @@ import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
-import { Plus, Pencil, Copy, Archive, ImageIcon, X, GripVertical, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react'
+import {
+  Archive,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  GripVertical,
+  ImageIcon,
+  Pencil,
+  Plus,
+  Waypoints,
+  X,
+} from 'lucide-react'
 import { ActivityScheduleSheet } from '@/components/activities/ActivityScheduleSheet'
 import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 
@@ -1478,6 +1490,8 @@ export default function ActivitiesPage() {
   const qc = useQueryClient()
   const t = useTranslations('Activities')
   const tq = useTranslations('QuickLinks')
+  // The button's label IS the catalogue's page title, so the two cannot drift.
+  const tCat = useTranslations('OfferCatalogue')
   // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
   // initializer, so clearing the param or closing the dialog is not undone by
   // the next render — the same shape as `openOnAttention` on the contacts list.
@@ -1605,16 +1619,26 @@ export default function ActivitiesPage() {
       <PageHeader
         title={t('title')}
         purpose="activities"
-        subtitle={isLoading ? undefined : t('subtitle', { count: activities.length })}
-        quickLinks={[
-          { href: '/schedule' as Route, label: tq('activitiesToSchedule') },
-          { href: '/offer/catalogue' as Route, label: tq('activitiesToCatalogue') },
-        ]}
+        quickLinks={[{ href: '/schedule' as Route, label: tq('activitiesToSchedule') }]}
         action={
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            {t('newActivity')}
-          </Button>
+          <>
+            {/* The catalogue was a quick link, which is a line of muted text
+                below the fold on a phone and easy to read past on any screen.
+                It is the answer to "which plans open this", asked constantly —
+                so it gets a button. Outline, not primary: creating an activity
+                is still the thing this page is for. */}
+            <Link
+              href={'/offer/catalogue' as Route}
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              <Waypoints className="h-4 w-4 mr-1.5" />
+              {tCat('title')}
+            </Link>
+            <Button onClick={openNew}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {t('newActivity')}
+            </Button>
+          </>
         }
       />
 

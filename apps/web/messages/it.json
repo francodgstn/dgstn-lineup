@@ -6557,8 +6557,6 @@
     "availabilityToActivities": "Imposta i tipi di appuntamento e le durate offerte da questi orari",
     "promoCodesToPricing": "Vedi i codici attivi accanto ai prezzi che riducono",
     "activitiesToSchedule": "Vedi queste lezioni nel calendario",
-    "activitiesToCatalogue": "Quali abbonamenti li sbloccano",
-    "plansToCatalogue": "Cosa sblocca ogni abbonamento",
     "pricingToActivities": "Modifica le attività dietro questi prezzi",
     "pricingToSubscriptions": "Modifica gli abbonamenti dietro questi prezzi"
   },
@@ -6848,16 +6846,18 @@
     "deadEndsClear": "Mostra di nuovo tutto",
     "summaryClass": "{gated, plural, =0 {Aperto a tutti} one {# abbonamento può prenotare} other {# abbonamenti possono prenotare}} · {rated, plural, =0 {nessuna tariffa soci} one {# tariffa soci} other {# con tariffa soci}}",
     "summaryAppointment": "Il prezzo è la porta · {plans, plural, =0 {nessuna tariffa soci} one {# abbonamento con tariffa soci} other {# abbonamenti con tariffa soci}}",
-    "summaryPlan": "{count, plural, =0 {Non sblocca ancora nulla} one {Collegato a # attività} other {Collegato a # attività}}"
+    "summaryPlan": "{count, plural, =0 {Non sblocca ancora nulla} one {Collegato a # attività} other {Collegato a # attività}}",
+    "backToActivities": "Torna alle attività",
+    "backToSubscriptions": "Torna agli abbonamenti"
   },
   "PagePurpose": {
     "activities": "Cosa offri",
     "schedule": "Quando lo offri",
-    "subscriptions": "Come vieni pagato",
+    "subscriptions": "Cosa vendi",
     "pricing": "Quanto pagano davvero le persone",
-    "activitiesNote": "I corsi e gli appuntamenti che offri: definiti una volta qui, poi programmati quante volte vuoi.",
+    "activitiesNote": "I corsi e gli appuntamenti che offri. Definiti una volta qui, poi programmati quante volte vuoi.",
     "scheduleNote": "Tutte le sessioni sul calendario, singole o ricorrenti, con le relative prenotazioni.",
-    "subscriptionsNote": "Abbonamenti, pacchetti e tessere: quanto costano, ogni quanto si rinnovano e cosa sbloccano.",
+    "subscriptionsNote": "Abbonamenti, pacchetti e tessere. Quanto costano, ogni quanto si rinnovano e cosa sbloccano.",
     "pricingNote": "Quanto paga ogni tipo di contatto, ricalcolato con le stesse regole di una prenotazione reale."
   }
 }
