@@ -7,6 +7,7 @@ import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { bucketRateLimit } from '../utils/rateLimit'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
+import { reviewAccessCodeFor } from '../ops/reviewAccess'
 
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
@@ -36,6 +37,12 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
 
   const normalizedEmail = email.toLowerCase().trim()
 
+  // THE APP-STORE REVIEW ACCOUNT. Null for every ordinary caller — see
+  // ops/reviewAccess.ts for why this exists and what bounds it. Resolved before
+  // the per-email rate limit because it must skip that limit: five codes an
+  // hour would refuse a reviewer who retries, and the app would look broken.
+  const reviewCode = await reviewAccessCodeFor(normalizedEmail)
+
   let teamData: admin.firestore.DocumentData | null = null
   if (requestedTeamId) {
     teamData = await getTeam(requestedTeamId)
@@ -54,9 +61,11 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
     recentCodesQuery = recentCodesQuery.where('team_id', '==', requestedTeamId)
   }
 
-  const recentCodes = await recentCodesQuery.get()
-  if (recentCodes.size >= MAX_CODES_PER_HOUR) {
-    throw new HttpsError('resource-exhausted', 'Too many verification codes requested. Please wait before trying again.')
+  if (!reviewCode) {
+    const recentCodes = await recentCodesQuery.get()
+    if (recentCodes.size >= MAX_CODES_PER_HOUR) {
+      throw new HttpsError('resource-exhausted', 'Too many verification codes requested. Please wait before trying again.')
+    }
   }
 
   // Find contacts matching this email
@@ -125,8 +134,9 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
     teamName = teamNameMap[matchedTeamIds[0]] || teamName
   }
 
-  // Generate code and store
-  const code = crypto.randomInt(100000, 999999).toString()
+  // Generate code and store. The review account's code is FIXED and comes from
+  // `app_settings/review_access`; everyone else gets a fresh random one.
+  const code = reviewCode ?? crypto.randomInt(100000, 999999).toString()
   const expiresAt = Timestamp.fromDate(new Date(Date.now() + CODE_EXPIRY_MS))
 
   const docRef = await admin.firestore().collection('verification_codes').add({
@@ -153,8 +163,16 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
     `,
   })
 
-  await sendEmail({ to: normalizedEmail, subject: `Your Linyup verification code: ${code}`, html, text, teamId: requestedTeamId ?? undefined })
-  console.log(`Verification code sent to ${normalizedEmail}` + (requestedTeamId ? ` for team ${requestedTeamId}` : ''))
+  if (reviewCode) {
+    // NOT MAILED. The reviewer already has this code from App Store Connect, and
+    // sending it would put a static credential in an inbox for its whole
+    // lifetime. Logged instead, so Cloud Logging can answer "was it used, when"
+    // without reading the database.
+    console.log(`[review-otp] issued fixed code for ${normalizedEmail}` + (requestedTeamId ? ` (team ${requestedTeamId})` : '')) // eslint-disable-line no-console
+  } else {
+    await sendEmail({ to: normalizedEmail, subject: `Your Linyup verification code: ${code}`, html, text, teamId: requestedTeamId ?? undefined })
+    console.log(`Verification code sent to ${normalizedEmail}` + (requestedTeamId ? ` for team ${requestedTeamId}` : ''))
+  }
 
   return {
     success: true,

@@ -12,6 +12,7 @@ const TABS = [
   { href: '/settings/domains', label: 'Domains' },
   { href: '/settings/access', label: 'Access' },
   { href: '/settings/announcement', label: 'Announcement' },
+  { href: '/settings/demo-tenant', label: 'Demo tenant' },
 ]
 
 export function SettingsTabs() {
