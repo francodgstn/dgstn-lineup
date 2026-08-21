@@ -4512,7 +4512,8 @@
     "discountsNoneRunning": "Zurzeit läuft kein Rabatt.",
     "discountsManageLink": "Aktionscodes verwalten",
     "discountPercentOff": "{percent}% Rabatt",
-    "discountFixedPrice": "{price} mit diesem Code"
+    "discountFixedPrice": "{price} mit diesem Code",
+    "personaPickerLabel": "Wer fragt"
   },
   "PublicBooking": {
     "titleBookSession": "Eine Einheit buchen",

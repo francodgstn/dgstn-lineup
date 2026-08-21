@@ -4512,7 +4512,8 @@
     "discountsNoneRunning": "No discount is running right now.",
     "discountsManageLink": "Manage promo codes",
     "discountPercentOff": "{percent}% off",
-    "discountFixedPrice": "{price} with this code"
+    "discountFixedPrice": "{price} with this code",
+    "personaPickerLabel": "Who's asking"
   },
   "PublicBooking": {
     "titleBookSession": "Book a Session",
