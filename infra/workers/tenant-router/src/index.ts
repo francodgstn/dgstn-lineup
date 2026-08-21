@@ -39,7 +39,13 @@ interface Env {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // An unhandled bug in here must not take the zone down. With this, an
+    // exception forwards the request to the origin exactly as if no Worker were
+    // present — the `*/*` route means a throw would otherwise 5xx every proxied
+    // hostname at once.
+    ctx.passThroughOnException()
+
     const url = new URL(request.url)
     const tenantHost = url.hostname
 
@@ -52,16 +58,33 @@ export default {
     }
 
     // Any OTHER linyup.com hostname reaching this Worker means somebody
-    // orange-clouded a record that is supposed to be DNS-only (see the ⚠ note in
-    // wrangler.jsonc). There is no safe guess to make — this Worker does not
-    // know which backend that host belongs to — so it fails with a message that
-    // names the cause, rather than a 404 that reads like a missing page.
+    // orange-clouded a record that is meant to be DNS-only. It is NOT this
+    // Worker's traffic, so it is forwarded to whatever that hostname's own DNS
+    // record points at, untouched.
+    //
+    // THIS USED TO RETURN 503, AND THAT TOOK THE WHOLE ZONE DOWN (2026-08-21).
+    // Every record in the zone was proxied by accident; without a Worker they
+    // would all have kept working — Cloudflare would simply have forwarded to
+    // App Hosting — but this refused them, so linyup.com, app, ops and demo went
+    // down together. A `*/*` route makes every proxied record in the zone this
+    // Worker's problem, so its default for anything it does not own has to be
+    // "carry on", not "refuse".
+    //
+    // The same-zone fetch is safe: a Worker on a ROUTE cannot be the target of a
+    // same-zone fetch(), so this reaches the origin instead of re-entering here.
+    // (Cloudflare docs, workers/configuration/routing/routes.) Do not convert
+    // this Worker to a Custom Domain without revisiting that — Custom Domains
+    // CAN be same-zone fetch targets, which would make this an infinite loop.
+    //
+    // Proxying still silently breaks certificate renewal and flattens CNAMEs
+    // (it broke DKIM that day), so the misconfiguration still has to be found —
+    // that is `assertZoneRecordsUnproxied` in the daily tasks, not this line.
     if (tenantHost === 'linyup.com' || tenantHost.endsWith('.linyup.com')) {
-      return new Response(
-        `tenant-router received ${tenantHost}, which should be DNS-only (grey cloud) ` +
-          `on the linyup.com zone. Un-proxy that record.`,
-        { status: 503, headers: { 'content-type': 'text/plain' } },
+      console.warn(
+        `tenant-router: ${tenantHost} is PROXIED but should be DNS-only on the ` +
+          `linyup.com zone — passing through to origin. Un-proxy that record.`,
       )
+      return fetch(request)
     }
 
     const slug = env.TENANT_SLUG // PASS B resolves the slug HERE — see header
