@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "linyup-tenant-router",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-21",
+
+  // A WILDCARD route, and it has to be. Worker routes match the REQUEST
+  // hostname, so `origin.linyup.com/*` never fires for `book.theirdojo.ch` —
+  // pointing the fallback origin at a Worker is not enough on its own, which
+  // shows up as a 522 on the tenant domain while origin itself answers fine.
+  // Cloudflare's documented answer for SaaS is `*/*`, which captures every
+  // request entering the zone including customer vanity domains, with no
+  // per-tenant route to add ever.
+  //
+  // ⚠ THE RULE THIS DEPENDS ON: a wildcard route only reaches hostnames whose
+  // DNS records are PROXIED. Every linyup.com record — the apex, app, app-stg,
+  // demo, ops, ops-stg — is DNS-only (grey cloud), so none of them enter the
+  // edge and this Worker can never see them. Orange-cloud one of those and this
+  // Worker starts intercepting production traffic it has no idea how to serve.
+  // Do not proxy a linyup.com record while this route exists.
+  "routes": [{ "pattern": "*/*", "zone_name": "linyup.com" }],
+
+  "vars": {
+    // The SANDBOX backend: six seeded demo studios, no real customers.
+    // NOTE us-central1, not europe-west4 — the sandbox backend has not been
+    // moved to the EU (infra/README.md §5b, "Moving an existing App Hosting
+    // backend to the EU"). Verified serving: /public/ronin-grappling-academy
+    // and /de/public/… both return 200.
+    "ORIGIN": "https://linyup-web--linyup-sandbox.us-central1.hosted.app",
+
+    // PASS A only — one hostname, one studio, no lookup. Removed in Pass B when
+    // the slug comes from the custom hostname's own metadata.
+    "TENANT_SLUG": "ronin-grappling-academy"
+  },
+
+  "observability": { "enabled": true }
+}

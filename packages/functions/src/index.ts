@@ -249,6 +249,14 @@ export { registerSenderDomain, checkSenderDomain, useManagedSender } from './mai
 export { sendTestEmail } from './mail/sendTestEmail'
 export { handleBrevoWebhook } from './mail/handleBrevoWebhook'
 
+// Custom PUBLIC domains (Cloudflare for SaaS) — the domain a studio's pages are
+// SERVED from, as opposed to the one it SENDS from above. See docs/custom-domains.md.
+export {
+  registerPublicDomain,
+  checkPublicDomain,
+  removePublicDomain,
+} from './domains/publicDomain'
+
 // Stripe Connect (member → studio payments; studio's own Stripe balance + platform fee)
 export { startConnectOnboarding, getConnectStatus } from './connect'
 export {

@@ -80,3 +80,6 @@ web-build/
 # Message fragments are a transient hand-off between a parallel lane and
 # `pnpm i18n:merge` — never committed. See apps/web/messages/_pending/README.md
 apps/web/messages/_pending/*.json
+
+# Cloudflare Worker local state/cache (infra/workers/*)
+.wrangler/
