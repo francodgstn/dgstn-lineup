@@ -129,7 +129,6 @@
     "bookingPage": "Booking page",
     "eventTypes": "Event types",
     "subscriptions": "Subscriptions",
-    "plans": "Plans & Affiliations",
     "onlineCourses": "Online courses",
     "products": "Products",
     "documents": "Documents",
@@ -966,7 +965,8 @@
     "filterExpiring": "Expiring soon",
     "selectAll": "Select all",
     "bulkRenewedPartial": "Renewed {ok}, {failed} failed",
-    "clearSelection": "Clear selection"
+    "clearSelection": "Clear selection",
+    "manageTypes": "Manage types"
   },
   "SubscriptionsOverview": {
     "title": "Subscriptions",
@@ -1558,7 +1558,6 @@
     "access_members_desc": "Members book with their membership. A newcomer can still book one class if “Free trial for newcomers” is on below.",
     "access_subscription": "Specific subscriptions",
     "access_subscription_desc": "Only members holding one of the selected subscriptions can book. A newcomer can still book one class if “Free trial for newcomers” is on below.",
-    "accessNoSubs": "No subscription types yet — create them under Plans & Affiliations.",
     "accessBadgeSubscription": "Subscription",
     "dropInLabel": "Offer drop-in (pay per class)",
     "dropInPricePlaceholder": "e.g. 25",
@@ -1603,9 +1602,6 @@
     "fieldType_checkbox": "Checkbox",
     "fieldType_date": "Date",
     "reorder": "Reorder",
-    "quickCreateSubPlaceholder": "New subscription name…",
-    "quickCreateSubButton": "Create",
-    "quickCreateSubHint": "Creates a basic subscription linked to this activity. Pricing can be added later in the subscription settings.",
     "sectionClasses": "Classes",
     "sectionAppointments": "Appointments",
     "sectionEmpty": "Nothing here yet.",
@@ -1631,7 +1627,6 @@
     "waitlistRequiresCapacity": "Only has an effect on sessions with a participant limit — a session with no limit is never full.",
     "waitlistRequiresPlan": "Available from the {plan} plan.",
     "level_none": "Not specified",
-    "accessNoSubsAction": "Create a subscription type",
     "sectionBookingTitle": "Booking and pricing",
     "sectionBookingSubtitle": "Who can book this, and what it costs them.",
     "moreOptionsLabel": "More options",
@@ -1645,7 +1640,11 @@
     "scheduleSheetEmptyTitle": "Not on the calendar",
     "scheduleSheetEmptyBody": "This activity has no upcoming sessions, so nobody can see or book it.",
     "scheduleSheetEmptyCta": "Schedule a session",
-    "scheduleSheetOpenSchedule": "Open the schedule"
+    "scheduleSheetOpenSchedule": "Open the schedule",
+    "accessPickInCatalogue": "Which plans can book this is set in the catalogue, next to the plans themselves.",
+    "accessOpenCatalogue": "Open the catalogue",
+    "dropInRateInCatalogue": "A member rate on this price is set in the catalogue — it is one rule shared by every plan on it.",
+    "benefitInCatalogue": "The member rate for these session lengths is set in the catalogue, beside the plans it applies to."
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -1729,7 +1728,6 @@
     "paymentModesDesc": "How you record cash / bank-transfer / TWINT payments — shown when a manager records a payment by hand.",
     "paymentModePlaceholder": "e.g. TWINT",
     "paymentModeAdd": "Add",
-    "paymentSettingsLink": "Currency & payment settings",
     "alertPresetName": "Preset name",
     "alertPresetScheduleType": "Trigger type",
     "deletePreset": "Delete",
@@ -1840,13 +1838,6 @@
     "autoTriggerUnsubscribed": "When unsubscribed",
     "autoTriggerChanged": "When subscription changes",
     "subTypeActivitiesLabel": "Activities this subscription unlocks",
-    "subTypeActivitiesDesc": "Linking a class restricts its booking to holders of this subscription. An appointment has no access gate — the price is the gate — so linking one sets what holders pay instead.",
-    "subTypeActivitiesEmpty": "No activities yet — create them under Offer → Activities.",
-    "subTypeActivitiesHint": "Unlinking the last subscription from a class makes it bookable by all members again. On an appointment it removes the benefit, and everyone pays the base price.",
-    "subTypeActivitiesAppointmentBadge": "Appointment",
-    "subTypeActivitiesBenefitLabel": "What holders get",
-    "subTypeActivitiesSharedRule": "An appointment carries one benefit rule, shared with {names} — this choice applies to them too.",
-    "subTypeActivitiesBenefitFix": "Check the appointment benefit marked above — nothing was saved.",
     "subTypeUsageLimit": "Usage limit",
     "subTypeUsageLimitDesc": "Only limits CLASS bookings covered by this subscription. Once the allowance is used up, members can still book at the drop-in price (member rate applies).",
     "subTypeLimitPeriodDay": "per day",
@@ -1882,14 +1873,15 @@
     "paymentsRecordingOff": "Paused",
     "paymentsRecordingStalled": "Not recording yet",
     "paymentsPublishableKeyHelp": "A label only — Linyup never charges with it. Recording starts once you add the webhook signing secret below.",
-    "subTypeActivitiesEmptyAction": "Create an activity",
     "paymentsWebhookEventsHelp": "Subscribe the endpoint to <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code>. Do not add <code>invoice.payment_succeeded</code> as well: Stripe no longer links an invoice to its payment, so recurring payments would be recorded twice.",
     "paymentsWebhookEventsTitle": "Choose the events carefully",
     "paymentsDoubleRecordingTitle": "This Stripe endpoint is recording payments twice",
     "paymentsDoubleRecordingBody": "In the last {days} days it delivered {invoiceCount} invoice events and {paymentCount} payment events. Stripe no longer links an invoice to its payment, so a recurring payment that arrives as both is written down twice — and nothing here can tell which two rows are the same money.",
     "paymentsDoubleRecordingFix": "Fix it in Stripe: edit this endpoint and remove <code>invoice.payment_succeeded</code>. Keep <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> and <code>checkout.session.completed</code> — they record everything, renewals included. Rows already written stay as they are; the payments list flags the ones at risk.",
     "customFieldPublicOnBooking": "Ask on the booking form",
-    "customFieldPublicOnBookingHint": "Makes this field's name and options publicly visible so it can be shown on your booking page. Leave off for anything private."
+    "customFieldPublicOnBookingHint": "Makes this field's name and options publicly visible so it can be shown on your booking page. Leave off for anything private.",
+    "subTypeActivitiesInCatalogue": "Set in the catalogue, where you can also see it from the activity's side.",
+    "subTypeActivitiesOpenCatalogue": "Open the catalogue"
   },
   "Bookings": {
     "title": "Bookings",
@@ -4457,7 +4449,6 @@
   },
   "OfferPricing": {
     "title": "Pricing",
-    "subtitle": "See exactly what each contact type pays across everything you sell, and catch pricing gaps before a member does.",
     "sectionPreviewTitle": "Price preview",
     "sectionPreviewSubtitle": "Pick who's asking and see exactly what they'd pay right now.",
     "personaGuest": "Guest",
@@ -4521,7 +4512,8 @@
     "discountsNoneRunning": "No discount is running right now.",
     "discountsManageLink": "Manage promo codes",
     "discountPercentOff": "{percent}% off",
-    "discountFixedPrice": "{price} with this code"
+    "discountFixedPrice": "{price} with this code",
+    "personaPickerLabel": "Who's asking"
   },
   "PublicBooking": {
     "titleBookSession": "Book a Session",
@@ -5243,7 +5235,6 @@
     "delete": "Delete",
     "toastSaved": "Saved."
   },
-  "OrgHome": {},
   "OrgPlaces": {
     "title": "Org places",
     "subtitle": "Locations shared with every studio in this organization."
@@ -6562,10 +6553,12 @@
   },
   "QuickLinks": {
     "plansToPricing": "Check what a member actually pays",
-    "plansToActivities": "See which classes a plan unlocks",
     "availabilityToActivities": "Set the appointment types and lengths these hours offer",
     "promoCodesToPricing": "See your live codes next to the prices they cut",
-    "activitiesToSchedule": "See these classes on the calendar"
+    "activitiesToSchedule": "See these classes on the calendar",
+    "pricingToActivities": "Edit the activities behind these prices",
+    "pricingToSubscriptions": "Edit the plans behind these prices",
+    "toPaymentSettings": "Set your currency and how you take payment"
   },
   "Site": {
     "loading": "Loading…",
@@ -6849,5 +6842,64 @@
     "statusError": "Needs attention",
     "unavailableTitle": "Available on the live app only",
     "unavailableBody": "Custom domains are not enabled in this environment. On the live app you can connect your own domain and your pages are served from it."
+  },
+  "OfferCatalogue": {
+    "title": "Catalogue",
+    "subtitle": "What you offer, and which plans open it.",
+    "toPricing": "See prices",
+    "toActivities": "All activities",
+    "railPlans": "Plans",
+    "railClasses": "Classes",
+    "railAppointments": "Appointments",
+    "noPlans": "No plans yet.",
+    "noPlansAction": "Create a plan",
+    "noActivities": "No activities yet.",
+    "noActivitiesAction": "Create an activity",
+    "noClasses": "No classes yet.",
+    "noAppointments": "No appointments yet.",
+    "noneFiltered": "None in this group.",
+    "paneEmpty": "Pick a plan or an activity to see what it connects to.",
+    "paneMissing": "That item no longer exists.",
+    "paneMissingAction": "Clear selection",
+    "appointmentBadge": "Appointment",
+    "classBadge": "Class",
+    "plansHeading": "Plans",
+    "plansHint": "Tick who may book this, and who gets a member rate.",
+    "includesHeading": "Includes",
+    "includesHint": "Tick what this plan opens, and where it earns a member rate.",
+    "accessToggle": "Can book",
+    "rateToggle": "Member rate",
+    "sharedRule": "This rate is shared with {names} — changing it changes theirs too.",
+    "unsaved": "Unsaved changes",
+    "save": "Save",
+    "saving": "Saving…",
+    "rename": "Rename",
+    "nameLabel": "Name",
+    "editAll": "Edit",
+    "deadEnds": "{count, plural, one {# activity nobody can book} other {# activities nobody can book}}",
+    "deadEndsAction": "Show only these",
+    "deadEndsClear": "Show everything again",
+    "summaryClass": "{gated, plural, =0 {Open to everyone} one {# plan can book} other {# plans can book}} · {rated, plural, =0 {no member rate} one {# member rate} other {# on the member rate}}",
+    "summaryAppointment": "The price is the gate · {plans, plural, =0 {no member rate} one {# plan on the member rate} other {# plans on the member rate}}",
+    "summaryPlan": "{count, plural, =0 {Opens nothing yet} one {Linked to # activity} other {Linked to # activities}}",
+    "backToActivities": "Back to activities",
+    "backToSubscriptions": "Back to subscriptions",
+    "railCourses": "Courses",
+    "noCourses": "No courses yet.",
+    "courseBadge": "Course",
+    "noEdgeHere": "Open to everyone",
+    "summaryCourseGated": "{plans, plural, =0 {Locked to plans, but none chosen yet} one {# plan can open it} other {# plans can open it}}",
+    "summaryCoursePriced": "Sold one-off · {plans, plural, =0 {no member rate} one {# plan on the member rate} other {# plans on the member rate}}",
+    "summaryCourseOpen": "Free or sign-in only, so no plan changes who can open it."
+  },
+  "PagePurpose": {
+    "activities": "What you do",
+    "schedule": "When you offer it",
+    "subscriptions": "What you sell",
+    "pricing": "What people actually pay",
+    "activitiesNote": "The classes and appointments you offer. Defined once here, then scheduled as often as you like.",
+    "scheduleNote": "Every session on the calendar, single or repeating, with who booked each one.",
+    "subscriptionsNote": "Memberships, packs and passes. What they cost, how often they renew, and what they unlock.",
+    "pricingNote": "What each kind of contact is charged, replayed through the same rules a real booking uses."
   }
 }

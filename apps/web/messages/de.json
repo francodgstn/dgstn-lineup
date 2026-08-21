@@ -129,7 +129,6 @@
     "bookingPage": "Buchungsseite",
     "eventTypes": "Eventtypen",
     "subscriptions": "Abos",
-    "plans": "Abos & Affiliationen",
     "onlineCourses": "Online-Kurse",
     "products": "Produkte",
     "documents": "Dokumente",
@@ -966,7 +965,8 @@
     "filterExpiring": "Läuft bald ab",
     "selectAll": "Alle auswählen",
     "bulkRenewedPartial": "{ok} verlängert, {failed} fehlgeschlagen",
-    "clearSelection": "Auswahl aufheben"
+    "clearSelection": "Auswahl aufheben",
+    "manageTypes": "Typen verwalten"
   },
   "SubscriptionsOverview": {
     "title": "Abonnements",
@@ -1558,7 +1558,6 @@
     "access_members_desc": "Mitglieder buchen mit ihrer Mitgliedschaft. Neue Personen können trotzdem eine Klasse buchen, wenn unten „Gratis-Trial für Neue“ aktiv ist.",
     "access_subscription": "Bestimmte Abos",
     "access_subscription_desc": "Nur Mitglieder mit einem der ausgewählten Abos können buchen. Neue Personen können trotzdem eine Klasse buchen, wenn unten „Gratis-Trial für Neue“ aktiv ist.",
-    "accessNoSubs": "Noch keine Abo-Typen — erstelle sie unter Abos & Affiliationen.",
     "accessBadgeSubscription": "Abonnement",
     "dropInLabel": "Drop-in anbieten (pro Kurs zahlen)",
     "dropInPricePlaceholder": "z. B. 25",
@@ -1603,9 +1602,6 @@
     "fieldType_checkbox": "Kontrollkästchen",
     "fieldType_date": "Datum",
     "reorder": "Neu anordnen",
-    "quickCreateSubPlaceholder": "Name des neuen Abos…",
-    "quickCreateSubButton": "Erstellen",
-    "quickCreateSubHint": "Erstellt ein einfaches Abo, das mit dieser Aktivität verknüpft ist. Preise können später in den Abo-Einstellungen ergänzt werden.",
     "sectionClasses": "Kurse",
     "sectionAppointments": "Termine",
     "sectionEmpty": "Noch nichts hier.",
@@ -1631,7 +1627,6 @@
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
     "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
     "level_none": "Nicht angegeben",
-    "accessNoSubsAction": "Abo-Typ erstellen",
     "sectionBookingTitle": "Buchung und Preise",
     "sectionBookingSubtitle": "Wer das buchen kann und was es kostet.",
     "moreOptionsLabel": "Weitere Optionen",
@@ -1645,7 +1640,11 @@
     "scheduleSheetEmptyTitle": "Nicht im Kalender",
     "scheduleSheetEmptyBody": "Für diese Aktivität sind keine Termine geplant — niemand kann sie sehen oder buchen.",
     "scheduleSheetEmptyCta": "Termin planen",
-    "scheduleSheetOpenSchedule": "Zum Zeitplan"
+    "scheduleSheetOpenSchedule": "Zum Zeitplan",
+    "accessPickInCatalogue": "Welche Abos das buchen dürfen, legst du im Katalog fest — direkt neben den Abos.",
+    "accessOpenCatalogue": "Katalog öffnen",
+    "dropInRateInCatalogue": "Einen Mitgliederpreis dafür legst du im Katalog fest — es ist eine Regel für alle beteiligten Abos.",
+    "benefitInCatalogue": "Den Mitgliederpreis für diese Dauern legst du im Katalog fest — neben den Abos, für die er gilt."
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -1729,7 +1728,6 @@
     "paymentModesDesc": "Wie du Bar-/Überweisungs-/TWINT-Zahlungen erfasst — erscheinen beim manuellen Erfassen einer Zahlung.",
     "paymentModePlaceholder": "z. B. TWINT",
     "paymentModeAdd": "Hinzufügen",
-    "paymentSettingsLink": "Währung & Zahlungseinstellungen",
     "alertPresetName": "Vorlagenname",
     "alertPresetScheduleType": "Auslösertyp",
     "deletePreset": "Löschen",
@@ -1840,13 +1838,6 @@
     "autoTriggerUnsubscribed": "Wenn gekündigt",
     "autoTriggerChanged": "Wenn sich das Abo ändert",
     "subTypeActivitiesLabel": "Aktivitäten, die dieses Abo freischaltet",
-    "subTypeActivitiesDesc": "Bei einem Kurs beschränkt die Verknüpfung die Buchung auf Inhaber dieses Abos. Ein Termin hat keine Zugangssperre — der Preis ist die Hürde — dort legt die Verknüpfung stattdessen fest, was Inhaber bezahlen.",
-    "subTypeActivitiesEmpty": "Noch keine Aktivitäten — erstelle sie unter Angebot → Aktivitäten.",
-    "subTypeActivitiesHint": "Wird das letzte Abo eines Kurses entfernt, ist er wieder für alle Mitglieder buchbar. Bei einem Termin entfällt der Vorteil und alle zahlen den Grundpreis.",
-    "subTypeActivitiesAppointmentBadge": "Termin",
-    "subTypeActivitiesBenefitLabel": "Was Inhaber erhalten",
-    "subTypeActivitiesSharedRule": "Ein Termin hat nur eine Vorteilsregel, geteilt mit {names} — diese Wahl gilt auch für sie.",
-    "subTypeActivitiesBenefitFix": "Prüfe den oben markierten Terminvorteil — es wurde nichts gespeichert.",
     "subTypeUsageLimit": "Nutzungslimit",
     "subTypeUsageLimitDesc": "Begrenzt nur KURS-Buchungen, die über dieses Abo abgedeckt sind. Ist das Kontingent aufgebraucht, können Mitglieder weiterhin zum Einzeleintritt buchen (Mitgliederpreis gilt).",
     "subTypeLimitPeriodDay": "pro Tag",
@@ -1882,14 +1873,15 @@
     "paymentsRecordingOff": "Pausiert",
     "paymentsRecordingStalled": "Erfasst noch nichts",
     "paymentsPublishableKeyHelp": "Nur eine Bezeichnung — Linyup belastet damit nichts. Die Erfassung startet, sobald du unten den Webhook-Signaturschlüssel hinterlegst.",
-    "subTypeActivitiesEmptyAction": "Aktivität erstellen",
     "paymentsWebhookEventsHelp": "Abonnieren Sie für den Endpunkt <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code>. Fügen Sie nicht zusätzlich <code>invoice.payment_succeeded</code> hinzu: Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung, wiederkehrende Zahlungen würden also doppelt erfasst.",
     "paymentsWebhookEventsTitle": "Wählen Sie die Ereignisse sorgfältig aus",
     "paymentsDoubleRecordingTitle": "Dieser Stripe-Endpunkt erfasst Zahlungen doppelt",
     "paymentsDoubleRecordingBody": "In den letzten {days} Tagen hat er {invoiceCount} Rechnungsereignisse und {paymentCount} Zahlungsereignisse geliefert. Stripe verknüpft eine Rechnung nicht mehr mit ihrer Zahlung — eine wiederkehrende Zahlung, die als beides eintrifft, wird deshalb doppelt erfasst, und hier lässt sich nicht erkennen, welche zwei Zeilen dasselbe Geld sind.",
     "paymentsDoubleRecordingFix": "In Stripe beheben: Bearbeiten Sie diesen Endpunkt und entfernen Sie <code>invoice.payment_succeeded</code>. Behalten Sie <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> und <code>checkout.session.completed</code> — sie erfassen alles, auch Verlängerungen. Bereits erfasste Zeilen bleiben bestehen; die Zahlungsliste markiert die betroffenen.",
     "customFieldPublicOnBooking": "Im Buchungsformular abfragen",
-    "customFieldPublicOnBookingHint": "Macht Name und Optionen dieses Feldes öffentlich sichtbar, damit es auf deiner Buchungsseite erscheinen kann. Für Vertrauliches ausgeschaltet lassen."
+    "customFieldPublicOnBookingHint": "Macht Name und Optionen dieses Feldes öffentlich sichtbar, damit es auf deiner Buchungsseite erscheinen kann. Für Vertrauliches ausgeschaltet lassen.",
+    "subTypeActivitiesInCatalogue": "Im Katalog festlegen — dort siehst du es auch von der Seite der Aktivität.",
+    "subTypeActivitiesOpenCatalogue": "Katalog öffnen"
   },
   "Bookings": {
     "title": "Buchungen",
@@ -4457,7 +4449,6 @@
   },
   "OfferPricing": {
     "title": "Preise",
-    "subtitle": "Sieh genau, was jede Art von Kontakt für dein gesamtes Angebot zahlt — und finde Preislücken, bevor ein Mitglied es tut.",
     "sectionPreviewTitle": "Preisvorschau",
     "sectionPreviewSubtitle": "Wähle, wer fragt, und sieh genau, was diese Person jetzt zahlen würde.",
     "personaGuest": "Gast",
@@ -4521,7 +4512,8 @@
     "discountsNoneRunning": "Zurzeit läuft kein Rabatt.",
     "discountsManageLink": "Aktionscodes verwalten",
     "discountPercentOff": "{percent}% Rabatt",
-    "discountFixedPrice": "{price} mit diesem Code"
+    "discountFixedPrice": "{price} mit diesem Code",
+    "personaPickerLabel": "Wer fragt"
   },
   "PublicBooking": {
     "titleBookSession": "Eine Einheit buchen",
@@ -5243,7 +5235,6 @@
     "delete": "Löschen",
     "toastSaved": "Gespeichert."
   },
-  "OrgHome": {},
   "OrgPlaces": {
     "title": "Standorte der Organisation",
     "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden."
@@ -6562,10 +6553,12 @@
   },
   "QuickLinks": {
     "plansToPricing": "Prüfen, was ein Mitglied tatsächlich bezahlt",
-    "plansToActivities": "Sehen, welche Kurse ein Abo freischaltet",
     "availabilityToActivities": "Terminarten und Dauern festlegen, die diese Zeiten anbieten",
     "promoCodesToPricing": "Aktive Codes neben den Preisen sehen, die sie reduzieren",
-    "activitiesToSchedule": "Diese Lektionen im Kalender ansehen"
+    "activitiesToSchedule": "Diese Lektionen im Kalender ansehen",
+    "pricingToActivities": "Die Aktivitäten hinter diesen Preisen bearbeiten",
+    "pricingToSubscriptions": "Die Abos hinter diesen Preisen bearbeiten",
+    "toPaymentSettings": "Währung festlegen und wie du Zahlungen annimmst"
   },
   "Site": {
     "loading": "Laden…",
@@ -6849,5 +6842,64 @@
     "statusError": "Aktion erforderlich",
     "unavailableTitle": "Nur in der Live-App verfügbar",
     "unavailableBody": "In dieser Umgebung sind eigene Domains nicht aktiviert. In der Live-App verbinden Sie Ihre eigene Domain und Ihre Seiten werden darüber ausgeliefert."
+  },
+  "OfferCatalogue": {
+    "title": "Katalog",
+    "subtitle": "Was du anbietest und welche Abos es freischalten.",
+    "toPricing": "Preise ansehen",
+    "toActivities": "Alle Aktivitäten",
+    "railPlans": "Abos",
+    "railClasses": "Kurse",
+    "railAppointments": "Termine",
+    "noPlans": "Noch keine Abos.",
+    "noPlansAction": "Abo erstellen",
+    "noActivities": "Noch keine Aktivitäten.",
+    "noActivitiesAction": "Aktivität erstellen",
+    "noClasses": "Noch keine Kurse.",
+    "noAppointments": "Noch keine Termine.",
+    "noneFiltered": "Keine in dieser Gruppe.",
+    "paneEmpty": "Wähle ein Abo oder eine Aktivität, um die Verbindungen zu sehen.",
+    "paneMissing": "Dieser Eintrag existiert nicht mehr.",
+    "paneMissingAction": "Auswahl aufheben",
+    "appointmentBadge": "Termin",
+    "classBadge": "Kurs",
+    "plansHeading": "Abos",
+    "plansHint": "Wähle, wer buchen darf und wer einen Mitgliederpreis erhält.",
+    "includesHeading": "Enthält",
+    "includesHint": "Wähle, was dieses Abo freischaltet und wo es einen Mitgliederpreis gibt.",
+    "accessToggle": "Kann buchen",
+    "rateToggle": "Mitgliederpreis",
+    "sharedRule": "Dieser Preis gilt auch für {names} — eine Änderung betrifft sie ebenfalls.",
+    "unsaved": "Nicht gespeicherte Änderungen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "rename": "Umbenennen",
+    "nameLabel": "Name",
+    "editAll": "Bearbeiten",
+    "deadEnds": "{count, plural, one {# Aktivität, die niemand buchen kann} other {# Aktivitäten, die niemand buchen kann}}",
+    "deadEndsAction": "Nur diese anzeigen",
+    "deadEndsClear": "Wieder alles anzeigen",
+    "summaryClass": "{gated, plural, =0 {Für alle offen} one {# Abo kann buchen} other {# Abos können buchen}} · {rated, plural, =0 {kein Mitgliederpreis} one {# Mitgliederpreis} other {# mit Mitgliederpreis}}",
+    "summaryAppointment": "Der Preis ist die Hürde · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
+    "summaryPlan": "{count, plural, =0 {Schaltet noch nichts frei} one {Mit # Aktivität verknüpft} other {Mit # Aktivitäten verknüpft}}",
+    "backToActivities": "Zurück zu Aktivitäten",
+    "backToSubscriptions": "Zurück zu Abos",
+    "railCourses": "Kurse",
+    "noCourses": "Noch keine Kurse.",
+    "courseBadge": "Kurs",
+    "noEdgeHere": "Für alle offen",
+    "summaryCourseGated": "{plans, plural, =0 {Auf Abos beschränkt, aber noch keines gewählt} one {# Abo kann ihn öffnen} other {# Abos können ihn öffnen}}",
+    "summaryCoursePriced": "Einmalverkauf · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
+    "summaryCourseOpen": "Kostenlos oder nur mit Anmeldung — kein Abo ändert, wer ihn öffnen kann."
+  },
+  "PagePurpose": {
+    "activities": "Was du anbietest",
+    "schedule": "Wann du es anbietest",
+    "subscriptions": "Was du verkaufst",
+    "pricing": "Was Leute tatsächlich zahlen",
+    "activitiesNote": "Die Kurse und Termine, die du anbietest. Einmal hier definiert, dann beliebig oft angesetzt.",
+    "scheduleNote": "Alle Termine im Kalender, einzeln oder wiederkehrend, mit den jeweiligen Buchungen.",
+    "subscriptionsNote": "Mitgliedschaften, Pakete und Abos. Was sie kosten, wie oft sie verlängert werden und was sie freischalten.",
+    "pricingNote": "Was jede Art von Kontakt zahlt — mit denselben Regeln berechnet wie bei einer echten Buchung."
   }
 }

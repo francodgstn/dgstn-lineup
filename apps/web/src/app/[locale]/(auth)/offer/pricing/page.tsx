@@ -15,6 +15,13 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Link } from '@/i18n/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useActivities } from '@/hooks/useActivities'
@@ -62,9 +69,21 @@ function truncatedList(names: string[], max: number, moreLabel: (count: number) 
   return `${shown.join(', ')} ${moreLabel(names.length - max)}`
 }
 
-// ─── persona chip row ──────────────────────────────────────────────────────────
+// ─── who is asking ─────────────────────────────────────────────────────────────
+//
+// A SELECT, not the chip row this replaces. The list is guest + member + one per
+// ACTIVE subscription type, so it grows with the studio's plans — a seeded swim
+// school already reaches eight. Past a handful the chips wrapped or scrolled
+// sideways, which buries the later plans and makes the current choice hard to
+// find among equals.
+//
+// A select trades the at-a-glance overview for a stable, one-line control that
+// does not reflow as plans are added, and it names the current persona in the
+// trigger rather than relying on which pill is tinted. The overview was worth
+// less than it looks here: these are alternatives to step through one at a time,
+// not a set to compare side by side — the comparison is the TABLE below.
 
-function PersonaChips({
+function PersonaPicker({
   personas,
   selectedId,
   onSelect,
@@ -75,26 +94,25 @@ function PersonaChips({
   onSelect: (id: string) => void
   t: ReturnType<typeof useTranslations<'OfferPricing'>>
 }) {
+  const labelFor = (p: PricingPersona) =>
+    p.kind === 'guest' ? t('personaGuest') : p.kind === 'member' ? t('personaMember') : p.label
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1">
-      {personas.map((p) => {
-        const label = p.kind === 'guest' ? t('personaGuest') : p.kind === 'member' ? t('personaMember') : p.label
-        const active = p.id === selectedId
-        return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onSelect(p.id)}
-            className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              active
-                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
-            }`}
-          >
-            {label}
-          </button>
-        )
-      })}
+    <div className="flex flex-wrap items-center gap-2">
+      {/* The chips carried no label — the tinted pill WAS the answer. A select
+          needs one, or the trigger reads as a filter over the table. */}
+      <span className="text-sm text-muted-foreground">{t('personaPickerLabel')}</span>
+      <Select value={selectedId} onValueChange={(v) => v && onSelect(v)}>
+        <SelectTrigger className="h-9 w-full sm:w-64">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {personas.map((p) => (
+            <SelectItem key={p.id} value={p.id}>
+              {labelFor(p)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
 }
@@ -244,7 +262,7 @@ function PricingPreviewSection({
         <p className="text-sm text-muted-foreground">{t('sectionPreviewSubtitle')}</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <PersonaChips personas={personas} selectedId={selected?.id ?? 'guest'} onSelect={handleSelect} t={t} />
+        <PersonaPicker personas={personas} selectedId={selected?.id ?? 'guest'} onSelect={handleSelect} t={t} />
 
         {selected?.creditOnly && (
           <div className="flex items-center justify-between rounded-lg border border-dashed p-2.5">
@@ -561,10 +579,14 @@ function severityIcon(severity: PricingWarning['severity']) {
   return <Info className="h-4 w-4 text-muted-foreground shrink-0" />
 }
 
+/** Where a warning's "Fix" goes. The catalogue takes a selection in the URL, so
+ *  an activity or plan warning now lands ON the subject with the edge editor
+ *  open beside it — where every one of these warnings is actually repaired —
+ *  rather than on a list page with the fix somewhere on it. */
 function fixHref(w: PricingWarning): Route {
-  if (w.subjectKind === 'activity') return '/offer/activities' as Route
+  if (w.subjectKind === 'activity') return `/offer/catalogue?sel=activity:${w.subjectId}` as Route
   if (w.subjectKind === 'course') return `/offer/online-courses/${w.subjectId}` as Route
-  return '/offer/plans' as Route
+  return `/offer/catalogue?sel=plan:${w.subjectId}` as Route
 }
 
 function HealthSection({ warnings }: { warnings: PricingWarning[] }) {
@@ -708,6 +730,7 @@ function DiscountsSection({ teamId, currency }: { teamId: string | null; currenc
 
 export default function PricingPage() {
   const t = useTranslations('OfferPricing')
+  const tq = useTranslations('QuickLinks')
   const { currentTeamId, team } = useAuth()
   const currency = team?.default_currency ?? 'CHF'
 
@@ -738,7 +761,14 @@ export default function PricingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PageHeader
+        title={t('title')}
+        purpose="pricing"
+        quickLinks={[
+          { href: '/offer/activities' as Route, label: tq('pricingToActivities') },
+          { href: '/offer/plans' as Route, label: tq('pricingToSubscriptions') },
+        ]}
+      />
 
       {loading ? (
         <div className="space-y-3">

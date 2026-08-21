@@ -12,7 +12,6 @@ import {
   orderBy,
   limit,
   getDocs,
-  getCountFromServer,
   Timestamp,
   doc,
   addDoc,
@@ -45,6 +44,7 @@ import { cn } from '@/lib/utils'
 import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
+import { PagePurpose } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -264,64 +264,6 @@ function useSessionsInRange(
         )
       )
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Session)
-    },
-  })
-}
-
-/**
- * THE authoritative answer to "how many upcoming?".
- *
- * The header used to count the rows the CALENDAR had loaded — a window anchored
- * to the month cursor, not to now. Page back to March and the grid filled with
- * March's classes while the header above it read "0 upcoming", because nothing
- * in the loaded window was still in the future (UX-20). Page forward to
- * November and it counted November alone, ignoring everything between today and
- * then.
- *
- * Two questions, so two queries: the grid/list ask "what is in this window",
- * this asks "what is still ahead", anchored to now and to nothing else. A
- * server-side aggregation, so a studio with a year of sessions pays one count
- * rather than downloading them to length a filtered array.
- */
-function useUpcomingCount(teamId: string | null, orgId: string | null | undefined) {
-  return useQuery<number>({
-    queryKey: ['schedule', 'upcoming-count', teamId, orgId],
-    enabled: !!teamId,
-    staleTime: 60_000,
-    queryFn: async () => {
-      if (!teamId) return 0
-      const now = Timestamp.now()
-      const counts = await Promise.all([
-        getCountFromServer(
-          query(
-            collection(db, SESSIONS_COLLECTION),
-            where('teamId', '==', teamId),
-            where('start', '>=', now)
-          )
-        ),
-        getCountFromServer(
-          query(
-            collection(db, EVENTS_COLLECTION),
-            where('teamId', '==', teamId),
-            where('deleted_at', '==', null),
-            where('start', '>=', now)
-          )
-        ),
-        ...(orgId
-          ? [
-              getCountFromServer(
-                query(
-                  collection(db, EVENTS_COLLECTION),
-                  where('orgId', '==', orgId),
-                  where('scope', '==', 'org'),
-                  where('deleted_at', '==', null),
-                  where('start', '>=', now)
-                )
-              ),
-            ]
-          : []),
-      ])
-      return counts.reduce((n, c) => n + c.data().count, 0)
     },
   })
 }
@@ -994,7 +936,6 @@ export default function CalendarPage() {
         : { from: addMonths(listAnchor, -horizon), to: addDays(listAnchor, 1) }
 
   const sessionsQ = useSessionsInRange(currentTeamId, range.from, range.to)
-  const upcomingCountQ = useUpcomingCount(currentTeamId, orgId)
   const activitiesQ = useActivities(currentTeamId)
   const eventsQ = useAllEvents(currentTeamId, orgId)
   const { data: members = [] } = useTeamMembers(currentTeamId)
@@ -1092,13 +1033,6 @@ export default function CalendarPage() {
     )
 
   const isListLoading = sessionsQ.isLoading || eventsQ.isLoading
-  // ONE query answers this, and it is not this page's window — see
-  // `useUpcomingCount`. Undefined while it loads, so the header says nothing
-  // rather than saying zero. A SHOWN/HIDDEN CALENDAR MUST NEVER REACH THIS: the
-  // count is a fact about the team, not about the view, which is exactly what
-  // UX-20 fixed when it stopped counting from the calendar's own cursor window.
-  const upcomingCount = upcomingCountQ.data
-
   // ── "you are looking at an empty grid because you hid a calendar" ─────────
   //
   // An empty grid under a hidden calendar is the same defect class as UX-20's
@@ -1155,9 +1089,6 @@ export default function CalendarPage() {
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {upcomingCount === undefined ? ' ' : t('subtitle', { count: upcomingCount })}
-          </p>
         </div>
         {/* ONE height across this row. The three controls were hand-sized
             independently — a p-1 segmented group, a `size="sm"` link and a
@@ -1264,6 +1195,7 @@ export default function CalendarPage() {
           )}
         </div>
       </div>
+      <PagePurpose purpose="schedule" />
 
       {/* Filters — ONE control group, read left to right as <who> | <what>.
           Both chips carry a caret and open checkboxes: same shape, same

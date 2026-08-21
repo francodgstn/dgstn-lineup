@@ -12,19 +12,18 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth } from '@/contexts/AuthContext'
 import {
   TEAMS_COLLECTION,
   AFFILIATION_TYPES_SUBCOLLECTION,
   planSupportsAffiliations,
 } from '@linyup/shared'
 import type { Team, AffiliationType, AffiliationIssuer } from '@linyup/shared'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
   SelectContent,
@@ -49,10 +48,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Pencil, Trash2, Users } from 'lucide-react'
-import type { Route } from 'next'
-import { Link } from '@/i18n/navigation'
-import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 
 /**
  * Manage the team's affiliation TYPES (e.g. club membership, federation licence).
@@ -294,13 +290,9 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">{t('description')}</p>
             <div className="flex items-center gap-3 shrink-0">
-              <Link
-                href={'/affiliations' as Route}
-                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-              >
-                <Users className="h-4 w-4" />
-                {t('manageMembersLink')}
-              </Link>
+              {/* The link out to the roster is gone: this manager now opens FROM
+                  the roster, so it would point at the page it is sitting on
+                  top of. */}
               <Button
                 size="sm"
                 onClick={() => {
@@ -403,27 +395,7 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
   )
 }
 
-/** Page wrapper — resolves the current team and renders the manager. */
-export function AffiliationsPage() {
-  const { currentTeamId, team } = useAuth()
-
-  if (currentTeamId === null || !team) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full rounded-lg" />
-      </div>
-    )
-  }
-
-  // Header omitted — the parent "Plans & affiliations" page supplies the section
-  // header + switcher, so a title here would duplicate it.
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
-        <PaymentSettingsLink />
-      </div>
-      <AffiliationTypesManager team={team} teamId={currentTeamId} />
-    </div>
-  )
-}
+// `AffiliationsPage` lived here as the wrapper the "Plans & affiliations" tab
+// rendered — a skeleton, a payments link and this manager. The tab is gone
+// (the manager opens from the roster now), so the wrapper had no caller and is
+// removed rather than left as a second, unreachable way to mount this.

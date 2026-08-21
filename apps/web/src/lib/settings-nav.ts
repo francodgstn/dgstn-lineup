@@ -4,22 +4,23 @@
 // each). Keeping it in one place means the sidebar and rail never drift.
 // Vocabulary: see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx.
 import {
-  CalendarRange,
-  CalendarCheck,
-  Puzzle,
-  UserCog,
-  ShieldCheck,
-  Settings,
-  CreditCard,
-  Bell,
   Award,
-  Wallet,
-  Send,
-  Mail,
+  Bell,
+  CalendarCheck,
+  CalendarRange,
+  CreditCard,
+  FlaskConical,
+  LayoutTemplate,
   ListChecks,
   ListTodo,
-  LayoutTemplate,
-  FlaskConical,
+  Mail,
+  Puzzle,
+  Send,
+  Settings,
+  ShieldCheck,
+  ShoppingBag,
+  UserCog,
+  Wallet,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -36,7 +37,11 @@ export type SettingsGroupKey = 'scheduling' | 'studio' | 'account'
 // only look at is not worth a row. The controls behind them are still disabled +
 // annotated for an owner-less arrival by deep link — hiding the row is
 // navigation, never enforcement.
-export type SettingsGate = 'ownerOnly' | 'customFields'
+//
+// `shop` — the storefront only means anything once there is something to sell or
+// a way to charge (the products or online-courses plugin, or a payment channel).
+// Same condition the main nav used while the row lived there.
+export type SettingsGate = 'ownerOnly' | 'customFields' | 'shop'
 
 export interface SettingsNavItem {
   id: string // stable id used in the pin set + as React key
@@ -91,11 +96,12 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
   // The public-surface overview hub — the map of everything the world can see
   // (public URL, default landing, per-surface live status). Individual surfaces
-  // are reachable from their own sections (Shop → Offer, Space → Grow, …); this is
+  // are reachable from their own sections (Space → Grow, Shop → just below); this is
   // the settings/overview that ties them together.
   //
-  // The route stays at /public-page — it is bookmarked, and its siblings
-  // /public-page/shop and /public-page/space are linked from the main nav — but it
+  // The route stays at /public-page — it is bookmarked, and its sibling
+  // /public-page/space is linked from the main nav (Shop sits in this rail, just
+  // below) — but it
   // now RENDERS inside the settings shell (rail + detail pane) via a route-group
   // layout at (auth)/public-page/layout.tsx, so it reads like every other
   // settings section instead of dumping the reader onto a bare full page (UX-61).
@@ -104,6 +110,12 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // the same id, so the map is reachable from where public surfaces are worked on
   // (UX-28) — one destination, one shortcut star, listed twice.
   { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },
+  // The public storefront that aggregates subscriptions, products and courses.
+  // It renders in this shell and is a SECTION of the public-page hub above, so
+  // the row belongs beside it — it spent a while in the main nav's Offer section
+  // instead, which put a settings destination in the middle of the things a
+  // studio actually sells.
+  { id: 'shop', href: '/public-page/shop', labelKey: 'shop', icon: ShoppingBag, group: 'studio', gate: 'shop' },
   { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
   // Account — workspace admin.
   { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },

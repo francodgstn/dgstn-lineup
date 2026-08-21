@@ -1,58 +1,71 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
+import { Waypoints } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import { buttonVariants } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SubscriptionsPanel } from '@/components/subscriptions/SubscriptionsPanel'
-import { AffiliationsPage } from '@/components/affiliations/AffiliationTypesManager'
+import type { SubscriptionTypesManagerHandle } from '@/components/subscriptions/SubscriptionTypesManager'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
-type Tab = 'subscriptions' | 'affiliations'
-
-/** "Plans & affiliations" is a nav grouping (umbrella), NOT an entity: it just houses the
- *  Subscriptions and Affiliations surfaces as tabs. Each tab renders its existing,
- *  self-contained surface (the Affiliations one self-gates to Studio+ with an
- *  upsell), so there's no data or gating logic here. */
-export function PlansTabs({ initialTab }: { initialTab: Tab }) {
+/** Subscription plans.
+ *
+ *  THIS WAS AN UMBRELLA and is no longer one. It housed Subscriptions and
+ *  Affiliations as two tabs, which put the affiliation TYPES here while the
+ *  affiliation ROSTER — the surface a studio actually opens weekly — had no nav
+ *  item at all. The roster is now its own destination and carries the types with
+ *  it, so this page is left with one subject and no switcher.
+ *
+ *  `?tab=affiliations` still arrives here from bookmarks and from the legacy
+ *  /offer/affiliations stub; the page component redirects those on. */
+export function PlansTabs() {
   const t = useTranslations('Nav')
   const tq = useTranslations('QuickLinks')
-  const [tab, setTab] = useState<Tab>(initialTab)
+  const tCat = useTranslations('OfferCatalogue')
+  const tSettings = useTranslations('TeamSettings')
+  // The panel owns the dialog; the header owns the button that opens it, so the
+  // primary action sits where it does on every other list page.
+  const managerRef = useRef<SubscriptionTypesManagerHandle>(null)
 
-  // Quick links (UX-71) — SUBSCRIPTIONS TAB ONLY. A plan's price is set here and
-  // proved somewhere else: Pricing replays it through the real resolver for each
-  // persona, and Activities is where the plan is attached to what it unlocks.
-  // Neither statement is true of an affiliation (no price, no activity grant), so
-  // the line is not shown on that tab rather than being quietly wrong there.
-  const quickLinks =
-    tab === 'subscriptions'
-      ? [
-          { href: '/offer/pricing' as Route, label: tq('plansToPricing') },
-          { href: '/offer/activities' as Route, label: tq('plansToActivities') },
-        ]
-      : undefined
+  // Quick link (UX-71): a plan's price is set here and proved on Pricing, which
+  // replays it through the real resolver for each persona. The catalogue is NOT
+  // in this line — it is a button, because "what does this plan actually open"
+  // is asked far too often to be muted text.
+  const quickLinks = [
+    { href: '/offer/pricing' as Route, label: tq('plansToPricing') },
+    // Was a stray `text-xs` link floating beside the Add button — the one
+    // destination every selling page needs, styled unlike every other
+    // cross-page pointer in the app.
+    { href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') },
+  ]
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('plans')} quickLinks={quickLinks} />
-      {/* Prominent segmented switcher (each panel supplies its own body, no repeated header) */}
-      <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
-        {(['subscriptions', 'affiliations'] as const).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              tab === key
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t(key)}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'subscriptions' ? <SubscriptionsPanel /> : <AffiliationsPage />}
+      <PageHeader
+        title={t('subscriptions')}
+        purpose="subscriptions"
+        quickLinks={quickLinks}
+        action={
+          <>
+            <Link
+              href={'/offer/catalogue' as Route}
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              <Waypoints className="h-4 w-4 mr-1.5" />
+              {tCat('title')}
+            </Link>
+            <Button onClick={() => managerRef.current?.openAdd()}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {tSettings('addSubscriptionType')}
+            </Button>
+          </>
+        }
+      />
+      <SubscriptionsPanel ref={managerRef} />
     </div>
   )
 }

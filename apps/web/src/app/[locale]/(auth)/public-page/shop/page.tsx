@@ -25,7 +25,6 @@ import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { TEAMS_COLLECTION, PRODUCTS_SUBCOLLECTION, COURSES_COLLECTION } from '@linyup/shared'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 import { Tag, Package, GraduationCap, ExternalLink, ChevronRight, Plus, CreditCard, ArrowUpRight } from 'lucide-react'
 
 function pluginSetupHref(pluginId: string): Route {
@@ -66,6 +65,7 @@ function ChannelRow({
 
 export default function ShopSettingsPage() {
   const t = useTranslations('ShopSettings')
+  const tq = useTranslations('QuickLinks')
   const { currentTeamId, team } = useAuth()
   const { publicUrl, flags } = usePublicSurfaces()
 
@@ -106,7 +106,9 @@ export default function ShopSettingsPage() {
             t('subtitle')
           )
         }
-        action={<PaymentSettingsLink />}
+        quickLinks={[
+          { href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') },
+        ]}
       />
 
       {/* Stacked, not side-by-side — see the note at the top of this file. */}

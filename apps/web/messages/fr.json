@@ -129,7 +129,6 @@
     "bookingPage": "Page de réservation",
     "eventTypes": "Types d'événements",
     "subscriptions": "Abonnements",
-    "plans": "Abonnements & affiliations",
     "onlineCourses": "Cours en ligne",
     "products": "Produits",
     "documents": "Documents",
@@ -966,7 +965,8 @@
     "filterExpiring": "Expire bientôt",
     "selectAll": "Tout sélectionner",
     "bulkRenewedPartial": "{ok} renouvelé(s), {failed} en échec",
-    "clearSelection": "Effacer la sélection"
+    "clearSelection": "Effacer la sélection",
+    "manageTypes": "Gérer les types"
   },
   "SubscriptionsOverview": {
     "title": "Abonnements",
@@ -1558,7 +1558,6 @@
     "access_members_desc": "Les membres réservent avec leur abonnement. Un nouveau venu peut tout de même réserver un cours si « Essai gratuit pour les nouveaux » est activé ci-dessous.",
     "access_subscription": "Abonnements spécifiques",
     "access_subscription_desc": "Seuls les membres possédant l’un des abonnements sélectionnés peuvent réserver. Un nouveau venu peut tout de même réserver un cours si « Essai gratuit pour les nouveaux » est activé ci-dessous.",
-    "accessNoSubs": "Aucun type d’abonnement — créez-les sous Abonnements et affiliations.",
     "accessBadgeSubscription": "Abonnement",
     "dropInLabel": "Proposer le drop-in (paiement à la séance)",
     "dropInPricePlaceholder": "p. ex. 25",
@@ -1603,9 +1602,6 @@
     "fieldType_checkbox": "Case à cocher",
     "fieldType_date": "Date",
     "reorder": "Réorganiser",
-    "quickCreateSubPlaceholder": "Nom du nouvel abonnement…",
-    "quickCreateSubButton": "Créer",
-    "quickCreateSubHint": "Crée un abonnement de base lié à cette activité. Les tarifs peuvent être ajoutés plus tard dans les réglages des abonnements.",
     "sectionClasses": "Cours",
     "sectionAppointments": "Rendez-vous",
     "sectionEmpty": "Rien ici pour l’instant.",
@@ -1631,7 +1627,6 @@
     "waitlistRequiresCapacity": "N’a d’effet que sur les séances avec une limite de participants — une séance sans limite n’est jamais complète.",
     "waitlistRequiresPlan": "Disponible à partir de la formule {plan}.",
     "level_none": "Non précisé",
-    "accessNoSubsAction": "Créer un type d’abonnement",
     "sectionBookingTitle": "Réservation et tarifs",
     "sectionBookingSubtitle": "Qui peut réserver, et à quel prix.",
     "moreOptionsLabel": "Plus d'options",
@@ -1645,7 +1640,11 @@
     "scheduleSheetEmptyTitle": "Pas au calendrier",
     "scheduleSheetEmptyBody": "Cette activité n'a aucune séance à venir : personne ne peut la voir ni la réserver.",
     "scheduleSheetEmptyCta": "Programmer une séance",
-    "scheduleSheetOpenSchedule": "Ouvrir le planning"
+    "scheduleSheetOpenSchedule": "Ouvrir le planning",
+    "accessPickInCatalogue": "Les abonnements autorisés se définissent dans le catalogue, à côté des abonnements eux-mêmes.",
+    "accessOpenCatalogue": "Ouvrir le catalogue",
+    "dropInRateInCatalogue": "Un tarif membre sur ce prix se définit dans le catalogue — c'est une règle unique partagée par tous les abonnements concernés.",
+    "benefitInCatalogue": "Le tarif membre pour ces durées se définit dans le catalogue, à côté des abonnements concernés."
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -1729,7 +1728,6 @@
     "paymentModesDesc": "Comment vous enregistrez les paiements espèces / virement / TWINT — proposés lors de la saisie manuelle d'un paiement.",
     "paymentModePlaceholder": "p. ex. TWINT",
     "paymentModeAdd": "Ajouter",
-    "paymentSettingsLink": "Devise et paramètres de paiement",
     "alertPresetName": "Nom du modèle",
     "alertPresetScheduleType": "Type de déclencheur",
     "deletePreset": "Supprimer",
@@ -1840,13 +1838,6 @@
     "autoTriggerUnsubscribed": "Quand désabonné",
     "autoTriggerChanged": "Quand l'abonnement change",
     "subTypeActivitiesLabel": "Activités débloquées par cet abonnement",
-    "subTypeActivitiesDesc": "Pour un cours, le lien réserve la réservation aux titulaires de cet abonnement. Un rendez-vous n’a aucune restriction d’accès — le prix fait office de filtre — le lien définit donc ce que paient les titulaires.",
-    "subTypeActivitiesEmpty": "Aucune activité pour l’instant — créez-les sous Offre → Activités.",
-    "subTypeActivitiesHint": "Si le dernier abonnement est retiré d’un cours, il redevient réservable par tous les membres. Sur un rendez-vous, l’avantage disparaît et tout le monde paie le prix de base.",
-    "subTypeActivitiesAppointmentBadge": "Rendez-vous",
-    "subTypeActivitiesBenefitLabel": "Ce que reçoivent les titulaires",
-    "subTypeActivitiesSharedRule": "Un rendez-vous ne porte qu’une règle d’avantage, partagée avec {names} — ce choix s’applique aussi à eux.",
-    "subTypeActivitiesBenefitFix": "Vérifiez l’avantage de rendez-vous signalé ci-dessus — rien n’a été enregistré.",
     "subTypeUsageLimit": "Limite d'utilisation",
     "subTypeUsageLimitDesc": "Limite uniquement les réservations de COURS couvertes par cet abonnement. Une fois le quota épuisé, les membres peuvent toujours réserver au tarif à la séance (le tarif membre s'applique).",
     "subTypeLimitPeriodDay": "par jour",
@@ -1882,14 +1873,15 @@
     "paymentsRecordingOff": "En pause",
     "paymentsRecordingStalled": "N'enregistre pas encore",
     "paymentsPublishableKeyHelp": "Une simple étiquette — Linyup ne débite rien avec. L'enregistrement démarre dès que vous ajoutez la clé de signature du webhook ci-dessous.",
-    "subTypeActivitiesEmptyAction": "Créer une activité",
     "paymentsWebhookEventsHelp": "Abonnez le point de terminaison à <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code>. N'ajoutez pas en plus <code>invoice.payment_succeeded</code> : Stripe ne relie plus une facture à son paiement, les paiements récurrents seraient donc enregistrés deux fois.",
     "paymentsWebhookEventsTitle": "Choisissez les événements avec soin",
     "paymentsDoubleRecordingTitle": "Ce point de terminaison Stripe enregistre les paiements en double",
     "paymentsDoubleRecordingBody": "Au cours des {days} derniers jours, il a livré {invoiceCount} événements de facture et {paymentCount} événements de paiement. Stripe ne relie plus une facture à son paiement : un paiement récurrent qui arrive sous les deux formes est donc enregistré deux fois, et rien ici ne peut dire quelles deux lignes correspondent au même argent.",
     "paymentsDoubleRecordingFix": "À corriger dans Stripe : modifiez ce point de terminaison et retirez <code>invoice.payment_succeeded</code>. Gardez <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> et <code>checkout.session.completed</code> — ils enregistrent tout, renouvellements compris. Les lignes déjà écrites restent telles quelles ; la liste des paiements signale celles qui sont concernées.",
     "customFieldPublicOnBooking": "Demander dans le formulaire de réservation",
-    "customFieldPublicOnBookingHint": "Rend le nom et les options de ce champ visibles publiquement afin qu'il puisse figurer sur votre page de réservation. Laissez désactivé pour toute information confidentielle."
+    "customFieldPublicOnBookingHint": "Rend le nom et les options de ce champ visibles publiquement afin qu'il puisse figurer sur votre page de réservation. Laissez désactivé pour toute information confidentielle.",
+    "subTypeActivitiesInCatalogue": "À définir dans le catalogue, où vous le voyez aussi du côté de l'activité.",
+    "subTypeActivitiesOpenCatalogue": "Ouvrir le catalogue"
   },
   "Bookings": {
     "title": "Réservations",
@@ -4457,7 +4449,6 @@
   },
   "OfferPricing": {
     "title": "Tarifs",
-    "subtitle": "Voyez exactement ce que chaque type de contact paie pour tout ce que vous vendez — et repérez les lacunes tarifaires avant un membre.",
     "sectionPreviewTitle": "Aperçu des prix",
     "sectionPreviewSubtitle": "Choisissez qui demande et voyez exactement ce qu'il paierait maintenant.",
     "personaGuest": "Invité",
@@ -4521,7 +4512,8 @@
     "discountsNoneRunning": "Aucune réduction n'est active pour le moment.",
     "discountsManageLink": "Gérer les codes promo",
     "discountPercentOff": "{percent} % de réduction",
-    "discountFixedPrice": "{price} avec ce code"
+    "discountFixedPrice": "{price} avec ce code",
+    "personaPickerLabel": "Qui demande"
   },
   "PublicBooking": {
     "titleBookSession": "Réserver une séance",
@@ -5243,7 +5235,6 @@
     "delete": "Supprimer",
     "toastSaved": "Enregistré."
   },
-  "OrgHome": {},
   "OrgPlaces": {
     "title": "Lieux de l'organisation",
     "subtitle": "Emplacements partagés avec chaque studio de cette organisation."
@@ -6562,10 +6553,12 @@
   },
   "QuickLinks": {
     "plansToPricing": "Vérifier ce qu'un membre paie réellement",
-    "plansToActivities": "Voir quels cours un abonnement débloque",
     "availabilityToActivities": "Définir les types de rendez-vous et les durées proposés par ces horaires",
     "promoCodesToPricing": "Voir vos codes actifs à côté des prix qu'ils réduisent",
-    "activitiesToSchedule": "Voir ces cours dans le calendrier"
+    "activitiesToSchedule": "Voir ces cours dans le calendrier",
+    "pricingToActivities": "Modifier les activités derrière ces prix",
+    "pricingToSubscriptions": "Modifier les abonnements derrière ces prix",
+    "toPaymentSettings": "Définir votre devise et votre mode d'encaissement"
   },
   "Site": {
     "loading": "Chargement…",
@@ -6849,5 +6842,64 @@
     "statusError": "Action requise",
     "unavailableTitle": "Disponible uniquement sur l'application en production",
     "unavailableBody": "Les domaines personnalisés ne sont pas activés dans cet environnement. Sur l'application en production, vous connectez votre propre domaine et vos pages sont diffusées depuis celui-ci."
+  },
+  "OfferCatalogue": {
+    "title": "Catalogue",
+    "subtitle": "Ce que vous proposez et les abonnements qui y donnent accès.",
+    "toPricing": "Voir les prix",
+    "toActivities": "Toutes les activités",
+    "railPlans": "Abonnements",
+    "railClasses": "Cours",
+    "railAppointments": "Rendez-vous",
+    "noPlans": "Aucun abonnement pour l'instant.",
+    "noPlansAction": "Créer un abonnement",
+    "noActivities": "Aucune activité pour l'instant.",
+    "noActivitiesAction": "Créer une activité",
+    "noClasses": "Aucun cours pour l'instant.",
+    "noAppointments": "Aucun rendez-vous pour l'instant.",
+    "noneFiltered": "Aucun dans ce groupe.",
+    "paneEmpty": "Choisissez un abonnement ou une activité pour voir ses liens.",
+    "paneMissing": "Cet élément n'existe plus.",
+    "paneMissingAction": "Effacer la sélection",
+    "appointmentBadge": "Rendez-vous",
+    "classBadge": "Cours",
+    "plansHeading": "Abonnements",
+    "plansHint": "Cochez qui peut réserver et qui bénéficie d'un tarif membre.",
+    "includesHeading": "Comprend",
+    "includesHint": "Cochez ce que cet abonnement ouvre et où il donne un tarif membre.",
+    "accessToggle": "Peut réserver",
+    "rateToggle": "Tarif membre",
+    "sharedRule": "Ce tarif est partagé avec {names} — le modifier modifie aussi le leur.",
+    "unsaved": "Modifications non enregistrées",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "rename": "Renommer",
+    "nameLabel": "Nom",
+    "editAll": "Modifier",
+    "deadEnds": "{count, plural, one {# activité que personne ne peut réserver} other {# activités que personne ne peut réserver}}",
+    "deadEndsAction": "Afficher uniquement celles-ci",
+    "deadEndsClear": "Tout afficher à nouveau",
+    "summaryClass": "{gated, plural, =0 {Ouvert à tous} one {# abonnement peut réserver} other {# abonnements peuvent réserver}} · {rated, plural, =0 {aucun tarif membre} one {# tarif membre} other {# avec tarif membre}}",
+    "summaryAppointment": "Le prix fait office de porte · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
+    "summaryPlan": "{count, plural, =0 {N'ouvre encore rien} one {Lié à # activité} other {Lié à # activités}}",
+    "backToActivities": "Retour aux activités",
+    "backToSubscriptions": "Retour aux abonnements",
+    "railCourses": "Cours en ligne",
+    "noCourses": "Aucun cours pour l'instant.",
+    "courseBadge": "Cours",
+    "noEdgeHere": "Ouvert à tous",
+    "summaryCourseGated": "{plans, plural, =0 {Réservé à des abonnements, mais aucun choisi} one {# abonnement peut l'ouvrir} other {# abonnements peuvent l'ouvrir}}",
+    "summaryCoursePriced": "Vendu à l'unité · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
+    "summaryCourseOpen": "Gratuit ou réservé aux connectés : aucun abonnement ne change qui peut l'ouvrir."
+  },
+  "PagePurpose": {
+    "activities": "Ce que vous proposez",
+    "schedule": "Quand vous le proposez",
+    "subscriptions": "Ce que vous vendez",
+    "pricing": "Ce que les gens paient vraiment",
+    "activitiesNote": "Les cours et rendez-vous que vous proposez. Définis une fois ici, puis planifiés autant de fois que vous voulez.",
+    "scheduleNote": "Toutes les séances au calendrier, uniques ou récurrentes, avec leurs réservations.",
+    "subscriptionsNote": "Adhésions, cartes et forfaits. Leur prix, leur fréquence de renouvellement et ce qu'ils débloquent.",
+    "pricingNote": "Ce que paie chaque type de contact, recalculé avec les règles d'une vraie réservation."
   }
 }

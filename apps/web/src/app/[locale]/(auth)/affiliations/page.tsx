@@ -28,11 +28,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { IdCard } from 'lucide-react'
+import { IdCard, Settings2 } from 'lucide-react'
 import { renewAffiliationCall } from '@/components/affiliations/renew'
 import { AffiliationBulkBar, RenewConfirmDialog } from '@/components/affiliations/RenewUI'
+import { AffiliationTypesManager } from '@/components/affiliations/AffiliationTypesManager'
 
 // ─── colour map ────────────────────────────────────────────────────────────────
 
@@ -386,6 +387,7 @@ export default function TeamAffiliationsPage() {
   const { can } = useCapabilities()
   const affiliationTerm = useAffiliationTerm()
   const qc = useQueryClient()
+  const [typesOpen, setTypesOpen] = useState(false)
 
   const orgId = team?.org_id
   // Affiliation types are studio "offerings" — manager+ may edit them.
@@ -549,15 +551,50 @@ export default function TeamAffiliationsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{affiliationTerm}</h1>
-        {contacts && (
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitle', { total: contacts.length, active: totalActive })}
-          </p>
+      {/* Header — the roster IS this page; the types are set-up, one click away.
+          They used to be a tab of "Plans & affiliations" while the roster had no
+          nav item at all, so the daily task was reachable only through a link
+          inside the set-up screen. A peer tab would have implied the two are
+          equals; one is opened weekly and the other at setup. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{affiliationTerm}</h1>
+          {contacts && (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t('subtitle', { total: contacts.length, active: totalActive })}
+            </p>
+          )}
+        </div>
+        {canEdit && team && currentTeamId && (
+          <Button variant="outline" size="sm" onClick={() => setTypesOpen(true)}>
+            <Settings2 className="h-4 w-4" />
+            {t('manageTypes')}
+          </Button>
         )}
       </div>
+
+      {/* The types manager, unchanged, in a dialog. On close the types query is
+          invalidated so a type added here shows up in the selector below without
+          a reload — the manager writes them, this page reads them, and they are
+          two different queries. */}
+      {team && currentTeamId && (
+        <Dialog
+          open={typesOpen}
+          onOpenChange={(v) => {
+            setTypesOpen(v)
+            if (!v) void qc.invalidateQueries({ queryKey: ['affiliation-types', currentTeamId] })
+          }}
+        >
+          <DialogContent className="sm:max-w-3xl h-[calc(100dvh-2rem)] sm:h-[40rem] p-0 gap-0">
+            <DialogHeader className="border-b px-4 py-3 pr-12">
+              <DialogTitle className="text-base">{t('manageTypes')}</DialogTitle>
+            </DialogHeader>
+            <DialogBody className="p-4">
+              <AffiliationTypesManager team={team} teamId={currentTeamId} />
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Type selector */}
       {affiliationTypes.length > 0 && (
