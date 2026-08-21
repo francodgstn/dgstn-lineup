@@ -42,6 +42,9 @@ export interface Contact {
   avatar_url: any;
   id: string;
   email: string;
+  /** Set while a self-service deletion is pending. Nothing is destroyed until
+   *  the date passes — see packages/shared/src/utils/contactDeletion.ts. */
+  deletion_scheduled_for?: { seconds: number } | null;
   firstname?: string;
   lastname?: string;
   phone?: string;

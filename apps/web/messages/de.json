@@ -933,7 +933,8 @@
     "subHistoryDeleteTitle": "Diesen Verlaufseintrag löschen?",
     "subHistoryDeleteBody": "Damit wird der Nachweis entfernt, dass {name} dieses Abo hatte. Es wird nichts erstattet und der aktuelle Stand ändert sich nicht.",
     "affiliationRemoveTitle": "Diese Zugehörigkeit entfernen?",
-    "affiliationRemoveBody": "{name} verliert diese Zugehörigkeit und alles, was davon abhängt: Zugang zu geschützten Aktivitäten, Mitgliederpreise und eine anstehende Verlängerung."
+    "affiliationRemoveBody": "{name} verliert diese Zugehörigkeit und alles, was davon abhängt: Zugang zu geschützten Aktivitäten, Mitgliederpreise und eine anstehende Verlängerung.",
+    "deletionScheduledBadge": "Löschung beantragt · {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
