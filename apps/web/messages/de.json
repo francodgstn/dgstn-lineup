@@ -129,7 +129,6 @@
     "bookingPage": "Buchungsseite",
     "eventTypes": "Eventtypen",
     "subscriptions": "Abos",
-    "plans": "Abos & Affiliationen",
     "onlineCourses": "Online-Kurse",
     "products": "Produkte",
     "documents": "Dokumente",
@@ -966,7 +965,8 @@
     "filterExpiring": "Läuft bald ab",
     "selectAll": "Alle auswählen",
     "bulkRenewedPartial": "{ok} verlängert, {failed} fehlgeschlagen",
-    "clearSelection": "Auswahl aufheben"
+    "clearSelection": "Auswahl aufheben",
+    "manageTypes": "Typen verwalten"
   },
   "SubscriptionsOverview": {
     "title": "Abonnements",

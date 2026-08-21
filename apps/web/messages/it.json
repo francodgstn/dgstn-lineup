@@ -129,7 +129,6 @@
     "bookingPage": "Pagina di prenotazione",
     "eventTypes": "Tipi di evento",
     "subscriptions": "Abbonamenti",
-    "plans": "Abbonamenti & affiliazioni",
     "onlineCourses": "Corsi online",
     "products": "Prodotti",
     "documents": "Documenti",
@@ -966,7 +965,8 @@
     "filterExpiring": "In scadenza",
     "selectAll": "Seleziona tutto",
     "bulkRenewedPartial": "{ok} rinnovati, {failed} non riusciti",
-    "clearSelection": "Deseleziona"
+    "clearSelection": "Deseleziona",
+    "manageTypes": "Gestisci i tipi"
   },
   "SubscriptionsOverview": {
     "title": "Abbonamenti",

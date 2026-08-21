@@ -129,7 +129,6 @@
     "bookingPage": "Booking page",
     "eventTypes": "Event types",
     "subscriptions": "Subscriptions",
-    "plans": "Plans & Affiliations",
     "onlineCourses": "Online courses",
     "products": "Products",
     "documents": "Documents",
@@ -966,7 +965,8 @@
     "filterExpiring": "Expiring soon",
     "selectAll": "Select all",
     "bulkRenewedPartial": "Renewed {ok}, {failed} failed",
-    "clearSelection": "Clear selection"
+    "clearSelection": "Clear selection",
+    "manageTypes": "Manage types"
   },
   "SubscriptionsOverview": {
     "title": "Subscriptions",

@@ -37,6 +37,7 @@ import {
   Zap,
   Package,
   IdCard,
+  BadgeCheck,
   FileText,
   ShoppingBag,
   DoorOpen,
@@ -63,6 +64,7 @@ import { usePlanName } from '@/hooks/usePlanName'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useUpgradeModal, UpgradeModalProvider } from '@/contexts/UpgradeModalContext'
 import { NavPinsProvider, useNavPins } from '@/contexts/NavPinsContext'
+import { useAffiliationTerm } from '@/hooks/useAffiliationTerm'
 import { OpenTabsProvider, useOpenTabs } from '@/contexts/OpenTabsContext'
 import { normalizeTabPath } from '@/lib/tab-routes'
 import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
@@ -115,6 +117,13 @@ type NavItem = {
   // Active only on an exact path match (not prefix) — for hub routes like
   // /plugins whose children (/plugins/website, …) have their own nav items.
   exact?: boolean
+  /** Opt in to a label the STUDIO chose rather than one we translate. Only
+   *  'affiliationTerm' today: an org configures what an affiliation is called
+   *  ("Lizenz", "Membership"), the roster page already titles itself with that
+   *  word, and a nav row reading "Affiliations" beside it would be the product
+   *  disagreeing with itself. Resolved ONCE in SidebarContent and applied to
+   *  both the row and the search catalogue, so the two cannot diverge. */
+  dynamicLabel?: 'affiliationTerm'
 }
 
 type NavSection = { labelKey: string; icon: React.ElementType; items: NavItem[] }
@@ -249,10 +258,30 @@ const NAV_SECTIONS: NavSection[] = [
     icon: Tag,
     items: [
       { id: 'activities', href: '/offer/activities', labelKey: 'activities', icon: Zap },
-      // "Plans & affiliations" is an umbrella grouping Subscriptions + Affiliations as tabs.
-      // Subscriptions is on every plan, so the item is always shown; the Affiliations
-      // tab self-gates to Studio+ with an upsell.
-      { id: 'plans', href: '/offer/plans', labelKey: 'plans', icon: IdCard },
+      // Subscriptions only. This was an umbrella ("Plans & Affiliations") whose
+      // second tab held the affiliation TYPES while the roster below had no nav
+      // item at all; the roster now owns both, so the umbrella is gone and the
+      // route id stays `plans` only because the href does. On every plan, so
+      // never gated.
+      { id: 'plans', href: '/offer/plans', labelKey: 'subscriptions', icon: IdCard },
+      // The affiliation ROSTER — who is affiliated, at what status, expiring when.
+      // It had no nav item at all: reachable only from a link inside the types
+      // manager and one dashboard figure, which is the same shape UX-99 fixed
+      // elsewhere. The types themselves are set-up and live behind "Manage
+      // types" on this page rather than earning a second destination.
+      {
+        id: 'affiliations',
+        href: '/affiliations',
+        labelKey: 'affiliations',
+        icon: BadgeCheck,
+        dynamicLabel: 'affiliationTerm',
+        // Affiliations are an ORG concept — the statuses live on the
+        // organization and the roster refuses outright for a team without one
+        // ("This team is not part of an organisation"). Showing the item to
+        // every studio would put a nav row in front of a page whose whole
+        // content is an explanation that it does not apply.
+        requiresOrg: true,
+      },
       // Unified read-only pricing surface — persona price preview + "what you
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
@@ -387,6 +416,7 @@ function NavLink({
   collapsed,
   onClick,
   shortcutId,
+  label: labelOverride,
 }: {
   item: NavItem
   collapsed: boolean
@@ -394,13 +424,16 @@ function NavLink({
   // When set (and the sidebar is expanded), a hover "always show" toggle is
   // shown that adds this destination to the Shortcuts group.
   shortcutId?: string
+  /** Pre-resolved label, for items whose name the STUDIO chose (see
+   *  NavItem.dynamicLabel). Absent ⇒ translated from `labelKey` as usual. */
+  label?: string
 }) {
   const pathname = usePathname()
   const t = useTranslations('Nav')
   const { isAtLeast } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
   const Icon = item.icon
-  const label = t(item.labelKey as Parameters<typeof t>[0])
+  const label = labelOverride ?? t(item.labelKey as Parameters<typeof t>[0])
 
   const isLocked = !!item.minPlan && !isAtLeast(item.minPlan)
 
@@ -2292,6 +2325,14 @@ function SidebarContent({
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
   const canEditTeamSettings = useCapabilities().can('team.settings')
   const { alwaysShownIds, recentIds, recordVisit, headTileId, setHeadTile } = useNavPins()
+  // ONE call for the whole sidebar. Resolved here rather than inside NavLink so
+  // the row and the search catalogue below read the same string — a per-row hook
+  // would also mean ~20 subscriptions to one cached query.
+  const affiliationTerm = useAffiliationTerm()
+  const navLabel = (item: NavItem) =>
+    item.dynamicLabel === 'affiliationTerm'
+      ? affiliationTerm
+      : t(item.labelKey as Parameters<typeof t>[0])
   // Raw message tree — used to read the per-locale `Nav.searchKeywords` synonym
   // map without a t() call per id (ids without keywords are simply label-only).
   const messages = useMessages() as unknown as {
@@ -2353,7 +2394,7 @@ function SidebarContent({
       catalogue.set(item.id, {
         id: item.id,
         href: item.href,
-        label: t(item.labelKey as Parameters<typeof t>[0]),
+        label: navLabel(item),
         icon: item.icon,
         exact: item.exact,
       })
@@ -2669,6 +2710,7 @@ function SidebarContent({
                       collapsed={false}
                       onClick={onLinkClick}
                       shortcutId={item.id}
+                      label={navLabel(item)}
                     />
                   ))}
                   {secPlugins.map((nav) => (
