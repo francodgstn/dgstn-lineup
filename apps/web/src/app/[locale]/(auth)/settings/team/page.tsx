@@ -91,6 +91,7 @@ import {
 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
+import { CustomDomainCard } from './CustomDomainCard'
 import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { PaymentModesCard } from '@/components/payments/PaymentModesCard'
 import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
@@ -2187,6 +2188,20 @@ function OutreachTab({ teamId, team }: { teamId: string; team: Team }) {
       <Card>
         <CardContent className="pt-6">
           <EmailSenderForm teamId={teamId} plan={team.plan} />
+        </CardContent>
+      </Card>
+
+      {/* The domain the studio's PAGES are served from, directly below the one
+          their MAIL is sent from — "our domain" is one question in an owner's
+          head, and separating the two makes them look unrelated. */}
+      <Card>
+        <CardContent className="pt-6">
+          <CustomDomainCard
+            scope="team"
+            entityId={teamId}
+            plan={team.plan}
+            slug={team.slug}
+          />
         </CardContent>
       </Card>
 

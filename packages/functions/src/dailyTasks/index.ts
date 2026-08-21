@@ -9,6 +9,7 @@ import { expirePendingBookings } from './expirePendingBookings'
 import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
+import { refreshCustomDomains } from './refreshCustomDomains'
 import { rollSessionSeries } from './rollSessionSeries'
 import { sweepWaitlistOffers } from '../booking/waitlist/sweep'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
@@ -72,6 +73,10 @@ export const dailyTasks = onSchedule(
       { name: 'rollSessionSeries', handler: rollSessionSeries },
       // Recurring accounting entry templates (finance plugin) — e.g. monthly rent.
       { name: 'materializeRecurringEntries', handler: materializeRecurringEntries },
+      // Custom domains: re-poll Cloudflare. Catches a domain that stops working
+      // with no event on our side — a lapsed certificate, or a CNAME the studio
+      // removed at their registrar. Status only; never registers or deletes.
+      { name: 'refreshCustomDomains', handler: refreshCustomDomains },
     ]
 
     const results: TaskResult[] = []

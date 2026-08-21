@@ -36,7 +36,7 @@ export interface PayrexxGatewayConfig {
 
 export type PaymentGatewayConfig = StripeGatewayConfig | PayrexxGatewayConfig
 
-export type IntegrationType = 'payment_gateway' | 'email_sender'
+export type IntegrationType = 'payment_gateway' | 'email_sender' | 'public_domain'
 
 // ─── Email sending (Brevo ESP) ────────────────────────────────────────────────
 // Outbound mail is sent through Brevo's transactional API (see
@@ -92,4 +92,66 @@ export interface TeamIntegration {
   created: Timestamp
   createdBy: string
   updated_at?: Timestamp
+}
+
+// ─── Custom public domain (Cloudflare for SaaS) ───────────────────────────────
+// A studio serving its public surfaces from a hostname it owns
+// (`book.theirdojo.ch`) instead of `linyup.com/public/{slug}`. Stored at
+// teams|organizations/{id}/integrations/public_domain. Owners/org-admins only,
+// server-written only, and — like EmailSenderConfig — it holds NO credentials:
+// the Cloudflare API token is platform-level and lives in Secret Manager.
+//
+// Full design: docs/custom-domains.md.
+
+// Mirrors the Cloudflare custom-hostname lifecycle, collapsed to the four states
+// a studio can act on. `error` is terminal only until they fix DNS and re-check.
+export type PublicDomainStatus =
+  | 'pending'    // registered at Cloudflare; waiting for the studio's CNAME
+  | 'verifying'  // CNAME seen; certificate being issued
+  | 'active'     // serving
+  | 'error'      // Cloudflare reported a problem — see `error`
+
+// The ONE record the studio adds at their registrar. Ownership verification and
+// certificate issuance both fall out of it resolving (Cloudflare HTTP
+// validation), which is why there is no TXT step in the common case.
+export interface PublicDomainDnsRecord {
+  type: 'CNAME'
+  host: string   // e.g. 'book' (or the full hostname, for registrars that want it)
+  value: string  // the published target, e.g. 'connect.linyup.com'
+}
+
+export interface PublicDomainConfig {
+  type: 'public_domain'
+  /**
+   * The PRIMARY hostname — the one that serves the tree.
+   *
+   * Singular on purpose. Extra hostnames are aliases that 301 into the primary
+   * (docs/custom-domains.md: a subdomain is a separate origin and the contact's
+   * session is origin-scoped), and when they ship they arrive as an OPTIONAL
+   * `aliases` array beside this field. That is additive — no migration, and no
+   * list-of-one to unwrap at every read in the meantime.
+   */
+  hostname: string
+  /** Cloudflare's custom-hostname id — the handle for status polls and deletion. */
+  cf_hostname_id: string
+  status: PublicDomainStatus
+  dns_record: PublicDomainDnsRecord
+  /** Cloudflare's raw SSL status, for support ("pending_validation", "active", …). */
+  ssl_status?: string
+  /** Cloudflare's verification error, verbatim. Null once it clears. */
+  error?: string | null
+  last_checked_at?: Timestamp
+  /** First time the hostname reached `active`. Never reset by a later error. */
+  verified_at?: Timestamp | null
+  updatedAt: Timestamp
+}
+
+// public_domains/{hostname} — the global uniqueness registry. Deliberately tiny:
+// it answers "is this hostname claimed, and by whom" and nothing else.
+export interface PublicDomainClaim {
+  hostname: string
+  scope: 'team' | 'org'
+  entityId: string
+  cf_hostname_id: string
+  created_at: Timestamp
 }

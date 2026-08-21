@@ -80,6 +80,21 @@ export const ORG_INSTALLED_PLUGINS_SUBCOLLECTION = 'installed_plugins'
 // Well-known integration doc id for a studio's email sender configuration
 // (teams|organizations/{id}/integrations/email_sender). See EmailSenderConfig.
 export const EMAIL_SENDER_INTEGRATION_DOC = 'email_sender'
+// Well-known integration doc id for a studio's custom PUBLIC domain
+// (teams|organizations/{id}/integrations/public_domain). See PublicDomainConfig.
+// The sibling of email_sender, and deliberately a separate doc: the domain a
+// studio SENDS from and the domain their pages are SERVED from are different
+// facts with different lifecycles, and a studio may well have one and not the
+// other. Contains no credentials.
+export const PUBLIC_DOMAIN_INTEGRATION_DOC = 'public_domain'
+
+// public_domains/{hostname} — the GLOBAL uniqueness registry for custom public
+// domains. The doc id IS the hostname (like promo_codes), which is what makes
+// "one hostname, one tenant" a property of the database rather than of a check
+// somebody has to remember to run. Admin-SDK only; every client access is
+// denied by the rules — a tenant reads its own config doc instead, and the
+// registry would otherwise let anyone enumerate every studio's domain.
+export const PUBLIC_DOMAINS_COLLECTION = 'public_domains'
 
 // Mail pipeline (Brevo). Both are Admin-SDK only — written by Cloud Functions
 // (the webhook handler + mail service), never by clients.
