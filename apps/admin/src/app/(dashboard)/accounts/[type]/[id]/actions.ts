@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { FieldValue } from 'firebase-admin/firestore'
 import {
   TEAMS_COLLECTION,
+  MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   MESSAGING_POLICIES_COLLECTION,
   type MessagingMode,
 } from '@linyup/shared'
@@ -31,6 +32,78 @@ export async function setConnectEnabled(teamId: string, enabled: boolean): Promi
       'payments.connectEnabled': enabled,
       updated_at: FieldValue.serverTimestamp(),
     })
+  revalidatePath(`/accounts/team/${teamId}`)
+  return { ok: true }
+}
+
+/**
+ * DETACH a team's Stripe connected account.
+ *
+ * `setConnectEnabled(false)` above stops charges but leaves the account LINKED —
+ * which is why `purgeTeam` flags `connect_accounts` as
+ * `externalTeardown: 'stripe_connect'` and its runbook ends in a manual step in
+ * the Stripe dashboard. Nothing in the product could sever the link, so a studio
+ * that left Linyup kept its account pointed here, and a torn-down tenant left an
+ * orphan behind.
+ *
+ * OPERATOR-ONLY, deliberately. A studio-facing version needs to reason about
+ * pending payouts and reversals, and getting that wrong strands a customer's
+ * money; the guards below are enough to keep an operator from breaking a live
+ * tenant, not enough to hand to one.
+ *
+ * It clears the local link only. The account continues to exist at Stripe, under
+ * the platform, and is untouched — this is a disconnect, not a deletion, and the
+ * caller still has to decide what happens to it there.
+ */
+export async function disconnectConnectAccount(teamId: string): Promise<ActionResult> {
+  await requireOperator()
+
+  const teamRef = adminDb.collection(TEAMS_COLLECTION).doc(teamId)
+  const teamSnap = await teamRef.get()
+  if (!teamSnap.exists) return { ok: false, error: 'Team not found.' }
+  const payments = (teamSnap.data()?.payments ?? {}) as { connectAccountId?: string }
+  const accountId = payments.connectAccountId
+  if (!accountId) return { ok: false, error: 'This team has no connected account.' }
+
+  // ── Refuse while anything still depends on it ────────────────────────────
+  // A live recurring subscription bills through this account; disconnecting
+  // under it would leave Stripe charging for a link the product no longer knows
+  // about. Same live set the checkout path uses.
+  const LIVE = new Set(['active', 'trialing', 'past_due'])
+  const subs = await teamRef.collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION).get()
+  const liveSubs = subs.docs.filter((d) => LIVE.has((d.data().status as string) ?? '')).length
+  if (liveSubs > 0) {
+    return {
+      ok: false,
+      error: `${liveSubs} live member subscription${liveSubs === 1 ? '' : 's'} still bill through this account. Cancel them in Stripe first.`,
+    }
+  }
+
+  // An in-flight checkout holds a seat and expects a webhook that will arrive
+  // after the link is gone. Short-lived (30 min), so this is a "try again
+  // shortly" rather than a real obstacle.
+  const holds = await adminDb
+    .collectionGroup('bookings')
+    .where('teamId', '==', teamId)
+    .where('status', '==', 'pending_payment')
+    .limit(1)
+    .get()
+  if (!holds.empty) {
+    return {
+      ok: false,
+      error: 'A checkout is still in flight for this team. Wait for it to complete or expire (30 min), then try again.',
+    }
+  }
+
+  // ── Sever both sides of the link ─────────────────────────────────────────
+  // `connect_accounts/{acct}.teamId` is the only account → team map the Connect
+  // webhook has, so removing it is what actually stops routing.
+  await adminDb.collection('connect_accounts').doc(accountId).delete()
+  await teamRef.update({
+    payments: FieldValue.delete(),
+    updated_at: FieldValue.serverTimestamp(),
+  })
+
   revalidatePath(`/accounts/team/${teamId}`)
   return { ok: true }
 }

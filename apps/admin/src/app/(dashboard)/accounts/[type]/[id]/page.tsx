@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
 import { getMessagingInfo } from '@/lib/queries/messaging'
 import { ConnectToggle } from './connect-toggle'
+import { DisconnectConnect } from './disconnect-connect'
 import { MessagingPolicyCard } from './messaging-policy-card'
 
 export const dynamic = 'force-dynamic'
@@ -174,6 +175,16 @@ export default async function AccountDetailPage({
                   }
                 />
               </div>
+
+              {/* The other half of teardown: the toggle above stops charges,
+                  this removes the link. `purgeTeam` cannot do it, which is why
+                  its runbook otherwise ends in a manual Stripe step. */}
+              {account.payments.connectAccountId && (
+                <DisconnectConnect
+                  teamId={account.id}
+                  accountId={account.payments.connectAccountId}
+                />
+              )}
 
               {account.payments.requirementsDue.length > 0 && (
                 <div className="flex flex-col gap-1">
