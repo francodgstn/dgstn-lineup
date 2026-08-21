@@ -318,6 +318,13 @@ App Hosting custom domains are a manual per-domain operation (§5b, §6) and can
 serve this — **Cloudflare for SaaS** (custom hostnames) can: one API call per
 tenant hostname, Cloudflare issues and renews the cert.
 
+**PRODUCTION ONLY.** Custom domains are wired on `linyup-prod` and nowhere else —
+one Cloudflare zone has one fallback origin, so sandbox/staging would each need
+their own domain, token and Worker deploy. Off-prod the studio card and this
+console both say so, and `registerPublicDomain` refuses server-side. Everything
+below therefore applies to the prod project alone. See `docs/custom-domains.md` →
+"Environments".
+
 **The SaaS zone is `linyup.com`** — its DNS moves from OVH to Cloudflare
 (registrar stays OVH; only the nameservers change). Child-zone delegation
 (`sites.linyup.com` alone) is **Enterprise-only**, and a separate single-purpose

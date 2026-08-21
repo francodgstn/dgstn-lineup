@@ -9,7 +9,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { useCustomDomain } from '@/hooks/useCustomDomain'
-import type { PublicDomainStatus } from '@linyup/shared'
+import {
+  CUSTOM_DOMAIN_ENV_REFUSAL,
+  customDomainsAvailable,
+  minimumPlanForFeature,
+  planHasFeature,
+  type PublicDomainStatus,
+  type SaasPlan,
+} from '@linyup/shared'
 
 /**
  * The studio's custom PUBLIC domain — where their pages are SERVED from, as
@@ -42,12 +49,22 @@ export function CustomDomainCard({
     isRemoving,
   } = useCustomDomain(scope, entityId)
 
+  // Production only (see customDomainsAvailable). Off-prod the form is not
+  // merely hidden — it is replaced by a sentence saying why, because a form that
+  // silently does nothing on the demo is how a prospect concludes the feature is
+  // broken. The callable refuses independently; this is the explanation, not the
+  // enforcement.
+  const available = customDomainsAvailable(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
+
   const [hostname, setHostname] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirmingRemove, setConfirmingRemove] = useState(false)
 
-  const isPaidPlan = plan === 'coach' || plan === 'studio' || plan === 'organization'
+  // Read the tier from PLAN_FEATURES rather than listing plans here — the same
+  // `custom_domain` feature drives the landing page's comparison table and the
+  // server's refusal, so the tier moves in one place.
+  const isPaidPlan = !!plan && planHasFeature(plan as SaasPlan, 'custom_domain')
 
   async function handleRegister() {
     setError(null)
@@ -56,7 +73,15 @@ export function CustomDomainCard({
       await registerDomain(hostname.trim())
       setHostname('')
     } catch (err) {
-      setError((err as Error).message || t('registerError'))
+      // The env refusal is a STABLE CODE, not prose — map it rather than showing
+      // the server's English. Unreachable while the form is hidden off-prod, but
+      // the code is the contract and a silent raw string is how that rots.
+      const message = (err as Error).message
+      setError(
+        message === CUSTOM_DOMAIN_ENV_REFUSAL
+          ? t('unavailableBody')
+          : message || t('registerError')
+      )
     }
   }
 
@@ -106,15 +131,23 @@ export function CustomDomainCard({
         </div>
       </div>
 
-      {!config && !isPaidPlan && (
+      {!available && (
+        <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
+          <p className="text-xs font-medium">{t('unavailableTitle')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('unavailableBody')}</p>
+        </div>
+      )}
+
+      {available && !config && !isPaidPlan && (
         <PlanUpgradeNotice
-          minPlan="coach"
+          feature="custom_domain"
+          minPlan={minimumPlanForFeature('custom_domain')}
           title={t('upsellTitle')}
           description={t('upsellDescription')}
         />
       )}
 
-      {!config && isPaidPlan && (
+      {available && !config && isPaidPlan && (
         <div className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="custom-domain">{t('hostnameLabel')}</Label>
@@ -137,7 +170,7 @@ export function CustomDomainCard({
         </div>
       )}
 
-      {config && (
+      {available && config && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0">

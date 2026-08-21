@@ -172,6 +172,11 @@
         "description": "Un sito di prenotazione pronto all'uso.",
         "detail": "Lancia un sito curato per il tuo studio con orario e prezzi integrati — senza designer né codice."
       },
+      "customDomain": {
+        "title": "Dominio personalizzato",
+        "description": "Le tue pagine sul tuo dominio.",
+        "detail": "Pubblica prenotazioni, shop e area soci su book.tuodominio.ch invece di un indirizzo Linyup. Tu aggiungi un record DNS, al certificato pensiamo noi."
+      },
       "embeds": {
         "title": "Widget",
         "description": "Aggiungi Linyup al tuo sito.",

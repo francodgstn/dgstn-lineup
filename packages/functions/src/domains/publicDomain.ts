@@ -20,6 +20,9 @@ import {
   PUBLIC_DOMAIN_INTEGRATION_DOC,
   TEAMS_COLLECTION,
   TEAM_INTEGRATIONS_SUBCOLLECTION,
+  CUSTOM_DOMAIN_ENV_REFUSAL,
+  customDomainsAvailable,
+  planHasFeature,
   type PublicDomainConfig,
   type PublicDomainStatus,
   type SaasPlan,
@@ -78,18 +81,19 @@ function normalizeHostname(input: unknown): string {
 }
 
 /**
- * Paid plans only, mirroring BYO email sending. Which tier this should really be
- * — coach+ for consistency, or studio+ as an upgrade lever — is an open product
- * decision (docs/custom-domains.md), so it is its own predicate rather than a
- * reuse of `isByoEligible`: the two are the same today and need not stay so.
+ * Paid plans only, mirroring BYO email sending — a DOMAIN is the studio's own
+ * identity, which is a different lever from removing Linyup branding (Studio+).
+ *
+ * The tier is read from `PLAN_FEATURES` rather than restated here, because it is
+ * now ADVERTISED: the landing page's comparison table renders the same
+ * `custom_domain` feature, and the studio card derives its upgrade prompt from
+ * it too. Three surfaces, one place to change the tier.
  */
-const ELIGIBLE_PLANS: SaasPlan[] = ['coach', 'studio', 'organization']
-
 async function assertPlanEligible(scope: SenderScope, entityId: string): Promise<void> {
   if (scope === 'org') return // an org is inherently a paid tier
   const snap = await admin.firestore().collection(TEAMS_COLLECTION).doc(entityId).get()
   const plan = snap.data()?.plan as SaasPlan | undefined
-  if (!plan || !ELIGIBLE_PLANS.includes(plan)) {
+  if (!plan || !planHasFeature(plan, 'custom_domain')) {
     throw new HttpsError('failed-precondition', 'A custom domain requires a paid plan.')
   }
 }
@@ -120,6 +124,29 @@ function requireAuth(uid: string | undefined): string {
   return uid
 }
 
+/**
+ * Production only — see `customDomainsAvailable` for why (one zone has one
+ * fallback origin, so a non-prod zone would need its own domain, token and
+ * Worker).
+ *
+ * Enforced HERE and not merely hidden in the UI, because without it a sandbox
+ * tenant reaches Cloudflare and registers a hostname on the PRODUCTION zone —
+ * the token and zone id are per-environment params, but "unset" is a
+ * misconfiguration away from "set to prod's". A settings form is not a boundary.
+ *
+ * `register` only. `check` and `remove` stay open so a domain connected before
+ * a project was reclassified can still be inspected and cleaned up rather than
+ * being stranded by the very guard meant to prevent strandings.
+ */
+function assertCustomDomainsEnabled(): void {
+  if (!customDomainsAvailable(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT)) {
+    throw new HttpsError(
+      'failed-precondition',
+      CUSTOM_DOMAIN_ENV_REFUSAL,
+    )
+  }
+}
+
 // ─── callables ───────────────────────────────────────────────────────────────
 
 /**
@@ -131,6 +158,7 @@ function requireAuth(uid: string | undefined): string {
  */
 export const registerPublicDomain = onCall(async (request) => {
   const uid = requireAuth(request.auth?.uid)
+  assertCustomDomainsEnabled()
   const { scope, entityId, hostname: raw } = request.data ?? {}
   validateScope(scope, entityId)
   await assertAccess(uid, scope, entityId)

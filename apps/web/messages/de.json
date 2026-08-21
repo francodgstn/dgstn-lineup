@@ -6846,6 +6846,8 @@
     "statusPending": "Warten auf DNS",
     "statusVerifying": "Zertifikat wird erstellt",
     "statusActive": "Aktiv",
-    "statusError": "Aktion erforderlich"
+    "statusError": "Aktion erforderlich",
+    "unavailableTitle": "Nur in der Live-App verfügbar",
+    "unavailableBody": "In dieser Umgebung sind eigene Domains nicht aktiviert. In der Live-App verbinden Sie Ihre eigene Domain und Ihre Seiten werden darüber ausgeliefert."
   }
 }
