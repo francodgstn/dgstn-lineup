@@ -172,6 +172,11 @@
         "description": "A booking site, ready out of the box.",
         "detail": "Launch a polished studio website with your schedule and pricing built in — no designer, no code."
       },
+      "customDomain": {
+        "title": "Custom domain",
+        "description": "Your pages on your own domain.",
+        "detail": "Serve your booking, shop and member pages from book.yourdomain.ch instead of a Linyup address. You add one DNS record; we issue and renew the certificate."
+      },
       "embeds": {
         "title": "Embeds",
         "description": "Add Linyup to your own website.",

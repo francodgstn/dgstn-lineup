@@ -172,6 +172,11 @@
         "description": "Buchungsseite, sofort einsatzbereit.",
         "detail": "Starte eine schicke Studio-Website mit Plan und Preisen — ohne Designer, ohne Code."
       },
+      "customDomain": {
+        "title": "Eigene Domain",
+        "description": "Ihre Seiten unter Ihrer eigenen Domain.",
+        "detail": "Buchung, Shop und Mitgliederbereich unter book.ihredomain.ch statt unter einer Linyup-Adresse. Sie setzen einen DNS-Eintrag, wir kümmern uns um das Zertifikat."
+      },
       "embeds": {
         "title": "Einbettungen",
         "description": "Linyup in deine eigene Website einbinden.",

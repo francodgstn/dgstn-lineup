@@ -6846,6 +6846,8 @@
     "statusPending": "En attente du DNS",
     "statusVerifying": "Émission du certificat",
     "statusActive": "Actif",
-    "statusError": "Action requise"
+    "statusError": "Action requise",
+    "unavailableTitle": "Disponible uniquement sur l'application en production",
+    "unavailableBody": "Les domaines personnalisés ne sont pas activés dans cet environnement. Sur l'application en production, vous connectez votre propre domaine et vos pages sont diffusées depuis celui-ci."
   }
 }

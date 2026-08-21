@@ -6846,6 +6846,8 @@
     "statusPending": "Waiting for DNS",
     "statusVerifying": "Issuing certificate",
     "statusActive": "Live",
-    "statusError": "Needs attention"
+    "statusError": "Needs attention",
+    "unavailableTitle": "Available on the live app only",
+    "unavailableBody": "Custom domains are not enabled in this environment. On the live app you can connect your own domain and your pages are served from it."
   }
 }

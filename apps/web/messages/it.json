@@ -6846,6 +6846,8 @@
     "statusPending": "In attesa del DNS",
     "statusVerifying": "Emissione certificato",
     "statusActive": "Attivo",
-    "statusError": "Richiede attenzione"
+    "statusError": "Richiede attenzione",
+    "unavailableTitle": "Disponibile solo sull'app in produzione",
+    "unavailableBody": "I domini personalizzati non sono attivi in questo ambiente. Sull'app in produzione puoi collegare il tuo dominio e le tue pagine vengono pubblicate da lì."
   }
 }

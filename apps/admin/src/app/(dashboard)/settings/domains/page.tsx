@@ -6,6 +6,7 @@ import { getCustomDomainPlatformStatus, listCustomDomains } from '@/lib/queries/
 import { requireOperator } from '@/lib/require-operator'
 import { useEmulators } from '@/lib/secret-manager'
 import { formatDateTime } from '@/lib/format'
+import { customDomainsAvailable } from '@linyup/shared'
 import { saveCloudflareToken } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -16,6 +17,11 @@ export default async function DomainsSettingsPage() {
     listCustomDomains(),
     requireOperator(),
   ])
+
+  // Production only — see customDomainsAvailable. Off-prod the token field is
+  // replaced by the reason, not merely hidden: an operator staring at an empty
+  // 'not configured' badge would reasonably go looking for the missing secret.
+  const available = customDomainsAvailable(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
 
   return (
     <div className="flex flex-col gap-6">
@@ -28,7 +34,20 @@ export default async function DomainsSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          {useEmulators && (
+          {!available && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+              <p className="font-medium">Disabled in this environment</p>
+              <p className="mt-0.5">
+                Custom domains run on <strong>production only</strong>. One Cloudflare zone has one
+                fallback origin, so a non-prod environment would need its own domain, token and
+                Worker deploy — deferred deliberately. Nothing here is configurable, and studios on
+                this environment see the same explanation in their settings. Demos and showcases run
+                on the linyup.com URLs.
+              </p>
+            </div>
+          )}
+
+          {available && useEmulators && (
             <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
               Running against the emulators — secrets are not persisted here. Set
               <code className="mx-1">CLOUDFLARE_API_TOKEN</code> in
@@ -36,6 +55,7 @@ export default async function DomainsSettingsPage() {
             </p>
           )}
 
+          {available && (
           <SecretField
             label="Cloudflare API token"
             name="cloudflareToken"
@@ -48,7 +68,9 @@ export default async function DomainsSettingsPage() {
             buttonLabel="Save token"
             action={saveCloudflareToken}
           />
+          )}
 
+          {available && (
           <div className="flex flex-col gap-3 rounded-md border p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">Zone ID</span>
@@ -73,6 +95,7 @@ export default async function DomainsSettingsPage() {
               functions. The CNAME target can never change once studios have it in their DNS.
             </p>
           </div>
+          )}
         </CardContent>
       </Card>
 

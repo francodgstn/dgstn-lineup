@@ -154,6 +154,42 @@ Leaning towards the second: the app **already** needs the host→tenant mapping 
 emailed links, canonical URLs and the Stripe origin check, so having the edge keep
 its own copy buys little and can disagree with the app's.
 
+## Environments — PRODUCTION ONLY
+
+**Custom domains work on `linyup-prod` and nowhere else.** Not sandbox, not
+staging, not the emulator. The predicate is `customDomainsAvailable(projectId)`
+(`packages/shared/src/utils/customDomains.ts`), derived from the Firebase project
+id for the same reason `robots.ts` is — the project id cannot disagree with which
+backend is actually being served.
+
+The constraint is structural, not a policy choice: **one Cloudflare zone has one
+fallback origin**, so every custom hostname on a zone reaches a single backend.
+Serving prod and sandbox from one zone would need the edge to resolve a hostname
+to an *environment*, which is the same lookup that does not exist yet. Real
+separation therefore means separate zones — a second registered domain, a second
+token, a second Worker deploy — and that is deferred.
+
+So the honest thing is to say so, in three places, rather than let a form accept
+a domain that will never be served:
+
+- the studio card renders one sentence instead of the form
+  (`CustomDomain.unavailable*`);
+- the operator console replaces the token field with the reason — an operator
+  staring at a bare "not configured" badge would go hunting for a missing secret;
+- **`registerPublicDomain` refuses server-side** (`CUSTOM_DOMAIN_ENV_REFUSAL`).
+  That is the enforcement; the UI is only the explanation. Without it a sandbox
+  tenant reaches Cloudflare and registers a hostname on the PRODUCTION zone — the
+  zone id and token are per-environment params, but "unset" is one
+  misconfiguration away from "set to prod's".
+
+`check` and `remove` stay open deliberately, so a domain connected before a
+project was reclassified can still be inspected and cleaned up rather than
+stranded by the guard meant to prevent strandings.
+
+**The product consequence, agreed 2026-08-21: Linyup advertises custom domains,
+but never showcases them on demo/sandbox/staging.** Lead demos and the `/try`
+playground run on linyup.com URLs.
+
 ## Per-tenant flow
 
 Model it on the BYO **email** domain feature, which is the same problem solved
@@ -234,7 +270,13 @@ at the studio's own host.
 
 ## Open decisions
 
-- **Plan tier** — coach+ (consistent with email BYO) or studio+ (an upgrade lever)?
+- ~~**Plan tier**~~ — settled: **coach+**, and now ADVERTISED, which is what
+  settled it. It is stated once, as the `custom_domain` member of
+  `PLAN_FEATURES`; the landing comparison row, the studio card's upgrade prompt
+  and `assertPlanEligible` all read it from there rather than restating a plan
+  list. Deliberately a tier below "Remove Linyup branding" (Studio+): a DOMAIN is
+  the studio's own identity in the address bar and the From line, which is a
+  different lever from taking our logo off the page.
 - ~~**Zone**~~ — settled: `linyup.app`, see "Why Cloudflare" above and
   `infra/README.md` §5d.
 - **Org tier** — a multi-club org wanting `zurich.federation.ch` per member studio

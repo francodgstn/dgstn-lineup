@@ -232,6 +232,7 @@ export type PlanFeature =
   | 'payment_tracking'
   | 'goals'
   | 'appointments'
+  | 'custom_domain'
   // Studio
   | 'student_app'
   | 'gamification'
@@ -300,6 +301,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'payment_tracking',
     'goals',
     'appointments',
+    'custom_domain',
     // The member app is available from Coach up (a basic booking/check-in portal
     // on Coach, enriched by add-ons). Never offered on Free. (2026-06 overhaul.)
     'student_app',
@@ -317,6 +319,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'payment_tracking',
     'goals',
     'appointments',
+    'custom_domain',
     'student_app',
     'gamification',
     'outreach_templates',
@@ -345,6 +348,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'payment_tracking',
     'goals',
     'appointments',
+    'custom_domain',
     'student_app',
     'gamification',
     'outreach_templates',
