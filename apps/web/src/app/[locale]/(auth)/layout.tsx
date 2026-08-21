@@ -39,7 +39,6 @@ import {
   IdCard,
   BadgeCheck,
   FileText,
-  ShoppingBag,
   DoorOpen,
   UserCog,
   Star,
@@ -108,7 +107,6 @@ type NavItem = {
   requiresConnect?: boolean
   // Only shown when the team has any sellable channel (products/online-courses
   // plugin, or Stripe Connect) — i.e. a public shop makes sense.
-  requiresShop?: boolean
   // Only shown when the named plugin is installed (e.g. online-courses, products).
   requiresPlugin?: string
   // Hidden entirely unless the team's plan is at least this tier. Distinct from
@@ -325,16 +323,6 @@ const NAV_SECTIONS: NavSection[] = [
         href: '/documents',
         labelKey: 'documents',
         icon: FileText,
-      },
-      // The public storefront that aggregates subscriptions, products and courses.
-      // Managed at its /public-page/shop detail page; shown once a sellable channel
-      // exists. Also surfaced on the Public pages hub (as a public URL + status).
-      {
-        id: 'shop',
-        href: '/public-page/shop',
-        labelKey: 'shop',
-        icon: ShoppingBag,
-        requiresShop: true,
       },
     ],
   },
@@ -2372,7 +2360,6 @@ function SidebarContent({
   const mainItemVisible = (item: NavItem) =>
     (!item.requiresOrg || inOrg) &&
     (!item.requiresConnect || connectOn) &&
-    (!item.requiresShop || shopAvailable) &&
     (!item.requiresPlugin || isInstalled(item.requiresPlugin)) &&
     (!item.requiresPlan || isAtLeast(item.requiresPlan))
 
@@ -2381,6 +2368,7 @@ function SidebarContent({
   const settingsItemVisible = (item: SettingsNavItem) => {
     if (item.gate === 'ownerOnly') return canEditTeamSettings
     if (item.gate === 'customFields') return isInstalled('custom-fields')
+    if (item.gate === 'shop') return shopAvailable
     return true
   }
 
