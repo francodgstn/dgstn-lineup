@@ -363,12 +363,15 @@ Cloudflare (once, per environment)
      record, and withholding it is what keeps the mail records out of reach.
   6. Cloud Functions params: CLOUDFLARE_ZONE_ID + CLOUDFLARE_CNAME_TARGET.
 
-⚠ NEVER PROXY (orange-cloud) A linyup.com RECORD while the Worker's `*/*` route
-   exists. The route reaches every hostname whose DNS record is proxied; the
-   apex, app, app-stg, demo, ops and ops-stg are all DNS-only, which is the only
-   reason a zone-wide route is safe here. Orange-cloud one and the tenant router
-   starts intercepting production traffic it cannot serve (it answers 503 naming
-   the cause rather than pretending, but the host is still down).
+⚠ NEVER PROXY (orange-cloud) A linyup.com RECORD. Only `origin` and `connect`
+   are proxied; everything else — apex, app, app-stg, demo, ops, ops-stg, the
+   mail CNAMEs, the DKIM selectors and the `_acme-challenge_*` authorizations —
+   stays DNS-only.
+   On 2026-08-21 every proxyable record was proxied at once. The web hosts went
+   down (the Worker refused them; it passes them through now), DKIM broke because
+   proxying FLATTENS a CNAME, and the certificate authorizations were flattened
+   the same way. `assertZoneRecordsUnproxied` in the daily tasks now alarms on
+   it — the invariant used to be enforced by this paragraph alone.
 
 Per tenant (automatic — the app, not an operator)
   registerPublicDomain → POST /zones/{id}/custom_hostnames

@@ -12,12 +12,16 @@
   // request entering the zone including customer vanity domains, with no
   // per-tenant route to add ever.
   //
-  // ⚠ THE RULE THIS DEPENDS ON: a wildcard route only reaches hostnames whose
-  // DNS records are PROXIED. Every linyup.com record — the apex, app, app-stg,
-  // demo, ops, ops-stg — is DNS-only (grey cloud), so none of them enter the
-  // edge and this Worker can never see them. Orange-cloud one of those and this
-  // Worker starts intercepting production traffic it has no idea how to serve.
-  // Do not proxy a linyup.com record while this route exists.
+  // ⚠ A wildcard route reaches every hostname whose DNS record is PROXIED, so
+  // every linyup.com record must stay DNS-only (grey cloud). On 2026-08-21 they
+  // were all proxied by accident and this Worker REFUSED them, taking the apex,
+  // app, ops and demo down together — without a Worker they would have kept
+  // working. It now passes unknown linyup.com hosts through to their own origin
+  // instead, so the same mistake costs a hop rather than the zone.
+  //
+  // That makes the mistake INVISIBLE, though, and proxying still flattens CNAMEs
+  // (it broke DKIM that day) and breaks certificate renewal. The alarm is
+  // `assertZoneRecordsUnproxied` in the daily tasks.
   "routes": [{ "pattern": "*/*", "zone_name": "linyup.com" }],
 
   "vars": {

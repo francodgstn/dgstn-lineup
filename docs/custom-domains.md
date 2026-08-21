@@ -117,6 +117,29 @@ visitor → theirdojo.ch
         → Next.js on App Hosting, route tree unchanged
 ```
 
+**The wildcard route makes every proxied record in the zone this Worker's
+problem — so its default for anything it does not own is "carry on".** Learned
+on 2026-08-21: every proxyable `linyup.com` record was orange-clouded at once,
+and the Worker *refused* the ones it did not recognise, taking the apex, `app`,
+`ops` and `demo` down together. Without a Worker they would have kept working —
+Cloudflare would simply have forwarded to App Hosting. A guard turned a
+degradation into an outage.
+
+It now forwards an unknown `linyup.com` host to that hostname's own origin
+(`fetch(request)`, safe because a Worker on a ROUTE cannot be the target of a
+same-zone fetch — do not convert it to a Custom Domain without revisiting that),
+and calls `ctx.passThroughOnException()` so a bug in the Worker degrades to "as
+if no Worker" rather than 5xx-ing the zone.
+
+That fixes availability and hides the mistake, which is why the other half
+exists: proxying **flattens a CNAME**, so that day it also broke DKIM (every
+outbound mail lost DMARC alignment) and flattened the five
+`_acme-challenge_*` certificate authorizations. Neither fails loudly.
+`assertZoneRecordsUnproxied` (daily tasks) is the alarm — it uses
+`origin.linyup.com` as the reference for "what proxied looks like", so it tracks
+Cloudflare's addressing instead of hardcoding IP ranges. **The invariant was
+previously enforced by a comment, and the comment lost.**
+
 **The Worker needs a `*/*` route, not a route on the fallback origin.** Worker
 routes match the REQUEST hostname, so `origin.linyup.com/*` never fires for
 `book.theirdojo.ch` — designating a Worker as the fallback origin is not enough
