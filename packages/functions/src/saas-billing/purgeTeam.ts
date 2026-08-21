@@ -74,6 +74,12 @@ export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> 
           `account & its member subscriptions still require provider-side teardown (cancel/disconnect).`
       )
     }
+    if (entry.externalTeardown === 'cloudflare_hostname') {
+      console.warn(
+        `${tag} team ${teamId}: ${entry.collection} removed from Firestore — the Cloudflare custom ` +
+          `hostname still exists and keeps serving (and billing). Delete it in the Cloudflare zone.`
+      )
+    }
   }
 
   if (dryRun) {

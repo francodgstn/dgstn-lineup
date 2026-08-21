@@ -85,4 +85,14 @@ export const PROVIDERS: Provider[] = [
     docsUrl: 'https://posthog.com/docs',
     statusUrl: 'https://status.posthog.com/',
   },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    category: 'Domains & DNS',
+    description:
+      'Authoritative DNS for linyup.com, plus Cloudflare for SaaS — the studios’ custom domains and the tenant-router Worker.',
+    panelUrl: 'https://dash.cloudflare.com/',
+    docsUrl: 'https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/',
+    statusUrl: 'https://www.cloudflarestatus.com/',
+  },
 ]

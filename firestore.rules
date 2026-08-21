@@ -320,6 +320,15 @@ service cloud.firestore {
     match /mail_sends/{idempotencyKey} {
       allow read, write: if false;
     }
+    // Custom public domains — the GLOBAL uniqueness registry (doc id = hostname).
+    // Functions-only, and deliberately unreadable by clients too: it is a list of
+    // every studio's custom domain, so a readable registry would let any signed-in
+    // user enumerate the customer base. A tenant reads its own
+    // integrations/public_domain doc instead. See docs/custom-domains.md.
+    match /public_domains/{hostname} {
+      allow read, write: if false;
+    }
+
     // SMS pipeline — same posture as mail: functions-only, phone numbers are PII.
     match /sms_suppressions/{phoneHash} {
       allow read, write: if false;
@@ -513,8 +522,16 @@ service cloud.firestore {
       // Manager) and the email_sender config (Brevo sender model + BYO domain
       // verification state — holds NO credentials).
       match /integrations/{integrationId} {
-        // Only owners can view or modify integration configuration
-        allow read, write: if hasTeamRole(teamId, 'owner');
+        // Only owners can view integration configuration
+        allow read: if hasTeamRole(teamId, 'owner');
+        // …and modify it, EXCEPT public_domain, which is server-written only.
+        // That doc is not merely display state: whatever resolves an incoming
+        // custom hostname to a tenant reads the hostname from here, so a client
+        // able to write it could name a hostname belonging to another studio.
+        // The authority is Cloudflare plus the public_domains/{hostname} claim;
+        // this doc must never be able to disagree with them.
+        allow write: if hasTeamRole(teamId, 'owner')
+                     && integrationId != 'public_domain';
       }
 
       // Per-team settings for features that are NOT plugins
@@ -1830,8 +1847,11 @@ service cloud.firestore {
       // sender model + BYO domain verification state — no credentials stored).
       match /integrations/{integrationId} {
         allow read:   if isOrgMember(orgId);
-        allow write:  if hasOrgRole(orgId, 'org_admin');
-        allow delete: if hasOrgRole(orgId, 'org_admin');
+        // public_domain is server-written only — see the team-side block for why.
+        allow write:  if hasOrgRole(orgId, 'org_admin')
+                      && integrationId != 'public_domain';
+        allow delete: if hasOrgRole(orgId, 'org_admin')
+                      && integrationId != 'public_domain';
       }
 
       // Org-wide places: shared down to every sub-studio (read), managed by org admins.

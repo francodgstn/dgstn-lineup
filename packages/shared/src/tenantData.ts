@@ -31,6 +31,7 @@ import {
   EMBED_WIDGETS_COLLECTION,
   MESSAGING_POLICIES_COLLECTION,
   FEEDBACK_COLLECTION,
+  PUBLIC_DOMAINS_COLLECTION,
   // platform-wide / cross-tenant
   FEEDBACK_PROMPTS_COLLECTION,
   USERS_COLLECTION,
@@ -63,7 +64,7 @@ export interface TenantCollection {
    * must be torn down separately (e.g. cancel/disconnect the Stripe Connect
    * account and its member subscriptions). Surfaced so teardown can warn/handle it.
    */
-  externalTeardown?: 'stripe_connect'
+  externalTeardown?: 'stripe_connect' | 'cloudflare_hostname'
 }
 
 /**
@@ -128,6 +129,17 @@ export const TENANT_DATA_COLLECTIONS: TenantCollection[] = [
   // PLATFORM `feedback/{uid}/` Storage prefix (keyed by user, not team) and are
   // not part of the team's storage teardown.
   { collection: FEEDBACK_COLLECTION, match: { by: 'field', field: 'team_id' } },
+  // Custom public domains. Keyed by HOSTNAME, so matched on the tenant field it
+  // carries rather than the doc id. It is tenant data and not platform data for
+  // one reason: a claim that outlives its tenant locks that hostname forever —
+  // nobody can re-add it, including the same studio signing up again.
+  // Deleting the claim does NOT delete the Cloudflare custom hostname, which
+  // keeps serving (and billing) until it is removed there too.
+  {
+    collection: PUBLIC_DOMAINS_COLLECTION,
+    match: { by: 'field', field: 'entityId' },
+    externalTeardown: 'cloudflare_hostname',
+  },
 ]
 
 /**

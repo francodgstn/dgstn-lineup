@@ -309,6 +309,82 @@ prod overrides apply, mirroring `apps/web`.
 already grants `linyup-admin` `secretVersionAdder` on `smtp-password` (write). The
 console never reads the value back (it tracks a `password_set` flag in Firestore).
 
+### 5d. Cloudflare — tenant custom domains (NOT SET UP)
+
+Direction only; nothing below exists yet. Feature design: `docs/custom-domains.md`.
+
+Tenants bring their own hostname (`book.theirdojo.ch`) for their public surfaces.
+App Hosting custom domains are a manual per-domain operation (§5b, §6) and cannot
+serve this — **Cloudflare for SaaS** (custom hostnames) can: one API call per
+tenant hostname, Cloudflare issues and renews the cert.
+
+**PRODUCTION ONLY.** Custom domains are wired on `linyup-prod` and nowhere else —
+one Cloudflare zone has one fallback origin, so sandbox/staging would each need
+their own domain, token and Worker deploy. Off-prod the studio card and this
+console both say so, and `registerPublicDomain` refuses server-side. Everything
+below therefore applies to the prod project alone. See `docs/custom-domains.md` →
+"Environments".
+
+**The SaaS zone is `linyup.com`** — its DNS moves from OVH to Cloudflare
+(registrar stays OVH; only the nameservers change). Child-zone delegation
+(`sites.linyup.com` alone) is **Enterprise-only**, and a separate single-purpose
+domain was considered and rejected — reasoning in `docs/custom-domains.md`.
+
+**Moving the zone is NOT proxying it.** Every record that exists today is
+recreated **grey-cloud / DNS-only**, where Cloudflare is a plain authoritative DNS
+host and behaves identically to OVH. Only the two new records are proxied.
+
+```
+Step 0 — migration preconditions (in this order, before flipping NS)
+  a) DISABLE DNSSEC at OVH. If the DS record is live when the nameservers
+     change, the domain goes dark until it clears. This is the step that bites.
+  b) Export the zone from OVH; add linyup.com to Cloudflare; verify the import
+     record-for-record BEFORE flipping — especially MX (mx*.mail.ovh.net,
+     inbound redirection) and the Brevo SPF/DKIM/DMARC TXT. The scan is good,
+     not perfect.
+  c) Confirm in the OVH panel that email redirection keeps working with the
+     zone hosted elsewhere (docs/email-inbound.md). Expected to be fine —
+     redirection follows MX, not zone hosting — but verify, don't assume.
+  d) Everything pre-existing = grey cloud. The App Hosting records especially:
+     App Hosting manages its own certs and proxying them breaks that.
+  e) Flip the nameservers at OVH. Re-verify MX + TXT resolve after propagation.
+
+Cloudflare (once, per environment)
+  1. enable Cloudflare for SaaS on the zone
+  2. deploy the router Worker (infra/workers/tenant-router) on a `*/*` route
+  3. origin.linyup.com   proxied (AAAA 100::); set as FALLBACK ORIGIN
+  4. connect.linyup.com  proxied CNAME → origin.linyup.com
+        the public target tenants CNAME to. Published separately from the
+        fallback origin ON PURPOSE: it is the one string we can never change
+        once it is in tenants' DNS, so the origin behind it stays swappable.
+  5. API token scoped to "SSL and Certificates: Write" on this zone only →
+     Secret Manager as `cloudflare-api-token` (set it in the operator console,
+     Settings → Domains). NOT `DNS: Edit` — the feature never writes a DNS
+     record, and withholding it is what keeps the mail records out of reach.
+  6. Cloud Functions params: CLOUDFLARE_ZONE_ID + CLOUDFLARE_CNAME_TARGET.
+
+⚠ NEVER PROXY (orange-cloud) A linyup.com RECORD. Only `origin` and `connect`
+   are proxied; everything else — apex, app, app-stg, demo, ops, ops-stg, the
+   mail CNAMEs, the DKIM selectors and the `_acme-challenge_*` authorizations —
+   stays DNS-only.
+   On 2026-08-21 every proxyable record was proxied at once. The web hosts went
+   down (the Worker refused them; it passes them through now), DKIM broke because
+   proxying FLATTENS a CNAME, and the certificate authorizations were flattened
+   the same way. `assertZoneRecordsUnproxied` in the daily tasks now alarms on
+   it — the invariant used to be enforced by this paragraph alone.
+
+Per tenant (automatic — the app, not an operator)
+  registerPublicDomain → POST /zones/{id}/custom_hostnames
+     { hostname: "book.theirdojo.ch", custom_metadata: { teamId, slug } }
+  the studio adds ONE record at their registrar:
+     CNAME  book → connect.linyup.com
+```
+
+The Worker reads `request.cf.hostMetadata`, rewrites `/shop` →
+`/public/{slug}/shop`, and forwards to the App Hosting host with the original host
+preserved in a header. **App Hosting is untouched** — no new custom domain, no new
+authorized domain, no cert work on the Google side.
+
 ### 6. Enable CI
 
 **Staging — auto from `main`.** Merge to `main` → `.github/workflows/deploy.yml`

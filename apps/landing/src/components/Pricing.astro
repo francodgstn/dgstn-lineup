@@ -33,6 +33,10 @@ const COMPARE: { heading: string; rows: { label: string; note?: string; feature?
       { label: 'plans.cmpContacts', note: 'plans.cmpContactsNote', values: ['15', '50', '250', 'unlimited'] },
       { label: 'plans.cmpMigration', values: [false, true, true, true] },
       { label: 'plans.cmpBranding', values: [false, false, true, true] },
+      // Paid plans, mirroring BYO email sending: a DOMAIN is the studio's own
+      // identity (in the address bar, and in the From line), which is a
+      // different thing from removing Linyup branding from the page above.
+      { label: 'features.cards.customDomain.title', values: [false, true, true, true] },
       { label: 'plans.cmpMembers', values: [false, false, true, true] },
     ],
   },

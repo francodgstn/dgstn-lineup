@@ -78,6 +78,11 @@ variable "secret_ids" {
     "brevo-webhook-secret", # authenticates Brevo's bounce/spam event callbacks
     "posthog-api-key",
     "ai-assistant-unlock-key", # strong key to unlock the locked AI assistant plugin
+    # Cloudflare for SaaS — custom domains. PROD ONLY, deliberately: the
+    # feature is gated to linyup-prod (docs/custom-domains.md → "Environments"),
+    # and a token that exists off-prod is a token that can register a hostname
+    # on the production zone.
+    "cloudflare-api-token",
   ]
 }
 
@@ -97,6 +102,9 @@ variable "admin_writable_secret_ids" {
     "stripe-secret-key",
     "stripe-webhook-secret",
     "stripe-connect-webhook-secret",
+    # Settings → Domains. Without this the save fails with
+    # "PERMISSION_DENIED: secretmanager.versions.add".
+    "cloudflare-api-token",
   ]
 }
 

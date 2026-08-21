@@ -9,6 +9,8 @@ import { expirePendingBookings } from './expirePendingBookings'
 import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
+import { refreshCustomDomains } from './refreshCustomDomains'
+import { assertZoneRecordsUnproxied } from './assertZoneRecordsUnproxied'
 import { rollSessionSeries } from './rollSessionSeries'
 import { sweepWaitlistOffers } from '../booking/waitlist/sweep'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
@@ -72,6 +74,16 @@ export const dailyTasks = onSchedule(
       { name: 'rollSessionSeries', handler: rollSessionSeries },
       // Recurring accounting entry templates (finance plugin) — e.g. monthly rent.
       { name: 'materializeRecurringEntries', handler: materializeRecurringEntries },
+      // Custom domains: re-poll Cloudflare. Catches a domain that stops working
+      // with no event on our side — a lapsed certificate, or a CNAME the studio
+      // removed at their registrar. Status only; never registers or deletes.
+      { name: 'refreshCustomDomains', handler: refreshCustomDomains },
+      // Alarm for a linyup.com record that has been proxied when it should be
+      // DNS-only. Since the tenant-router now passes such hosts through instead
+      // of refusing them, the misconfiguration is no longer visible — but it
+      // still flattens CNAMEs, which is what silently broke DKIM and cert
+      // renewal on 2026-08-21.
+      { name: 'assertZoneRecordsUnproxied', handler: assertZoneRecordsUnproxied },
     ]
 
     const results: TaskResult[] = []
