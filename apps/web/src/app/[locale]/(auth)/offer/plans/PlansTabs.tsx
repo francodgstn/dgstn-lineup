@@ -18,6 +18,7 @@ import { SubscriptionsPanel } from '@/components/subscriptions/SubscriptionsPane
 export function PlansTabs() {
   const t = useTranslations('Nav')
   const tq = useTranslations('QuickLinks')
+  const tp = useTranslations('PagePurpose')
 
   // Quick links (UX-71). A plan's price is set here and proved somewhere else:
   // the Catalogue is where it is attached to what it unlocks (replacing the
@@ -30,7 +31,7 @@ export function PlansTabs() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('subscriptions')} quickLinks={quickLinks} />
+      <PageHeader title={t('subscriptions')} purpose={tp('subscriptions')} quickLinks={quickLinks} />
       <SubscriptionsPanel />
     </div>
   )

@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils'
 import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
+import { PagePurpose } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -927,6 +928,7 @@ export default function CalendarPage() {
   const qc = useQueryClient()
   const t = useTranslations('Calendar')
   const tCommon = useTranslations('Common')
+  const tp = useTranslations('PagePurpose')
   const orgId = team?.org_id ?? null
 
   const today = useMemo(() => new Date(), [])
@@ -1155,9 +1157,10 @@ export default function CalendarPage() {
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {upcomingCount === undefined ? ' ' : t('subtitle', { count: upcomingCount })}
-          </p>
+          <PagePurpose
+            purpose={tp('schedule')}
+            detail={upcomingCount === undefined ? undefined : t('subtitle', { count: upcomingCount })}
+          />
         </div>
         {/* ONE height across this row. The three controls were hand-sized
             independently — a p-1 segmented group, a `size="sm"` link and a

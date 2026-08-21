@@ -4450,7 +4450,6 @@
   },
   "OfferPricing": {
     "title": "Prezzi",
-    "subtitle": "Vedi esattamente cosa paga ogni tipo di contatto per tutto ciò che vendi — e individua le lacune nei prezzi prima di un membro.",
     "sectionPreviewTitle": "Anteprima prezzi",
     "sectionPreviewSubtitle": "Scegli chi sta chiedendo e vedi esattamente cosa pagherebbe ora.",
     "personaGuest": "Ospite",
@@ -6559,7 +6558,9 @@
     "promoCodesToPricing": "Vedi i codici attivi accanto ai prezzi che riducono",
     "activitiesToSchedule": "Vedi queste lezioni nel calendario",
     "activitiesToCatalogue": "Quali abbonamenti li sbloccano",
-    "plansToCatalogue": "Cosa sblocca ogni abbonamento"
+    "plansToCatalogue": "Cosa sblocca ogni abbonamento",
+    "pricingToActivities": "Modifica le attività dietro questi prezzi",
+    "pricingToSubscriptions": "Modifica gli abbonamenti dietro questi prezzi"
   },
   "Site": {
     "loading": "Caricamento…",
@@ -6848,5 +6849,11 @@
     "summaryClass": "{gated, plural, =0 {Aperto a tutti} one {# abbonamento può prenotare} other {# abbonamenti possono prenotare}} · {rated, plural, =0 {nessuna tariffa soci} one {# tariffa soci} other {# con tariffa soci}}",
     "summaryAppointment": "Il prezzo è la porta · {plans, plural, =0 {nessuna tariffa soci} one {# abbonamento con tariffa soci} other {# abbonamenti con tariffa soci}}",
     "summaryPlan": "{count, plural, =0 {Non sblocca ancora nulla} one {Collegato a # attività} other {Collegato a # attività}}"
+  },
+  "PagePurpose": {
+    "activities": "Cosa offri",
+    "schedule": "Quando lo offri",
+    "subscriptions": "Come vieni pagato",
+    "pricing": "Quanto pagano davvero le persone"
   }
 }

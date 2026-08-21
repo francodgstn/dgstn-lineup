@@ -4450,7 +4450,6 @@
   },
   "OfferPricing": {
     "title": "Preise",
-    "subtitle": "Sieh genau, was jede Art von Kontakt für dein gesamtes Angebot zahlt — und finde Preislücken, bevor ein Mitglied es tut.",
     "sectionPreviewTitle": "Preisvorschau",
     "sectionPreviewSubtitle": "Wähle, wer fragt, und sieh genau, was diese Person jetzt zahlen würde.",
     "personaGuest": "Gast",
@@ -6559,7 +6558,9 @@
     "promoCodesToPricing": "Aktive Codes neben den Preisen sehen, die sie reduzieren",
     "activitiesToSchedule": "Diese Lektionen im Kalender ansehen",
     "activitiesToCatalogue": "Welche Abos das freischalten",
-    "plansToCatalogue": "Was jedes Abo freischaltet"
+    "plansToCatalogue": "Was jedes Abo freischaltet",
+    "pricingToActivities": "Die Aktivitäten hinter diesen Preisen bearbeiten",
+    "pricingToSubscriptions": "Die Abos hinter diesen Preisen bearbeiten"
   },
   "Site": {
     "loading": "Laden…",
@@ -6848,5 +6849,11 @@
     "summaryClass": "{gated, plural, =0 {Für alle offen} one {# Abo kann buchen} other {# Abos können buchen}} · {rated, plural, =0 {kein Mitgliederpreis} one {# Mitgliederpreis} other {# mit Mitgliederpreis}}",
     "summaryAppointment": "Der Preis ist die Hürde · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
     "summaryPlan": "{count, plural, =0 {Schaltet noch nichts frei} one {Mit # Aktivität verknüpft} other {Mit # Aktivitäten verknüpft}}"
+  },
+  "PagePurpose": {
+    "activities": "Was du anbietest",
+    "schedule": "Wann du es anbietest",
+    "subscriptions": "Wie du bezahlt wirst",
+    "pricing": "Was Leute tatsächlich zahlen"
   }
 }
