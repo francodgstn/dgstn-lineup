@@ -1728,7 +1728,6 @@
     "paymentModesDesc": "How you record cash / bank-transfer / TWINT payments — shown when a manager records a payment by hand.",
     "paymentModePlaceholder": "e.g. TWINT",
     "paymentModeAdd": "Add",
-    "paymentSettingsLink": "Currency & payment settings",
     "alertPresetName": "Preset name",
     "alertPresetScheduleType": "Trigger type",
     "deletePreset": "Delete",
@@ -6558,7 +6557,8 @@
     "promoCodesToPricing": "See your live codes next to the prices they cut",
     "activitiesToSchedule": "See these classes on the calendar",
     "pricingToActivities": "Edit the activities behind these prices",
-    "pricingToSubscriptions": "Edit the plans behind these prices"
+    "pricingToSubscriptions": "Edit the plans behind these prices",
+    "toPaymentSettings": "Set your currency and how you take payment"
   },
   "Site": {
     "loading": "Loading…",

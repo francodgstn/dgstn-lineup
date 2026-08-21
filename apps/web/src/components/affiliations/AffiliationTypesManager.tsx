@@ -396,6 +396,6 @@ export function AffiliationTypesManager({ team, teamId }: { team: Team; teamId: 
 }
 
 // `AffiliationsPage` lived here as the wrapper the "Plans & affiliations" tab
-// rendered — a skeleton, a PaymentSettingsLink and this manager. The tab is gone
+// rendered — a skeleton, a payments link and this manager. The tab is gone
 // (the manager opens from the roster now), so the wrapper had no caller and is
 // removed rather than left as a second, unreachable way to mount this.

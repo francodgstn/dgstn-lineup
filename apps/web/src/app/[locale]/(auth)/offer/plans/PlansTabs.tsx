@@ -27,7 +27,13 @@ export function PlansTabs() {
   // replays it through the real resolver for each persona. The catalogue is NOT
   // in this line — it is a button, because "what does this plan actually open"
   // is asked far too often to be muted text.
-  const quickLinks = [{ href: '/offer/pricing' as Route, label: tq('plansToPricing') }]
+  const quickLinks = [
+    { href: '/offer/pricing' as Route, label: tq('plansToPricing') },
+    // Was a stray `text-xs` link floating beside the Add button — the one
+    // destination every selling page needs, styled unlike every other
+    // cross-page pointer in the app.
+    { href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') },
+  ]
 
   return (
     <div className="space-y-6">

@@ -1728,7 +1728,6 @@
     "paymentModesDesc": "Wie du Bar-/Überweisungs-/TWINT-Zahlungen erfasst — erscheinen beim manuellen Erfassen einer Zahlung.",
     "paymentModePlaceholder": "z. B. TWINT",
     "paymentModeAdd": "Hinzufügen",
-    "paymentSettingsLink": "Währung & Zahlungseinstellungen",
     "alertPresetName": "Vorlagenname",
     "alertPresetScheduleType": "Auslösertyp",
     "deletePreset": "Löschen",
@@ -6558,7 +6557,8 @@
     "promoCodesToPricing": "Aktive Codes neben den Preisen sehen, die sie reduzieren",
     "activitiesToSchedule": "Diese Lektionen im Kalender ansehen",
     "pricingToActivities": "Die Aktivitäten hinter diesen Preisen bearbeiten",
-    "pricingToSubscriptions": "Die Abos hinter diesen Preisen bearbeiten"
+    "pricingToSubscriptions": "Die Abos hinter diesen Preisen bearbeiten",
+    "toPaymentSettings": "Währung festlegen und wie du Zahlungen annimmst"
   },
   "Site": {
     "loading": "Laden…",

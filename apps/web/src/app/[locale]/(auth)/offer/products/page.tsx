@@ -27,7 +27,8 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { db, storage } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
+import type { Route } from 'next'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -132,6 +133,7 @@ function parseAmount(text: string): number | null {
 
 export default function ProductsPage() {
   const t = useTranslations('Products')
+  const tq = useTranslations('QuickLinks')
   const tCommon = useTranslations('Common')
   const { user, currentTeamId, team, teamRole } = useAuth()
   const queryClient = useQueryClient()
@@ -386,9 +388,14 @@ export default function ProductsPage() {
           <span className="text-xs text-muted-foreground">
             {t('quota', { count: products.length, max: limits.maxProductsPerTeam })}
           </span>
-          <PaymentSettingsLink />
         </div>
       </div>
+      {/* The payment destination reads as a prompt link like every other
+          cross-page pointer, instead of a `text-xs` link tucked under the quota
+          counter where it looked like a footnote about the quota. */}
+      <QuickLinks
+        links={[{ href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') }]}
+      />
 
       {/* Team-wide collection default — written once, inherited by every product
           that says nothing of its own. Read-only for a manager: the team doc is

@@ -1728,7 +1728,6 @@
     "paymentModesDesc": "Come registri i pagamenti in contanti / bonifico / TWINT — mostrati quando un manager registra un pagamento a mano.",
     "paymentModePlaceholder": "es. TWINT",
     "paymentModeAdd": "Aggiungi",
-    "paymentSettingsLink": "Valuta e impostazioni di pagamento",
     "alertPresetName": "Nome modello",
     "alertPresetScheduleType": "Tipo trigger",
     "deletePreset": "Elimina",
@@ -6558,7 +6557,8 @@
     "promoCodesToPricing": "Vedi i codici attivi accanto ai prezzi che riducono",
     "activitiesToSchedule": "Vedi queste lezioni nel calendario",
     "pricingToActivities": "Modifica le attività dietro questi prezzi",
-    "pricingToSubscriptions": "Modifica gli abbonamenti dietro questi prezzi"
+    "pricingToSubscriptions": "Modifica gli abbonamenti dietro questi prezzi",
+    "toPaymentSettings": "Imposta la valuta e come incassi i pagamenti"
   },
   "Site": {
     "loading": "Caricamento…",

@@ -9,7 +9,7 @@ import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -93,6 +93,7 @@ function CourseCard({ course, onOpen, currency }: { course: Course; onOpen: () =
 
 export default function OnlineCoursesPage() {
   const t = useTranslations('Courses')
+  const tq = useTranslations('QuickLinks')
   const { user, currentTeamId, team } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -208,9 +209,14 @@ export default function OnlineCoursesPage() {
           <span className="text-xs text-muted-foreground">
             {t('quotaCourses', { count: courses.length, max: limits.maxCoursesPerTeam })}
           </span>
-          <PaymentSettingsLink />
         </div>
       </div>
+      {/* The payment destination reads as a prompt link like every other
+          cross-page pointer, instead of a `text-xs` link tucked under the quota
+          counter where it looked like a footnote about the quota. */}
+      <QuickLinks
+        links={[{ href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') }]}
+      />
 
       {/* Status filter */}
       <div className="flex flex-wrap gap-2">

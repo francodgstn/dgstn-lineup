@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
-import { PaymentSettingsLink } from '@/components/connect/PaymentSettingsLink'
 import { useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
 import {
   SubscriptionTypesManager,
@@ -35,8 +34,7 @@ export function SubscriptionsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <PaymentSettingsLink />
+      <div className="flex items-center justify-end gap-3">
         <Button onClick={() => managerRef.current?.openAdd()}>
           <Plus className="h-4 w-4 mr-1.5" />
           {t('addSubscriptionType')}

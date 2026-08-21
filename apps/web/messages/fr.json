@@ -1728,7 +1728,6 @@
     "paymentModesDesc": "Comment vous enregistrez les paiements espèces / virement / TWINT — proposés lors de la saisie manuelle d'un paiement.",
     "paymentModePlaceholder": "p. ex. TWINT",
     "paymentModeAdd": "Ajouter",
-    "paymentSettingsLink": "Devise et paramètres de paiement",
     "alertPresetName": "Nom du modèle",
     "alertPresetScheduleType": "Type de déclencheur",
     "deletePreset": "Supprimer",
@@ -6558,7 +6557,8 @@
     "promoCodesToPricing": "Voir vos codes actifs à côté des prix qu'ils réduisent",
     "activitiesToSchedule": "Voir ces cours dans le calendrier",
     "pricingToActivities": "Modifier les activités derrière ces prix",
-    "pricingToSubscriptions": "Modifier les abonnements derrière ces prix"
+    "pricingToSubscriptions": "Modifier les abonnements derrière ces prix",
+    "toPaymentSettings": "Définir votre devise et votre mode d'encaissement"
   },
   "Site": {
     "loading": "Chargement…",
