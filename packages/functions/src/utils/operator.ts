@@ -22,6 +22,20 @@
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
 import { defineString } from 'firebase-functions/params'
 
+/**
+ * MUST ALSO BE SPELLED OUT IN EVERY `.env.<alias>`, even empty.
+ *
+ * `default:` is not enough for a non-interactive deploy — firebase-tools asks
+ * for the value and CI has nobody to ask, so the whole deploy fails with
+ * "In non-interactive mode but have no value for the following environment
+ * variables". That is exactly what broke the staging deploy on 2026-08-21, and
+ * it is why `TEST_EMAIL=` is written out in those files rather than left to its
+ * own empty default.
+ *
+ * The value MIRRORS `apps/admin`'s `OPERATOR_EMAILS`: the console and these
+ * callables authorise the same person, so a value here that disagrees with the
+ * console's is a button that renders and then refuses.
+ */
 const operatorEmails = defineString('OPERATOR_EMAILS', {
   default: '',
   description: 'Comma-separated operator emails. Mirrors the admin console env of the same name.',
