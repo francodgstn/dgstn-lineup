@@ -1,6 +1,7 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -838,6 +839,7 @@ export const SubscriptionTypesManager = forwardRef<
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
   const { data: types = [], isLoading } = useSubscriptionTypes(teamId)
+  const editParam = useSearchParams().get('edit')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SubscriptionType | null>(null)
   const [duplicating, setDuplicating] = useState<SubscriptionType | null>(null)
@@ -853,6 +855,20 @@ export const SubscriptionTypesManager = forwardRef<
 
   // Let the page header own the primary "New type" action.
   useImperativeHandle(ref, () => ({ openAdd }))
+
+  // ── arriving from the catalogue's Edit button (?edit=<id>) ──
+  // The types load async, so this cannot be a lazy initializer the way the
+  // "new" param is: there is nothing to find on first render. It runs when the
+  // data arrives, and the ref makes it run ONCE — without that, closing the
+  // dialog while the param is still in the URL would immediately reopen it.
+  const consumedEditParam = useRef(false)
+  useEffect(() => {
+    if (consumedEditParam.current || !editParam || types.length === 0) return
+    const target = types.find((st) => st.id === editParam)
+    consumedEditParam.current = true
+    if (target) openEdit(target)
+  }, [editParam, types])
+
   const openEdit = (st: SubscriptionType) => {
     setDuplicating(null)
     setEditing(st)

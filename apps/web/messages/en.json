@@ -6848,7 +6848,14 @@
     "summaryAppointment": "The price is the gate · {plans, plural, =0 {no member rate} one {# plan on the member rate} other {# plans on the member rate}}",
     "summaryPlan": "{count, plural, =0 {Opens nothing yet} one {Linked to # activity} other {Linked to # activities}}",
     "backToActivities": "Back to activities",
-    "backToSubscriptions": "Back to subscriptions"
+    "backToSubscriptions": "Back to subscriptions",
+    "railCourses": "Courses",
+    "noCourses": "No courses yet.",
+    "courseBadge": "Course",
+    "noEdgeHere": "Open to everyone",
+    "summaryCourseGated": "{plans, plural, =0 {Locked to plans, but none chosen yet} one {# plan can open it} other {# plans can open it}}",
+    "summaryCoursePriced": "Sold one-off · {plans, plural, =0 {no member rate} one {# plan on the member rate} other {# plans on the member rate}}",
+    "summaryCourseOpen": "Free or sign-in only, so no plan changes who can open it."
   },
   "PagePurpose": {
     "activities": "What you do",

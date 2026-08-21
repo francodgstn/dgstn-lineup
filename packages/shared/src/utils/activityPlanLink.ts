@@ -209,3 +209,174 @@ export function activityPlanEdgeUpdate(
 export function plansSharingRate(a: Pick<Activity, 'memberBenefit'>, subTypeId: string): string[] {
   return ratedPlanIds(a).filter((id) => id !== subTypeId)
 }
+
+// ─── COURSES ─────────────────────────────────────────────────────────────────
+//
+// A course carries the same two facets, in different fields and — this is the
+// part that bites — only on some of its tiers. The rules below are not a choice
+// made here; they are what `resolvePaymentOptions`' course arm actually honours,
+// read off that function:
+//
+//   free        neither. It is free to everyone; there is nothing to gate.
+//   registered  neither. Any signed-in contact opens it.
+//   subscription ACCESS only. `accessRule.subscriptionTypeIds` is the gate, and
+//               the arm RETURNS before it ever looks at `benefit` — so a rate
+//               written here would be inert data that no reader consults.
+//   purchase    RATE only. `benefit` decides what a holder pays, and it WINS
+//               over the legacy free-inclusion list, which is why this editor
+//               never writes that list: "included free" is expressible as a
+//               benefit with effect 'included', through the same control every
+//               other rate uses.
+//
+// Offering a control the stored tier cannot honour is the failure mode here.
+// It writes successfully, shows no error, and changes nothing a member sees.
+
+import type { Course, CourseAccessRule } from '../types/course'
+
+export type CourseEdgeFields = Pick<Course, 'accessRule' | 'benefit'>
+
+/** Which facets an offering can actually carry. The UI renders a control only
+ *  where this says the field is honoured. */
+export interface OfferingFacets {
+  access: boolean
+  rate: boolean
+}
+
+export function activityPlanFacets(a: Pick<Activity, 'type'>): OfferingFacets {
+  // An appointment has no gate — the price is the gate.
+  return { access: !isAppointmentActivity(a), rate: true }
+}
+
+export function coursePlanFacets(c: { accessRule?: CourseAccessRule | null }): OfferingFacets {
+  const type = c.accessRule?.type
+  return { access: type === 'subscription', rate: type === 'purchase' }
+}
+
+/** Plans on a course's gate. Empty on every tier that does not have one. */
+export function courseGatedPlanIds(c: CourseEdgeFields): string[] {
+  if (c.accessRule?.type !== 'subscription') return []
+  return c.accessRule.subscriptionTypeIds ?? []
+}
+
+/** Plans on a course's rate rule. */
+export function courseRatedPlanIds(c: Pick<Course, 'benefit'>): string[] {
+  return normalizeBenefit(c.benefit)?.subscriptionTypeIds ?? []
+}
+
+export function coursePlanEdge(c: CourseEdgeFields, subTypeId: string): ActivityPlanEdge {
+  return {
+    access: courseGatedPlanIds(c).includes(subTypeId),
+    rate: courseRatedPlanIds(c).includes(subTypeId),
+  }
+}
+
+export function courseRateChoiceOf(c: Pick<Course, 'benefit'>): ActivityRateChoice {
+  const n = normalizeBenefit(c.benefit)
+  if (!n) return { effect: 'included' }
+  return {
+    effect: n.effect === 'spend_credits' ? 'included' : n.effect,
+    percent: n.percent ?? null,
+    amount: n.amount ?? null,
+  }
+}
+
+/**
+ * The course half of the ONE edge write. Same contract as
+ * `activityPlanEdgeUpdate`: the fresh document read inside the transaction, and
+ * null when nothing would change.
+ *
+ * A facet the tier does not honour is IGNORED rather than written — the caller
+ * should not have offered the control, and writing it anyway would store data
+ * the resolver never reads.
+ */
+export function coursePlanEdgeUpdate(
+  fresh: CourseEdgeFields,
+  subTypeId: string,
+  next: ActivityPlanEdge,
+  choice?: ActivityRateChoice
+): Record<string, unknown> | null {
+  const facets = coursePlanFacets(fresh)
+  const now = coursePlanEdge(fresh, subTypeId)
+  const update: Record<string, unknown> = {}
+
+  if (facets.rate) {
+    const ids = courseRatedPlanIds(fresh)
+    const nextIds = next.rate
+      ? ids.includes(subTypeId)
+        ? ids
+        : [...ids, subTypeId]
+      : ids.filter((id) => id !== subTypeId)
+    const nextRate = buildRate(
+      nextIds,
+      next.rate ? (choice ?? courseRateChoiceOf(fresh)) : courseRateChoiceOf(fresh)
+    )
+    if (!sameRate(normalizeBenefit(fresh.benefit), nextRate)) update.benefit = nextRate
+  }
+
+  if (facets.access && next.access !== now.access) {
+    const ids = courseGatedPlanIds(fresh)
+    const nextIds = next.access ? [...ids, subTypeId] : ids.filter((id) => id !== subTypeId)
+    // The tier is NOT changed here. Emptying a course's gate leaves it
+    // subscription-tier with nobody on it, which the pricing health check
+    // reports — the same shape as a class with an empty allow-list. Silently
+    // demoting it to 'registered' would hand a paid course to every signed-in
+    // contact, which is not what removing one plan asked for.
+    update.accessRule = { ...fresh.accessRule, subscriptionTypeIds: nextIds }
+  }
+
+  return Object.keys(update).length ? update : null
+}
+
+/** Every plan that shares a course's rate rule, minus the one being edited. */
+export function plansSharingCourseRate(c: Pick<Course, 'benefit'>, subTypeId: string): string[] {
+  return courseRatedPlanIds(c).filter((id) => id !== subTypeId)
+}
+
+// ─── ONE ENTRY POINT FOR BOTH KINDS ──────────────────────────────────────────
+//
+// The catalogue lists activities and courses side by side, and every row does
+// the same thing to a different document. Dispatching here rather than in the
+// component keeps that decision on the tested side of the boundary — and means
+// a third kind is added in this file, not in a `switch` inside some JSX.
+//
+// PRODUCTS AND GIFT CARDS ARE NOT MEMBERS, and not by oversight. A plan can only
+// open or discount something that has a gate or a benefit to write to. `Product`
+// has neither (`resolvePaymentOptions`' product arm threads `benefit` purely for
+// uniformity and documents it as "ALWAYS null today"), and a gift card is a
+// TENDER — it pays for things, so there is nothing for a plan to unlock. A row
+// for either would show controls that write nowhere.
+
+export type PlanLinkTarget =
+  | { kind: 'activity'; doc: ActivityEdgeFields }
+  | { kind: 'course'; doc: CourseEdgeFields }
+
+export function offeringFacets(t: PlanLinkTarget): OfferingFacets {
+  return t.kind === 'activity' ? activityPlanFacets(t.doc) : coursePlanFacets(t.doc)
+}
+
+export function offeringPlanEdge(t: PlanLinkTarget, subTypeId: string): ActivityPlanEdge {
+  return t.kind === 'activity'
+    ? activityPlanEdge(t.doc, subTypeId)
+    : coursePlanEdge(t.doc, subTypeId)
+}
+
+export function offeringRateChoiceOf(t: PlanLinkTarget): ActivityRateChoice {
+  return t.kind === 'activity' ? activityRateChoiceOf(t.doc) : courseRateChoiceOf(t.doc)
+}
+
+export function plansSharingOfferingRate(t: PlanLinkTarget, subTypeId: string): string[] {
+  return t.kind === 'activity'
+    ? plansSharingRate(t.doc, subTypeId)
+    : plansSharingCourseRate(t.doc, subTypeId)
+}
+
+export function offeringPlanEdgeUpdate(
+  t: PlanLinkTarget,
+  subTypeId: string,
+  next: ActivityPlanEdge,
+  choice?: ActivityRateChoice
+): Record<string, unknown> | null {
+  return t.kind === 'activity'
+    ? activityPlanEdgeUpdate(t.doc, subTypeId, next, choice)
+    : coursePlanEdgeUpdate(t.doc, subTypeId, next, choice)
+}

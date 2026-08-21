@@ -6848,7 +6848,14 @@
     "summaryAppointment": "Le prix fait office de porte · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
     "summaryPlan": "{count, plural, =0 {N'ouvre encore rien} one {Lié à # activité} other {Lié à # activités}}",
     "backToActivities": "Retour aux activités",
-    "backToSubscriptions": "Retour aux abonnements"
+    "backToSubscriptions": "Retour aux abonnements",
+    "railCourses": "Cours en ligne",
+    "noCourses": "Aucun cours pour l'instant.",
+    "courseBadge": "Cours",
+    "noEdgeHere": "Ouvert à tous",
+    "summaryCourseGated": "{plans, plural, =0 {Réservé à des abonnements, mais aucun choisi} one {# abonnement peut l'ouvrir} other {# abonnements peuvent l'ouvrir}}",
+    "summaryCoursePriced": "Vendu à l'unité · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
+    "summaryCourseOpen": "Gratuit ou réservé aux connectés : aucun abonnement ne change qui peut l'ouvrir."
   },
   "PagePurpose": {
     "activities": "Ce que vous proposez",

@@ -1510,6 +1510,20 @@ export default function ActivitiesPage() {
 
   function openNew() { setEditing(null); setDuplicating(null); setDialogOpen(true) }
   function openEdit(a: Activity) { setDuplicating(null); setEditing(a); setDialogOpen(true) }
+
+  // ── arriving from the catalogue's Edit button (?edit=<id>) ──
+  // Unlike the "new" param above, this cannot be read in a lazy initializer:
+  // the activities load async, so there is nothing to find on first render. The
+  // ref makes it fire ONCE — otherwise closing the dialog with the param still
+  // in the URL would reopen it on the next render.
+  const editParam = quickActionParams.get('edit')
+  const consumedEditParam = useRef(false)
+  useEffect(() => {
+    if (consumedEditParam.current || !editParam || activities.length === 0) return
+    const target = activities.find((a) => a.id === editParam)
+    consumedEditParam.current = true
+    if (target) openEdit(target)
+  }, [editParam, activities])
   // A copy OPENS in the same dialog rather than being written silently: the name
   // and everything else is there to change before anything exists.
   function openDuplicate(a: Activity) { setEditing(null); setDuplicating(a); setDialogOpen(true) }

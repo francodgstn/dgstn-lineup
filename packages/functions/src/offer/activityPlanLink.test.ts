@@ -6,7 +6,13 @@ import {
   gatedPlanIds,
   plansSharingRate,
   ratedPlanIds,
+  coursePlanEdge,
+  coursePlanEdgeUpdate,
+  coursePlanFacets,
+  courseGatedPlanIds,
+  plansSharingCourseRate,
   type ActivityEdgeFields,
+  type CourseEdgeFields,
 } from '@linyup/shared'
 
 // The activity ↔ plan edge, which the catalogue page edits from BOTH directions.
@@ -242,6 +248,117 @@ describe('the activity ↔ plan edge', () => {
     it('is empty when the plan is alone on the rule — nothing to warn about', () => {
       const fresh = appt({ memberBenefit: { subscriptionTypeIds: ['premium'], effect: 'included' } })
       assert.deepEqual(plansSharingRate(fresh, 'premium'), [])
+    })
+  })
+})
+
+describe('the course ↔ plan edge', () => {
+  // The per-tier rules are not a choice made in the editor; they are what
+  // `resolvePaymentOptions`' course arm honours. A control offered on a tier
+  // that ignores the field writes successfully, shows no error, and changes
+  // nothing a member sees — which is the failure these tests exist to stop.
+  const course = (accessRule: Record<string, unknown>, benefit?: unknown) =>
+    ({ accessRule, benefit } as unknown as CourseEdgeFields)
+
+  describe('which facets each tier honours', () => {
+    it('free and registered honour neither', () => {
+      assert.deepEqual(coursePlanFacets(course({ type: 'free' })), { access: false, rate: false })
+      assert.deepEqual(coursePlanFacets(course({ type: 'registered' })), {
+        access: false,
+        rate: false,
+      })
+    })
+
+    it('subscription honours ACCESS only', () => {
+      // The resolver returns from the subscription branch before it ever reads
+      // `benefit`, so a rate stored here would be inert.
+      assert.deepEqual(coursePlanFacets(course({ type: 'subscription' })), {
+        access: true,
+        rate: false,
+      })
+    })
+
+    it('purchase honours RATE only', () => {
+      // `benefit` wins over the legacy free-inclusion list, so that list is
+      // never written and "included free" is a benefit with effect 'included'.
+      assert.deepEqual(coursePlanFacets(course({ type: 'purchase', priceAmount: 49 })), {
+        access: false,
+        rate: true,
+      })
+    })
+  })
+
+  describe('writes', () => {
+    it('gates a subscription-tier course and never touches benefit', () => {
+      const update = coursePlanEdgeUpdate(course({ type: 'subscription' }), 'premium', {
+        access: true,
+        rate: true,
+      })
+      assert.deepEqual(update, {
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
+      })
+      assert.ok(update && !('benefit' in update), 'the tier does not honour a rate')
+    })
+
+    it('keeps the tier when the last plan comes off the gate', () => {
+      // Demoting to 'registered' would hand a paid course to every signed-in
+      // contact. An empty gate is reported by the pricing health check instead.
+      const fresh = course({ type: 'subscription', subscriptionTypeIds: ['premium'] })
+      assert.deepEqual(coursePlanEdgeUpdate(fresh, 'premium', OFF), {
+        accessRule: { type: 'subscription', subscriptionTypeIds: [] },
+      })
+    })
+
+    it('rates a purchase-tier course and never touches accessRule', () => {
+      const update = coursePlanEdgeUpdate(
+        course({ type: 'purchase', priceAmount: 49 }),
+        'premium',
+        { access: true, rate: true },
+        { effect: 'percent_off', percent: 30 }
+      )
+      assert.deepEqual(update, {
+        benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 30 },
+      })
+      assert.ok(update && !('accessRule' in update), 'the tier does not honour a gate')
+    })
+
+    it('writes nothing at all on a free or registered course', () => {
+      // Both facets asked for, neither honoured.
+      const asked = { access: true, rate: true }
+      assert.equal(coursePlanEdgeUpdate(course({ type: 'free' }), 'premium', asked), null)
+      assert.equal(coursePlanEdgeUpdate(course({ type: 'registered' }), 'premium', asked), null)
+    })
+
+    it('clears a purchase course rule when its last plan comes off', () => {
+      const fresh = course({ type: 'purchase', priceAmount: 49 }, {
+        subscriptionTypeIds: ['premium'],
+        effect: 'included',
+      })
+      assert.deepEqual(coursePlanEdgeUpdate(fresh, 'premium', OFF), { benefit: null })
+    })
+
+    it('returns null when the edge is already as asked', () => {
+      const fresh = course({ type: 'subscription', subscriptionTypeIds: ['premium'] })
+      assert.equal(coursePlanEdgeUpdate(fresh, 'premium', { access: true, rate: false }), null)
+    })
+  })
+
+  describe('reading', () => {
+    it('reports no gate on a tier that has none', () => {
+      assert.deepEqual(courseGatedPlanIds(course({ type: 'purchase', priceAmount: 9 })), [])
+      assert.deepEqual(coursePlanEdge(course({ type: 'free' }), 'premium'), {
+        access: false,
+        rate: false,
+      })
+    })
+
+    it('names the other plans on a shared course rate', () => {
+      const fresh = course({ type: 'purchase', priceAmount: 49 }, {
+        subscriptionTypeIds: ['basic', 'premium'],
+        effect: 'percent_off',
+        percent: 10,
+      })
+      assert.deepEqual(plansSharingCourseRate(fresh, 'premium'), ['basic'])
     })
   })
 })

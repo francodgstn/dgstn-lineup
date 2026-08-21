@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
 import { Waypoints } from 'lucide-react'
@@ -7,6 +8,9 @@ import { Link } from '@/i18n/navigation'
 import { buttonVariants } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SubscriptionsPanel } from '@/components/subscriptions/SubscriptionsPanel'
+import type { SubscriptionTypesManagerHandle } from '@/components/subscriptions/SubscriptionTypesManager'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
 /** Subscription plans.
  *
@@ -22,6 +26,10 @@ export function PlansTabs() {
   const t = useTranslations('Nav')
   const tq = useTranslations('QuickLinks')
   const tCat = useTranslations('OfferCatalogue')
+  const tSettings = useTranslations('TeamSettings')
+  // The panel owns the dialog; the header owns the button that opens it, so the
+  // primary action sits where it does on every other list page.
+  const managerRef = useRef<SubscriptionTypesManagerHandle>(null)
 
   // Quick link (UX-71): a plan's price is set here and proved on Pricing, which
   // replays it through the real resolver for each persona. The catalogue is NOT
@@ -42,16 +50,22 @@ export function PlansTabs() {
         purpose="subscriptions"
         quickLinks={quickLinks}
         action={
-          <Link
-            href={'/offer/catalogue' as Route}
-            className={buttonVariants({ variant: 'outline' })}
-          >
-            <Waypoints className="h-4 w-4 mr-1.5" />
-            {tCat('title')}
-          </Link>
+          <>
+            <Link
+              href={'/offer/catalogue' as Route}
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              <Waypoints className="h-4 w-4 mr-1.5" />
+              {tCat('title')}
+            </Link>
+            <Button onClick={() => managerRef.current?.openAdd()}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {tSettings('addSubscriptionType')}
+            </Button>
+          </>
         }
       />
-      <SubscriptionsPanel />
+      <SubscriptionsPanel ref={managerRef} />
     </div>
   )
 }

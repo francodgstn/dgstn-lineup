@@ -6848,7 +6848,14 @@
     "summaryAppointment": "Il prezzo è la porta · {plans, plural, =0 {nessuna tariffa soci} one {# abbonamento con tariffa soci} other {# abbonamenti con tariffa soci}}",
     "summaryPlan": "{count, plural, =0 {Non sblocca ancora nulla} one {Collegato a # attività} other {Collegato a # attività}}",
     "backToActivities": "Torna alle attività",
-    "backToSubscriptions": "Torna agli abbonamenti"
+    "backToSubscriptions": "Torna agli abbonamenti",
+    "railCourses": "Corsi",
+    "noCourses": "Nessun corso per ora.",
+    "courseBadge": "Corso",
+    "noEdgeHere": "Aperto a tutti",
+    "summaryCourseGated": "{plans, plural, =0 {Riservato agli abbonamenti, ma nessuno scelto} one {# abbonamento può aprirlo} other {# abbonamenti possono aprirlo}}",
+    "summaryCoursePriced": "Venduto singolarmente · {plans, plural, =0 {nessuna tariffa soci} one {# abbonamento con tariffa soci} other {# abbonamenti con tariffa soci}}",
+    "summaryCourseOpen": "Gratuito o solo con accesso: nessun abbonamento cambia chi può aprirlo."
   },
   "PagePurpose": {
     "activities": "Cosa offri",

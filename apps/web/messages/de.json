@@ -6848,7 +6848,14 @@
     "summaryAppointment": "Der Preis ist die Hürde · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
     "summaryPlan": "{count, plural, =0 {Schaltet noch nichts frei} one {Mit # Aktivität verknüpft} other {Mit # Aktivitäten verknüpft}}",
     "backToActivities": "Zurück zu Aktivitäten",
-    "backToSubscriptions": "Zurück zu Abos"
+    "backToSubscriptions": "Zurück zu Abos",
+    "railCourses": "Kurse",
+    "noCourses": "Noch keine Kurse.",
+    "courseBadge": "Kurs",
+    "noEdgeHere": "Für alle offen",
+    "summaryCourseGated": "{plans, plural, =0 {Auf Abos beschränkt, aber noch keines gewählt} one {# Abo kann ihn öffnen} other {# Abos können ihn öffnen}}",
+    "summaryCoursePriced": "Einmalverkauf · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
+    "summaryCourseOpen": "Kostenlos oder nur mit Anmeldung — kein Abo ändert, wer ihn öffnen kann."
   },
   "PagePurpose": {
     "activities": "Was du anbietest",

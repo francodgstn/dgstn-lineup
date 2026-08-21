@@ -36,16 +36,21 @@ import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore'
-import { AlertTriangle, IdCard, Zap, CalendarClock, Pencil, Check, X } from 'lucide-react'
+import { AlertTriangle, IdCard, Zap, CalendarClock, GraduationCap, Pencil, Check, X } from 'lucide-react'
 
 import {
   ACTIVITIES_COLLECTION,
+  COURSES_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  courseGatedPlanIds,
+  courseRatedPlanIds,
+  coursePlanFacets,
   gatedPlanIds,
   isAppointmentActivity,
   ratedPlanIds,
   type Activity,
+  type Course,
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
@@ -60,7 +65,9 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
 import { useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
-import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
+import { ActivityPlanLinks, type Offering } from '@/components/offer/ActivityPlanLinks'
+import { useCourses } from '@/plugins/online-courses/hooks'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
 
 const DEFAULT_ACCENT = '#6366f1'
@@ -73,7 +80,7 @@ const DEAD_END_CODES = new Set<PricingWarning['code']>([
   'appointment_no_way_in',
 ])
 
-type Selection = { kind: 'activity' | 'plan'; id: string } | null
+type Selection = { kind: 'activity' | 'course' | 'plan'; id: string } | null
 
 /** Selection rides in the URL so the pane is deep-linkable — which is what lets
  *  the pricing surface's warnings point AT the thing to fix instead of at a list
@@ -83,7 +90,7 @@ function parseSelection(raw: string | null): Selection {
   const [kind, ...rest] = raw.split(':')
   const id = rest.join(':')
   if (!id) return null
-  if (kind === 'activity' || kind === 'plan') return { kind, id }
+  if (kind === 'activity' || kind === 'course' || kind === 'plan') return { kind, id }
   return null
 }
 
@@ -117,7 +124,14 @@ export default function CataloguePage() {
   const { data: activities = [], isLoading: loadingActivities } = useActivities(currentTeamId)
   const { data: plans = [], isLoading: loadingPlans } = useSubscriptionTypes(currentTeamId)
   const { data: gatewayCurrency } = useGatewayCurrency(currentTeamId)
-  const loading = loadingActivities || loadingPlans
+  // Courses only exist for a studio that installed the plugin, so the group is
+  // absent rather than empty when it is not — an empty "Courses" heading would
+  // advertise a feature this studio has not got.
+  const coursesInstalled = useInstalledPlugins().isInstalled('online-courses')
+  const { data: courses = [], isLoading: loadingCourses } = useCourses(
+    coursesInstalled ? currentTeamId : null
+  )
+  const loading = loadingActivities || loadingPlans || (coursesInstalled && loadingCourses)
   // Same derivation as the Subscriptions panel — the stored team currency, else
   // whatever the payment gateway is configured in, else CHF. Two surfaces
   // showing a rate in different currencies would be worse than either being
@@ -133,10 +147,35 @@ export default function CataloguePage() {
   )
   const deadEndIds = useMemo(() => new Set(warnings.map((w) => w.subjectId)), [warnings])
 
+  // ── everything a plan can open or discount, flattened to rows ──
+  // Products and gift cards are deliberately absent: a product carries no
+  // access rule and no benefit, and a gift card is a tender. Neither has an
+  // edge for a plan to sit on. See `PlanLinkTarget` in @linyup/shared.
+  const toActivityOffering = (a: Activity): Offering => ({
+    id: a.id,
+    name: a.name,
+    collection: ACTIVITIES_COLLECTION,
+    color: a.color ?? '',
+    badge: isAppointmentActivity(a) ? t('appointmentBadge') : undefined,
+    target: { kind: 'activity', doc: a },
+  })
+  const toCourseOffering = (c: Course): Offering => ({
+    id: c.id,
+    name: c.title,
+    collection: COURSES_COLLECTION,
+    badge: t('courseBadge'),
+    target: { kind: 'course', doc: c },
+  })
+  const allOfferings: Offering[] = [
+    ...activities.map(toActivityOffering),
+    ...courses.map(toCourseOffering),
+  ]
+
   const classes = activities.filter((a) => !isAppointmentActivity(a))
   const appointments = activities.filter(isAppointmentActivity)
   const visible = (list: Activity[]) =>
     onlyDeadEnds ? list.filter((a) => deadEndIds.has(a.id)) : list
+  const visibleCourses = onlyDeadEnds ? courses.filter((c) => deadEndIds.has(c.id)) : courses
 
   function select(next: Selection) {
     const sel = next ? `${next.kind}:${next.id}` : null
@@ -147,6 +186,8 @@ export default function CataloguePage() {
 
   const selectedActivity =
     selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : undefined
+  const selectedCourse =
+    selection?.kind === 'course' ? courses.find((c) => c.id === selection.id) : undefined
   const selectedPlan =
     selection?.kind === 'plan' ? plans.find((p) => p.id === selection.id) : undefined
 
@@ -281,6 +322,30 @@ export default function CataloguePage() {
                   ))
                 )}
               </RailGroup>
+
+              {coursesInstalled && (
+                <RailGroup icon={GraduationCap} label={t('railCourses')}>
+                  {visibleCourses.length === 0 ? (
+                    <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noCourses')} />
+                  ) : (
+                    visibleCourses.map((c) => (
+                      <RailRow
+                        key={c.id}
+                        name={c.title}
+                        warn={deadEndIds.has(c.id)}
+                        selected={selection?.kind === 'course' && selection.id === c.id}
+                        onClick={() =>
+                          select(
+                            selection?.kind === 'course' && selection.id === c.id
+                              ? null
+                              : { kind: 'course', id: c.id }
+                          )
+                        }
+                      />
+                    ))
+                  )}
+                </RailGroup>
+              )}
             </>
           )}
         </div>
@@ -309,7 +374,7 @@ export default function CataloguePage() {
                       rated: ratedPlanIds(selectedActivity).length,
                     })
               }
-              editHref={'/offer/activities' as Route}
+              editHref={`/offer/activities?edit=${selectedActivity.id}` as Route}
               canEdit={canEdit}
               onRename={async (name) => {
                 await updateDoc(doc(db, ACTIVITIES_COLLECTION, selectedActivity.id), { name })
@@ -317,9 +382,9 @@ export default function CataloguePage() {
               }}
             >
               <ActivityPlanLinks
-                direction="from-activity"
-                activity={selectedActivity}
-                activities={activities}
+                direction="from-offering"
+                offering={toActivityOffering(selectedActivity)}
+                offerings={allOfferings}
                 plans={plans}
                 currency={currency}
                 canEdit={canEdit}
@@ -332,13 +397,19 @@ export default function CataloguePage() {
               key={selectedPlan.id}
               title={selectedPlan.name}
               summary={t('summaryPlan', {
-                count: activities.filter(
-                  (a) =>
-                    gatedPlanIds(a).includes(selectedPlan.id) ||
-                    ratedPlanIds(a).includes(selectedPlan.id)
-                ).length,
+                count:
+                  activities.filter(
+                    (a) =>
+                      gatedPlanIds(a).includes(selectedPlan.id) ||
+                      ratedPlanIds(a).includes(selectedPlan.id)
+                  ).length +
+                  courses.filter(
+                    (c) =>
+                      courseGatedPlanIds(c).includes(selectedPlan.id) ||
+                      courseRatedPlanIds(c).includes(selectedPlan.id)
+                  ).length,
               })}
-              editHref={'/offer/plans' as Route}
+              editHref={`/offer/plans?edit=${selectedPlan.id}` as Route}
               canEdit={canEdit}
               onRename={async (name) => {
                 if (!currentTeamId) return
@@ -358,7 +429,42 @@ export default function CataloguePage() {
               <ActivityPlanLinks
                 direction="from-plan"
                 plan={selectedPlan}
-                activities={activities}
+                offerings={allOfferings}
+                plans={plans}
+                currency={currency}
+                canEdit={canEdit}
+              />
+            </PaneBody>
+          )}
+
+          {selectedCourse && (
+            <PaneBody
+              key={selectedCourse.id}
+              title={selectedCourse.title}
+              badge={t('courseBadge')}
+              summary={t(
+                coursePlanFacets(selectedCourse).access
+                  ? 'summaryCourseGated'
+                  : coursePlanFacets(selectedCourse).rate
+                    ? 'summaryCoursePriced'
+                    : 'summaryCourseOpen',
+                {
+                  plans:
+                    courseGatedPlanIds(selectedCourse).length +
+                    courseRatedPlanIds(selectedCourse).length,
+                }
+              )}
+              editHref={`/offer/online-courses/${selectedCourse.id}` as Route}
+              canEdit={canEdit}
+              onRename={async (title) => {
+                await updateDoc(doc(db, COURSES_COLLECTION, selectedCourse.id), { title })
+                await qc.invalidateQueries({ queryKey: ['courses'] })
+              }}
+            >
+              <ActivityPlanLinks
+                direction="from-offering"
+                offering={toCourseOffering(selectedCourse)}
+                offerings={allOfferings}
                 plans={plans}
                 currency={currency}
                 canEdit={canEdit}
@@ -368,7 +474,7 @@ export default function CataloguePage() {
 
           {/* Selected, but gone — a stale deep link, or something archived in
               another tab. Saying so beats an empty pane that looks like a bug. */}
-          {selection && !selectedActivity && !selectedPlan && !loading && (
+          {selection && !selectedActivity && !selectedCourse && !selectedPlan && !loading && (
             <div className="space-y-2 px-4 py-12 text-center">
               <p className="text-sm text-muted-foreground">{t('paneMissing')}</p>
               <Button variant="outline" size="sm" onClick={() => select(null)}>
@@ -383,7 +489,12 @@ export default function CataloguePage() {
 }
 
 /** The pane's frame: name (inline-editable), a one-line summary, an Edit escape
- *  hatch, and the edge editor below. */
+ *  hatch, and the edge editor below.
+ *
+ *  Edit deep-links: it lands on the owning page AND opens that entity's editor
+ *  (`?edit=<id>`). Sending the studio to a list page with the row somewhere on
+ *  it is the shape UX-99 is about — a page naming a destination and then making
+ *  you look for it. */
 function PaneBody({
   title,
   badge,

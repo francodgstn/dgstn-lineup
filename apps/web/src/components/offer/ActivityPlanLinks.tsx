@@ -34,15 +34,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Plus, AlertTriangle } from 'lucide-react'
 
 import {
-  ACTIVITIES_COLLECTION,
-  activityPlanEdge,
-  activityPlanEdgeUpdate,
-  activityRateChoiceOf,
-  isAppointmentActivity,
-  plansSharingRate,
-  type Activity,
+  offeringFacets,
+  offeringPlanEdge,
+  offeringPlanEdgeUpdate,
+  offeringRateChoiceOf,
+  plansSharingOfferingRate,
   type ActivityPlanEdge,
   type ActivityRateChoice,
+  type PlanLinkTarget,
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
@@ -73,8 +72,8 @@ interface RowDraft {
   rate: RateDraft
 }
 
-function rateDraftOf(a: Activity): RateDraft {
-  const c = activityRateChoiceOf(a)
+function rateDraftOf(t: PlanLinkTarget): RateDraft {
+  const c = offeringRateChoiceOf(t)
   return {
     effect: (RATE_EFFECTS as readonly string[]).includes(c.effect)
       ? (c.effect as RateEffect)
@@ -107,23 +106,38 @@ function rateError(d: RateDraft): 'percent' | 'amount' | null {
   return null
 }
 
-export type EdgeDirection = 'from-activity' | 'from-plan'
+export type EdgeDirection = 'from-offering' | 'from-plan'
+
+/** An activity or a course, flattened to what a row needs plus the document the
+ *  writer dispatches on. Products and gift cards are absent by construction —
+ *  see the note above `PlanLinkTarget` in @linyup/shared. */
+export interface Offering {
+  id: string
+  name: string
+  /** Firestore collection the document lives in — the transaction reads it back
+   *  from here before writing. */
+  collection: string
+  target: PlanLinkTarget
+  color?: string
+  /** A short word for what kind it is, shown on the row in the plan direction. */
+  badge?: string
+}
 
 export function ActivityPlanLinks({
   direction,
-  activity,
+  offering,
   plan,
-  activities,
+  offerings,
   plans,
   currency,
   canEdit,
 }: {
   direction: EdgeDirection
-  /** The fixed side when direction is 'from-activity'. */
-  activity?: Activity
+  /** The fixed side when direction is 'from-offering'. */
+  offering?: Offering
   /** The fixed side when direction is 'from-plan'. */
   plan?: SubscriptionType
-  activities: Activity[]
+  offerings: Offering[]
   plans: SubscriptionType[]
   currency: string
   canEdit: boolean
@@ -135,25 +149,28 @@ export function ActivityPlanLinks({
   const [saving, setSaving] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
 
-  // Rows are the OTHER side. Everything below is written against (activity,
+  // Rows are the OTHER side. Everything below is written against (offering,
   // plan) pairs, so the two directions differ only in which of the two each row
   // supplies.
   const rows = useMemo(() => {
-    if (direction === 'from-activity') {
-      return plans.map((p) => ({ key: p.id, plan: p, act: activity! }))
+    if (direction === 'from-offering') {
+      return plans.map((p) => ({ key: p.id, plan: p, off: offering! }))
     }
-    return activities.map((a) => ({ key: a.id, plan: plan!, act: a }))
-  }, [direction, plans, activities, activity, plan])
+    return offerings.map((o) => ({ key: o.id, plan: plan!, off: o }))
+  }, [direction, plans, offerings, offering, plan])
 
-  const draftFor = (key: string, act: Activity, planId: string): RowDraft =>
-    drafts[key] ?? { edge: activityPlanEdge(act, planId), rate: rateDraftOf(act) }
+  const draftFor = (key: string, off: Offering, planId: string): RowDraft =>
+    drafts[key] ?? {
+      edge: offeringPlanEdge(off.target, planId),
+      rate: rateDraftOf(off.target),
+    }
 
   const setDraft = (key: string, next: RowDraft) => setDrafts((d) => ({ ...d, [key]: next }))
 
   const dirty = Object.keys(drafts).length > 0
   const errors = rows
     .map((r) => {
-      const d = draftFor(r.key, r.act, r.plan.id)
+      const d = draftFor(r.key, r.off, r.plan.id)
       return d.edge.rate ? rateError(d.rate) : null
     })
     .filter(Boolean)
@@ -165,20 +182,21 @@ export function ActivityPlanLinks({
     }
     setSaving(true)
     try {
-      // One transaction over every touched activity. Each document is re-read
-      // INSIDE it and the id lists recomputed from that read, so a second studio
-      // ticking a different plan on the same activity merges rather than losing.
+      // One transaction over every touched document, whatever kind it is. Each
+      // is re-read INSIDE the transaction and its id lists recomputed from that
+      // read, so a second studio ticking a different plan on the same offering
+      // merges rather than losing.
       await runTransaction(db, async (tx) => {
         const touched = rows.filter((r) => drafts[r.key])
         const snaps = await Promise.all(
-          touched.map((r) => tx.get(doc(db, ACTIVITIES_COLLECTION, r.act.id)))
+          touched.map((r) => tx.get(doc(db, r.off.collection, r.off.id)))
         )
         snaps.forEach((snap, i) => {
           if (!snap.exists()) return
           const r = touched[i]
           const d = drafts[r.key]
-          const update = activityPlanEdgeUpdate(
-            snap.data() as Activity,
+          const update = offeringPlanEdgeUpdate(
+            { kind: r.off.target.kind, doc: snap.data() } as PlanLinkTarget,
             r.plan.id,
             d.edge,
             d.edge.rate ? toChoice(d.rate) : undefined
@@ -188,7 +206,10 @@ export function ActivityPlanLinks({
       })
       setDrafts({})
       setShowErrors(false)
-      await qc.invalidateQueries({ queryKey: ['activities'] })
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['activities'] }),
+        qc.invalidateQueries({ queryKey: ['courses'] }),
+      ])
     } finally {
       setSaving(false)
     }
@@ -197,12 +218,12 @@ export function ActivityPlanLinks({
   // ── empty states ──
   // Both name a destination AND link it (UX-99): the mirror-image empty states
   // these replace each named one and went nowhere.
-  if (direction === 'from-activity' && plans.length === 0) {
+  if (direction === 'from-offering' && plans.length === 0) {
     return (
       <EmptyLink text={t('noPlans')} action={t('noPlansAction')} href={'/offer/plans' as Route} />
     )
   }
-  if (direction === 'from-plan' && activities.length === 0) {
+  if (direction === 'from-plan' && offerings.length === 0) {
     return (
       <EmptyLink
         text={t('noActivities')}
@@ -216,19 +237,22 @@ export function ActivityPlanLinks({
     <div className="space-y-3">
       <SectionHeading
         level="sub"
-        title={direction === 'from-activity' ? t('plansHeading') : t('includesHeading')}
-        description={direction === 'from-activity' ? t('plansHint') : t('includesHint')}
+        title={direction === 'from-offering' ? t('plansHeading') : t('includesHeading')}
+        description={direction === 'from-offering' ? t('plansHint') : t('includesHint')}
       />
 
       <div className="space-y-1.5">
-        {rows.map(({ key, act, plan: p }) => {
-          const d = draftFor(key, act, p.id)
-          const appointment = isAppointmentActivity(act)
-          const label = direction === 'from-activity' ? p.name : act.name
-          // Everyone ELSE on this activity's ONE rate rule — named, because the
+        {rows.map(({ key, off, plan: p }) => {
+          const d = draftFor(key, off, p.id)
+          // Which controls this offering can actually honour. An appointment has
+          // no gate; a course honours one facet or the other depending on its
+          // tier, and neither on a free or sign-in-only one.
+          const facets = offeringFacets(off.target)
+          const label = direction === 'from-offering' ? p.name : off.name
+          // Everyone ELSE on this offering's ONE rate rule — named, because the
           // effect chosen here applies to them too. Read from the SAVED document
           // plus the draft, so a plan just ticked on is already counted.
-          const others = plansSharingRate(act, p.id)
+          const others = plansSharingOfferingRate(off.target, p.id)
           const sharedWith = [...new Set(others)]
             .map((id) => plans.find((s) => s.id === id)?.name)
             .filter((n): n is string => !!n)
@@ -242,24 +266,31 @@ export function ActivityPlanLinks({
             >
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                  {direction === 'from-plan' && (
+                  {direction === 'from-plan' && off.color !== undefined && (
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ background: act.color || DEFAULT_ACCENT }}
+                      style={{ background: off.color || DEFAULT_ACCENT }}
                     />
                   )}
                   <span className="truncate">{label}</span>
-                  {direction === 'from-plan' && appointment && (
+                  {direction === 'from-plan' && off.badge && (
                     <Badge variant="outline" className="text-[10px] font-normal">
-                      {t('appointmentBadge')}
+                      {off.badge}
                     </Badge>
                   )}
                 </span>
 
-                {/* An appointment has NO access gate — the price is the gate —
-                    so the control is absent, not disabled: a greyed checkbox
-                    reads as "not yet", and this is "never". */}
-                {!appointment && (
+                {/* A control appears only where the stored document HONOURS it.
+                    Absent, not disabled: a greyed checkbox reads as "not yet",
+                    and these are "never" — an appointment has no gate (the price
+                    is the gate), and a free or sign-in-only course has neither
+                    facet at all. */}
+                {!facets.access && !facets.rate && (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {t('noEdgeHere')}
+                  </span>
+                )}
+                {facets.access && (
                   <Toggle
                     label={t('accessToggle')}
                     checked={d.edge.access}
@@ -267,12 +298,14 @@ export function ActivityPlanLinks({
                     onChange={(v) => setDraft(key, { ...d, edge: { ...d.edge, access: v } })}
                   />
                 )}
-                <Toggle
-                  label={t('rateToggle')}
-                  checked={d.edge.rate}
-                  disabled={!canEdit}
-                  onChange={(v) => setDraft(key, { ...d, edge: { ...d.edge, rate: v } })}
-                />
+                {facets.rate && (
+                  <Toggle
+                    label={t('rateToggle')}
+                    checked={d.edge.rate}
+                    disabled={!canEdit}
+                    onChange={(v) => setDraft(key, { ...d, edge: { ...d.edge, rate: v } })}
+                  />
+                )}
               </div>
 
               {d.edge.rate && (
