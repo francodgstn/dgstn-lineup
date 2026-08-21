@@ -8,6 +8,7 @@ import { expireAffiliations } from './expireAffiliations'
 import { expirePendingBookings } from './expirePendingBookings'
 import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
+import { purgeVerificationCodes } from './purgeVerificationCodes'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
 import { refreshCustomDomains } from './refreshCustomDomains'
 import { assertZoneRecordsUnproxied } from './assertZoneRecordsUnproxied'
@@ -68,6 +69,10 @@ export const dailyTasks = onSchedule(
       // module header for why it earns a place the waiver work gave nothing.
       { name: 'expireOrgMemberInvitations', handler: expireOrgMemberInvitations },
       { name: 'purgeProvisionalContacts', handler: purgeProvisionalContacts },
+      // Expired one-time codes on both OTP rails. They carry an email address
+      // and (on the contact rail) a plaintext code, and nothing ever deleted
+      // them — see the module header for why this is not just tidiness.
+      { name: 'purgeVerificationCodes', handler: purgeVerificationCodes },
       // The rolling 6-month horizon for recurring classes. Without it a series
       // simply stops at whatever was materialised the day it was created, and
       // every public booking link for it goes with it.

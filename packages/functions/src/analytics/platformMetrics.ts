@@ -5,6 +5,7 @@ import { to } from '../utils/async'
 import {
   computePlatformMetrics,
   platformMetricsToDoc,
+  tenantHiddenFromPlatformMetrics,
   type AccountMetricInput,
   type SaasSubscription,
   PLATFORM_METRICS_COLLECTION,
@@ -74,13 +75,12 @@ export const capturePlatformMetrics = onSchedule(
 
     for (const doc of teamsSnap.docs) {
       const team = doc.data()
-      // Internal teams (e.g. the prod smoke-test studio) never count toward
+      // Internal tenants (e.g. the prod smoke-test studio) never count toward
       // platform metrics. Filtered in memory — `flags.internal` is a nested field
       // (no top-level boolean to query on) and all teams are already loaded.
-      // `comped` deliberately does NOT filter: a comped tenant is a real customer
-      // whose usage belongs in every count. It only leaves the MRR line, which
-      // the reducer handles from the flag below.
-      if (team.flags?.internal === true) continue
+      // The rule itself lives in `tenantHiddenFromPlatformMetrics`, so the org
+      // loop below and the operator console cannot answer it differently.
+      if (tenantHiddenFromPlatformMetrics(team.flags)) continue
       const sub = subs.get(doc.id)
       inputs.push({
         type: 'team',
@@ -95,6 +95,10 @@ export const capturePlatformMetrics = onSchedule(
 
     for (const doc of orgsSnap.docs) {
       const org = doc.data()
+      // Same rule as the teams loop above — this check was MISSING here, so an
+      // internal organisation counted toward every platform number while an
+      // internal team did not.
+      if (tenantHiddenFromPlatformMetrics(org.flags)) continue
       const sub = subs.get(doc.id)
       inputs.push({
         type: 'org',

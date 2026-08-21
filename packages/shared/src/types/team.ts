@@ -509,6 +509,28 @@ export function tenantExemptFromTrialSweep(flags?: TenantFlags): boolean {
   return Boolean(flags?.internal || flags?.pilot || flags?.comped)
 }
 
+/**
+ * Is this tenant hidden from platform metrics?
+ *
+ * THE one reader of the flags for that decision, for the same reason
+ * `tenantExemptFromTrialSweep` exists: the check used to be spelled out inline,
+ * and the copies did not agree. The daily snapshot skipped internal TEAMS but
+ * not internal ORGANISATIONS, and the operator console's overview skipped
+ * neither — so the console and `platform_metrics/{date}` reported different
+ * numbers for the same platform, while a comment in the snapshot called the
+ * shared reducer "single source of truth".
+ *
+ * Only `internal` hides a tenant. `pilot` and `comped` are REAL usage and
+ * belong in every count — `comped` only leaves the MRR line, which the reducer
+ * handles from its own flag.
+ *
+ * Hidden from METRICS, never from the console's account list: an operator who
+ * cannot see the demo tenant cannot manage it.
+ */
+export function tenantHiddenFromPlatformMetrics(flags?: TenantFlags): boolean {
+  return flags?.internal === true
+}
+
 /** Which exemption applied, for the sweep's log line. Null when none did. */
 export function trialSweepExemption(flags?: TenantFlags): 'internal' | 'pilot' | 'comped' | null {
   if (flags?.internal) return 'internal'

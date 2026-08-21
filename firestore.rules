@@ -90,6 +90,27 @@ service cloud.firestore {
       return request.resource.data.get('payments', {}) == resource.data.get('payments', {});
     }
 
+    // The OPERATOR-OWNED fields on a tenant document.
+    //
+    // `flags` decides whether a tenant counts toward platform metrics and
+    // whether the daily trial sweep may lapse it; `plan`, `plan_status` and
+    // `trial_ends_at` are what the studio is entitled to and until when. All
+    // four are written by Cloud Functions and the operator console — never by
+    // the tenant — and `TenantFlags`' own doc comment has said "Operator-set
+    // only; never client-writable" since it was written.
+    //
+    // It was not true. Only `payments` was guarded, so a team OWNER could grant
+    // themselves a plan, clear an expiring trial, or set `flags.internal` and
+    // vanish from every platform number. That mattered little while owners were
+    // all founders; it stops being fine the moment an owner login is shared —
+    // which is exactly what a demo tenant is for.
+    function tenantGovernanceUnchanged() {
+      return request.resource.data.get('flags', {}) == resource.data.get('flags', {})
+             && request.resource.data.get('plan', null) == resource.data.get('plan', null)
+             && request.resource.data.get('plan_status', null) == resource.data.get('plan_status', null)
+             && request.resource.data.get('trial_ends_at', null) == resource.data.get('trial_ends_at', null);
+    }
+
     // Organization Helper functions
     //-------------------------------------------------------
 
@@ -393,9 +414,10 @@ service cloud.firestore {
                || resource.data.get('createdBy', null) == request.auth.uid);
 
       // Only team owners can update team details. The `payments` map (Connect
-      // feature flag + account mirror) is reserved for Cloud Functions / admins.
+      // feature flag + account mirror) and the governance fields (plan, status,
+      // trial end, flags) are reserved for Cloud Functions / admins.
       allow update: if isTeamMember(teamId) && hasTeamRole(teamId, 'owner')
-                    && (paymentsUnchanged() || hasRole('admin'));
+                    && ((paymentsUnchanged() && tenantGovernanceUnchanged()) || hasRole('admin'));
 
       // Only users with admin role can create teams, OR the user is provisioning their own first team
       allow create: if isAuthed() && (hasRole('admin') || request.resource.data.createdBy == request.auth.uid);

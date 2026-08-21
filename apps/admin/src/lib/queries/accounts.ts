@@ -6,6 +6,7 @@ import type { SaasPlan, SaasStatus } from '@linyup/shared'
 import {
   PLAN_PRICING,
   computePlatformMetrics,
+  tenantHiddenFromPlatformMetrics,
   type AccountMetricInput,
   type PlatformMetrics,
 } from '@linyup/shared'
@@ -38,6 +39,10 @@ export interface AccountRow {
   /** A real customer the platform bills nothing (`TenantFlags.comped`). Counted
    *  everywhere except MRR — see AccountMetricInput.comped. */
   comped: boolean
+  /** Linyup's own tenant (`TenantFlags.internal`) — the demo/smoke studio. Still
+   *  LISTED here (an operator has to be able to manage it) but excluded from the
+   *  overview metrics, which is what the daily snapshot does too. */
+  internal: boolean
 }
 
 /** Derive the compact Connect status from the team's payments mirror. */
@@ -123,6 +128,7 @@ async function loadAccounts(): Promise<LoadResult> {
       createdMs: team.created?.toMillis?.() ?? 0,
       paymentsStatus: teamPaymentsStatus(team),
       comped: team.flags?.comped === true,
+      internal: tenantHiddenFromPlatformMetrics(team.flags),
     })
   }
 
@@ -144,6 +150,7 @@ async function loadAccounts(): Promise<LoadResult> {
       createdMs: org.created?.toMillis?.() ?? 0,
       paymentsStatus: null,
       comped: org.flags?.comped === true,
+      internal: tenantHiddenFromPlatformMetrics(org.flags),
     })
   }
 
@@ -186,7 +193,13 @@ function toMetricInput(r: AccountRow): AccountMetricInput {
 
 export async function getOverviewMetrics(nowMs: number): Promise<OverviewMetrics> {
   const { rows } = await loadAccounts()
-  // Same reducer the daily snapshot Cloud Function uses — single source of truth.
-  const metrics = computePlatformMetrics(rows.map(toMetricInput), nowMs)
+  // Same reducer AND the same exclusion the daily snapshot applies. The reducer
+  // was already shared and the comment already claimed "single source of truth",
+  // but the filter was not — so an internal tenant left the snapshot and stayed
+  // in these KPIs, and the two disagreed by exactly one studio.
+  const counted = rows.filter((r) => !r.internal)
+  const metrics = computePlatformMetrics(counted.map(toMetricInput), nowMs)
+  // Recent signups is a LIST, not a metric — it keeps every row, so a newly
+  // provisioned demo tenant is visible to the operator who just made it.
   return { ...metrics, recentSignups: rows.slice(0, 8) }
 }
