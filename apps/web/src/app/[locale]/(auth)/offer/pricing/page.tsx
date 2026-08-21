@@ -561,10 +561,14 @@ function severityIcon(severity: PricingWarning['severity']) {
   return <Info className="h-4 w-4 text-muted-foreground shrink-0" />
 }
 
+/** Where a warning's "Fix" goes. The catalogue takes a selection in the URL, so
+ *  an activity or plan warning now lands ON the subject with the edge editor
+ *  open beside it — where every one of these warnings is actually repaired —
+ *  rather than on a list page with the fix somewhere on it. */
 function fixHref(w: PricingWarning): Route {
-  if (w.subjectKind === 'activity') return '/offer/activities' as Route
+  if (w.subjectKind === 'activity') return `/offer/catalogue?sel=activity:${w.subjectId}` as Route
   if (w.subjectKind === 'course') return `/offer/online-courses/${w.subjectId}` as Route
-  return '/offer/plans' as Route
+  return `/offer/catalogue?sel=plan:${w.subjectId}` as Route
 }
 
 function HealthSection({ warnings }: { warnings: PricingWarning[] }) {

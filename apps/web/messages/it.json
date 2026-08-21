@@ -1558,7 +1558,6 @@
     "access_members_desc": "I membri prenotano con il loro abbonamento. Chi è nuovo può comunque prenotare una lezione se qui sotto è attivo “Prova gratuita per i nuovi”.",
     "access_subscription": "Abbonamenti specifici",
     "access_subscription_desc": "Possono prenotare solo i membri con uno degli abbonamenti selezionati. Chi è nuovo può comunque prenotare una lezione se qui sotto è attivo “Prova gratuita per i nuovi”.",
-    "accessNoSubs": "Nessun tipo di abbonamento — creali in Abbonamenti e affiliazioni.",
     "accessBadgeSubscription": "Abbonamento",
     "dropInLabel": "Offri drop-in (paga a lezione)",
     "dropInPricePlaceholder": "es. 25",
@@ -1603,9 +1602,6 @@
     "fieldType_checkbox": "Casella di controllo",
     "fieldType_date": "Data",
     "reorder": "Riordina",
-    "quickCreateSubPlaceholder": "Nome del nuovo abbonamento…",
-    "quickCreateSubButton": "Crea",
-    "quickCreateSubHint": "Crea un abbonamento di base collegato a questa attività. I prezzi possono essere aggiunti in seguito nelle impostazioni degli abbonamenti.",
     "sectionClasses": "Corsi",
     "sectionAppointments": "Appuntamenti",
     "sectionEmpty": "Ancora niente qui.",
@@ -1631,7 +1627,6 @@
     "waitlistRequiresCapacity": "Ha effetto solo sulle sessioni con un limite di partecipanti — una sessione senza limite non è mai al completo.",
     "waitlistRequiresPlan": "Disponibile dal piano {plan}.",
     "level_none": "Non specificato",
-    "accessNoSubsAction": "Crea un tipo di abbonamento",
     "sectionBookingTitle": "Prenotazione e prezzi",
     "sectionBookingSubtitle": "Chi può prenotare e quanto paga.",
     "moreOptionsLabel": "Altre opzioni",
@@ -1645,7 +1640,11 @@
     "scheduleSheetEmptyTitle": "Non a calendario",
     "scheduleSheetEmptyBody": "Questa attività non ha sessioni in programma, quindi nessuno può vederla o prenotarla.",
     "scheduleSheetEmptyCta": "Programma una sessione",
-    "scheduleSheetOpenSchedule": "Apri la programmazione"
+    "scheduleSheetOpenSchedule": "Apri la programmazione",
+    "accessPickInCatalogue": "Quali abbonamenti possono prenotare si imposta nel catalogo, accanto agli abbonamenti stessi.",
+    "accessOpenCatalogue": "Apri il catalogo",
+    "dropInRateInCatalogue": "Una tariffa soci su questo prezzo si imposta nel catalogo: è una sola regola condivisa da tutti gli abbonamenti coinvolti.",
+    "benefitInCatalogue": "La tariffa soci per queste durate si imposta nel catalogo, accanto agli abbonamenti a cui si applica."
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -1840,13 +1839,6 @@
     "autoTriggerUnsubscribed": "Quando disiscritto",
     "autoTriggerChanged": "Quando l'abbonamento cambia",
     "subTypeActivitiesLabel": "Attività sbloccate da questo abbonamento",
-    "subTypeActivitiesDesc": "Per un corso, il collegamento limita la prenotazione ai titolari di questo abbonamento. Un appuntamento non ha nessun blocco d’accesso — è il prezzo a filtrare — quindi il collegamento definisce quanto pagano i titolari.",
-    "subTypeActivitiesEmpty": "Nessuna attività al momento — creale in Offerta → Attività.",
-    "subTypeActivitiesHint": "Rimuovendo l’ultimo abbonamento da un corso, questo torna prenotabile da tutti i membri. Su un appuntamento l’agevolazione decade e tutti pagano il prezzo base.",
-    "subTypeActivitiesAppointmentBadge": "Appuntamento",
-    "subTypeActivitiesBenefitLabel": "Cosa ottengono i titolari",
-    "subTypeActivitiesSharedRule": "Un appuntamento ha una sola regola di agevolazione, condivisa con {names} — questa scelta vale anche per loro.",
-    "subTypeActivitiesBenefitFix": "Controlla l’agevolazione dell’appuntamento segnalata sopra — non è stato salvato nulla.",
     "subTypeUsageLimit": "Limite di utilizzo",
     "subTypeUsageLimitDesc": "Limita solo le prenotazioni di CORSI coperte da questo abbonamento. Una volta esaurita l'allowance, i membri possono comunque prenotare al prezzo a ingresso singolo (si applica il prezzo membro).",
     "subTypeLimitPeriodDay": "al giorno",
@@ -1882,14 +1874,15 @@
     "paymentsRecordingOff": "In pausa",
     "paymentsRecordingStalled": "Non registra ancora",
     "paymentsPublishableKeyHelp": "Solo un'etichetta — Linyup non addebita nulla con questa. La registrazione inizia quando aggiungi qui sotto la chiave di firma del webhook.",
-    "subTypeActivitiesEmptyAction": "Crea un’attività",
     "paymentsWebhookEventsHelp": "Iscrivi l'endpoint a <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> e <code>checkout.session.completed</code>. Non aggiungere anche <code>invoice.payment_succeeded</code>: Stripe non collega più una fattura al suo pagamento, quindi i pagamenti ricorrenti verrebbero registrati due volte.",
     "paymentsWebhookEventsTitle": "Scegli gli eventi con attenzione",
     "paymentsDoubleRecordingTitle": "Questo endpoint Stripe registra i pagamenti due volte",
     "paymentsDoubleRecordingBody": "Negli ultimi {days} giorni ha consegnato {invoiceCount} eventi di fattura e {paymentCount} eventi di pagamento. Stripe non collega più una fattura al suo pagamento: un pagamento ricorrente che arriva in entrambe le forme viene quindi registrato due volte e qui non è possibile sapere quali due righe siano lo stesso denaro.",
     "paymentsDoubleRecordingFix": "Da correggere in Stripe: modifica questo endpoint e rimuovi <code>invoice.payment_succeeded</code>. Mantieni <code>payment_intent.succeeded</code>, <code>charge.succeeded</code> e <code>checkout.session.completed</code> — registrano tutto, rinnovi compresi. Le righe già scritte restano come sono; l'elenco dei pagamenti segnala quelle a rischio.",
     "customFieldPublicOnBooking": "Chiedi nel modulo di prenotazione",
-    "customFieldPublicOnBookingHint": "Rende il nome e le opzioni di questo campo visibili pubblicamente, così può comparire nella tua pagina di prenotazione. Lascia disattivato per i dati riservati."
+    "customFieldPublicOnBookingHint": "Rende il nome e le opzioni di questo campo visibili pubblicamente, così può comparire nella tua pagina di prenotazione. Lascia disattivato per i dati riservati.",
+    "subTypeActivitiesInCatalogue": "Si imposta nel catalogo, dove lo vedi anche dal lato dell'attività.",
+    "subTypeActivitiesOpenCatalogue": "Apri il catalogo"
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -6565,7 +6558,9 @@
     "plansToActivities": "Vedi quali corsi sblocca un abbonamento",
     "availabilityToActivities": "Imposta i tipi di appuntamento e le durate offerte da questi orari",
     "promoCodesToPricing": "Vedi i codici attivi accanto ai prezzi che riducono",
-    "activitiesToSchedule": "Vedi queste lezioni nel calendario"
+    "activitiesToSchedule": "Vedi queste lezioni nel calendario",
+    "activitiesToCatalogue": "Quali abbonamenti li sbloccano",
+    "plansToCatalogue": "Cosa sblocca ogni abbonamento"
   },
   "Site": {
     "loading": "Caricamento…",

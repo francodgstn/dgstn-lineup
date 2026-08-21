@@ -29,8 +29,9 @@ import { Label } from '@/components/ui/label'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ACTIVITIES_COLLECTION, TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
 import { resolveDurationSale, resolveBookingContactFields } from '@linyup/shared'
+import { activityRateChoiceOf, gatedPlanIds, ratedPlanIds } from '@linyup/shared'
 import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField, BookingContactField } from '@linyup/shared'
 
 /** The waitlist's plan gate, mirroring the server side of it
@@ -48,14 +49,6 @@ import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { usePlanName } from '@/hooks/usePlanName'
 import { resolveActivityTerms } from '@/lib/activityTerms'
-import {
-  BenefitEditor,
-  toBenefitFormValue,
-  toBenefitPayload,
-  defaultBenefitFormValue,
-  benefitPercentInvalid,
-  benefitAmountInvalid,
-} from '@/components/pricing/BenefitEditor'
 import { formatCurrency } from '@/lib/format'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
@@ -172,10 +165,7 @@ const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
 // Wrapped in a factory so the ≥0.5 price-floor message can be translated — the
 // rest of the messages here are pre-existing tech debt (hardcoded English),
 // unrelated to this change, left as-is.
-function createActivitySchema(
-  t: ReturnType<typeof useTranslations>,
-  tBenefit: ReturnType<typeof useTranslations>
-) {
+function createActivitySchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
     name: z.string().min(1, 'Required').max(80),
     description: z.string().max(500).optional(),
@@ -203,7 +193,6 @@ function createActivitySchema(
     // 'open' === free trial). Appointments dropped this entirely — the price is
     // the only gate; see `memberBenefit` below.
     accessTier: z.enum(['open', 'members', 'subscription'] as const),
-    subscriptionTypeIds: z.array(z.string()),
     // Drop-in / pay-per-class: an uncovered contact may pay this to book a single
     // session. CLASS-ONLY.
     dropInEnabled: z.boolean(),
@@ -234,15 +223,6 @@ function createActivitySchema(
         mode: z.enum(['free', 'priced', 'benefit_only'] as const),
       })
     ),
-    // The one member-benefit rule for the whole activity — appointments (every
-    // priced duration) and classes (the drop-in price, while enabled). See
-    // BenefitFormValue / toBenefitPayload in components/pricing/BenefitEditor.
-    memberBenefit: z.object({
-      subscriptionTypeIds: z.array(z.string()),
-      effect: z.enum(['included', 'percent_off', 'fixed_price'] as const),
-      percent: z.string(),
-      amount: z.string(),
-    }),
   }).superRefine((d, ctx) => {
     if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
       ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
@@ -264,20 +244,6 @@ function createActivitySchema(
         ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
       }
     })
-    if (benefitPercentInvalid(d.memberBenefit)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['memberBenefit', 'percent'],
-        message: tBenefit('percentValidation'),
-      })
-    }
-    if (benefitAmountInvalid(d.memberBenefit)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['memberBenefit', 'amount'],
-        message: tBenefit('amountValidation'),
-      })
-    }
   })
 }
 
@@ -315,7 +281,6 @@ function ActivityDialog({
   currency: string
 }) {
   const t = useTranslations('Activities')
-  const tBenefit = useTranslations('Benefit')
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
   // The waitlist is a paid-tier feature, and THIS is where its flag is written —
@@ -362,9 +327,8 @@ function ActivityDialog({
   const [imagePreview, setImagePreview] = useState<string | null>(
     (editing ?? duplicating)?.image_url ?? null
   )
-  const activitySchema = useMemo(() => createActivitySchema(t, tBenefit), [t, tBenefit])
+  const activitySchema = useMemo(() => createActivitySchema(t), [t])
 
-  const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
   // ONE seed for the form's starting values: the activity being edited, or the
   // one being copied. `editing` alone still decides which BRANCH of onSubmit
   // runs — a duplicate is a create, and must go down the create path.
@@ -379,7 +343,6 @@ function ActivityDialog({
     control,
     watch,
     setValue,
-    getValues,
     formState: { errors, isSubmitting },
   } = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
@@ -400,14 +363,12 @@ function ActivityDialog({
           level: seed.level ?? undefined,
           color: seed.color ?? '',
           accessTier: initialRule.type,
-          subscriptionTypeIds: initialRule.subscriptionTypeIds ?? [],
           dropInEnabled: seed.dropIn?.enabled ?? false,
           dropInPrice: seed.dropIn?.priceAmount != null ? String(seed.dropIn.priceAmount) : '',
           trialEnabled: seed.trialEnabled ?? false,
           trialPrice: seed.trialPriceAmount != null ? String(seed.trialPriceAmount) : '',
           waitlistEnabled: seed.waitlistEnabled ?? false,
           durations: toDurationFormValues(seed.durations),
-          memberBenefit: toBenefitFormValue(seed.memberBenefit),
           autoConfirm: resolveAutoConfirm(seed),
         }
       : {
@@ -422,11 +383,10 @@ function ActivityDialog({
           // short-circuits it to `covered`) — the wrong thing to land on by
           // accident. A newcomer can still be let in via "Free trial for
           // newcomers" below, which is what makes 'members' safe as a default.
-          color: DEFAULT_ACCENT, accessTier: 'members', subscriptionTypeIds: [],
+          color: DEFAULT_ACCENT, accessTier: 'members',
           dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
           waitlistEnabled: false,
           durations: [],
-          memberBenefit: defaultBenefitFormValue(),
           // TRUE for a new activity of either kind. `resolveAutoConfirm` is left
           // alone on purpose: it answers what a STORED doc means, and flipping
           // its fallback would silently reinterpret every existing class that
@@ -443,10 +403,11 @@ function ActivityDialog({
   // Can a 'benefit_only' length actually be opened by anything? Only an
   // INCLUDED benefit is a way in — a percentage off a price that does not exist
   // opens nothing (the resolver refuses it; see the appointment arm).
-  const memberBenefitValue = watch('memberBenefit')
+  // Read from the SAVED activity, not the form: the rule moved to the catalogue,
+  // so this dialog can only report what is stored. A duration whose only way in
+  // is a benefit therefore answers against the same document the resolver will.
   const benefitOpensDoor =
-    memberBenefitValue?.effect === 'included' &&
-    (memberBenefitValue?.subscriptionTypeIds?.length ?? 0) > 0
+    !!seed && activityRateChoiceOf(seed).effect === 'included' && ratedPlanIds(seed).length > 0
 
   // Does the activity being EDITED already carry anything from the "More
   // options" tail? If so the disclosure opens showing it — a field the studio
@@ -516,35 +477,6 @@ function ActivityDialog({
   // Inline quick-create: "create or link a subscription to this activity" without
   // leaving the form. Writes a minimal type (pricing is configured later in the
   // subscriptions manager) and auto-checks it in the allow-list above.
-  const [newSubName, setNewSubName] = useState('')
-  const [creatingSub, setCreatingSub] = useState(false)
-
-  async function quickCreateSubscription() {
-    const name = newSubName.trim()
-    if (!name || creatingSub) return
-    setCreatingSub(true)
-    try {
-      const ref = await addDoc(
-        collection(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION),
-        {
-          name,
-          description: null,
-          source: 'internal',
-          active: true,
-          public: false,
-          checkout_contact_mode: 'minimal',
-          prices: [],
-          order: subscriptionTypes.length,
-          created_at: serverTimestamp(),
-        },
-      )
-      setValue('subscriptionTypeIds', [...getValues('subscriptionTypeIds'), ref.id])
-      setNewSubName('')
-      qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
-    } finally {
-      setCreatingSub(false)
-    }
-  }
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -611,15 +543,18 @@ function ActivityDialog({
     if (data.type === 'appointment') {
       return {
         durations: toActivityDurations(data.durations),
-        memberBenefit: toBenefitPayload(data.memberBenefit),
       }
     }
     return {
       isFreeTrial: data.accessTier === 'open',
+      // THE TIER IS THIS DIALOG'S; THE ALLOW-LIST IS THE CATALOGUE'S. The ids
+      // are carried through from the stored document rather than read off a
+      // control that is no longer here — same rule as `waitlistEnabled` below.
+      // Without this, saving any edit would blank the plans the catalogue set.
       accessRule: {
         type: data.accessTier,
         ...(data.accessTier === 'subscription'
-          ? { subscriptionTypeIds: data.subscriptionTypeIds }
+          ? { subscriptionTypeIds: gatedPlanIds(editing ?? { type: 'class' }) }
           : {}),
       },
       dropIn: {
@@ -643,7 +578,9 @@ function ActivityDialog({
           ? data.waitlistEnabled
           : (editing?.waitlistEnabled ?? false),
       durations: null,
-      memberBenefit: data.dropInEnabled ? toBenefitPayload(data.memberBenefit) : null,
+      // `memberBenefit` is NOT written here at all any more. It is the
+      // catalogue's, and a dialog that cleared it on an unrelated save would
+      // delete a rate the studio set on another screen.
     }
   }
 
@@ -878,73 +815,24 @@ function ActivityDialog({
                   )}
                 />
                 {accessTier === 'subscription' && (
-                  <Controller
-                    control={control}
-                    name="subscriptionTypeIds"
-                    render={({ field }) => (
-                      <div className="space-y-1.5 rounded-md border p-3">
-                        {subscriptionTypes.length === 0 ? (
-                          /* The tier that gates on subscription types, with none to
-                             gate on: the sentence named the destination and went
-                             nowhere (UX-99). Link it, like UX-92 did on the session
-                             and appointment pickers. */
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">{t('accessNoSubs')}</p>
-                            <Link
-                              href={'/offer/plans' as Route}
-                              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              {t('accessNoSubsAction')}
-                            </Link>
-                          </div>
-                        ) : (
-                          subscriptionTypes.map((s) => (
-                            <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                              <input
-                                type="checkbox"
-                                className="accent-primary"
-                                checked={field.value.includes(s.id)}
-                                onChange={(e) =>
-                                  field.onChange(
-                                    e.target.checked
-                                      ? [...field.value, s.id]
-                                      : field.value.filter((id: string) => id !== s.id),
-                                  )
-                                }
-                              />
-                              {s.name}
-                            </label>
-                          ))
-                        )}
-                        <div className="flex items-center gap-2 pt-1.5 border-t mt-1.5">
-                          <Input
-                            value={newSubName}
-                            onChange={(e) => setNewSubName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                void quickCreateSubscription()
-                              }
-                            }}
-                            placeholder={t('quickCreateSubPlaceholder')}
-                            className="h-8 text-sm flex-1"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={!newSubName.trim() || creatingSub}
-                            onClick={() => void quickCreateSubscription()}
-                          >
-                            <Plus className="h-3.5 w-3.5 mr-1" />
-                            {t('quickCreateSubButton')}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{t('quickCreateSubHint')}</p>
-                      </div>
-                    )}
-                  />
+                  /* WHICH plans is set in the catalogue, not here. The list used
+                     to live in this dialog AND in the subscription editor — two
+                     copies of one relationship, and neither could show the other
+                     side. A gated activity saved before its plans are picked is
+                     counted by the catalogue's banner, which is the path back. */
+                  <div className="space-y-2 rounded-md border border-dashed p-3">
+                    <p className="text-xs text-muted-foreground">{t('accessPickInCatalogue')}</p>
+                    <Link
+                      href={
+                        (editing
+                          ? `/offer/catalogue?sel=activity:${editing.id}`
+                          : '/offer/catalogue') as Route
+                      }
+                      className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                    >
+                      {t('accessOpenCatalogue')}
+                    </Link>
+                  </div>
                 )}
               </div>
             )}
@@ -1075,28 +963,14 @@ function ActivityDialog({
                   </div>
                   {errors.dropInPrice && <p className="text-destructive text-xs">{errors.dropInPrice.message}</p>}
 
-                  {/* Member rate on the drop-in price — only while drop-in is
-                      enabled (a benefit with no priced drop-in to modify is
-                      inert). Coverage (free/credits) stays the access tier's
-                      job; this only ever lowers the PRICE a not-covered member
-                      pays. */}
+                  {/* The member rate on this price is set in the catalogue,
+                      beside the plans it applies to — it is ONE rule shared by
+                      every plan on it, and this dialog could not show who else a
+                      change would reprice. */}
                   {dropInEnabled && (
-                    <div className="pt-2 mt-1 border-t">
-                      <Controller
-                        control={control}
-                        name="memberBenefit"
-                        render={({ field }) => (
-                          <BenefitEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            subscriptionTypes={subscriptionTypes}
-                            context="class"
-                            percentError={errors.memberBenefit?.percent?.message}
-                            amountError={errors.memberBenefit?.amount?.message}
-                          />
-                        )}
-                      />
-                    </div>
+                    <p className="mt-1 border-t pt-2 text-xs text-muted-foreground">
+                      {t('dropInRateInCatalogue')}
+                    </p>
                   )}
                 </div>
               )}
@@ -1210,24 +1084,22 @@ function ActivityDialog({
               )}
 
               {/* APPOINTMENT-ONLY: the one member-benefit rule for the whole
-                  activity — every priced duration. Absent selection = no
-                  benefit, everyone pays base. */}
+                  activity — every priced duration. It is set in the catalogue,
+                  beside the plans it names, because it is ONE rule shared by all
+                  of them and a change here would silently reprice the rest. */}
               {type === 'appointment' && (
-                <div className="p-3 space-y-3">
-                  <Controller
-                    control={control}
-                    name="memberBenefit"
-                    render={({ field }) => (
-                      <BenefitEditor
-                        value={field.value}
-                        onChange={field.onChange}
-                        subscriptionTypes={subscriptionTypes}
-                        context="appointment"
-                        percentError={errors.memberBenefit?.percent?.message}
-                        amountError={errors.memberBenefit?.amount?.message}
-                      />
-                    )}
-                  />
+                <div className="space-y-2 p-3">
+                  <p className="text-xs text-muted-foreground">{t('benefitInCatalogue')}</p>
+                  <Link
+                    href={
+                      (editing
+                        ? `/offer/catalogue?sel=activity:${editing.id}`
+                        : '/offer/catalogue') as Route
+                    }
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    {t('accessOpenCatalogue')}
+                  </Link>
                 </div>
               )}
             </div>
@@ -1722,16 +1594,21 @@ export default function ActivitiesPage() {
 
   return (
     <div className="space-y-6">
-      {/* ONE quick link (UX-71), and it answers the question this page cannot:
-          an activity is a TEMPLATE — nothing here says whether it is actually on
-          the calendar, and an activity with no sessions behind it is invisible to
-          every visitor while looking perfectly configured. The Schedule is where
-          that is confirmed. Deliberately not a second link to Plans: this page
-          already shows which plans unlock each activity on the row itself. */}
+      {/* Two quick links (UX-71). The Schedule answers the question this page
+          cannot: an activity is a TEMPLATE, nothing here says whether it is
+          actually on the calendar, and one with no sessions behind it is
+          invisible to every visitor while looking perfectly configured. The
+          Catalogue answers the other one — which plans open it. (This used to
+          claim the rows already showed that. They did not: the class chips drop
+          the `gate` term, so a row showed the bare word "Subscription" and never
+          a plan name.) */}
       <PageHeader
         title={t('title')}
         subtitle={isLoading ? undefined : t('subtitle', { count: activities.length })}
-        quickLinks={[{ href: '/schedule' as Route, label: tq('activitiesToSchedule') }]}
+        quickLinks={[
+          { href: '/schedule' as Route, label: tq('activitiesToSchedule') },
+          { href: '/offer/catalogue' as Route, label: tq('activitiesToCatalogue') },
+        ]}
         action={
           <Button onClick={openNew}>
             <Plus className="h-4 w-4 mr-1.5" />
