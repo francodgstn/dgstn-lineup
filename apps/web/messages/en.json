@@ -933,7 +933,8 @@
     "subHistoryDeleteTitle": "Delete this history entry?",
     "subHistoryDeleteBody": "This removes the record that {name} held this subscription. It does not refund anything or change what they hold now.",
     "affiliationRemoveTitle": "Remove this affiliation?",
-    "affiliationRemoveBody": "{name} loses this affiliation and anything that depends on it — access to gated activities, member pricing and any renewal it was due."
+    "affiliationRemoveBody": "{name} loses this affiliation and anything that depends on it — access to gated activities, member pricing and any renewal it was due.",
+    "deletionScheduledBadge": "Deletion requested · {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliations",

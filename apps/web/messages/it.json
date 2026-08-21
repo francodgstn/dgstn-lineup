@@ -933,7 +933,8 @@
     "subHistoryDeleteTitle": "Eliminare questa voce dello storico?",
     "subHistoryDeleteBody": "Rimuove la traccia del fatto che {name} ha avuto questo abbonamento. Non rimborsa nulla e non cambia ciò che ha ora.",
     "affiliationRemoveTitle": "Rimuovere questa affiliazione?",
-    "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto."
+    "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto.",
+    "deletionScheduledBadge": "Cancellazione richiesta · {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",

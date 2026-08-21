@@ -13,6 +13,26 @@ const DEFAULT_PERFORMANCE_INDICATORS: PerformanceIndicator[] = [
 ];
 
 export const FirestoreService = {
+  /**
+   * Ask for this account to be closed. Nothing is destroyed — the server only
+   * schedules it, and the account keeps working for the whole window. See
+   * packages/functions/src/contacts/selfDeletion.ts.
+   */
+  async requestAccountDeletion(): Promise<{ scheduledForMs: number; graceDays: number }> {
+    const fn = httpsCallable<Record<string, never>, { scheduledForMs: number; graceDays: number }>(
+      getFunctions(),
+      'requestContactDeletion'
+    );
+    const res = await fn({});
+    return res.data;
+  },
+
+  /** Change your mind, any time before the sweep actually runs. */
+  async cancelAccountDeletion(): Promise<void> {
+    const fn = httpsCallable(getFunctions(), 'cancelContactDeletion');
+    await fn({});
+  },
+
   // Send verification code via existing membership signup function
   async sendVerificationCode(
     email: string,

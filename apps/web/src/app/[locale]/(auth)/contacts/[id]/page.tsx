@@ -90,6 +90,7 @@ import {
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
   CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION,
+  contactDeletionState,
 } from '@linyup/shared'
 import type {
   Contact,
@@ -5204,6 +5205,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div className="flex-1 min-w-0 mt-3">
               <div className="flex flex-wrap items-center gap-2">
+                {/* A member has asked to close their own account. It sits with
+                    the lifecycle badges because that is what it is — but ABOVE
+                    the stage chips, because it outranks anything about chasing
+                    them. The studio can do nothing about it and should not try;
+                    it is here so the roster stops being a surprise. */}
+                {contactDeletionState(contact, Date.now()) === 'scheduled' && (
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800">
+                    {t('deletionScheduledBadge', {
+                      date: formatDate(contact.deletion_scheduled_for) ?? '',
+                    })}
+                  </Badge>
+                )}
                 {contact.deleted_at ? (
                   <Badge variant="destructive">{t('deletedBadge')}</Badge>
                 ) : contact.archived_at ? (

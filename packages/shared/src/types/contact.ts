@@ -330,6 +330,18 @@ export interface Contact {
   archived_at?: Timestamp | null
   deleted_at?: Timestamp | null
   anonymized_at?: Timestamp | null
+
+  /**
+   * SELF-SERVICE DELETION, requested by the contact from the mobile app.
+   *
+   * Nothing is destroyed when these are set — the account keeps working for the
+   * whole window and the contact can cancel by signing in. A `dailyTasks` sweep
+   * anonymises once `deletion_scheduled_for` passes. See
+   * `utils/contactDeletion.ts` for the state machine and for why this
+   * anonymises rather than erases.
+   */
+  deletion_requested_at?: Timestamp | null
+  deletion_scheduled_for?: Timestamp | null
 }
 
 // ─── contact group (teams/{teamId}/contact_groups) ───────────────────────────

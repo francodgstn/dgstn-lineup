@@ -392,6 +392,10 @@ export {
   getMyReferralStats,
 } from './referrals'
 
+// A contact closing their own account, from the mobile app. Only moves a date —
+// the dailyTasks sweep is what acts, and it anonymises. See contacts/selfDeletion.ts.
+export { requestContactDeletion, cancelContactDeletion } from './contacts/selfDeletion'
+
 // Operator-only: the production demo tenant and the app-store review login.
 // Triggered from the operator console, executed here so the code ships through
 // the reviewed prod deploy rather than from a workstation — see ops/demoTenant.ts.

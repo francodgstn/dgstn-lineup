@@ -933,7 +933,8 @@
     "subHistoryDeleteTitle": "Supprimer cette entrée d'historique ?",
     "subHistoryDeleteBody": "Cela supprime la trace du fait que {name} a eu cet abonnement. Aucun remboursement n'est effectué et l'abonnement actuel n'est pas modifié.",
     "affiliationRemoveTitle": "Retirer cette affiliation ?",
-    "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu."
+    "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu.",
+    "deletionScheduledBadge": "Suppression demandée · {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliations",

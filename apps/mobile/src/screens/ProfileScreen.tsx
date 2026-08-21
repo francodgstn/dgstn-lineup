@@ -399,6 +399,67 @@ export const ProfileScreen: React.FC = () => {
     ]);
   };
 
+  /**
+   * CLOSING THE ACCOUNT.
+   *
+   * Required by Apple 5.1.1(v) where accounts exist, and the right of anyone
+   * whose data a studio holds. Nothing is destroyed on tap: the server schedules
+   * it and the account keeps working for the whole window, which is why the
+   * confirmation names the date and the way back rather than shouting.
+   *
+   * It ANONYMISES rather than erases when the window closes — the studio's
+   * finance records and its signed waivers have to survive somebody leaving.
+   * The copy says so plainly; discovering it afterwards would feel like a trick.
+   */
+  // Read straight off the contact, so a cancel on another device shows up on the
+  // next refresh rather than needing its own state to be kept in step.
+  const deletionSeconds = (contact as { deletion_scheduled_for?: { seconds?: number } | null } | null)
+    ?.deletion_scheduled_for?.seconds
+  const deletionPending = typeof deletionSeconds === 'number'
+  const deletionDate = deletionPending
+    ? new Date(deletionSeconds * 1000).toLocaleDateString()
+    : ''
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      // No day count here on purpose: this app does not depend on @linyup/shared,
+      // so a number typed in would be a second copy of
+      // CONTACT_DELETION_GRACE_DAYS that nothing keeps in step. The server
+      // returns the real date and the next alert states it.
+      'Your account will be scheduled for deletion. You can sign in and cancel any time before it happens.\n\nYour name and contact details are removed. Records your studio has to keep — payments and signed documents — stay, but are no longer linked to you by name.',
+      [
+        { text: 'Keep my account', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await FirestoreService.requestAccountDeletion();
+              await refreshContact();
+              Alert.alert(
+                'Deletion scheduled',
+                `Your account will be deleted on ${new Date(res.scheduledForMs).toLocaleDateString()}. Sign in before then and tap Cancel deletion to stop it.`
+              );
+            } catch (err) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Could not schedule deletion.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelDeletion = async () => {
+    try {
+      await FirestoreService.cancelAccountDeletion();
+      await refreshContact();
+      Alert.alert('Deletion cancelled', 'Your account will not be deleted.');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not cancel.');
+    }
+  };
+
   if (!contact) return <LoadingOverlay visible message="Loading profile..." />;
 
 
@@ -523,6 +584,46 @@ export const ProfileScreen: React.FC = () => {
           <Icon source="logout" size={24} color="#EF4444" />
           <Text variant="labelLarge" style={{ color: '#EF4444', fontWeight: '700', textAlign: 'center' }}>SIGN OUT</Text>
         </Pressable>
+      </View>
+
+      {/* Account closure. Set apart from the action row above: it is not one of
+          the things you do here, it is the way out. A pending deletion takes
+          over the space entirely, because until it is resolved it is the most
+          important thing on this screen. */}
+      <View style={{ marginTop: 24, paddingHorizontal: 16 }}>
+        {deletionPending ? (
+          <Surface style={{ padding: 16, borderRadius: 12, gap: 8 }} elevation={1}>
+            <Text variant="titleSmall" style={{ color: '#B45309', fontWeight: '700' }}>
+              Deletion scheduled
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {`Your account will be deleted on ${deletionDate}. You can stop this any time before then.`}
+            </Text>
+            <Pressable
+              onPress={handleCancelDeletion}
+              style={({ pressed }) => ({
+                marginTop: 4,
+                paddingVertical: 10,
+                borderRadius: 8,
+                backgroundColor: theme.colors.primary,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text variant="labelLarge" style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>
+                CANCEL DELETION
+              </Text>
+            </Pressable>
+          </Surface>
+        ) : (
+          <Pressable onPress={handleDeleteAccount} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+            <Text
+              variant="bodySmall"
+              style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', textDecorationLine: 'underline' }}
+            >
+              Delete my account
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       <Surface style={styles.infoCard} elevation={1}>
