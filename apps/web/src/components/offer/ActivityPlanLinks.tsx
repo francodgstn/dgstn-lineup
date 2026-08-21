@@ -50,6 +50,7 @@ import { Link } from '@/i18n/navigation'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { SectionHeading } from '@/components/layout/SectionHeading'
 
 const DEFAULT_ACCENT = '#6366f1'
 
@@ -213,14 +214,11 @@ export function ActivityPlanLinks({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-0.5">
-        <p className="text-sm font-medium">
-          {direction === 'from-activity' ? t('plansHeading') : t('includesHeading')}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {direction === 'from-activity' ? t('plansHint') : t('includesHint')}
-        </p>
-      </div>
+      <SectionHeading
+        level="sub"
+        title={direction === 'from-activity' ? t('plansHeading') : t('includesHeading')}
+        description={direction === 'from-activity' ? t('plansHint') : t('includesHint')}
+      />
 
       <div className="space-y-1.5">
         {rows.map(({ key, act, plan: p }) => {

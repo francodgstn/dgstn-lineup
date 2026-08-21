@@ -6854,6 +6854,10 @@
     "activities": "Was du anbietest",
     "schedule": "Wann du es anbietest",
     "subscriptions": "Wie du bezahlt wirst",
-    "pricing": "Was Leute tatsächlich zahlen"
+    "pricing": "Was Leute tatsächlich zahlen",
+    "activitiesNote": "Die Kurse und Termine, die du anbietest — einmal hier definiert und dann beliebig oft angesetzt.",
+    "scheduleNote": "Alle Termine im Kalender, einmalig oder wiederkehrend, mit den jeweiligen Buchungen.",
+    "subscriptionsNote": "Mitgliedschaften, Pakete und Abos — was sie kosten, wie oft sie verlängert werden und was sie freischalten.",
+    "pricingNote": "Was jede Art von Kontakt zahlt — mit denselben Regeln berechnet wie bei einer echten Buchung."
   }
 }

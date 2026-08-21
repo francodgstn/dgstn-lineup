@@ -61,6 +61,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
 import { useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
 import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
+import { SectionHeading } from '@/components/layout/SectionHeading'
 
 const DEFAULT_ACCENT = '#6366f1'
 
@@ -489,10 +490,7 @@ function RailGroup({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </div>
+      <SectionHeading level="eyebrow" icon={Icon} title={label} className="px-2 py-1.5" />
       <div className="space-y-0.5">{children}</div>
     </div>
   )

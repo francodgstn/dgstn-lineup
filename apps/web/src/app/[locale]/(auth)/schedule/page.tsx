@@ -928,7 +928,6 @@ export default function CalendarPage() {
   const qc = useQueryClient()
   const t = useTranslations('Calendar')
   const tCommon = useTranslations('Common')
-  const tp = useTranslations('PagePurpose')
   const orgId = team?.org_id ?? null
 
   const today = useMemo(() => new Date(), [])
@@ -1158,7 +1157,7 @@ export default function CalendarPage() {
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
           <PagePurpose
-            purpose={tp('schedule')}
+            purpose="schedule"
             detail={upcomingCount === undefined ? undefined : t('subtitle', { count: upcomingCount })}
           />
         </div>

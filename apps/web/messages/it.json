@@ -6854,6 +6854,10 @@
     "activities": "Cosa offri",
     "schedule": "Quando lo offri",
     "subscriptions": "Come vieni pagato",
-    "pricing": "Quanto pagano davvero le persone"
+    "pricing": "Quanto pagano davvero le persone",
+    "activitiesNote": "I corsi e gli appuntamenti che offri: definiti una volta qui, poi programmati quante volte vuoi.",
+    "scheduleNote": "Tutte le sessioni sul calendario, singole o ricorrenti, con le relative prenotazioni.",
+    "subscriptionsNote": "Abbonamenti, pacchetti e tessere: quanto costano, ogni quanto si rinnovano e cosa sbloccano.",
+    "pricingNote": "Quanto paga ogni tipo di contatto, ricalcolato con le stesse regole di una prenotazione reale."
   }
 }

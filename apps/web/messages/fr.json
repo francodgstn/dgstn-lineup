@@ -6854,6 +6854,10 @@
     "activities": "Ce que vous proposez",
     "schedule": "Quand vous le proposez",
     "subscriptions": "Comment vous êtes payé",
-    "pricing": "Ce que les gens paient vraiment"
+    "pricing": "Ce que les gens paient vraiment",
+    "activitiesNote": "Les cours et rendez-vous que vous proposez — définis une fois ici, puis planifiés autant de fois que vous voulez.",
+    "scheduleNote": "Toutes les séances au calendrier, ponctuelles ou récurrentes, avec leurs réservations.",
+    "subscriptionsNote": "Adhésions, cartes et forfaits — leur prix, leur fréquence de renouvellement et ce qu'ils débloquent.",
+    "pricingNote": "Ce que paie chaque type de contact, recalculé avec les règles d'une vraie réservation."
   }
 }

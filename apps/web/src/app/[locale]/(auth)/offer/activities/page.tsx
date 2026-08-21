@@ -1478,7 +1478,6 @@ export default function ActivitiesPage() {
   const qc = useQueryClient()
   const t = useTranslations('Activities')
   const tq = useTranslations('QuickLinks')
-  const tp = useTranslations('PagePurpose')
   // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
   // initializer, so clearing the param or closing the dialog is not undone by
   // the next render — the same shape as `openOnAttention` on the contacts list.
@@ -1605,7 +1604,7 @@ export default function ActivitiesPage() {
           a plan name.) */}
       <PageHeader
         title={t('title')}
-        purpose={tp('activities')}
+        purpose="activities"
         subtitle={isLoading ? undefined : t('subtitle', { count: activities.length })}
         quickLinks={[
           { href: '/schedule' as Route, label: tq('activitiesToSchedule') },

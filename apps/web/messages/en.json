@@ -6854,6 +6854,10 @@
     "activities": "What you do",
     "schedule": "When you offer it",
     "subscriptions": "How you get paid",
-    "pricing": "What people actually pay"
+    "pricing": "What people actually pay",
+    "activitiesNote": "The classes and appointments you offer — defined once here, then scheduled as often as you like.",
+    "scheduleNote": "Every session on the calendar, one-off or repeating, with who booked each one.",
+    "subscriptionsNote": "Memberships, packs and passes — what they cost, how often they renew, and what they unlock.",
+    "pricingNote": "What each kind of contact is charged, replayed through the same rules a real booking uses."
   }
 }
