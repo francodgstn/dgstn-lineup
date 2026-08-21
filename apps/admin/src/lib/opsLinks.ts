@@ -62,6 +62,34 @@ export const OPS_ENVIRONMENTS: OpsEnvironment[] = [
   },
 ]
 
+/**
+ * The environment THIS console is deployed in, derived from the Firebase project
+ * it was built against — the same trick `robots.ts` uses in the web app: a
+ * project id cannot disagree with which backend is actually being served, where
+ * a separate flag can.
+ *
+ * The Health page defaults to it, and that default is a safety property rather
+ * than a convenience. Three environments' worth of near-identical deep links
+ * stacked on one page is how somebody opens STAGING's Error Reporting during a
+ * production incident, sees nothing, and concludes nothing is wrong.
+ *
+ * Falls back to production: an unrecognised project id most likely means a local
+ * or preview build, and pointing an operator at the environment that matters is
+ * the safer wrong answer.
+ */
+export function currentOpsEnvironment(): OpsEnvironment {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  return (
+    OPS_ENVIRONMENTS.find((e) => e.projectId === projectId) ??
+    OPS_ENVIRONMENTS.find((e) => e.isProduction)!
+  )
+}
+
+/** Resolves a `?env=` value to an environment, ignoring anything unrecognised. */
+export function opsEnvironmentById(id: string | undefined): OpsEnvironment | undefined {
+  return id ? OPS_ENVIRONMENTS.find((e) => e.id === id) : undefined
+}
+
 export type OpsLinkGroup = 'Errors & logs' | 'Alerting' | 'Deploys' | 'Data'
 
 export interface OpsLink {

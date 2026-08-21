@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { ExternalLink, AlertTriangle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
@@ -5,6 +6,8 @@ import { cn } from '@/lib/utils'
 import {
   OPS_ENVIRONMENTS,
   OPS_LINK_GROUP_ORDER,
+  currentOpsEnvironment,
+  opsEnvironmentById,
   opsLinksFor,
   opsProviderLinksFor,
   type OpsEnvironment,
@@ -90,11 +93,58 @@ function EnvironmentSection({ env }: { env: OpsEnvironment }) {
   )
 }
 
-export default function HealthPage() {
+
+/**
+ * Plain links rather than a `<select>`: three options, no client JavaScript, the
+ * choice is shareable as a URL, and it matches `SettingsTabs` next door instead
+ * of introducing a second navigation idiom in the same console.
+ */
+function EnvironmentPicker({ selected }: { selected: OpsEnvironment }) {
+  const here = currentOpsEnvironment()
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {OPS_ENVIRONMENTS.map((env) => {
+        const active = env.id === selected.id
+        return (
+          <Link
+            key={env.id}
+            href={`/health?env=${env.id}`}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+              active
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+          >
+            {env.name}
+            {env.id === here.id && (
+              <span className={cn('ml-1.5', active ? 'opacity-70' : 'opacity-60')}>· you</span>
+            )}
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
+export default async function HealthPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ env?: string }>
+}) {
+  const { env } = await searchParams
+  // An unrecognised ?env= falls back to this console's own environment rather
+  // than erroring — a stale bookmark should still land somewhere useful.
+  const selected = opsEnvironmentById(env) ?? currentOpsEnvironment()
+
   return (
     <div className="flex max-w-3xl flex-col gap-10">
       <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold">Health</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold">Health</h1>
+          <EnvironmentPicker selected={selected} />
+        </div>
         <p className="text-sm text-muted-foreground">
           Where a production problem is looked at. Errors are reported to Google Cloud Error
           Reporting — there is no separate inbox to check, so these are the pre-filtered links into
@@ -125,9 +175,10 @@ export default function HealthPage() {
         </Card>
       </div>
 
-      {OPS_ENVIRONMENTS.map((env) => (
-        <EnvironmentSection key={env.id} env={env} />
-      ))}
+      {/* ONE environment, not all three. Stacked, they are near-identical walls
+          of deep links, and the failure mode is opening the wrong project's
+          Error Reporting mid-incident and concluding nothing is wrong. */}
+      <EnvironmentSection env={selected} />
 
       <p className="text-xs text-muted-foreground">
         These are deep links, not credentials — whether one opens depends on your Google
