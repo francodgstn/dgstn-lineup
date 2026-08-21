@@ -20,11 +20,12 @@ export function PlansTabs() {
   const tq = useTranslations('QuickLinks')
 
   // Quick links (UX-71). A plan's price is set here and proved somewhere else:
-  // Pricing replays it through the real resolver for each persona, and Activities
-  // is where the plan is attached to what it unlocks.
+  // the Catalogue is where it is attached to what it unlocks (replacing the
+  // picker that used to sit inside this page's dialog), and Pricing replays the
+  // result through the real resolver for each persona.
   const quickLinks = [
+    { href: '/offer/catalogue' as Route, label: tq('plansToCatalogue') },
     { href: '/offer/pricing' as Route, label: tq('plansToPricing') },
-    { href: '/offer/activities' as Route, label: tq('plansToActivities') },
   ]
 
   return (
