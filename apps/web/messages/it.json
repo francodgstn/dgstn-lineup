@@ -5492,7 +5492,8 @@
       "plugins": "Plugin",
       "acquisition": "Acquisizione",
       "other": "Altro",
-      "subscriptionTypes": "Tipi di abbonamento"
+      "subscriptionTypes": "Tipi di abbonamento",
+      "payment": "Pagamento"
     },
     "triggers": {
       "schedule_daily": "Scansione giornaliera (pianificata)",
@@ -5509,7 +5510,10 @@
       "session_ended": "Sessione terminata",
       "inbound_webhook": "Webhook in entrata",
       "manual": "Solo manuale",
-      "acquisition_stage_changed": "Fase di acquisizione avanzata"
+      "acquisition_stage_changed": "Fase di acquisizione avanzata",
+      "payment_received": "Pagamento ricevuto",
+      "payment_refunded": "Pagamento rimborsato",
+      "payment_disputed": "Contestazione aperta"
     },
     "conditions": {
       "addCondition": "Aggiungi condizione",
@@ -5673,7 +5677,8 @@
         "affiliationTypeKeyLabel": "Chiave del tipo di affiliazione (facoltativo)",
         "affiliationTypeKeyPlaceholder": "qualsiasi — o una chiave di tipo (es. club_membership)",
         "submit": "Salva automazione",
-        "saveFailed": "Salvataggio non riuscito"
+        "saveFailed": "Salvataggio non riuscito",
+        "paymentKindLabel": "Che cosa è stato pagato"
       },
       "templates": {
         "title": "Modelli email",
@@ -5709,7 +5714,17 @@
       "recipientsGone": "{count, plural, one {# destinatario non è più tra i tuoi contatti} other {# destinatari non sono più tra i tuoi contatti}}",
       "recipientsNotRecorded": "Per questa esecuzione non sono stati registrati destinatari."
     },
-    "deleteConfirmTitle": "Eliminare questa automazione?"
+    "deleteConfirmTitle": "Eliminare questa automazione?",
+    "paymentKinds": {
+      "any": "Tutto",
+      "membership": "Abbonamento",
+      "course": "Corso",
+      "product": "Prodotto",
+      "drop_in": "Lezione singola",
+      "appointment": "Appuntamento",
+      "gift_card": "Carta regalo",
+      "policy_fee": "Penale"
+    }
   },
   "SettingsEmails": {
     "title": "Email",

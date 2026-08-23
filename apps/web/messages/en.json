@@ -5492,7 +5492,8 @@
       "plugins": "Plugins",
       "acquisition": "Acquisition",
       "other": "Other",
-      "subscriptionTypes": "Subscription types"
+      "subscriptionTypes": "Subscription types",
+      "payment": "Payment"
     },
     "triggers": {
       "schedule_daily": "Daily scan (scheduled)",
@@ -5509,7 +5510,10 @@
       "session_ended": "Session ended",
       "inbound_webhook": "Inbound webhook",
       "manual": "Manual only",
-      "acquisition_stage_changed": "Acquisition stage advanced"
+      "acquisition_stage_changed": "Acquisition stage advanced",
+      "payment_received": "Payment received",
+      "payment_refunded": "Payment refunded",
+      "payment_disputed": "Chargeback opened"
     },
     "conditions": {
       "addCondition": "Add condition",
@@ -5673,7 +5677,8 @@
         "affiliationTypeKeyLabel": "Affiliation type key (optional)",
         "affiliationTypeKeyPlaceholder": "any — or a type key (e.g. club_membership)",
         "submit": "Save automation",
-        "saveFailed": "Failed to save"
+        "saveFailed": "Failed to save",
+        "paymentKindLabel": "What was paid for"
       },
       "templates": {
         "title": "Email templates",
@@ -5709,7 +5714,17 @@
       "recipientsGone": "{count, plural, one {# recipient is no longer in your contacts} other {# recipients are no longer in your contacts}}",
       "recipientsNotRecorded": "Recipients weren't recorded for this run."
     },
-    "deleteConfirmTitle": "Delete this automation?"
+    "deleteConfirmTitle": "Delete this automation?",
+    "paymentKinds": {
+      "any": "Anything",
+      "membership": "Membership",
+      "course": "Course",
+      "product": "Product",
+      "drop_in": "Drop-in class",
+      "appointment": "Appointment",
+      "gift_card": "Gift card",
+      "policy_fee": "Policy fee"
+    }
   },
   "SettingsEmails": {
     "title": "Emails",

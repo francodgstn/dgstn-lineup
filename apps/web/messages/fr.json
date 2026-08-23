@@ -5492,7 +5492,8 @@
       "plugins": "Plugins",
       "acquisition": "Acquisition",
       "other": "Autre",
-      "subscriptionTypes": "Types d'abonnement"
+      "subscriptionTypes": "Types d'abonnement",
+      "payment": "Paiement"
     },
     "triggers": {
       "schedule_daily": "Analyse quotidienne (planifiée)",
@@ -5509,7 +5510,10 @@
       "session_ended": "Séance terminée",
       "inbound_webhook": "Webhook entrant",
       "manual": "Manuel uniquement",
-      "acquisition_stage_changed": "Étape d'acquisition franchie"
+      "acquisition_stage_changed": "Étape d'acquisition franchie",
+      "payment_received": "Paiement reçu",
+      "payment_refunded": "Paiement remboursé",
+      "payment_disputed": "Contestation ouverte"
     },
     "conditions": {
       "addCondition": "Ajouter une condition",
@@ -5673,7 +5677,8 @@
         "affiliationTypeKeyLabel": "Clé du type d'affiliation (facultatif)",
         "affiliationTypeKeyPlaceholder": "n'importe lequel — ou une clé de type (ex. club_membership)",
         "submit": "Enregistrer l'automatisation",
-        "saveFailed": "Échec de l'enregistrement"
+        "saveFailed": "Échec de l'enregistrement",
+        "paymentKindLabel": "Ce qui a été payé"
       },
       "templates": {
         "title": "Modèles d'e-mail",
@@ -5709,7 +5714,17 @@
       "recipientsGone": "{count, plural, one {# destinataire ne figure plus dans vos contacts} other {# destinataires ne figurent plus dans vos contacts}}",
       "recipientsNotRecorded": "Aucun destinataire n'a été enregistré pour cette exécution."
     },
-    "deleteConfirmTitle": "Supprimer cette automatisation ?"
+    "deleteConfirmTitle": "Supprimer cette automatisation ?",
+    "paymentKinds": {
+      "any": "Tout",
+      "membership": "Abonnement",
+      "course": "Cours en ligne",
+      "product": "Produit",
+      "drop_in": "Cours à l'unité",
+      "appointment": "Rendez-vous",
+      "gift_card": "Carte cadeau",
+      "policy_fee": "Frais"
+    }
   },
   "SettingsEmails": {
     "title": "E-mails",

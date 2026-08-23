@@ -5492,7 +5492,8 @@
       "plugins": "Plugins",
       "acquisition": "Akquisition",
       "other": "Weitere",
-      "subscriptionTypes": "Abo-Typen"
+      "subscriptionTypes": "Abo-Typen",
+      "payment": "Zahlung"
     },
     "triggers": {
       "schedule_daily": "Täglicher Scan (geplant)",
@@ -5509,7 +5510,10 @@
       "session_ended": "Einheit beendet",
       "inbound_webhook": "Eingehender Webhook",
       "manual": "Nur manuell",
-      "acquisition_stage_changed": "Akquisitionsphase vorangeschritten"
+      "acquisition_stage_changed": "Akquisitionsphase vorangeschritten",
+      "payment_received": "Zahlung eingegangen",
+      "payment_refunded": "Zahlung erstattet",
+      "payment_disputed": "Rückbuchung eröffnet"
     },
     "conditions": {
       "addCondition": "Bedingung hinzufügen",
@@ -5673,7 +5677,8 @@
         "affiliationTypeKeyLabel": "Affiliationstyp-Schlüssel (optional)",
         "affiliationTypeKeyPlaceholder": "beliebig — oder ein Typ-Schlüssel (z. B. club_membership)",
         "submit": "Automatisierung speichern",
-        "saveFailed": "Speichern fehlgeschlagen"
+        "saveFailed": "Speichern fehlgeschlagen",
+        "paymentKindLabel": "Wofür bezahlt wurde"
       },
       "templates": {
         "title": "E-Mail-Vorlagen",
@@ -5709,7 +5714,17 @@
       "recipientsGone": "{count, plural, one {# Empfänger ist nicht mehr in deinen Kontakten} other {# Empfänger sind nicht mehr in deinen Kontakten}}",
       "recipientsNotRecorded": "Für diesen Lauf wurden keine Empfänger erfasst."
     },
-    "deleteConfirmTitle": "Diese Automation löschen?"
+    "deleteConfirmTitle": "Diese Automation löschen?",
+    "paymentKinds": {
+      "any": "Alles",
+      "membership": "Mitgliedschaft",
+      "course": "Kurs",
+      "product": "Produkt",
+      "drop_in": "Einzellektion",
+      "appointment": "Termin",
+      "gift_card": "Geschenkkarte",
+      "policy_fee": "Gebühr"
+    }
   },
   "SettingsEmails": {
     "title": "E-Mails",
