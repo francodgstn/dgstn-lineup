@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { httpsCallable } from 'firebase/functions'
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
+import { Timestamp, collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { usePaymentMutationErrorToast } from './usePaymentErrorToast'
 import {
@@ -62,16 +62,40 @@ export function useConnectStatus(teamId: string | null, enabled: boolean) {
 export function useStartConnectOnboarding() {
   const onError = usePaymentMutationErrorToast()
   return useMutation({
-    mutationFn: async (vars: {
-      teamId: string
-      model: ConnectOnboardingModel
-      locale?: string
-    }) => {
+    // No `model`: onboarding produces one kind of account, so the caller has
+    // nothing to choose. See the note on ConnectOnboardingModel in @linyup/shared.
+    mutationFn: async (vars: { teamId: string; locale?: string }) => {
       const fn = httpsCallable<
-        { teamId: string; model: string; locale?: string; origin?: string },
+        { teamId: string; locale?: string; origin?: string },
         { accountId: string; model: ConnectOnboardingModel; url: string }
       >(functions, 'startConnectOnboarding')
       return (await fn({ ...vars, origin: clientOrigin() })).data
+    },
+    onError,
+  })
+}
+
+/**
+ * Unlink the team's Stripe account so a different one can be onboarded.
+ *
+ * Invalidates the STATUS query rather than mutating it: the callable is the
+ * authority on what the team now has, and the card's whole shape is derived
+ * from it.
+ */
+export function useDisconnectConnectAccount() {
+  const qc = useQueryClient()
+  const onError = usePaymentMutationErrorToast()
+  return useMutation({
+    mutationFn: async (vars: { teamId: string }) => {
+      const fn = httpsCallable<{ teamId: string }, { ok: boolean; disconnected: boolean }>(
+        functions,
+        'disconnectConnectAccount'
+      )
+      return (await fn(vars)).data
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['connect-status', vars.teamId] })
+      qc.invalidateQueries({ queryKey: ['team', vars.teamId] })
     },
     onError,
   })
@@ -117,14 +141,39 @@ export function useHasByoGateway(teamId: string | null) {
   })
 }
 
-export function useMemberPayments(teamId: string | null, pageLimit = 50) {
+/**
+ * Payments are an EVENT LOG, so they are read through a WINDOW.
+ *
+ * ── WHY A WINDOW AND NOT JUST A BIGGER LIMIT ────────────────────────────────
+ * The page's search box filters the rows already loaded. With a bare `limit`
+ * that made the search a liar at scale: a studio taking daily payments searches
+ * for a member, the match is 400 rows back, and the screen says "No payments" —
+ * which reads as "that payment does not exist" rather than "not in what I
+ * fetched". A window is honest because the UI can NAME it ("the last 3
+ * months") and offer to widen it, which a limit cannot: nobody can be told
+ * "your match is past row 50".
+ *
+ * `sinceMs` is a single-field range on the same field the query already orders
+ * by, so it needs no composite index.
+ *
+ * The subscriptions list is deliberately NOT windowed — see
+ * `useMemberSubscriptions` for why a roster and a log want opposite treatment.
+ */
+export function useMemberPayments(
+  teamId: string | null,
+  pageLimit = 50,
+  sinceMs: number | null = null
+) {
   return useQuery({
-    queryKey: ['member-payments', teamId, pageLimit],
+    queryKey: ['member-payments', teamId, pageLimit, sinceMs],
     enabled: !!teamId,
     queryFn: async (): Promise<MemberPayment[]> => {
       const snap = await getDocs(
         query(
           collection(db, TEAMS_COLLECTION, teamId!, MEMBER_PAYMENTS_SUBCOLLECTION),
+          ...(sinceMs !== null
+            ? [where('created_at', '>=', Timestamp.fromMillis(sinceMs))]
+            : []),
           orderBy('created_at', 'desc'),
           limit(pageLimit)
         )
@@ -134,6 +183,25 @@ export function useMemberPayments(teamId: string | null, pageLimit = 50) {
   })
 }
 
+/**
+ * Every member subscription on the team.
+ *
+ * NO PAGE LIMIT, deliberately — it had a hard `limit(50)` and no "load more",
+ * so a studio with 60 memberships saw 50 of them and nothing on the screen said
+ * so. Silent truncation on a money surface is the worst of the three ways this
+ * could be wrong.
+ *
+ * Unbounded is safe here in a way it would NOT be for payments, and the
+ * difference is what each collection IS. A subscription list is a ROSTER: one
+ * row per member holding a plan, bounded by headcount, and a membership sold
+ * two years ago is still live today so there is no honest window to cut it at.
+ * Payments are an EVENT LOG that only grows, which is why that side is time
+ * bounded instead.
+ *
+ * Cancelled subscriptions accumulate, so this is headcount plus churn rather
+ * than headcount alone. If it ever becomes a problem the fix is a status filter
+ * in the query, not a bare limit that hides rows without saying which.
+ */
 export function useMemberSubscriptions(teamId: string | null) {
   return useQuery({
     queryKey: ['member-subscriptions', teamId],
@@ -142,14 +210,14 @@ export function useMemberSubscriptions(teamId: string | null) {
       const snap = await getDocs(
         query(
           collection(db, TEAMS_COLLECTION, teamId!, MEMBER_SUBSCRIPTIONS_SUBCOLLECTION),
-          orderBy('created_at', 'desc'),
-          limit(50)
+          orderBy('created_at', 'desc')
         )
       )
       return snap.docs.map((d) => d.data() as MemberSubscription)
     },
   })
 }
+
 
 export function useRefundMemberPayment() {
   const qc = useQueryClient()
@@ -180,14 +248,22 @@ export function useRefundMemberPayment() {
 
 /** BYO ledger (Payrexx / Stripe-BYO) for the team — function-written, rules allow
  * manager/owner reads. Includes unassigned payments (no contact matched). */
-export function usePaymentEvents(teamId: string | null, pageLimit = 100) {
+export function usePaymentEvents(
+  teamId: string | null,
+  pageLimit = 100,
+  sinceMs: number | null = null
+) {
   return useQuery({
-    queryKey: ['payment-events', teamId, pageLimit],
+    queryKey: ['payment-events', teamId, pageLimit, sinceMs],
     enabled: !!teamId,
     queryFn: async (): Promise<Array<ExternalPayment & { id: string }>> => {
       const snap = await getDocs(
         query(
           collection(db, TEAMS_COLLECTION, teamId!, PAYMENT_EVENTS_SUBCOLLECTION),
+          // The BYO rail orders by its own timestamp; same single-field range.
+          ...(sinceMs !== null
+            ? [where('processed_at', '>=', Timestamp.fromMillis(sinceMs))]
+            : []),
           orderBy('processed_at', 'desc'),
           limit(pageLimit)
         )

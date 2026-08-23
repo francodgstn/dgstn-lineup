@@ -578,6 +578,38 @@ export interface Team {
   // Onboarding: team-level dismissal of the setup checklist (data-driven; the
   // steps themselves auto-complete from collection contents)
   setup_dismissed?: boolean
+  /**
+   * Setup steps the studio has closed by saying they do not apply — keyed by
+   * `SetupStepKey`, valued with when they said so.
+   *
+   * NOT the same as done, and the guide does not draw it the same way. It
+   * exists because some steps have a legitimate "no": a cash-only club never
+   * wants Stripe Connect, a solo coach has nobody to invite. A permanent nag at
+   * somebody who has already decided is worse than no step at all.
+   *
+   * Owner-written from the client, like `setup_dismissed` beside it — the team
+   * update rule is a deny-list (`payments` + the four governance fields), so a
+   * new key here needs no rules change.
+   */
+  setup_ack?: Record<string, Timestamp>
+  /**
+   * Has the OWNER proved the email address they signed up with?
+   *
+   * Written for every team created from 2026-08-23, and by
+   * `confirmEmailVerified` when the owner clicks the link. ABSENT on every team
+   * that predates it, and that absence is load-bearing: the mail gate
+   * (`mailService.sendEntityMail`) refuses only on an explicit `false`, so the
+   * pre-existing population is unaffected rather than silenced.
+   */
+  owner_email_verified?: boolean
+  // ── Self-service account deletion (GDPR) ───────────────────────────────────
+  // Set by `requestTeamDeletion`, cleared by `cancelTeamDeletion`, executed by
+  // the `purgeScheduledTeams` daily sweep. The billing is stopped at REQUEST
+  // time, not at purge time — see teams/deleteAccount.ts.
+  deletion_requested_at?: Timestamp
+  deletion_requested_by?: string
+  /** When the tenant is erased. Its presence IS the pending state. */
+  deletion_scheduled_for?: Timestamp
   // SaaS plan fields (new in Linyup)
   plan?: SaasPlan
   plan_status?: SaasStatus

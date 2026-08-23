@@ -52,6 +52,7 @@ import type { SetupStep } from '@/hooks/useSetupChecklist'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlan } from '@/hooks/usePlan'
+import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
 import { Panel, PanelBody, PanelHeader } from './Panel'
 import { useUnassignedPaymentCount } from './preview-data'
 
@@ -130,6 +131,43 @@ function TaskRowView({
   )
 }
 
+/**
+ * The setup row — it OPENS THE GUIDE rather than navigating anywhere.
+ *
+ * It used to be an ordinary task row pointing at `openSetup[0].href`, the first
+ * remaining step. A studio with two steps left clicked "Finish setting up · 2
+ * left" and landed on, say, the subscriptions tab, with nothing on screen
+ * saying why they were there or what the other step was; the first-run modal
+ * that had listed them was long gone. Reported on the prod canary, 2026-08-23.
+ *
+ * The overview it was missing is now `SetupGuide` — a minimizable overlay the
+ * shell mounts, which survives every navigation the steps demand. So this row
+ * does not reproduce the list and does not lead anywhere: it raises the guide,
+ * which is the one place the list lives.
+ */
+function SetupTaskRow({ count }: { count: number }) {
+  const t = useTranslations('NewDashboard')
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(OPEN_SETUP_GUIDE_EVENT))}
+      className={`${ROW_CLASS} w-full`}
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">
+        <Rocket className="h-3.5 w-3.5 text-muted-foreground" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
+        {t('taskSetup')}
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {t('taskSetupMeta', { count })}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+    </button>
+  )
+}
+
 export function QueuePanel({
   teamId,
   contacts,
@@ -168,17 +206,11 @@ export function QueuePanel({
       href: '/payments' as Route,
     })
   }
-  if (openSetup.length > 0) {
-    tasks.push({
-      key: 'setup',
-      icon: Rocket,
-      label: t('taskSetup'),
-      meta: t('taskSetupMeta', { count: openSetup.length }),
-      href: openSetup[0].href as Route,
-    })
-  }
+  // NOT pushed into `tasks`: it is the one row that opens instead of leading
+  // somewhere, so it renders itself below.
+  const showSetup = openSetup.length > 0
 
-  const total = people.length + tasks.length
+  const total = people.length + tasks.length + (showSetup ? 1 : 0)
   const shown = people.slice(0, PEOPLE_ROWS)
   const hidden = people.length - shown.length
 
@@ -233,11 +265,12 @@ export function QueuePanel({
                 {t('queueMorePeople', { count: hidden })}
               </Link>
             )}
-            {tasks.length > 0 && (
+            {(tasks.length > 0 || showSetup) && (
               <div className={shown.length > 0 ? 'mt-1.5 border-t pt-1.5' : ''}>
                 {tasks.map(({ key, ...task }) => (
                   <TaskRowView key={key} {...task} />
                 ))}
+                {showSetup && <SetupTaskRow count={openSetup.length} />}
               </div>
             )}
           </div>

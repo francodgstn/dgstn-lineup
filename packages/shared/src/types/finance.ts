@@ -200,6 +200,30 @@ function neg(v: number): number {
   return v === 0 ? 0 : -v
 }
 
+/**
+ * The journal's natural key for a PAYMENT, derived the way a reader has it.
+ *
+ * Every writer above builds its id from a `source_ref` — the PaymentIntent id on
+ * Connect, the gateway's own reference on BYO. A reader holding a payment row
+ * has the same fact, but the BYO rails carry it inside the `payment_events` doc
+ * id (`${gateway}:${gatewayRef}`), so getting back to it means stripping a
+ * prefix.
+ *
+ * That derivation lives HERE rather than in the UI that needs it, for the reason
+ * this file already states about its ids: the moment two places compute the same
+ * key, they compute it differently. A reader that got the prefix rule wrong
+ * would silently match nothing and render "not recorded" over a payment that
+ * was.
+ */
+export function financeSourceRefForPayment(gateway: string, paymentId: string): string {
+  // Connect stores the PaymentIntent id as-is.
+  if (gateway === 'connect') return paymentId
+  // BYO: the doc id is `${gateway}:${gatewayRef}`, and only the FIRST separator
+  // is ours — a gateway reference may legitimately contain colons.
+  const sep = paymentId.indexOf(':')
+  return sep === -1 ? paymentId : paymentId.slice(sep + 1)
+}
+
 /** Deterministic journal doc id — the idempotency key for every writer. */
 export function financeTxnId(
   source: FinanceTxnSource,

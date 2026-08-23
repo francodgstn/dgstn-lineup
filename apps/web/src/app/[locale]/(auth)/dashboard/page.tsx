@@ -133,18 +133,27 @@ function Header({ children }: { children: React.ReactNode }) {
 export default function DashboardPage() {
   const t = useTranslations('NewDashboard')
   const { currentTeamId, team } = useAuth()
-  const { isAtLeast, isLoading: planLoading } = usePlan()
+  const { plan, isAtLeast, isLoading: planLoading } = usePlan()
   // The parked panels at the foot of the page. Off unless a studio asked for
   // them; see ExtraSection.
   const { isEnabled } = useExperimentalFeatures()
 
   const { data: contacts, isLoading: contactsLoading } = usePreviewContacts(currentTeamId)
-  const { steps: setupSteps, loading: setupLoading } = useSetupChecklist(currentTeamId)
+  const {
+    steps: setupSteps,
+    hasContacts,
+    loading: setupLoading,
+  } = useSetupChecklist(currentTeamId, team, plan ?? undefined)
 
   const stepDone = (key: string) => setupSteps.find((s) => s.key === key)?.done ?? false
   const resolving = setupLoading || contactsLoading
-  // Day one: no contacts and no sessions ever. Not "the checklist is unfinished".
-  const isFirstRun = !resolving && !stepDone('contacts') && !stepDone('sessions')
+  // Day one: no contacts and no bookable session. Not "the checklist is
+  // unfinished" — this decides whether the page has anything to SAY.
+  //
+  // `hasContacts` rather than a step: adding a contact by hand stopped being a
+  // setup step (contacts arrive through booking, signup and the shop), but the
+  // dashboard still needs the fact, so the hook keeps the probe and exposes it.
+  const isFirstRun = !resolving && !hasContacts && !stepDone('sessions')
 
   return (
     <div className="space-y-5">

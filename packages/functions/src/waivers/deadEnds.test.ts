@@ -143,8 +143,14 @@ describe('A STALE-EMPTY MIRROR IS RECOVERABLE — the server outranks the mirror
     // The numbers count HAPPY-PATH ENTRIES into a terminal submit, which is not
     // quite the same as counting submits: a submit reachable from two places
     // needs a gate in front of each, or the second way in is ungated.
+    // THREE entries on the class form: `onSubmitGuest`, `onVerified` (the OTP
+    // path) and `onSubmitMember`. The third arrived with the contact-session fix
+    // of 2026-08-23 — a signed-in member pressing Confirm on the member screen,
+    // which, like the picker's equivalent, has no verification moment to hang a
+    // gate off. Without its own `ensure(` that Confirm would book with no
+    // consent step in front of it.
     const bookingForm = code(web(BOOKING_SURFACES[0]))
-    assert.equal(count(bookingForm, 'waiverGate.ensure('), 2, 'one per entry, no more')
+    assert.equal(count(bookingForm, 'waiverGate.ensure('), 3, 'one per entry, no more')
     assert.equal(count(bookingForm, 'waiverGate.reset()'), 1, 'only the flow reset survives')
     // The picker has three terminal submits and FOUR ways into them:
     // `onSubmitGuest`, `onMemberPay`, and two entries to `runMemberFreeBooking`

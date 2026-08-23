@@ -1,4 +1,4 @@
-import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore'
 import { db } from './firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 
@@ -8,21 +8,15 @@ import { TEAMS_COLLECTION } from '@linyup/shared'
  * use these to mutate it. All writes are merge-writes so they never clobber the
  * rest of the profile.
  *
- * The product tour calls markTourDone / resetTour.
+ * The product tour that called markTourDone / resetTour was removed on
+ * 2026-08-23 — see the note on the user menu's setup entry. Those two helpers
+ * went with it; `users/{uid}.onboarding.tourDone` survives on existing profiles
+ * as inert data, which is cheaper to leave than to migrate away.
  *
  * The per-page section-intro popovers were removed in 2026-08 — the How-to page
  * does that job in one place and reaches every page, where the popovers reached
  * three and carried two competing "seen" flags between them.
  */
-
-/** Mark the guided product tour as completed or skipped. */
-export async function markTourDone(uid: string): Promise<void> {
-  await setDoc(
-    doc(db, 'users', uid),
-    { onboarding: { tourDone: true, tourDoneAt: serverTimestamp() } },
-    { merge: true }
-  )
-}
 
 /**
  * THE setup-checklist dismissal (UX-45). One flag, on the team doc, written
@@ -38,11 +32,23 @@ export async function setSetupDismissed(teamId: string, dismissed: boolean): Pro
   await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { setup_dismissed: dismissed })
 }
 
-/** Re-arm the product tour so it shows again (e.g. "Restart tour" in settings). */
-export async function resetTour(uid: string): Promise<void> {
-  await setDoc(
-    doc(db, 'users', uid),
-    { onboarding: { tourDone: false, tourDoneAt: null } },
-    { merge: true }
-  )
+/**
+ * Close a setup step as "not needed", or reopen it.
+ *
+ * DELIBERATELY NOT the same as done. A cash-only club that closes the payments
+ * step has not set up payments and the guide does not claim they have — the
+ * step is drawn as acknowledged, not completed. The distinction is what keeps
+ * this from being a "mark everything green" button.
+ *
+ * Reopening deletes the key rather than storing false, so `setup_ack` only ever
+ * holds decisions somebody actually made.
+ */
+export async function setSetupStepAcknowledged(
+  teamId: string,
+  key: string,
+  acknowledged: boolean
+): Promise<void> {
+  await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
+    [`setup_ack.${key}`]: acknowledged ? serverTimestamp() : deleteField(),
+  })
 }

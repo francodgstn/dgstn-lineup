@@ -1,7 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
-import { setGlobalOptions } from 'firebase-functions/v2'
 import {
   EVENTS_COLLECTION,
   EVENT_CATEGORIES_SUBCOLLECTION,
@@ -14,7 +13,9 @@ import {
 import type { EventProgramConfig } from '@linyup/shared'
 import { DEFAULT_TIMEZONE } from '../utils/dateFormatting'
 
-setGlobalOptions({ region: 'europe-west6' })
+// Region comes from the single setGlobalOptions call in index.ts — see the note
+// there. A second call warns "Calling setGlobalOptions twice leads to undefined
+// behavior".
 
 // Duplicating an event copies its SETUP — settings, categories and the whole
 // programme — and never its PARTICIPANTS. Attendees, invitations, check-ins and

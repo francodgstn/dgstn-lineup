@@ -1,7 +1,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
@@ -44,7 +44,6 @@ import { cn } from '@/lib/utils'
 import { useAvailabilityTemplates } from '@/components/appointments/AppointmentAvailability'
 import { Badge } from '@/components/ui/badge'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
-import { PagePurpose } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,6 +84,7 @@ import {
   ArrowUpRight,
   EyeOff,
   Zap,
+  Loader2,
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
@@ -92,6 +92,7 @@ import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 import { AppointmentAvailabilityFormDialog, AppointmentDetail } from '@/components/appointments/AppointmentAvailability'
 import { AppointmentFormDialog } from '@/components/appointments/AppointmentFormDialog'
 import { useVisibleCalendars, type ScheduleCalendar } from '@/hooks/useVisibleCalendars'
+import { useGeneratingSeries } from '@/hooks/useGeneratingSeries'
 import { VisibleCalendarsMenu } from '@/components/schedule/VisibleCalendarsMenu'
 import { CoachFilterMenu } from '@/components/schedule/CoachFilterMenu'
 import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
@@ -862,6 +863,42 @@ function ListItemRow({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
+/**
+ * "Still filling in" — the visible half of the background series generation.
+ *
+ * It also owns the REFRESH: while a series is materialising, the sessions
+ * query is invalidated on every tick, so the calendar grows as the occurrences
+ * land instead of waiting for the studio to reload. When the list empties, one
+ * final invalidation picks up whatever arrived after the last tick.
+ */
+function GeneratingSeriesNotice({ teamId }: { teamId: string | null }) {
+  const t = useTranslations('Sessions')
+  const qc = useQueryClient()
+  const generating = useGeneratingSeries(teamId)
+  const count = generating.length
+  const prevCount = useRef(0)
+
+  useEffect(() => {
+    if (count > 0 || prevCount.current > 0) {
+      void qc.invalidateQueries({ queryKey: ['sessions'] })
+    }
+    prevCount.current = count
+  }, [count, qc])
+
+  if (count === 0) return null
+
+  const named = generating.find((g) => g.activityName)?.activityName ?? null
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm">
+      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+      <span className="text-muted-foreground">
+        {named ? t('seriesFillingInNamed', { name: named }) : t('seriesFillingIn')}
+      </span>
+    </div>
+  )
+}
+
 export default function CalendarPage() {
   // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
   const { confirm, confirmDialog } = useConfirm()
@@ -1195,7 +1232,11 @@ export default function CalendarPage() {
           )}
         </div>
       </div>
-      <PagePurpose purpose="schedule" />
+
+      {/* A recurring series commits on its own doc and materialises behind it
+          (SessionFormDialog). Say so, or the classes that have not landed yet
+          read as a save that half-worked. */}
+      <GeneratingSeriesNotice teamId={currentTeamId} />
 
       {/* Filters — ONE control group, read left to right as <who> | <what>.
           Both chips carry a caret and open checkboxes: same shape, same

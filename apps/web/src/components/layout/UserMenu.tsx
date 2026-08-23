@@ -6,9 +6,9 @@ import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import { persistLocale } from '@/i18n/persistLocale'
-import { Sun, Moon, Monitor, Compass, LogOut, BarChart3, Settings } from 'lucide-react'
+import { Sun, Moon, Monitor, Rocket, LogOut, BarChart3, Settings } from 'lucide-react'
 import { posthog } from '@/lib/posthog'
-import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
+import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +77,6 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
       <div className={`flex gap-1 ${collapsed ? 'flex-col items-center' : 'items-center'}`}>
         <DropdownMenu>
           <DropdownMenuTrigger
-            data-tour="theme-lang"
             aria-label={t('account')}
             title={collapsed ? (user?.email ?? t('account')) : undefined}
             className={`flex items-center gap-2.5 rounded-lg hover:bg-muted transition-colors text-left min-w-0 ${
@@ -202,9 +201,17 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
               <Settings className="h-4 w-4 mr-2" />
               {tNav('settings')}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(START_TOUR_EVENT))}>
-              <Compass className="h-4 w-4 mr-2" />
-              {tOnb('replayTour')}
+            {/* Was "Replay tour". The tour is gone (2026-08-23) — three steps
+                over the sidebar's chrome, auto-started on day one against the
+                setup guide, and never instrumented, so nobody could say whether
+                it helped. The guide teaches the same thing by DOING: every step
+                is a link to the page that step is about. This is the way back
+                to it once it has been dismissed. */}
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new Event(OPEN_SETUP_GUIDE_EVENT))}
+            >
+              <Rocket className="h-4 w-4 mr-2" />
+              {tOnb('setup.title')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
 

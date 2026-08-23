@@ -43,3 +43,22 @@ variable "deploy_sa_roles" {
     "roles/resourcemanager.projectIamAdmin",
   ]
 }
+
+variable "extra_token_creator_sa_emails" {
+  type        = list(string)
+  description = <<-DESC
+    Service accounts that must be able to sign blobs AS THEMSELVES, granted
+    roles/iam.serviceAccountTokenCreator on their own identity.
+
+    Needed by any function calling admin.auth().createCustomToken() — a gen2
+    function has no private key, so the Admin SDK signs via the IAM signBlob
+    API, which this role authorises. roles/editor does NOT include signBlob,
+    which is why the omission is invisible until a token mint is attempted.
+
+    In practice this is the DEFAULT COMPUTE SA: functions deploy without an
+    explicit serviceAccount (setGlobalOptions sets only the region), so they run
+    as it rather than as the dedicated linyup-functions SA — the same reason the
+    secrets module takes extra_accessor_members.
+  DESC
+  default     = []
+}

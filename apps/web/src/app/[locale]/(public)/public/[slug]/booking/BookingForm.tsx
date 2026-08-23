@@ -156,6 +156,21 @@ type Step =
   | 'sessions'
   | 'who'
   | 'returning'
+  // A CONTACT WHO IS ALREADY SIGNED IN. Neither 'who' nor 'returning' is a
+  // question you may ask them: one offers to treat a member as a newcomer, the
+  // other asks a signed-in person to fetch an emailed code to prove they are
+  // themselves. Both were asked, and a member with a valid subscription hit the
+  // OTP wall every time — the class-side twin of the appointment-picker defect
+  // fixed on 2026-08-16 (docs/open-defects.md).
+  //
+  // The server never needed the code: `bookSession` and `createDropInCheckout`
+  // both read the caller off the contact-session token and say so in as many
+  // words ("a signed-in app never has to type an emailed code to book something
+  // it's already authenticated for"). This step is the surface catching up with
+  // that. It stays a chooser in one respect — "book for someone else" leads to
+  // 'who'/'returning', because the code path is exactly how a parent books for
+  // a child (see buildContactSession's login-email allow-list).
+  | 'member'
   | 'details'
   // The consent step. NON-TERMINAL on purpose (unlike 'confirmed'/'waitlisted'):
   // Back into it must be safe, and booking a second class from the same mounted
@@ -258,9 +273,10 @@ function trialDoorOpen(
 }
 
 /**
- * Which step follows picking a session. Members-only → sign in ('returning');
- * but if the class has a guest door — drop-in (pay per class) or a trial for
- * newcomers — the visitor gets the chooser ('who') instead.
+ * Which step follows picking a session. A signed-in contact goes straight to
+ * 'member' — there is nothing to ask them. Otherwise: members-only → sign in
+ * ('returning'); but if the class has a guest door — drop-in (pay per class) or
+ * a trial for newcomers — the visitor gets the chooser ('who') instead.
  *
  * The ONLY place this rule lives. Both the session click handler and the
  * `?session=` deep-link resolver call it, or the click path and the link path
@@ -268,8 +284,12 @@ function trialDoorOpen(
  */
 function nextStepAfterSession(
   a: ActivityProfile | null | undefined,
-  paymentsEnabled: boolean
+  paymentsEnabled: boolean,
+  signedIn: boolean
 ): Step {
+  // A KNOWN CALLER SKIPS BOTH DOORS. 'who' and 'returning' exist to work out
+  // who is booking; a contact session has already answered that.
+  if (signedIn) return 'member'
   const gated = a?.isFreeTrial === false
   const canGuest = dropInPriceOf(a, paymentsEnabled) != null || trialDoorOpen(a, paymentsEnabled)
   return gated && !canGuest ? 'returning' : 'who'
@@ -548,6 +568,7 @@ export default function BookingForm({
   const [pendingSubmit, setPendingSubmit] = useState<
     | { kind: 'guest'; values: GuestDetailsValues }
     | { kind: 'returning'; contactId: string; verificationCodeId: string; contactData: ContactData }
+    | { kind: 'member' }
     | null
   >(null)
 
@@ -705,7 +726,7 @@ export default function BookingForm({
         setSelectedSession(target)
         setSelectedDate(toDateKey(target.start))
         entryResolvedRef.current = true
-        setStep(nextStepAfterSession(activity, paymentsEnabled))
+        setStep(nextStepAfterSession(activity, paymentsEnabled, isAuthenticated))
         return 'applied'
       }
 
@@ -905,6 +926,22 @@ export default function BookingForm({
     if (!pay?.appliedBenefit) return null
     return { amount: pay.amount, base: pay.appliedBenefit.baseAmount }
   }, [dropInQuote])
+
+  // CAN THE SIGNED-IN MEMBER JUST BOOK? The same question `onVerified` asks
+  // after an OTP, asked from the session instead — and through the same shared
+  // resolver, so the 'member' step and the returning path can never disagree
+  // about who is covered. DISPLAY only: `bookSession` re-resolves from its own
+  // snapshot and stays authoritative.
+  const memberAccess = useMemo(() => {
+    if (!isAuthenticated || !selectedActivity) return null
+    const accessRule = resolveActivityAccessRule(selectedActivity)
+    const heldSubscriptionTypeIds = contact?.subscription_type_id
+      ? [contact.subscription_type_id]
+      : []
+    const snapshot = clientPaymentSnapshot({ authenticated: true, heldSubscriptionTypeIds })
+    const { denial } = resolvePaymentOptions(snapshot, { kind: 'class_booking', accessRule })
+    return { covered: !denial }
+  }, [isAuthenticated, selectedActivity, contact])
 
   // Gated class with drop-in enabled → pay-per-class. NOT when the visitor
   // explicitly took the free-trial door — a trial newcomer must never be
@@ -1333,6 +1370,70 @@ export default function BookingForm({
     }
   }
 
+  // ── The signed-in member's booking ────────────────────────────────────────
+  //
+  // The THIRD terminal submit in this file, and the shortest, because a contact
+  // session carries everything the other two have to collect: `bookSession`
+  // reads the caller off the token, so no contactId, no verification code and
+  // no contactDetails are sent — sending a contactId would be refused anyway
+  // (it demands a code alongside it, deliberately).
+  //
+  // A member who is NOT covered never reaches this: the step routes them into
+  // 'details', which owns the one paid path (promo, gift card, price
+  // breakdown, the server's `price_changed` renegotiation). A second checkout
+  // call built here is exactly the duplication this file keeps warning about.
+  async function onSubmitMember() {
+    if (!selectedSession || !teamId) return
+    if (missingRequiredAnswer()) {
+      setAnswersError(t('errorAnswerRequired'))
+      return
+    }
+    setAnswersError(null)
+    setIsSubmitting(true)
+    setBookingError(null)
+    try {
+      // No identity arguments: the gate resolves a contact session as its
+      // FIRST proof (waivers/caller.ts), which is the same person the booking
+      // will be made for.
+      if (!(await waiverGate.ensure({ email: contact?.email ?? undefined }))) {
+        setPendingSubmit({ kind: 'member' })
+        setStep('waiver')
+        return
+      }
+      const waiverAcceptances = waiverGate.acceptances
+      const bookSessionFn = httpsCallable<Record<string, unknown>, { bookingReference?: string }>(
+        functions,
+        'bookSession'
+      )
+      const res = await bookSessionFn({
+        teamId,
+        sessionId: selectedSession.id,
+        ...(Object.keys(answers).length ? { questionAnswers: answers } : {}),
+        ...(referral ? { referralCode: referral } : {}),
+        ...(waiverAcceptances.length ? { waiverAcceptances } : {}),
+      })
+      setBookingReference(res.data.bookingReference ?? null)
+      setConfirmedSession(selectedSession)
+      setStep('confirmed')
+    } catch (err) {
+      // The requirement moved between the step and the call — re-present it.
+      // Cheap here in a way it is not on the returning path: nothing has been
+      // spent, so the member can simply be shown the consent step and continue.
+      if (
+        waiverErrorMessage(err, tWaiver) &&
+        (await waiverGate.recover(err, { email: contact?.email ?? undefined }))
+      ) {
+        setPendingSubmit({ kind: 'member' })
+        setStep('waiver')
+        return
+      }
+      const e = err as { message?: string }
+      setBookingError(waiverErrorMessage(err, tWaiver) || e.message || t('errorGeneric'))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   /**
    * Leave the consent step by finishing what it interrupted.
    *
@@ -1347,6 +1448,10 @@ export default function BookingForm({
     if (!pending) return
     if (pending.kind === 'guest') {
       await onSubmitGuest(pending.values)
+      return
+    }
+    if (pending.kind === 'member') {
+      await onSubmitMember()
       return
     }
     setIsSubmitting(true)
@@ -1441,7 +1546,7 @@ export default function BookingForm({
           // which case the queue step no longer applies and the normal funnel
           // does.
           const blocked = sessionBlockReason(restored, bookingSettings?.cutoffMinutes)
-          setStep(offersWaitlist(blocked, activity) ? 'waitlist' : nextStepAfterSession(activity, paymentsEnabled))
+          setStep(offersWaitlist(blocked, activity) ? 'waitlist' : nextStepAfterSession(activity, paymentsEnabled, isAuthenticated))
         } else if (sub === 'returning') {
           setStep('returning')
         } else {
@@ -1450,7 +1555,7 @@ export default function BookingForm({
           // of are in memory — so restoring it from a pasted or forward-
           // navigated link would render a Confirm with nothing behind it. The
           // visitor re-enters the funnel and reaches it again in one step.
-          setStep(nextStepAfterSession(activity, paymentsEnabled))
+          setStep(nextStepAfterSession(activity, paymentsEnabled, isAuthenticated))
         }
         return
       }
@@ -1596,6 +1701,11 @@ export default function BookingForm({
   const showBar =
     selectedActivity && step !== 'activities' && step !== 'confirmed' && step !== 'waitlisted'
 
+  // Does the signed-in member's Confirm book a seat, or does it hand over to the
+  // paid door? Derived once: the bar's button and the step's own copy must
+  // never answer this differently.
+  const memberCanBookFree = memberAccess?.covered === true
+
   // WHERE THE TERMS BELONG. Every step that can end in a seat — the guest form,
   // the returning-member sign-in (whose `onVerified` books straight through),
   // the consent interrupt, and the queue join — gets them, and no step that
@@ -1609,7 +1719,11 @@ export default function BookingForm({
   // then no-show, and the claim window is measured in minutes — after the offer
   // email is not a moment to be reading the fee for the first time.
   const showTerms =
-    step === 'details' || step === 'returning' || step === 'waiver' || step === 'waitlist'
+    step === 'details' ||
+    step === 'returning' ||
+    step === 'member' ||
+    step === 'waiver' ||
+    step === 'waitlist'
 
   const termsBlock = showTerms ? (
     <BookingTerms
@@ -1652,7 +1766,12 @@ export default function BookingForm({
               // the booking step — one Confirm control, three verbs, so the
               // visitor never has to hunt for a different button in the same
               // layout.
-              showConfirm={step === 'details' || step === 'waitlist' || step === 'waiver'}
+              showConfirm={
+                step === 'details' ||
+                step === 'waitlist' ||
+                step === 'waiver' ||
+                (step === 'member' && memberCanBookFree)
+              }
               submitting={isSubmitting}
               // Greyed, not hidden, until every outstanding waiver is satisfied
               // by what the visitor did here — the tick, plus the "who is
@@ -1666,11 +1785,15 @@ export default function BookingForm({
                     // is cleared by the local ticks on this second pass, so the
                     // rail is called with the acceptances attached.
                     resumePendingSubmit()
-                  : step === 'waitlist' && isAuthenticated
-                    ? // A signed-in contact has no form to submit — their identity
-                      // comes from the session token the callable verifies.
-                      onJoinWaitlist(null)
-                    : guestFormRef.current?.submit()
+                  : step === 'member'
+                    ? // Same reason as the queue join below: nothing to collect,
+                      // because the token names the person.
+                      onSubmitMember()
+                    : step === 'waitlist' && isAuthenticated
+                      ? // A signed-in contact has no form to submit — their identity
+                        // comes from the session token the callable verifies.
+                        onJoinWaitlist(null)
+                      : guestFormRef.current?.submit()
               }
             />
           ) : null
@@ -2080,7 +2203,7 @@ export default function BookingForm({
                         setPromoApplied(null)
                         setDeepLinkNotice(null)
                         setBookingError(null)
-                        setStep(waitlistable ? 'waitlist' : nextStepAfterSession(activity, paymentsEnabled))
+                        setStep(waitlistable ? 'waitlist' : nextStepAfterSession(activity, paymentsEnabled, isAuthenticated))
                       }}
                       className="w-full text-left rounded-xl border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-colors flex items-stretch gap-3 group disabled:pointer-events-none disabled:opacity-60"
                     >
@@ -2245,6 +2368,87 @@ export default function BookingForm({
             </svg>
           </button>
         </div>
+      </>
+    )
+  }
+
+  // ─── Step: Member — a signed-in contact, confirming ──────────────────────
+  //
+  // One screen, three outcomes, and the copy names which one this is rather
+  // than leaving the member to work it out from whether a button is there:
+  //   covered            → Confirm, from the sticky bar, books the seat free
+  //   not covered + door → hands over to 'details', which owns the paid path
+  //   not covered, no door → the refusal, in words, with the way in named
+  //
+  // "Book for someone else" is not decoration. `bookSession`'s OTP path exists
+  // precisely so a parent can book for a child on their own signed-in device,
+  // and routing every signed-in visitor past 'who' would have quietly removed
+  // that.
+
+  if (step === 'member' && selectedSession && contact) {
+    const covered = memberCanBookFree
+    const payable = !covered && dropInAvailable
+    const someoneElseStep: Step =
+      selectedActivity?.isFreeTrial === false && !dropInAvailable && !trialAvailable
+        ? 'returning'
+        : 'who'
+
+    return withBar(
+      <>
+        <div>
+          <BackButton label={t('back')} onClick={backToSessions} />
+          <h1 className="text-2xl font-bold">{t('memberTitle')}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {t('memberSubtitle', { name: contact.firstname || contact.email || '' })}
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-card p-4 space-y-1">
+          <p className="text-sm font-medium">
+            {contact.firstname} {contact.lastname}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {covered
+              ? t('memberCovered')
+              : payable
+                ? t('memberPayable', {
+                    price: formatCurrency(
+                      dropInQuote?.pay.amount ?? selectedDropInPrice ?? 0,
+                      currency,
+                      locale
+                    ),
+                  })
+                : t('errorNoSubscriptionForActivity')}
+          </p>
+        </div>
+
+        {covered && bookingQuestionsBlock}
+
+        {payable && (
+          <button
+            onClick={() => {
+              setGuestPath('dropin')
+              setStep('details')
+            }}
+            className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            style={accentColor ? { backgroundColor: accentColor } : undefined}
+          >
+            {t('memberContinueToPayment')}
+          </button>
+        )}
+
+        {bookingError && <p className="text-sm text-destructive">{bookingError}</p>}
+        {answersError && <p className="text-sm text-destructive">{answersError}</p>}
+
+        <button
+          onClick={() => setStep(someoneElseStep)}
+          className="w-full rounded-xl border bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary hover:bg-primary/5"
+        >
+          <span className="font-semibold">{t('memberSomeoneElseTitle')}</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {t('memberSomeoneElseSubtitle')}
+          </span>
+        </button>
       </>
     )
   }

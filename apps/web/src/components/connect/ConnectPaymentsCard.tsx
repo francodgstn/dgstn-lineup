@@ -6,11 +6,33 @@
 
 import { useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { CreditCard, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react'
-import { takeRatePercent, type ConnectOnboardingModel } from '@linyup/shared'
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  CreditCard,
+  ExternalLink,
+  Loader2,
+  Unlink,
+} from 'lucide-react'
+import { takeRatePercent } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
-import { useConnectStatus, useStartConnectOnboarding } from '@/hooks/useConnect'
+import {
+  useConnectStatus,
+  useStartConnectOnboarding,
+  useDisconnectConnectAccount,
+} from '@/hooks/useConnect'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -28,14 +50,15 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
   const notDisabled = team?.payments?.connectEnabled !== false
   const { data: status, isLoading, refetch, isRefetching } = useConnectStatus(teamId, notDisabled)
   const start = useStartConnectOnboarding()
-  const [model, setModel] = useState<ConnectOnboardingModel>('managed')
+  const disconnect = useDisconnectConnectAccount()
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
 
   if (!notDisabled) return null
 
   const feePct = plan ? takeRatePercent(plan) : null
 
-  async function beginOnboarding(chosen: ConnectOnboardingModel) {
-    const res = await start.mutateAsync({ teamId, model: chosen, locale })
+  async function beginOnboarding() {
+    const res = await start.mutateAsync({ teamId, locale })
     if (res?.url) window.location.href = res.url
   }
 
@@ -64,34 +87,96 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
         ) : null}
       </div>
 
-      <p className="text-sm text-muted-foreground">{t('description')}</p>
-      {feePct != null && (
-        <p className="text-xs text-muted-foreground">{t('feeNote', { pct: feePct })}</p>
+      {/* The `description` key is deliberately NOT rendered: it said "collect
+          memberships, drop-ins and shop payments … money goes to your own
+          Stripe account", which is the first two bullets below in weaker words.
+          Kept in the locale files rather than deleted — four files, one lane. */}
+
+      {/* ── WHAT THIS BUYS, AGAINST THE ALTERNATIVE BELOW IT ──────────────────
+          The record-only rail further down the page can do none of these — it
+          matches a contact and stops. Stating them here turns a page with two
+          similar-looking Stripe options into a choice with a reason, and each
+          line is deliberately the mirror of one of that rail's stated limits.
+
+          Shown only BEFORE setup: once an account is live these are facts
+          about the product, not a case to make, and a permanent sales list on
+          a settings page is noise. */}
+      {!status?.connected && !isLoading && (
+        <div className="space-y-1.5">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {t('benefitsTitle')}
+        </p>
+        <ul className="space-y-1.5 text-sm">
+          {(['benefitCheckout', 'benefitLinked', 'benefitRefunds', 'benefitRenewals'] as const).map(
+            (key) => (
+              <li key={key} className="flex gap-2">
+                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-500" />
+                <span className="text-muted-foreground">{t(key)}</span>
+              </li>
+            )
+          )}
+        </ul>
+        </div>
       )}
+
+      {/* ── WHAT A PAYMENT ACTUALLY COSTS ─────────────────────────────────────
+          Two fees, and only one of them is ours — a studio reading "Linyup's
+          fee is 2%" alone will budget for 2% and be wrong. Stripe's cut depends
+          on the payment method (card, TWINT, SEPA, and by region), so it is
+          named and linked rather than quoted: a number printed here would go
+          stale silently and be believed.
+
+          The refund line is the same fact the payments table's breakdown states
+          per row: our fee comes back, Stripe's does not. Better learned here,
+          when choosing, than on the row where it already happened.
+
+          "What you pay", answering "What you get" above it — the two headings
+          are a pair, and the cost belongs beside the case for paying it. */}
+      <div className="space-y-1.5 text-xs text-muted-foreground">
+        <p className="font-medium uppercase tracking-wide">{t('feesTitle')}</p>
+        {/* Bulleted like the list above it, but with a NEUTRAL marker — a green
+            tick on "you pay the Stripe fee on a refund" would read as a perk. */}
+        <ul className="space-y-1">
+          {feePct != null && <FeeLine>{t('feeNote', { pct: feePct })}</FeeLine>}
+          <FeeLine>
+            {t.rich('feeStripeNote', {
+              link: (chunks) => (
+                // UNLOCALISED on purpose. Stripe 307s this to
+                // /{lang}-{country}/… using the browser's Accept-Language AND
+                // the visitor's IP, so all four of our locales resolve and a
+                // studio outside Switzerland sees ITS OWN country's fees.
+                // Pinning /en-ch/… would show every visitor Swiss pricing in
+                // English. The local-payment-methods page rather than /pricing
+                // because the sentence beside it is about the fee varying BY
+                // METHOD — and in CH that means TWINT, which /pricing omits.
+                <a
+                  href="https://stripe.com/pricing/local-payment-methods"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
+          </FeeLine>
+          <FeeLine>{t('feeRefundNote')}</FeeLine>
+        </ul>
+      </div>
 
       <Separator />
 
       {isLoading ? (
         <Skeleton className="h-20 rounded" />
       ) : !status?.connected ? (
-        // ── Not connected — choose onboarding model ──────────────────────────────
+        // ── Not connected — start onboarding ─────────────────────────────────────
+        // Deliberately ONE path, no picker. The picker offered "use my existing
+        // Stripe account", which onboarding cannot do (see the note on
+        // MODEL_DASHBOARD in functions/utils/connect/client.ts) — and its other
+        // option built the identical account, so there was nothing left to choose.
         <div className="space-y-3">
-          <p className="text-sm font-medium">{t('chooseModel')}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <ModelOption
-              active={model === 'managed'}
-              onClick={() => setModel('managed')}
-              title={t('managedTitle')}
-              desc={t('managedDesc')}
-            />
-            <ModelOption
-              active={model === 'byo'}
-              onClick={() => setModel('byo')}
-              title={t('byoTitle')}
-              desc={t('byoDesc')}
-            />
-          </div>
-          <Button onClick={() => beginOnboarding(model)} disabled={start.isPending}>
+          <p className="text-sm text-muted-foreground">{t('setupNote')}</p>
+          <Button onClick={() => beginOnboarding()} disabled={start.isPending}>
             {start.isPending ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
             ) : (
@@ -121,7 +206,7 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
             </ul>
           )}
           <div className="flex gap-2">
-            <Button onClick={() => beginOnboarding(status.model ?? model)} disabled={start.isPending}>
+            <Button onClick={() => beginOnboarding()} disabled={start.isPending}>
               {start.isPending ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
@@ -136,33 +221,76 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
           </div>
         </div>
       )}
+
+      {/* ── A WAY BACK OUT ────────────────────────────────────────────────────
+          Onboarding reuses the stored account id forever, so a studio that
+          started under the wrong Stripe login was permanently pointed at it:
+          "Start setup" walked them back into the same account every time, and
+          nothing here could name a different one. Found on the prod canary of
+          2026-08-23.
+
+          Quiet, at the bottom, below a rule: it is a real need but a rare one,
+          and it is refused server-side while any member subscription is still
+          live — cancelling those is a decision about somebody's membership, not
+          a step in changing a login. */}
+      {status?.connected && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t('disconnectNote')}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDisconnectOpen(true)}
+              disabled={disconnect.isPending}
+            >
+              {disconnect.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Unlink className="h-4 w-4 mr-1" />
+              )}
+              {t('disconnectAction')}
+            </Button>
+          </div>
+        </>
+      )}
       </CardContent>
+
+      <AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('disconnectConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('disconnectConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('disconnectCancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                disconnect.mutate({ teamId })
+                setDisconnectOpen(false)
+              }}
+            >
+              {t('disconnectAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
 
-function ModelOption({
-  active,
-  onClick,
-  title,
-  desc,
-}: {
-  active: boolean
-  onClick: () => void
-  title: string
-  desc: string
-}) {
+/** One bulleted line. Shared by the fee list and, by the same marker, by the
+ *  external-provider limits on the settings page — a page that showed two
+ *  different bullet glyphs for two lists of plain facts read as an accident. */
+function FeeLine({ children }: { children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`text-left rounded-lg border p-3 transition-colors ${
-        active ? 'border-primary ring-1 ring-primary' : 'hover:border-muted-foreground/40'
-      }`}
-    >
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-    </button>
+    <li className="flex gap-2">
+      <span aria-hidden className="select-none leading-5">
+        •
+      </span>
+      <span>{children}</span>
+    </li>
   )
 }
 

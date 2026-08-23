@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { CreditCard, Snowflake, Play, Plus } from 'lucide-react'
+import { CreditCard, Snowflake, Play, Plus, Ban } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { collection, getDocs, query, where } from 'firebase/firestore'
@@ -37,6 +37,9 @@ import {
 } from '@/components/payments/AssignPaymentDialog'
 import { RecordPaymentDialog } from '@/components/payments/RecordPaymentDialog'
 import { VoidPaymentDialog } from '@/components/payments/VoidPaymentDialog'
+import { RefundPaymentDialog } from '@/components/payments/RefundPaymentDialog'
+import { useFinanceJournal } from '@/plugins/finance/hooks'
+import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { PaymentsTable } from '@/components/payments/PaymentsTable'
 import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 import { Badge } from '@/components/ui/badge'
@@ -133,23 +136,64 @@ function useResumeMemberSubscription(teamId: string | null, contactId: string) {
   })
 }
 
+/**
+ * STOP THE BILLING, not just freeze it.
+ *
+ * Until 2026-08-23 this section could only FREEZE (`pause_collection`), and the
+ * only way to cancel anything was a radio buried inside the "change
+ * subscription" dialog that defaulted to KEEP. So a studio that froze a
+ * membership and then removed the plan from the contact was left with a live
+ * Stripe subscription nobody could see a way to stop — and the only apparent
+ * exit was to RESUME the billing, which is the opposite of what they wanted.
+ *
+ * Offered in every live state INCLUDING paused, for that exact reason.
+ */
+function useCancelMemberSubscription(teamId: string | null, contactId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      const fn = httpsCallable<{ teamId: string; subscriptionId: string }, { ok: boolean }>(
+        functions,
+        'cancelMemberSubscription'
+      )
+      return (await fn({ teamId: teamId!, subscriptionId })).data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contact-member-subscriptions', teamId, contactId] })
+      qc.invalidateQueries({ queryKey: ['contact', contactId] })
+    },
+  })
+}
+
 // ─── member subscriptions section ─────────────────────────────────────────────
 
 export function MemberSubscriptionsSection({
   teamId,
   contactId,
+  assignedTypeId,
   t,
 }: {
   teamId: string
   contactId: string
+  /** The plan the STUDIO has assigned this contact (`Contact.subscription_type_id`).
+   *  Compared against what Stripe is actually billing — see the divergence
+   *  notice below. Optional so a caller that has not loaded the contact simply
+   *  does not raise it, rather than raising it wrongly. */
+  assignedTypeId?: string | null
   t: ReturnType<typeof useTranslations<'PaymentsDashboard'>>
 }) {
   const { data: subs = [], isLoading } = useContactMemberSubscriptions(teamId, contactId)
   const pause = usePauseMemberSubscription(teamId, contactId)
   const resume = useResumeMemberSubscription(teamId, contactId)
+  const cancel = useCancelMemberSubscription(teamId, contactId)
 
   // Confirm dialog state: null = closed, string = subscriptionId to freeze
   const [freezeTarget, setFreezeTarget] = useState<string | null>(null)
+  // …and the same for cancelling. Two separate pieces of state, not one with a
+  // mode: freezing is reversible and cancelling is not, and a dialog that can
+  // render either verb from one variable is a dialog that can render the wrong
+  // one.
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null)
 
   // Only show recurring subscriptions (those that have a Stripe subscriptionId).
   // Hide auto-cancelled duplicates (same-type re-buys the webhook refunded) — they
@@ -174,6 +218,13 @@ export function MemberSubscriptionsSection({
     return (sub.status === 'active' || sub.status === 'trialing') && !isBillingPaused(sub)
   }
 
+  /** Anything Stripe is still capable of charging for — a PAUSED subscription
+   *  very much included, and past_due too: a card that keeps failing is exactly
+   *  one a studio wants to stop retrying. Only an already-cancelled one is out. */
+  function canCancel(sub: MemberSubscription) {
+    return ['active', 'trialing', 'past_due', 'paused'].includes(sub.status as string)
+  }
+
   // "Cancels on …" is a THIRD state, distinct from active and cancelled: the
   // member is still training and still has access, but this will not renew. The
   // date comes from the ONE shared predicate so this tab and the member's own
@@ -195,13 +246,33 @@ export function MemberSubscriptionsSection({
     return subscriptionIsCancelling(sub) ? t('subCancelsAtPeriodEnd') : null
   }
 
+  // ── STRIPE IS BILLING FOR SOMETHING NOBODY HAS ASSIGNED ────────────────────
+  // The same comparison the contacts list and the attention queue run
+  // (`contactBillingIsUnlinked`), asked here from what this section already
+  // holds. It is raised where the button that fixes it is — the row's own
+  // "Cancel billing" — rather than as a notification somewhere else.
+  const liveSubs = recurringOnly.filter((s) =>
+    ['active', 'trialing', 'past_due', 'paused'].includes(s.status as string)
+  )
+  const unlinked =
+    assignedTypeId !== undefined &&
+    liveSubs.length > 0 &&
+    !liveSubs.some((s) => s.subscriptionTypeId === assignedTypeId)
+
   return (
     <>
+      {unlinked && (
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+          <p className="font-medium">{t('billingUnlinkedTitle')}</p>
+          <p className="mt-0.5">{t('billingUnlinkedBody')}</p>
+        </div>
+      )}
       <div className="rounded-lg border divide-y">
         {recurringOnly.map((sub) => {
           const paused = isBillingPaused(sub)
           const freezable = canFreeze(sub)
           const resumable = paused
+          const cancellable = canCancel(sub)
           const endsAt = endsAtLabel(sub)
 
           return (
@@ -260,6 +331,18 @@ export function MemberSubscriptionsSection({
                   {t('resumeBilling')}
                 </Button>
               )}
+              {cancellable && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setCancelTarget(sub.id)}
+                  disabled={cancel.isPending}
+                >
+                  <Ban className="h-3.5 w-3.5 mr-1.5" />
+                  {t('cancelBilling')}
+                </Button>
+              )}
             </div>
           )
         })}
@@ -293,6 +376,37 @@ export function MemberSubscriptionsSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Cancel confirm dialog — its own, and its copy says what freezing's
+          does not: this cannot be undone from here, and the member keeps their
+          access until the period they have already paid for runs out. */}
+      <AlertDialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('cancelBillingConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('cancelBillingConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (cancelTarget) {
+                  cancel.mutate(cancelTarget)
+                  setCancelTarget(null)
+                }
+              }}
+              disabled={cancel.isPending}
+            >
+              {t('cancelBillingConfirmAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
@@ -311,6 +425,9 @@ export function PaymentsTab({
   const { data, isLoading } = useContactPayments(tid, contact.id)
   const [assignTarget, setAssignTarget] = useState<AssignPaymentTarget | null>(null)
   const [voidTarget, setVoidTarget] = useState<UnifiedPaymentRow | null>(null)
+  const [refundTarget, setRefundTarget] = useState<UnifiedPaymentRow | null>(null)
+  const { isInstalled } = useInstalledPlugins()
+  const { data: journal } = useFinanceJournal(tid, null, isInstalled('finance'))
   const [recordOpen, setRecordOpen] = useState(false)
 
   // Determine whether Connect is in play: show subscriptions section only
@@ -346,7 +463,12 @@ export function PaymentsTab({
               <RollupBadge status={rollupStatus} t={t} />
             )}
           </div>
-          <MemberSubscriptionsSection teamId={tid} contactId={contact.id} t={t} />
+          <MemberSubscriptionsSection
+            teamId={tid}
+            contactId={contact.id}
+            assignedTypeId={contact.subscription_type_id ?? null}
+            t={t}
+          />
         </div>
       )}
 
@@ -368,12 +490,24 @@ export function PaymentsTab({
           {t('contactNoPayments')}
         </div>
       ) : (
-        // Same table as the general /payments page, minus the (redundant) contact
-        // column — one shared component so the two views never drift.
+        // Same table as the general /payments page, minus the (redundant)
+        // contact column — one shared component so the two views never drift.
+        //
+        // WITH REFUND, since 2026-08-23. The component was already shared but
+        // this mount left `onRefund` off, so the button simply did not render
+        // here: a studio looking at the member whose charge they wanted to
+        // reverse could see it and not act on it, and had to go and find the
+        // same row again on /payments. Sharing a table is not sharing a
+        // surface unless the actions come with it.
         <PaymentsTable
           rows={rows}
+          // ALL TIME here, unlike the payments page: a contact's list is bounded
+          // by one person's history, and windowing it would hide the very rows
+          // somebody opened this tab to find.
+          journal={journal}
           showContact={false}
           onAssign={setAssignTarget}
+          onRefund={setRefundTarget}
           onVoid={setVoidTarget}
         />
       )}
@@ -383,6 +517,15 @@ export function PaymentsTab({
           teamId={tid}
           target={assignTarget}
           onClose={() => setAssignTarget(null)}
+        />
+      )}
+
+      {tid && (
+        <RefundPaymentDialog
+          teamId={tid}
+          target={refundTarget}
+          memberName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() || contact.email}
+          onClose={() => setRefundTarget(null)}
         />
       )}
 

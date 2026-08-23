@@ -22,8 +22,8 @@ import {
 //    count every quarter and quietly run a "10 sessions" course forever.
 
 // ─── a very small in-memory Firestore ────────────────────────────────────────
-// Supports only what this task uses: an equality query with a limit, a batch of
-// sets, and doc.ref.update().
+// Supports only what this task uses: an equality query with a limit and an
+// optional field projection, a batch of sets, and doc.ref.update().
 
 type Row = Record<string, unknown>
 type Filter = [string, string, unknown]
@@ -36,11 +36,14 @@ interface FakeRef {
 interface FakeSnap {
   empty: boolean
   size: number
-  docs: Array<{ id: string; data(): Row; ref: FakeRef }>
+  docs: Array<{ id: string; data(): Row; get(field: string): unknown; ref: FakeRef }>
 }
 interface FakeQuery {
   where(field: string, op: string, value: unknown): FakeQuery
   limit(n: number): FakeQuery
+  /** Projection. Modelled because the dedupe read asks for `instanceDate` only;
+   *  the rows it returns are read through `doc.get(field)`, not `data()`. */
+  select(...fields: string[]): FakeQuery
   doc(id?: string): FakeRef
   get(): Promise<FakeSnap>
 }
@@ -85,6 +88,7 @@ class FakeDb {
     return {
       where: (field, op, value) => self.query(name, [...filters, [field, op, value]], take),
       limit: (n) => self.query(name, filters, n),
+      select: () => self.query(name, filters, take),
       doc: (id?: string) => self.docRef(name, id ?? `auto-${++self.seq}`),
       get: async () => {
         if (filters.length > 0 && name === 'sessions') self.lookups++
@@ -98,6 +102,7 @@ class FakeDb {
           docs: docs.map((d) => ({
             id: d.id,
             data: () => d.data,
+            get: (field: string) => d.data[field],
             ref: self.docRef(name, d.id),
           })),
         }
@@ -217,10 +222,16 @@ describe('rollSessionSeries — idempotency', () => {
     assert.equal(new Set(instants).size, instants.length, 'duplicate instanceDate written')
   })
 
-  it('asks the (seriesId, instanceDate) question before every write', async () => {
+  it('asks the (seriesId, instanceDate) question ONCE per series, not once per write', async () => {
+    // The dedupe used to run a query per occurrence — 26 sequential round-trips
+    // for a weekly class, which is what made creating a series feel hung. It is
+    // one read of the pairs the series already holds, and the property that
+    // matters (nothing is written without having asked) is unchanged: the read
+    // happens, and it happens before any write.
     const db = makeDb({ s1: weeklySeries() })
     const res = await rollSessionSeries(asFirestore(db), NOW)
-    assert.ok(db.lookups >= res.created)
+    assert.ok(res.created > 1, 'fixture should create several sessions')
+    assert.equal(db.lookups, 1)
   })
 
   it('finishes a series that was only half-materialised', async () => {

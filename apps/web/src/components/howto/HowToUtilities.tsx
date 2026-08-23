@@ -9,7 +9,6 @@ import type { Route } from 'next'
 import {
   ArrowRight,
   Check,
-  Compass,
   Puzzle,
   RefreshCw,
   Rocket,
@@ -20,8 +19,9 @@ import { DynamicIcon } from '@/components/ui/icon-picker'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSetupChecklist } from '@/hooks/useSetupChecklist'
+import { usePlan } from '@/hooks/usePlan'
 import { setSetupDismissed } from '@/lib/onboarding'
-import { START_TOUR_EVENT } from '@/components/onboarding/ProductTour'
+import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
 import { TIPS } from '@/data/tips'
 
 function UtilityCard({
@@ -46,42 +46,29 @@ function UtilityCard({
   )
 }
 
-function TourCard() {
-  const t = useTranslations('HowTo')
-  return (
-    <UtilityCard icon={<Compass className="h-4 w-4" />} title={t('utilities.tour.title')}>
-      <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
-        {t('utilities.tour.body')}
-      </p>
-      <Button
-        variant="outline"
-        size="sm"
-        className="mt-3 self-start"
-        onClick={() => window.dispatchEvent(new Event(START_TOUR_EVENT))}
-      >
-        {t('utilities.tour.action')}
-      </Button>
-    </UtilityCard>
-  )
-}
-
 /**
  * Setup PROGRESS — a pointer at the checklist, not a second copy of it (UX-45).
  *
  * This card used to render the open steps itself, which made How-to a third
  * place setup was presented and the only one that could never be dismissed. It
- * shows the same progress (one shared query) and sends the reader to the one
- * card that owns the steps — and, because that card's dismissal is permanent
- * and team-wide, it is also the place a dismissal can be UNDONE. A hidden
- * checklist with no way back is how "I closed it and now I can't find what I
- * still have to do" happens.
+ * shows the same progress (one shared query) and RAISES the one surface that
+ * owns the steps — `SetupGuide`, since 2026-08-23 an overlay the shell mounts
+ * on every page rather than a card on the dashboard. Because the guide's
+ * dismissal is permanent and team-wide, this is also where it can be UNDONE. A
+ * hidden checklist with no way back is how "I closed it and now I can't find
+ * what I still have to do" happens.
  */
 function ChecklistCard() {
   const t = useTranslations('HowTo')
   const tOnb = useTranslations('Onboarding')
   const { currentTeamId, team } = useAuth()
   const { can } = useCapabilities()
-  const { requiredDone, requiredTotal, allRequiredDone } = useSetupChecklist(currentTeamId ?? null)
+  const { plan } = usePlan()
+  const { requiredDone, requiredTotal, allRequiredDone } = useSetupChecklist(
+    currentTeamId ?? null,
+    team,
+    plan ?? undefined
+  )
   const [restoring, setRestoring] = useState(false)
 
   const hidden = team?.setup_dismissed === true
@@ -129,12 +116,18 @@ function ChecklistCard() {
              so do not send them to a dashboard where the card isn't. */
           <p className="text-xs text-muted-foreground">{t('utilities.checklist.hiddenNote')}</p>
         ) : (
-          <Link
-            href={'/dashboard' as Route}
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          /* OPENS THE GUIDE, rather than linking to the dashboard. The card it
+             used to point at is now `SetupGuide`, an overlay the shell mounts
+             on every page — including this one — so there is nowhere to send
+             anybody. Same event mechanism as the tour button above. */
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto p-0 text-xs font-medium text-primary hover:bg-transparent hover:underline"
+            onClick={() => window.dispatchEvent(new Event(OPEN_SETUP_GUIDE_EVENT))}
           >
             {t('utilities.checklist.open')} <ArrowRight className="h-3 w-3" />
-          </Link>
+          </Button>
         )}
       </div>
     </UtilityCard>
@@ -210,7 +203,6 @@ export function HowToUtilities() {
     <section>
       <h2 className="text-lg font-semibold">{t('utilitiesTitle')}</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <TourCard />
         <ChecklistCard />
         <TipsCard />
         <PluginsCard />

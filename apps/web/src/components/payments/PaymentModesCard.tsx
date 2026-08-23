@@ -3,6 +3,9 @@
 // Settings → Payments: manage the studio's MANUAL payment modes (Cash / Bank
 // transfer / TWINT / …). Owner-only. The list feeds the Record-payment dialog;
 // until customized, a sensible default set is shown (and used) as a hint.
+//
+// Renders BARE (no card chrome) — the page wraps it in its own Card, first of
+// the two under "Payments you take outside Linyup".
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -52,7 +55,8 @@ export function PaymentModesCard({
   }
 
   return (
-    <div className="h-full rounded-lg border p-4 space-y-3">
+    // BARE — the parent owns the card; a border here would box a box.
+    <div className="space-y-3">
       <div>
         <Label>{t('paymentModes')}</Label>
         <p className="text-xs text-muted-foreground mt-0.5">{t('paymentModesDesc')}</p>

@@ -1,8 +1,9 @@
 /* eslint-disable no-console */
 // Stripe Connect — onboarding callables (member → studio payments).
 //
-// Both onboarding models (BYO full-dashboard, Managed express) flow through here.
-// The whole feature is feature-flagged per team (teams/{teamId}.payments.connectEnabled)
+// Onboarding creates ONE kind of connected account — see the note on
+// MODEL_DASHBOARD in utils/connect/client.ts for what it is and why there is only
+// one. The whole feature is feature-flagged per team (teams/{teamId}.payments.connectEnabled)
 // so it can ship dark and be enabled per studio. Money settles on the studio's
 // Stripe balance; Linyup never holds member funds.
 
@@ -11,6 +12,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import {
   CONNECT_ACCOUNTS_COLLECTION,
+  MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   type ConnectOnboardingModel,
 } from '@linyup/shared'
@@ -58,10 +60,14 @@ export const startConnectOnboarding = onCall(async (request) => {
   let model: ConnectOnboardingModel = team.payments?.connectModel ?? 'managed'
 
   if (!accountId) {
-    if (!data.model || !VALID_MODELS.includes(data.model as ConnectOnboardingModel)) {
+    // The onboarding model is historical and branches no behaviour — see the note
+    // on ConnectOnboardingModel in @linyup/shared. The UI no longer sends one, so
+    // absent means 'managed'; a value that IS sent is still validated, so an older
+    // client cannot persist a junk string onto the account document.
+    if (data.model !== undefined && !VALID_MODELS.includes(data.model as ConnectOnboardingModel)) {
       throw new HttpsError('invalid-argument', `model must be one of: ${VALID_MODELS.join(', ')}`)
     }
-    model = data.model as ConnectOnboardingModel
+    model = (data.model as ConnectOnboardingModel | undefined) ?? 'managed'
     const email = await ownerEmail(request.auth.uid, team)
 
     try {
@@ -97,7 +103,13 @@ export const startConnectOnboarding = onCall(async (request) => {
           capabilities: {},
           requirements_currently_due: [],
           requirements_disabled_reason: null,
-          default_currency: 'chf',
+          // The STUDIO's currency, not a constant. This was hard-coded 'chf',
+          // so every account opened outside Switzerland was recorded against
+          // the wrong one from the moment it was created — and the signup
+          // wizard now asks for the currency precisely so there is a real
+          // answer here. Stripe still decides what the account can settle in;
+          // this is our record of what the studio prices in.
+          default_currency: (team.default_currency ?? 'chf').toLowerCase(),
           created_at: now,
           updated_at: now,
         },
@@ -164,4 +176,87 @@ export const getConnectStatus = onCall(async (request) => {
     capabilities: status.capabilities,
     requirements_currently_due: status.requirements_currently_due,
   }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// disconnectConnectAccount — UNLINK the studio's Stripe account from this team.
+//
+// WHY THIS HAS TO EXIST. `startConnectOnboarding` is idempotent by reusing the
+// stored `connectAccountId` forever — "the model is fixed at creation" — so a
+// studio that began onboarding under the wrong Stripe login had no way out at
+// all: every subsequent "Start setup" walked them back into the same account,
+// and nothing in the app could point at a different one. Found on the prod
+// canary of 2026-08-23.
+//
+// WHAT IT IS NOT. It does not delete, close or touch the Stripe account itself —
+// that account belongs to the studio, holds their money and their history, and
+// is theirs to keep or close in Stripe. This severs the LINK: Linyup stops
+// routing charges to it and stops claiming the team can take money.
+//
+// WHY THE `connect_accounts` DOC SURVIVES, teamId and all. That collection is
+// the ONLY account → team map the Connect webhook has. Deleting the doc (or
+// nulling its teamId) would strand every late event for charges the account has
+// already taken — a refund, a dispute, a renewal — with nowhere to write them.
+// So it is marked detached and left readable, and a new onboarding simply
+// creates a second doc. One account still belongs to exactly one team; a team
+// may have several accounts over its life, one of which is current.
+//
+// THE ONE REFUSAL. A live subscription on the account would go on charging a
+// member every month into an account this product no longer watches — nobody
+// would see the money and nobody would see it stop. Those are cancelled first,
+// from the contact page, which is where the control is.
+export const disconnectConnectAccount = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
+
+  const data = request.data as { teamId?: string }
+  if (!data?.teamId) throw new HttpsError('invalid-argument', 'teamId is required')
+  const teamId = data.teamId
+
+  await assertOwner(request.auth.uid, teamId)
+  const team = await loadEnabledTeam(teamId)
+
+  const accountId = team.payments?.connectAccountId
+  if (!accountId) return { ok: true as const, disconnected: false as const }
+
+  const db = admin.firestore()
+
+  // Live = anything Stripe can still charge for, PAUSED INCLUDED: a frozen
+  // subscription is one `resume` away from billing again, and after this call
+  // there would be no screen in Linyup showing it exists.
+  const liveSnap = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(MEMBER_SUBSCRIPTIONS_SUBCOLLECTION)
+    .where('status', 'in', ['active', 'trialing', 'past_due', 'paused'])
+    .get()
+  const live = liveSnap.docs.filter((d) => d.data().duplicate !== true)
+  if (live.length > 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Cancel the remaining member subscriptions before disconnecting',
+      { reason: 'live_subscriptions', count: live.length }
+    )
+  }
+
+  const now = FieldValue.serverTimestamp()
+  await db
+    .collection(CONNECT_ACCOUNTS_COLLECTION)
+    .doc(accountId)
+    .set({ status: 'detached', detached_at: now, updated_at: now }, { merge: true })
+
+  // Deleting the keys rather than nulling them: `startConnectOnboarding` tests
+  // `if (!accountId)`, and `payments_enabled` on the public profile fails closed
+  // on anything that is not an enabled account — so an absent key is the state
+  // both readers already handle correctly.
+  await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .update({
+      'payments.connectAccountId': FieldValue.delete(),
+      'payments.connectModel': FieldValue.delete(),
+      'payments.connectStatus': FieldValue.delete(),
+    })
+
+  console.log(`[connect] account ${accountId} detached from team ${teamId}`)
+  return { ok: true as const, disconnected: true as const, accountId }
 })
