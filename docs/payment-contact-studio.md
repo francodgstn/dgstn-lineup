@@ -627,8 +627,16 @@ Confirmed against Stripe test mode (2026-06-19, run via the guarded integration 
   capabilities) is accepted once Connect + Accounts v2 are enabled on the platform. The
   express/embedded Managed variant was **rejected** ("account configuration is not supported")
   — hence the single Standard config above.
-- ✅ **"Use my existing account" + onboarding link** — the `dashboard: 'full'` Account Link
-  lets a studio sign into an existing Stripe account or create a new one (both framings).
+- ⚠️ **"Use my existing account" — MISREAD HERE, corrected 2026-08-23.** This bullet used to
+  read ✅ "the `dashboard: 'full'` Account Link lets a studio sign into an existing Stripe
+  account or create a new one (both framings)". Signing in is real, but it only **prefills**
+  the studio's already-verified details onto the **newly created** account — the account they
+  already had is never attached. Confirmed against production 2026-08-22: an owner who picked
+  "use your existing account" ended up with a second, empty business. Attaching a pre-existing
+  account needs the Standard OAuth flow (`connect.stripe.com/oauth/authorize`), which is not
+  implemented. The studio-facing copy no longer offers it, and the two-option picker this
+  bullet justified was removed — both options built the same account. Authoritative note:
+  `packages/functions/src/utils/connect/client.ts`, on `MODEL_DASHBOARD`.
 - ✅ **Direct charge + refund** — one-off direct charge with `application_fee_amount`, then a
   partial refund with proportional fee reversal, both succeed on the connected account.
 - ✅ **Enablement derivation** — on a fully-onboarded account, `normalizeAccount()` correctly

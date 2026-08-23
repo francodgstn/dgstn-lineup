@@ -179,7 +179,10 @@
     "headTileSearch": "Cerca pagine…",
     "headTileNoMatch": "Nessun risultato",
     "headTileRemove": "Rimuovi questa scorciatoia",
-    "utilities": "Altro"
+    "utilities": "Altro",
+    "subscriptionPlans": "Piani di abbonamento",
+    "memberSubscriptions": "Abbonamenti dei membri",
+    "paymentsAndSubscriptions": "Pagamenti e abbonamenti"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -307,7 +310,10 @@
     "trialNotice": "Stai iniziando una prova di {days} giorni del piano {plan}. Nessuna carta richiesta.",
     "errorEmailInUse": "Esiste già un account con questa email.",
     "errorAccountGeneric": "Impossibile creare l'account. Riprova.",
-    "errorTeamGeneric": "Impossibile creare il tuo team. Riprova."
+    "errorTeamGeneric": "Impossibile creare il tuo team. Riprova.",
+    "currency": "Valuta",
+    "language": "Lingua",
+    "languageHint": "La lingua in cui i tuoi membri vengono contattati: conferme, promemoria e ricevute. Puoi modificare entrambe in seguito."
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -380,15 +386,6 @@
     "demoViewLevel": "Grado",
     "demoEmptyLevel": "Nessun contatto con grado impostato",
     "firstRunTitle": "La tua dashboard si riempie da sola",
-    "firstRunBody": "Non è ancora successo nulla, quindi non c'è nulla da contare. Ecco cosa comparirà — e cosa deve succedere prima.",
-    "firstRun_agenda_title": "L'agenda di oggi",
-    "firstRun_agenda_body": "appena una sessione è in calendario.",
-    "firstRun_figures_title": "I tuoi numeri",
-    "firstRun_figures_body": "presenze, prenotazioni e abbonamenti, quando avrai dei contatti.",
-    "firstRun_money_title": "I soldi",
-    "firstRun_money_body": "incassi e pagamenti recenti, dal primo incasso.",
-    "firstRun_trends_title": "Tendenze settimanali",
-    "firstRun_trends_body": "dopo qualche settimana di sessioni — una tendenza ha bisogno di un passato.",
     "trendsNoHistoryTitle": "Non c'è ancora uno storico da rappresentare",
     "trendsNoHistoryBody": "Le tendenze confrontano settimana per settimana. Dopo qualche sessione, i grafici compariranno qui da soli.",
     "chartEmptyTitle": "Ancora nulla da mostrare",
@@ -412,7 +409,8 @@
     "chartTitleSessions": "Sessioni",
     "chartTitleContacts": "Contatti",
     "chartTitleTopActivities": "Attività principali",
-    "sectionDiscover": "Scopri"
+    "sectionDiscover": "Scopri",
+    "firstRunSetupBody": "Non è ancora successo nulla, quindi non c'è nulla da contare. Completa la configurazione e questa pagina si riempirà da sola."
   },
   "Contacts": {
     "noteColor_none": "Nessun colore",
@@ -934,7 +932,9 @@
     "subHistoryDeleteBody": "Rimuove la traccia del fatto che {name} ha avuto questo abbonamento. Non rimborsa nulla e non cambia ciò che ha ora.",
     "affiliationRemoveTitle": "Rimuovere questa affiliazione?",
     "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto.",
-    "deletionScheduledBadge": "Cancellazione richiesta · {date}"
+    "deletionScheduledBadge": "Cancellazione richiesta · {date}",
+    "attention_cancelling": "In disdetta",
+    "attention_billing_unlinked": "Fatturazione orfana"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -1014,7 +1014,6 @@
     "type_appointment": "Appuntamento",
     "typeAutoSet": "Impostato automaticamente dall'attività — puoi modificarlo se necessario.",
     "fieldAllowBooking": "Consenti prenotazione online",
-    "locationPlaceholder": "Palestra, dojo…",
     "deleteConfirm": "Eliminare la sessione \"{label}\"? Questa azione non può essere annullata.",
     "fieldActivity": "Attività",
     "fieldLocation": "Luogo",
@@ -1049,8 +1048,6 @@
     "daySun": "Dom",
     "repeatPreview": "Prossime sessioni",
     "repeatPreviewMore": "+{count} altre",
-    "generatingSeries": "Generazione sessioni…",
-    "seriesCreated": "{count, plural, one {# sessione creata} other {# sessioni create}}",
     "partOfSeries": "Parte di una serie",
     "freqYearly": "Annuale",
     "seriesEveryDays": "Ogni {count} giorni",
@@ -1103,7 +1100,19 @@
     "editConfirmTitle": "Ci sono persone iscritte a questa sessione",
     "editConfirmBody": "{count, plural, one {# persona è} other {# persone sono}} associate a questa sessione. Modificare orario, luogo o attività cambia quanto è stato loro comunicato.",
     "editConfirmPast": "Questa sessione si è già svolta, quindi stai modificando il registro di ciò che è accaduto.",
-    "editConfirmAction": "Salva le modifiche"
+    "editConfirmAction": "Salva le modifiche",
+    "newActivityNamePlaceholder": "Nome del corso",
+    "noPlacesHint": "Una sede è un indirizzo che conservi: ha delle sale, e tutto ciò che pianifichi lì viene raggruppato sotto di essa.",
+    "createPlaceAction": "Aggiungi una sede",
+    "fieldLocationNote": "Nota sul luogo",
+    "locationNotePlaceholder": "Ingresso posteriore, campo 2…",
+    "locationHintWithPlace": "Dettaglio in più rispetto alla sede",
+    "locationHintNoPlace": "Testo libero, per un luogo occasionale che non vuoi salvare",
+    "creatingSeries": "Creazione della serie…",
+    "seriesCreatingToast": "Serie creata. I corsi vengono aggiunti al tuo calendario.",
+    "seriesGenerateFailed": "La serie è stata creata, ma i suoi corsi non sono ancora stati aggiunti: {message}",
+    "seriesFillingIn": "Una serie ricorrente è ancora in fase di aggiunta al calendario…",
+    "seriesFillingInNamed": "{name} è ancora in fase di aggiunta al calendario…"
   },
   "Calendar": {
     "title": "Programma",
@@ -1645,7 +1654,9 @@
     "accessPickInCatalogue": "Quali abbonamenti possono prenotare si imposta nel catalogo, accanto agli abbonamenti stessi.",
     "accessOpenCatalogue": "Apri il catalogo",
     "dropInRateInCatalogue": "Una tariffa soci su questo prezzo si imposta nel catalogo: è una sola regola condivisa da tutti gli abbonamenti coinvolti.",
-    "benefitInCatalogue": "La tariffa soci per queste durate si imposta nel catalogo, accanto agli abbonamenti a cui si applica."
+    "benefitInCatalogue": "La tariffa soci per queste durate si imposta nel catalogo, accanto agli abbonamenti a cui si applica.",
+    "dropInPriceValidation": "Inserisci un prezzo a lezione di almeno 0.50",
+    "durationsRequiredValidation": "Scegli almeno una durata dell'appuntamento"
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -1862,10 +1873,10 @@
     "subTypeIntroErr_amount_invalid": "Inserisci un prezzo di lancio pari o superiore a 0.",
     "subTypeIntroErr_below_minimum": "Un addebito deve essere di almeno 0.50. Usa 0 per rendere gratuiti i primi periodi.",
     "subTypeIntroErr_not_cheaper": "Il prezzo di lancio deve essere inferiore al prezzo normale dell'abbonamento.",
-    "paymentsRecordOnlyTitle": "Pagamenti che incassi fuori da Linyup",
+    "paymentsRecordOnlyTitle": "Gestire i pagamenti fuori da Linyup",
     "paymentsRecordOnlyDescription": "Niente qui sotto addebita nulla a un membro. Queste impostazioni registrano soltanto il denaro che hai già incassato — sul tuo account Stripe o Payrexx, oppure a mano — così compare nella scheda del membro. Per addebitare le carte dentro Linyup, usa \"Accetta pagamenti con Linyup\" qui sopra.",
     "paymentsExternalTitle": "Il tuo account Stripe o Payrexx",
-    "paymentsExternalDescription": "Incassi il pagamento nella dashboard del tuo provider; Linyup riceve la notifica e la collega al contatto giusto. Qui Linyup non addebita nulla a nessuno.",
+    "paymentsExternalDescription": "Incassi nel tuo account Stripe o Payrexx. Linyup registra il pagamento quando il tuo provider invia i dati.",
     "paymentsExternalHiddenOwnerOnly": "I provider esterni sono visibili solo al proprietario del team.",
     "paymentsAddExternal": "Aggiungi provider",
     "paymentsEditExternal": "Modifica provider",
@@ -1882,7 +1893,14 @@
     "customFieldPublicOnBooking": "Chiedi nel modulo di prenotazione",
     "customFieldPublicOnBookingHint": "Rende il nome e le opzioni di questo campo visibili pubblicamente, così può comparire nella tua pagina di prenotazione. Lascia disattivato per i dati riservati.",
     "subTypeActivitiesInCatalogue": "Si imposta nel catalogo, dove lo vedi anche dal lato dell'attività.",
-    "subTypeActivitiesOpenCatalogue": "Apri il catalogo"
+    "subTypeActivitiesOpenCatalogue": "Apri il catalogo",
+    "language": "Lingua dei membri",
+    "languageHint": "La lingua in cui i tuoi membri vengono contattati: conferme, promemoria e ricevute. La lingua della tua dashboard si sceglie separatamente.",
+    "subTypeActivitiesAfterSave": "Salva prima il piano: poi potrai scegliere cosa sblocca e quanto costa a chi lo possiede.",
+    "paymentsExternalBeta": "Beta",
+    "paymentsExternalLimitMatch": "Linyup prova ad abbinare il contatto tramite e-mail.",
+    "paymentsExternalLimitLink": "I pagamenti non vengono collegati automaticamente a prenotazione, abbonamento, corso o prodotto.",
+    "paymentsExternalLimitRefund": "Rimborsi, sospensioni e disdette vanno gestiti manualmente nella dashboard del tuo provider e in Linyup."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -3400,40 +3418,6 @@
     "signupClosedNotice": "La registrazione è attualmente solo su invito. Se hai ricevuto un invito, continua qui sotto con l'indirizzo email dell'invito."
   },
   "Onboarding": {
-    "replayTour": "Rivedi il tour",
-    "tour": {
-      "welcomeTitle": "Benvenuto su Linyup 👋",
-      "welcomeBody": "Ecco un breve tour delle funzioni essenziali. Puoi rivederlo quando vuoi dal menu account.",
-      "themeLangTitle": "Rendilo tuo",
-      "themeLangBody": "Apri il menu account per cambiare lingua o passare tra modalità chiara e scura.",
-      "featuresTitle": "Le tue aree di lavoro",
-      "featuresBody": "Tutto ciò che gestisci ogni giorno: attività (cosa offri), sessioni (quando si tengono), prenotazioni (chi viene) e pagamenti. Più cosa vendi e come cresci. Apri una sezione per vederne le pagine.",
-      "shortcutsTitle": "Scorciatoie",
-      "shortcutsBody": "Le pagine che apri compaiono qui. Passa su una riga e clicca la puntina per tenere in alto quelle che usi di più.",
-      "searchTitle": "Ricerca rapida",
-      "searchBody": "Vai ovunque con un tasto — prova a digitare \"Att\" per Attività o \"Con\" per Contatti.",
-      "howToTitle": "Guide e aiuto",
-      "howToBody": "Guide passo passo e aiuto alla configurazione sono qui quando ti servono.",
-      "next": "Avanti",
-      "prev": "Indietro",
-      "done": "Capito",
-      "activitiesTitle": "1. Attività — ciò che insegni",
-      "activitiesBody": "Un'attività è una cosa che offri: yoga base, judo per bambini, una sessione privata. Contiene il prezzo, la capienza e chi può prenotare. Tutto il resto in Linyup parte da qui.",
-      "sessionsTitle": "2. Sessioni — quando si svolgono",
-      "sessionsBody": "Una sessione è un'attività in un orario. Mettila in calendario una volta e falla ripetere ogni settimana — oppure pubblica le tue disponibilità per gli appuntamenti individuali.",
-      "bookingsTitle": "3. Prenotazioni — chi viene",
-      "bookingsBody": "Le persone prenotano dalla tua pagina pubblica e ogni posto arriva qui — con lista d'attesa, check-in e l'elenco del giorno. Iscrivere qualcuno a mano funziona allo stesso modo.",
-      "paymentsTitle": "4. Pagamenti — farsi pagare",
-      "paymentsBody": "Abbonamenti, ingressi singoli, corsi e prodotti si chiudono qui. Contanti e bonifici si registrano a mano; collega Stripe per accettare le carte online.",
-      "checklistTitle": "La tua lista di configurazione",
-      "helpTitle": "Bloccato? Cerca il punto interrogativo",
-      "helpBody": "Il punto interrogativo in alto nella barra laterale apre la guida: come si incastrano i pezzi, quanto costa cosa e questo tour quando vuoi.",
-      "checklistBody": "Lo stesso percorso, con i tuoi dati. Si spunta da sola e resta in cima alla dashboard finché non sei operativo.",
-      "quickAccessTitle": "Sempre a portata",
-      "quickAccessBody": "I due riquadri in alto sono il ritorno più rapido — la dashboard e una pagina a tua scelta. Sotto, le pagine aperte si raccolgono come scorciatoie; fissa quelle che usi di più.",
-      "utilitiesTitle": "Ricerca e il resto",
-      "utilitiesBody": "La ricerca ti porta ovunque con un tasto — prova \"Att\" per Attività. Accanto: il QR code del tuo studio, i plugin, le impostazioni e How-to per le guide e questo tour."
-    },
     "setup": {
       "title": "Configurazione",
       "subtitle": "Pochi passaggi per avviare la tua attività.",
@@ -3441,39 +3425,72 @@
       "dismiss": "Nascondi",
       "optional": "facoltativo",
       "sessionsNotBookableWarning": "Questa classe non è ancora prenotabile — attiva \"Consenti prenotazione online\".",
-      "steps": {
-        "activities": {
-          "label": "Aggiungi le attività",
-          "desc": "Definisci le lezioni o il coaching che offri."
-        },
-        "sessions": {
-          "label": "Pianifica una sessione",
-          "desc": "Aggiungi la prima lezione o slot al calendario."
-        },
-        "subscriptions": {
-          "label": "Crea gli abbonamenti",
-          "desc": "Imposta i piani a cui i membri possono iscriversi."
-        },
-        "bioLink": {
-          "label": "Pubblica il bio link",
-          "desc": "Rendi attiva la tua pagina di prenotazione pubblica."
-        },
-        "contacts": {
-          "label": "Aggiungi un contatto",
-          "desc": "Aggiungi il tuo primo membro o potenziale cliente."
-        },
-        "ranks": {
-          "label": "Configura i gradi",
-          "desc": "Configura un sistema di gradi se ne usi uno."
-        }
-      },
       "doneTitle": "Il tuo studio è pronto",
       "doneBody": "Tutti i passaggi di configurazione sono completati — le persone possono trovarti e prenotare.",
       "doneAction": "Vedi le tue pagine pubbliche",
       "doneDismiss": "Chiudi",
       "next": "Avanti",
       "showSteps": "Mostra tutti i passaggi",
-      "hideSteps": "Nascondi i passaggi"
+      "hideSteps": "Nascondi i passaggi",
+      "minimize": "Riduci",
+      "sections": {
+        "offer": "Cosa offri",
+        "doors": "Apri le porte",
+        "extra": "Passaggi extra"
+      },
+      "requiresPlan": "Piano {plan}",
+      "steps": {
+        "activities": {
+          "label": "Aggiungi le tue attività",
+          "desc": "Definisci i corsi o il coaching che offri."
+        },
+        "pricing": {
+          "label": "Imposta i prezzi",
+          "desc": "Un piano di abbonamento, o un prezzo a lezione.",
+          "ack": "Nessun prezzo per ora"
+        },
+        "sessions": {
+          "label": "Metti un corso prenotabile in calendario",
+          "desc": "Mettilo in calendario e attiva la prenotazione online. Altrimenti nessuno può prendere posto."
+        },
+        "publicPage": {
+          "desc": "La tua descrizione, i tuoi link, i tuoi social. La pagina è già online.",
+          "label": "Completa la tua pagina bio link"
+        },
+        "payments": {
+          "label": "Configura i pagamenti",
+          "desc": "Collega Stripe per accettare pagamenti direttamente in Linyup.",
+          "ack": "Accettiamo solo contanti"
+        },
+        "branding": {
+          "label": "Aggiungi logo e colori",
+          "desc": "Ogni pagina pubblica li utilizza.",
+          "ack": "Non serve"
+        },
+        "bookingForm": {
+          "label": "Controlla cosa chiede il modulo di prenotazione",
+          "desc": "Telefono, data di nascita, le tue domande. I valori predefiniti vanno bene per quasi tutti.",
+          "ack": "Sembra tutto a posto"
+        },
+        "coaches": {
+          "label": "Invita i tuoi coach",
+          "desc": "Dai loro un accesso personale, con solo ciò che serve.",
+          "ack": "Lavoro da solo"
+        },
+        "pricingReview": {
+          "label": "Controlla quanto pagano davvero",
+          "desc": "Ogni prezzo come lo vede un membro, in un unico posto.",
+          "ack": "Sembra tutto a posto"
+        },
+        "plugins": {
+          "desc": "Corsi online, gift card, liberatorie, finanze e altro. Attiva solo ciò che ti serve.",
+          "ack": "Ho dato un'occhiata",
+          "label": "Esplora i plugin"
+        }
+      },
+      "ackUndo": "Annulla",
+      "ackNoteSkip": "Hai chiuso tu questo passaggio",
+      "ackNoteReview": "L'hai verificato"
     }
   },
   "SubscriptionCancellation": {
@@ -3713,7 +3730,21 @@
     "readyBody": "Il tuo account è configurato e può accettare pagamenti.",
     "chargesEnabled": "Pagamenti attivi",
     "payoutsEnabled": "Pagamenti in uscita attivi",
-    "incompleteBody": "Il tuo account di pagamento necessita di altri dettagli prima di poter accettare pagamenti."
+    "incompleteBody": "Il tuo account di pagamento necessita di altri dettagli prima di poter accettare pagamenti.",
+    "setupNote": "Bastano pochi minuti. Ottieni il tuo account Stripe con accesso completo alla dashboard e Stripe si occupa della verifica. Usi già Stripe? Accedi durante la configurazione: i dati già verificati vengono riutilizzati.",
+    "disconnectNote": "Configurato con l'account Stripe sbagliato? Scollegalo qui e ricomincia con un altro account.",
+    "disconnectAction": "Scollega questo account Stripe",
+    "disconnectCancel": "Mantieni il collegamento",
+    "disconnectConfirmTitle": "Scollegare questo account Stripe?",
+    "disconnectConfirmDesc": "Il tuo account Stripe, il suo denaro e la sua cronologia non vengono toccati: Linyup smette solo di inviarvi pagamenti. Finché non colleghi un altro account non potrai incassare: lo shop e le prenotazioni a pagamento si chiudono. I pagamenti passati restano nei tuoi archivi.",
+    "benefitsTitle": "Cosa ottieni",
+    "benefitCheckout": "I membri pagano direttamente in Linyup prenotazioni, abbonamenti, corsi e acquisti nello shop.",
+    "benefitLinked": "Ogni pagamento è collegato al membro e a ciò che ha acquistato.",
+    "benefitRefunds": "Rimborsa i pagamenti direttamente in Linyup. La scheda del membro e la contabilità restano allineate.",
+    "benefitRenewals": "Gli abbonamenti si rinnovano, riprovano e si annullano automaticamente.",
+    "feeStripeNote": "Si applica la commissione di Stripe. Vedi <link>i prezzi di Stripe</link>.",
+    "feeRefundNote": "In caso di rimborso, la commissione Stripe è a tuo carico.",
+    "feesTitle": "Cosa paghi"
   },
   "PaymentsDashboard": {
     "title": "Pagamenti",
@@ -3914,7 +3945,51 @@
     "mayDuplicateHelp": "Questa riga è collegata alla fattura, non al pagamento. Se il tuo webhook Stripe invia anche eventi di pagamento, lo stesso importo può comparire due volte in questo elenco.",
     "markPaidClosesLink": "Il link di pagamento inviato a questo cliente verrà annullato, così non potrà essere pagato due volte.",
     "markPaidAlreadyOnline": "Questo cliente aveva già pagato online — qui non è stato registrato nulla.",
-    "markPaidLinkStillOpen": "Pagamento registrato, ma non è stato possibile annullare il link di pagamento — annullalo in Stripe. Se viene comunque pagato, l'addebito viene rimborsato automaticamente."
+    "markPaidLinkStillOpen": "Pagamento registrato, ma non è stato possibile annullare il link di pagamento — annullalo in Stripe. Se viene comunque pagato, l'addebito viene rimborsato automaticamente.",
+    "cancelBilling": "Interrompi la fatturazione",
+    "cancelBillingConfirmTitle": "Interrompere la fatturazione di questo abbonamento?",
+    "cancelBillingConfirmDesc": "L'abbonamento viene disdetto in Stripe e non verrà più addebitato. Il membro mantiene l'accesso fino alla fine del periodo già pagato. Non è possibile annullare questa azione qui: occorrerebbe vendere un nuovo abbonamento.",
+    "cancelBillingConfirmAction": "Interrompi la fatturazione",
+    "billingUnlinkedTitle": "La fatturazione continua senza un abbonamento corrispondente",
+    "billingUnlinkedBody": "Stripe continua ad addebitare questo membro, ma l'abbonamento qui sotto non è quello assegnato. Assegna l'abbonamento corrispondente oppure interrompi la fatturazione.",
+    "unknownMember": "Membro",
+    "subRenewsOn": "Si rinnova il {date}",
+    "titleWithSubscriptions": "Pagamenti e abbonamenti",
+    "subscriptionsEmpty": "Nessuno ha ancora un abbonamento.",
+    "subOffline": "Non fatturato qui",
+    "allPaymentsHeading": "Pagamenti",
+    "colPlan": "Piano",
+    "colRenewal": "Rinnovo",
+    "searchSubscriptions": "Cerca membri o piani…",
+    "searchPartnerVisits": "Cerca visite…",
+    "noPaymentsForMember": "Nessun pagamento registrato per questo membro.",
+    "window_1m": "Ultimo mese",
+    "window_3m": "Ultimi 3 mesi",
+    "window_12m": "Ultimi 12 mesi",
+    "window_all": "Sempre",
+    "searchAllTime": "Cerca invece su tutto il periodo",
+    "expandRow": "Mostra i pagamenti",
+    "collapseRow": "Nascondi i pagamenti",
+    "filterNeedsAttention": "Da gestire",
+    "noSubscriptionsNeedAttention": "Nulla da gestire. Nessun pagamento fallito, nessuna disdetta, nessuna fatturazione senza abbonamento.",
+    "journalCorrected": "Stornato in contabilità",
+    "category_drop_in": "Lezione singola",
+    "category_course": "Corso",
+    "category_product": "Prodotto",
+    "category_gift_card": "Gift card",
+    "category_other": "Altro",
+    "journalGross": "Addebitato",
+    "journalStripeFee": "Commissione Stripe",
+    "journalPlatformFee": "Commissione Linyup",
+    "journalNetLabel": "Ricevi",
+    "journalFeeEstimated": "La commissione di Stripe non è ancora confermata: questa è una stima.",
+    "category_membership": "Abbonamento",
+    "journalHeading": "Nella tua contabilità",
+    "journalRefunded": "Rimborsato",
+    "journalFeeReturned": "Commissione Linyup restituita",
+    "journalNetAfterRefund": "Ti resta",
+    "journalStripeFeeKept": "Stripe trattiene la sua commissione di elaborazione in caso di rimborso.",
+    "journalNetAfterRefundCost": "Ti è costato"
   },
   "PaymentErrors": {
     "setupIncomplete": "La configurazione del conto di pagamento non è ancora completata, quindi l'operazione non è riuscita. Completare la configurazione in Impostazioni → Pagamenti.",
@@ -4671,7 +4746,14 @@
     "contactFieldAddressRoute": "Via",
     "contactFieldAddressNumber": "N.",
     "contactFieldAddressPostalCode": "CAP",
-    "contactFieldAddressLocality": "Località"
+    "contactFieldAddressLocality": "Località",
+    "memberTitle": "Conferma la prenotazione",
+    "memberSubtitle": "Hai effettuato l'accesso come {name}: non c'è nulla da compilare.",
+    "memberCovered": "Incluso nel tuo abbonamento",
+    "memberPayable": "Questo corso non è incluso nel tuo abbonamento. Puoi prenotarlo per {price}.",
+    "memberContinueToPayment": "Prosegui al pagamento",
+    "memberSomeoneElseTitle": "Prenota per qualcun altro",
+    "memberSomeoneElseSubtitle": "Prenota questo corso per un'altra persona"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Prenota una lezione di prova",
@@ -5509,7 +5591,9 @@
       "session_ended": "Sessione terminata",
       "inbound_webhook": "Webhook in entrata",
       "manual": "Solo manuale",
-      "acquisition_stage_changed": "Fase di acquisizione avanzata"
+      "acquisition_stage_changed": "Fase di acquisizione avanzata",
+      "subscription_cancel_requested": "Abbonamento disdetto",
+      "subscription_payment_failed": "Pagamento dell'abbonamento fallito"
     },
     "conditions": {
       "addCondition": "Aggiungi condizione",
@@ -6277,11 +6361,6 @@
     },
     "utilitiesTitle": "Per continuare",
     "utilities": {
-      "tour": {
-        "title": "Rivedi il tour guidato",
-        "body": "Ripercorri le aree principali dell'app, passo dopo passo.",
-        "action": "Avvia il tour"
-      },
       "checklist": {
         "title": "Checklist di configurazione",
         "body": "L'avanzamento della configurazione del tuo studio, letto dai tuoi dati reali.",
@@ -6782,7 +6861,9 @@
     "demoAgeAdults": "Adulti (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extra",
-    "extraSubtitle": "Pannelli in sospeso, attivati in Impostazioni → Sperimentale."
+    "extraSubtitle": "Pannelli in sospeso, attivati in Impostazioni → Sperimentale.",
+    "reason_cancelling": "Abbonamento in scadenza",
+    "reason_billing_unlinked": "Addebitato per un abbonamento che non ha più"
   },
   "BookingContactFields": {
     "title": "Dati di contatto da raccogliere",
@@ -6893,14 +6974,29 @@
     "summaryCoursePriced": "Venduto singolarmente · {plans, plural, =0 {nessuna tariffa soci} one {# abbonamento con tariffa soci} other {# abbonamenti con tariffa soci}}",
     "summaryCourseOpen": "Gratuito o solo con accesso: nessun abbonamento cambia chi può aprirlo."
   },
-  "PagePurpose": {
-    "activities": "Cosa offri",
-    "schedule": "Quando lo offri",
-    "subscriptions": "Cosa vendi",
-    "pricing": "Quanto pagano davvero le persone",
-    "activitiesNote": "I corsi e gli appuntamenti che offri. Definiti una volta qui, poi programmati quante volte vuoi.",
-    "scheduleNote": "Tutte le sessioni sul calendario, singole o ricorrenti, con le relative prenotazioni.",
-    "subscriptionsNote": "Abbonamenti, pacchetti e tessere. Quanto costano, ogni quanto si rinnovano e cosa sbloccano.",
-    "pricingNote": "Quanto paga ogni tipo di contatto, ricalcolato con le stesse regole di una prenotazione reale."
+  "VerifyEmail": {
+    "title": "Conferma {email}",
+    "body": "Fino ad allora nessuna email raggiunge i tuoi membri: conferme, promemoria e ricevute restano in sospeso.",
+    "resend": "Invia di nuovo il link",
+    "sent": "Link inviato",
+    "recheck": "Ho confermato"
+  },
+  "DeleteAccount": {
+    "title": "Elimina questo studio",
+    "body": "Tutto ciò che contiene questo studio — contatti, prenotazioni, sessioni, documenti e file — viene cancellato definitivamente. Dopo non sarà più recuperabile: esporta prima ciò che vuoi conservare.",
+    "pointBilling": "Gli abbonamenti dei tuoi membri vengono disdetti subito e annullare l'eliminazione non li ripristina.",
+    "pointWindow": "I dati vengono cancellati fra 30 giorni. Fino ad allora nulla cambia e puoi ancora fermare tutto.",
+    "pointStripe": "Il tuo account Stripe, il suo saldo e la cronologia dei pagamenti non vengono eliminati: sono tuoi e rappresentano l'altra parte di transazioni reali.",
+    "startAction": "Elimina questo studio…",
+    "confirmLabel": "Digita {name} per confermare",
+    "confirmAction": "Interrompi la fatturazione e pianifica l'eliminazione",
+    "back": "Lascia stare",
+    "scheduledToast": "Fatturazione interrotta. Questo studio verrà cancellato il {date}.",
+    "cancelledToast": "Eliminazione annullata. I tuoi dati restano.",
+    "pendingTitle": "Questo studio è programmato per l'eliminazione",
+    "pendingBody": "Il {date} tutto verrà cancellato definitivamente. Fino ad allora lo studio funziona normalmente e puoi fermare tutto quando vuoi.",
+    "pendingBillingNote": "Gli abbonamenti dei tuoi membri sono già stati disdetti e non possono essere riattivati: dovrebbero acquistare di nuovo un abbonamento.",
+    "cancelAction": "Ferma l'eliminazione",
+    "errorGeneric": "Non ha funzionato. Non è stato eliminato nulla."
   }
 }

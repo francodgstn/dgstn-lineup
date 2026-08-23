@@ -16,7 +16,11 @@
 // 2. THE DEDUPE RULE. One occurrence == one `(seriesId, instanceDate)` pair.
 //    `materializeOccurrences` refuses to write a second session for a pair that
 //    already has one, which is what makes every caller — and a re-run of any of
-//    them — idempotent. There is no second dedupe rule anywhere.
+//    them — idempotent. There is no second dedupe rule anywhere. It is answered
+//    by ONE read of the series' existing `instanceDate`s; a failing read THROWS
+//    rather than falling through to a write, because an occurrence whose
+//    existence we could not establish is better left for the next run than
+//    duplicated in front of everyone holding a booking link.
 import { Timestamp, FieldValue, type Firestore, type DocumentData } from 'firebase-admin/firestore'
 import { SESSION_SERIES_COLLECTION, SESSIONS_COLLECTION } from '@linyup/shared'
 import { to } from '../utils/async'
@@ -99,13 +103,13 @@ export function buildSeriesSessionDoc(
  * Writes one session per occurrence that does not already have one, and returns
  * how many were created.
  *
- * IDEMPOTENCY. Each occurrence is looked up by its `(seriesId, instanceDate)`
- * pair before it is written; a hit is skipped. Two runs on the same day
- * therefore create the same set exactly once — the second finds every pair
- * taken. A FAILING dedupe query THROWS rather than falling through to a write:
- * an occurrence whose existence we could not establish is left for the next run,
- * because a duplicate class is visible to every member holding a booking link
- * while a one-day delay is visible to nobody.
+ * IDEMPOTENCY. Every `(seriesId, instanceDate)` pair the series already has is
+ * read once, up front, into a set; an occurrence whose pair is in it is skipped.
+ * Two runs on the same day therefore create the same set exactly once — the
+ * second finds every pair taken. A FAILING dedupe read THROWS rather than
+ * falling through to writes: occurrences whose existence we could not establish
+ * are left for the next run, because a duplicate class is visible to every
+ * member holding a booking link while a one-day delay is visible to nobody.
  */
 export async function materializeOccurrences(
   db: Firestore,
@@ -115,22 +119,39 @@ export async function materializeOccurrences(
 ): Promise<number> {
   let created = 0
 
+  // ONE read for the whole series, not one per occurrence. This used to run a
+  // `(seriesId, instanceDate)` query inside the occurrence loop — 26 sequential
+  // round-trips for a 6-month weekly class and ~180 for a daily one, which is
+  // the entire reason creating a series felt like it had hung. The rule it
+  // enforces is unchanged (one occurrence == one `(seriesId, instanceDate)`
+  // pair); only the number of queries that answer it is.
+  //
+  // Deliberately NOT bounded to the occurrence window: a range on
+  // `instanceDate` beside the `seriesId` equality is the one query shape that
+  // would need a composite index, and this projection is a handful of
+  // timestamps per series.
+  const [takenErr, takenSnap] = await to(
+    db.collection(SESSIONS_COLLECTION).where('seriesId', '==', seriesId).select('instanceDate').get()
+  )
+  if (takenErr) throw takenErr
+  const taken = new Set<number>()
+  for (const d of takenSnap?.docs ?? []) {
+    const at = d.get('instanceDate') as Timestamp | undefined
+    if (at) taken.add(at.toMillis())
+  }
+
   for (let i = 0; i < occurrences.length; i += BATCH_SIZE) {
     const slice = occurrences.slice(i, i + BATCH_SIZE)
     const batch = db.batch()
     let inBatch = 0
 
     for (const occurrence of slice) {
-      const [existErr, existSnap] = await to(
-        db
-          .collection(SESSIONS_COLLECTION)
-          .where('seriesId', '==', seriesId)
-          .where('instanceDate', '==', Timestamp.fromDate(occurrence.start))
-          .limit(1)
-          .get()
-      )
-      if (existErr) throw existErr
-      if (existSnap && !existSnap.empty) continue
+      // Guards against a duplicate WITHIN this run as well as against one
+      // already on the server — the recurrence calculator is not required to
+      // return a distinct set.
+      const key = occurrence.start.getTime()
+      if (taken.has(key)) continue
+      taken.add(key)
 
       batch.set(
         db.collection(SESSIONS_COLLECTION).doc(),

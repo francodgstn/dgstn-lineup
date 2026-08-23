@@ -3,6 +3,7 @@ import {
   signOut as firebaseSignOut,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
   signInWithPopup,
   GoogleAuthProvider,
   OAuthProvider,
@@ -19,7 +20,25 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signUp(email: string, password: string) {
-  return createUserWithEmailAndPassword(auth, email, password)
+  const cred = await createUserWithEmailAndPassword(auth, email, password)
+  // Best-effort, deliberately not awaited into the failure path: an account that
+  // exists but whose verification mail bounced off a rate limit must not look
+  // like a signup that failed. The banner in the app can resend, and the mail
+  // gate on the server is what actually enforces the verification.
+  await sendVerificationEmail(cred.user).catch(() => {})
+  return cred
+}
+
+/** Send (or resend) the verification link. Returns false if Firebase refused —
+ *  most often its own per-address rate limit, which is a "try again shortly",
+ *  not an error worth a stack trace. */
+export async function sendVerificationEmail(user: User): Promise<boolean> {
+  try {
+    await sendEmailVerification(user)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function signOut() {

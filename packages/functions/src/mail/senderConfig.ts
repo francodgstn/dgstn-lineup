@@ -86,6 +86,14 @@ export interface StudioContext {
   plan?: SaasPlan
   contactEmail?: string
   config: EmailSenderConfig | null
+  /**
+   * `teams/{id}.owner_email_verified` VERBATIM — including undefined, which is
+   * load-bearing. The field is written only for accounts created after the
+   * verification gate shipped (2026-08-23), so an absent value means "this team
+   * predates the question" and must NOT be read as "unverified". The gate in
+   * `sendEntityMail` therefore blocks on an explicit `false` and nothing else.
+   */
+  ownerEmailVerified?: boolean
 }
 
 export async function loadStudioContext(teamId: string): Promise<StudioContext> {
@@ -101,6 +109,7 @@ export async function loadStudioContext(teamId: string): Promise<StudioContext> 
     plan: team.plan as SaasPlan | undefined,
     contactEmail,
     config,
+    ownerEmailVerified: team.owner_email_verified as boolean | undefined,
   }
 }
 

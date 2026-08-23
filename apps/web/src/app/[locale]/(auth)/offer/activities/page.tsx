@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FormSection } from '@/components/ui/form-section'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -142,6 +143,23 @@ function toDurationFormValues(durations?: ActivityDuration[] | null): DurationFo
   })
 }
 
+/**
+ * A price typed by a human, as a number.
+ *
+ * `Number('10,00')` is NaN, and a comma is the decimal separator on a Swiss,
+ * German, French and Italian keyboard — which is every locale this product
+ * ships in. Typing the price the way the studio's own currency is written made
+ * the field fail validation with a message about a minimum, which is not what
+ * was wrong. Parse it the same way the refund dialog already does
+ * (`RefundPaymentDialog.minorFromMajorInput`).
+ *
+ * Used by BOTH the validation and the payload, deliberately: two parsers is how
+ * a form validates one number and stores a different one.
+ */
+function parsePriceInput(text: string): number {
+  return Number(String(text).trim().replace(',', '.'))
+}
+
 function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[] {
   return [...durations]
     .sort((a, b) => a.minutes - b.minutes)
@@ -150,7 +168,7 @@ function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[]
       // A price is written ONLY in 'priced' mode, so switching a length to
       // "only with a plan" (or back to free) cannot leave a sellable number
       // behind it.
-      priceAmount: d.mode === 'priced' && d.price.trim() !== '' ? Number(d.price) : null,
+      priceAmount: d.mode === 'priced' && d.price.trim() !== '' ? parsePriceInput(d.price) : null,
       ...(d.mode === 'benefit_only' ? { benefitOnly: true } : {}),
     }))
 }
@@ -236,23 +254,23 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
       })
     ),
   }).superRefine((d, ctx) => {
-    if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && Number(d.dropInPrice) >= 0.5)) {
-      ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: 'Enter a drop-in price of at least 0.50' })
+    if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && parsePriceInput(d.dropInPrice) >= 0.5)) {
+      ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: t('dropInPriceValidation') })
     }
-    if (d.trialPrice.trim() !== '' && !(Number(d.trialPrice) >= 0.5)) {
+    if (d.trialPrice.trim() !== '' && !(parsePriceInput(d.trialPrice) >= 0.5)) {
       ctx.addIssue({ code: 'custom', path: ['trialPrice'], message: t('trialPriceValidation') })
     }
     if (d.type === 'appointment' && d.durations.length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['durations'], message: 'Pick at least one session length' })
+      ctx.addIssue({ code: 'custom', path: ['durations'], message: t('durationsRequiredValidation') })
     }
     d.durations.forEach((dur, i) => {
       // 'priced' with nothing in the box is the one state the stored shape
       // cannot distinguish from free — so it is refused here rather than saved
       // as an accidentally-free one-to-one.
-      if (dur.mode === 'priced' && !(Number(dur.price) >= 0.5)) {
+      if (dur.mode === 'priced' && !(parsePriceInput(dur.price) >= 0.5)) {
         ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
       }
-      if (dur.mode !== 'priced' && dur.price.trim() !== '' && !(Number(dur.price) >= 0.5)) {
+      if (dur.mode !== 'priced' && dur.price.trim() !== '' && !(parsePriceInput(dur.price) >= 0.5)) {
         ctx.addIssue({ code: 'custom', path: ['durations', i, 'price'], message: t('durationPriceValidation') })
       }
     })
@@ -571,14 +589,14 @@ function ActivityDialog({
       },
       dropIn: {
         enabled: data.dropInEnabled,
-        ...(data.dropInPrice ? { priceAmount: Number(data.dropInPrice) } : {}),
+        ...(data.dropInPrice ? { priceAmount: parsePriceInput(data.dropInPrice) } : {}),
       },
       trialEnabled: data.trialEnabled,
       // Cleared on an open tier — the field is hidden there (the trial door
       // grants nothing extra on a free-to-book class), so a leftover price from
       // a previous tier must not survive as inert data the UI can't show.
       trialPriceAmount:
-        data.trialPrice && data.accessTier !== 'open' ? Number(data.trialPrice) : null,
+        data.trialPrice && data.accessTier !== 'open' ? parsePriceInput(data.trialPrice) : null,
       // Below the tier the stored value is carried through untouched rather than
       // read off a locked control: the gate stops a queue being OPENED, it does
       // not quietly strip one an activity already had (see WAITLIST_MIN_PLAN).
@@ -618,7 +636,12 @@ function ActivityDialog({
         await qc.invalidateQueries({ queryKey: ['activities'] })
         toast.success(t('savedToast'))
         onClose()
-      } catch {
+      } catch (err) {
+        // LOGGED, because the toast cannot be. A studio reporting "it wouldn't
+        // save" is reporting the only thing this surface tells them, and a bare
+        // `catch {}` threw away the one fact that would have identified the
+        // cause. The message stays generic; the console does not.
+        console.error('[activities] save failed:', err)
         toast.error(t('saveErrorToast'))
       }
       return
@@ -644,8 +667,9 @@ function ActivityDialog({
         order: nextOrder,
         created_at: serverTimestamp(),
       })
-    } catch {
+    } catch (err) {
       // Nothing exists yet — keep the dialog open with the data, retry is correct.
+      console.error('[activities] create failed:', err)
       toast.error(t('saveErrorToast'))
       return
     }
@@ -657,7 +681,8 @@ function ActivityDialog({
       try {
         const url = await uploadImage(newRef.id)
         if (url) await updateDoc(newRef, { image_url: url })
-      } catch {
+      } catch (err) {
+        console.error('[activities] cover upload failed:', err)
         await qc.invalidateQueries({ queryKey: ['activities'] })
         toast.error(t('createdImageErrorToast'))
         onClose()
@@ -784,11 +809,10 @@ function ActivityDialog({
               charged and who can get in. Grouped and ordered here, NEVER moved
               behind the disclosure below — see components/forms/MoreOptions.tsx
               for why, and UX-11 for the public half of the same rule. */}
-          <section className="space-y-2">
-            <div>
-              <p className="text-sm font-medium">{t('sectionBookingTitle')}</p>
-              <p className="text-xs text-muted-foreground">{t('sectionBookingSubtitle')}</p>
-            </div>
+          <FormSection
+            title={t('sectionBookingTitle')}
+            description={t('sectionBookingSubtitle')}
+          >
 
             {/* CLASS-ONLY: appointments dropped the access gate entirely — the
                 price is the only gate (see the member-benefit row below). */}
@@ -1115,7 +1139,7 @@ function ActivityDialog({
                 </div>
               )}
             </div>
-          </section>
+          </FormSection>
 
           {/* ── Everything with an honest default ─────────────────────────────
               Presentation and the public-page prose. Every field in here is
@@ -1632,7 +1656,6 @@ export default function ActivitiesPage() {
           a plan name.) */}
       <PageHeader
         title={t('title')}
-        purpose="activities"
         quickLinks={[{ href: '/schedule' as Route, label: tq('activitiesToSchedule') }]}
         action={
           <>

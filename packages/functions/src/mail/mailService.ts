@@ -261,6 +261,23 @@ export async function sendEntityMail(
   }
   const ctx =
     scope === 'team' ? await loadStudioContext(entityId) : await loadOrgContext(entityId, fallbackContactEmail)
+
+  // ── AN UNVERIFIED SIGNUP DOES NOT GET TO SEND MAIL AS A STUDIO ─────────────
+  // Anyone could sign up with an address they do not own and, within a minute,
+  // have this product mailing strangers under a studio name. Verification is
+  // what closes that, and the send is where it has to bite — a banner in the
+  // dashboard asks nicely, it does not stop anything.
+  //
+  // BLOCKS ON AN EXPLICIT `false`, never on absence. The flag is written by
+  // signup and by `confirmEmailVerified` from 2026-08-23 onward; every team that
+  // existed before has no value at all, and reading that as "unverified" would
+  // silence every studio on the platform. Failing open here is the correct
+  // direction: the population it cannot see is the one that was never at risk.
+  if (scope === 'team' && ctx.ownerEmailVerified === false) {
+    console.warn(`[mail] blocked: team ${entityId} has not verified its email address`)
+    return { skipped: true }
+  }
+
   const sender = resolveStudioSender({
     teamName: ctx.teamName,
     contactEmail: ctx.contactEmail,

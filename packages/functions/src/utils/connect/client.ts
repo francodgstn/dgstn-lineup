@@ -76,16 +76,35 @@ export async function getConnectStripe(): Promise<StripeInstance> {
   return new Stripe(key)
 }
 
-// Account configuration. Per §6, the studio is the fee payer (fees_collector
-// 'stripe' = Stripe collects its processing fees from the connected account) and
-// Linyup is never liable for losses (losses_collector 'stripe' = Stripe bears
-// negative balances). Test-mode finding (2026-06): Stripe only allows
-// "losses → Stripe" on the Standard profile, which requires the FULL dashboard —
-// an express/embedded dashboard forces the platform to take fees + losses. So
-// BOTH onboarding choices create the same Standard account (full dashboard); the
-// byo vs managed distinction is UI framing only (connect an existing account vs
-// create a new one — the hosted Account Link supports both). See
-// docs/payment-contact-studio.md.
+// Account configuration — the OWNER of what Connect onboarding actually produces.
+// Both members of ConnectOnboardingModel resolve here, and they resolve
+// identically; the shared type defers to this comment rather than restating it,
+// because the restatement is what drifted.
+//
+// Per §6, the studio is the fee payer (fees_collector 'stripe' = Stripe collects
+// its processing fees from the connected account) and Linyup is never liable for
+// losses (losses_collector 'stripe' = Stripe bears negative balances). Test-mode
+// finding (2026-06): Stripe only allows "losses → Stripe" on the Standard
+// profile, which requires the FULL dashboard — an express/embedded dashboard
+// forces the platform to take fees + losses. So BOTH onboarding choices create
+// the same Standard account, and the byo/managed distinction became nothing at
+// all rather than something smaller.
+//
+// ─── What this comment used to claim, and why it was wrong (2026-08-23) ────────
+// It read: "the byo vs managed distinction is UI framing only (connect an
+// existing account vs create a new one — the hosted Account Link supports both)".
+// The parenthetical is FALSE, and it was the load-bearing half: creating a NEW
+// account is the only thing this module does. Signing into Stripe from the hosted
+// Account Link prefills the new account with the studio's already-verified
+// details; it does NOT attach the account they already had. Confirmed against
+// production 2026-08-22, where a studio owner who chose "use your existing
+// account" was sent to hosted onboarding and got a second, empty business.
+//
+// Attaching a pre-existing account requires the Standard OAuth flow
+// (connect.stripe.com/oauth/authorize) — a genuinely separate provisioning rail,
+// not a flag on this one. It is not implemented. Until it is, no studio-facing
+// copy may offer it; the picker that did was removed rather than relabelled,
+// since both options produced this same account. See docs/payment-contact-studio.md.
 const MODEL_DASHBOARD: Record<ConnectOnboardingModel, 'full'> = {
   byo: 'full',
   managed: 'full',

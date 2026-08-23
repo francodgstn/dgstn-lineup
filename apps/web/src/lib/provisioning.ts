@@ -31,10 +31,26 @@ export async function userHasTeam(uid: string): Promise<boolean> {
  * user's `currentTeam` at it. Safe for users who authenticated via any method
  * (social sign-ins carry displayName/photoURL; email signups don't).
  */
+export interface TeamProvisioningOptions {
+  /** ISO 4217, uppercase. Every price the studio types is authored in it. */
+  defaultCurrency?: string
+  /**
+   * The language this studio writes to its MEMBERS in — every booking
+   * confirmation, reminder and waitlist offer (`Team.language`, read by ~15 call
+   * sites in the functions). Not the UI language, which follows the URL.
+   *
+   * Optional so the social-auth path and any other caller still compile, but a
+   * team created without one mails in English forever, which is why the signup
+   * wizard now asks.
+   */
+  language?: 'en' | 'de' | 'fr' | 'it'
+}
+
 export async function provisionTeam(
-  user: Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL'>,
+  user: Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL' | 'emailVerified'>,
   teamName: string,
-  sportType: string | undefined
+  sportType: string | undefined,
+  options: TeamProvisioningOptions = {}
 ): Promise<string> {
   const teamRef = doc(collection(db, 'teams'))
   const teamId = teamRef.id
@@ -70,10 +86,18 @@ export async function provisionTeam(
     slug,
     description: '',
     sport_type: sportType || '',
+    ...(options.defaultCurrency ? { default_currency: options.defaultCurrency } : {}),
+    ...(options.language ? { language: options.language } : {}),
     links: defaultLinks,
     settings: {},
     plan: 'studio',
     plan_status: 'trial',
+    // WRITTEN FOR EVERY NEW TEAM, true or false, and read by the mail gate
+    // (`mailService.sendEntityMail`). A social sign-in arrives already verified;
+    // an email/password signup does not, and cannot send mail as this studio
+    // until it does. Teams created before 2026-08-23 carry no value at all and
+    // the gate treats that as "not asked" rather than "not verified".
+    owner_email_verified: user.emailVerified === true,
     trial_ends_at: trialEndsAt,
     created: now,
     createdBy: uid,
@@ -99,6 +123,11 @@ export async function provisionTeam(
       ...(user.displayName ? { displayName: user.displayName } : {}),
       ...(user.photoURL ? { photoURL: user.photoURL } : {}),
       currentTeam: teamId,
+      // The sweep's candidate query filters on this, so it has to EXIST — an
+      // absent field is not matched by `where('email_verified', '==', false)`,
+      // and an unverified signup that was never written here would simply never
+      // be looked at.
+      email_verified: user.emailVerified === true,
       ...(existing.exists() ? {} : { created_at: now }),
     },
     { merge: true }

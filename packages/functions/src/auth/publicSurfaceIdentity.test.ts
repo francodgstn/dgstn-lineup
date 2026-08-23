@@ -265,4 +265,36 @@ describe('THE PUBLIC-SURFACE IDENTITY CENSUS', () => {
         'ref-driven sticky bar is long enough to submit.'
     )
   })
+
+  // THE CLASS RAIL HAD THE SAME DEFECT, one surface over, and it was found the
+  // same way — by a studio hitting it in production (2026-08-23). BookingForm
+  // consumed the session for PRICING and for the summary card, so it passed the
+  // census's own test above while still sending a signed-in member with a valid
+  // subscription to fetch an emailed code.
+  it('the CLASS rail routes a signed-in contact past both identity doors', () => {
+    const src = stripComments(readFileSync(join(SLUG_ROOT, 'booking', 'BookingForm.tsx'), 'utf8'))
+
+    assert.match(
+      src,
+      /if \(signedIn\) return 'member'/,
+      "nextStepAfterSession must return 'member' for a signed-in contact BEFORE it " +
+        "considers the gate: 'who' offers to treat a member as a newcomer and 'returning' " +
+        'asks them to prove they are themselves, and neither is a question the server needs ' +
+        'answered (bookSession reads the caller off the contact-session token).'
+    )
+
+    // The rule lives in ONE function; the value it needs must reach every call
+    // of it, or the click path and the deep-link path diverge — which is the
+    // exact failure the function's own header was written to prevent.
+    const calls = [...code(src).matchAll(/nextStepAfterSession\(/g)].length
+    const callsWithSession = [
+      ...code(src).matchAll(/nextStepAfterSession\([^)]*isAuthenticated[^)]*\)/g),
+    ].length
+    assert.ok(calls > 1, 'expected several call sites to guard')
+    assert.equal(
+      callsWithSession,
+      calls - 1, // the definition itself matches the needle too
+      'every nextStepAfterSession call must pass the signed-in flag'
+    )
+  })
 })

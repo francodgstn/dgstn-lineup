@@ -237,6 +237,22 @@ const TRIGGER_OPTIONS = [
   { value: 'subscription_added', icon: CreditCard, supportsDelay: true, group: 'subscription' },
   { value: 'subscription_removed', icon: CreditCard, supportsDelay: true, group: 'subscription' },
   { value: 'subscription_changed', icon: CreditCard, supportsDelay: true, group: 'subscription' },
+  // The two BILLING events (2026-08-23). Both carry a delay because the useful
+  // rules are delayed ones: a win-back a few days after somebody cancels beats
+  // one that arrives while they are still in the billing portal, and a card
+  // reminder is kinder a day after the failure than a minute after it.
+  {
+    value: 'subscription_cancel_requested',
+    icon: CreditCard,
+    supportsDelay: true,
+    group: 'subscription',
+  },
+  {
+    value: 'subscription_payment_failed',
+    icon: CreditCard,
+    supportsDelay: true,
+    group: 'subscription',
+  },
   { value: 'affiliation_added', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
   { value: 'affiliation_removed', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
   { value: 'affiliation_changed', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
@@ -785,12 +801,17 @@ function ConditionEditor({
   }
 
   return (
-    <div className="space-y-2">
+    // A HAIRLINE BETWEEN CONDITIONS. They stack as two-row blocks of selects and
+    // inputs, and with nothing but 8px of air between them a reader could not
+    // tell where one condition ended and the next began — the rows INSIDE a
+    // condition looked exactly like the gap BETWEEN two. `divide-y` plus a
+    // little padding draws the boundary the eye is already hunting for.
+    <div className="divide-y">
       {conditions.map((cond, i) => {
         const opt = CONDITION_TYPE_OPTIONS.find((o) => o.value === cond.type)
         const isFieldEquals = cond.type === 'field_equals'
         return (
-          <div key={i} className="flex gap-2 items-start">
+          <div key={i} className="flex gap-2 items-start py-2 first:pt-0 last:pb-0">
             <div className="flex-1 space-y-1">
               {/* Row 1: type selector + inline value (all types except field_equals) */}
               {/* lg:grid-cols-1 — at lg this row sits inside a one-third-width
@@ -994,7 +1015,13 @@ function ConditionEditor({
           </div>
         )
       })}
-      <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={add}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2 h-7 text-xs"
+        onClick={add}
+      >
         <Plus className="h-3 w-3 mr-1" />
         {t('conditions.addCondition')}
       </Button>

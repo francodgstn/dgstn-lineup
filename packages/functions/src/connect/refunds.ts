@@ -47,7 +47,7 @@ import {
   type SubscriptionType,
 } from '@linyup/shared'
 import * as admin from 'firebase-admin'
-import { Timestamp } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { refundDirectCharge } from '../utils/connect/client'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import { reverseGiftCardDrawdown, unvoidGiftCard, voidUntouchedGiftCard } from './giftCards'
@@ -335,7 +335,37 @@ export const refundMemberPayment = onCall(async (request) => {
       )
     }
 
-    // The charge.refunded webhook reconciles amount_refunded / status / refunds[].
+    // ── Say what just happened, without waiting for Stripe to tell us ────────
+    // The `charge.refunded` webhook is still the RECONCILER — it writes the
+    // authoritative amount_refunded / status / refunds[] — but it lands on its
+    // own schedule, and until it did, this row read exactly as it had a second
+    // earlier. The manager refunded, the table did not move, and the only way
+    // to see the refund was to reload the page a few seconds later.
+    //
+    // So the outcome this call KNOWS is written here. Both fields are ABSOLUTE
+    // values computed from the amounts already read above, never increments, so
+    // the webhook's own absolute write reconciles rather than double-counts —
+    // whichever of the two lands second is correct.
+    //
+    // Best-effort: the money has moved, and failing the call over a display
+    // write would invite a second refund. The webhook heals a miss.
+    const refundedNow = data.amount ?? (payment.amount as number) ?? 0
+    const alreadyRefunded = (payment.amount_refunded as number) ?? 0
+    const totalRefunded = alreadyRefunded + refundedNow
+    const total = (payment.amount as number) ?? 0
+    await paymentSnap.ref
+      .set(
+        {
+          amount_refunded: totalRefunded,
+          status: totalRefunded >= total ? 'refunded' : 'partially_refunded',
+          updated_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .catch((e) =>
+        console.error(`[connect] optimistic refund stamp failed (pi=${paymentIntentId}):`, e)
+      )
+
     return { refundId: refund.id, status: refund.status, reversal }
   } catch (err) {
     // The card was voided in anticipation of a refund that never happened —

@@ -11,6 +11,7 @@ import { collection, doc, getDocs, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION, SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -79,7 +80,11 @@ export function BillingCurrencyCard({
   }
 
   return (
-    <div className="h-full rounded-lg border p-4 space-y-3">
+    // A CARD, like every other block on this tab. It was a bare bordered box
+    // beside two real cards, which read as a different KIND of thing — a note
+    // about the cards rather than a setting of its own.
+    <Card>
+      <CardContent className="pt-6 space-y-3">
       <div>
         <Label>{t('billingCurrency')}</Label>
         <p className="text-xs text-muted-foreground mt-0.5">{t('billingCurrencyDesc')}</p>
@@ -103,6 +108,7 @@ export function BillingCurrencyCard({
           </Button>
         )}
       </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

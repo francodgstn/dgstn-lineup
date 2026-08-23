@@ -1,14 +1,12 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import type { Route } from 'next'
-import { Link } from '@/i18n/navigation'
 import {
   collection,
   doc,
@@ -21,9 +19,12 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import {
+  ACTIVITIES_COLLECTION,
+  COURSES_COLLECTION,
   TEAMS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   INTRO_OFFER_MAX_PERIODS,
+  isAppointmentActivity,
   introOfferProblem,
   introOfferSupport,
   isRecurringRecurrence,
@@ -53,13 +54,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
+import { FormSection } from '@/components/ui/form-section'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Pencil, Copy, Trash2, ChevronUp, ChevronDown, Globe, GripVertical } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
+import { ActivityPlanLinks, type Offering } from '@/components/offer/ActivityPlanLinks'
+import { useActivities } from '@/hooks/useActivities'
+import { useCourses } from '@/plugins/online-courses/hooks'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
 
@@ -218,7 +223,35 @@ function SubTypeDialog({
 }) {
   const t = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
+  const tCat = useTranslations('OfferCatalogue')
   const tCommon = useTranslations('Common')
+
+  // The rows the edge editor offers. Built exactly as the catalogue builds them
+  // — same shape, same collections — because it IS the same component reading
+  // them. Courses are in for the same reason they are in the catalogue: a plan
+  // can open one.
+  const { data: activities = [] } = useActivities(teamId)
+  const { data: courses = [] } = useCourses(teamId)
+  const offerings: Offering[] = useMemo(
+    () => [
+      ...activities.map((a) => ({
+        id: a.id,
+        name: a.name,
+        collection: ACTIVITIES_COLLECTION,
+        color: a.color ?? '',
+        badge: isAppointmentActivity(a) ? tCat('appointmentBadge') : undefined,
+        target: { kind: 'activity' as const, doc: a },
+      })),
+      ...courses.map((c) => ({
+        id: c.id,
+        name: c.title,
+        collection: COURSES_COLLECTION,
+        badge: tCat('courseBadge'),
+        target: { kind: 'course' as const, doc: c },
+      })),
+    ],
+    [activities, courses, tCat]
+  )
 
   const initialValues = () =>
     duplicating
@@ -386,9 +419,10 @@ function SubTypeDialog({
           created_at: serverTimestamp(),
         }
       )
-      // Link the selected activities to the freshly-created type. If this write
-      // fails the type still exists (just unlinked) — the links can be added by
-      // reopening it, so we don't roll the creation back.
+      // NOTHING is linked here. What a plan opens is the edge editor's, and it
+      // needs an id to write against — which is why the dialog shows "save
+      // first" until this create has run. Reopening the plan is the next step,
+      // not a fallback.
     }
     onSaved()
     onOpenChange(false)
@@ -511,12 +545,10 @@ function SubTypeDialog({
           )}
 
           {/* Pricing (optional) — kept secondary so the simple flow stays one-field */}
-          <div className="space-y-2 rounded-lg border border-dashed p-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t('subTypePricing')}</Label>
-                <p className="text-xs text-muted-foreground">{t('subTypePricingDesc')}</p>
-              </div>
+          <FormSection
+            title={t('subTypePricing')}
+            description={t('subTypePricingDesc')}
+            action={
               <Button
                 type="button"
                 variant="outline"
@@ -534,14 +566,23 @@ function SubTypeDialog({
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 {t('subTypeAddPrice')}
               </Button>
-            </div>
-
+            }
+          >
             {fields.length > 0 && (
               <div className="space-y-2 pt-1">
                 {fields.map((field, i) => (
                   <div key={field.id} className="rounded-md border bg-card p-2.5 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
+                    {/* WRAPS, and the amount field may SHRINK. This row is an
+                        amount, a recurrence select (130px) and sometimes a
+                        second 130px input — a min-content width the dialog
+                        cannot always give it. `DialogBody` is `overflow-y-auto`,
+                        and CSS promotes overflow-x to `auto` alongside it, so a
+                        child one pixel too wide put a horizontal scrollbar under
+                        the whole form. Fixed by letting the row wrap and the
+                        flexible child shrink — never by clipping the body,
+                        which would hide a control instead of moving it. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative min-w-[8rem] flex-1">
                         <Input
                           type="number"
                           step="0.01"
@@ -639,18 +680,16 @@ function SubTypeDialog({
                 ))}
               </div>
             )}
-          </div>
+          </FormSection>
 
           {/* Intro offer — the first N periods of ONE recurring price at a
               reduced or zero amount, then the full price automatically. It is a
               Stripe COUPON on the checkout, never a lower recurring price, and
               the controls below offer only what Stripe can express. */}
-          <div className="space-y-2 rounded-lg border border-dashed p-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t('subTypeIntro')}</Label>
-                <p className="text-xs text-muted-foreground">{t('subTypeIntroDesc')}</p>
-              </div>
+          <FormSection
+            title={t('subTypeIntro')}
+            description={t('subTypeIntroDesc')}
+            action={
               <Switch
                 checked={introEnabled}
                 disabled={introEligiblePrices.length === 0}
@@ -659,7 +698,8 @@ function SubTypeDialog({
                   if (!v) setShowIntroError(false)
                 }}
               />
-            </div>
+            }
+          >
             {introEligiblePrices.length === 0 ? (
               <p className="text-xs text-muted-foreground">{t('subTypeIntroNoRecurring')}</p>
             ) : (
@@ -743,24 +783,23 @@ function SubTypeDialog({
                 </div>
               )
             )}
-          </div>
+          </FormSection>
 
           {/* Usage limit — caps CLASS bookings covered by this subscription
               per calendar day/week/month. Once spent, the drop-in price still
               applies (member rate); credits and appointments are unaffected. */}
-          <div className="space-y-2 rounded-lg border border-dashed p-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t('subTypeUsageLimit')}</Label>
-                <p className="text-xs text-muted-foreground">{t('subTypeUsageLimitDesc')}</p>
-              </div>
+          <FormSection
+            title={t('subTypeUsageLimit')}
+            description={t('subTypeUsageLimitDesc')}
+            action={
               <Switch
                 checked={limitEnabled}
                 onCheckedChange={(v) => setValue('limitEnabled', v)}
               />
-            </div>
+            }
+          >
             {limitEnabled && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Input
                   type="number"
                   step="1"
@@ -784,32 +823,53 @@ function SubTypeDialog({
                 </Select>
               </div>
             )}
-          </div>
+          </FormSection>
 
-          {/* WHAT THIS PLAN OPENS IS EDITED IN THE CATALOGUE, not here. This
-              block was the second author of one relationship — and the two
-              disagreed, because it read only `accessRule` and so showed every
-              appointment benefit as unlinked. It is one link now, from a screen
-              that can also show the other side. */}
-          <div className="space-y-2 rounded-lg border border-dashed p-3">
-            <div className="space-y-0.5">
-              <Label>{t('subTypeActivitiesLabel')}</Label>
-              <p className="text-xs text-muted-foreground">{t('subTypeActivitiesInCatalogue')}</p>
-            </div>
-            <Link
-              href={
-                (editing
-                  ? `/offer/catalogue?sel=plan:${editing.id}`
-                  : '/offer/catalogue') as Route
-              }
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              {t('subTypeActivitiesOpenCatalogue')}
-            </Link>
-          </div>
+          {/* ── WHAT THIS PLAN OPENS, EDITED HERE ─────────────────────────
+              For one release this was a LINK to the catalogue, and the link was
+              the wrong lesson drawn from a real bug. The bug (UX-69) was TWO
+              WRITERS: this dialog had its own copy of where the activity↔plan
+              edge is stored, it read only `accessRule`, so every appointment
+              benefit looked unlinked and an unlinked-looking tick was wiped on
+              the next save. Removing the second writer was right. Removing the
+              CONTROL was not — it sent a studio away from a half-filled form to
+              another page to answer the most obvious question a plan raises.
+
+              So the control is back and there is still exactly one writer: this
+              mounts `ActivityPlanLinks`, the same component the catalogue
+              mounts, in its `from-plan` direction. Same rows, same validation,
+              same `offeringPlanEdgeUpdate` transaction, same shared-rate
+              warning. There is nothing here for the two to disagree about
+              because there is no second implementation to disagree with. */}
+          {editing ? (
+            <FormSection>
+              <ActivityPlanLinks
+                direction="from-plan"
+                plan={editing}
+                offerings={offerings}
+                plans={[editing]}
+                currency={currency}
+                canEdit
+              />
+            </FormSection>
+          ) : (
+            /* A plan that does not exist yet has no id to hang an edge on. Say
+               that, rather than rendering an inert list of activities whose
+               ticks would be discarded on save. An EMPTY STATE keeps its box —
+               it is an aside, not the next setting. */
+            <FormSection title={t('subTypeActivitiesLabel')}>
+              <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                {t('subTypeActivitiesAfterSave')}
+              </p>
+            </FormSection>
+          )}
 
           {/* Automations referencing this subscription + a quick create shortcut */}
-          {editing && <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />}
+          {editing && (
+            <FormSection>
+              <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />
+            </FormSection>
+          )}
           </DialogBody>
 
           <DialogFooter>

@@ -21,14 +21,18 @@ import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
 import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { PastItemNotice } from '@/components/sessions/PastItemNotice'
-import { SESSIONS_COLLECTION, resolveAutoConfirm, isPastSession } from '@linyup/shared'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  SESSIONS_COLLECTION,
+  ACTIVITIES_COLLECTION,
+  resolveAutoConfirm,
+  isPastSession,
+} from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
-import { Loader2, Repeat2, Plus, AlertTriangle } from 'lucide-react'
+import { Loader2, Repeat2, Plus, AlertTriangle, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Route } from 'next'
-import { Link } from '@/i18n/navigation'
-import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { PlacesSheet } from '@/components/schedule/PlacesSheet'
 
 // ─── shared helpers (single source of truth for session forms) ─────────────────
 
@@ -45,6 +49,19 @@ export function deriveDefaultDuration(s: Session | null): number {
   if (s.duration_minutes) return s.duration_minutes
   if (s.start && s.end) return Math.max(15, Math.round((s.end.toDate().getTime() - s.start.toDate().getTime()) / 60000))
   return 60
+}
+
+/** Same shape as the activities page's own slugify — an activity created from
+ *  here must be indistinguishable from one created there. */
+function slugifyActivityName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50)
 }
 
 function defaultStart(): Date {
@@ -126,6 +143,12 @@ function DurationPicker({ value, onChange, minutesLabel }: {
   )
 }
 
+// `SectionLabel` was this file's own copy of the group heading. It IS the shape
+// that won the 2026-08-23 form sweep — small, uppercase, muted — so it moved to
+// `components/ui/form-section.tsx` and everything else adopted it. Kept here as
+// a one-line alias rather than rewritten at three call sites: the sections in
+// this dialog carry no rules between them (they sit inside their own bordered
+// blocks) and converting them would change this form's look for no reason.
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -468,8 +491,60 @@ export function SessionFormDialog({
   const watchedAllowBooking = watch('allowBooking')
 
   const { team } = useAuth()
+  const qc = useQueryClient()
   const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
   const placeRooms = places.find((p) => p.id === watchedPlaceId)?.rooms ?? []
+
+  // ── The two empty states this form has to answer for itself ────────────────
+  // A session is scheduled FROM an activity INTO a place, and both of those are
+  // created on other screens. Sending someone there mid-form loses everything
+  // they have typed, so both are handled here: the activity is created inline
+  // (a class needs only a name to exist; everything else has a sane default and
+  // is edited later on /offer/activities), and the place opens its own sheet
+  // OVER this dialog. The sheet is free — it already shares the
+  // ['places', teamId, orgId] query key with the picker below, so a place
+  // created in it appears here with no wiring, no event and no reload.
+  const [newActivityName, setNewActivityName] = useState('')
+  const [creatingActivity, setCreatingActivity] = useState(false)
+  const [placesOpen, setPlacesOpen] = useState(false)
+
+  async function createClassActivity() {
+    const name = newActivityName.trim()
+    if (!name || creatingActivity) return
+    setCreatingActivity(true)
+    try {
+      const ref = await addDoc(collection(db, ACTIVITIES_COLLECTION), {
+        name,
+        description: '',
+        prerequisites: '',
+        confirmationInstructions: '',
+        type: 'class' as const,
+        level: null,
+        color: '',
+        // Open and free to book, which is the least surprising default: a gate
+        // nobody asked for is invisible until a member is refused at the door.
+        isFreeTrial: true,
+        accessRule: { type: 'open' as const },
+        dropIn: { enabled: false },
+        trialEnabled: false,
+        waitlistEnabled: false,
+        autoConfirm: true,
+        slug: slugifyActivityName(name),
+        teamId,
+        createdBy: userId,
+        isActive: true,
+        order: activities.length,
+        created_at: serverTimestamp(),
+      })
+      await qc.invalidateQueries({ queryKey: ['activities'] })
+      setValue('activityId', ref.id)
+      setNewActivityName('')
+    } catch (err) {
+      toast.error(t('saveError', { message: errorMessage(err) }))
+    } finally {
+      setCreatingActivity(false)
+    }
+  }
   const { pickable: coaches } = useCoaches(teamId)
   const watchedDuration   = watch('duration')
 
@@ -538,7 +613,21 @@ export function SessionFormDialog({
     const activityEntry = activities.find(a => a.id === values.activityId)
 
     if (isRecurring) {
-      setBusyMsg(t('generatingSeries'))
+      // ── THE SERIES DOC IS THE COMMIT; GENERATION IS NOT ───────────────────
+      // Materialising a series is one dedupe query and one write per
+      // occurrence: a 6-month weekly class is ~26 server round-trips, a daily
+      // one ~180. Waiting for that behind a spinner is what the 30-second
+      // timeout below existed to survive.
+      //
+      // So the dialog commits on the SERIES doc — the thing that actually
+      // records the studio's intent — and generation runs behind it. Nothing is
+      // lost if it dies mid-way: `materializeOccurrences` is idempotent
+      // (dedupe by seriesId + instanceDate) and the daily `rollSessionSeries`
+      // task tops every ACTIVE series back up to the horizon, so the worst case
+      // is a series that finishes filling in later rather than one that is
+      // wrong. Until it does, the schedule says so — see `useGeneratingSeries`,
+      // which reads the `lastGeneratedUntil: null` this write leaves behind.
+      setBusyMsg(t('creatingSeries'))
       try {
         const seriesRef = await addDoc(collection(db, 'session_series'), {
           teamId, teacher: userId, createdBy: userId,
@@ -574,15 +663,24 @@ export function SessionFormDialog({
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           totalOccurrences: 0, lastGeneratedUntil: null,
         })
+        // Deliberately NOT awaited. A callable keeps running server-side after
+        // the client stops listening, so this is a fire-and-forget with a
+        // reported failure rather than a request nobody watches: the catch
+        // still runs if the promise rejects, and the toast is the only place
+        // that failure could surface once the dialog is gone.
         const generate = httpsCallable<{ seriesId: string }, { generatedCount: number }>(functions, 'generateRecurringSessions')
-        const result = await withTimeout(generate({ seriesId: seriesRef.id }))
-        setBusyMsg(t('seriesCreated', { count: result.data.generatedCount }))
-        onSaved()
-        setTimeout(close, 1200)
-      } catch (err) {
+        void generate({ seriesId: seriesRef.id }).catch((err) => {
+          toast.error(t('seriesGenerateFailed', { message: errorMessage(err) }))
+        })
         setBusyMsg(null)
-        if (err instanceof CallableTimeoutError) toast.error(t('saveTimeoutError'))
-        else toast.error(t('saveError', { message: errorMessage(err) }))
+        toast.success(t('seriesCreatingToast'))
+        onSaved()
+        close()
+      } catch (err) {
+        // Only the SERIES write can reach here now, and a failed one means
+        // nothing exists — keep the dialog open so the retry is the same save.
+        setBusyMsg(null)
+        toast.error(t('saveError', { message: errorMessage(err) }))
       }
       return
     }
@@ -693,6 +791,17 @@ export function SessionFormDialog({
   const title = editing ? t('editSession') : duplicating ? tCommon('duplicate') : t('newSession')
 
   return (
+    <>
+    {/* Mounted beside the modal rather than inside it: the sheet portals to the
+        body either way, and keeping it out of the form means opening it can
+        never unmount the fields it was opened to fill in. */}
+    <PlacesSheet
+      open={placesOpen}
+      onOpenChange={setPlacesOpen}
+      teamId={teamId}
+      userId={userId}
+      orgId={team?.org_id ?? null}
+    />
     <ResponsiveModal open={open} onOpenChange={(v) => { if (!v) close() }} title={title}>
       {busyMsg ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -805,24 +914,51 @@ export function SessionFormDialog({
                     </SelectContent>
                   </Select>
                 )} />
-                {/* A team with no class activity finds an empty picker and no
-                    way out of it: the thing a session is scheduled FROM is
-                    created on another page, and this dialog never said where.
-                    So say it, and link there. (Sibling of the availability
-                    dialog's empty state, which creates one inline — a class
-                    activity carries a name, a level and an access rule that
-                    nobody can invent on the studio's behalf, so this one
-                    navigates instead.) */}
+                {/* A team with no class activity used to find an empty picker
+                    and a LINK to the page that fills it — which navigates away
+                    and takes every field typed here with it. It creates one
+                    inline instead, like the availability dialog next door. The
+                    old note said a class "carries a name, a level and an access
+                    rule nobody can invent on the studio's behalf": only the name
+                    is true. A level is optional by design, and the access rule
+                    has a correct default (open), so the one thing that cannot be
+                    guessed is the one thing this asks for. Everything else is
+                    edited later on /offer/activities. */}
                 {classActivities.length === 0 && (
                   <div className="rounded-md border border-dashed p-3 space-y-2">
                     <p className="text-xs text-muted-foreground">{t('noClassActivitiesHint')}</p>
-                    <Link
-                      href={'/offer/activities' as Route}
-                      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      {t('createActivityAction')}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newActivityName}
+                        onChange={(e) => setNewActivityName(e.target.value)}
+                        onKeyDown={(e) => {
+                          // Enter must not submit the SESSION form from inside
+                          // a nested create.
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void createClassActivity()
+                          }
+                        }}
+                        placeholder={t('newActivityNamePlaceholder')}
+                        className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        disabled={!newActivityName.trim() || creatingActivity}
+                        onClick={() => void createClassActivity()}
+                      >
+                        {creatingActivity ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5" />
+                        )}
+                        {t('createActivityAction')}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -917,8 +1053,21 @@ export function SessionFormDialog({
                   )} />
                 </div>
 
-                {/* Place + room share a row — both are selects from the team's venues. */}
-                {places.length > 0 && (
+                {/* ── WHERE: PLACE FIRST, LOCATION UNDER IT ────────────────
+                    Place is the field that gets TRACKED — a venue the studio
+                    keeps, with rooms, that everything downstream can group by.
+                    Location is free text: a quick alternative before any place
+                    exists, or a detail added on top of one.
+
+                    The layout used to state the opposite. Place was hidden
+                    entirely when the team had none (`places.length > 0 &&`), so
+                    the tracked field was the one that disappeared — while a
+                    free-text box placeheld "Gym, dojo…", which is a description
+                    of a Place. A new studio typed "Gym" into free text forever
+                    and never discovered Places existed. So Place is ALWAYS
+                    rendered, and when there is nothing to pick it says what a
+                    place is and opens the sheet that creates one. */}
+                {places.length > 0 ? (
                   <div className="flex items-center justify-between gap-4 p-3">
                     <label className="text-sm font-medium">{t('fieldPlace')}</label>
                     <div className="flex shrink-0 items-center gap-2">
@@ -969,14 +1118,42 @@ export function SessionFormDialog({
                       )}
                     </div>
                   </div>
+                ) : (
+                  <div className="p-3">
+                    <div className="rounded-md border border-dashed p-3 space-y-2">
+                      <p className="text-sm font-medium">{t('fieldPlace')}</p>
+                      <p className="text-xs text-muted-foreground">{t('noPlacesHint')}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPlacesOpen(true)}
+                      >
+                        <MapPin className="h-3.5 w-3.5" />
+                        {t('createPlaceAction')}
+                      </Button>
+                    </div>
+                  </div>
                 )}
 
-                <div className="flex items-center justify-between gap-4 p-3">
-                  <label className="text-sm font-medium">
-                    {t('fieldLocation')}
+                {/* SUBORDINATE to the block above, and its copy says which of
+                    the two it is: an addition once a place is picked, the quick
+                    alternative while none is. */}
+                <div className="flex items-center justify-between gap-4 py-3 pl-6 pr-3">
+                  <label className="min-w-0 text-sm font-medium">
+                    {/* NOT `fieldLocation`. In German and French that key is the
+                        SAME WORD as `fieldPlace` ("Ort"/"Ort", "Lieu"/"Lieu"),
+                        so the two fields were labelled identically and the hint
+                        below was the only thing telling them apart. This key
+                        names the free-text one for what it is; `fieldLocation`
+                        is left alone for the other surfaces that read it. */}
+                    {t('fieldLocationNote')}
                     <span className="ml-2 font-normal text-muted-foreground">{t('optional')}</span>
+                    <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                      {watchedPlaceId ? t('locationHintWithPlace') : t('locationHintNoPlace')}
+                    </span>
                   </label>
-                  <input type="text" {...register('location')} placeholder={t('locationPlaceholder')}
+                  <input type="text" {...register('location')} placeholder={t('locationNotePlaceholder')}
                     className="h-9 w-48 shrink-0 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
 
@@ -1051,5 +1228,6 @@ export function SessionFormDialog({
         </form>
       )}
     </ResponsiveModal>
+    </>
   )
 }

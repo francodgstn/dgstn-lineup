@@ -9,6 +9,8 @@ import { expirePendingBookings } from './expirePendingBookings'
 import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { purgeVerificationCodes } from './purgeVerificationCodes'
+import { purgeUnverifiedSignups } from './purgeUnverifiedSignups'
+import { purgeScheduledTeams } from './purgeScheduledTeams'
 import { anonymizeScheduledContacts } from './anonymizeScheduledContacts'
 import { materializeRecurringEntries } from './materializeRecurringEntries'
 import { refreshCustomDomains } from './refreshCustomDomains'
@@ -74,6 +76,13 @@ export const dailyTasks = onSchedule(
       // and (on the contact rail) a plaintext code, and nothing ever deleted
       // them — see the module header for why this is not just tidiness.
       { name: 'purgeVerificationCodes', handler: purgeVerificationCodes },
+      // Signups that never proved their address AND never did anything. Both
+      // halves are required — see the module header for why deleting on the
+      // first half alone would be the worst thing this file could do.
+      { name: 'purgeUnverifiedSignups', handler: purgeUnverifiedSignups },
+      // Studios that asked to be deleted and whose 30-day window has passed.
+      // Decides nothing — see teams/deleteAccount.ts for the shape.
+      { name: 'purgeScheduledTeams', handler: purgeScheduledTeams },
       // Self-service account deletions whose 30-day window has passed. Runs
       // AFTER purgeProvisionalContacts on purpose: a provisional contact that
       // asked to be deleted is better hard-deleted by that one than anonymised
