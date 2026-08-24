@@ -53,6 +53,23 @@ export async function getSecret(secretName: string, version = 'latest'): Promise
     return secretValue
   } catch (error) {
     console.error(`Error accessing secret ${secretName}:`, error) // eslint-disable-line no-console
-    throw new Error(`Failed to access secret: ${secretName}`)
+    // CARRY THE CAUSE. This used to rethrow the name alone, which made
+    // PERMISSION_DENIED (the runtime SA lacks secretmanager.versions.access),
+    // NOT_FOUND (no such secret in this project) and FAILED_PRECONDITION (the
+    // container exists but has no enabled version) read identically — three
+    // different fixes behind one sentence. A gen1 leftover running as the App
+    // Engine SA hit exactly this and looked like an unset secret for days.
+    //
+    // The gRPC code and message are metadata about the FAILURE, never the
+    // payload, so this leaks nothing: the value is only ever in `payload.data`
+    // on the success path.
+    const cause = error as { code?: number | string; details?: string; message?: string }
+    const detail = cause?.details || cause?.message || String(error)
+    throw new Error(
+      `Failed to access secret: ${secretName}` +
+        (cause?.code !== undefined ? ` [gRPC ${cause.code}]` : '') +
+        (detail ? ` — ${detail}` : ''),
+      { cause: error },
+    )
   }
 }
