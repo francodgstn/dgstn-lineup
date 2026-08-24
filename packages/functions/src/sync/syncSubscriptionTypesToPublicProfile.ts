@@ -7,6 +7,13 @@
  * list (incl. active prices) to
  * teams/{teamId}/public_profile/{teamId}.aggregator_subscription_types.
  * (Field name kept for back-compat; it now means "public", not aggregator-only.)
+ *
+ * It ALSO recomputes `partner_apps` on the same document, because a partner app
+ * IS a subscription type (`source: 'aggregator'`) and this is the only trigger
+ * that fires when one is added, renamed or deactivated — nothing about it
+ * touches `teams/{teamId}`, so the team-document sync would keep publishing
+ * yesterday's list. See `resolveTeamPartnerApps` for the derivation and for
+ * every rail that writes the field.
  */
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
@@ -17,6 +24,7 @@ import {
   resolveIntroOffer,
   type SubscriptionType,
 } from '@linyup/shared'
+import { resolveTeamPartnerApps } from './syncTeamPublicProfile'
 
 export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
   `${TEAMS_COLLECTION}/{teamId}/${SUBSCRIPTION_TYPES_SUBCOLLECTION}/{typeId}`,
@@ -120,8 +128,19 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
       return entry
     })
 
+    // The partner-app vocabulary, recomputed from the same subcollection this
+    // trigger watches. It rides in the SAME merge as the public types: one
+    // document write, and the public book form can never see one of the two
+    // halves refreshed without the other. A failure here fails the trigger, the
+    // same way the query above does — a stale mirror is what this exists to
+    // prevent, so it must not be swallowed.
+    const partnerApps = await resolveTeamPartnerApps(db, teamId)
+
     const [updateErr] = await to(
-      publicProfileRef.set({ aggregator_subscription_types: publicTypes }, { merge: true })
+      publicProfileRef.set(
+        { aggregator_subscription_types: publicTypes, partner_apps: partnerApps },
+        { merge: true }
+      )
     )
 
     if (updateErr) {
@@ -130,7 +149,7 @@ export const syncSubscriptionTypesToPublicProfile = onDocumentWritten(
     }
 
     console.log(
-      `Synced ${publicTypes.length} public subscription type(s) to public profile for team ${teamId}`
+      `Synced ${publicTypes.length} public subscription type(s) and ${partnerApps.length} partner app(s) to public profile for team ${teamId}`
     )
   }
 )

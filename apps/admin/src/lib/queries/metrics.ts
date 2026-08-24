@@ -10,6 +10,17 @@ export interface MetricsPoint {
   mrr: number
   contacts: number
   trials: number
+  /**
+   * Addresses mailed on the day BEFORE `date` (see PlatformMailMetrics). null on
+   * every snapshot with no mail block — a zero there would draw a flat line
+   * through history that never happened.
+   *
+   * Currently null on ALL of them: the producer exists but is not yet called
+   * from `capturePlatformMetrics` (see capturePlatformMailMetrics's header in
+   * packages/functions/src/mail/mailMetrics.ts). The overview's platform mail
+   * KPIs do not depend on this — they are aggregated live in `./messaging`.
+   */
+  emailsSent: number | null
 }
 
 // Reads the daily platform_metrics snapshots (written by capturePlatformMetrics)
@@ -30,6 +41,7 @@ export async function getMetricsHistory(days: number): Promise<MetricsPoint[]> {
       mrr: m.mrr?.estimated_chf ?? 0,
       contacts: m.contacts?.total_active ?? 0,
       trials: m.trials?.active ?? 0,
+      emailsSent: m.mail?.sent_yesterday ?? null,
     } satisfies MetricsPoint
   })
 

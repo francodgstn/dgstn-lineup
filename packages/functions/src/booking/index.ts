@@ -19,7 +19,11 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
-import { buildContactFieldPatch, expandContactFieldPatch } from './contactFields'
+import {
+  buildContactFieldPatch,
+  expandContactFieldPatch,
+  loadTeamPartnerAppNames,
+} from './contactFields'
 import { memberCanCancel } from './myBookings'
 import { isSessionCancelled } from './waitlist/constants'
 import { loadBookingSettings } from './bookingSettings'
@@ -508,7 +512,19 @@ export const bookSession = onCall(async (request) => {
   const data = request.data as {
     teamId?: string
     sessionId?: string
-    contactDetails?: { firstname: string; lastname: string; email: string; phone?: string }
+    contactDetails?: {
+      firstname: string
+      lastname: string
+      email: string
+      phone?: string
+      /** "Which fitness app did you come through?" — asked only when the studio
+       *  both wants the question (BookingSettings.showFitnessAppField) and has
+       *  partner apps to name. Untrusted: narrowed against the same public list
+       *  the form offered (TeamPublicProfile.partner_apps, via
+       *  `loadTeamPartnerAppNames`) before it is stored, and it grants nothing —
+       *  see Contact.acquisition_partner_app. */
+      aggregatorApp?: string | null
+    }
     authenticatedContactId?: string
     verificationCodeId?: string
     referralCode?: string
@@ -1050,6 +1066,22 @@ export const bookSession = onCall(async (request) => {
     bookingSettings,
     activityContactFields
   )
+  // THE PARTNER-APP ANSWER, if there is one to store. Only a guest is ever
+  // asked (an authenticated booking ignores `contactDetails` entirely), only
+  // while the studio's own switch is on, and the allowed-names read (one get of
+  // the same public_profile document the form rendered from) is paid only when
+  // something non-empty was actually posted — so the rail that existed before
+  // this feature performs exactly the reads it always did.
+  const postedPartnerApp =
+    !authenticatedContact &&
+    bookingSettings.showFitnessAppField !== false &&
+    typeof data.contactDetails?.aggregatorApp === 'string'
+      ? data.contactDetails.aggregatorApp.trim()
+      : ''
+  const partnerApp = postedPartnerApp
+    ? { value: postedPartnerApp, allowed: await loadTeamPartnerAppNames(data.teamId) }
+    : null
+
   const contactFieldPatch = buildContactFieldPatch({
     fields: resolvedContactFields,
     answers: data.contactFieldAnswers,
@@ -1057,6 +1089,7 @@ export const bookSession = onCall(async (request) => {
     // Read ONLY to merge an address over the stored one — an answer that names
     // a street and a town must not take the postcode with it.
     existing: authenticatedContact,
+    partnerApp,
   })
 
   let contactId: string

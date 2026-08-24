@@ -1,11 +1,48 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocale } from 'next-intl'
 import { onAuthStateChanged, type User } from 'firebase/auth'
-import { doc, getDoc, onSnapshot } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { auth } from '@/lib/firebase-auth'
 import { db } from '@/lib/firebase'
+import { usePathname, useRouter } from '@/i18n/navigation'
+import { LOCALE_COOKIE, persistLocale } from '@/i18n/persistLocale'
 import type { UserProfile, Team, TeamRole, Capability, DataScope } from '@linyup/shared'
+
+// ─── UI language: the browser decides, the profile remembers ─────────────────
+//
+// Two facts that are easy to fuse and must not be:
+//
+//   Team.language      the language the STUDIO writes to its MEMBERS in.
+//   UserProfile.locale the language THIS PERSON reads the dashboard in.
+//
+// The `NEXT_LOCALE` cookie stays the authority for the browser the user is
+// sitting at — it is what next-intl resolves against, and it is written both by
+// `persistLocale` (the language switchers, the signup wizard) and by next-intl's
+// own middleware whenever the URL disagrees with the browser's Accept-Language.
+// `UserProfile.locale` is a MIRROR of that choice, and its only job is to carry
+// it to a browser that has no cookie yet (a new device, a fresh profile). Hence
+// the adopt/record directions below, which are exclusive by construction: with
+// no cookie we adopt the stored value, with a cookie we record it. Making the
+// profile authoritative instead would bounce a user straight back every time
+// they used the switcher.
+
+const UI_LOCALES = ['en', 'de', 'fr', 'it'] as const
+type UiLocale = (typeof UI_LOCALES)[number]
+
+/** Has THIS browser ever been told a language explicitly? */
+function hasExplicitLocaleChoice(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.cookie.split('; ').some((c) => c.startsWith(`${LOCALE_COOKIE}=`))
+}
+
+/** Surfaces whose locale belongs to the link that reached them, not to whoever
+ *  happens to be signed in — a studio owner opening their own booking page in
+ *  French must see what a French member sees. */
+function honoursItsOwnLocale(pathname: string): boolean {
+  return pathname.startsWith('/public/') || pathname.startsWith('/embed/') || pathname.startsWith('/auth/')
+}
 
 interface AuthContextValue {
   user: User | null
@@ -76,6 +113,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileUnsub?.()
     }
   }, [])
+
+  // Keep the UI language and the stored preference in step. See the note above
+  // the helpers for why the cookie — not the profile — is authoritative.
+  const activeLocale = useLocale()
+  const pathname = usePathname()
+  const router = useRouter()
+  const adoptedStoredLocale = useRef(false)
+
+  useEffect(() => {
+    if (!user || !profile) return
+    if (honoursItsOwnLocale(pathname)) return
+
+    const stored = profile.locale
+    if (!hasExplicitLocaleChoice()) {
+      // No choice in this browser — adopt the one the user made elsewhere, once
+      // per mount so a redirect that does not stick cannot loop. `persistLocale`
+      // must run BEFORE the navigation: English is the UNPREFIXED path, so a
+      // switch to 'en' would otherwise be re-resolved from Accept-Language.
+      if (stored && stored !== activeLocale && !adoptedStoredLocale.current) {
+        adoptedStoredLocale.current = true
+        persistLocale(stored)
+        // `usePathname()` is the PATH ONLY. Re-navigating to it verbatim drops
+        // the query string and hash, and the pages this can fire on read them:
+        // the Stripe checkout return lands on `settings/billing?checkout=…`.
+        const search = typeof window === 'undefined' ? '' : window.location.search + window.location.hash
+        router.replace(`${pathname}${search}`, { locale: stored })
+      }
+      return
+    }
+
+    if (UI_LOCALES.includes(activeLocale as UiLocale) && activeLocale !== stored) {
+      // Best-effort mirror of an explicit choice. `firestore.rules` already lets
+      // a user write their own doc, so this needs no callable.
+      setDoc(doc(db, 'users', user.uid), { locale: activeLocale }, { merge: true }).catch(() => {})
+    }
+  }, [user, profile, activeLocale, pathname, router])
 
   // Subscribe to the team document whenever currentTeamId changes
   const currentTeamId = profile?.currentTeam ?? null

@@ -391,7 +391,9 @@ export function routableSurfaces<T extends Partial<Record<PublicSurface, boolean
  *
  *   • `bookingSettings.appointmentsEnabled` is the studio's TOGGLE — an
  *     intention, not a fact. On with nothing published, the picker renders an
- *     empty state and every visitor sent there finds nothing to book.
+ *     empty state and every visitor sent there finds nothing to book. ABSENT
+ *     MEANS ON (see the field's doc comment in types/team.ts), which is exactly
+ *     why the content half below has to be the strict one.
  *   • `active_public_surfaces.appointments` is the CONTENT — server-computed by
  *     `syncTeamPublicProfile` from the same inputs `listAvailability` reads
  *     (active hours × bookable appointment activities). It says something is
@@ -413,7 +415,7 @@ export function appointmentPickerLive(profile: {
 } | undefined | null): boolean {
   if (!profile) return false
   return (
-    profile.bookingSettings?.appointmentsEnabled === true &&
+    profile.bookingSettings?.appointmentsEnabled !== false &&
     profile.active_public_surfaces?.appointments === true
   )
 }

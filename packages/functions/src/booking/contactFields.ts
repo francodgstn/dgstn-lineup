@@ -20,6 +20,17 @@
  * leaves the prefilled box untouched, or the client sends ''. Treating that as
  * an edit would delete a phone number the studio collected months ago, silently,
  * on an ordinary booking. Absent and empty are therefore both "no answer".
+ *
+ * ── partnerApp: A KEY THAT IS NOT IN THE RESOLVED LIST ───────────────────────
+ * `partnerApp` — "which fitness app did you come through?" — predates
+ * `contactFields` and is governed by its own switch
+ * (`BookingSettings.showFitnessAppField`), so a studio never authored it as a
+ * field and it cannot be resolved from the list. It rides here anyway, because
+ * this is the seam that owns writing a book form's answers to a contact, and it
+ * is narrowed by the same rules: the caller supplies the ALLOWED names — the
+ * studio's own partner apps, read from the same public document the form offered
+ * them from (`loadTeamPartnerAppNames`) — and anything outside them is dropped
+ * rather than stored.
  */
 
 import type { BookingContactField, CustomFieldDefinition } from '@linyup/shared'
@@ -27,9 +38,15 @@ import {
   bookingContactFieldCustomId,
   BOOKING_CONTACT_BASE_FIELDS,
   resolveBookingContactFields,
+  TEAMS_COLLECTION,
 } from '@linyup/shared'
+import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
 import { loadBookingSettings } from './bookingSettings'
+
+/** The team's world-readable mirror, spelt the way the `public_profile` syncs
+ *  spell it — `@linyup/shared` carries no team-scoped constant for it. */
+const TEAM_PUBLIC_PROFILE_SUBCOLLECTION = 'public_profile'
 
 /** Base contact fields a book form may write. Kept as a Set of the shared
  *  vocabulary so adding one there cannot silently fail to be writable here. */
@@ -47,6 +64,12 @@ export interface ContactFieldPatchInput {
    * value alone when the answer is empty — never to decide what is writable.
    */
   existing?: Record<string, unknown> | null
+  /**
+   * The book form's partner-app answer, with the vocabulary it is allowed to
+   * use — `loadTeamPartnerAppNames(teamId)`. Omit it and no partner-app key is
+   * written, which is every caller that does not ask the question.
+   */
+  partnerApp?: { value: unknown; allowed: string[] } | null
 }
 
 /** A flat Firestore patch (dotted paths for custom fields), or `{}` when the
@@ -98,7 +121,86 @@ export function buildContactFieldPatch(input: ContactFieldPatchInput): Record<st
     patch[key] = value
   }
 
+  const partnerApp = narrowPartnerApp(input.partnerApp)
+  if (partnerApp) patch.acquisition_partner_app = partnerApp
+
   return patch
+}
+
+/**
+ * The fitness-app answer, narrowed to the studio's OWN partner-app names.
+ *
+ * The posted string is anonymous and is about to be written to a contact, so it
+ * is matched against the allowed list rather than stored — and the STUDIO'S
+ * spelling is what lands, so "fitpass" and "FitPass" cannot become two values
+ * the contacts list shows as two different partners.
+ *
+ * Anything else — an empty answer, the "not using one" sentinel the form sends
+ * as '', a name this studio does not accept — writes NOTHING. Absent is the
+ * honest record of "did not say", and it leaves an earlier answer standing for
+ * the same reason an empty phone box does.
+ *
+ * A NON-EMPTY name that the studio DOES offer but that is not in the list is
+ * logged, because it should now be impossible: the list is the same document the
+ * form rendered from (see `loadTeamPartnerAppNames`). A line here means either a
+ * crafted payload or a mirror that lagged, and both are worth being able to find
+ * rather than losing an answer invisibly.
+ */
+function narrowPartnerApp(input: ContactFieldPatchInput['partnerApp']): string | null {
+  if (!input) return null
+  const raw = typeof input.value === 'string' ? input.value.trim() : ''
+  if (!raw) return null
+  const key = raw.toLowerCase()
+  const match =
+    (input.allowed ?? []).find((name) => name.trim().toLowerCase() === key)?.trim() ?? null
+  if (!match && (input.allowed ?? []).length > 0) {
+    console.warn(`[partner-app] posted name not in the offered list, dropped: ${raw}`)
+  }
+  return match
+}
+
+/**
+ * The names a partner-app answer may take for this team: its active
+ * `source: 'aggregator'` subscription types (FitPass, SportPass…).
+ *
+ * ── THE PUBLIC MIRROR IS AUTHORITATIVE, AND THAT IS THE POINT ────────────────
+ * This reads `teams/{teamId}/public_profile/{teamId}.partner_apps` — the very
+ * document the public book form rendered its dropdown from — and NOT the
+ * `subscription_types` collection the mirror is derived from.
+ *
+ * Re-querying the live collection here was the earlier shape, and it put the
+ * offered vocabulary and the accepted vocabulary in two different places. The
+ * book form is ANONYMOUS: it can read `public_profile` and nothing else, so it
+ * has no way to agree with a live query. Rename or deactivate a partner type and
+ * the form would keep offering the old name until the mirror caught up, the
+ * visitor would pick it, and the validator would drop the answer — success
+ * returned, nothing stored, no error anywhere. One document decides what is
+ * offered AND what is accepted, so the two cannot disagree.
+ *
+ * The cost of that choice, stated rather than hidden: for as long as the mirror
+ * lags (one trigger — every rail that changes the answer rewrites it; see
+ * `resolveTeamPartnerApps` in sync/syncTeamPublicProfile.ts, which is the ONE
+ * place the list is derived from subscription types), a contact can be stamped
+ * with a name the studio has just retired. `acquisition_partner_app` is a
+ * self-reported attribution that grants nothing (see Contact), so recording the
+ * name the visitor was actually shown is the honest answer, not a wrong one.
+ *
+ * THE READ IS PAID ONLY WHEN THERE IS SOMETHING TO VALIDATE: callers pass a
+ * non-empty answer or skip this entirely.
+ */
+export async function loadTeamPartnerAppNames(teamId: string): Promise<string[]> {
+  const snap = await admin
+    .firestore()
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(TEAM_PUBLIC_PROFILE_SUBCOLLECTION)
+    .doc(teamId)
+    .get()
+  const names = snap.data()?.partner_apps
+  if (!Array.isArray(names)) return []
+  return names
+    .map((name) => (typeof name === 'string' ? name.trim() : ''))
+    .filter((name) => name.length > 0)
 }
 
 /** A select must be one of its own options; everything else is taken as typed.

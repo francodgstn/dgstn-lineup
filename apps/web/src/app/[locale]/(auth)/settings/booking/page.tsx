@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { resolveBookingContactFields } from '@linyup/shared'
@@ -125,7 +126,10 @@ function getDefaults(stored: Partial<BookingSettings> | undefined): FormData {
       showFitnessAppField: rawBooking.showFitnessAppField !== false,
       ctaUrl: typeof rawBooking.ctaUrl === 'string' ? rawBooking.ctaUrl : '',
       ctaLabel: typeof rawBooking.ctaLabel === 'string' ? rawBooking.ctaLabel : '',
-      appointmentsEnabled: rawBooking.appointmentsEnabled === true,
+      // Defaults ON — `!== false`, like showActivityDescription above. Every
+      // reader spells it the same way; the list of them is on
+      // `BookingSettings.appointmentsEnabled` (types/team.ts), not repeated here.
+      appointmentsEnabled: rawBooking.appointmentsEnabled !== false,
       waitlistEnabled: rawBooking.waitlistEnabled === true,
       cutoffMinutes,
       waitlistClaimMinutes,
@@ -205,12 +209,22 @@ function ToggleRow({
   name,
   label,
   desc,
+  badge,
+  badgeHint,
   children,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
   name: 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled' | 'booking.waitlistEnabled'
   label: string
   desc: string
+  /** Chip beside the label — a maturity marker, not a state ("Beta"). */
+  badge?: React.ReactNode
+  /** What the chip PROMISES, in prose under the description. The chip also
+   *  carries it as a `title`, but a native tooltip never appears on touch and
+   *  is not reachable by keyboard, so for most of the audience the chip would
+   *  say "Beta" and nothing else — leaving "may change" and "may misbehave"
+   *  equally readable. The caveat is the substance; the chip is the marker. */
+  badgeHint?: string
   /** Rendered under the row, inside its border — the settings this switch owns. */
   children?: React.ReactNode
 }) {
@@ -218,8 +232,12 @@ function ToggleRow({
     <div>
       <div className="flex items-center justify-between gap-4 p-3">
         <div>
-          <p className="text-sm font-medium">{label}</p>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            {label}
+            {badge}
+          </p>
           <p className="text-xs text-muted-foreground">{desc}</p>
+          {badgeHint && <p className="text-xs text-muted-foreground">{badgeHint}</p>}
         </div>
         <Controller
           control={control}
@@ -252,11 +270,15 @@ function BookingForm({
   control,
   register,
   customFieldDefinitions,
+  customFieldsInstalled,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
   register: ReturnType<typeof useForm<FormData>>['register']
   /** Already gated on the custom-fields plugin by the page. */
   customFieldDefinitions: CustomFieldDefinition[]
+  /** Passed on so the field list can point at the plugin rather than at a
+   *  settings tab the studio does not have. */
+  customFieldsInstalled: boolean
 }) {
   const t = useTranslations('SettingsBooking')
   // Subscribed, not read once: the claim window below appears the moment the
@@ -329,72 +351,39 @@ function BookingForm({
           already answered sensibly by default — which is a good reason to
           DEMOTE them (put them lower) and a poor reason to HIDE them: a studio
           looking for the booking window had to guess that a collapsed grey bar
-          contained it. Ordering carries that weight instead. What the page
-          OFFERS comes first (appointments, waitlist), then how the form BEHAVES
-          (window, cutoff, which fields to ask for), then the optional custom
-          button last.
+          contained it. Ordering carries that weight instead: what the page
+          OFFERS comes first (appointments), then how the form BEHAVES (window,
+          cutoff, which fields to ask for), then the optional custom button, then
+          anything still in BETA last.
+
+          WAITLISTS USED TO SIT SECOND, as the other thing the page offers. It
+          moved to the bottom with the Beta chip: a queue is a niche answer to a
+          problem most studios do not have yet, and meeting it second — above the
+          booking window — made it read as a decision every studio owes an answer
+          to. The chip says the feature may still change; it is not a warning
+          that it misbehaves.
 
           Each of these still has a default that is right for a studio that
           never opens this panel, so none of them is a question it must answer
           to go live:
+            • appointments     -> on (the picker still needs bookable content
+                                  behind it — see appointmentPickerLive)
             • booking window   -> 2 months ahead
             • booking cutoff   -> none, i.e. bookable up to the start
             • ask for a phone  -> off (one less field on the public form)
             • show description -> on (what the studio wrote is what visitors see)
             • fitness-app field-> on
             • custom button    -> empty, so no extra button is rendered
+            • waitlists        -> off (a new studio never meets the concept)
           Nothing here changes what anybody is charged or who may book. */}
       <div className="divide-y rounded-lg border">
-      <ToggleRow
-        control={control}
-        name="booking.appointmentsEnabled"
-        label={t('toggleAppointmentsEnabledLabel')}
-        desc={t('toggleAppointmentsEnabledDesc')}
-      />
+        <ToggleRow
+          control={control}
+          name="booking.appointmentsEnabled"
+          label={t('toggleAppointmentsEnabledLabel')}
+          desc={t('toggleAppointmentsEnabledDesc')}
+        />
 
-      {/* The claim window is the waitlist's OWN setting, so it lives inside the
-          waitlist row and renders only once the queue is on. It used to sit
-          three rows further up as a peer of the cutoff, where a studio with no
-          waitlist at all met it as a question — and where the only thing it
-          could possibly do was make a queue that studio did not have worse
-          (UX-41). Its default, 120 minutes, is the SAME one the promoter
-          applies server-side (WAITLIST_DEFAULT_CLAIM_MINUTES), so a studio that
-          switches the queue on and never opens this gets exactly what the
-          server would have done anyway. Still a maximum: the cutoff above and
-          the session start both clamp it. */}
-      <ToggleRow
-        control={control}
-        name="booking.waitlistEnabled"
-        label={t('toggleWaitlistEnabledLabel')}
-        desc={t('toggleWaitlistEnabledDesc')}
-      >
-        {waitlistEnabled && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
-            <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
-            <Controller
-              control={control}
-              name="booking.waitlistClaimMinutes"
-              render={({ field }) => (
-                <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-                  <SelectTrigger className="h-9 w-48">
-                    <span className="flex flex-1 text-left text-sm truncate">
-                      {t('waitlistClaimMinutesValue', { minutes: field.value })}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[60, 120, 240, 480, 1440].map((minutes) => (
-                      <SelectItem key={minutes} value={String(minutes)}>
-                        {t('waitlistClaimMinutesValue', { minutes })}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-        )}
-      </ToggleRow>
         {/* Booking window */}
         <div className="flex items-center justify-between gap-4 p-3">
           <div>
@@ -465,6 +454,7 @@ function BookingForm({
                 value={field.value ?? []}
                 onChange={field.onChange}
                 definitions={customFieldDefinitions}
+                customFieldsInstalled={customFieldsInstalled}
               />
             )}
           />
@@ -510,6 +500,61 @@ function BookingForm({
             </div>
           </div>
         </div>
+
+        {/* LAST ROW, AND BETA — see the ordering note at the top of the panel.
+            The claim window is the waitlist's OWN setting, so it lives inside
+            this row and renders only once the queue is on. It used to sit
+            further up as a peer of the cutoff, where a studio with no waitlist
+            at all met it as a question — and where the only thing it could
+            possibly do was make a queue that studio did not have worse (UX-41).
+            Its default, 120 minutes, is the SAME one the promoter applies
+            server-side (WAITLIST_DEFAULT_CLAIM_MINUTES), so a studio that
+            switches the queue on and never opens this gets exactly what the
+            server would have done anyway. Still a maximum: the cutoff above and
+            the session start both clamp it. */}
+        <ToggleRow
+          control={control}
+          name="booking.waitlistEnabled"
+          label={t('toggleWaitlistEnabledLabel')}
+          desc={t('toggleWaitlistEnabledDesc')}
+          badgeHint={t('betaBadgeHint')}
+          badge={
+            <Badge
+              variant="secondary"
+              className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+              title={t('betaBadgeHint')}
+            >
+              {t('betaBadge')}
+            </Badge>
+          }
+        >
+          {waitlistEnabled && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
+              <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
+              <Controller
+                control={control}
+                name="booking.waitlistClaimMinutes"
+                render={({ field }) => (
+                  <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                    <SelectTrigger className="h-9 w-48">
+                      <span className="flex flex-1 text-left text-sm truncate">
+                        {t('waitlistClaimMinutesValue', { minutes: field.value })}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[60, 120, 240, 480, 1440].map((minutes) => (
+                        <SelectItem key={minutes} value={String(minutes)}>
+                          {t('waitlistClaimMinutesValue', { minutes })}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+          )}
+        </ToggleRow>
       </div>
     </div>
   )
@@ -574,7 +619,10 @@ export default function BookingSettingsPage() {
       showFitnessAppField: data.booking.showFitnessAppField,
       ctaUrl: data.booking.ctaUrl || null,
       ctaLabel: data.booking.ctaLabel || null,
-      appointmentsEnabled: data.booking.appointmentsEnabled ?? false,
+      // Absent ⇒ ON, the same way `getDefaults` above reads it — a save must
+      // never be the thing that decides the default differently from the form
+      // that produced it.
+      appointmentsEnabled: data.booking.appointmentsEnabled ?? true,
       waitlistEnabled: data.booking.waitlistEnabled ?? false,
       cutoffMinutes: data.booking.cutoffMinutes,
       waitlistClaimMinutes: data.booking.waitlistClaimMinutes,
@@ -628,6 +676,7 @@ export default function BookingSettingsPage() {
           control={control}
           register={register}
           customFieldDefinitions={customFieldDefinitions}
+          customFieldsInstalled={isInstalled('custom-fields')}
         />
         <SettingsSaveBar
           onSave={handleSubmit(onSubmit)}

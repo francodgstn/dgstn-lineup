@@ -435,7 +435,9 @@ interface ActivityEntry {
   description?: string
   color?: string
   imageUrl?: string
-  level?: string
+  /** Free-text display labels mirrored from `Activity.tags` — shown as chips on
+   *  the card, enforced nowhere. */
+  tags?: string[]
   isFreeTrial?: boolean
   order?: number
   /** CLASS-ONLY. */
@@ -649,7 +651,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               description: (data.description as string) || undefined,
               color: (data.color as string) || undefined,
               imageUrl: (data.image_url as string) || undefined,
-              level: (data.level as string) || undefined,
+              tags: Array.isArray(data.tags) ? (data.tags as string[]) : undefined,
               isFreeTrial: Boolean(data.isFreeTrial),
               order: typeof data.order === 'number' ? (data.order as number) : undefined,
               accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
@@ -868,7 +870,7 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                     )}
                   </div>
                   <div className="flex flex-1 flex-col p-5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold" style={{ color: palette.text }}>
                         {a.name}
                       </h3>
@@ -879,6 +881,20 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
                       >
                         {d.type === 'appointment' ? t('typeAppointment') : t('typeClass')}
                       </span>
+                      {/* The studio's own words for this class ("Beginner
+                          friendly", "Gi", "Kids"). Same chip shape as the type,
+                          in the SITE palette — a per-site colour scheme cannot
+                          take Tailwind's fixed greys. No translation: the studio
+                          typed these, and nothing looks them up. */}
+                      {a.tags?.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full border px-2 py-0.5 text-xs"
+                          style={{ borderColor: palette.border, color: palette.muted }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
                     </div>
                     {a.description && (
                       <p className="mt-2 flex-1 text-sm" style={{ color: palette.muted }}>

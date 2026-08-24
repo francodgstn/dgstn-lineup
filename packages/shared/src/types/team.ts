@@ -13,6 +13,8 @@ import type { EngagementThresholds } from './engagement'
 import type { Capability, DataScope } from './capabilities'
 // Type-only — kiosk.ts imports nothing from here; no cycle.
 import type { KioskPublicConfig } from './kiosk'
+// Type-only — utils/regional.ts imports nothing from here; no cycle.
+import type { RegionalSettings } from '../utils/regional'
 
 // Team roles. owner/manager/viewer are the fixed SYSTEM roles (capability sets in
 // code, never customizable). 'coach' is a predefined-but-team-customizable role
@@ -554,6 +556,23 @@ export interface Team {
   custom_field_definitions?: CustomFieldDefinition[]
   links?: TeamLink[]
   language?: 'en' | 'de' | 'fr' | 'it'
+  /**
+   * How this studio RENDERS dates and times — zone, week start, date order,
+   * hour cycle. Partial by design and absent on every team created before it
+   * existed; `resolveRegional` (shared/utils/regional) fills the gaps with the
+   * Swiss defaults, so there is nothing to migrate.
+   *
+   * Team-scoped on purpose: one studio, one clock, one printed roster. The
+   * reader's UI LANGUAGE stays per-user and layers on top — it picks the
+   * words, this picks the shape.
+   *
+   * DISPLAY ONLY. Not the zone the scheduling or accounting math runs in —
+   * see the header of shared/utils/regional.ts for that boundary.
+   *
+   * Owner-written from the client like `setup_ack` beside it: the team update
+   * rule is a deny-list, so a new key here needs no rules change.
+   */
+  regional?: Partial<RegionalSettings>
   // Free-form settings bag (booking, gamification, referral, …). Untyped at
   // this level because it's a grab-bag of unrelated feature settings; typed
   // sub-shapes (e.g. TeamNavDefaults for `defaultNavPins`, BookingSettings)
@@ -714,6 +733,25 @@ export interface BookingSettings {
   showFitnessAppField?: boolean
   ctaUrl?: string | null
   ctaLabel?: string | null
+  /**
+   * Whether the studio offers appointment booking on its public surfaces.
+   *
+   * ABSENT ⇒ ON. It is only ever spelt `!== false`, never `=== true`: a studio
+   * that has never opened Settings → Booking offers appointments, and switching
+   * them off is the deliberate act. This is safe because the toggle is only half
+   * the answer — `appointmentPickerLive` (publicRoutes.ts) composes it with the
+   * server-computed `active_public_surfaces.appointments`, which fails closed,
+   * so nothing is advertised that has nothing behind it (UX-28).
+   *
+   * THE READERS, so a new one is spelt the same way rather than reinventing the
+   * default (a reader that writes `=== true` silently un-defaults every tenant
+   * that never touched the toggle):
+   *   • apps/web .../settings/booking/page.tsx — the form default AND its save
+   *   • apps/web/src/hooks/usePublicSurfaces.ts — the studio's own surface list
+   *   • publicRoutes.ts `appointmentPickerLive` — the composed liveness
+   *   • apps/mobile/src/services/firestore.ts — getTeamPublicProfile, which
+   *     composes both halves itself because mobile cannot import from here
+   */
   appointmentsEnabled?: boolean
   /** Minutes before a session's start that online booking closes. Absent/0 = no
    *  cutoff (bookable right up to start, today's behaviour). Enforced
@@ -891,6 +929,54 @@ export interface TeamPublicProfile {
   // shop resolves the pair through `resolveProductCollectionNote` so that the
   // card, the checkout modal and the receipt cannot disagree.
   productCollectionNote?: string | null
+  // The NAMES of the partner apps this studio accepts — its own active
+  // `source: 'aggregator'` subscription types (FitPass, SportPass…), nothing
+  // else about them: no ids, no payout rate, no prices. Derived by
+  // `resolveTeamPartnerApps` (functions sync/syncTeamPublicProfile.ts), whose
+  // header lists every sync that writes this field — a partner app is a
+  // subscription type, so the subscription-type rail refreshes it too.
+  //
+  // It exists so the public book form can ask "which app did you come through?"
+  // with the studio's OWN answers instead of a hardcoded industry list, and so
+  // that a studio with no partner types is not shown the question at all. The
+  // form reads public_profile alone, so the list has to live here — and this is
+  // therefore also the list the SERVER validates a posted answer against
+  // (`loadTeamPartnerAppNames`), so the offered and the accepted vocabulary are
+  // one document rather than two that can disagree.
+  //
+  // Deliberately NOT derived from `aggregator_subscription_types` below: that
+  // array is the PUBLIC + active types (a partner type is usually neither sold
+  // nor flagged public), and its name is a back-compat artefact rather than a
+  // description of its contents.
+  //
+  // Absent/empty ⇒ this studio accepts none, and the question is not asked.
+  partner_apps?: string[]
+  // The team's PUBLIC + active subscription types, mirrored by
+  // syncSubscriptionTypesToPublicProfile for the website pricing table, the
+  // public shop and the booking form's access lines. The field name predates
+  // the meaning — it is "public", not aggregator-only — and is kept because it
+  // is what every stored document and reader already says.
+  aggregator_subscription_types?: PublicSubscriptionTypeEntry[]
+}
+
+/** One entry of `TeamPublicProfile.aggregator_subscription_types` — the
+ *  public-safe subset of a SubscriptionType, as the sync writes it. */
+export interface PublicSubscriptionTypeEntry {
+  id: string
+  name: string
+  description?: string
+  /** CheckoutContactMode as stored; absent ⇒ 'minimal'. */
+  checkout_contact_mode?: string
+  prices?: Array<{
+    id: string
+    amount: number
+    recurrence: string
+    label?: string
+    included_months?: number
+    credits?: number
+    /** The resolved intro offer, present only when it is sellable. */
+    intro?: { periods: number; amount: number }
+  }>
 }
 
 export interface TeamInvitation {

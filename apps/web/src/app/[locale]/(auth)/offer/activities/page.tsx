@@ -33,7 +33,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
 import { resolveDurationSale, resolveBookingContactFields } from '@linyup/shared'
 import { activityRateChoiceOf, gatedPlanIds, ratedPlanIds } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField, BookingContactField } from '@linyup/shared'
+import { MAX_ACTIVITY_TAGS, normalizeActivityTags, normalizeBookingQuestions } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField, BookingContactField } from '@linyup/shared'
 
 /** The waitlist's plan gate, mirroring the server side of it
  *  (`requirePlan(teamId, 'coach')` in joinWaitlist). One constant, because a
@@ -41,17 +42,20 @@ import type { Activity, ActivityDuration, ActivityLevel, ActivityType, DurationS
  *  than no toggle at all. */
 const WAITLIST_MIN_PLAN: SaasPlan = 'coach'
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
+import { ActivityTagsEditor } from '@/components/activities/ActivityTagsEditor'
 import { BookingContactFieldsEditor } from '@/components/booking/BookingContactFieldsEditor'
+import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
 import { MoreOptions } from '@/components/forms/MoreOptions'
+import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
+import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { usePlanName } from '@/hooks/usePlanName'
 import { resolveActivityTerms } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SortableList, SortableItem, type SortableRenderProps } from '@/components/ui/sortable'
@@ -182,10 +186,6 @@ function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[]
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const LEVELS = ['all', 'beginners', 'intermediate', 'advanced'] as const
-// Radix Select cannot carry an empty string as a value, so "not specified" needs
-// a sentinel. It is never stored: the submit maps it back to null.
-const LEVEL_NONE = '__none__'
 const ACTIVITY_TYPES: ActivityType[] = ['class', 'appointment']
 // APPOINTMENT-ONLY: the bookable session lengths an appointment activity offers.
 const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
@@ -212,12 +212,10 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
     bookingQuestions: z.array(z.any()),
     contactFields: z.array(z.object({ key: z.string(), required: z.boolean().optional() })),
     type: z.enum(['class', 'appointment'] as const).default('class'),
-    // OPTIONAL. It was mandatory only because the legacy import always had a
-    // value; `Activity.level` has always been optional in the type, and the list
-    // badge already renders nothing when it is absent. Small studios mostly do
-    // not grade their classes, and forcing a choice made them pick "All levels"
-    // to mean "not applicable" — two different statements collapsed into one.
-    level: z.enum(LEVELS).optional(),
+    // Free-text display labels for the public booking cards. They replaced a
+    // four-value `level` enum that no public surface ever rendered — a studio
+    // grades its classes in its own words, or not at all.
+    tags: z.array(z.string()).max(MAX_ACTIVITY_TAGS),
     color: z.string().optional(),
     // CLASS-ONLY paid-access gate (supersedes the legacy isFreeTrial toggle;
     // 'open' === free trial). Appointments dropped this entirely — the price is
@@ -290,11 +288,20 @@ function ActivityDialog({
   duplicating,
   nextOrder,
   currency,
+  subscriptionTypes,
+  canEditPlanLinks,
 }: {
   open: boolean
   onClose: () => void
   teamId: string
   userId: string
+  /**
+   * The LIVE document, re-read from the activities query on every render — not
+   * the snapshot taken when the dialog opened. The plan editor below writes
+   * `accessRule` on this same document while the form is open, so a stale
+   * snapshot here would have this form's Save write the pre-edit allow-list
+   * back over it (see `kindSpecificPayload`).
+   */
   editing: Activity | null
   /**
    * The activity a NEW one is being copied from. `editing` stays null, so the
@@ -309,10 +316,18 @@ function ActivityDialog({
   nextOrder: number
   /** Team's billing currency (ISO code), shown next to duration price inputs. */
   currency: string
+  /** The team's plans — the rows of the in-place plan editor. */
+  subscriptionTypes: SubscriptionType[]
+  /** `team.settings`, the same capability the catalogue gates that editor on. */
+  canEditPlanLinks: boolean
 }) {
   const t = useTranslations('Activities')
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
+  // A saved activity can move TWO derived setup steps: "add an activity" on its
+  // existence, and "set a price" on `dropIn.enabled`. Beside the list
+  // invalidation, never instead of it — they are different queries.
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
   // The waitlist is a paid-tier feature, and THIS is where its flag is written —
   // the activity doc is a client write, so the gate has to sit on the control
   // itself (the same shape every other plan-gated toggle uses). `joinWaitlist`
@@ -350,6 +365,10 @@ function ActivityDialog({
     [isInstalled, team?.custom_field_definitions]
   )
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Does the mounted plan editor hold ticks it has not written yet? It reports
+  // this upward because THIS form's Save writes the same document and carries
+  // the STORED plan list through — so pressing it would discard them.
+  const [planLinksDirty, setPlanLinksDirty] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   // A copy keeps the cover image: `image_url` is a download URL for a file that
   // outlives the source (activities are ARCHIVED, never deleted), and a new
@@ -373,6 +392,7 @@ function ActivityDialog({
     control,
     watch,
     setValue,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
@@ -390,7 +410,12 @@ function ActivityDialog({
           bookingQuestions: seed.bookingQuestions ?? [],
           contactFields: seed.contactFields ?? [],
           type: (seed.type ?? 'class') as ActivityType,
-          level: seed.level ?? undefined,
+          // NORMALISED on the way IN, not just on the way out. A stored array
+          // longer than the cap (a seed, an older client, a future cap change)
+          // would otherwise fail the schema on every submit — and a form whose
+          // Save silently does nothing, with the offending field nowhere on
+          // screen, is a dead form with no way to diagnose it.
+          tags: normalizeActivityTags(seed.tags ?? []),
           color: seed.color ?? '',
           accessTier: initialRule.type,
           dropInEnabled: seed.dropIn?.enabled ?? false,
@@ -406,7 +431,7 @@ function ActivityDialog({
           meetingPoint: '', whatsIncluded: '', whatsNotIncluded: '', faq: '', cancellationPolicy: '',
           bookingQuestions: [],
           contactFields: [],
-          type: 'class' as ActivityType, level: undefined,
+          type: 'class' as ActivityType, tags: [],
           // Defaults for a NEW activity. 'members' rather than 'open': a studio
           // sells memberships, so a class its members can book is the ordinary
           // case, and 'open' means free for anyone (resolvePaymentOptions
@@ -448,7 +473,7 @@ function ActivityDialog({
   const hasStoredDetails =
     !!seed &&
     ((!!seed.color && seed.color !== DEFAULT_ACCENT) ||
-      !!seed.level ||
+      (seed.tags?.length ?? 0) > 0 ||
       !!seed.prerequisites ||
       !!seed.confirmationInstructions ||
       !!seed.meetingPoint ||
@@ -504,6 +529,18 @@ function ActivityDialog({
       setValue('autoConfirm', editing ? resolveAutoConfirm({ type }) : true)
   }, [type, autoConfirmTouched, setValue, editing])
 
+  // THE RADIO IS AUTHORITATIVE FOR THE TIER, so it has to follow the document
+  // when the plan editor below moves it — unticking the last plan there stores
+  // `members`, and a radio still reading "Subscription" would put the tier back
+  // over an empty allow-list on the next Save: a class nobody can book.
+  // Keyed on the VALUE, never the document: `editing` is a fresh object on every
+  // refetch, and re-running on those would wipe a tier the studio has chosen and
+  // not yet saved.
+  const storedAccessTier = editing ? resolveActivityAccessRule(editing).type : null
+  useEffect(() => {
+    if (storedAccessTier) setValue('accessTier', storedAccessTier)
+  }, [storedAccessTier, setValue])
+
   // Inline quick-create: "create or link a subscription to this activity" without
   // leaving the form. Writes a minimal type (pricing is configured later in the
   // subscriptions manager) and auto-checks it in the allow-list above.
@@ -541,11 +578,11 @@ function ActivityDialog({
       whatsNotIncluded: data.whatsNotIncluded ?? '',
       faq: data.faq ?? '',
       cancellationPolicy: data.cancellationPolicy ?? '',
-      // Drop half-written rows (no label = nothing to ask) so the public form
-      // never renders an unlabelled input.
-      bookingQuestions: (data.bookingQuestions ?? [])
-        .filter((q: FormField) => q?.label?.trim())
-        .map((q: FormField, i: number) => ({ ...q, label: q.label.trim(), order: i })),
+      // Through the shared normaliser, which drops half-written rows and — the
+      // part that was a live crash — writes each key out instead of spreading
+      // the editor's object, whose `options` can be an own key holding
+      // `undefined`. Firestore refuses that value and the whole save dies.
+      bookingQuestions: normalizeBookingQuestions(data.bookingQuestions as FormField[]),
       // EXTENDS the team-wide list, never replaces it — so a row already asked
       // for team-wide is not stored again here (the resolver would dedupe it
       // anyway; not storing it means the activity does not silently pin a
@@ -554,7 +591,7 @@ function ActivityDialog({
         (f: BookingContactField) => !teamContactFieldKeys.includes(f.key)
       ),
       type: data.type,
-      level: data.level ?? null,
+      tags: normalizeActivityTags(data.tags),
       color: data.color ?? '',
       autoConfirm: data.autoConfirm,
     }
@@ -577,14 +614,21 @@ function ActivityDialog({
     }
     return {
       isFreeTrial: data.accessTier === 'open',
-      // THE TIER IS THIS DIALOG'S; THE ALLOW-LIST IS THE CATALOGUE'S. The ids
+      // THE TIER IS THIS DIALOG'S; THE ALLOW-LIST IS THE PLAN EDITOR'S. The ids
       // are carried through from the stored document rather than read off a
-      // control that is no longer here — same rule as `waitlistEnabled` below.
-      // Without this, saving any edit would blank the plans the catalogue set.
+      // control this form does not own — same rule as `waitlistEnabled` below.
+      // Without this, saving any edit would blank the plans that editor set.
+      //
+      // It reads `seed`, which for an edit is the LIVE document: the plan
+      // editor is mounted in this very dialog and writes this same field, so a
+      // snapshot taken when the dialog opened would put the pre-edit list
+      // straight back. For a COPY it is the activity being copied — a duplicate
+      // carries its plans like everything else, and a subscription-gated
+      // activity with an empty allow-list is one nobody can book.
       accessRule: {
         type: data.accessTier,
         ...(data.accessTier === 'subscription'
-          ? { subscriptionTypeIds: gatedPlanIds(editing ?? { type: 'class' }) }
+          ? { subscriptionTypeIds: gatedPlanIds(seed ?? { type: 'class' }) }
           : {}),
       },
       dropIn: {
@@ -615,6 +659,17 @@ function ActivityDialog({
   }
 
   async function onSubmit(data: ActivityFormData) {
+    // A class gated to subscriptions with an empty allow-list is a class NOBODY
+    // can book, and nothing downstream refuses it. Checked here rather than in
+    // the schema because the ids are not a form field at all — they live on the
+    // stored document, written by the plan editor mounted above. Only while
+    // editing: a brand-new activity has no id to hang an edge on, which is what
+    // `accessPlansAfterSave` tells the studio to come back for.
+    if (editing && data.type === 'class' && data.accessTier === 'subscription' &&
+        gatedPlanIds(editing).length === 0) {
+      setError('accessTier', { type: 'manual', message: t('accessSubscriptionPlansValidation') })
+      return
+    }
     if (editing) {
       // EDIT: the image upload (when there's a new file) runs BEFORE the
       // write, so a throw anywhere in this block means updateDoc never ran —
@@ -634,6 +689,7 @@ function ActivityDialog({
         }
         await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), updates)
         await qc.invalidateQueries({ queryKey: ['activities'] })
+        void invalidateSetupChecklist()
         toast.success(t('savedToast'))
         onClose()
       } catch (err) {
@@ -684,6 +740,7 @@ function ActivityDialog({
       } catch (err) {
         console.error('[activities] cover upload failed:', err)
         await qc.invalidateQueries({ queryKey: ['activities'] })
+        void invalidateSetupChecklist()
         toast.error(t('createdImageErrorToast'))
         onClose()
         return
@@ -691,6 +748,7 @@ function ActivityDialog({
     }
 
     await qc.invalidateQueries({ queryKey: ['activities'] })
+    void invalidateSetupChecklist()
     toast.success(t('createdToast'))
     onClose()
   }
@@ -850,25 +908,45 @@ function ActivityDialog({
                     </div>
                   )}
                 />
-                {accessTier === 'subscription' && (
-                  /* WHICH plans is set in the catalogue, not here. The list used
-                     to live in this dialog AND in the subscription editor — two
-                     copies of one relationship, and neither could show the other
-                     side. A gated activity saved before its plans are picked is
-                     counted by the catalogue's banner, which is the path back. */
-                  <div className="space-y-2 rounded-md border border-dashed p-3">
-                    <p className="text-xs text-muted-foreground">{t('accessPickInCatalogue')}</p>
-                    <Link
-                      href={
-                        (editing
-                          ? `/offer/catalogue?sel=activity:${editing.id}`
-                          : '/offer/catalogue') as Route
-                      }
-                      className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                    >
-                      {t('accessOpenCatalogue')}
-                    </Link>
-                  </div>
+                {accessTier === 'subscription' &&
+                  (editing ? (
+                    /* WHICH plans, EDITED HERE. For one release this was a link
+                       to the catalogue, which sent the studio out of a
+                       half-filled form — discarding every unsaved field — to
+                       answer the most obvious question the tier raises. The
+                       control is back and there is still exactly one writer of
+                       the edge, because this mounts THAT writer: the same
+                       `ActivityPlanLinks` the catalogue and the subscription
+                       editor mount, in its offering direction. The catalogue
+                       keeps the plan-side view of the same rows. */
+                    <div className="rounded-md border p-3">
+                      <ActivityPlanLinks
+                        direction="from-offering"
+                        offering={{
+                          id: editing.id,
+                          name: editing.name,
+                          collection: ACTIVITIES_COLLECTION,
+                          color: editing.color ?? '',
+                          target: { kind: 'activity', doc: editing },
+                        }}
+                        offerings={[]}
+                        plans={subscriptionTypes}
+                        currency={currency}
+                        canEdit={canEditPlanLinks}
+                        hostedInForm
+                        onDirtyChange={setPlanLinksDirty}
+                      />
+                    </div>
+                  ) : (
+                    /* An activity that does not exist yet has no id to hang an
+                       edge on. Say so, rather than showing ticks that would be
+                       discarded on save. */
+                    <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                      {t('accessPlansAfterSave')}
+                    </p>
+                  ))}
+                {errors.accessTier && (
+                  <p className="text-xs text-destructive">{errors.accessTier.message}</p>
                 )}
               </div>
             )}
@@ -1169,32 +1247,17 @@ function ActivityDialog({
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 p-3">
-                <Label htmlFor="act-level" className="font-medium">{t('fieldLevel')}</Label>
+              {/* Display-only, like `prerequisites` below — which is why it sits
+                  behind the disclosure and not among the decisions above. */}
+              <div className="p-3">
                 <Controller
-                  name="level"
+                  name="tags"
                   control={control}
                   render={({ field }) => (
-                    <Select
-                      value={field.value ?? LEVEL_NONE}
-                      onValueChange={(v) => field.onChange(v === LEVEL_NONE ? undefined : v)}
-                    >
-                      <SelectTrigger className="w-44">
-                        <span className="flex flex-1 text-left text-sm truncate">
-                          {field.value ? (
-                            t(`level_${field.value}` as const)
-                          ) : (
-                            <span className="text-muted-foreground">{t('level_none')}</span>
-                          )}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={LEVEL_NONE}>{t('level_none')}</SelectItem>
-                        {LEVELS.map((l) => (
-                          <SelectItem key={l} value={l}>{t(`level_${l}` as const)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ActivityTagsEditor
+                      value={(field.value ?? []) as string[]}
+                      onChange={field.onChange}
+                    />
                   )}
                 />
               </div>
@@ -1304,6 +1367,7 @@ function ActivityDialog({
                     definitions={customFieldDefinitions}
                     extendsTeamDefault
                     inheritedKeys={teamContactFieldKeys}
+                    customFieldsInstalled={isInstalled('custom-fields')}
                   />
                 )}
               />
@@ -1311,7 +1375,14 @@ function ActivityDialog({
           </MoreOptions>
           </DialogBody>
 
-          <DialogFooter>
+          <DialogFooter className={planLinksDirty ? 'sm:justify-between' : undefined}>
+            {/* The plan editor above owns its own Save and its own document
+                write. Saving HERE carries the stored plan list through, so ticks
+                left unsaved there are lost — said out loud, next to the button
+                that would lose them, rather than after the fact. */}
+            {planLinksDirty && (
+              <p className="text-xs text-muted-foreground">{t('planLinksUnsaved')}</p>
+            )}
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? t('saving') : editing ? t('saveChanges') : t('createActivity')}
             </Button>
@@ -1429,25 +1500,19 @@ function ActivityCard({
           {activity.type === 'appointment' && (
             <Badge variant="secondary" className="text-xs">{t('type_appointment')}</Badge>
           )}
-          {(() => {
-            const raw = activity.level
-            if (!raw) return null
-            const key = raw.toLowerCase().replace(/\s+/g, '_')
-            if (key === 'all' || key === 'all_levels') return null
-            const known = ['beginners', 'intermediate', 'advanced'] as const
-            const match = known.find((k) => k === key)
-            return match ? (
-              <Badge variant="secondary" className="text-xs">
-                {t(`level_${match}` as const)}
-              </Badge>
-            ) : null
-          })()}
+          {activity.tags?.map((tag) => (
+            <Badge key={tag} variant="secondary" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
           {(() => {
             const rule = resolveActivityAccessRule(activity)
             if (rule.type === 'subscription')
               return <Badge variant="outline" className="text-xs">{t('accessBadgeSubscription')}</Badge>
+            // The SHORT label, not the tier card's: this is a chip in a row of
+            // chips, and the card title carries a qualifier that would wrap here.
             if (rule.type === 'members')
-              return <Badge variant="outline" className="text-xs">{t('access_members')}</Badge>
+              return <Badge variant="outline" className="text-xs">{t('accessBadgeMembers')}</Badge>
             return activity.isFreeTrial ? (
               <Badge variant="outline" className="text-xs">{t('freeTrialBadge')}</Badge>
             ) : null
@@ -1510,8 +1575,13 @@ export default function ActivitiesPage() {
   const { currentTeamId, user, team } = useAuth()
   const { data: activities = [], isLoading } = useActivities(currentTeamId)
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
+  // Same capability the catalogue gates the plan editor on, so the control does
+  // not appear here for someone the write would be refused for.
+  const canEditPlanLinks = useCapabilities().can('team.settings')
   const currency = team?.default_currency ?? 'CHF'
   const qc = useQueryClient()
+  // Archiving the last activity puts the "add an activity" step back.
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
   const t = useTranslations('Activities')
   const tq = useTranslations('QuickLinks')
   // The button's label IS the catalogue's page title, so the two cannot drift.
@@ -1531,6 +1601,12 @@ export default function ActivitiesPage() {
   // sit above its disclosure, and this answers a question you ask BEFORE
   // deciding to change anything.
   const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
+  // The dialog gets the LIVE row, never this snapshot. It now hosts the plan
+  // editor, which writes `accessRule` on the same activity and invalidates
+  // ['activities'] — so the form must be looking at the refreshed document when
+  // its own Save carries that field forward. The dialog is keyed on the id, so
+  // it does not remount on the refetch and nothing typed is lost.
+  const editingLive = editing ? (activities.find((a) => a.id === editing.id) ?? editing) : null
 
   function openNew() { setEditing(null); setDuplicating(null); setDialogOpen(true) }
   function openEdit(a: Activity) { setDuplicating(null); setEditing(a); setDialogOpen(true) }
@@ -1557,6 +1633,7 @@ export default function ActivitiesPage() {
     if (!archiving) return
     await updateDoc(doc(db, ACTIVITIES_COLLECTION, archiving.id), { isActive: false })
     await qc.invalidateQueries({ queryKey: ['activities'] })
+    void invalidateSetupChecklist()
     setArchiving(null)
   }
 
@@ -1706,10 +1783,12 @@ export default function ActivitiesPage() {
           onClose={closeDialog}
           teamId={currentTeamId}
           userId={user.uid}
-          editing={editing}
+          editing={editingLive}
           duplicating={duplicating}
           nextOrder={activities.length}
           currency={team?.default_currency ?? 'CHF'}
+          subscriptionTypes={subscriptionTypes}
+          canEditPlanLinks={canEditPlanLinks}
         />
       )}
 

@@ -182,7 +182,9 @@
     "utilities": "More",
     "subscriptionPlans": "Subscription plans",
     "memberSubscriptions": "Member subscriptions",
-    "paymentsAndSubscriptions": "Payments & Subscriptions"
+    "paymentsAndSubscriptions": "Payments & Subscriptions",
+    "sidebarResizeLabel": "Resize sidebar",
+    "sidebarResizeHint": "Drag to resize — drag past the left to collapse, double-click to reset"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -224,7 +226,7 @@
     "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot.",
     "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you.",
     "surfaceAppointments": "Appointments",
-    "appointmentsDesc": "Let visitors pick a free time with a coach and book it themselves.",
+    "appointmentsDesc": "Part of booking — visitors pick a coach's free time and book it themselves.",
     "surfaceEvents": "Events",
     "eventsDesc": "Your published events, with their day-by-day programme."
   },
@@ -313,7 +315,13 @@
     "errorTeamGeneric": "Could not create your team. Please try again.",
     "currency": "Currency",
     "language": "Language",
-    "languageHint": "The language your members are written to in — confirmations, reminders and receipts. You can change both later."
+    "languageHint": "The language your members are written to in — confirmations, reminders and receipts. You can change both later.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "memberLanguage": "Member language",
+    "memberLanguageHint": "The language your members are written to in — confirmations, reminders and receipts. Your own dashboard language is chosen separately, from the user menu.",
+    "errorNameRequired": "Required",
+    "errorNameTooLong": "Max 40 characters"
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -1190,7 +1198,9 @@
     "eventDayOf": "Day {day} of {total}",
     "eventFrom": "from",
     "eventUntil": "until",
-    "deleteEventConfirmTitle": "Delete this event?"
+    "deleteEventConfirmTitle": "Delete this event?",
+    "timezoneNotice": "Times shown in {zone}.",
+    "timezoneChange": "Change"
   },
   "Events": {
     "title": "Events",
@@ -1541,7 +1551,6 @@
     "createdImageErrorToast": "Activity created, but the cover image couldn't be uploaded. Edit the activity to add it later.",
     "fieldName": "Name",
     "fieldDescription": "Description",
-    "fieldLevel": "Level",
     "fieldColor": "Color",
     "fieldImage": "Cover image",
     "type_class": "Class",
@@ -1551,10 +1560,6 @@
     "fieldFreeTrial": "Available as free trial booking",
     "fieldDurationsMinutes": "Session lengths",
     "durationsMinutesHint": "The lengths clients can choose from when booking this offering.",
-    "level_all": "All levels",
-    "level_beginners": "Beginners",
-    "level_intermediate": "Intermediate",
-    "level_advanced": "Advanced",
     "freeTrialBadge": "Trial",
     "cancel": "Cancel",
     "archive": "Archive",
@@ -1564,8 +1569,8 @@
     "accessLabel": "Who can book",
     "access_open": "Open to everyone",
     "access_open_desc": "Anyone can book, free — no membership and no payment. A newcomer becomes a trial contact.",
-    "access_members": "Members only",
-    "access_members_desc": "Members book with their membership. A newcomer can still book one class if “Free trial for newcomers” is on below.",
+    "access_members": "Any member",
+    "access_members_desc": "Anyone who has joined can book — also without a subscription. A newcomer can still book one class if “Free trial for newcomers” is on below.",
     "access_subscription": "Specific subscriptions",
     "access_subscription_desc": "Only members holding one of the selected subscriptions can book. A newcomer can still book one class if “Free trial for newcomers” is on below.",
     "accessBadgeSubscription": "Subscription",
@@ -1636,7 +1641,6 @@
     "waitlistEnabledHint": "When a session is full, visitors join a queue instead of hitting a dead end. The first in line is offered the seat automatically as soon as one frees up.",
     "waitlistRequiresCapacity": "Only has an effect on sessions with a participant limit — a session with no limit is never full.",
     "waitlistRequiresPlan": "Available from the {plan} plan.",
-    "level_none": "Not specified",
     "sectionBookingTitle": "Booking and pricing",
     "sectionBookingSubtitle": "Who can book this, and what it costs them.",
     "moreOptionsLabel": "More options",
@@ -1651,12 +1655,20 @@
     "scheduleSheetEmptyBody": "This activity has no upcoming sessions, so nobody can see or book it.",
     "scheduleSheetEmptyCta": "Schedule a session",
     "scheduleSheetOpenSchedule": "Open the schedule",
-    "accessPickInCatalogue": "Which plans can book this is set in the catalogue, next to the plans themselves.",
     "accessOpenCatalogue": "Open the catalogue",
     "dropInRateInCatalogue": "A member rate on this price is set in the catalogue — it is one rule shared by every plan on it.",
     "benefitInCatalogue": "The member rate for these session lengths is set in the catalogue, beside the plans it applies to.",
     "dropInPriceValidation": "Enter a drop-in price of at least 0.50",
-    "durationsRequiredValidation": "Pick at least one session length"
+    "durationsRequiredValidation": "Pick at least one session length",
+    "accessBadgeMembers": "Members",
+    "accessPlansAfterSave": "Save the activity first, then choose which plans can book it.",
+    "fieldTags": "Tags",
+    "tagsHint": "Short labels shown publicly on the booking page — e.g. Beginner friendly, Gi, Kids.",
+    "tagsPlaceholder": "Add a label and press Enter",
+    "tagsMax": "{max} labels is the maximum.",
+    "tagRemove": "Remove {tag}",
+    "accessSubscriptionPlansValidation": "Choose at least one subscription that can book this activity.",
+    "planLinksUnsaved": "The plans above have unsaved changes — save them in that box first, or this Save will discard them."
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -1715,7 +1727,6 @@
     "subTypePublic": "Show on public pricing page",
     "subTypePublicDesc": "List this plan on your bio-link and website pricing table.",
     "subTypeCheckoutContact": "Contact capture at checkout",
-    "subTypeCheckoutContactDesc": "Off — no contact. Minimal — create a member with name + email. Full — create the member, then have them finish signup (consent + required fields).",
     "subTypeContactMode_off": "Off",
     "subTypeContactMode_minimal": "Minimal",
     "subTypeContactMode_full": "Full",
@@ -1900,7 +1911,28 @@
     "paymentsExternalBeta": "Beta",
     "paymentsExternalLimitMatch": "Linyup tries to match the contact by email.",
     "paymentsExternalLimitLink": "Payments are not automatically linked to booking, plan, course or product.",
-    "paymentsExternalLimitRefund": "Refunds, pause and cancellation should be handled manually in your provider's dashboard and in Linyup."
+    "paymentsExternalLimitRefund": "Refunds, pause and cancellation should be handled manually in your provider's dashboard and in Linyup.",
+    "customFieldRequiredHint": "Marks the field as required on the contact form. Whether the booking form requires it is set in Booking settings.",
+    "customFieldPublicBadge": "Available on the booking form",
+    "customFieldPublicNextStep": "This only makes the field available. Save, then switch it on under \"Contact details to collect\" in Booking settings to actually ask it.",
+    "customFieldPublicNextStepLink": "Open booking settings",
+    "subTypeContactMode_off_desc": "No contact is created.",
+    "subTypeContactMode_minimal_desc": "Create a member with name + email.",
+    "subTypeContactMode_full_desc": "Create the member, then have them finish signup (consent + required fields).",
+    "regionTitle": "Region & formats",
+    "regionHint": "How dates and times are shown across your studio. Everyone on your team sees the same formats; the dashboard language stays personal.",
+    "regionTimezone": "Time zone",
+    "regionTimezoneHint": "Used to display times and to date the emails you send. Start typing to search, e.g. Europe/Zurich.",
+    "regionTimezoneInvalid": "Unknown time zone — pick one from the list.",
+    "regionUseDeviceTimezone": "Use this device",
+    "regionWeekStart": "Week starts on",
+    "regionWeekStartMonday": "Monday",
+    "regionWeekStartSunday": "Sunday",
+    "regionDateFormat": "Date format",
+    "regionTimeFormat": "Time format",
+    "regionTime24h": "24-hour (18:30)",
+    "regionTime12h": "12-hour (6:30 PM)",
+    "regionPreview": "Preview"
   },
   "Bookings": {
     "title": "Bookings",
@@ -1944,7 +1976,28 @@
     "range_thisMonth": "This month",
     "range_custom": "Custom",
     "empty": "No bookings yet.",
-    "emptySearch": "No bookings match your search."
+    "emptySearch": "No bookings match your search.",
+    "subtitleWindow": "{total} in this range · {trials} trial",
+    "windowTruncated": "Showing the {count} most recent — narrow the range to see them all.",
+    "windowTooWideTitle": "Too many classes in this range",
+    "windowTooWide": "This range covers more than {count} classes, too many to load at once. Pick a shorter range.",
+    "dateAxisLabel": "Filter by",
+    "axisClassDate": "Class date",
+    "axisBookingDate": "Booking date",
+    "range_tomorrow": "Tomorrow",
+    "range_next7": "Next 7 days",
+    "range_next30": "Next 30 days",
+    "range_nextMonth": "Next month",
+    "rangeMaxSpan": "Max {days} days",
+    "labelClassDate": "Class:",
+    "labelBookedOn": "Booked:",
+    "labelReference": "Ref",
+    "searchPlaceholderWithReference": "Search by name, email or reference…",
+    "referenceMatchHeading": "Booking reference {code}",
+    "referenceSearching": "Looking up the reference…",
+    "referenceNotFound": "No booking found with reference {code}.",
+    "referenceMultipleMatches": "{count} bookings share this reference — check the name and the class.",
+    "emptyWindow": "No bookings in this range."
   },
   "ManageBooking": {
     "title": "Manage booking",
@@ -2115,7 +2168,13 @@
     "analyticsHint": "Helps us improve the product",
     "analyticsOn": "On",
     "analyticsOff": "Off",
-    "qrSurfaceDesc": "Scanning opens this page in the visitor's browser."
+    "qrSurfaceDesc": "Scanning opens this page in the visitor's browser.",
+    "switchStudio": "Switch studio",
+    "currentStudio": "Current studio",
+    "createStudio": "Create another studio",
+    "switchStudioFailed": "Could not switch studio. Please try again.",
+    "studioListFailed": "Could not load your studios.",
+    "studioListRetry": "Try again"
   },
   "BioLink": {
     "title": "Bio link",
@@ -3486,6 +3545,35 @@
           "desc": "Online courses, gift cards, waivers, finance and more. Turn on only what you need.",
           "ack": "I've had a look",
           "label": "Explore plugins"
+        },
+        "bioLink": {
+          "label": "Fill in your bio link page",
+          "desc": "Your links, your socials and your look. The page is already live."
+        },
+        "publicPages": {
+          "label": "See all your public pages",
+          "desc": "Every page your members and visitors can reach, in one list.",
+          "ack": "I've had a look"
+        },
+        "qrCodes": {
+          "label": "Get your QR codes",
+          "desc": "One code per public page — print them, or put them on the wall.",
+          "ack": "I've had a look"
+        },
+        "automations": {
+          "label": "Set up an automation",
+          "desc": "Welcome messages, reminders, follow-ups — sent without you.",
+          "ack": "I've had a look"
+        },
+        "paymentsReview": {
+          "label": "Check your payments page",
+          "desc": "Every payment that comes in, and everything still owed.",
+          "ack": "I've had a look"
+        },
+        "shortcuts": {
+          "label": "Pin a shortcut",
+          "desc": "Keep the pages you use every day at the top of the sidebar.",
+          "ack": "I've had a look"
         }
       },
       "ackUndo": "Undo",
@@ -4938,7 +5026,7 @@
     "toggleShowActivityDescriptionLabel": "Show activity description",
     "toggleShowActivityDescriptionDesc": "Show the activity description text on the activity selection screen.",
     "toggleShowFitnessAppLabel": "Show fitness app field",
-    "toggleShowFitnessAppDesc": "Ask new guests which fitness app they're coming from (e.g. Fitpass, ClassPass).",
+    "toggleShowFitnessAppDesc": "Ask new guests which partner app they came through. The options are your own partner (aggregator) subscription types — while you have none, the question is not shown.",
     "toggleAppointmentsEnabledLabel": "Show appointment booking",
     "toggleAppointmentsEnabledDesc": "Show appointment booking in the public booking flow.",
     "ctaTitle": "CTA button (optional)",
@@ -4960,7 +5048,9 @@
     "toggleWaitlistEnabledDesc": "Let clients queue for a full class and be offered a seat when one frees up. Turn this on to show the waitlist option on each activity.",
     "noShowPublicNote": "These terms are shown to visitors on your public booking pages before they book. The fee is emailed as a payment link — it is never charged to a saved card.",
     "moreOptionsLabel": "More options",
-    "moreOptionsHint": "Booking window, cutoff, the fields you ask for, and a custom button"
+    "moreOptionsHint": "Booking window, cutoff, the fields you ask for, and a custom button",
+    "betaBadge": "Beta",
+    "betaBadgeHint": "Ready to use — this feature may still change."
   },
   "SettingsPlaces": {
     "pageTitle": "Places",
@@ -5234,7 +5324,24 @@
     "restoredToast": "{name} put back",
     "restoreFailed": "Could not put that back. Reload and check the roster.",
     "removeFailed": "Could not remove that. Nothing was changed.",
-    "undo": "Undo"
+    "undo": "Undo",
+    "seatPaidBadge": "Drop-in paid",
+    "seatPaidBadgeTitle": "This seat was paid for online",
+    "seatGiftCardBadge": "Gift card",
+    "seatGiftCardBadgeTitle": "This seat was paid for with a gift card",
+    "seatCreditBadge": "Credit used",
+    "seatCreditBadgeTitle": "This seat used one class credit from a credit pack",
+    "seatUsageBadge": "Included in membership",
+    "seatUsageBadgeTitle": "This seat used one of the classes the subscription includes",
+    "seatAwaitingPaymentBadge": "Awaiting payment",
+    "seatAwaitingPaymentBadgeTitle": "Checkout started but not finished — this seat is not paid for yet",
+    "confirmedSection": "Confirmed, not checked in",
+    "confirmedBadge": "Confirmed",
+    "markNoShowFromCheckInTitle": "Mark as no-show and remove the check-in",
+    "noShowConfirmTitle": "Mark as no-show?",
+    "noShowConfirmBody": "{name} will be marked as a no-show and their check-in removed. It counts as an absence and can trigger no-show automations.",
+    "noShowConfirmAction": "Mark as no-show",
+    "noShowFailed": "Could not mark as no-show"
   },
   "OrgEvents": {
     "title": "Organization events",
@@ -6890,7 +6997,12 @@
     "versusBookingQuestions": "These are saved to the contact and can be filtered later. For something that only matters for one booking, use the activity's booking questions instead.",
     "field_phone": "Phone number",
     "field_birthdate": "Date of birth",
-    "field_address": "Address"
+    "field_address": "Address",
+    "notAskedYet": "Available — switch on to ask it on the booking form.",
+    "addFieldsPrompt": "Need another detail? Create your own field and it appears here.",
+    "addFieldsLink": "Add a custom field",
+    "addFieldsPluginPrompt": "Only the fields above? Custom fields let you collect anything else.",
+    "addFieldsPluginLink": "Activate custom fields"
   },
   "QuickActions": {
     "newSession": "New session",
@@ -7012,7 +7124,9 @@
     "pendingBody": "Everything will be permanently erased on {date}. Until then the studio works as normal and you can stop this at any time.",
     "pendingBillingNote": "Your members' subscriptions were already cancelled and cannot be restarted — they would need to buy a membership again.",
     "cancelAction": "Stop the deletion",
-    "errorGeneric": "That didn't work. Nothing has been deleted."
+    "errorGeneric": "That didn't work. Nothing has been deleted.",
+    "bannerTitle": "This studio will be permanently erased on {date}.",
+    "bannerBody": "Until then the studio works as normal."
   },
   "TeamInvitation": {
     "title": "You've been invited",

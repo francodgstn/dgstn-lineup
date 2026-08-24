@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { useTranslations } from 'next-intl'
 import {
   collection,
@@ -2066,6 +2067,7 @@ export default function AutomationsPage() {
   // installed add-ons (the builder only offers those). Show a note below Studio.
   const fullAutomations = isAtLeast('studio')
   const qc = useQueryClient()
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
 
   // Plugin-contributed triggers and actions
   const { plugins: installedPlugins } = useInstalledPlugins()
@@ -2162,8 +2164,12 @@ export default function AutomationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, rules])
 
-  const invalidateRules = () =>
-    qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
+  // The setup checklist's "set up an automation" step counts the same
+  // subcollection, through its own cached query.
+  const invalidateRules = () => {
+    void invalidateSetupChecklist()
+    return qc.invalidateQueries({ queryKey: ['automation_rules', currentTeamId] })
+  }
   const invalidateTemplates = () =>
     qc.invalidateQueries({ queryKey: ['outreach_templates', currentTeamId] })
   const invalidateAll = () => {

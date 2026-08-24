@@ -613,9 +613,20 @@ function useContactActivityLog(contactId: string, teamId: string | null, days?: 
 
 interface RecentSession {
   id: string
-  joinedAt: { toDate(): Date } | null
+  checkedInAt: { toDate(): Date } | null
 }
 
+/**
+ * The sessions this contact was actually checked in to, most recent first.
+ *
+ * ORDERED ON `checkedInAt`, WHICH IS THE FIELD THE WRITER WRITES. It asked for
+ * `joinedAt` — a field `buildParticipantDoc` (the ONE writer of an attendance
+ * row) has never set — and the index behind that query is sparse, so every real
+ * check-in was silently absent and the list came back empty. Only the seeders
+ * write `joinedAt` on participants, which is why this looked alive on demo data
+ * and dead for every studio. Same failure as the bookings query above, one
+ * collection over.
+ */
 function useContactRecentSessions(contactId: string, count: number) {
   return useQuery<RecentSession[]>({
     queryKey: ['contact-recent-sessions', contactId, count],
@@ -624,11 +635,11 @@ function useContactRecentSessions(contactId: string, count: number) {
         query(
           collectionGroup(db, 'participants'),
           where('contactId', '==', contactId),
-          orderBy('joinedAt', 'desc'),
+          orderBy('checkedInAt', 'desc'),
           limit(count)
         )
       )
-      return snap.docs.map((d) => ({ id: d.id, joinedAt: d.data().joinedAt ?? null }))
+      return snap.docs.map((d) => ({ id: d.id, checkedInAt: d.data().checkedInAt ?? null }))
     },
   })
 }

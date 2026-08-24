@@ -19,6 +19,7 @@ key is server-side only and BYO domains are authenticated via the studio's own D
 | `brevoDomains.ts` | Brevo sender-domains API (create / status / authenticate / delete). |
 | `domainAuth.ts` | Callables: `registerSenderDomain`, `checkSenderDomain`, `useManagedSender`. |
 | `handleBrevoWebhook.ts` | `onRequest` webhook → suppression + delivery-status ledger. |
+| `mailMetrics.ts` | Aggregations over the send log — the platform daily figure. |
 
 Application code does **not** import this module directly — it calls
 `sendEmail(...)` from `../utils/email`, a thin façade. Pass `teamId` to send **as the
@@ -97,10 +98,10 @@ outbound delivery is layered:
 | `redirect` | Replace every recipient with `redirectEmail`/`redirectPhone` (e2e capture inboxes) |
 | `silent` | Drop everything |
 
-Resolution is cached in-memory for 60s (`mail/messagingPolicy.ts`). Keyed sends
-that are fully dropped write a `mail_sends` ledger entry with `status:'suppressed'`
-+ `suppress_reason` (`synthetic` / `policy_silent` / `policy_allowlist`) so gaps
-are explainable; a `'suppressed'` entry is terminal for that idempotency key.
+Resolution is cached in-memory for 60s (`mail/messagingPolicy.ts`). A send that is
+fully dropped writes a `mail_sends` entry with `status:'suppressed'` +
+`suppress_reason` so gaps are explainable. A `'suppressed'` entry does **not**
+spend the idempotency key — see "The send log" below.
 
 **Operator visibility:** the functions runtime publishes its messaging ENV params
 (kill switches, TEST_MODE + redirect target, default mode) hourly to
@@ -162,9 +163,64 @@ polls Brevo (`authenticate` + `getDomainConfiguration`) and flips the status to
   hardBounce/blocked/spam/invalid/unsubscribed; `mailService` skips suppressed
   recipients so repeated sends to dead addresses stop.
 - Pass `idempotencyKey` on critical-path sends. The key is forwarded to Brevo
-  (`Idempotency-Key` header) and recorded in `mail_sends/{key}`; a duplicate keyed
-  send is skipped, and keyed sends are retried with backoff (safe because Brevo
-  dedupes on the key).
+  (`Idempotency-Key` header) and becomes the `mail_sends` **doc id**; a duplicate
+  keyed send is skipped, and keyed sends are retried with backoff (safe because
+  Brevo dedupes on the key).
+
+## The send log (`mail_sends`)
+
+**Every send is recorded** — keyed or not. A keyed send uses its key as the doc
+id (that is what makes a resend a no-op); a keyless one gets an auto id. Until
+2026-08 a row was written only when the call site passed a key, which was a
+minority of sends, so anything counting the collection reported an arbitrary
+fraction while reading as authoritative. There is no backfill for the gap: those
+sends were never recorded, and every figure derived from the ledger says so.
+
+Client reads and writes are denied outright (`firestore.rules`) — this is an
+Admin-SDK collection.
+
+| Field | Notes |
+|---|---|
+| `channel` | `'email'` \| `'sms'`. SMS shares this collection; mail rows carry it too from 2026-08, so the two are separable. Rows older than that have none. |
+| `stream` | `'system'` (Linyup's own mail) \| `'studio'` (sent AS a tenant). |
+| `team_id` | Present on studio mail only — system mail is attributable to no studio. |
+| `status` | `'sent'` → flipped by the Brevo webhook to delivered / bounced / blocked / spam / failed; or `'suppressed'` for a send dropped before the provider. |
+| `suppress_reason` | `synthetic` / `policy_silent` / `policy_allowlist` / `dead_address`. |
+| `recipient_count` | Addresses handed to the provider — a row is one provider call, which may carry several. `0` on a suppressed row. |
+| `created_at` | The SEND time, stamped **once**. `updated_at` moves when a delivery webhook lands, so it is not a send-time axis and no count ranges over it. |
+
+A drop caused by the ENVIRONMENT writes **nothing**, on purpose — the kill
+switch (`MAIL_ENABLED=false`), and TEST_MODE with no `TEST_EMAIL` to redirect to.
+Neither is a fact about an address, and filing an operator's configuration beside
+a hard bounce would tell a studio that a real address is bad when nothing was
+ever sent.
+
+**A suppressed row does not spend the idempotency key.** The key is the doc id,
+and a keyed resend is skipped only once the row shows the message REACHED THE
+PROVIDER — `sent`, or whatever the webhook made of it (`delivered`, `bounced`,
+`blocked`, `spam`). `failed` and `suppressed` both mean nothing left the process.
+A suppressed row records a seeded `@example.com` address, a policy the operator
+set, or an address on the suppression list; every one of those can be true today
+and false tomorrow, while the key is derived from the message and never changes.
+Treat the drop as terminal and the legitimate send that follows the fix is
+skipped forever. The rule lives in one predicate, `ledgerRowSpendsKey`
+(`mailService.ts`), and is pinned by `mailService.test.ts`.
+
+**Counting it.** Aggregations, never a stored counter — nothing here is
+write-contended (a per-team counter would be touched once per email), and an
+aggregation cannot drift out of sync with the rows it reads.
+
+A ROW IS A PROVIDER CALL, NOT AN EMAIL. So a "sent" figure SUMS `recipient_count`
+(the addresses, which is what an operator reads "Emails" to mean) and a
+"suppressed" figure COUNTS rows — a suppressed send reached nobody and carries
+`recipient_count: 0`, which is also why the sums need no `status != 'suppressed'`
+filter. Just as well: an inequality drops documents where the field is absent,
+and it cannot be combined with a `created_at` range anyway.
+
+Readers: `mailMetrics.ts` (platform daily snapshot → `PlatformMetricsDoc.mail`)
+and `apps/admin/src/lib/queries/messaging.ts` (per-studio + live platform
+figures). Retention is deliberately unset — the collection grows forever; if a
+TTL is ever added, the lifetime figures must move to the daily snapshot.
 
 ## Tests
 
@@ -172,6 +228,8 @@ polls Brevo (`authenticate` + `getDomainConfiguration`) and flips the status to
   no-domain→Managed / free-plan→Managed.
 - `brevoProvider.test.ts` — request mapping (sender, reply-to, idempotency, attachments).
 - `handleBrevoWebhook.test.ts` — event classification.
+- `mailMetrics.test.ts` — the Zurich day window, including both DST switches.
+- `mailService.test.ts` — which ledger states spend an idempotency key.
 - `brevo.integration.test.ts` — live, runs only when `BREVO_API_KEY` (and
   `BREVO_TEST_RECIPIENT` for sends) is set; covers system, managed-studio and BYO sends
   plus a domain-status read.

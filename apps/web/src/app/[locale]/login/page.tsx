@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Route } from 'next'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
@@ -49,6 +49,21 @@ export default function LoginPage() {
   const { enabled: signupEnabled } = usePublicSignupEnabled()
   const [error, setError] = useState<string | null>(null)
   const [resetSent, setResetSent] = useState(false)
+
+  // A submit BEFORE hydration is a real credential leak, not a cosmetic bug.
+  // This page is prerendered, so the served HTML contains a working <form> whose
+  // inputs carry react-hook-form's `name` attributes; a form with no action
+  // submits GET to its own URL, so Enter or a click during the hydration window
+  // (slow mobile, cold cache, a chunk that 404s after a deploy) navigates to
+  // /login?email=…&password=…. That URL then reaches analytics, browser history,
+  // the access log and the Referer of every later request from the page.
+  //
+  // Per the HTML spec implicit submission activates the form's DEFAULT button,
+  // and a disabled default button blocks it — so shutting the button closes the
+  // Enter path as well as the click. Do not swap this for a visual-only
+  // disabled style.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
 
   const {
     register,
@@ -121,7 +136,11 @@ export default function LoginPage() {
 
           <AuthDivider label={tAuth('orWithEmail')} />
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* `method="post"` is the belt to the disabled button's braces: even if
+              a pre-hydration submit escapes, POST puts the values in a body
+              Next.js rejects, never in a query string. Inert once hydrated,
+              since handleSubmit preventDefaults. */}
+          <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1" suppressHydrationWarning>
               <label htmlFor="email" className="text-sm font-medium">
                 {t('email')}
@@ -158,7 +177,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={!hydrated || isSubmitting}
               className="w-full rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {isSubmitting ? t('submitting') : t('submit')}

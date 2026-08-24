@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
 import { useSearchParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
@@ -128,11 +129,6 @@ function toTs(ts: unknown): number | null {
   return obj.seconds ? obj.seconds * 1000 : null
 }
 
-function formatDate(ts: unknown) {
-  const ms = toTs(ts)
-  return ms ? new Date(ms).toLocaleDateString() : null
-}
-
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat('de-CH', {
     style: 'currency',
@@ -215,6 +211,7 @@ function SubscriptionCard({
   teamId: string
 }) {
   const t = useTranslations('Billing')
+  const fmt = useTeamFormat()
   const tp = useTranslations('Pricing')
   const planName = usePlanName()
 
@@ -353,15 +350,15 @@ function SubscriptionCard({
               {/* Billing period */}
               {status !== 'trial' && periodStartDate && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
-                  {t('periodLabel')}: {periodStartDate.toLocaleDateString()} –{' '}
-                  {periodEndDate.toLocaleDateString()}
+                  {t('periodLabel')}: {fmt.date(periodStartDate)} –{' '}
+                  {fmt.date(periodEndDate)}
                 </p>
               )}
 
               {/* Trial end */}
               {status === 'trial' && trialEndDate && (
                 <p className="text-sm text-muted-foreground">
-                  {t('trialEnds', { date: trialEndDate.toLocaleDateString() })}
+                  {t('trialEnds', { date: fmt.date(trialEndDate) })}
                 </p>
               )}
 
@@ -370,7 +367,7 @@ function SubscriptionCard({
                   in the Stripe portal was never shown. */}
               {endsAtDate && (
                 <p className="text-sm text-amber-600">
-                  {t('accessUntil', { date: endsAtDate.toLocaleDateString() })}
+                  {t('accessUntil', { date: fmt.date(endsAtDate) })}
                 </p>
               )}
 
@@ -384,7 +381,7 @@ function SubscriptionCard({
               {/* Renewal (when period start not available) */}
               {status !== 'trial' && !endsAtDate && !periodStartDate && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
-                  {t('nextBilling', { date: periodEndDate.toLocaleDateString() })}
+                  {t('nextBilling', { date: fmt.date(periodEndDate) })}
                 </p>
               )}
 
@@ -449,7 +446,7 @@ function SubscriptionCard({
               </div>
               {teamTrialEndDate && (
                 <p className="text-sm text-muted-foreground">
-                  {t('trialEnds', { date: teamTrialEndDate.toLocaleDateString() })}
+                  {t('trialEnds', { date: fmt.date(teamTrialEndDate) })}
                 </p>
               )}
             </div>
@@ -592,7 +589,7 @@ function SubscriptionCard({
             <AlertDialogTitle>{t('cancelTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               {periodEndDate
-                ? t('cancelConfirm', { date: periodEndDate.toLocaleDateString() })
+                ? t('cancelConfirm', { date: fmt.date(periodEndDate) })
                 : t('cancelConfirmGeneric')}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -616,6 +613,7 @@ function SubscriptionCard({
 
 function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: boolean }) {
   const t = useTranslations('Billing')
+  const fmt = useTeamFormat()
   // UX-5/UX-6: `getSaasInvoices` throws `internal` when the Stripe fetch fails,
   // and this list used to fall through to "No invoices yet" — an owner who was
   // billed last month would be told she never was. A failed fetch is not an
@@ -654,7 +652,7 @@ function InvoicesSection({ teamId, hasGateway }: { teamId: string; hasGateway: b
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{formatCurrency(inv.amount, inv.currency)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(inv.created).toLocaleDateString()}
+                    {fmt.date(new Date(inv.created))}
                   </p>
                 </div>
                 <Badge

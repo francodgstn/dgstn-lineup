@@ -217,10 +217,19 @@ export const ProfileScreen: React.FC = () => {
         setRewardedCount(stats.rewarded_count);
       }
 
-      if (contact.teamId && loadedProfile?.appointmentsEnabled) {
+      if (contact.teamId) {
         // The contact's OWN booked appointments. Browsing/booking NEW times is a
         // separate flow (AppointmentBookingModal, built on listAvailability) —
         // availability-only means there are no pre-existing "open slots" here.
+        //
+        // DELIBERATELY NOT gated on `teamProfile.appointmentsEnabled`: that flag
+        // composes the studio toggle with the server's content half, which goes
+        // false when the availability windows lapse, when the window↔activity
+        // pairing breaks, or when Connect stops being chargeable — none of which
+        // is a fact about an appointment somebody has already booked. Gating the
+        // FETCH on it meant a member with a confirmed booking could not even see
+        // it, let alone cancel it. The query costs nothing where there is nothing
+        // to find: a studio with no appointment sessions matches no documents.
         const slots = await FirestoreService.getUpcomingAppointments(contact.teamId, contact.id);
         setAppointments(slots);
       } else {
@@ -543,6 +552,9 @@ export const ProfileScreen: React.FC = () => {
           }}
         />
 
+        {/* Not the raw studio toggle: FirestoreService.getTeamPublicProfile
+            composes it with the server's content flag, so this card is never
+            shown over a coach who has published no availability. */}
         {teamProfile?.appointmentsEnabled && (
           <AppointmentsDashboardCard
             contact={contact}
@@ -1045,7 +1057,12 @@ export const ProfileScreen: React.FC = () => {
 
         <PerformanceProfileSection contactId={contact.id} teamId={contact.teamId || ''} />
 
-        {teamProfile?.appointmentsEnabled && (
+        {/* Two questions, and only one of them is the promo flag. A booking the
+            member already holds is a RECORD — it shows because it exists, so the
+            cancel/reschedule affordances stay reachable even after the studio's
+            availability lapses. The composed flag only adds the section when
+            there is nothing booked yet, i.e. when it is an invitation. */}
+        {(appointments.length > 0 || teamProfile?.appointmentsEnabled) && (
           <View>
             <TouchableRipple
               onPress={() => {

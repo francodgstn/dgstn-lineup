@@ -1599,6 +1599,25 @@ async function seedDemoTeam(profile: SectorProfile) {
 
   // Mirror written to public_profile (what syncSubscriptionTypesToPublicProfile
   // would produce) so the bio-link / website pricing table works deterministically.
+// Mirrors resolveTeamPartnerApps (packages/functions/src/sync/syncTeamPublicProfile.ts):
+// aggregator types only, `active === false` dropped, blank names dropped, deduped
+// case-insensitively. Hand-written here because the seeders write the mirror directly.
+function partnerAppNames(defs: { source?: string; active?: boolean; name?: string }[]): string[] {
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const d of defs) {
+    if (d.source !== 'aggregator') continue
+    if (d.active === false) continue
+    const name = typeof d.name === 'string' ? d.name.trim() : ''
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    names.push(name)
+  }
+  return names
+}
+
   const publicSubTypes = subscriptions.map((st) => {
     const recurrence = recurrenceForKind(st.kind)
     const entry: {
@@ -1641,6 +1660,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       bookingSettings,
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
+      partner_apps: partnerAppNames(subscriptions),
       membershipRequiredFields: null,
       membershipOptionalFields: null,
       updated_at: ts(now()),
@@ -2365,6 +2385,7 @@ async function seedDemoTeam(profile: SectorProfile) {
           lastname: cs.lastname,
           fullname: `${cs.lastname} ${cs.firstname}`,
           joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
+          checkedInAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
           checkedInBy: 'seed',
         })
     }

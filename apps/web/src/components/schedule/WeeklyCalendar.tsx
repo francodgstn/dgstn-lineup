@@ -7,13 +7,21 @@
 // schedule section (components/site/sections.tsx) and the kiosk (KioskSchedule).
 //
 // The container scrolls horizontally on narrow screens; the hour axis sticks to
-// the left so it stays visible. Shows the CURRENT week (Monday-anchored — a
-// future team setting can drive `weekStartsOn`), pageable forward while the
-// data window lasts.
+// the left so it stays visible. Shows the CURRENT week, pageable forward while
+// the data window lasts.
+//
+// Week start, hour cycle and weekday/month names come from the studio's
+// regional settings. The grid POSITIONS its blocks with the device's clock
+// (`daySpans` reads local hours), so it labels them in the device's zone too —
+// a Zurich time on a New York row is worse than either alone. Converting the
+// bucketing is its own change; until then this surface opts out of the studio's
+// display zone. The opt-out itself is documented once, on the `zone` option in
+// hooks/useTeamFormat.ts.
 
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { dayKey, daySpans, spanOnDay } from '@linyup/shared'
+import { dayKey, daySpans, spanOnDay, startOfWeek, type RegionalSettings, type WeekStart } from '@linyup/shared'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
 
 /** Firestore-Timestamp-like — the public session mirror provides `{ toDate() }`. */
 interface TimestampLike {
@@ -51,7 +59,6 @@ const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 // `dayKey` was a local copy; it and the interval→days translation now live in
 // shared/utils/calendarSpan, shared with the admin grid.
-const fmtTime = (d: Date) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
 function colorFor(s: PlannerSession, accent?: string): string {
   if (s.activityColor) return s.activityColor
@@ -148,25 +155,30 @@ interface Props {
   /** How many days ahead the schedule covers — bounds how many weeks the visitor
    *  can page forward. Defaults to 7 (a single week, no navigation shown). */
   windowDays?: number
+  /**
+   * The studio's regional settings. Public surfaces have no signed-in team to
+   * read them off, so the page that resolved the tenant passes them in; absent
+   * ⇒ the product defaults (weeks from Monday, 24-hour).
+   */
+  regional?: Partial<RegionalSettings> | null
 }
 
-/** Midnight Monday of the week containing `d`. */
-function mondayOf(d: Date): Date {
-  const m = new Date(d)
-  m.setHours(0, 0, 0, 0)
-  m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
-  return m
-}
-
-export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, windowDays = 7 }: Props) {
-  // Weeks the visitor can page through: from the current (Monday-anchored) week
-  // up to the week containing the end of the section's data window.
+export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, windowDays = 7, regional }: Props) {
+  const fmt = useTeamFormat({ zone: 'device', regional })
+  const weekStartsOn: WeekStart = fmt.weekStartsOn
+  const weekStartOf = (d: Date) => startOfWeek(d, weekStartsOn)
+  // Weeks the visitor can page through: from the current week up to the week
+  // containing the end of the section's data window.
   const weekMs = 7 * 24 * 60 * 60 * 1000
+  // The axis is a device-local clock reading, so it is built from a device-local
+  // Date — only the hour cycle (24h vs AM/PM) comes from the studio.
+  const hourLabel = (h: number) => fmt.custom(new Date(2000, 0, 1, h, 0), { hour: '2-digit', minute: '2-digit' })
   const maxOffset = useMemo(() => {
     const last = new Date()
     last.setDate(last.getDate() + windowDays)
-    return Math.max(0, Math.floor((last.getTime() - mondayOf(new Date()).getTime()) / weekMs))
-  }, [windowDays, weekMs])
+    return Math.max(0, Math.floor((last.getTime() - weekStartOf(new Date()).getTime()) / weekMs))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowDays, weekMs, weekStartsOn])
   // Land on the first week that actually has a session — for sparse/future
   // schedules (e.g. appointment slots starting next week) the current week is often
   // empty, and showing an empty grid reads as "nothing here". Near-term
@@ -175,14 +187,14 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
     let earliest = Infinity
     for (const s of sessions) earliest = Math.min(earliest, s.start.toDate().getTime())
     if (!isFinite(earliest)) return 0
-    const off = Math.floor((earliest - mondayOf(new Date()).getTime()) / weekMs)
+    const off = Math.floor((earliest - weekStartOf(new Date()).getTime()) / weekMs)
     return Math.max(0, Math.min(off, maxOffset))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [weekOffset, setWeekOffset] = useState(initialOffset)
 
   const { weekDays, startHour, endHour } = useMemo(() => {
-    const start = mondayOf(new Date())
+    const start = weekStartOf(new Date())
     start.setDate(start.getDate() + weekOffset * 7)
 
     const byDay = new Map<string, PlannerSession[]>()
@@ -208,7 +220,8 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
       return { date, blocks: layoutDay(byDay.get(dayKey(date)) ?? [], date, sh, eh) }
     })
     return { weekDays: days, startHour: sh, endHour: eh }
-  }, [sessions, weekOffset])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, weekOffset, weekStartsOn])
 
   const hourCount = endHour - startHour
   const gridHeight = hourCount * HOUR_PX
@@ -230,9 +243,9 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="text-sm font-medium tabular-nums">
-            {weekDays[0].date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+            {fmt.dayMonth(weekDays[0].date)}
             {' – '}
-            {weekDays[6].date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+            {fmt.dayMonth(weekDays[6].date)}
           </span>
           <button
             type="button"
@@ -256,10 +269,8 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
               key={dayKey(date)}
               className={`border-b border-l px-1 py-1.5 text-center ${isToday ? 'bg-primary/5' : ''}`}
             >
-              <p className="text-xs font-bold">{date.toLocaleDateString(undefined, { weekday: 'short' })}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-              </p>
+              <p className="text-xs font-bold">{fmt.weekdayShort(date)}</p>
+              <p className="text-[11px] text-muted-foreground">{fmt.dayMonth(date)}</p>
             </div>
           )
         })}
@@ -276,7 +287,7 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
                 className="absolute right-1.5 text-[10px] text-muted-foreground tabular-nums select-none"
                 style={{ top: i * HOUR_PX + 2 }}
               >
-                {String(startHour + i).padStart(2, '0')}:00
+                {hourLabel(startHour + i)}
               </span>
             ))}
           </div>
@@ -320,7 +331,7 @@ export function WeeklyCalendar({ sessions, accent, bookingHref, onSelect, window
                 // Provider in the title distinguishes parallel slots (e.g. three
                 // "Private Lesson" columns at the same hour, one per provider).
                 const label = s.providerName ? `${name} · ${s.providerName}` : name
-                const timeRange = `${fmtTime(s.start.toDate())}${s.end ? ` – ${fmtTime(s.end.toDate())}` : ''}`
+                const timeRange = `${fmt.time(s.start)}${s.end ? ` – ${fmt.time(s.end)}` : ''}`
                 // Narrow parallel columns truncate hard — the tooltip carries it all.
                 const tooltip = [label, timeRange, s.location].filter(Boolean).join(' · ')
                 // Already-run sessions stay on the grid (timetable) but muted.

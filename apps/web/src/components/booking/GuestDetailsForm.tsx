@@ -24,8 +24,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-const FITNESS_APPS = ['Fitpass', 'ClassPass', 'Urban Sports Club', 'Gymlib', 'Wellhub', 'Other']
-
 export function createNewGuestSchema(t: ReturnType<typeof useTranslations>) {
   return z.object({
     firstname: z.string().min(1, t('errorRequired')).max(60),
@@ -106,7 +104,21 @@ export interface GuestDetailsFormProps {
    *  for any `custom:` key in the list. A key with no definition here renders
    *  nothing: it was never opted in to being asked publicly. */
   customFieldDefinitions?: PublicCustomFieldDefinition[]
+  /** Whether the studio asks which partner app the visitor came through
+   *  (BookingSettings.showFitnessAppField). The question is rendered only when
+   *  `aggregatorApps` also has something to offer — see below. */
   showAggregatorField?: boolean
+  /**
+   * The partner apps this studio actually accepts, by name — the public mirror
+   * of its own active `source: 'aggregator'` subscription types
+   * (TeamPublicProfile.partner_apps).
+   *
+   * Empty (or absent) HIDES the question rather than falling back to a generic
+   * list. The answer is stored against the studio's own vocabulary and the
+   * server refuses anything outside it, so offering names a studio has never
+   * heard of would collect nothing and imply a partnership that does not exist.
+   */
+  aggregatorApps?: string[]
   submitting: boolean
   error?: string | null
   onSubmit: (values: GuestDetailsValues) => void | Promise<void>
@@ -129,6 +141,7 @@ export const GuestDetailsForm = forwardRef<GuestDetailsFormHandle, GuestDetailsF
       contactFields,
       customFieldDefinitions,
       showAggregatorField,
+      aggregatorApps,
       submitting,
       error,
       onSubmit,
@@ -329,7 +342,10 @@ export const GuestDetailsForm = forwardRef<GuestDetailsFormHandle, GuestDetailsF
           )
         })}
 
-        {showAggregatorField && (
+        {/* Asked only when the studio both wants the question AND has partner
+            apps to name. An empty dropdown is a worse question than no
+            question: whatever it collected could not be stored. */}
+        {showAggregatorField && (aggregatorApps?.length ?? 0) > 0 && (
           <div className="space-y-1">
             <label className="text-sm font-medium">
               {t('labelFitnessApp')} <span className="text-muted-foreground font-normal">{t('optionalSuffix')}</span>
@@ -347,7 +363,7 @@ export const GuestDetailsForm = forwardRef<GuestDetailsFormHandle, GuestDetailsF
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">{t('notUsingFitnessApp')}</SelectItem>
-                    {FITNESS_APPS.map((app) => (
+                    {(aggregatorApps ?? []).map((app) => (
                       <SelectItem key={app} value={app}>
                         {app}
                       </SelectItem>

@@ -11,6 +11,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
+import type { RegionalFormatter } from '@linyup/shared'
 import {
   addDoc,
   collection,
@@ -61,7 +63,8 @@ export interface OutreachTemplate {
 function substituteSample(
   str: string,
   teamName: string,
-  custom: Record<string, string>
+  custom: Record<string, string>,
+  fmt: RegionalFormatter
 ): string {
   return (str || '')
     .replaceAll('{{firstname}}', 'Alex')
@@ -73,7 +76,22 @@ function substituteSample(
     .replace(/\{\{date([+-]\d+)?\}\}/g, (_, offset) => {
       const d = new Date()
       if (offset) d.setDate(d.getDate() + parseInt(offset, 10))
-      return d.toLocaleDateString()
+      // MATCH THE SENDER, NOT THE DASHBOARD. `substituteVariables`
+      // (packages/functions/src/utils/outreachEmail.ts) renders this
+      // placeholder with date-fns `format(d, 'd MMMM yyyy')` — long month,
+      // English, no weekday — whatever the template's language and whatever
+      // numeric order the studio picked. A preview exists to show what will
+      // arrive, so it copies that shape rather than `fmt.date()`'s numeric one.
+      // The studio's display zone is used to pick WHICH day, which is the one
+      // axis the two can still differ on (the sender uses the function
+      // runtime's zone); wiring the sender to the team's regional settings is a
+      // server change and has not been made.
+      return new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: fmt.timeZone,
+      }).format(d)
     })
     .replace(/\{\{(bookingUrl|membershipUrl|bioLinkUrl|websiteUrl|reviewUrl)\}\}/g, '#')
     .replace(/\{\{(\w+)\}\}/g, (match, key) => custom[key] ?? match)
@@ -210,6 +228,7 @@ export function TemplateEditor({
   const t = useTranslations('Automations')
   const te = useTranslations('SettingsEmails')
   const tCommon = useTranslations('Common')
+  const fmt = useTeamFormat()
   const [submitErr, setSubmitErr] = useState('')
   const [sideTab, setSideTab] = useState<'preview' | 'placeholders'>('preview')
 
@@ -262,7 +281,7 @@ export function TemplateEditor({
   const subject = watch('subject')
   const language = watch('language')
   const previewDoc = useMemo(() => {
-    const substituted = substituteSample(body, teamName, customPlaceholders)
+    const substituted = substituteSample(body, teamName, customPlaceholders, fmt)
     const html = marked.parse(substituted) as string
     return wrapInLayout({
       language,
@@ -271,8 +290,8 @@ export function TemplateEditor({
       footerContent: buildTeamFooter(teamDoc ?? {}, language),
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [body, language, teamName, teamDoc])
-  const previewSubject = substituteSample(subject, teamName, customPlaceholders)
+  }, [body, language, teamName, teamDoc, fmt])
+  const previewSubject = substituteSample(subject, teamName, customPlaceholders, fmt)
 
   const onSave = async (vals: TmplFormValues) => {
     setSubmitErr('')

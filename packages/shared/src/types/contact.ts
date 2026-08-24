@@ -225,6 +225,23 @@ export interface Contact {
   // Marketing channel + free-form detail. Set once at creation, never overwritten.
   source?: ContactSource
   source_detail?: string
+  // Which PARTNER APP the person said they come through, when the book form
+  // asked (BookingSettings.showFitnessAppField). The value is one of the
+  // studio's own partner-app NAMES as the public form offered them
+  // (TeamPublicProfile.partner_apps, derived from its active
+  // `source: 'aggregator'` subscription types) — the server narrows the
+  // anonymous payload to that same list before storing it, so an arbitrary
+  // string can never land here.
+  //
+  // A CLAIM, NOT AN ENTITLEMENT. It is what somebody typed into a public form;
+  // it proves nothing about a FitPass membership and must never be read as
+  // coverage. Access and payout are answered by the contact's actual
+  // subscription (Contact.subscription_type_id / active_subscriptions) and the
+  // partner_visits ledger — never by this field.
+  //
+  // Absent ⇒ never asked, or answered "not using one". An empty answer never
+  // clears a stored value (see booking/contactFields.ts).
+  acquisition_partner_app?: string | null
   // "New contact seen" UX flag (replaces the old acquisition.acknowledged).
   lead_acknowledged?: boolean
 

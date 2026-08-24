@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import { collection, query, where, limit, getDocs, Timestamp } from 'firebase/firestore'
+import { useCallback, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { collection, doc, getDoc, query, where, limit, getDocs, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { PUBLIC_PAGE_QR_PARAM } from '@/lib/onboarding'
 import {
   ACTIVITIES_COLLECTION,
   SESSIONS_COLLECTION,
@@ -9,8 +11,12 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  AUTOMATION_RULES_SUBCOLLECTION,
   type SaasPlan,
+  type SocialLink,
   type Team,
+  type TeamLink,
+  type TeamPublicProfile,
 } from '@linyup/shared'
 
 /**
@@ -25,12 +31,44 @@ import {
  *    step had never been false for any studio, ever. It also started every
  *    progress bar at 1/5 before anybody had done anything.
  *
+ *    That is why the mirror is read for its FIELDS and never for its existence
+ *    (see `publicPageHasContent`), and why "pin a shortcut" is an
+ *    acknowledgement rather than a derived check: `NavPinsContext` seeds a
+ *    default shortcut list, so a derived check there could never be false.
+ *
  * 2. **A STEP'S CHECK MUST MEAN WHAT ITS LABEL SAYS.** "Schedule a session"
- *    ticked on the existence of any session — and `allowBooking` defaults to
- *    FALSE, so the step went green with the door shut. The old hook computed
+ *    ticked on the existence of any session — and `allowBooking` used to default
+ *    to FALSE, so the step went green with the door shut. The old hook computed
  *    `sessionsNotActuallyBookable` as a "UX-2 interim" and no surface ever
  *    rendered it. The requirement is now IN the step: a future session that
- *    people can actually book.
+ *    people can actually book. (A NEW session now opts in — see
+ *    `components/sessions/SessionFormDialog.tsx`, where an edit or a duplicate
+ *    still keeps whatever its source had — so the two no longer pull apart, but
+ *    the step checks the door rather than trusting the default.)
+ *
+ * ── AND ONE ABOUT FRESHNESS, LEARNED FROM STEPS THAT WERE RIGHT BUT LATE ────
+ *
+ * A DERIVED STEP IS ONLY AS GOOD AS ITS LAST READ. Every derived fact below
+ * comes from a cached query, and the guide that renders it is mounted by the
+ * persistent `(auth)` layout — so its observer does NOT remount on a client-side
+ * navigation. Until 2026-08-24 nothing invalidated this query either, and the
+ * result was a studio adding an activity, or saving a class, and watching the
+ * step stay open until some unrelated navigation happened to refetch. Two
+ * mechanisms keep it honest now, and BOTH are needed:
+ *
+ *   INVALIDATION (`useInvalidateSetupChecklist`) — instant, for writes the
+ *   browser makes itself.
+ *
+ *   A BOUNDED POLL — for writes it does NOT make. A recurring save writes one
+ *   `session_series` doc and lets `generateRecurringSessions` materialise the
+ *   occurrences server-side afterwards, so a refetch fired at the instant of
+ *   save legitimately finds nothing. No invalidation can see that; only looking
+ *   again can. It is bounded on both ends: it stops the moment there is nothing
+ *   counted left to find, and it gives up `POLL_WINDOW_MS` after the last change
+ *   to `factsSignature` — a primitive fingerprint of the counted facts, because
+ *   the data REFERENCE cannot answer that question (see the effect that writes
+ *   `lastChangeRef`) — so an unfinished tab left open all day cannot poll
+ *   forever.
  *
  * ── THREE SECTIONS, AND ONLY TWO OF THEM COUNT ──────────────────────────────
  *
@@ -76,17 +114,79 @@ import {
  * a place is actually needed, which beats a fourth line here.
  */
 
+/** The query key this hook owns. Nothing spells it inline. */
+export const SETUP_CHECKLIST_KEY = 'setup-checklist'
+
+/** The full key for one team's checklist. */
+export const setupChecklistKey = (teamId: string | null) =>
+  [SETUP_CHECKLIST_KEY, teamId] as const
+
+/**
+ * Ask the checklist to look again.
+ *
+ * WHERE IT BELONGS: on any write that can move a DERIVED step — an activity, a
+ * subscription type, a session, an installed plugin, a team member, an automation
+ * rule. Those are the facts `queryFn` below reads; anything else on this list
+ * comes off the live team document (AuthContext's snapshot) and is already
+ * instant, so `payments`, the acknowledgements, and the team-doc halves of
+ * `bioLink` / `branding` need no call at all.
+ *
+ * A PAGE THAT REFRESHES ITSELF IS NOT EVIDENCE THIS IS UNNECESSARY. Where the
+ * page already invalidates its own list, add this beside it; where the page's
+ * list is a live `onSnapshot` and there is nothing of its own to invalidate
+ * (`settings/plugins`), this is the only call there is. Being CACHED is what
+ * makes the checklist need telling, and it always is.
+ *
+ * PREFIX MATCH, on purpose: the caller does not have to know the teamId, and the
+ * dashboard's and How-to's observers of the same key refresh with the guide's —
+ * they show the same numbers, so they must never show different ones.
+ *
+ * It cannot cover a write the browser does not make: a recurring save writes one
+ * `session_series` doc and the occurrences are materialised server-side
+ * afterwards, so there is nothing to find at the moment of the save. That is the
+ * poll's job, not this one's — neither mechanism replaces the other.
+ */
+export function useInvalidateSetupChecklist() {
+  const qc = useQueryClient()
+  return useCallback(
+    () => qc.invalidateQueries({ queryKey: [SETUP_CHECKLIST_KEY] }),
+    [qc]
+  )
+}
+
+/** How often the checklist looks again while a counted step is still open. */
+const POLL_MS = 20_000
+
+/**
+ * How long the poll keeps going after the last time a COUNTED FACT changed.
+ * The bound exists so an unfinished studio that leaves a tab focused all day
+ * does not pay for a refetch every 20 seconds forever.
+ *
+ * What restarts it: a refetch whose `factsSignature` differs from the last one
+ * (see below), or a fresh observer — a remount starts a new `lastChangeRef`. A
+ * window focus or an invalidation restarts it only if it finds something
+ * different; one that finds the same answers deliberately does not, because
+ * "nothing has changed" is the exact condition the window was written to stop
+ * paying for.
+ */
+const POLL_WINDOW_MS = 10 * 60 * 1000
+
 export type SetupStepKey =
   | 'activities'
   | 'pricing'
   | 'sessions'
-  | 'publicPage'
+  | 'bioLink'
   | 'pricingReview'
   | 'payments'
   | 'branding'
   | 'bookingForm'
   | 'plugins'
   | 'coaches'
+  | 'publicPages'
+  | 'qrCodes'
+  | 'automations'
+  | 'paymentsReview'
+  | 'shortcuts'
 
 export type SetupSection = 'offer' | 'doors' | 'extra'
 
@@ -164,34 +264,121 @@ async function hasBookableFutureSession(teamId: string, nowTs: Timestamp): Promi
   return !snap.empty
 }
 
+/** The public mirror of the team, read for its FIELDS — never for its existence. */
+async function readPublicProfile(teamId: string): Promise<TeamPublicProfile | null> {
+  const snap = await getDoc(doc(db, TEAMS_COLLECTION, teamId, 'public_profile', teamId))
+  return snap.exists() ? (snap.data() as TeamPublicProfile) : null
+}
+
+const filled = (value: string | null | undefined) => !!(value ?? '').trim()
+
 /**
  * Does the public page say anything about this studio?
  *
- * Read from the TEAM document the studio edits, not from the mirror — the
- * mirror is written by a trigger and is therefore always present (rule 1
- * above). The three signals are exactly the ones `provisionTeam` leaves empty:
- * it writes `description: ''`, two links with `url: ''`, and no image. So this
- * starts FALSE and turns true the moment there is something to read.
+ * ── IT READS BOTH DOCUMENTS, AND THAT IS THE FIX ────────────────────────────
+ *
+ * `/team/bio-link` writes the public mirror FIRST (team-member permission, and
+ * it must succeed) and then updates the team doc as a non-fatal side effect —
+ * because `teams/{id}` is owner-only. So a MANAGER's save genuinely publishes
+ * the page while `team.links` / `team.socialLinks` never move. Reading the team
+ * doc alone therefore made this step unreachable from its own page for every
+ * manager, silently. It now asks both and takes either.
+ *
+ * FIELDS, NEVER THE DOC'S EXISTENCE (rule 1): `syncTeamPublicProfile` is an
+ * `onDocumentWritten` trigger, so the mirror exists from the moment the team
+ * does — but it is written with `description: ''` and mapped links, so every
+ * field check below can still be false on a fresh team.
+ *
+ * A BARE PAGE LINK IS NOT CONTENT, and that is not an oversight — it is rule 1
+ * again. `provisionTeam` (`lib/provisioning.ts`, `defaultLinks`) seeds every new
+ * team with page links — "Book Now" carrying `target: 'booking'` and "Membership
+ * Signup" carrying `target: 'signup'` — each with `url: ''`, and
+ * `syncTeamPublicProfile` copies `target` straight into the mirror. So a
+ * predicate that took `target` as evidence would be TRUE for every studio from
+ * the instant its team document was written, and the counted step would start
+ * green before anybody had opened the tab.
+ *
+ * What is left is what the studio itself had to type or upload: a URL on a link,
+ * a description, an image, a social link. Every one of those is empty on a fresh
+ * team, so this predicate can still be false.
  */
-function publicPageHasContent(team: Team | null | undefined): boolean {
-  if (!team) return false
-  if ((team.description ?? '').trim()) return true
-  if (team.profileImage) return true
-  if ((team.links ?? []).some((l) => (l.url ?? '').trim())) return true
-  if ((team.socialLinks ?? []).some((l) => (l.url ?? '').trim())) return true
+function publicPageHasContent(
+  team: Team | null | undefined,
+  profile: TeamPublicProfile | null | undefined
+): boolean {
+  if (filled(team?.description) || filled(profile?.description)) return true
+  if (team?.profileImage || profile?.profileImage) return true
+  const links: TeamLink[] = [...(team?.links ?? []), ...(profile?.links ?? [])]
+  if (links.some((l) => filled(l.url))) return true
+  const socials: SocialLink[] = [...(team?.socialLinks ?? []), ...(profile?.socialLinks ?? [])]
+  if (socials.some((l) => filled(l.url))) return true
   return false
 }
 
-/** Logo or colours — the LOOK, as opposed to `publicPageHasContent`'s WORDS. */
-function hasBranding(team: Team | null | undefined): boolean {
-  return !!(team?.profileImage || team?.heroImage || team?.bioLinkAccentColor)
+/**
+ * Logo or colours — the LOOK, as opposed to `publicPageHasContent`'s WORDS.
+ *
+ * Reads the mirror too, for the same reason: the accent colour is picked on the
+ * bio-link page, whose team-doc write a manager is not allowed to make.
+ */
+function hasBranding(
+  team: Team | null | undefined,
+  profile: TeamPublicProfile | null | undefined
+): boolean {
+  return !!(
+    team?.profileImage ||
+    team?.heroImage ||
+    team?.bioLinkAccentColor ||
+    profile?.profileImage ||
+    profile?.heroImage ||
+    profile?.bioLinkAccentColor
+  )
 }
 
 export function useSetupChecklist(teamId: string | null, team?: Team | null, plan?: SaasPlan) {
+  // The poll reads its two answers off refs written after render, so this
+  // callback never has to change identity — see below for why that matters.
+  const stopPollingRef = useRef(false)
+  const lastChangeRef = useRef(Date.now())
+
+  /**
+   * BOTH ANSWERS COME OFF REFS, NEVER OFF THE CLOSURE — that is the part that
+   * matters. `QueryObserver` CALLS this callback (`#computeRefetchInterval`) on
+   * every `setOptions` and again on every query update, and acts on the VALUE it
+   * returns, not on the callback's identity: `setOptions` restarts the timer only
+   * when the returned number differs, and `onQueryUpdate` restarts it after each
+   * fetch regardless. So a stale closure would be read as a live answer. The
+   * stable `useCallback` identity is plain memoisation on top of that, not a
+   * correctness requirement.
+   *
+   * IT RETURNS FALSE — and the observer then clears the interval and schedules
+   * nothing — under exactly two conditions:
+   *
+   *   1. `stopPollingRef`: there is no counted step left open, or the studio put
+   *      the guide away. Looking again could only cost reads.
+   *   2. `POLL_WINDOW_MS` has passed since `factsSignature` last changed — i.e.
+   *      every refetch in that whole span came back with the identical counted
+   *      facts. Because the observer re-evaluates this after each poll's result
+   *      lands, at most one further poll runs past the deadline.
+   */
+  const refetchInterval = useCallback(() => {
+    if (stopPollingRef.current) return false
+    if (Date.now() - lastChangeRef.current > POLL_WINDOW_MS) return false
+    return POLL_MS
+  }, [])
+
   const queryResult = useQuery({
-    queryKey: ['setup-checklist', teamId],
+    queryKey: setupChecklistKey(teamId),
     enabled: !!teamId,
-    staleTime: 60 * 1000,
+    // ZERO, deliberately: an invalidation that is answered from a fresh cache
+    // is an invalidation that did nothing, and this data is a handful of
+    // `limit(1)` reads — cheap enough to be right rather than fast.
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    // A hidden tab finds nothing worth the reads; coming back to it refetches
+    // on focus anyway.
+    refetchIntervalInBackground: false,
+    refetchInterval,
     queryFn: async () => {
       const id = teamId as string
       const nowTs = Timestamp.now()
@@ -203,6 +390,8 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
         contacts,
         memberCount,
         installedPlugins,
+        automations,
+        publicProfile,
       ] = await Promise.all([
           teamCollectionHasAny(ACTIVITIES_COLLECTION, id),
           subcollectionHasAny(id, SUBSCRIPTION_TYPES_SUBCOLLECTION),
@@ -216,6 +405,8 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
           teamCollectionHasAny(CONTACTS_COLLECTION, id),
           subcollectionHasAny(id, TEAM_MEMBERS_SUBCOLLECTION, 2),
           subcollectionHasAny(id, INSTALLED_PLUGINS_SUBCOLLECTION),
+          subcollectionHasAny(id, AUTOMATION_RULES_SUBCOLLECTION),
+          readPublicProfile(id),
         ])
 
       return {
@@ -225,6 +416,8 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
         contacts,
         hasOtherMembers: memberCount > 1,
         hasPlugins: installedPlugins > 0,
+        hasAutomations: automations > 0,
+        publicProfile,
       }
     },
   })
@@ -246,6 +439,11 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       // courses and products are plugin surfaces this hook deliberately does
       // not read — so a studio whose prices live somewhere else can close it
       // rather than be nagged by a step that is wrong about them.
+      //
+      // THE `OR` IS DELIBERATE AND STAYS: a priced drop-in on its own is a
+      // price per class, which is what the label asks for. Narrowing it to
+      // subscriptions would retroactively un-tick every studio that sells by
+      // the class.
       key: 'pricing',
       section: 'offer',
       href: '/offer/plans?tab=subscriptions',
@@ -275,10 +473,14 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
     // ── Open the doors ───────────────────────────────────────────────────────
     { key: 'sessions', section: 'doors', href: '/schedule', done: !!d?.sessions },
     {
-      key: 'publicPage',
+      // `bioLink`, not `publicPage`: this step is about the bio-link editor it
+      // links to, and the "Extra steps" row for the public-pages hub is
+      // `publicPages`. Two keys a letter apart, one of them the id a hand-close
+      // is stored under (`setup_ack.{key}`), is a trap not worth leaving.
+      key: 'bioLink',
       section: 'doors',
       href: '/team/bio-link',
-      done: publicPageHasContent(team),
+      done: publicPageHasContent(team, d?.publicProfile),
     },
     {
       // WHAT THE BOOKING FORM ASKS is part of opening the doors, not polish
@@ -317,7 +519,30 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       section: 'extra',
       href: '/team/bio-link',
       ack: 'skip',
-      done: hasBranding(team),
+      done: hasBranding(team, d?.publicProfile),
+    },
+    {
+      // WHERE EVERYTHING PUBLIC ACTUALLY IS. The surfaces are managed from
+      // prefixes with nothing in common — /team/bio-link, /settings/booking,
+      // /plugins/website, /events — and this hub is the census of them. Pure
+      // acknowledgement: there is nothing to observe about having read a
+      // directory.
+      key: 'publicPages',
+      section: 'extra',
+      href: '/public-page',
+      ack: 'review',
+      done: false,
+    },
+    {
+      // The QR codes are a DIALOG with nothing behind it, so the row opens it
+      // where it belongs — on the hub that is the census of the surfaces the
+      // codes point at. `?qr=1` follows the `?new=1` convention rather than
+      // inventing a second one.
+      key: 'qrCodes',
+      section: 'extra',
+      href: `/public-page?${PUBLIC_PAGE_QR_PARAM}=1`,
+      ack: 'review',
+      done: false,
     },
     {
       // EXPLORING is the point, not installing — so it closes BOTH ways.
@@ -333,12 +558,45 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       done: !!d?.hasPlugins,
     },
     {
+      // Same shape as plugins, and for the same reason: building a rule is the
+      // outcome, deciding you want none is an equally finished answer. Nothing
+      // seeds `automation_rules`, so the derived half starts false.
+      key: 'automations',
+      section: 'extra',
+      href: '/automations',
+      ack: 'review',
+      done: !!d?.hasAutomations,
+    },
+    {
+      // `paymentsReview`, NOT `payments` — that id is taken by the Connect step
+      // above, and a hand-close is stored per id (`setup_ack.{key}`), so a
+      // collision would have the two steps closing each other. Same naming
+      // shape as the `pricing` / `pricingReview` pair.
+      key: 'paymentsReview',
+      section: 'extra',
+      href: '/payments',
+      ack: 'review',
+      done: false,
+    },
+    {
       key: 'coaches',
       section: 'extra',
       href: '/coaches',
       ack: 'skip',
       requiresPlan: 'studio',
       done: !!d?.hasOtherMembers,
+    },
+    {
+      // NEVER DERIVED (rule 1): `NavPinsContext` falls back to
+      // `DEFAULT_SHORTCUT_IDS`, so a studio has shortcuts from its first render
+      // and a derived check could not be false. It is also per-browser
+      // localStorage rather than a fact about the studio. The row exists to
+      // teach the gesture; How-to is where the gesture is explained.
+      key: 'shortcuts',
+      section: 'extra',
+      href: '/how-to',
+      ack: 'review',
+      done: false,
     },
   ]
 
@@ -359,6 +617,49 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
   const counted = steps.filter((s) => !s.optional && !s.locked)
   const requiredDone = counted.filter((s) => s.done).length
   const allRequiredDone = requiredDone === counted.length
+
+  // ── What the poll reads ────────────────────────────────────────────────────
+  // Nothing counted left to find, or the studio has put the guide away: looking
+  // again can only cost reads.
+  const pollPointless = allRequiredDone || team?.setup_dismissed === true
+  useEffect(() => {
+    stopPollingRef.current = pollPointless
+  }, [pollPointless])
+
+  // THE DEADLINE IS KEYED ON A STRING, NEVER ON `queryResult.data`.
+  //
+  // The data REFERENCE cannot answer "did anything change". TanStack's
+  // structural sharing (`replaceEqualDeep`) keeps the previous value only for
+  // pairs that are both plain objects or arrays, and returns the new one for
+  // everything else — and `publicProfile` carries a Firestore `Timestamp`
+  // (`updated_at`, written by every `syncTeamPublicProfile` run). A fresh
+  // `Timestamp` instance therefore mints a new `publicProfile`, which mints a
+  // new root object, on EVERY refetch. Keying the deadline on that refreshed it
+  // every 20 seconds and `refetchInterval`'s give-up branch could never be
+  // reached — an unfinished tab polled forever, which is the precise cost the
+  // window was written to cap.
+  //
+  // So the fingerprint is the counted facts themselves, as primitives: identical
+  // across a refetch that found nothing new, different the moment one moves.
+  const factsSignature = d
+    ? [
+        d.activities,
+        d.pricing,
+        d.sessions,
+        d.contacts,
+        d.hasOtherMembers,
+        d.hasPlugins,
+        d.hasAutomations,
+        // The mirror is read for the two answers the steps ask of it, not for
+        // its bytes — a description edited from one sentence to another is not
+        // progress toward opening the doors.
+        publicPageHasContent(null, d.publicProfile),
+        hasBranding(null, d.publicProfile),
+      ].join('|')
+    : ''
+  useEffect(() => {
+    lastChangeRef.current = Date.now()
+  }, [factsSignature])
 
   return {
     steps,

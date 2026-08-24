@@ -1,13 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { doc, setDoc } from 'firebase/firestore'
 import { TRIAL_DAYS, SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '@linyup/shared'
 import { signUp } from '@/lib/auth'
+import { db } from '@/lib/firebase'
+import { persistLocale } from '@/i18n/persistLocale'
 import { provisionTeam, userHasTeam } from '@/lib/provisioning'
 import { usePublicSignupEnabled, isSignupClosedError } from '@/lib/signupGate'
 import { useAuth } from '@/contexts/AuthContext'
@@ -30,20 +33,49 @@ interface AuthedUser {
   /** Carried through to `provisionTeam`, which records it on the team — the
    *  mail gate reads it. A social sign-in arrives true; an email signup false. */
   emailVerified: boolean
+  /** Typed at step 1 on the email path. Kept apart from `displayName` because
+   *  `UserProfile` declares both and the dashboard greeting reads `firstname`
+   *  first — a provider sign-in supplies only a joined `displayName`, and
+   *  splitting that on a space is wrong for a great many names. */
+  firstname?: string
+  lastname?: string
 }
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
 
-const accountSchema = z
-  .object({
-    email: z.string().email('Invalid email address'),
-    password: z.string().min(8, 'At least 8 characters'),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-  })
+// THE NAME IS ASKED HERE, and it is asked because nothing else could supply it:
+// the email/password path never called `updateProfile`, so `users/{uid}` carried
+// no name at all and every coach picker fell back to `coachLabel`'s email — which
+// is also what got denormalised onto sessions and published on the world-readable
+// coach roster. Only a provider sign-in ever produced a named coach.
+//
+// Built from `t` rather than declared at module scope: a zod message here is
+// rendered verbatim under the field, and a hardcoded English one on /de/signup
+// is the first thing a German studio ever reads from us. (`email`, `password`
+// and `confirmPassword` below carry older English messages — they belong to
+// whoever translates the rest of this form, not to the name fields.)
+function buildAccountSchema(t: (key: string) => string) {
+  return z
+    .object({
+      firstname: z
+        .string()
+        .trim()
+        .min(1, t('errorNameRequired'))
+        .max(40, t('errorNameTooLong')),
+      lastname: z
+        .string()
+        .trim()
+        .min(1, t('errorNameRequired'))
+        .max(40, t('errorNameTooLong')),
+      email: z.string().email('Invalid email address'),
+      password: z.string().min(8, 'At least 8 characters'),
+      confirmPassword: z.string(),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      message: "Passwords don't match",
+      path: ['confirmPassword'],
+    })
+}
 
 // CURRENCY AND LANGUAGE ARE ASKED HERE, and they are asked here because of what
 // happens if they are not (found on the prod canary, 2026-08-23):
@@ -64,7 +96,7 @@ const teamSchema = z.object({
   language: z.enum(['en', 'de', 'fr', 'it']),
 })
 
-type AccountData = z.infer<typeof accountSchema>
+type AccountData = z.infer<ReturnType<typeof buildAccountSchema>>
 type TeamData = z.infer<typeof teamSchema>
 
 // ─── step indicator ───────────────────────────────────────────────────────────
@@ -88,9 +120,15 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
   const [error, setError] = useState<string | null>(null)
+  // See `hydrated` in the login page for why a credential form's submit is shut
+  // until mount: an unhydrated submit is a native GET that puts the password in
+  // the query string.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
   const t = useTranslations('Signup')
   const tAuth = useTranslations('Auth')
   const { enabled: signupEnabled } = usePublicSignupEnabled()
+  const accountSchema = useMemo(() => buildAccountSchema(t), [t])
   const {
     register,
     handleSubmit,
@@ -99,14 +137,19 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
 
   async function onSubmit(data: AccountData) {
     setError(null)
+    const displayName = `${data.firstname.trim()} ${data.lastname.trim()}`.trim()
     try {
-      const cred = await signUp(data.email, data.password)
+      const cred = await signUp(data.email, data.password, displayName)
       onNext({
         uid: cred.user.uid,
         email: cred.user.email,
-        displayName: cred.user.displayName,
+        // `updateProfile` is best-effort, so fall back to what was typed —
+        // `provisionTeam` writes this field and that write is the durable copy.
+        displayName: cred.user.displayName || displayName,
         photoURL: cred.user.photoURL,
         emailVerified: cred.user.emailVerified,
+        firstname: data.firstname.trim(),
+        lastname: data.lastname.trim(),
       })
     } catch (err) {
       const e = err as { code?: string }
@@ -150,7 +193,24 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
 
       <AuthDivider label={tAuth('orWithEmail')} />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* `method="post"` is the belt to the disabled button's braces: if a submit
+          somehow escapes before hydration, the values go in a body Next.js
+          rejects rather than into the URL. Inert once hydrated — react-hook-form's
+          handleSubmit preventDefaults. */}
+      <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="firstname">{t('firstName')}</Label>
+            <Input id="firstname" type="text" autoComplete="given-name" {...register('firstname')} />
+            {errors.firstname && <p className="text-destructive text-xs">{errors.firstname.message}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="lastname">{t('lastName')}</Label>
+            <Input id="lastname" type="text" autoComplete="family-name" {...register('lastname')} />
+            {errors.lastname && <p className="text-destructive text-xs">{errors.lastname.message}</p>}
+          </div>
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="email">{t('email')}</Label>
           <Input id="email" type="email" autoComplete="email" {...register('email')} />
@@ -177,7 +237,7 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
           </p>
         )}
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="w-full" disabled={!hydrated || isSubmitting}>
           {isSubmitting ? t('creating') : t('continue')}
         </Button>
       </form>
@@ -204,6 +264,9 @@ const SPORT_TYPES = [
   'Other',
 ]
 
+const UI_LOCALES = ['en', 'de', 'fr', 'it'] as const
+type UiLocale = (typeof UI_LOCALES)[number]
+
 /** The languages the product speaks. Same four as `routing.locales`; named here
  *  rather than imported from the i18n config because this list is about the
  *  STUDIO's outbound mail, not about the URL the browser is on. */
@@ -219,6 +282,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
   const t = useTranslations('Signup')
   const locale = useLocale()
   const planName = usePlanName()
+  const uiLocale = UI_LOCALES.includes(locale as UiLocale) ? (locale as UiLocale) : 'en'
   const {
     register,
     handleSubmit,
@@ -230,9 +294,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
     // best guess available, and one they can see and change before it is saved.
     defaultValues: {
       default_currency: DEFAULT_CURRENCY,
-      language: (['en', 'de', 'fr', 'it'] as const).includes(locale as 'en')
-        ? (locale as 'en' | 'de' | 'fr' | 'it')
-        : 'en',
+      language: uiLocale,
     },
   })
 
@@ -243,6 +305,22 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
         defaultCurrency: data.default_currency,
         language: data.language,
       })
+      // Record the PERSON's facts alongside the team's. The UI locale is NOT
+      // asked for — the visitor is reading this page in a language and that is
+      // the choice; the form's one language select is about member mail.
+      // Best-effort: the team exists by now, and `displayName` is already
+      // durable from `provisionTeam`, so a failure here must not read as a
+      // signup that failed.
+      persistLocale(uiLocale)
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          locale: uiLocale,
+          ...(user.firstname ? { firstname: user.firstname } : {}),
+          ...(user.lastname ? { lastname: user.lastname } : {}),
+        },
+        { merge: true }
+      ).catch(() => {})
       onComplete()
     } catch {
       setError(t('errorTeamGeneric'))
@@ -250,7 +328,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="name">{t('teamName')}</Label>
         <Input id="name" type="text" placeholder={t('teamNamePlaceholder')} {...register('name')} />
@@ -304,7 +382,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="language">{t('language')}</Label>
+          <Label htmlFor="language">{t('memberLanguage')}</Label>
           <Controller
             name="language"
             control={control}
@@ -326,9 +404,11 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
         </div>
       </div>
       {/* What the language actually decides, said once — it is not the UI
-          language (that follows the URL), it is what your members are written
-          to in. */}
-      <p className="text-xs text-muted-foreground -mt-2">{t('languageHint')}</p>
+          language (that follows the URL and is changed from the user menu), it
+          is what your members are written to in. The label says so too: a field
+          called plain "Language" on the one screen where a new studio meets it
+          reads as "the app's language", which is the whole of the surprise. */}
+      <p className="text-xs text-muted-foreground -mt-2">{t('memberLanguageHint')}</p>
 
       {error && (
         <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
@@ -366,7 +446,18 @@ export default function SignupPage() {
   // step. If they already have a team, send them to the app.
   useEffect(() => {
     if (loading || !user || authedUser) return
-    if (profile?.currentTeam) {
+    // …UNLESS they asked for another studio. The account menu's team switcher
+    // sends an owner here with `?new=1`, and for that visitor the team step is
+    // the destination, not a stage they have already passed: without the flag
+    // the bounce below fires the moment their profile loads and the menu item
+    // does nothing. `provisionTeam` needs no change to run a second time — it
+    // creates a new team and repoints `currentTeam` at it.
+    //
+    // Read off `window.location` rather than `useSearchParams` so this page
+    // keeps prerendering without a Suspense boundary; the effect is
+    // client-only, so there is nothing to read on the server.
+    const wantsAnotherTeam = new URLSearchParams(window.location.search).get('new') === '1'
+    if (profile?.currentTeam && !wantsAnotherTeam) {
       router.replace('/dashboard')
       return
     }

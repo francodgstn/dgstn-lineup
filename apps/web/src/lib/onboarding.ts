@@ -1,6 +1,6 @@
-import { doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore'
+import { arrayUnion, doc, setDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore'
 import { db } from './firebase'
-import { TEAMS_COLLECTION } from '@linyup/shared'
+import { TEAMS_COLLECTION, USERS_COLLECTION, type UserProfile } from '@linyup/shared'
 
 /**
  * Helpers for reading/writing per-user onboarding progress
@@ -51,4 +51,52 @@ export async function setSetupStepAcknowledged(
   await updateDoc(doc(db, TEAMS_COLLECTION, teamId), {
     [`setup_ack.${key}`]: acknowledged ? serverTimestamp() : deleteField(),
   })
+}
+
+/**
+ * ── HAS THIS PERSON MET THIS PANEL BEFORE? ──────────────────────────────────
+ *
+ * "The first time the app is accessed" is a fact about a PERSON, not about a
+ * device, so it lives on the user profile and not in localStorage: a studio
+ * owner who signs in on a laptop and then a phone has already seen the intro,
+ * and being shown it twice would say otherwise.
+ *
+ * THE ABSENT VALUE MEANS "NEVER SEEN IT", never "they chose to fold it away".
+ * That inversion was the bug: the setup guide read a missing localStorage key
+ * as a preference for the collapsed pill, so the one moment the panel is worth
+ * opening — the first — was the one moment it stayed shut. A "not right now"
+ * (the minimize control) is a different fact, still per-browser, and the two
+ * must not be read off one key.
+ *
+ * Stored in `users/{uid}.onboarding.seenIntros` — the list the profile already
+ * declares for exactly this ("panels the user has already seen, keyed by
+ * section"), so no new field and no migration. The write is a merge-set so it
+ * creates nothing else and clobbers nothing else, and callers treat a failure
+ * as "seen": showing the panel again is a smaller harm than a render that
+ * depends on a write having succeeded.
+ */
+export const SETUP_GUIDE_INTRO = 'setup-guide'
+
+/**
+ * The param the checklist's "view all your QR codes" step arrives with, and
+ * which `/public-page` honours by opening its QR dialog.
+ *
+ * It lives here rather than at either end because both ends need the same
+ * spelling and neither owns the other: the step is a URL string in
+ * `useSetupChecklist`, the reader is a page. Same convention as the `?new=1`
+ * quick actions (`lib/quickActions.ts`), with its own name because this opens a
+ * viewer rather than a create form.
+ */
+export const PUBLIC_PAGE_QR_PARAM = 'qr'
+
+export function hasSeenIntro(profile: UserProfile | null | undefined, key: string): boolean {
+  return !!profile?.onboarding?.seenIntros?.includes(key)
+}
+
+export async function markIntroSeen(uid: string, key: string): Promise<void> {
+  await setDoc(
+    doc(db, USERS_COLLECTION, uid),
+    { onboarding: { seenIntros: arrayUnion(key) } },
+    { merge: true }
+  )
 }

@@ -121,12 +121,14 @@ export interface PublicPage {
 // and of where each one is managed — is the `surfaces` array in
 // (auth)/public-page/page.tsx; this list exists to explain the idea, so it
 // carries only the surfaces that have a wireframe and a paragraph written for
-// them in the `HowTo.publicPages.surfaces` copy. It therefore differs from the
-// census in both directions (it has appointments, which the hub does not; the hub
-// has signup, forms and documents, which this does not) and that is fine as long
-// as nobody reads it as complete — which is what the "see all" link the section
-// renders is for. Adding a surface HERE without copy + a preview renders an empty
-// panel; adding one to the hub is the change that matters.
+// them in the `HowTo.publicPages.surfaces` copy. Everything here is on the census
+// too; the census carries more (signup, forms, documents, events), and that is
+// fine as long as nobody reads this list as complete — which is what the "see
+// all" link the section renders is for. The hrefs may legitimately differ: the
+// hub sends Appointments to /schedule/availability, where its bookable hours are
+// authored, while a teaching panel points at the calendar. Adding a surface HERE
+// without copy + a preview renders an empty panel; adding one to the hub is the
+// change that matters.
 export const PUBLIC_PAGES: PublicPage[] = [
   { id: 'bioLink', icon: LinkIcon, href: '/team/bio-link' },
   { id: 'website', icon: Globe, href: '/plugins/website' },

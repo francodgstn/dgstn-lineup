@@ -103,28 +103,106 @@ async function sendWithRetry(
   throw lastErr
 }
 
-// Records a keyed send that was dropped before the provider (synthetic recipient
-// or policy) so ledger gaps are explainable. Keyless sends are only console-logged.
+// ── The send ledger ─────────────────────────────────────────────────────────
+// `mail_sends/{id}` is a SEND LOG, and every send lands in it — keyed or not.
+// It used to record only the sends whose call site happened to pass an
+// idempotency key, which is a minority of them; anything counting it therefore
+// reported an arbitrary fraction while reading as authoritative, so the
+// operator console's volume figures and the platform daily snapshot both
+// depend on this being complete.
+//
+// The idempotency key, when there is one, is the DOC ID — that is what makes a
+// keyed resend a no-op. A keyless send gets an auto id and no dedupe, exactly
+// as before.
+type SuppressReason = 'synthetic' | 'policy_silent' | 'policy_allowlist' | 'dead_address'
+
+/**
+ * Whether an existing ledger row has SPENT its idempotency key — i.e. whether a
+ * keyed resend must be skipped.
+ *
+ * A key is spent once the message REACHED THE PROVIDER: `status: 'sent'`, or
+ * whatever the Brevo webhook later made of it (`delivered`, `bounced`,
+ * `blocked`, `spam`). Those all describe a message Brevo accepted, and sending
+ * again would double it.
+ *
+ * `failed` and `suppressed` are NOT spent, because nothing left this process. A
+ * suppressed row records why a send was dropped — a seeded @example.com
+ * address, the tenant policy an operator set, an address on the suppression
+ * list — and each of those can be true today and false tomorrow. The key is
+ * derived from the message and never changes, so treating a drop as terminal
+ * means the legitimate send that follows the fix is skipped forever: the
+ * operator flips the policy back to `live`, the parent's mailbox comes off the
+ * suppression list, and the confirmation still never goes out.
+ *
+ * An absent status blocks, deliberately — a row nothing here wrote is not
+ * evidence that nothing was sent, and a duplicate is the worse mistake.
+ */
+export function ledgerRowSpendsKey(status: unknown): boolean {
+  return status !== 'failed' && status !== 'suppressed'
+}
+
+interface LedgerSlot {
+  ref: FirebaseFirestore.DocumentReference
+  /** False once the row already exists — which is what keeps `created_at` put. */
+  isNew: boolean
+}
+
+function ledgerFields(
+  slot: LedgerSlot,
+  f: {
+    stream: MailStream
+    teamId?: string
+    idempotencyKey?: string
+    status: 'sent' | 'suppressed'
+    /** Addresses that actually reached the provider — 0 on a suppressed row. A
+     *  row is one provider call, which may carry several of them. */
+    recipientCount: number
+    providerMessageId?: string
+    suppressReason?: SuppressReason
+  },
+): Record<string, unknown> {
+  const now = FieldValue.serverTimestamp()
+  return {
+    provider: 'brevo',
+    // SMS rows share this collection (smsService.ts) and have always carried
+    // `channel`; mail rows did not, so a channel filter matched none of them.
+    channel: 'email',
+    stream: f.stream,
+    status: f.status,
+    recipient_count: f.recipientCount,
+    ...(f.idempotencyKey ? { idempotency_key: f.idempotencyKey } : {}),
+    ...(f.providerMessageId ? { provider_message_id: f.providerMessageId } : {}),
+    ...(f.teamId ? { team_id: f.teamId } : {}),
+    ...(f.suppressReason ? { suppress_reason: f.suppressReason } : {}),
+    updated_at: now,
+    // `created_at` is the SEND time and is stamped once, at creation. It used to
+    // be re-stamped on every merge, so a resend after the webhook marked a row
+    // 'failed' silently moved the send date onto the retry — and a send-time
+    // window is exactly what the volume counts range over.
+    ...(slot.isNew ? { created_at: now } : {}),
+  }
+}
+
+// Records a send dropped before the provider (synthetic recipient, tenant
+// policy, or every address already dead) so ledger gaps are explainable.
+// A suppressed row does NOT spend the idempotency key — see `ledgerRowSpendsKey`.
 async function writeSuppressedLedger(
-  ledgerRef: FirebaseFirestore.DocumentReference | null,
+  slot: LedgerSlot,
   stream: MailStream,
   teamId: string | undefined,
-  reason: 'synthetic' | 'policy_silent' | 'policy_allowlist',
+  idempotencyKey: string | undefined,
+  reason: SuppressReason,
 ): Promise<void> {
-  if (!ledgerRef) return
-  const now = FieldValue.serverTimestamp()
   try {
-    await ledgerRef.set(
-      {
-        idempotency_key: ledgerRef.id,
-        provider: 'brevo',
+    await slot.ref.set(
+      ledgerFields(slot, {
         stream,
-        ...(teamId ? { team_id: teamId } : {}),
+        teamId,
+        idempotencyKey,
         status: 'suppressed',
-        suppress_reason: reason,
-        updated_at: now,
-        created_at: now,
-      },
+        recipientCount: 0,
+        suppressReason: reason,
+      }),
       { merge: true },
     )
   } catch (err) {
@@ -138,34 +216,43 @@ async function dispatch(
   stream: MailStream,
   teamId?: string,
 ): Promise<SendOutcome> {
-  if (!msg.to || !msg.subject || (!msg.html && !msg.text)) {
-    throw new Error('Missing required email fields: to, subject, and html/text')
+  // An EMPTY recipient list is a caller bug, and `!msg.to` does not catch it —
+  // `[]` and `''` are both falsy-looking and only one of them is falsy. Left
+  // unchecked, an empty array survives to the synthetic filter below and is
+  // filed as `suppress_reason: 'synthetic'`, which records a caller bug as a
+  // fact about a recipient in the very ledger whose job is to explain gaps.
+  const requested = toArray(msg.to ?? []).filter((r) => r.trim().length > 0)
+  if (requested.length === 0 || !msg.subject || (!msg.html && !msg.text)) {
+    throw new Error('Missing required email fields: to (at least one address), subject, and html/text')
   }
 
   // Kill switch — short-circuit before any Brevo or Firestore work so a disabled
   // environment makes zero external calls.
   if (!isMailEnabled()) {
-    console.log(`[mail] sending disabled (MAIL_ENABLED=false) — skipping ${stream} mail to ${toArray(msg.to).join(', ')}`)
+    console.log(`[mail] sending disabled (MAIL_ENABLED=false) — skipping ${stream} mail to ${requested.join(', ')}`)
     return { skipped: true }
   }
 
   const db = admin.firestore()
   const testMode = isTestMode()
 
-  // ── Idempotency: skip a keyed send that already succeeded ──────────────────
-  const ledgerRef = msg.idempotencyKey
-    ? db.collection(MAIL_SENDS_COLLECTION).doc(msg.idempotencyKey)
-    : null
-  if (ledgerRef) {
-    const existing = await ledgerRef.get()
-    if (existing.exists && existing.data()?.status !== 'failed') {
-      console.log(`[mail] idempotent skip for key ${msg.idempotencyKey}`)
-      return { providerMessageId: existing.data()?.provider_message_id, skipped: true }
+  // ── Ledger slot + idempotency: skip a keyed send that already succeeded ────
+  const slot: LedgerSlot = msg.idempotencyKey
+    ? { ref: db.collection(MAIL_SENDS_COLLECTION).doc(msg.idempotencyKey), isNew: true }
+    : { ref: db.collection(MAIL_SENDS_COLLECTION).doc(), isNew: true }
+  if (msg.idempotencyKey) {
+    const existing = await slot.ref.get()
+    if (existing.exists) {
+      if (ledgerRowSpendsKey(existing.data()?.status)) {
+        console.log(`[mail] idempotent skip for key ${msg.idempotencyKey}`)
+        return { providerMessageId: existing.data()?.provider_message_id, skipped: true }
+      }
+      slot.isNew = false
     }
   }
 
   // ── Recipients: test-mode redirect, else synthetic guard → policy → suppression ──
-  let recipients = toArray(msg.to)
+  let recipients = requested
   if (testMode) {
     // Local-dev/CI convenience: redirect everything to one inbox. Deliberately
     // BYPASSES the per-tenant policy layer below.
@@ -180,7 +267,7 @@ async function dispatch(
     if (synthetic.length) console.log(`[mail] dropping synthetic recipients: ${synthetic.join(', ')}`)
     recipients = recipients.filter((r) => !isSyntheticEmail(r))
     if (recipients.length === 0) {
-      await writeSuppressedLedger(ledgerRef, stream, teamId, 'synthetic')
+      await writeSuppressedLedger(slot, stream, teamId, msg.idempotencyKey, 'synthetic')
       return { skipped: true }
     }
 
@@ -190,7 +277,7 @@ async function dispatch(
     const decision = applyEmailPolicy(recipients, policy, envDefaultMode())
     if (decision.droppedAll) {
       console.log(`[mail] policy '${policy?.mode ?? envDefaultMode()}' for '${entityId}' dropped all recipients (${decision.droppedAll})`)
-      await writeSuppressedLedger(ledgerRef, stream, teamId, decision.droppedAll)
+      await writeSuppressedLedger(slot, stream, teamId, msg.idempotencyKey, decision.droppedAll)
       return { skipped: true }
     }
     if (decision.recipients.join(',') !== recipients.join(',')) {
@@ -204,32 +291,37 @@ async function dispatch(
     const suppressed = checked.filter((c) => c.suppressed).map((c) => c.email)
     if (suppressed.length) console.warn(`[mail] skipping suppressed recipients: ${suppressed.join(', ')}`)
     recipients = checked.filter((c) => !c.suppressed).map((c) => c.email)
+    if (recipients.length === 0) {
+      await writeSuppressedLedger(slot, stream, teamId, msg.idempotencyKey, 'dead_address')
+      return { skipped: true }
+    }
   }
 
   if (recipients.length === 0) {
+    // Reached when the test-mode redirect produced no recipient: TEST_MODE is on
+    // and TEST_EMAIL is unset. NOTHING is filed, for the same reason the kill
+    // switch files nothing (see `isMailEnabled` above) — this is a fact about how
+    // the environment is configured, never about an address, and a row in the
+    // send log would say a message was dropped on the recipient's account.
+    console.warn('[mail] TEST_MODE is on but TEST_EMAIL is unset — nothing sent, nothing recorded')
     return { skipped: true, testMode }
   }
 
   // ── Send ───────────────────────────────────────────────────────────────────
   const result = await sendWithRetry({ ...msg, to: recipients }, sender)
 
-  // ── Ledger (idempotency + delivery status linkage for the webhook) ─────────
-  if (ledgerRef) {
-    const now = FieldValue.serverTimestamp()
-    await ledgerRef.set(
-      {
-        idempotency_key: msg.idempotencyKey,
-        provider: 'brevo',
-        provider_message_id: result.providerMessageId,
-        stream,
-        ...(teamId ? { team_id: teamId } : {}),
-        status: 'sent',
-        updated_at: now,
-        created_at: now,
-      },
-      { merge: true },
-    )
-  }
+  // ── Ledger (send log + idempotency + delivery-status linkage for the webhook) ──
+  await slot.ref.set(
+    ledgerFields(slot, {
+      stream,
+      teamId,
+      idempotencyKey: msg.idempotencyKey,
+      status: 'sent',
+      recipientCount: recipients.length,
+      providerMessageId: result.providerMessageId,
+    }),
+    { merge: true },
+  )
 
   return { providerMessageId: result.providerMessageId, testMode }
 }

@@ -65,8 +65,9 @@ export interface PublicSurfaceFlags {
    *  team's own sessions, so install is the only gate; no published content). */
   kioskActive: boolean
   /** The studio's appointments TOGGLE (`bookingSettings.appointmentsEnabled`) —
-   *  an intention, not a fact. It is what distinguishes "not switched on" from
-   *  "switched on with nothing published", which are fixed in different places. */
+   *  an intention, not a fact, and ABSENT MEANS ON. It is what distinguishes
+   *  "not switched on" from "switched on with nothing published", which are
+   *  fixed in different places. */
   appointmentsEnabled: boolean
   /** The /appointments picker is live: the toggle above AND something bookable
    *  behind it (`active_public_surfaces.appointments` — active hours linked to a
@@ -118,7 +119,7 @@ export function usePublicSurfaces(): UsePublicSurfacesResult {
         // The appointments toggle is written to THIS document by Settings →
         // Booking, so it costs nothing extra here — which is exactly why the
         // server flag does not store a copy of it (see appointmentPickerLive).
-        appointmentsEnabled: profile?.bookingSettings?.appointmentsEnabled === true,
+        appointmentsEnabled: profile?.bookingSettings?.appointmentsEnabled !== false,
         appointmentsLive: appointmentPickerLive(profile),
       }
     },

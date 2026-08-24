@@ -417,6 +417,25 @@ async function seedTeam(opts: {
 
   // Mirror written to public_profile (what syncSubscriptionTypesToPublicProfile
   // would produce) so the bio-link / website pricing table works deterministically.
+// Mirrors resolveTeamPartnerApps (packages/functions/src/sync/syncTeamPublicProfile.ts):
+// aggregator types only, `active === false` dropped, blank names dropped, deduped
+// case-insensitively. Hand-written here because the seeders write the mirror directly.
+function partnerAppNames(defs: { source?: string; active?: boolean; name?: string }[]): string[] {
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const d of defs) {
+    if (d.source !== 'aggregator') continue
+    if (d.active === false) continue
+    const name = typeof d.name === 'string' ? d.name.trim() : ''
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    names.push(name)
+  }
+  return names
+}
+
   const publicSubTypes = subscriptionTypeDefs
     .filter((st) => st.active !== false)
     .map((st) => {
@@ -650,6 +669,7 @@ async function seedTeam(opts: {
       showBranding: false, // paid plans carry no "Powered by Linyup" badge
       default_currency: 'CHF',
       aggregator_subscription_types: publicSubTypes,
+      partner_apps: partnerAppNames(subscriptionTypeDefs),
       giftCards: giftCardSettings,
       // products mirror is written by seedStoreProducts (studio+ only) at the end
       // of seedTeam, via a merge into this same public_profile doc.
@@ -1501,6 +1521,7 @@ async function seedTeam(opts: {
           lastname: cs.lastname,
           fullname: `${cs.lastname} ${cs.firstname}`,
           joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
+          checkedInAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
           checkedInBy: 'seed',
         })
     }

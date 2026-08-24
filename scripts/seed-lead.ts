@@ -991,6 +991,25 @@ async function seedLeadTenant(profile: LeadProfile) {
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
   // would produce). price.id must equal the raw subscription_types price id or the
   // shop's Buy button stays disabled.
+// Mirrors resolveTeamPartnerApps (packages/functions/src/sync/syncTeamPublicProfile.ts):
+// aggregator types only, `active === false` dropped, blank names dropped, deduped
+// case-insensitively. Hand-written here because the seeders write the mirror directly.
+function partnerAppNames(defs: { source?: string; active?: boolean; name?: string }[]): string[] {
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const d of defs) {
+    if (d.source !== 'aggregator') continue
+    if (d.active === false) continue
+    const name = typeof d.name === 'string' ? d.name.trim() : ''
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    names.push(name)
+  }
+  return names
+}
+
   const publicSubTypes = profile.subscriptions.map((st) => {
     const entry: {
       id: string
@@ -1072,6 +1091,7 @@ async function seedLeadTenant(profile: LeadProfile) {
           }
         : { name: profile.location.label, address: profile.location.address },
       aggregator_subscription_types: publicSubTypes,
+      partner_apps: partnerAppNames(profile.subscriptions),
       // Public-safe gift-card config (enabled + face values, never balances/
       // codes) so the shop can offer them — mirrors settings.giftCards exactly
       // as syncTeamPublicProfile does.
@@ -1475,6 +1495,7 @@ async function seedLeadTenant(profile: LeadProfile) {
             lastname: client.lastname,
             fullname: `${client.lastname} ${client.firstname}`,
             joinedAt: ts(start),
+            checkedInAt: ts(start),
             checkedInBy: 'seed',
           })
       }
@@ -2081,6 +2102,7 @@ async function seedLeadTenant(profile: LeadProfile) {
           lastname: cs.lastname,
           fullname: `${cs.lastname} ${cs.firstname}`,
           joinedAt: ts(def.date),
+          checkedInAt: ts(def.date),
           checkedInBy: 'seed',
         })
     }

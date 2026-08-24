@@ -15,7 +15,7 @@ import {
 import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
-import { getMessagingInfo } from '@/lib/queries/messaging'
+import { getMessagingInfo, MAIL_LEDGER_NOTE } from '@/lib/queries/messaging'
 import { ConnectToggle } from './connect-toggle'
 import { DisconnectConnect } from './disconnect-connect'
 import { MessagingPolicyCard } from './messaging-policy-card'
@@ -27,6 +27,20 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex flex-col gap-0.5">
       <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
       <span className="text-sm">{value}</span>
+    </div>
+  )
+}
+
+// A count that failed (typically a missing index) renders as a dash — never as
+// a zero, which an operator would read as "this studio sends nothing".
+function Figure({ label, value, sub }: { label: string; value: number | null; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-lg font-semibold tabular-nums">
+        {value == null ? '—' : value.toLocaleString('en-CH')}
+      </span>
+      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
     </div>
   )
 }
@@ -221,8 +235,26 @@ export default async function AccountDetailPage({
         </Card>
 
         <Card className="py-0">
-          <div className="px-4 pt-4">
-            <CardTitle>Recent sends</CardTitle>
+          <div className="flex flex-col gap-3 px-4 pt-4">
+            <CardTitle>Outbound volume</CardTitle>
+            <div className="grid grid-cols-3 gap-3">
+              <Figure
+                label="Email · 30d"
+                value={messaging.volume.email?.last30d ?? null}
+                sub={
+                  messaging.volume.email && messaging.volume.email.suppressed30d > 0
+                    ? `${messaging.volume.email.suppressed30d} sends suppressed`
+                    : undefined
+                }
+              />
+              <Figure label="Email · total" value={messaging.volume.email?.lifetime ?? null} />
+              {/* SMS stays its own figure — it spends prepaid credits, mail does not. */}
+              <Figure label="SMS · 30d" value={messaging.volume.smsLast30d} />
+            </div>
+            <p className="text-xs text-muted-foreground">{MAIL_LEDGER_NOTE}</p>
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Recent sends
+            </span>
           </div>
           <Table>
             <TableHeader>
@@ -236,7 +268,7 @@ export default async function AccountDetailPage({
               {messaging.recentSends.length === 0 && (
                 <TableRow>
                   <TableCell className="py-4 text-muted-foreground" colSpan={3}>
-                    No ledger entries (only keyed sends are recorded).
+                    No ledger entries yet.
                   </TableCell>
                 </TableRow>
               )}

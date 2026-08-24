@@ -182,7 +182,9 @@
     "utilities": "Plus",
     "subscriptionPlans": "Formules d'abonnement",
     "memberSubscriptions": "Abonnements des membres",
-    "paymentsAndSubscriptions": "Paiements et abonnements"
+    "paymentsAndSubscriptions": "Paiements et abonnements",
+    "sidebarResizeLabel": "Redimensionner la barre latérale",
+    "sidebarResizeHint": "Faites glisser pour redimensionner — au-delà de la gauche pour réduire, double-cliquez pour réinitialiser"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -224,7 +226,7 @@
     "kioskDesc": "Un écran de check-in sur tablette pour votre accueil – membres et visiteurs s'enregistrent sur place.",
     "shopDescPriceList": "Affiche vos tarifs. Les paiements en ligne sont désactivés : les visiteurs sont invités à vous contacter.",
     "surfaceAppointments": "Rendez-vous",
-    "appointmentsDesc": "Les visiteurs choisissent un créneau libre avec un coach et le réservent eux-mêmes.",
+    "appointmentsDesc": "Intégré à la réservation — les visiteurs choisissent un créneau libre avec un coach et le réservent eux-mêmes.",
     "surfaceEvents": "Événements",
     "eventsDesc": "Vos événements publiés, avec leur programme jour par jour."
   },
@@ -313,7 +315,13 @@
     "errorTeamGeneric": "Impossible de créer votre équipe. Veuillez réessayer.",
     "currency": "Devise",
     "language": "Langue",
-    "languageHint": "La langue dans laquelle vos membres sont contactés : confirmations, rappels et reçus. Vous pourrez modifier les deux plus tard."
+    "languageHint": "La langue dans laquelle vos membres sont contactés : confirmations, rappels et reçus. Vous pourrez modifier les deux plus tard.",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "memberLanguage": "Langue des membres",
+    "memberLanguageHint": "La langue dans laquelle vos membres sont contactés — confirmations, rappels et reçus. La langue de votre propre tableau de bord se choisit séparément, dans le menu utilisateur.",
+    "errorNameRequired": "Obligatoire",
+    "errorNameTooLong": "40 caractères maximum"
   },
   "Dashboard": {
     "title": "Tableau de bord",
@@ -1190,7 +1198,9 @@
     "eventDayOf": "Jour {day} sur {total}",
     "eventFrom": "à partir de",
     "eventUntil": "jusqu'à",
-    "deleteEventConfirmTitle": "Supprimer cet événement ?"
+    "deleteEventConfirmTitle": "Supprimer cet événement ?",
+    "timezoneNotice": "Heures affichées en {zone}.",
+    "timezoneChange": "Modifier"
   },
   "Events": {
     "title": "Événements",
@@ -1541,7 +1551,6 @@
     "createdImageErrorToast": "Activité créée, mais l'image de couverture n'a pas pu être chargée. Modifiez l'activité pour l'ajouter plus tard.",
     "fieldName": "Nom",
     "fieldDescription": "Description",
-    "fieldLevel": "Niveau",
     "fieldColor": "Couleur",
     "fieldImage": "Image de couverture",
     "type_class": "Cours",
@@ -1551,10 +1560,6 @@
     "fieldFreeTrial": "Disponible comme cours d'essai",
     "fieldDurationsMinutes": "Durées de séance",
     "durationsMinutesHint": "Les durées parmi lesquelles les clients peuvent choisir lors de la réservation de cette offre.",
-    "level_all": "Tous niveaux",
-    "level_beginners": "Débutants",
-    "level_intermediate": "Intermédiaire",
-    "level_advanced": "Avancé",
     "freeTrialBadge": "Essai",
     "cancel": "Annuler",
     "archive": "Archiver",
@@ -1564,8 +1569,8 @@
     "accessLabel": "Qui peut réserver",
     "access_open": "Ouvert à tous",
     "access_open_desc": "Tout le monde peut réserver gratuitement — sans abonnement ni paiement. Un nouveau venu devient un contact d’essai.",
-    "access_members": "Membres uniquement",
-    "access_members_desc": "Les membres réservent avec leur abonnement. Un nouveau venu peut tout de même réserver un cours si « Essai gratuit pour les nouveaux » est activé ci-dessous.",
+    "access_members": "Tout membre",
+    "access_members_desc": "Toute personne inscrite peut réserver — même sans abonnement. Un nouveau venu peut toujours réserver un cours si « Cours d'essai gratuit » est activé ci-dessous.",
     "access_subscription": "Abonnements spécifiques",
     "access_subscription_desc": "Seuls les membres possédant l’un des abonnements sélectionnés peuvent réserver. Un nouveau venu peut tout de même réserver un cours si « Essai gratuit pour les nouveaux » est activé ci-dessous.",
     "accessBadgeSubscription": "Abonnement",
@@ -1636,7 +1641,6 @@
     "waitlistEnabledHint": "Quand une séance est complète, les visiteurs rejoignent une file au lieu d’aboutir à une impasse. Dès qu’une place se libère, elle est proposée automatiquement à la première personne.",
     "waitlistRequiresCapacity": "N’a d’effet que sur les séances avec une limite de participants — une séance sans limite n’est jamais complète.",
     "waitlistRequiresPlan": "Disponible à partir de la formule {plan}.",
-    "level_none": "Non précisé",
     "sectionBookingTitle": "Réservation et tarifs",
     "sectionBookingSubtitle": "Qui peut réserver, et à quel prix.",
     "moreOptionsLabel": "Plus d'options",
@@ -1651,12 +1655,20 @@
     "scheduleSheetEmptyBody": "Cette activité n'a aucune séance à venir : personne ne peut la voir ni la réserver.",
     "scheduleSheetEmptyCta": "Programmer une séance",
     "scheduleSheetOpenSchedule": "Ouvrir le planning",
-    "accessPickInCatalogue": "Les abonnements autorisés se définissent dans le catalogue, à côté des abonnements eux-mêmes.",
     "accessOpenCatalogue": "Ouvrir le catalogue",
     "dropInRateInCatalogue": "Un tarif membre sur ce prix se définit dans le catalogue — c'est une règle unique partagée par tous les abonnements concernés.",
     "benefitInCatalogue": "Le tarif membre pour ces durées se définit dans le catalogue, à côté des abonnements concernés.",
     "dropInPriceValidation": "Saisissez un prix à la séance d'au moins 0.50",
-    "durationsRequiredValidation": "Choisissez au moins une durée de rendez-vous"
+    "durationsRequiredValidation": "Choisissez au moins une durée de rendez-vous",
+    "accessBadgeMembers": "Membres",
+    "accessPlansAfterSave": "Enregistrez d'abord l'activité, puis choisissez les abonnements qui permettent de la réserver.",
+    "fieldTags": "Étiquettes",
+    "tagsHint": "Courtes mentions affichées publiquement sur la page de réservation — p. ex. Débutants bienvenus, Gi, Enfants.",
+    "tagsPlaceholder": "Saisissez une mention puis appuyez sur Entrée",
+    "tagsMax": "{max} mentions au maximum.",
+    "tagRemove": "Supprimer {tag}",
+    "accessSubscriptionPlansValidation": "Choisissez au moins un abonnement permettant de réserver cette activité.",
+    "planLinksUnsaved": "La sélection d'abonnements ci-dessus n'est pas enregistrée — enregistrez-la dans cet encadré, sinon cet enregistrement la supprimera."
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -1715,7 +1727,6 @@
     "subTypePublic": "Afficher sur la page tarifs publique",
     "subTypePublicDesc": "Lister ce plan sur votre bio-link et la table de tarifs du site.",
     "subTypeCheckoutContact": "Saisie du contact au paiement",
-    "subTypeCheckoutContactDesc": "Désactivé — aucun contact. Minimal — créer un membre avec nom + e-mail. Complet — créer le membre, puis lui faire finaliser son inscription (consentement + champs requis).",
     "subTypeContactMode_off": "Désactivé",
     "subTypeContactMode_minimal": "Minimal",
     "subTypeContactMode_full": "Complet",
@@ -1900,7 +1911,28 @@
     "paymentsExternalBeta": "Bêta",
     "paymentsExternalLimitMatch": "Linyup tente de rapprocher le contact par e-mail.",
     "paymentsExternalLimitLink": "Les paiements ne sont pas automatiquement reliés à une réservation, un abonnement, un cours ou un produit.",
-    "paymentsExternalLimitRefund": "Les remboursements, mises en pause et résiliations doivent être gérés manuellement dans le tableau de bord de votre prestataire et dans Linyup."
+    "paymentsExternalLimitRefund": "Les remboursements, mises en pause et résiliations doivent être gérés manuellement dans le tableau de bord de votre prestataire et dans Linyup.",
+    "customFieldRequiredHint": "Marque le champ comme obligatoire dans la fiche de contact. Son caractère obligatoire dans le formulaire de réservation se règle dans les paramètres de réservation.",
+    "customFieldPublicBadge": "Disponible dans le formulaire de réservation",
+    "customFieldPublicNextStep": "Cela rend seulement le champ disponible. Enregistrez, puis activez-le sous « Coordonnées à collecter » dans les paramètres de réservation pour qu'il soit réellement demandé.",
+    "customFieldPublicNextStepLink": "Ouvrir les paramètres de réservation",
+    "subTypeContactMode_off_desc": "Aucun contact n'est créé.",
+    "subTypeContactMode_minimal_desc": "Créer un membre avec nom + e-mail.",
+    "subTypeContactMode_full_desc": "Créer le membre, puis lui faire finaliser son inscription (consentement + champs requis).",
+    "regionTitle": "Région et formats",
+    "regionHint": "Comment les dates et les heures s'affichent dans votre studio. Toute l'équipe voit les mêmes formats ; la langue du tableau de bord reste personnelle.",
+    "regionTimezone": "Fuseau horaire",
+    "regionTimezoneHint": "Utilisé pour afficher les heures et dater les e-mails que vous envoyez. Saisissez pour rechercher, par ex. Europe/Zurich.",
+    "regionTimezoneInvalid": "Fuseau horaire inconnu — choisissez-en un dans la liste.",
+    "regionUseDeviceTimezone": "Utiliser cet appareil",
+    "regionWeekStart": "La semaine commence le",
+    "regionWeekStartMonday": "Lundi",
+    "regionWeekStartSunday": "Dimanche",
+    "regionDateFormat": "Format de date",
+    "regionTimeFormat": "Format d'heure",
+    "regionTime24h": "24 heures (18:30)",
+    "regionTime12h": "12 heures (6:30 PM)",
+    "regionPreview": "Aperçu"
   },
   "Bookings": {
     "title": "Réservations",
@@ -1944,7 +1976,28 @@
     "range_thisMonth": "Ce mois-ci",
     "range_custom": "Personnalisé",
     "empty": "Aucune réservation pour l'instant.",
-    "emptySearch": "Aucune réservation ne correspond à votre recherche."
+    "emptySearch": "Aucune réservation ne correspond à votre recherche.",
+    "subtitleWindow": "{total} sur cette période · {trials} essai",
+    "windowTruncated": "Affichage des {count} plus récentes — réduisez la période pour toutes les voir.",
+    "windowTooWideTitle": "Trop de cours sur cette période",
+    "windowTooWide": "Cette période couvre plus de {count} cours, trop pour un seul chargement. Choisissez une période plus courte.",
+    "dateAxisLabel": "Filtrer par",
+    "axisClassDate": "Date du cours",
+    "axisBookingDate": "Date de réservation",
+    "range_tomorrow": "Demain",
+    "range_next7": "7 prochains jours",
+    "range_next30": "30 prochains jours",
+    "range_nextMonth": "Le mois prochain",
+    "rangeMaxSpan": "{days} jours max.",
+    "labelClassDate": "Cours :",
+    "labelBookedOn": "Réservé :",
+    "labelReference": "Réf.",
+    "searchPlaceholderWithReference": "Rechercher par nom, e-mail ou référence…",
+    "referenceMatchHeading": "Référence de réservation {code}",
+    "referenceSearching": "Recherche de la référence…",
+    "referenceNotFound": "Aucune réservation trouvée avec la référence {code}.",
+    "referenceMultipleMatches": "{count} réservations partagent cette référence — vérifiez le nom et le cours.",
+    "emptyWindow": "Aucune réservation sur cette période."
   },
   "ManageBooking": {
     "title": "Gérer la réservation",
@@ -2115,7 +2168,13 @@
     "analyticsHint": "Nous aide à améliorer le produit",
     "analyticsOn": "Activé",
     "analyticsOff": "Désactivé",
-    "qrSurfaceDesc": "Le scan ouvre cette page dans le navigateur du visiteur."
+    "qrSurfaceDesc": "Le scan ouvre cette page dans le navigateur du visiteur.",
+    "switchStudio": "Changer de studio",
+    "currentStudio": "Studio actuel",
+    "createStudio": "Créer un autre studio",
+    "switchStudioFailed": "Impossible de changer de studio. Veuillez réessayer.",
+    "studioListFailed": "Impossible de charger vos studios.",
+    "studioListRetry": "Réessayer"
   },
   "BioLink": {
     "title": "Bio link",
@@ -3486,6 +3545,35 @@
           "desc": "Cours en ligne, cartes cadeaux, décharges, finances et plus. N'activez que ce dont vous avez besoin.",
           "ack": "J'ai jeté un œil",
           "label": "Explorez les plugins"
+        },
+        "bioLink": {
+          "label": "Complétez votre page bio link",
+          "desc": "Vos liens, vos réseaux sociaux et votre style. La page est déjà en ligne."
+        },
+        "publicPages": {
+          "label": "Voir toutes vos pages publiques",
+          "desc": "Toutes les pages que vos membres et visiteurs peuvent atteindre, en une liste.",
+          "ack": "J'ai jeté un œil"
+        },
+        "qrCodes": {
+          "label": "Récupérez vos QR codes",
+          "desc": "Un code par page publique — à imprimer ou à afficher au mur.",
+          "ack": "J'ai jeté un œil"
+        },
+        "automations": {
+          "label": "Créez une automatisation",
+          "desc": "Messages de bienvenue, rappels, relances — envoyés sans vous.",
+          "ack": "J'ai jeté un œil"
+        },
+        "paymentsReview": {
+          "label": "Vérifiez votre page paiements",
+          "desc": "Chaque paiement reçu, et tout ce qui reste dû.",
+          "ack": "J'ai jeté un œil"
+        },
+        "shortcuts": {
+          "label": "Épinglez un raccourci",
+          "desc": "Gardez les pages que vous utilisez chaque jour en haut de la barre latérale.",
+          "ack": "J'ai jeté un œil"
         }
       },
       "ackUndo": "Annuler",
@@ -4938,7 +5026,7 @@
     "toggleShowActivityDescriptionLabel": "Afficher la description de l'activité",
     "toggleShowActivityDescriptionDesc": "Afficher le texte de description de l'activité sur l'écran de sélection d'activité.",
     "toggleShowFitnessAppLabel": "Afficher le champ application fitness",
-    "toggleShowFitnessAppDesc": "Demander aux nouveaux invités de quelle application fitness ils viennent (p. ex. Fitpass, ClassPass).",
+    "toggleShowFitnessAppDesc": "Demander aux nouveaux visiteurs par quelle application partenaire ils arrivent. Les options sont vos propres types d'abonnement partenaires (agrégateurs) — tant que vous n'en avez aucun, la question n'est pas posée.",
     "toggleAppointmentsEnabledLabel": "Afficher les rendez-vous",
     "toggleAppointmentsEnabledDesc": "Afficher la prise de rendez-vous dans le parcours de réservation public.",
     "ctaTitle": "Bouton d'appel à l'action (facultatif)",
@@ -4960,7 +5048,9 @@
     "toggleWaitlistEnabledDesc": "Permettez aux clients de faire la queue pour un cours complet et de se voir proposer une place dès qu’elle se libère. Activez pour afficher l’option sur chaque activité.",
     "noShowPublicNote": "Ces conditions sont affichées aux visiteurs sur vos pages de réservation publiques avant qu'ils ne réservent. Les frais sont envoyés par e-mail sous forme de lien de paiement — ils ne sont jamais débités d'une carte enregistrée.",
     "moreOptionsLabel": "Plus d'options",
-    "moreOptionsHint": "Période de réservation, délai limite, champs demandés et bouton personnalisé"
+    "moreOptionsHint": "Période de réservation, délai limite, champs demandés et bouton personnalisé",
+    "betaBadge": "Bêta",
+    "betaBadgeHint": "Prêt à l'emploi — cette fonctionnalité peut encore évoluer."
   },
   "SettingsPlaces": {
     "pageTitle": "Lieux",
@@ -5234,7 +5324,24 @@
     "restoredToast": "{name} rétabli",
     "restoreFailed": "Impossible de rétablir. Rechargez et vérifiez la liste.",
     "removeFailed": "Suppression impossible. Rien n'a été modifié.",
-    "undo": "Annuler"
+    "undo": "Annuler",
+    "seatPaidBadge": "Cours à l'unité payé",
+    "seatPaidBadgeTitle": "Cette place a été payée en ligne",
+    "seatGiftCardBadge": "Carte cadeau",
+    "seatGiftCardBadgeTitle": "Cette place a été payée avec une carte cadeau",
+    "seatCreditBadge": "Crédit utilisé",
+    "seatCreditBadgeTitle": "Cette place a utilisé un crédit de cours d'un pack",
+    "seatUsageBadge": "Inclus dans l'abonnement",
+    "seatUsageBadgeTitle": "Cette place utilise l'un des cours inclus dans l'abonnement",
+    "seatAwaitingPaymentBadge": "Paiement en attente",
+    "seatAwaitingPaymentBadgeTitle": "Paiement commencé mais non finalisé — cette place n'est pas encore payée",
+    "confirmedSection": "Confirmé, sans enregistrement",
+    "confirmedBadge": "Confirmé",
+    "markNoShowFromCheckInTitle": "Marquer comme absent et supprimer l'enregistrement",
+    "noShowConfirmTitle": "Marquer comme absent ?",
+    "noShowConfirmBody": "{name} sera marqué comme absent et son enregistrement sera supprimé. Cela compte comme une absence et peut déclencher des automatisations.",
+    "noShowConfirmAction": "Marquer comme absent",
+    "noShowFailed": "Impossible de marquer comme absent"
   },
   "OrgEvents": {
     "title": "Événements de l'organisation",
@@ -6890,7 +6997,12 @@
     "versusBookingQuestions": "Ces informations sont enregistrées sur le contact et peuvent être filtrées ensuite. Pour ce qui ne concerne qu'une seule réservation, utilisez plutôt les questions de réservation de l'activité.",
     "field_phone": "Numéro de téléphone",
     "field_birthdate": "Date de naissance",
-    "field_address": "Adresse"
+    "field_address": "Adresse",
+    "notAskedYet": "Disponible — activez pour le demander dans le formulaire de réservation.",
+    "addFieldsPrompt": "Besoin d'une autre information ? Créez votre propre champ et il apparaîtra ici.",
+    "addFieldsLink": "Ajouter un champ personnalisé",
+    "addFieldsPluginPrompt": "Seulement les champs ci-dessus ? Les champs personnalisés vous permettent de collecter tout le reste.",
+    "addFieldsPluginLink": "Activer les champs personnalisés"
   },
   "QuickActions": {
     "newSession": "Nouvelle séance",
@@ -7012,7 +7124,9 @@
     "pendingBody": "Tout sera définitivement effacé le {date}. D'ici là, le studio fonctionne normalement et vous pouvez arrêter cela à tout moment.",
     "pendingBillingNote": "Les abonnements de vos membres ont déjà été résiliés et ne peuvent pas être relancés : ils devraient racheter un abonnement.",
     "cancelAction": "Arrêter la suppression",
-    "errorGeneric": "Cela n'a pas fonctionné. Rien n'a été supprimé."
+    "errorGeneric": "Cela n'a pas fonctionné. Rien n'a été supprimé.",
+    "bannerTitle": "Ce studio sera définitivement supprimé le {date}.",
+    "bannerBody": "D'ici là, le studio fonctionne normalement."
   },
   "TeamInvitation": {
     "title": "Vous avez été invité",
