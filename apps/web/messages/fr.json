@@ -7013,5 +7013,27 @@
     "pendingBillingNote": "Les abonnements de vos membres ont déjà été résiliés et ne peuvent pas être relancés : ils devraient racheter un abonnement.",
     "cancelAction": "Arrêter la suppression",
     "errorGeneric": "Cela n'a pas fonctionné. Rien n'a été supprimé."
+  },
+  "TeamInvitation": {
+    "title": "Vous avez été invité",
+    "subtitle": "Rejoignez l'équipe sur Linyup",
+    "unnamedTeam": "Cette équipe",
+    "roleLine": "Vous rejoindrez en tant que {role}",
+    "sentTo": "Invitation envoyée à {email}",
+    "role_manager": "Gestionnaire",
+    "role_coach": "Coach",
+    "role_viewer": "Observateur",
+    "signInRequired": "Connectez-vous pour accepter cette invitation. Vous pouvez utiliser n'importe quel compte — nous recommandons l'adresse à laquelle l'invitation a été envoyée.",
+    "signInBtn": "Se connecter pour accepter",
+    "acceptBtn": "Accepter l'invitation",
+    "accepting": "Adhésion…",
+    "acceptedTitle": "Vous avez rejoint {team}",
+    "acceptedBody": "Votre compte a maintenant accès à cette équipe.",
+    "goToDashboard": "Aller au tableau de bord",
+    "error_invalid": "Ce lien d'invitation n'est pas valide. Demandez à l'équipe de vous en envoyer un nouveau.",
+    "error_expired": "Cette invitation a expiré. Les invitations sont valables 7 jours — demandez à l'équipe de vous en envoyer une nouvelle.",
+    "error_alreadyAccepted": "Cette invitation a déjà été acceptée. Connectez-vous pour accéder à l'équipe.",
+    "error_planRequired": "Le forfait de cette équipe n'inclut plus d'utilisateur supplémentaire, l'invitation ne peut donc pas être acceptée. Demandez au propriétaire de l'équipe de passer à un forfait supérieur.",
+    "error_generic": "Une erreur s'est produite. Veuillez réessayer ou demander à l'équipe une nouvelle invitation."
   }
 }

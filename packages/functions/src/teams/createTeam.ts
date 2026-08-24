@@ -1,18 +1,17 @@
-import * as admin from 'firebase-admin'
-import { regionalFunctions } from '../utils/functions'
+import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { isAdmin, createTeamRecord } from '../utils/teams'
 
-export const createTeam = regionalFunctions.https.onCall(
-  async (data: { name: string; description?: string }, context) => {
-    if (!context.auth) throw new (await import('firebase-functions')).https.HttpsError('unauthenticated', 'Not authenticated')
+export const createTeam = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Not authenticated')
 
-    const userId = context.auth.uid
-    const hasAdmin = await isAdmin(userId)
-    if (!hasAdmin) throw new (await import('firebase-functions')).https.HttpsError('permission-denied', 'Admin role required to create teams')
+  const { name, description } = request.data as { name: string; description?: string }
 
-    if (!data.name?.trim()) throw new (await import('firebase-functions')).https.HttpsError('invalid-argument', 'Team name is required')
+  const userId = request.auth.uid
+  const hasAdmin = await isAdmin(userId)
+  if (!hasAdmin) throw new HttpsError('permission-denied', 'Admin role required to create teams')
 
-    const teamId = await createTeamRecord({ name: data.name.trim(), description: data.description }, userId)
-    return { teamId }
-  }
-)
+  if (!name?.trim()) throw new HttpsError('invalid-argument', 'Team name is required')
+
+  const teamId = await createTeamRecord({ name: name.trim(), description }, userId)
+  return { teamId }
+})

@@ -7013,5 +7013,27 @@
     "pendingBillingNote": "Gli abbonamenti dei tuoi membri sono già stati disdetti e non possono essere riattivati: dovrebbero acquistare di nuovo un abbonamento.",
     "cancelAction": "Ferma l'eliminazione",
     "errorGeneric": "Non ha funzionato. Non è stato eliminato nulla."
+  },
+  "TeamInvitation": {
+    "title": "Sei stato invitato",
+    "subtitle": "Unisciti al team su Linyup",
+    "unnamedTeam": "Questo team",
+    "roleLine": "Ti unirai come {role}",
+    "sentTo": "Invito inviato a {email}",
+    "role_manager": "Manager",
+    "role_coach": "Coach",
+    "role_viewer": "Osservatore",
+    "signInRequired": "Accedi per accettare questo invito. Puoi usare qualsiasi account — consigliamo l'indirizzo a cui è stato inviato l'invito.",
+    "signInBtn": "Accedi per accettare",
+    "acceptBtn": "Accetta l'invito",
+    "accepting": "Adesione…",
+    "acceptedTitle": "Ti sei unito a {team}",
+    "acceptedBody": "Il tuo account ora ha accesso a questo team.",
+    "goToDashboard": "Vai alla dashboard",
+    "error_invalid": "Questo link di invito non è valido. Chiedi al team di inviartene uno nuovo.",
+    "error_expired": "Questo invito è scaduto. Gli inviti sono validi per 7 giorni — chiedi al team di inviartene uno nuovo.",
+    "error_alreadyAccepted": "Questo invito è già stato accettato. Accedi per raggiungere il team.",
+    "error_planRequired": "Il piano di questo team non include più un utente aggiuntivo, quindi l'invito non può essere accettato. Chiedi al proprietario del team di effettuare l'upgrade.",
+    "error_generic": "Qualcosa è andato storto. Riprova o chiedi al team un nuovo invito."
   }
 }

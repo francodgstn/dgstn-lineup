@@ -7013,5 +7013,27 @@
     "pendingBillingNote": "Die Abos deiner Mitglieder wurden bereits gekündigt und lassen sich nicht neu starten — sie müssten erneut eine Mitgliedschaft kaufen.",
     "cancelAction": "Löschung stoppen",
     "errorGeneric": "Das hat nicht geklappt. Es wurde nichts gelöscht."
+  },
+  "TeamInvitation": {
+    "title": "Sie wurden eingeladen",
+    "subtitle": "Treten Sie dem Team auf Linyup bei",
+    "unnamedTeam": "Dieses Team",
+    "roleLine": "Sie treten als {role} bei",
+    "sentTo": "Einladung gesendet an {email}",
+    "role_manager": "Manager",
+    "role_coach": "Coach",
+    "role_viewer": "Betrachter",
+    "signInRequired": "Melden Sie sich an, um diese Einladung anzunehmen. Sie können ein beliebiges Konto verwenden — wir empfehlen die Adresse, an die die Einladung gesendet wurde.",
+    "signInBtn": "Zum Annehmen anmelden",
+    "acceptBtn": "Einladung annehmen",
+    "accepting": "Beitreten…",
+    "acceptedTitle": "Sie sind {team} beigetreten",
+    "acceptedBody": "Ihr Konto hat jetzt Zugriff auf dieses Team.",
+    "goToDashboard": "Zum Dashboard",
+    "error_invalid": "Dieser Einladungslink ist ungültig. Bitten Sie das Team, Ihnen einen neuen zu senden.",
+    "error_expired": "Diese Einladung ist abgelaufen. Einladungen sind 7 Tage gültig — bitten Sie das Team, Ihnen eine neue zu senden.",
+    "error_alreadyAccepted": "Diese Einladung wurde bereits angenommen. Melden Sie sich an, um zum Team zu gelangen.",
+    "error_planRequired": "Der Plan dieses Teams enthält keinen zusätzlichen Benutzer mehr, daher kann die Einladung nicht angenommen werden. Bitten Sie den Team-Inhaber um ein Upgrade.",
+    "error_generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut oder bitten Sie das Team um eine neue Einladung."
   }
 }
