@@ -54,6 +54,9 @@ describe('resolveEventDelayMinutes — absent or zero delay runs inline', () => 
     'affiliation_added',
     'affiliation_removed',
     'affiliation_changed',
+    'payment_received',
+    'payment_refunded',
+    'payment_disputed',
   ]
 
   for (const t of inlineTriggers) {
@@ -78,7 +81,8 @@ describe('resolveEventDelayMinutes — absent or zero delay runs inline', () => 
 })
 
 // ---------------------------------------------------------------------------
-// The ten triggers UX-85 named now honour a delay.
+// The event triggers that store a delay now honour it. Named rather than counted:
+// the list grows, and a tally in the heading goes wrong the moment it does.
 // ---------------------------------------------------------------------------
 
 describe('resolveEventDelayMinutes — the triggers that stored a delay nothing read', () => {
@@ -93,6 +97,9 @@ describe('resolveEventDelayMinutes — the triggers that stored a delay nothing 
     'affiliation_added',
     'affiliation_removed',
     'affiliation_changed',
+    'payment_received',
+    'payment_refunded',
+    'payment_disputed',
   ]
 
   for (const t of nowHonoured) {

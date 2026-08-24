@@ -87,10 +87,13 @@ import {
   Webhook,
   History,
   Copy,
+  Banknote,
+  Undo2,
+  ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION, ALERT_PRESETS_SUBCOLLECTION, SUBSCRIPTION_ROLLUP_STATUSES, CONTACT_SOURCES } from '@linyup/shared'
-import type { SubscriptionType, CustomFieldDefinition, RankingSystem } from '@linyup/shared'
+import type { SubscriptionType, CustomFieldDefinition, RankingSystem, MemberPayment } from '@linyup/shared'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
@@ -112,6 +115,7 @@ interface AutomationTrigger {
   webhook_endpoint_id?: string // inbound_webhook only
   subscriptionTypeId?: string // subscription_added/removed: scope to a specific type ('' = any)
   affiliationTypeKey?: string // affiliation_added/removed: scope to a specific type key ('' = any)
+  paymentKind?: string // payment_*: scope to one MemberPayment.kind ('' = any)
 }
 
 interface AutomationCondition {
@@ -196,7 +200,7 @@ interface FormAction {
 
 // `group` drives the sectioned dropdown (SelectGroup + divider) — machine keys,
 // translated for display via Automations.groups.* (see renderGroupedOptions).
-const TRIGGER_GROUP_ORDER = ['contact', 'booking', 'attendance', 'subscription', 'affiliation', 'general', 'plugins']
+const TRIGGER_GROUP_ORDER = ['contact', 'booking', 'attendance', 'subscription', 'payment', 'affiliation', 'general', 'plugins']
 const CONDITION_GROUP_ORDER = ['acquisition', 'subscription', 'affiliation', 'attendance', 'other']
 
 // supportsDelay says the DELAY IS HONOURED, not merely stored — which is what
@@ -216,6 +220,38 @@ const CONDITION_GROUP_ORDER = ['acquisition', 'subscription', 'affiliation', 'at
 // The delay is capped at MAX_DELAY_MINUTES: Cloud Tasks will not schedule a task
 // more than 30 days out. Beyond that the engine clamps and logs.
 const MAX_DELAY_MINUTES = 30 * 24 * 60
+
+// The triggers that read a member_payments row, and so the ones the paymentKind scope
+// applies to. Typed against AutomationRule.trigger.type on the engine side by the
+// delayedRules parity test, which reads this file.
+const PAYMENT_TRIGGERS: string[] = ['payment_received', 'payment_refunded', 'payment_disputed']
+
+// The triggers that carry a subscription_type_id in their delta, and so the ones the
+// subscription-type scope applies to. Must agree with the matching branch in
+// fireEventRules — a select the engine ignores is worse than no select at all, and
+// that is exactly how subscription_cancel_requested shipped.
+const SUBSCRIPTION_SCOPED_TRIGGERS: string[] = [
+  'subscription_added',
+  'subscription_removed',
+  'subscription_cancel_requested',
+]
+
+// What a payment can have bought, in the order the select offers it.
+//
+// Written as a Record over the shared MemberPayment union, not as a free-hand array,
+// so that adding a kind in @linyup/shared and forgetting this select FAILS THE BUILD.
+// An array would have accepted the omission silently, and the symptom — a scope the
+// studio cannot express — is invisible until somebody goes looking for it.
+const PAYMENT_KIND_ORDER: Record<NonNullable<MemberPayment['kind']>, true> = {
+  membership: true,
+  course: true,
+  product: true,
+  drop_in: true,
+  appointment: true,
+  gift_card: true,
+  policy_fee: true,
+}
+const PAYMENT_KINDS = Object.keys(PAYMENT_KIND_ORDER) as NonNullable<MemberPayment['kind']>[]
 
 const TRIGGER_OPTIONS = [
   { value: 'schedule_daily', icon: Clock, supportsDelay: false, group: 'general' },
@@ -253,6 +289,13 @@ const TRIGGER_OPTIONS = [
     supportsDelay: true,
     group: 'subscription',
   },
+  // Money events read off the payment ROW, as opposed to the two above, which are read
+  // off the contact. Offered to every studio, including one with no Stripe account
+  // connected: a trigger that never fires is inert, whereas a hidden one is a support
+  // question from a studio halfway through onboarding.
+  { value: 'payment_received', icon: Banknote, supportsDelay: true, group: 'payment' },
+  { value: 'payment_refunded', icon: Undo2, supportsDelay: true, group: 'payment' },
+  { value: 'payment_disputed', icon: ShieldAlert, supportsDelay: true, group: 'payment' },
   { value: 'affiliation_added', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
   { value: 'affiliation_removed', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
   { value: 'affiliation_changed', icon: ShieldCheck, supportsDelay: true, group: 'affiliation' },
@@ -1540,6 +1583,8 @@ function RuleDialog({
   // Scope for the added/removed delta triggers ('' = any type).
   const [triggerSubTypeId, setTriggerSubTypeId] = useState('')
   const [triggerAffTypeKey, setTriggerAffTypeKey] = useState('')
+  // Scope for the payment_* triggers ('' = any kind).
+  const [triggerPaymentKind, setTriggerPaymentKind] = useState('')
   const [submitError, setSubmitError] = useState('')
   const ruleSchema = useMemo(() => createRuleSchema(t), [t])
 
@@ -1612,6 +1657,7 @@ function RuleDialog({
       setWebhookEndpointId(seed.trigger.webhook_endpoint_id ?? '')
       setTriggerSubTypeId(seed.trigger.subscriptionTypeId ?? '')
       setTriggerAffTypeKey(seed.trigger.affiliationTypeKey ?? '')
+      setTriggerPaymentKind(seed.trigger.paymentKind ?? '')
     } else {
       reset({
         name: '',
@@ -1624,6 +1670,7 @@ function RuleDialog({
       setWebhookEndpointId('')
       setTriggerSubTypeId(prefill?.subscriptionTypeId ?? '')
       setTriggerAffTypeKey('')
+      setTriggerPaymentKind('')
     }
     setSubmitError('')
   }, [open, editing, duplicating, reset, prefill, tCommon])
@@ -1686,15 +1733,16 @@ function RuleDialog({
           ...(values.trigger_type === 'inbound_webhook' && webhookEndpointId
             ? { webhook_endpoint_id: webhookEndpointId }
             : {}),
-          ...((values.trigger_type === 'subscription_added' ||
-            values.trigger_type === 'subscription_removed') &&
-          triggerSubTypeId
+          ...(SUBSCRIPTION_SCOPED_TRIGGERS.includes(values.trigger_type) && triggerSubTypeId
             ? { subscriptionTypeId: triggerSubTypeId }
             : {}),
           ...((values.trigger_type === 'affiliation_added' ||
             values.trigger_type === 'affiliation_removed') &&
           triggerAffTypeKey.trim()
             ? { affiliationTypeKey: triggerAffTypeKey.trim() }
+            : {}),
+          ...(PAYMENT_TRIGGERS.includes(values.trigger_type) && triggerPaymentKind
+            ? { paymentKind: triggerPaymentKind }
             : {}),
         },
         conditions: conditions.map((c) => {
@@ -1872,8 +1920,8 @@ function RuleDialog({
               </div>
             )}
 
-            {/* Delta trigger scope — which subscription type was added/removed */}
-            {(triggerType === 'subscription_added' || triggerType === 'subscription_removed') && (
+            {/* Delta trigger scope — which subscription type the event was about */}
+            {SUBSCRIPTION_SCOPED_TRIGGERS.includes(triggerType) && (
               <div>
                 <Label className="text-xs">{t('dialogs.rule.subscriptionTypeLabel')}</Label>
                 <Select value={triggerSubTypeId} onValueChange={(v) => setTriggerSubTypeId(v ?? '')}>
@@ -1890,6 +1938,33 @@ function RuleDialog({
                     {subscriptionTypes.map((s) => (
                       <SelectItem key={s.id} value={s.id} className="text-xs">
                         {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Delta trigger scope — what the payment bought */}
+            {PAYMENT_TRIGGERS.includes(triggerType) && (
+              <div>
+                <Label className="text-xs">{t('dialogs.rule.paymentKindLabel')}</Label>
+                <Select
+                  value={triggerPaymentKind}
+                  onValueChange={(v) => setTriggerPaymentKind(v ?? '')}
+                >
+                  <SelectTrigger className="mt-1 h-8 text-xs">
+                    <span className="flex flex-1 text-left text-xs truncate">
+                      {triggerPaymentKind
+                        ? t(`paymentKinds.${triggerPaymentKind}` as Parameters<typeof t>[0])
+                        : t('paymentKinds.any')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="" className="text-xs">{t('paymentKinds.any')}</SelectItem>
+                    {PAYMENT_KINDS.map((k) => (
+                      <SelectItem key={k} value={k} className="text-xs">
+                        {t(`paymentKinds.${k}` as Parameters<typeof t>[0])}
                       </SelectItem>
                     ))}
                   </SelectContent>

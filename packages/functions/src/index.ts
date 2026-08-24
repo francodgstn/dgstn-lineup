@@ -421,6 +421,7 @@ export {
   previewAutomationRule,
   onContactWrite,
   onBookingWrite,
+  onMemberPaymentWrite,
   onSessionWrite,
   executeDelayedRule,
   inboundWebhook,

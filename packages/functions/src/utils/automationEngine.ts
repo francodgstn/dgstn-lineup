@@ -64,6 +64,13 @@ export type AutomationTriggerType =
   /** An invoice failed and the membership is now past due. Fires on the
    *  transition INTO 'past_due', never while it stays there. */
   | 'subscription_payment_failed'
+  // Money events read off the PAYMENT document — automation/paymentEvents.ts owns the
+  // census of their edges. The split from the two above is where the SUBJECT is, not
+  // tidiness: a failed recurring charge writes a payment row with no contactId on it,
+  // and a cancellation writes no payment row at all. docs/automations-money-triggers.md.
+  | 'payment_received'
+  | 'payment_refunded'
+  | 'payment_disputed'
   // Tier 1+2 — event trigger + optional Cloud Tasks delay
   | 'session_ended'
   // Inbound webhook — external system POSTs to a team's unique URL
@@ -147,6 +154,10 @@ export interface AutomationRule {
     // when set, the rule only fires when the specific affiliation type_key was added/removed.
     // Absent or empty string = match ANY add/remove.
     affiliationTypeKey?: string
+    // Delta scoping for the payment_* triggers: when set, the rule only fires for
+    // payments of that MemberPayment.kind ('course', 'product', 'membership', …).
+    // Absent or empty string = match ANY kind.
+    paymentKind?: string
   }
   conditions: AutomationCondition[]
   actions: AutomationAction[]
@@ -220,15 +231,42 @@ export interface AutomationContext {
 }
 
 /**
- * Delta payload for subscription_added/removed and affiliation_added/removed triggers.
- * Carries the specific type that changed so the engine can scope rules that opt-in
- * to a particular type via trigger.subscriptionTypeId / trigger.affiliationTypeKey.
+ * What CHANGED, for the triggers whose rules can be scoped to a part of it.
+ *
+ * Carries the specific type that changed so the engine can scope rules that opt-in to a
+ * particular type via trigger.subscriptionTypeId / trigger.affiliationTypeKey /
+ * trigger.paymentKind.
+ *
+ * This is also where a money trigger's facts ride — NOT in AutomationContext.payload.
+ * A non-empty payload costs the run its delay (see resolveEventDelayMinutes), and that
+ * loss is silent: the rule builder would still offer the field. The accepted cost of
+ * the choice is that these facts are not addressable from an action template as
+ * {{payload.*}}.
  */
 export interface EventDelta {
-  /** For subscription_added / subscription_removed: the subscription_type_id that changed. */
+  /**
+   * For subscription_added / subscription_removed: the subscription_type_id that
+   * changed — and for subscription_cancel_requested, the one winding down, so a rule
+   * can be scoped through the same select.
+   */
   subscriptionTypeId?: string
   /** For affiliation_added / affiliation_removed: the affiliation type_key that changed. */
   affiliationTypeKey?: string
+  /** For the payment_* triggers: identity + money facts off the member_payments row. */
+  payment?: {
+    paymentIntentId: string
+    /** MemberPayment.kind — what the money bought. Scoped on by trigger.paymentKind. */
+    kind: string | null
+    /** Gross amount of the payment, in minor units (Rappen). */
+    amountMinor: number
+    currency: string | null
+    /** payment_refunded: what THIS refund gave back, not the running total. */
+    refundAmountMinor?: number
+    /** payment_refunded: whether the payment is now fully refunded. */
+    refundIsFull?: boolean
+    /** payment_disputed: Stripe's dispute status at the moment it first appeared. */
+    disputeStatus?: string
+  }
 }
 
 export interface RunRuleOptions {
@@ -1763,7 +1801,9 @@ export function resolveEventDelayMinutes(
  * CloudEvent id of the Firestore write that fired it, which is stable across a
  * duplicate delivery of that same write. The delta is folded in because one
  * write can emit several events (two subscriptions added at once), and those
- * are genuinely different occurrences.
+ * are genuinely different occurrences. A money event contributes its
+ * paymentIntentId for the same reason — one payment write emits at most one of
+ * them today, but the key should say WHICH payment rather than rely on that.
  *
  * The key is deliberately NOT `{ruleId}:{contactId}`: that would make a
  * legitimate second booking, months later, a permanent no-op. Repeat firings
@@ -1775,7 +1815,10 @@ export function buildEventIdempotencyKey(input: {
   occurrenceId: string
   delta?: EventDelta
 }): string {
-  const deltaKey = input.delta?.subscriptionTypeId || input.delta?.affiliationTypeKey
+  const deltaKey =
+    input.delta?.subscriptionTypeId ||
+    input.delta?.affiliationTypeKey ||
+    input.delta?.payment?.paymentIntentId
   return ['evt', input.ruleId, input.occurrenceId, deltaKey].filter(Boolean).join(':')
 }
 
@@ -1905,10 +1948,18 @@ export async function fireEventRules(
     )
       continue
 
-    // Delta scoping for subscription_added / subscription_removed:
-    // if the rule specifies a subscriptionTypeId, only fire when the delta matches.
+    // Delta scoping for the subscription-type family: if the rule specifies a
+    // subscriptionTypeId, only fire when the delta matches.
+    //
+    // `subscription_cancel_requested` belongs here because it CARRIES that delta.
+    // It was emitting one nothing matched on, so a rule narrowed to one plan fired
+    // when any plan was cancelled — a control that silently does nothing, which is
+    // found by a studio rather than by a test. The builder's select must agree;
+    // automation/subscriptionScope.test.ts reads both files and pins it.
     if (
-      (triggerType === 'subscription_added' || triggerType === 'subscription_removed') &&
+      (triggerType === 'subscription_added' ||
+        triggerType === 'subscription_removed' ||
+        triggerType === 'subscription_cancel_requested') &&
       rule.trigger.subscriptionTypeId &&
       rule.trigger.subscriptionTypeId !== delta?.subscriptionTypeId
     )
@@ -1920,6 +1971,20 @@ export async function fireEventRules(
       (triggerType === 'affiliation_added' || triggerType === 'affiliation_removed') &&
       rule.trigger.affiliationTypeKey &&
       rule.trigger.affiliationTypeKey !== delta?.affiliationTypeKey
+    )
+      continue
+
+    // Delta scoping for the payment_* family: if the rule names a paymentKind, only
+    // fire for payments of that kind — "when someone buys a COURSE" as one rule,
+    // rather than one rule that fires on every sale and a condition that cannot see
+    // the delta. A row whose kind was never stamped (kind: null) matches nothing but
+    // the unscoped rule, which is the honest answer: it is not known to be a course.
+    if (
+      (triggerType === 'payment_received' ||
+        triggerType === 'payment_refunded' ||
+        triggerType === 'payment_disputed') &&
+      rule.trigger.paymentKind &&
+      rule.trigger.paymentKind !== delta?.payment?.kind
     )
       continue
 
