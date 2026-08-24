@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
-  collectionGroup,
   query,
   where,
   orderBy,
@@ -53,6 +52,17 @@ import {
   buildParticipantDoc,
   type Booking,
 } from '@linyup/shared'
+import { QueryErrorState } from '@/components/ui/query-error'
+import {
+  MAX_RANGE_DAYS,
+  MAX_WINDOW_SESSIONS,
+  parseBookingReference,
+  useBookingReference,
+  useBookingsWindow,
+  useContactBookedSessions,
+  type BookingDateAxis,
+  type SessionInfo,
+} from '@/hooks/useBookingsWindow'
 import {
   Search,
   MoreHorizontal,
@@ -63,6 +73,8 @@ import {
   Repeat,
   ExternalLink,
   User,
+  Hash,
+  AlertTriangle,
 } from 'lucide-react'
 import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
@@ -104,6 +116,11 @@ function initials(b: Booking) {
   return `${b.firstname?.[0] ?? ''}${b.lastname?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
+function errorMessage(err: unknown): string | null {
+  if (err instanceof Error && err.message) return err.message
+  return null
+}
+
 const AVATAR_COLORS = [
   'bg-blue-500',
   'bg-purple-500',
@@ -124,26 +141,61 @@ function avatarColor(id: string) {
 // Predefined windows for the bookings date filter. Selecting one fills the From/To
 // fields (yyyy-mm-dd, the format the DatePicker + filter already use); editing either
 // field manually flips the dropdown back to "custom".
+//
+// Every preset is BOUNDED — the old 'All time' option is gone. It read as a free
+// search and was neither: the query took the newest 200 bookings whatever was
+// picked, so "All time" meant "the last 200, silently". The window is now the
+// query, so it has to be one.
+//
+// Some of them reach FORWARD, because the class-date axis can: a studio asking
+// "who is booked into next week" is the common question, and no window built off
+// `joinedAt` alone could ever answer it. `FORWARD_RANGES` below is the list of
+// those, and the booking axis is offered the rest.
 
 type QuickRange =
-  | 'all'
   | 'today'
+  | 'tomorrow'
+  | 'thisWeek'
+  | 'next7'
+  | 'next30'
+  | 'nextMonth'
   | 'yesterday'
   | 'last7'
   | 'last30'
-  | 'thisWeek'
   | 'thisMonth'
   | 'custom'
 
 const QUICK_RANGES: Exclude<QuickRange, 'custom'>[] = [
-  'all',
+  'thisWeek',
   'today',
+  'tomorrow',
+  'next7',
+  'next30',
+  'nextMonth',
   'yesterday',
   'last7',
   'last30',
-  'thisWeek',
   'thisMonth',
 ]
+
+// Presets whose label promises the future — tomorrow, next 7 days, next 30 days,
+// next month. They belong to the CLASS axis alone: `joinedAt` is stamped when a
+// booking is taken and so is never later than now, which makes "Tomorrow" on the
+// booking axis a guaranteed-empty list and "Next 30 days" a window that quietly
+// means "today". Offering them there is a dead end with no explanation, so the
+// axis toggle removes them and snaps a selected one back to the default.
+const FORWARD_RANGES: ReadonlySet<QuickRange> = new Set<QuickRange>([
+  'tomorrow',
+  'next7',
+  'next30',
+  'nextMonth',
+])
+
+function rangesForAxis(axis: BookingDateAxis): Exclude<QuickRange, 'custom'>[] {
+  return axis === 'class' ? QUICK_RANGES : QUICK_RANGES.filter((r) => !FORWARD_RANGES.has(r))
+}
+
+const DEFAULT_RANGE: Exclude<QuickRange, 'custom'> = 'thisWeek'
 
 function ymd(d: Date) {
   const y = d.getFullYear()
@@ -152,33 +204,79 @@ function ymd(d: Date) {
   return `${y}-${m}-${day}`
 }
 
-// Returns local-calendar from/to dates (yyyy-mm-dd) for a preset, or empty strings.
-function rangeForPreset(preset: QuickRange): { from: string; to: string } {
-  if (preset === 'all' || preset === 'custom') return { from: '', to: '' }
+// A yyyy-mm-dd field as a LOCAL calendar day. `new Date('2026-08-24')` is UTC
+// midnight, which lands on the 23rd for anyone west of Greenwich — fine while the
+// filter ran in the browser over already-loaded rows, wrong now that both ends
+// become Timestamps in the query.
+function startOfDay(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!m) return null
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+function endOfDay(value: string): Date | null {
+  const d = startOfDay(value)
+  if (!d) return null
+  d.setHours(23, 59, 59, 999)
+  return d
+}
+
+function daysBetween(from: Date, to: Date): number {
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1
+}
+
+function addDays(d: Date, days: number): Date {
+  const next = new Date(d)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+// Returns local-calendar from/to dates (yyyy-mm-dd) for a preset. 'custom' keeps
+// whatever the pickers hold, so it has no range of its own.
+function rangeForPreset(preset: Exclude<QuickRange, 'custom'>): { from: string; to: string } {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   let from = new Date(today)
-  const to = new Date(today)
+  let to = new Date(today)
   switch (preset) {
     case 'today':
       break
+    case 'tomorrow':
+      from = addDays(today, 1)
+      to = addDays(today, 1)
+      break
     case 'yesterday':
-      from.setDate(today.getDate() - 1)
-      to.setDate(today.getDate() - 1)
+      from = addDays(today, -1)
+      to = addDays(today, -1)
       break
     case 'last7':
-      from.setDate(today.getDate() - 6)
+      from = addDays(today, -6)
       break
     case 'last30':
-      from.setDate(today.getDate() - 29)
+      from = addDays(today, -29)
+      break
+    case 'next7':
+      to = addDays(today, 6)
+      break
+    case 'next30':
+      to = addDays(today, 29)
       break
     case 'thisWeek': {
+      // Mon–Sun, the WHOLE week: the default window, and the class axis reaches
+      // the end of it, so it opens on the classes still to come as well as the
+      // ones already run.
       const mondayOffset = (today.getDay() + 6) % 7 // Mon = 0
-      from.setDate(today.getDate() - mondayOffset)
+      from = addDays(today, -mondayOffset)
+      to = addDays(from, 6)
       break
     }
     case 'thisMonth':
       from = new Date(today.getFullYear(), today.getMonth(), 1)
+      to = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+      break
+    case 'nextMonth':
+      from = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+      to = new Date(today.getFullYear(), today.getMonth() + 2, 0)
       break
   }
   return { from: ymd(from), to: ymd(to) }
@@ -194,33 +292,13 @@ const STATUS_VARIANT: Record<BookingStatus, 'default' | 'secondary' | 'destructi
   rebooked: 'secondary',
 }
 
-interface SessionInfo {
-  activityName?: string
-  start?: string
-  end?: string
-  allowBooking?: boolean
-}
-
 // ─── data hooks ───────────────────────────────────────────────────────────────
+// The list itself is `useBookingsWindow` (@/hooks/useBookingsWindow), which owns
+// both date axes. What is left here is what only this page needs: the sessions
+// behind an already-loaded page of bookings, and the rebook picker's shortlist.
 
-function useBookings(teamId: string | null) {
-  return useQuery<Booking[]>({
-    queryKey: ['bookings', 'all', teamId],
-    enabled: !!teamId,
-    queryFn: async () => {
-      if (!teamId) return []
-      const q = query(
-        collectionGroup(db, 'bookings'),
-        where('teamId', '==', teamId),
-        orderBy('joinedAt', 'desc'),
-        limit(200)
-      )
-      const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
-    },
-  })
-}
-
+// Sessions for bookings loaded on the BOOKING-date axis. The class-date axis
+// queries the sessions first, so it hands its own map back and this stays idle.
 function useSessionMap(bookings: Booking[]) {
   const sessionIds = useMemo(
     () => [...new Set(bookings.map((b) => b.session).filter((s): s is string => !!s))],
@@ -250,11 +328,12 @@ function useSessionMap(bookings: Booking[]) {
   })
 }
 
-// Future sessions available for rebooking
-function useFutureSessions(teamId: string | null) {
+// Future sessions available for rebooking — read only once the rebook dialog is
+// actually open, since nothing else on the page looks at them.
+function useFutureSessions(teamId: string | null, enabled: boolean) {
   return useQuery<{ id: string; activityName?: string; start?: string; end?: string }[]>({
     queryKey: ['future-sessions', teamId],
-    enabled: !!teamId,
+    enabled: !!teamId && enabled,
     staleTime: 2 * 60 * 1000,
     queryFn: async () => {
       if (!teamId) return []
@@ -286,6 +365,16 @@ function useFutureSessions(teamId: string | null) {
 // ─── booking actions ──────────────────────────────────────────────────────────
 
 type BookingAction = 'confirm' | 'no_show' | 'cancel' | 'revert'
+
+// The windowed list, the reference band and the rebook picker's exclusion set
+// all read the same booking documents, so an action taken on any of them has to
+// refresh the others — a cancelled seat that stays in the exclusion set keeps a
+// class out of the picker it is now free for.
+function invalidateBookings(qc: QueryClient, teamId: string | null) {
+  qc.invalidateQueries({ queryKey: ['bookings', 'window', teamId] })
+  qc.invalidateQueries({ queryKey: ['bookings', 'reference', teamId] })
+  qc.invalidateQueries({ queryKey: ['bookings', 'contact-sessions', teamId] })
+}
 
 function useBookingAction(teamId: string | null) {
   const qc = useQueryClient()
@@ -394,7 +483,7 @@ function useBookingAction(teamId: string | null) {
 
       await batch.commit()
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings', 'all', teamId] }),
+    onSuccess: () => invalidateBookings(qc, teamId),
   })
 }
 
@@ -405,7 +494,7 @@ function useRebookAction(teamId: string | null) {
       const fn = httpsCallable(functions, 'rebookSession')
       await fn({ token, newSessionId })
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings', 'all', teamId] }),
+    onSuccess: () => invalidateBookings(qc, teamId),
   })
 }
 
@@ -415,13 +504,19 @@ function RebookDialog({
   booking,
   futureSessions,
   bookedSessionIds,
+  loadingOptions,
   onConfirm,
   onClose,
   loading,
 }: {
   booking: Booking
   futureSessions: { id: string; activityName?: string; start?: string; end?: string }[]
-  bookedSessionIds: Set<string>
+  bookedSessionIds: ReadonlySet<string>
+  /** The picker's two queries are fired by this dialog OPENING, so it draws
+   *  first with nothing. Without this it announces "no other bookable sessions"
+   *  for the length of a round trip and then silently repopulates under the
+   *  manager — a false negative on the one screen that has to be trusted. */
+  loadingOptions: boolean
   onConfirm: (newSessionId: string) => void
   onClose: () => void
   loading: boolean
@@ -442,7 +537,9 @@ function RebookDialog({
         <p className="text-sm text-muted-foreground">
           {t('rebookDesc', { name: `${booking.firstname} ${booking.lastname}` })}
         </p>
-        {options.length === 0 ? (
+        {loadingOptions ? (
+          <Skeleton className="h-9 w-full rounded-md" />
+        ) : options.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('rebookNoSessions')}</p>
         ) : (
           <Select value={selectedId} onValueChange={(v) => setSelectedId(v ?? '')}>
@@ -518,10 +615,11 @@ function BookingRow({
   const t = useTranslations('Bookings')
   const router = useRouter()
   const status: BookingStatus = (booking.status as BookingStatus) ?? 'pending'
+  // `formatIso` already renders the day AND the start time. A second
+  // `formatTime` call sat here casting the ISO string to a Timestamp shape it
+  // never had, so it returned '' and printed nothing; spelled honestly it would
+  // print the time twice.
   const sessionDate = sessionInfo?.start ? formatIso(sessionInfo.start) : null
-  const sessionTime = sessionInfo?.start
-    ? formatTime(sessionInfo.start as unknown as { toDate(): Date })
-    : null
   const activityName = sessionInfo?.activityName
 
   const isPending = status === 'pending'
@@ -561,19 +659,28 @@ function BookingRow({
             </Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground truncate">{booking.email ?? '—'}</p>
+        {/* The reference rides with the email because it is the other thing a
+            caller can read out. Until now it was minted, mailed to the contact
+            and never shown to the studio, so a phone call about "booking
+            BK-7F3K9Q" had nowhere to land. */}
+        <p className="text-xs text-muted-foreground truncate">
+          {booking.email ?? '—'}
+          {booking.booking_reference && (
+            <span className="ml-1.5">
+              · {t('labelReference')} <span className="font-mono">{booking.booking_reference}</span>
+            </span>
+          )}
+        </p>
         {(activityName || sessionDate) &&
           (() => {
             const sessionLine = (
               <>
+                <span className="text-muted-foreground font-normal">{t('labelClassDate')} </span>
                 {activityName && <span>{activityName}</span>}
                 {activityName && sessionDate && (
                   <span className="text-muted-foreground font-normal"> · </span>
                 )}
                 {sessionDate && <span>{sessionDate}</span>}
-                {sessionTime && (
-                  <span className="text-muted-foreground font-normal"> {sessionTime}</span>
-                )}
               </>
             )
             return booking.session ? (
@@ -584,7 +691,9 @@ function BookingRow({
                 {sessionLine}
               </Link>
             ) : (
-              <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">{sessionLine}</p>
+              <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">
+                {sessionLine}
+              </p>
             )
           })()}
       </div>
@@ -594,8 +703,10 @@ function BookingRow({
           <Badge variant={STATUS_VARIANT[status]} className="text-xs">
             {statusLabel[status]}
           </Badge>
+          {/* Two dates show on a row and only one of them is the one the filter
+              is ranging on, so both say which they are. */}
           <p className="text-xs text-muted-foreground">
-            {formatDate(booking.joinedAt as Parameters<typeof formatDate>[0])}
+            {t('labelBookedOn')} {formatDate(booking.joinedAt as Parameters<typeof formatDate>[0])}
             {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0]) && (
               <> · {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0])}</>
             )}
@@ -678,21 +789,75 @@ function BookingRow({
 
 type StatusFilter = BookingStatus | 'all'
 
+/** Stable identity for the idle branch of `useSessionMap`. */
+const NO_BOOKINGS: Booking[] = []
+
+/** Stable identity for the rebook picker before its exclusion set has loaded. */
+const EMPTY_SESSION_IDS: ReadonlySet<string> = new Set<string>()
+
 export default function BookingsPage() {
   const { currentTeamId } = useAuth()
-  const { data: bookings = [], isLoading } = useBookings(currentTeamId)
-  const { data: sessionMap = {} } = useSessionMap(bookings)
-  const { data: futureSessions = [] } = useFutureSessions(currentTeamId)
-  const { mutate: doAction } = useBookingAction(currentTeamId)
-  const { mutate: doRebook, isPending: rebooking } = useRebookAction(currentTeamId)
+  const t = useTranslations('Bookings')
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [quickRange, setQuickRange] = useState<QuickRange>('all')
+  const [dateAxis, setDateAxis] = useState<BookingDateAxis>('class')
+  const [dateFrom, setDateFrom] = useState(() => rangeForPreset(DEFAULT_RANGE).from)
+  const [dateTo, setDateTo] = useState(() => rangeForPreset(DEFAULT_RANGE).to)
+  const [quickRange, setQuickRange] = useState<QuickRange>(DEFAULT_RANGE)
   const [rebookTarget, setRebookTarget] = useState<Booking | null>(null)
-  const t = useTranslations('Bookings')
+
+  const windowFrom = useMemo(() => startOfDay(dateFrom), [dateFrom])
+  const windowTo = useMemo(() => endOfDay(dateTo), [dateTo])
+
+  const {
+    data: windowData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useBookingsWindow(currentTeamId, dateAxis, windowFrom, windowTo)
+  const bookings = useMemo(() => windowData?.bookings ?? [], [windowData])
+  const tooWide = windowData?.tooWide ?? false
+  const truncated = windowData?.truncated ?? false
+
+  // On the class axis the fan-out already read the session docs; on the booking
+  // axis they have to be resolved for the rows.
+  const { data: fetchedSessions = {} } = useSessionMap(
+    dateAxis === 'booking' ? bookings : NO_BOOKINGS
+  )
+  const sessionMap: Record<string, SessionInfo> =
+    dateAxis === 'class' ? (windowData?.sessions ?? {}) : fetchedSessions
+
+  // Both of the rebook picker's inputs are fetched only once the dialog opens,
+  // so both pending states have to reach it — see `loadingOptions` there.
+  const { data: futureSessions = [], isLoading: futureLoading } = useFutureSessions(
+    currentTeamId,
+    !!rebookTarget
+  )
+  const { data: bookedSessionIds, isLoading: bookedLoading } = useContactBookedSessions(
+    currentTeamId,
+    rebookTarget?.contact ?? null
+  )
+  const { mutate: doAction } = useBookingAction(currentTeamId)
+  const { mutate: doRebook, isPending: rebooking } = useRebookAction(currentTeamId)
+
+  // A `BK-…` code is looked up across the tenant rather than filtered out of the
+  // window — the booking a caller is asking about is precisely the one the window
+  // does not hold. A bare six-character word may be a code or a name, so a miss is
+  // only REPORTED when the prefix was typed; otherwise the list below just filters.
+  const searchTrimmed = search.trim()
+  const referenceCode = parseBookingReference(searchTrimmed)
+  const referenceExplicit = /^bk-/i.test(searchTrimmed)
+  const {
+    data: referenceMatches,
+    isLoading: referenceLoading,
+    isError: referenceErrored,
+    error: referenceError,
+    refetch: refetchReference,
+  } = useBookingReference(currentTeamId, referenceCode)
+  const referenceHits = referenceMatches?.bookings ?? []
+  const showReferenceBand = !!referenceCode && (referenceExplicit || referenceHits.length > 0)
 
   // Apply a predefined window: fills From/To and (re)applies the date filter.
   const applyQuickRange = useCallback((preset: QuickRange) => {
@@ -702,6 +867,69 @@ export default function BookingsPage() {
     setDateFrom(from)
     setDateTo(to)
   }, [])
+
+  // Switching to the booking date drops any window that lies ahead of today,
+  // because `joinedAt` never does. Both shapes are caught: a forward PRESET, and
+  // a custom From the manager typed past today — either would otherwise answer a
+  // deliberate question with an empty list and no reason for it.
+  const handleAxisChange = useCallback(
+    (axis: BookingDateAxis) => {
+      setDateAxis(axis)
+      if (axis === 'class') return
+      const from = startOfDay(dateFrom)
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      if (FORWARD_RANGES.has(quickRange) || (from && from > today)) applyQuickRange(DEFAULT_RANGE)
+    },
+    [applyQuickRange, dateFrom, quickRange]
+  )
+
+  // Manual picker edits are clamped rather than refused: the window is the query
+  // now, and a browser fanning out over a year of classes is the cost the cap
+  // exists to stop. Clearing a field falls back to the default window — there is
+  // no half-open range to fall back to.
+  const handleFromChange = useCallback(
+    (d: Date | undefined) => {
+      if (!d) return applyQuickRange(DEFAULT_RANGE)
+      const from = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      setQuickRange('custom')
+      setDateFrom(ymd(from))
+      setDateTo((prev) => {
+        const to = startOfDay(prev)
+        if (!to || to < from) return ymd(from)
+        return daysBetween(from, to) > MAX_RANGE_DAYS
+          ? ymd(addDays(from, MAX_RANGE_DAYS - 1))
+          : prev
+      })
+    },
+    [applyQuickRange]
+  )
+
+  const handleToChange = useCallback(
+    (d: Date | undefined) => {
+      if (!d) return applyQuickRange(DEFAULT_RANGE)
+      const to = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      setQuickRange('custom')
+      setDateTo(ymd(to))
+      setDateFrom((prev) => {
+        const from = startOfDay(prev)
+        if (!from || from > to) return ymd(to)
+        return daysBetween(from, to) > MAX_RANGE_DAYS
+          ? ymd(addDays(to, -(MAX_RANGE_DAYS - 1)))
+          : prev
+      })
+    },
+    [applyQuickRange]
+  )
+
+  const visibleRanges = useMemo(() => rangesForAxis(dateAxis), [dateAxis])
+
+  // Measured midnight-to-midnight, not against `windowTo` (end of day).
+  const spanAtCap = useMemo(() => {
+    const from = startOfDay(dateFrom)
+    const to = startOfDay(dateTo)
+    return !!from && !!to && daysBetween(from, to) >= MAX_RANGE_DAYS
+  }, [dateFrom, dateTo])
 
   const statusLabel: Record<BookingStatus, string> = {
     pending: t('statusPending'),
@@ -727,42 +955,20 @@ export default function BookingsPage() {
     [rebookTarget, doRebook]
   )
 
-  // Session IDs already booked by the rebookTarget contact (exclude from picker)
-  const bookedSessionIds = useMemo(() => {
-    if (!rebookTarget) return new Set<string>()
-    return new Set(
-      bookings
-        .filter((b) => b.contact === rebookTarget.contact && b.session)
-        .map((b) => b.session as string)
-    )
-  }, [rebookTarget, bookings])
-
+  // Text only — the date window is the QUERY now, so filtering the loaded rows by
+  // date again would just hide part of what was asked for.
   const searchFiltered = useMemo(() => {
-    let result = bookings
     const q = search.trim().toLowerCase()
-    if (q) {
-      result = result.filter((b) => {
-        const name = `${b.firstname} ${b.lastname}`.toLowerCase()
-        return name.includes(q) || (b.email ?? '').toLowerCase().includes(q)
-      })
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom)
-      result = result.filter((b) => {
-        const d = tsToDate(b.joinedAt)
-        return d ? d >= from : false
-      })
-    }
-    if (dateTo) {
-      const to = new Date(dateTo)
-      to.setHours(23, 59, 59, 999)
-      result = result.filter((b) => {
-        const d = tsToDate(b.joinedAt)
-        return d ? d <= to : false
-      })
-    }
-    return result
-  }, [bookings, search, dateFrom, dateTo])
+    if (!q) return bookings
+    return bookings.filter((b) => {
+      const name = `${b.firstname} ${b.lastname}`.toLowerCase()
+      return (
+        name.includes(q) ||
+        (b.email ?? '').toLowerCase().includes(q) ||
+        (b.booking_reference ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [bookings, search])
 
   const counts: Record<StatusFilter, number> = {
     all: searchFiltered.length,
@@ -796,47 +1002,77 @@ export default function BookingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        {!isLoading && (
+        {/* The count is of the WINDOW, and says so. It used to read
+            `bookings.length` off a fixed 200-document page, so a busy studio was
+            told "200 total" for ever. */}
+        {!isLoading && !isError && !tooWide && (
           <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitle', { total: bookings.length, trials })}
+            {t('subtitleWindow', { total: bookings.length, trials })}
+            {/* The count is what was actually loaded, not the ceiling. The class
+                axis stops on a class boundary, so it can hold a few more rows
+                than the cap and a fixed number would misreport it. */}
+            {truncated && (
+              <span className="block">{t('windowTruncated', { count: bookings.length })}</span>
+            )}
           </p>
         )}
       </div>
 
-      {/* Search + date range */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder={t('searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder={t('searchPlaceholderWithReference')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {/* Which date, then the window on it. The axis is a stated choice rather
+          than a relabelled filter: a row carries a class date AND a booking date,
+          and the old From/To said nothing about which one it ranged on. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground shrink-0">{t('dateAxisLabel')}</span>
+        <div
+          className="inline-flex items-center rounded-lg border bg-muted/40 p-0.5"
+          role="group"
+          aria-label={t('dateAxisLabel')}
+        >
+          {(['class', 'booking'] as const).map((axis) => (
+            <button
+              key={axis}
+              type="button"
+              onClick={() => handleAxisChange(axis)}
+              aria-pressed={dateAxis === axis}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                dateAxis === axis
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {axis === 'class' ? t('axisClassDate') : t('axisBookingDate')}
+            </button>
+          ))}
         </div>
         <Select value={quickRange} onValueChange={(v) => applyQuickRange(v as QuickRange)}>
           <SelectTrigger className="h-9 w-[10rem] shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {QUICK_RANGES.map((r) => (
+            {visibleRanges.map((r) => (
               <SelectItem key={r} value={r}>
                 {t(`range_${r}` as Parameters<typeof t>[0])}
               </SelectItem>
             ))}
-            {quickRange === 'custom' && (
-              <SelectItem value="custom">{t('range_custom')}</SelectItem>
-            )}
+            {quickRange === 'custom' && <SelectItem value="custom">{t('range_custom')}</SelectItem>}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterFrom')}</span>
           <DatePicker
-            value={dateFrom ? new Date(dateFrom) : undefined}
-            onChange={(d) => {
-              setDateFrom(d ? d.toISOString().split('T')[0] : '')
-              setQuickRange('custom')
-            }}
+            value={windowFrom ?? undefined}
+            onChange={handleFromChange}
             placeholder="—"
             className="w-[9rem]"
           />
@@ -844,16 +1080,65 @@ export default function BookingsPage() {
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground shrink-0">{t('filterTo')}</span>
           <DatePicker
-            value={dateTo ? new Date(dateTo) : undefined}
-            onChange={(d) => {
-              setDateTo(d ? d.toISOString().split('T')[0] : '')
-              setQuickRange('custom')
-            }}
+            value={startOfDay(dateTo) ?? undefined}
+            onChange={handleToChange}
             placeholder="—"
             className="w-[9rem]"
           />
         </div>
+        {spanAtCap && (
+          <span className="text-xs text-muted-foreground">
+            {t('rangeMaxSpan', { days: MAX_RANGE_DAYS })}
+          </span>
+        )}
       </div>
+
+      {/* Reference lookup — pinned above the list, because a hit is normally
+          OUTSIDE the window the studio is looking at. */}
+      {showReferenceBand && (
+        <div className="rounded-xl border overflow-hidden bg-card">
+          <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/40">
+            <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-xs font-medium">
+              {t('referenceMatchHeading', { code: referenceCode ?? '' })}
+            </p>
+          </div>
+          {referenceErrored ? (
+            <QueryErrorState
+              onRetry={() => refetchReference()}
+              detail={errorMessage(referenceError)}
+            />
+          ) : referenceLoading ? (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+              {t('referenceSearching')}
+            </p>
+          ) : referenceHits.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+              {t('referenceNotFound', { code: referenceCode ?? '' })}
+            </p>
+          ) : (
+            <>
+              {/* Codes are minted without a collision check, so more than one
+                  booking can answer to the same one. */}
+              {referenceHits.length > 1 && (
+                <p className="px-4 py-2 text-xs text-muted-foreground border-b">
+                  {t('referenceMultipleMatches', { count: referenceHits.length })}
+                </p>
+              )}
+              {referenceHits.map((b) => (
+                <BookingRow
+                  key={b.session ? `${b.session}_${b.id}` : b.id}
+                  booking={b}
+                  sessionInfo={b.session ? referenceMatches?.sessions[b.session] : undefined}
+                  statusLabel={statusLabel}
+                  onAction={handleAction}
+                  onRebook={setRebookTarget}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b overflow-x-auto">
@@ -883,9 +1168,13 @@ export default function BookingsPage() {
         ))}
       </div>
 
-      {/* List */}
+      {/* List. A FAILED query renders as a failure — it used to render as "no
+          bookings yet", which turns a missing index or a rules change into a
+          studio believing its bookings are gone. */}
       <div className="rounded-xl border overflow-hidden bg-card">
-        {isLoading &&
+        {isError ? (
+          <QueryErrorState onRetry={() => refetch()} detail={errorMessage(error)} />
+        ) : isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-4 py-3 border-b last:border-0">
               <Skeleton className="h-10 w-10 rounded-full" />
@@ -895,15 +1184,26 @@ export default function BookingsPage() {
               </div>
               <Skeleton className="h-5 w-20 rounded-full" />
             </div>
-          ))}
-
-        {!isLoading && filtered.length === 0 && (
-          <div className="px-4 py-16 text-center text-muted-foreground text-sm">
-            {search ? t('emptySearch') : t('empty')}
+          ))
+        ) : tooWide ? (
+          // Said out loud rather than trimmed to the first N classes: a list
+          // quietly missing half its window is the defect this page had.
+          <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+            <AlertTriangle className="h-8 w-8 text-muted-foreground/60" />
+            <p className="text-sm font-medium">{t('windowTooWideTitle')}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {t('windowTooWide', { count: MAX_WINDOW_SESSIONS })}
+            </p>
           </div>
-        )}
-
-        {!isLoading &&
+        ) : filtered.length === 0 ? (
+          <div className="px-4 py-16 text-center text-muted-foreground text-sm">
+            {/* Scoped to the window, not to the tenant. "No bookings yet." was
+                true of an all-time page; against a one-week window it tells a
+                studio with thousands of bookings that it has none — and
+                contradicts the header, which already says "0 in this range". */}
+            {search ? t('emptySearch') : t('emptyWindow')}
+          </div>
+        ) : (
           filtered.map((b) => (
             <BookingRow
               key={b.session ? `${b.session}_${b.id}` : b.id}
@@ -913,7 +1213,8 @@ export default function BookingsPage() {
               onAction={handleAction}
               onRebook={setRebookTarget}
             />
-          ))}
+          ))
+        )}
       </div>
 
       {/* Rebook dialog */}
@@ -921,7 +1222,8 @@ export default function BookingsPage() {
         <RebookDialog
           booking={rebookTarget}
           futureSessions={futureSessions}
-          bookedSessionIds={bookedSessionIds}
+          bookedSessionIds={bookedSessionIds ?? EMPTY_SESSION_IDS}
+          loadingOptions={futureLoading || bookedLoading}
           onConfirm={handleRebookConfirm}
           onClose={() => setRebookTarget(null)}
           loading={rebooking}

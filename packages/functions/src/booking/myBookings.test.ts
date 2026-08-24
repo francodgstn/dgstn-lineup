@@ -19,22 +19,38 @@ import { bookingIsLiveForMember, memberCanCancel } from './myBookings'
 // Both are asserted, and (b) is re-derived from the source rather than trusted
 // to a comment.
 //
+// THE DERIVATION SPANS THE functions/web BOUNDARY, like
+// `connect/commitSites.test.ts` and for the same reason: that boundary is where
+// corrections stop travelling. Walking `packages/functions/src` alone declared
+// this closed while the staff "Add contact" dialog on the session detail page —
+// a direct client write, with no server seam to mount a guard on — created
+// bookings with no `joinedAt` at all. They showed on the session roster (the
+// one reader that does not sort) and on no other screen in the product.
+//
 // Pure — no Firestore. Run: pnpm --filter @linyup/functions test
 
-const FUNCTIONS_SRC = join(__dirname, '..')
+const REPO_ROOT = join(__dirname, '../../../..')
 
-/** Every non-test .ts file under packages/functions/src, as repo-relative paths. */
-function sourceFiles(dir: string = FUNCTIONS_SRC): string[] {
+/** Every place a booking document can be written from. */
+const BOOKING_WRITER_ROOTS = [
+  join(REPO_ROOT, 'packages/functions/src'),
+  join(REPO_ROOT, 'apps/web/src'),
+]
+
+/** Every non-test .ts/.tsx file under the roots above. */
+function sourceFiles(dirs: string[] = BOOKING_WRITER_ROOTS): string[] {
   const out: string[] = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...sourceFiles(full))
-    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) out.push(full)
+  for (const dir of dirs) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) out.push(...sourceFiles([full]))
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) out.push(full)
+    }
   }
   return out
 }
 
-const asPosix = (p: string) => relative(FUNCTIONS_SRC, p).split(sep).join('/')
+const asPosix = (p: string) => relative(REPO_ROOT, p).split(sep).join('/')
 
 describe('WHICH DOCUMENTS ARE BOOKINGS SHE HOLDS', () => {
   it('an ordinary booking is hers, with or without a status', () => {
@@ -131,8 +147,15 @@ describe('THE ORDERING FIELD IS ON EVERY BOOKING THAT GETS WRITTEN', () => {
     // Named, not counted: a claim about "the seven writers" would rot the
     // moment somebody adds a rail. These have to be among them, and the
     // per-file assertion below covers whatever else the derivation turns up.
+    // The last one is the client write — it is listed by name because it is the
+    // one this derivation used to be blind to.
     const found = writers.map(asPosix)
-    for (const expected of ['booking/index.ts', 'booking/dropIn.ts', 'appointments/window.ts']) {
+    for (const expected of [
+      'packages/functions/src/booking/index.ts',
+      'packages/functions/src/booking/dropIn.ts',
+      'packages/functions/src/appointments/window.ts',
+      'apps/web/src/app/[locale]/(auth)/sessions/[id]/page.tsx',
+    ]) {
       assert.ok(
         found.includes(expected),
         `${expected} writes bookings; the writer-set derivation missed it`

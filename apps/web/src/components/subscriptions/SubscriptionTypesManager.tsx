@@ -6,6 +6,7 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
+import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { useTranslations } from 'next-intl'
 import {
   collection,
@@ -524,23 +525,38 @@ function SubTypeDialog({
           {isPublic && (
             <div className="space-y-1.5">
               <Label>{t('subTypeCheckoutContact')}</Label>
-              <div className="flex gap-2">
+              {/* Selectable option cards — the same shape the activity editor's
+                  "who can book" uses, and for the same reason: each option's
+                  explanation belongs INSIDE the box it explains. These three
+                  used to be bare pills with all three explanations concatenated
+                  into one sentence underneath, which the reader had to map back
+                  to the buttons by position — and which no translator could keep
+                  in the button order, being a single string. */}
+              <div className="grid gap-2 lg:grid-cols-3">
                 {(['off', 'minimal', 'full'] as const).map((val) => (
-                  <button
+                  <label
                     key={val}
-                    type="button"
-                    onClick={() => setValue('checkout_contact_mode', val)}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                      contactMode === val
-                        ? 'border-primary bg-primary/5 text-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                    className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
+                      contactMode === val ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
                     }`}
                   >
-                    {t(`subTypeContactMode_${val}` as Parameters<typeof t>[0])}
-                  </button>
+                    <input
+                      type="radio"
+                      className="mt-0.5 accent-primary"
+                      checked={contactMode === val}
+                      onChange={() => setValue('checkout_contact_mode', val)}
+                    />
+                    <span>
+                      <span className="font-medium">
+                        {t(`subTypeContactMode_${val}` as Parameters<typeof t>[0])}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t(`subTypeContactMode_${val}_desc` as Parameters<typeof t>[0])}
+                      </span>
+                    </span>
+                  </label>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">{t('subTypeCheckoutContactDesc')}</p>
             </div>
           )}
 
@@ -905,7 +921,13 @@ export const SubscriptionTypesManager = forwardRef<
   const [duplicating, setDuplicating] = useState<SubscriptionType | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
+  // The setup checklist's "set a price" step counts subscription types, so both
+  // queries have to look again — the list's own, and the checklist's.
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
+  const invalidate = () => {
+    void invalidateSetupChecklist()
+    return qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
+  }
 
   const openAdd = () => {
     setEditing(null)

@@ -1,6 +1,6 @@
 // Keeps activities/{activityId}/public_profile/{activityId} in sync
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
-import { resolveActivityAccessRule, resolveDurationSale } from '@linyup/shared'
+import { normalizeActivityTags, resolveActivityAccessRule, resolveDurationSale } from '@linyup/shared'
 import { touchTeamForSurfaceRecompute } from '../utils/plugins'
 
 // An APPOINTMENT activity is half of what makes the appointment picker live
@@ -47,7 +47,12 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     // Denormalised display order so public consumers sort like the admin list.
     order: typeof data.order === 'number' ? data.order : null,
     isFreeTrial: data.isFreeTrial || false,
-    level: data.level || null,
+    // Free-text display labels for the public cards. Normalised here as well as
+    // in the editor — the mirror is the copy the world reads, and an activity
+    // written by anything other than that form still has to arrive tidy.
+    ...(Array.isArray(data.tags) && data.tags.length
+      ? { tags: normalizeActivityTags(data.tags) }
+      : {}),
     // Denormalised access gate so the public booking UI can render lock badges.
     // CLASS-ONLY: appointments have no access gate (the price is the gate) —
     // mirroring a resolved rule for them would resurrect a phantom {type:'open'}.

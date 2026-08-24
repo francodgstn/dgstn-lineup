@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getOverviewMetrics } from '@/lib/queries/accounts'
 import { getMetricsHistory, type MetricsPoint } from '@/lib/queries/metrics'
+import { getPlatformMailVolume, MAIL_LEDGER_NOTE } from '@/lib/queries/messaging'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge, PlanBadge } from '@/components/status-badge'
 import { Sparkline } from '@/components/sparkline'
@@ -60,10 +61,21 @@ function Trend({
 
 export default async function OverviewPage() {
   const now = Date.now()
-  const [m, history] = await Promise.all([getOverviewMetrics(now), getMetricsHistory(90)])
+  const [m, history, mail] = await Promise.all([
+    getOverviewMetrics(now),
+    getMetricsHistory(90),
+    getPlatformMailVolume(),
+  ])
   const hasTrends = history.length >= 2
   const chf = (n: number) => formatChf(n)
   const num = (n: number) => n.toLocaleString('en-CH')
+  const numOrDash = (n: number | null) => (n == null ? '—' : num(n))
+  // Only the days the capture job actually recorded mail for — a snapshot from
+  // before it did carries no mail block, and plotting those as zero would draw a
+  // drought that never happened. Empty until the capture job writes the block
+  // (see MetricsPoint.emailsSent), so the trend card below stays absent; the
+  // "Emails" KPIs are live counts and are unaffected.
+  const mailHistory = history.filter((p) => p.emailsSent != null)
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,12 +91,17 @@ export default async function OverviewPage() {
         <Kpi label="Total contacts" value={num(m.contacts.totalActive)} sub="across all teams" />
       </section>
 
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="New (7d)" value={String(m.signups.last7d)} />
         <Kpi label="New (30d)" value={String(m.signups.last30d)} />
         <Kpi label="Past due" value={String(m.accounts.byStatus.past_due)} sub="needs attention" />
         <Kpi label="Trials expiring (7d)" value={String(m.trials.expiring7d)} />
+        {/* Platform mail — studio sends AND Linyup's own system mail. A studio's
+            own figure is on its account page and is team-scoped, so smaller. */}
+        <Kpi label="Emails (30d)" value={numOrDash(mail.last30d)} sub="all streams" />
+        <Kpi label="Emails (total)" value={numOrDash(mail.lifetime)} sub="since the ledger" />
       </section>
+      <p className="-mt-4 text-xs text-muted-foreground">{MAIL_LEDGER_NOTE}</p>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-muted-foreground">
@@ -96,6 +113,14 @@ export default async function OverviewPage() {
             <Trend label="Active" history={history} pick={(p) => p.activeAccounts} format={num} />
             <Trend label="Est. MRR" history={history} pick={(p) => p.mrr} format={chf} />
             <Trend label="Contacts" history={history} pick={(p) => p.contacts} format={num} />
+            {mailHistory.length >= 2 && (
+              <Trend
+                label="Emails / day"
+                history={mailHistory}
+                pick={(p) => p.emailsSent ?? 0}
+                format={num}
+              />
+            )}
           </div>
         ) : (
           <Card>

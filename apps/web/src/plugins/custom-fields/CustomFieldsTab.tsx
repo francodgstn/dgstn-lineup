@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { doc, updateDoc } from 'firebase/firestore'
+import { Link } from '@/i18n/navigation'
 import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import type { Team, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
@@ -168,8 +169,18 @@ function CustomFieldDialog({
             </div>
           )}
 
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <span className="text-sm font-medium">{t('customFieldRequired')}</span>
+          {/* THIS IS THE CONTACT FORM'S "required", not the book form's — they
+              are two flags and only the other one is enforced. The hint says
+              which, because two adjacent switches reading "Required" is how a
+              studio comes away believing it has made a booking question
+              mandatory when it has not touched the book form at all. */}
+          <label className="flex items-start justify-between gap-3 cursor-pointer">
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium">{t('customFieldRequired')}</span>
+              <span className="block text-xs text-muted-foreground">
+                {t('customFieldRequiredHint')}
+              </span>
+            </span>
             <Switch
               checked={form.required}
               onCheckedChange={(v) => setForm((f) => ({ ...f, required: v }))}
@@ -193,6 +204,22 @@ function CustomFieldDialog({
               onCheckedChange={(v) => setForm((f) => ({ ...f, publicOnBookingForm: v }))}
             />
           </label>
+
+          {/* THE SECOND STEP. Opting in only makes the field ASKABLE — nothing
+              here adds it to the book form, deliberately (see the header of
+              BookingContactFieldsEditor). Said at the moment the switch goes on,
+              because that is when a studio believes it is finished. */}
+          {form.publicOnBookingForm && (
+            <div className="rounded-md border border-dashed p-2.5 space-y-1">
+              <p className="text-xs text-muted-foreground">{t('customFieldPublicNextStep')}</p>
+              <Link
+                href="/settings/booking"
+                className="text-xs text-primary hover:underline underline-offset-2"
+              >
+                {t('customFieldPublicNextStepLink')}
+              </Link>
+            </div>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -326,6 +353,15 @@ export function CustomFieldsTab({ teamId, team }: { teamId: string; team: Team }
                   {d.required && (
                     <Badge variant="outline" className="text-xs">
                       {t('customFieldRequired')}
+                    </Badge>
+                  )}
+                  {/* The flag that actually governs whether the field can be
+                      asked publicly — invisible outside the edit dialog until
+                      now, which is why "I turned it on" and "it isn't there"
+                      were both true. */}
+                  {d.publicOnBookingForm && (
+                    <Badge variant="outline" className="text-xs">
+                      {t('customFieldPublicBadge')}
                     </Badge>
                   )}
                 </div>

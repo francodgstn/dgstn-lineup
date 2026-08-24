@@ -21,6 +21,8 @@ import {
 import { addDays, addMonths } from 'date-fns'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
+import { deviceTimeZone } from '@/lib/format'
 import {
   SESSIONS_COLLECTION,
   ACTIVITIES_COLLECTION,
@@ -30,7 +32,7 @@ import {
   compareActivities,
   isPastSession,
 } from '@linyup/shared'
-import type { Session, Activity, Event } from '@linyup/shared'
+import type { Session, Activity, Event, RegionalFormatter, DateLike } from '@linyup/shared'
 import { PastItemNotice } from '@/components/sessions/PastItemNotice'
 import { useEventTypes } from '@/hooks/useEventTypes'
 import { useCoaches } from '@/hooks/useCoaches'
@@ -142,16 +144,15 @@ interface MemberDoc {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function formatDate(ts: { toDate(): Date } | null | undefined) {
-  if (!ts) return '—'
-  return ts
-    .toDate()
-    .toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+// Dates here go through the studio's regional settings (useTeamFormat), never
+// `toLocaleDateString([])` — the bare form asks the BROWSER, so an en-US laptop
+// showed a German studio US date order and 12-hour times.
+function formatDate(fmt: RegionalFormatter, ts: DateLike) {
+  return fmt.dateMedium(ts) || '—'
 }
 
-function formatTime(ts: { toDate(): Date } | null | undefined) {
-  if (!ts) return ''
-  return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+function formatTime(fmt: RegionalFormatter, ts: DateLike) {
+  return fmt.time(ts)
 }
 
 function durationLabel(
@@ -175,31 +176,44 @@ function getItemMs(item: ListItem) {
 }
 
 // Day-divider helpers — group the list by calendar day with a human label.
-function dayKey(ms: number) {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+//
+// THE BUCKET, THE "TODAY" TEST AND THE LABEL ALL READ ONE ZONE: the
+// formatter's, which is the studio's display zone (`fmt.isoDate` renders
+// `YYYY-MM-DD` in it). They used to disagree — the key and the diff were built
+// from `getFullYear()/getDate()`, i.e. the BROWSER's zone, while the label was
+// already rendered in the studio's — so a divider could read "Today · 23
+// August" over a row dated the 24th, and one bucket could straddle two dates in
+// the studio's zone. A day divider is a claim about the rows under it; it has
+// to be made in the same zone those rows are printed in.
+function dayKey(fmt: RegionalFormatter, ms: number) {
+  return fmt.isoDate(ms)
 }
+/** Midnight in the DEVICE's zone. Used only to snap the list's fetch WINDOW to
+ *  a stable query key — not to bucket or label anything. */
 function startOfDay(d: Date) {
   const x = new Date(d)
   x.setHours(0, 0, 0, 0)
   return x
 }
+/** Shift a `YYYY-MM-DD` key by whole days. Calendar arithmetic on the key
+ *  itself, so a DST transition cannot make "tomorrow" land on today. */
+function shiftIsoDay(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
 function dayDividerLabel(
+  fmt: RegionalFormatter,
   ms: number,
   rel: { today: string; tomorrow: string; yesterday: string }
 ) {
-  const d = new Date(ms)
-  const diffDays = Math.round((startOfDay(d).getTime() - startOfDay(new Date()).getTime()) / 86400000)
-  const now = new Date()
-  const dayMonth = d.toLocaleDateString([], {
-    day: 'numeric',
-    month: 'long',
-    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  })
-  if (diffDays === 0) return `${rel.today} · ${dayMonth}`
-  if (diffDays === 1) return `${rel.tomorrow} · ${dayMonth}`
-  if (diffDays === -1) return `${rel.yesterday} · ${dayMonth}`
-  return `${d.toLocaleDateString([], { weekday: 'long' })}, ${dayMonth}`
+  const key = fmt.isoDate(ms)
+  const todayKey = fmt.isoDate(Date.now())
+  const dayMonth = fmt.dayMonthLong(ms, key.slice(0, 4) !== todayKey.slice(0, 4))
+  if (key === todayKey) return `${rel.today} · ${dayMonth}`
+  if (key === shiftIsoDay(todayKey, 1)) return `${rel.tomorrow} · ${dayMonth}`
+  if (key === shiftIsoDay(todayKey, -1)) return `${rel.yesterday} · ${dayMonth}`
+  return `${fmt.weekdayLong(ms)}, ${dayMonth}`
 }
 
 // ─── schemas ──────────────────────────────────────────────────────────────────
@@ -688,6 +702,7 @@ function ListItemRow({
   const tS = useTranslations('Sessions')
   const tE = useTranslations('Events')
   const tC = useTranslations('Calendar')
+  const fmt = useTeamFormat()
 
   if (item.kind === 'session') {
     const s = item.data
@@ -734,7 +749,7 @@ function ListItemRow({
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {formatDate(s.start)} · {formatTime(s.start)}
+                {formatDate(fmt, s.start)} · {formatTime(fmt, s.start)}
                 {dur && <span className="ml-1 text-muted-foreground/60">({dur})</span>}
               </p>
             </div>
@@ -819,7 +834,7 @@ function ListItemRow({
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {formatDate(e.start)} · {formatTime(e.start)}
+              {formatDate(fmt, e.start)} · {formatTime(fmt, e.start)}
               {dur && <span className="ml-1 text-muted-foreground/60">({dur})</span>}
             </p>
           </div>
@@ -907,6 +922,7 @@ export default function CalendarPage() {
   const t = useTranslations('Calendar')
   const tCommon = useTranslations('Common')
   const orgId = team?.org_id ?? null
+  const fmt = useTeamFormat()
 
   const today = useMemo(() => new Date(), [])
   const [viewYear, setViewYear] = useState(() => today.getFullYear())
@@ -985,8 +1001,8 @@ export default function CalendarPage() {
   const handleDeleteSession = (s: Session) => setDeletingSession(s)
   const deleteSessionLabel = deletingSession
     ? deletingSession.activityName
-      ? `${deletingSession.activityName} – ${formatDate(deletingSession.start)}`
-      : formatDate(deletingSession.start)
+      ? `${deletingSession.activityName} – ${formatDate(fmt, deletingSession.start)}`
+      : formatDate(fmt, deletingSession.start)
     : ''
 
   const handleDeleteEvent = async (e: Event) => {
@@ -1126,6 +1142,24 @@ export default function CalendarPage() {
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
+          {/* NAME THE CLOCK WHEN IT IS NOT THE READER'S. Every time on this page
+              is printed in the studio's display zone (`Team.regional.timezone`,
+              Swiss by default when the field was never set). When that differs
+              from the browser's zone the numbers are correct and still look
+              wrong, so the line says which clock they are on and links to the
+              control that changes it. Same zone on both sides ⇒ nothing to
+              explain, and no line. */}
+          {fmt.timeZone !== deviceTimeZone() && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t('timezoneNotice', { zone: fmt.timeZone })}{' '}
+              <Link
+                href={'/settings/team?tab=general' as Route}
+                className="underline hover:text-foreground"
+              >
+                {t('timezoneChange')}
+              </Link>
+            </p>
+          )}
         </div>
         {/* ONE height across this row. The three controls were hand-sized
             independently — a p-1 segmented group, a `size="sm"` link and a
@@ -1433,14 +1467,14 @@ export default function CalendarPage() {
                 let lastDay = ''
                 return listItems.map((item) => {
                   const ms = getItemMs(item)
-                  const dk = dayKey(ms)
+                  const dk = dayKey(fmt, ms)
                   const showDivider = dk !== lastDay
                   lastDay = dk
                   return (
                     <Fragment key={`${item.kind}-${item.data.id}`}>
                       {showDivider && (
                         <div className="px-4 py-1.5 bg-muted/40 border-b text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {dayDividerLabel(ms, {
+                          {dayDividerLabel(fmt, ms, {
                             today: tCommon('today'),
                             tomorrow: tCommon('tomorrow'),
                             yesterday: tCommon('yesterday'),

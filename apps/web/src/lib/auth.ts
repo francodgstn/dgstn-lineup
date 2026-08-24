@@ -10,6 +10,7 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  updateProfile,
   type User,
   type UserCredential,
 } from 'firebase/auth'
@@ -19,8 +20,17 @@ export async function signIn(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email, password)
 }
 
-export async function signUp(email: string, password: string) {
+export async function signUp(email: string, password: string, displayName?: string) {
   const cred = await createUserWithEmailAndPassword(auth, email, password)
+  // Stamp the name on the Auth record so it is there for anything that reads the
+  // Firebase user rather than the Firestore profile. Best-effort for the same
+  // reason as the verification mail below — the DURABLE copy is the Firestore
+  // write in the signup wizard, which does not depend on this succeeding.
+  if (displayName) {
+    await updateProfile(cred.user, { displayName })
+      .then(() => cred.user.reload())
+      .catch(() => {})
+  }
   // Best-effort, deliberately not awaited into the failure path: an account that
   // exists but whose verification mail bounced off a rate limit must not look
   // like a signup that failed. The banner in the app can resend, and the mail

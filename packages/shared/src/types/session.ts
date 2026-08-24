@@ -619,7 +619,6 @@ export interface SessionPublicProfile {
   activitySlug?: string
   activityColor?: string
   activityImage?: string | null
-  activityLevel?: string
   activityIsFreeTrial?: boolean
   // Appointment-specific public fields
   max_participants?: number

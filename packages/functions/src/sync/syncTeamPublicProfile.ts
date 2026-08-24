@@ -11,6 +11,7 @@ import {
   ACTIVITIES_COLLECTION,
   AVAILABILITY_COLLECTION,
   TEAM_SETTINGS_SUBCOLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
   DOCUMENTS_SETTINGS_DOC_ID,
   WAIVER_POLICY_SUBCOLLECTION,
   WAIVER_POLICY_DOC_ID,
@@ -251,6 +252,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // here, and `appointmentPickerLive` for the one place the two are combined.
   const appointmentsActive = await appointmentContentExists(db, teamId, paymentsEnabled)
 
+  // The partner apps this studio accepts, by name — see
+  // TeamPublicProfile.partner_apps and resolveTeamPartnerApps below.
+  const partnerApps = await resolveTeamPartnerApps(db, teamId)
+
   const active_public_surfaces: ActivePublicSurfaces = {
     site: siteActive,
     space: spaceActive,
@@ -376,6 +381,14 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // reads public_profile, so the setting must be mirrored here.
     space_signup_nudge: data.settings?.space?.signup_nudge !== false,
     active_public_surfaces,
+    // The studio's own partner-app names, so the public book form can ask which
+    // app somebody came through using the studio's answers rather than a
+    // hardcoded industry list — and ask nothing at all when there are none.
+    // Recomputed every run, so deactivating the last partner type takes the
+    // question down. A partner type is not on THIS document, though, which is
+    // why `syncSubscriptionTypesToPublicProfile` recomputes it too — see
+    // `resolveTeamPartnerApps` below for every rail that writes this field.
+    partner_apps: partnerApps,
     // Recomputed every run (may be empty) so stale consent links never linger.
     signup_documents: signupDocuments,
     // Recomputed every run from the waiver policy, for the same reason.
@@ -412,6 +425,78 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // `public_coaches_enabled` gets toggled, and that field lives on this same doc.
   await rebuildTeamPublicCoaches(teamId)
 })
+
+/**
+ * THE PARTNER APPS A STUDIO ACCEPTS, as names — for `TeamPublicProfile.partner_apps`.
+ *
+ * A "fitness app" is not a concept of its own in this data model: it is a
+ * subscription type with `source: 'aggregator'` (SubscriptionType.source), which
+ * is how the studio-facing UI already speaks about FitPass, SportPass and the
+ * rest. So the public list is derived from the studio's own types rather than
+ * from anything hardcoded, and it goes stale exactly when they do.
+ *
+ * NOT derived from the already-mirrored `aggregator_subscription_types`: that
+ * array is filtered to `public == true`, which a partner type usually is not —
+ * a studio does not sell FitPass in its own shop. Re-filtering it would yield an
+ * empty list for most tenants, silently.
+ *
+ * NAMES ONLY. `payoutPerVisit` is what the partner pays the studio and prices
+ * are commercial terms; neither belongs on a world-readable document, and the
+ * form needs neither. Deduped case-insensitively (two types spelled the same
+ * would render as two identical options) and sorted, so the option order does
+ * not shuffle between syncs.
+ *
+ * ── ABSENT `active` MEANS ACTIVE ─────────────────────────────────────────────
+ * Queried on `source` ALONE, with liveness filtered in memory. A
+ * `.where('active', '==', true)` clause DROPS a document whose `active` field is
+ * absent, and absent is ACTIVE everywhere else this repo reads an aggregator
+ * type — `scripts/backfill-public-subscription-types.ts` spells it
+ * `data.active !== false`, and so does the manager UI
+ * (`components/subscriptions/SubscriptionTypesManager.tsx`). The strict clause
+ * would hide a legacy partner the studio can see listed as active, and hide it
+ * from the validator too, so the studio's real partner could be neither offered
+ * nor stored. The result set is one studio's partner types: tiny.
+ *
+ * ── WHO WRITES THE MIRROR ────────────────────────────────────────────────────
+ * Every rail that can change the answer calls this and writes the result to
+ * `teams/{teamId}/public_profile/{teamId}.partner_apps`:
+ *   • `syncTeamPublicProfile` (above) — on any write to `teams/{teamId}`
+ *   • `syncSubscriptionTypesToPublicProfile` — on any write to a subscription
+ *     type, which is where a partner is actually added, renamed or deactivated
+ * A subscription type does NOT live on the team document, so without the second
+ * rail the list would only refresh on some unrelated team write — the same gap
+ * `sync/onAvailabilityWrite.ts` exists to close for availability windows.
+ *
+ * ── AND THAT MIRROR IS AUTHORITATIVE ─────────────────────────────────────────
+ * Not a rendering hint: `loadTeamPartnerAppNames` (booking/contactFields.ts)
+ * validates a posted answer against the mirror rather than re-querying here, so
+ * the vocabulary the public form offered and the one the server accepts are the
+ * same document. See that function's header for why.
+ */
+export async function resolveTeamPartnerApps(
+  db: admin.firestore.Firestore,
+  teamId: string
+): Promise<string[]> {
+  const snap = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(teamId)
+    .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
+    .where('source', '==', 'aggregator')
+    .get()
+
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const doc of snap.docs) {
+    if (doc.data().active === false) continue
+    const name = typeof doc.data().name === 'string' ? (doc.data().name as string).trim() : ''
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    names.push(name)
+  }
+  return names.sort((a, b) => a.localeCompare(b))
+}
 
 // ── The appointment picker's CONTENT probe ──────────────────────────────────
 //

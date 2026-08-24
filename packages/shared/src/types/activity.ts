@@ -6,8 +6,6 @@ import type { Benefit } from './benefit'
 // inventing a parallel one: same types, same renderer, same answer shape.
 import type { FormField } from './form'
 
-export type ActivityLevel = 'all' | 'beginners' | 'intermediate' | 'advanced'
-
 /** Top-level category that determines the session model and booking flow.
  *  'class' = a scheduled event with seats; 'appointment' = a provider's exclusive
  *  time booked from published availability (was 'coaching'). */
@@ -65,8 +63,8 @@ export function resolveAutoConfirm(a: {
  *  ONE FIELD SAYING TWO THINGS: an absent price meant both "free for everyone"
  *  and "not sold by the session", so a coach who sells only packs could express
  *  neither (leave it unpriced → a stranger books a free one-to-one; price it →
- *  anyone buys the single session the coach does not sell). Same conflation the
- *  `Activity.level` field was made optional to escape.
+ *  anyone buys the single session the coach does not sell) — the conflation one
+ *  optional field always produces when it is asked two questions at once.
  *
  *  IT IS NOT A SECOND GATE. Appointments have no `accessRule` and gain none
  *  here: this flag introduces no list of subscription ids and no new predicate.
@@ -166,7 +164,18 @@ export interface Activity {
   description?: string
   slug: string
   color?: string
-  level?: ActivityLevel
+  /** Free-text labels shown on the public booking cards ("Beginner friendly",
+   *  "Gi", "Kids"). Display-only and enforced NOWHERE — no gate, no filter, no
+   *  resolver reads them; the same class of field as `prerequisites`.
+   *
+   *  They replaced `level`, a four-value enum ('all' | 'beginners' | …) that no
+   *  public surface ever rendered: it produced one chip in the admin list and
+   *  nothing else, while a studio grades its classes in its own words or not at
+   *  all. Stored values were dropped rather than migrated (pre-launch).
+   *
+   *  Mirrored into the WORLD-READABLE public profile, so the editor says so.
+   *  Normalise through `normalizeActivityTags` on every write. */
+  tags?: string[]
   /** Session category — default 'class'. 'appointment' uses the availability model. */
   type?: ActivityType
   /** Assigned provider uid — populated when type === 'appointment'. */
@@ -333,6 +342,9 @@ export interface ActivityPublicProfile {
    *  drop-in member rates) — public-safe, since the referenced
    *  subscription-type ids are already public in the shop. */
   memberBenefit?: ActivityMemberBenefit | Benefit
+  /** Mirrored from `Activity.tags` — free-text display labels for the public
+   *  booking cards. Present only when the activity has any. */
+  tags?: string[]
   /** Denormalised display-only prerequisites for the public booking pages. */
   prerequisites?: string
   /** Denormalised verbatim from the matching `Activity` fields — see there for
@@ -357,6 +369,65 @@ export interface ActivityPublicProfile {
 /** A book form is not a survey — keep it short enough that it doesn't cost the
  *  booking. Enforced in the activity editor. */
 export const MAX_BOOKING_QUESTIONS = 6
+
+/**
+ * The book-form questions as they are STORED, from whatever the editor holds.
+ *
+ * Every key is written out rather than spread, because a patch that clears a
+ * key by setting it to `undefined` — which is exactly what the editor's type
+ * picker does when a question stops being a choice type — leaves the key
+ * standing as an own property, and Firestore refuses an undefined value
+ * outright (`addDoc() called with invalid data`). That killed the whole save,
+ * not just the question. Enumerating the keys means only defined values can
+ * reach the write, whoever built the array; a new `FormField` key belongs here
+ * too, or it will silently stop being persisted.
+ *
+ * Half-written rows are dropped here as well: no label means nothing to ask,
+ * and the public form must never render an unlabelled input.
+ */
+export function normalizeBookingQuestions(
+  questions: FormField[] | null | undefined
+): FormField[] {
+  return (questions ?? [])
+    .filter((q) => q?.label?.trim())
+    .map((q, i) => ({
+      id: q.id,
+      type: q.type,
+      label: q.label.trim(),
+      required: q.required ?? false,
+      order: i,
+      ...(q.placeholder ? { placeholder: q.placeholder } : {}),
+      ...(q.options?.length ? { options: q.options } : {}),
+    }))
+}
+
+/** How many free-text labels one activity may carry. A row of chips is a
+ *  glance, not a taxonomy. */
+export const MAX_ACTIVITY_TAGS = 6
+
+/** Longest single tag — a label, never a sentence. */
+export const MAX_ACTIVITY_TAG_LENGTH = 24
+
+/** THE ONE normaliser for `Activity.tags`, run by the editor and the public
+ *  mirror alike: trim, drop empties, cap the length, dedupe
+ *  case-insensitively (keeping the first spelling the studio typed) and cap the
+ *  count. Free text collected on two surfaces diverges unless both narrow it
+ *  the same way. */
+export function normalizeActivityTags(input: readonly unknown[] | null | undefined): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of input ?? []) {
+    if (typeof raw !== 'string') continue
+    const tag = raw.trim().slice(0, MAX_ACTIVITY_TAG_LENGTH).trim()
+    if (!tag) continue
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+    if (out.length >= MAX_ACTIVITY_TAGS) break
+  }
+  return out
+}
 
 /** Longest answer we'll persist per question. Generous for a free-text note,
  *  bounded so a book form can't be used to write arbitrary payloads. */

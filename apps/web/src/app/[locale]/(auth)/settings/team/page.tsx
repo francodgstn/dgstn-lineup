@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { toast } from 'sonner'
 import {
   doc,
@@ -18,6 +18,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { checkTeamSlug } from '@/lib/teamSlug'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -72,7 +73,18 @@ import type {
   RankLevel,
   TeamIntegration,
   PaymentGatewayType,
+  RegionalSettings,
+  DateFormatStyle,
+  TimeFormatStyle,
+  WeekStart,
 } from '@linyup/shared'
+import {
+  createRegionalFormatter,
+  resolveRegional,
+  deviceTimeZone,
+  DATE_FORMAT_SAMPLE,
+  DATE_FORMAT_STYLES,
+} from '@/lib/format'
 import {
   AlertTriangle,
   CalendarDays,
@@ -205,10 +217,16 @@ function OwnerOnlyNote() {
 
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
+// Asked of the server (`lib/teamSlug.ts`), which owns this question and is the
+// only place that can answer it. This used to be a client `where('slug','==',…)`
+// over `teams`, which the rules refuse the moment a matching document belongs to
+// a studio the caller is not in — i.e. it threw for exactly the case it exists
+// to detect, and `onSlugBlur` had no catch, so the spinner stuck and the form
+// saved a slug that was already taken.
 async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
   if (isReservedSlug(slug)) return false
-  const snap = await getDocs(query(collection(db, TEAMS_COLLECTION), where('slug', '==', slug)))
-  return snap.docs.every((d) => d.id === teamId)
+  const check = await checkTeamSlug(slug, teamId)
+  return check.available
 }
 
 function useTeam(teamId: string | null) {
@@ -403,9 +421,19 @@ function GeneralForm({
     if (!SLUG_REGEX.test(slug) || slug.length < 3) return
     setSlugChecking(true)
     setSlugError(null)
-    const available = await isSlugAvailable(slug, teamId)
-    setSlugChecking(false)
-    if (!available) setSlugError(isReservedSlug(slug) ? t('slugReserved') : t('slugTaken'))
+    try {
+      const available = await isSlugAvailable(slug, teamId)
+      if (!available) setSlugError(isReservedSlug(slug) ? t('slugReserved') : t('slugTaken'))
+    } catch {
+      // FAILS CLOSED, and deliberately: `onSubmit` refuses while `slugError` is
+      // set, so a check that could not run blocks Save. Two studios sharing a
+      // slug send one studio's members to the other's public page and there is
+      // no error anywhere to notice it; being asked to retry a blurred field is
+      // the cheaper failure. Editing the slug again clears this and re-checks.
+      setSlugError(t('slugCheckFailed'))
+    } finally {
+      setSlugChecking(false)
+    }
   }
 
   async function onSubmit(data: GeneralData) {
@@ -544,6 +572,198 @@ function GeneralForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+// ─── region & formats ─────────────────────────────────────────────────────────
+// How this studio RENDERS dates and times. All four settings are team-wide on
+// purpose — one studio, one clock, one printed roster — while the reader's UI
+// language stays per-user and layers on top: it picks the words, this picks the
+// shape. Absent means the Swiss defaults, so nothing here needs a migration.
+//
+// DISPLAY ONLY. This zone is not the one the scheduling or accounting math runs
+// in; see the header of shared/utils/regional.ts for that boundary.
+
+/** A fixed instant, not `now` — the 31st tells DD/MM from MM/DD at a glance,
+ *  and a constant cannot drift between the server render and the browser's. */
+const REGION_PREVIEW_INSTANT = new Date(Date.UTC(2026, 0, 31, 17, 30))
+
+function RegionalForm({
+  team,
+  teamId,
+  canEdit,
+}: {
+  team: Team
+  teamId: string
+  canEdit: boolean
+}) {
+  const t = useTranslations('TeamSettings')
+  const locale = useLocale()
+  const qc = useQueryClient()
+  const stored = resolveRegional(team.regional)
+  // Seeded at MOUNT and intentionally not resynced — a form that rewrites the
+  // field somebody is typing in is worse than a stale one. The call site keys
+  // this component on the team id so a team switch remounts it; see there.
+  const [draft, setDraft] = useState<RegionalSettings>(stored)
+  const [zones, setZones] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  // Client-only: ~400 <option>s have no business in the server-rendered HTML,
+  // and populating them after mount keeps the datalist out of hydration.
+  useEffect(() => {
+    try {
+      const supported = (Intl as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf
+      setZones(supported ? supported('timeZone') : [])
+    } catch {
+      setZones([])
+    }
+  }, [])
+
+  const zoneValid = draft.timezone === resolveRegional(draft).timezone
+  const dirty =
+    draft.timezone !== stored.timezone ||
+    draft.weekStartsOn !== stored.weekStartsOn ||
+    draft.dateFormat !== stored.dateFormat ||
+    draft.timeFormat !== stored.timeFormat
+
+  const previewSettings = zoneValid ? draft : stored
+  const preview = useMemo(
+    () => createRegionalFormatter(locale, previewSettings),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale, previewSettings.timezone, previewSettings.dateFormat, previewSettings.timeFormat]
+  )
+
+  function set<K extends keyof RegionalSettings>(key: K, value: RegionalSettings[K]) {
+    setDraft((d) => ({ ...d, [key]: value }))
+  }
+
+  async function onSave() {
+    if (!canEdit || !zoneValid) return
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, TEAMS_COLLECTION, teamId), { regional: draft })
+      await qc.invalidateQueries({ queryKey: ['team', teamId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      toast.error(t('saveError'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      <div>
+        <p className="text-sm font-medium">{t('regionTitle')}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('regionHint')}</p>
+        {!canEdit && <OwnerOnlyNote />}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="regional-timezone">{t('regionTimezone')}</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="regional-timezone"
+            list="regional-timezone-options"
+            value={draft.timezone}
+            disabled={!canEdit}
+            onChange={(e) => set('timezone', e.target.value.trim())}
+            placeholder="Europe/Zurich"
+            className="font-mono"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!canEdit}
+            onClick={() => set('timezone', deviceTimeZone())}
+          >
+            {t('regionUseDeviceTimezone')}
+          </Button>
+        </div>
+        <datalist id="regional-timezone-options">
+          {zones.map((z) => (
+            <option key={z} value={z} />
+          ))}
+        </datalist>
+        {!zoneValid && <p className="text-destructive text-xs">{t('regionTimezoneInvalid')}</p>}
+        <p className="text-xs text-muted-foreground">{t('regionTimezoneHint')}</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <Label>{t('regionWeekStart')}</Label>
+          <Select
+            value={String(draft.weekStartsOn)}
+            disabled={!canEdit}
+            onValueChange={(v) => set('weekStartsOn', (v === '0' ? 0 : 1) as WeekStart)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">{t('regionWeekStartMonday')}</SelectItem>
+              <SelectItem value="0">{t('regionWeekStartSunday')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>{t('regionDateFormat')}</Label>
+          <Select
+            value={draft.dateFormat}
+            disabled={!canEdit}
+            onValueChange={(v) => set('dateFormat', v as DateFormatStyle)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DATE_FORMAT_STYLES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {DATE_FORMAT_SAMPLE[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>{t('regionTimeFormat')}</Label>
+          <Select
+            value={draft.timeFormat}
+            disabled={!canEdit}
+            onValueChange={(v) => set('timeFormat', v as TimeFormatStyle)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="24h">{t('regionTime24h')}</SelectItem>
+              <SelectItem value="12h">{t('regionTime12h')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/40 px-3 py-2">
+        <p className="text-xs text-muted-foreground">{t('regionPreview')}</p>
+        <p className="text-sm mt-0.5 tabular-nums">
+          {preview.dateMedium(REGION_PREVIEW_INSTANT)} · {preview.date(REGION_PREVIEW_INSTANT)} ·{' '}
+          {preview.time(REGION_PREVIEW_INSTANT)}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {saved && !saving && <span className="text-xs text-muted-foreground">{t('saved')}</span>}
+        <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !dirty || !zoneValid}>
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {saving ? t('saving') : t('save')}
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -2436,6 +2656,17 @@ export default function TeamSettingsPage() {
             {tab === 'general' && (
               <>
                 <GeneralForm team={team} teamId={currentTeamId} canEdit={canEdit} />
+                {/* Keyed on the team: the draft below is seeded from
+                    `team.regional` at mount only, and the TeamSwitcher can
+                    change `currentTeamId` under a mounted settings page. Without
+                    the remount the form would keep team A's zone and formats and
+                    save them onto team B's document. */}
+                <RegionalForm
+                  key={currentTeamId}
+                  team={team}
+                  teamId={currentTeamId}
+                  canEdit={canEdit}
+                />
                 <EngagementThresholdsForm team={team} teamId={currentTeamId} canEdit={canEdit} />
                 <TabBarPreference />
               </>

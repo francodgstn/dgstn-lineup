@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  updateDoc, deleteDoc, setDoc, increment, serverTimestamp, deleteField, writeBatch,
+  increment, serverTimestamp, deleteField, writeBatch,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -72,6 +72,16 @@ function activityPalette(activityId?: string | null, customColor?: string | null
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+/** The same 32-byte hex secret every server rail mints (`generateSecureToken`
+ *  in functions/utils/crypto.ts), from the Web Crypto API — this is the only
+ *  booking written from a browser, and a token that is guessable is a link
+ *  anyone can cancel somebody else's seat with. */
+function generateBookingToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 function formatDate(ts?: { toDate(): Date } | null) {
   if (!ts) return '—'
@@ -141,6 +151,100 @@ interface ParticipantDoc {
   avatar_url?: string | null
   checkedInAt?: { toDate(): Date }
   confirmedFromBooking?: boolean
+}
+
+// ─── what bought this seat ────────────────────────────────────────────────────
+
+/**
+ * The tender that settled a booking, or the fact that none has yet.
+ *
+ * The roster's "No subscription" chip was computed from the CONTACT alone — the
+ * subscription snapshot against the activity's required types — and never
+ * looked at the booking. So a member who paid a drop-in price, redeemed a gift
+ * card, spent a class credit or used up a weekly allowance was labelled "holds
+ * no valid subscription", which at the door reads as "do not let this person
+ * in".
+ *
+ * FIXED ORDER, evaluated top-down, because a seat can carry more than one
+ * marker and the chip names ONE tender. `'awaiting_payment'` is deliberately
+ * its own answer rather than folded into either arm: a drop-in sits there until
+ * the Connect webhook lands, and it is the state a coach most needs to tell
+ * apart from both "paid" and "no subscription".
+ *
+ * READ STRUCTURALLY, because the `Booking` type is behind its writers:
+ * `credit_grant_id` / `credit_spent` / `usage_window_doc_id` are written by
+ * `booking/index.ts` and absent from the interface, and `payment_status` there
+ * omits the `'gift_card'` that `booking/dropIn.ts` writes. This belongs beside
+ * `bookingWasPaidFor` in packages/shared/src/types/session.ts once that type is
+ * widened — `cancelBooking` and `getMyBookings` each inline the same question
+ * today; another copy is one too many.
+ */
+type SeatFunding = 'paid' | 'gift_card' | 'credit' | 'usage' | 'awaiting_payment' | 'none'
+
+interface SeatFundingMarkers {
+  payment_status?: string | null
+  credit_grant_id?: string | null
+  credit_spent?: number | null
+  usage_window_doc_id?: string | null
+}
+
+function seatFunding(b: SeatFundingMarkers | null | undefined): SeatFunding {
+  if (!b) return 'none'
+  if (b.payment_status === 'gift_card') return 'gift_card'
+  if (b.payment_status === 'paid') return 'paid'
+  if (b.credit_grant_id && b.credit_spent) return 'credit'
+  if (b.usage_window_doc_id) return 'usage'
+  if (b.payment_status === 'required') return 'awaiting_payment'
+  return 'none'
+}
+
+/** What the roster says about one person's seat. `'none'` is the ordinary case
+ *  — a covered member on a gated class, or any seat on a class with no gate at
+ *  all — and renders nothing. */
+type FundedTender = Exclude<SeatFunding, 'none' | 'awaiting_payment'>
+
+type SeatChipState =
+  | { kind: 'none' }
+  | { kind: 'no_sub' }
+  | { kind: 'awaiting_payment' }
+  | { kind: 'funded'; funding: FundedTender }
+
+const FUNDING_BADGE_KEY: Record<FundedTender, string> = {
+  paid: 'seatPaidBadge',
+  gift_card: 'seatGiftCardBadge',
+  credit: 'seatCreditBadge',
+  usage: 'seatUsageBadge',
+}
+
+/** ONE chip, rendered on every roster row — the booking rows and the check-in
+ *  rows drifted apart the last time the same fact was written twice. */
+function SeatFundingChip({ chip }: { chip: SeatChipState }) {
+  const t = useTranslations('SessionDetail')
+  const base =
+    'inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0'
+  if (chip.kind === 'none') return null
+  if (chip.kind === 'no_sub') {
+    return (
+      <span className={`${base} bg-amber-100 text-amber-700`} title={t('noSubBadgeTitle')}>
+        <AlertTriangle className="h-3 w-3" />
+        {t('noSubBadge')}
+      </span>
+    )
+  }
+  if (chip.kind === 'awaiting_payment') {
+    return (
+      <span className={`${base} bg-amber-100 text-amber-700`} title={t('seatAwaitingPaymentBadgeTitle')}>
+        <Clock className="h-3 w-3" />
+        {t('seatAwaitingPaymentBadge')}
+      </span>
+    )
+  }
+  const key = FUNDING_BADGE_KEY[chip.funding]
+  return (
+    <span className={`${base} bg-emerald-100 text-emerald-700`} title={t(`${key}Title`)}>
+      {t(key)}
+    </span>
+  )
 }
 
 // ─── roster name ──────────────────────────────────────────────────────────────
@@ -320,11 +424,13 @@ function AddParticipantsDialog({
   const pickedContacts = contacts.filter((c) => picked.has(c.id))
   const uncovered = pickedContacts.filter((c) => !isCovered(c))
 
-  /** Firestore caps a batch at 500 writes and this door writes TWO per person
-   *  (the seat and the attendance), so a batch may carry 250. Chunked well under
-   *  that: a roster never approaches it, and the alternative to chunking is a
-   *  hard failure at the exact moment somebody is adding a big group. */
-  const CHUNK = 200
+  /** Firestore caps a batch at 500 writes. This door writes the seat, the
+   *  attendance row and — for a person whose seat was pending — one contact
+   *  counter, so budget THREE per person plus one session write per chunk.
+   *  Chunked well under the ceiling: a roster never approaches it, and the
+   *  alternative to chunking is a hard failure at the exact moment somebody is
+   *  adding a big group. */
+  const CHUNK = 150
 
   const addPicked = async ({ force = false } = {}) => {
     if (pickedContacts.length === 0) return
@@ -365,8 +471,12 @@ function AddParticipantsDialog({
           slice.map((c) => getDoc(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, c.id)))
         )
         const batch = writeBatch(db)
+        let conversions = 0
         slice.forEach((contact, n) => {
           const existing = existingRows[n]
+          const priorStatus = existing.exists()
+            ? ((existing.data() as Booking).status ?? 'pending')
+            : null
           batch.set(
             doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, contact.id),
             {
@@ -380,7 +490,28 @@ function AddParticipantsDialog({
               confirmed_at: serverTimestamp(),
               ...(existing.exists()
                 ? confirmClearedHoldFields(existing.data() as Booking, deleteField())
-                : { source: 'staff', created_at: serverTimestamp() }),
+                : {
+                    source: 'staff',
+                    created_at: serverTimestamp(),
+                    // NEW ROW ONLY — an existing booking keeps the instant its
+                    // seat was really taken.
+                    //
+                    // `joinedAt` IS WHAT MAKES THE SEAT VISIBLE. Every list that
+                    // shows a booking orders on it (/bookings, the contact's
+                    // bookings tab, `getMyBookings`) and the index behind those
+                    // queries is SPARSE, so a booking written without it is not
+                    // in the index and never appears anywhere but this roster —
+                    // which is exactly how a hand-added seat became "the booking
+                    // that exists but no page can find".
+                    joinedAt: serverTimestamp(),
+                    is_new_contact: false,
+                    // WITHOUT A TOKEN THE MEMBER CANNOT GET OUT. `cancelBooking`
+                    // finds a booking only by token, so a seat entered here
+                    // would render in her Space as a class she cannot cancel —
+                    // worse than a coach's manual entry becoming
+                    // member-cancellable like any other booking (Franco).
+                    booking_token: generateBookingToken(),
+                  }),
             },
             { merge: true }
           )
@@ -394,7 +525,41 @@ function AddParticipantsDialog({
               checkedInAt: serverTimestamp(),
             })
           )
+          // ── THIS DOOR IS A CONFIRM, SO IT OWES THE CONFIRM'S COUNTERS ─────
+          // It writes `status: 'confirmed'` directly, which means every
+          // compensation that undoes a confirm — `markNoShow`'s
+          // `conversions_count: -1`, `performRemoval`'s revert-to-pending pair
+          // — reaches a seat this batch created. Writing the status without
+          // the counters left those undo paths subtracting a number nobody had
+          // added, and `conversions_count` has no absolute writer to correct
+          // the drift (unlike `bookings_count`, which `trackBookings`
+          // recounts). Same arithmetic as `confirmBooking`, for the same
+          // reason; the census of confirm surfaces and what each owes lives in
+          // `packages/functions/src/analytics/attendanceWriters.test.ts`.
+          //
+          // Guarded on the PRIOR status, because a booking that was already
+          // 'confirmed' (its attendance row deleted, so the person is pickable
+          // here again) was counted when it was confirmed the first time.
+          if (priorStatus !== 'confirmed') {
+            conversions += 1
+            // ONLY from 'pending' — exactly `confirmBooking`'s guard. A
+            // 'no_show' row already had its pending count given back when it
+            // was marked absent, and a brand-new seat was never pending at all.
+            if (priorStatus === 'pending') {
+              batch.update(doc(db, CONTACTS_COLLECTION, contact.id), {
+                pending_bookings_count: increment(-1),
+              })
+            }
+          }
         })
+        // Summed and written ONCE per chunk rather than per person: the session
+        // document is one document however many people are added, and a batch
+        // counts each update against its 500-write cap.
+        if (conversions > 0) {
+          batch.update(doc(db, SESSIONS_COLLECTION, sessionId), {
+            conversions_count: increment(conversions),
+          })
+        }
         // `participants_count` is `trackSessionParticipants`' to write — see
         // `confirmBooking`.
         await batch.commit()
@@ -773,8 +938,36 @@ export default function SessionDetailPage() {
         ])
       : [],
   )
-  const showsNoSubBadge = (contactId?: string | null) =>
-    !!contactId && rosterCoverage.get(contactId) === false
+  // contactId → their booking on this session. Keyed by `bookingContactId` and
+  // not by the document id: the two are equal by convention today, and the day
+  // they are not is the day one person occupies two roster rows.
+  //
+  // A CHECK-IN ROW CARRIES NO PAYMENT FIELDS AT ALL (`buildParticipantDoc`
+  // writes identity plus who checked them in), so the person who paid and was
+  // then checked in resolves their funding through this map or not at all.
+  const bookingByContact = new Map<string, Booking>(
+    (bookingsQ.data ?? []).map((b) => [bookingContactId(b), b])
+  )
+
+  /** THE SEAT FIRST, THE PERSON SECOND. What bought this seat is a fact about
+   *  the booking; "no valid subscription" is only the answer when nothing did.
+   *  Without the bookings read the coverage arm is withheld rather than
+   *  flashed — an amber warning that turns out to be wrong is worse at the door
+   *  than a chip that arrives a moment late.
+   *
+   *  GUARDED ON THE ABSENCE OF DATA, NOT ON `isLoading`. A failed read (a rules
+   *  change, a transient error, a missing index) leaves `isLoading` false and
+   *  `data` undefined, so `bookingByContact` is empty and every row would fall
+   *  through to the contact-only arm — amber "No subscription" on the people
+   *  who paid, which is precisely the wrong answer this resolver exists to stop
+   *  showing. A read that failed must render as no answer, never as an answer. */
+  const seatChipFor = (contactId?: string | null): SeatChipState => {
+    if (!contactId || bookingsQ.data === undefined) return { kind: 'none' }
+    const funding = seatFunding(bookingByContact.get(contactId))
+    if (funding === 'awaiting_payment') return { kind: 'awaiting_payment' }
+    if (funding !== 'none') return { kind: 'funded', funding }
+    return rosterCoverage.get(contactId) === false ? { kind: 'no_sub' } : { kind: 'none' }
+  }
 
   // ── The waiver chip ───────────────────────────────────────────────────────
   // Read LIVE from the signer rows for exactly the people on this roster, rather
@@ -857,7 +1050,12 @@ export default function SessionDetailPage() {
     batch.update(doc(db, SESSIONS_COLLECTION, sessionId), {
       conversions_count: increment(1),
     })
-    if (booking.contact) {
+    // ONLY from 'pending'. This surface also confirms a NO-SHOW back into the
+    // class (the override button), and that booking's pending count was already
+    // given back when it was marked absent — decrementing again drives the
+    // contact's counter negative. /bookings never meets this case: it offers
+    // Confirm from 'pending' alone.
+    if (booking.contact && (!booking.status || booking.status === 'pending')) {
       batch.update(doc(db, CONTACTS_COLLECTION, booking.contact), {
         pending_bookings_count: increment(-1),
       })
@@ -866,9 +1064,67 @@ export default function SessionDetailPage() {
     invalidate()
   }
 
-  const markNoShow = async (bookingId: string) => {
-    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, bookingId), { status: 'no_show' })
+  // ── MARKING SOMEBODY ABSENT ───────────────────────────────────────────────
+  //
+  // ONE act, reachable from 'pending' and from 'confirmed', and each starting
+  // state owes different compensations. Until this branch existed, 'confirmed'
+  // was a one-way door: the only exit was /bookings' "Revert to pending" and
+  // then a second click, a two-step whose middle state is a lie about the
+  // roster.
+  //
+  // THE ATTENDANCE ROW ALWAYS GOES. Somebody marked absent must not stay in
+  // "Check-ins" — that is the divergence this whole branch exists to close —
+  // and a batch delete of a document that isn't there is a no-op, so the
+  // pending rows (which normally have none) pay nothing for it.
+  //
+  // The counters, in contrast, are each undone by whoever wrote them:
+  // `conversions_count` by the confirm, `pending_bookings_count` by the seat
+  // while it was still pending. Touching the pending count on the confirmed
+  // path would drive the contact's counter negative — the confirm already gave
+  // it back. `bookings_count` is never written from here at all: `trackBookings`
+  // recounts it absolutely from the subcollection.
+  const markNoShow = async (booking: Booking) => {
+    const batch = writeBatch(db)
+    batch.update(doc(db, SESSIONS_COLLECTION, sessionId, BOOKINGS_SUB, booking.id), {
+      status: 'no_show',
+      no_show_at: serverTimestamp(),
+    })
+    batch.delete(
+      doc(db, SESSIONS_COLLECTION, sessionId, PARTICIPANTS_SUBCOLLECTION, bookingContactId(booking))
+    )
+    if (booking.status === 'confirmed') {
+      batch.update(doc(db, SESSIONS_COLLECTION, sessionId), { conversions_count: increment(-1) })
+    } else if ((!booking.status || booking.status === 'pending') && booking.contact) {
+      // The same compensation /bookings applies — this surface used to skip it,
+      // so the same click left the contact's pending counter one too high here
+      // and correct one page over.
+      batch.update(doc(db, CONTACTS_COLLECTION, booking.contact), {
+        pending_bookings_count: increment(-1),
+      })
+    }
+    await batch.commit()
     invalidate()
+  }
+
+  // The confirmed → no_show step is the one that asks first. It fires
+  // `booking_no_show` automations and `processNoShowStrike` (as the pending
+  // path always has), and on top of that it DELETES the attendance row a coach
+  // recorded — a misclick there rewrites who was in the room.
+  const [pendingNoShow, setPendingNoShow] = useState<Booking | null>(null)
+  const [markingNoShow, setMarkingNoShow] = useState(false)
+
+  const confirmNoShow = async () => {
+    const booking = pendingNoShow
+    if (!booking) return
+    setMarkingNoShow(true)
+    try {
+      await markNoShow(booking)
+      setPendingNoShow(null)
+    } catch {
+      toast.error(t('noShowFailed'))
+    } finally {
+      setMarkingNoShow(false)
+    }
   }
 
   // ── TAKING SOMEBODY OFF A SESSION ─────────────────────────────────────────
@@ -898,7 +1154,17 @@ export default function SessionDetailPage() {
   // class credit and a usage-limit window unit; this path refunds neither, and
   // never did. That is a real gap, and it is not one a confirm dialog closes.
   const [pendingRemoval, setPendingRemoval] = useState<
-    { kind: 'booking' | 'participant'; id: string; name: string } | null
+    {
+      kind: 'booking' | 'participant'
+      id: string
+      name: string
+      /** The person this row is about, carried separately from the document
+       *  id. A check-in row is written under the contact id by convention, and
+       *  the seat behind it is found through `bookingByContact` — which is
+       *  keyed by `bookingContactId`, not by a document id, for the reason
+       *  stated where that map is built. */
+      contactId?: string | null
+    } | null
   >(null)
   const [removing, setRemoving] = useState(false)
   // Read off the END where there is one, so a class still running is not
@@ -919,12 +1185,63 @@ export default function SessionDetailPage() {
     if (!target) return
     setRemoving(true)
     const ref = doc(db, SESSIONS_COLLECTION, sessionId, removalSub(target.kind), target.id)
+    // ── THE SEAT BEHIND THE CHECK-IN, RESOLVED BY PERSON ──────────────────
+    // Not by document id. `bookings/{contactId}` is what the booking rails
+    // write, so id-as-id holds for every seat they made — but a seat carried in
+    // from elsewhere (imported, seeded) lives under an id of its own, and
+    // deriving the reference from the participant's id there points at a
+    // document that does not exist: the revert below silently does nothing and
+    // the orphaned confirmed booking this whole branch exists to clear stays
+    // exactly where it was. So the seat comes out of `bookingByContact`, the
+    // same by-person map every other reader in this change uses, and the
+    // id-shaped guess is only the fallback when the roster read has no row for
+    // this person.
+    const seatContactId = target.contactId ?? target.id
+    const seat = target.kind === 'participant' ? bookingByContact.get(seatContactId) : undefined
+    const bookingRef = doc(
+      db,
+      SESSIONS_COLLECTION,
+      sessionId,
+      BOOKINGS_SUB,
+      seat?.id ?? seatContactId
+    )
     try {
       // READ BEFORE DELETE — this snapshot IS the undo. Taken inside the same
       // click so nothing can have changed between the two.
       const snap = await getDoc(ref)
       const restore = snap.exists() ? snap.data() : null
-      await deleteDoc(ref)
+      // ── AND THE SEAT BEHIND IT ────────────────────────────────────────────
+      // Deleting the attendance row alone left a CONFIRMED booking with no row
+      // on any screen: the Portal-bookings block renders pending and no-shows,
+      // the person is gone from Check-ins, and `bookingHoldsSeat` still counts
+      // their seat. So the removal takes the booking back to 'pending' — the
+      // same place /bookings' "Revert to pending" puts it — where it is visible
+      // and can be confirmed, no-showed or removed. NOT to 'no_show': taking a
+      // check-in back says the record was wrong, not that the person failed to
+      // turn up (Franco).
+      //
+      // Keyed on the booking's STATUS, not on `confirmedFromBooking`: the staff
+      // add-contact door writes a confirmed booking and an attendance row with
+      // no such flag, and that pairing orphans exactly the same way.
+      const bookingSnap = target.kind === 'participant' ? await getDoc(bookingRef) : null
+      const revertedBooking =
+        bookingSnap?.exists() && bookingSnap.data().status === 'confirmed'
+          ? bookingSnap.data()
+          : null
+      const batch = writeBatch(db)
+      batch.delete(ref)
+      if (revertedBooking) {
+        batch.update(bookingRef, { status: 'pending', confirmed_at: null })
+        batch.update(doc(db, SESSIONS_COLLECTION, sessionId), {
+          conversions_count: increment(-1),
+        })
+        if (revertedBooking.contact) {
+          batch.update(doc(db, CONTACTS_COLLECTION, revertedBooking.contact as string), {
+            pending_bookings_count: increment(1),
+          })
+        }
+      }
+      await batch.commit()
       // `participants_count` is recounted by `trackSessionParticipants` and
       // `bookings_count` by `trackBookings` — see `confirmBooking`. A blind
       // decrement here could not tell a double click from two removals, and
@@ -938,7 +1255,24 @@ export default function SessionDetailPage() {
               label: t('undo'),
               onClick: async () => {
                 try {
-                  await setDoc(ref, restore)
+                  // The undo restores BOTH documents, or it is not an undo: the
+                  // booking goes back verbatim (its own `confirmed_at`, not a
+                  // fresh one) and the two counters the revert moved go back
+                  // with it.
+                  const undo = writeBatch(db)
+                  undo.set(ref, restore)
+                  if (revertedBooking) {
+                    undo.set(bookingRef, revertedBooking)
+                    undo.update(doc(db, SESSIONS_COLLECTION, sessionId), {
+                      conversions_count: increment(1),
+                    })
+                    if (revertedBooking.contact) {
+                      undo.update(doc(db, CONTACTS_COLLECTION, revertedBooking.contact as string), {
+                        pending_bookings_count: increment(-1),
+                      })
+                    }
+                  }
+                  await undo.commit()
                   invalidate()
                   toast.success(t('restoredToast', { name: target.name }))
                 } catch {
@@ -1039,6 +1373,14 @@ export default function SessionDetailPage() {
     bookings.filter((b) => bookingHoldsSeat(b)).length
   )
   const existingParticipantIds = new Set(participants.map((p) => p.contact).filter(Boolean) as string[])
+  // A CONFIRMED booking normally lives in "Check-ins" — the confirm writes the
+  // attendance row — so listing every one of them here would show the same
+  // person twice. What has no home anywhere is a confirmed booking with NO
+  // attendance row: it holds a seat in the recount and appears on no screen.
+  // This is that group, and it is empty on a healthy session.
+  const confirmedBookings = bookings.filter(
+    (b) => b.status === 'confirmed' && !existingParticipantIds.has(bookingContactId(b))
+  )
   const activity = activities.find((a) => a.id === session?.activityId)
   const { accent } = activityPalette(session?.activityId, activity?.color)
 
@@ -1071,7 +1413,8 @@ export default function SessionDetailPage() {
     )
   }
 
-  const hasBookings = pendingBookings.length > 0 || noShowBookings.length > 0
+  const hasBookings =
+    pendingBookings.length > 0 || confirmedBookings.length > 0 || noShowBookings.length > 0
 
   return (
     <div className="space-y-5 max-w-2xl mx-auto pb-20">
@@ -1256,7 +1599,7 @@ export default function SessionDetailPage() {
       {/* Portal bookings */}
       {hasBookings && (
         <div className="rounded-xl border bg-card p-4 shadow-sm">
-          <SectionHeader icon={<BookOpen className="h-3.5 w-3.5" />} label={t('portalBookingsSection')} count={pendingBookings.length + noShowBookings.length} color="#D97706" />
+          <SectionHeader icon={<BookOpen className="h-3.5 w-3.5" />} label={t('portalBookingsSection')} count={pendingBookings.length + confirmedBookings.length + noShowBookings.length} color="#D97706" />
 
           {/* Pending */}
           {pendingBookings.map((b) => (
@@ -1268,12 +1611,7 @@ export default function SessionDetailPage() {
                 <RosterName contactId={b.contact}>{b.lastname} {b.firstname}</RosterName>
                 {b.email && <p className="text-xs text-muted-foreground">{b.email}</p>}
               </div>
-              {showsNoSubBadge(b.contact) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0" title={t('noSubBadgeTitle')}>
-                  <AlertTriangle className="h-3 w-3" />
-                  {t('noSubBadge')}
-                </span>
-              )}
+              <SeatFundingChip chip={seatChipFor(b.contact)} />
               <WaiverChip state={waiverStateOf(b.contact)} />
               <WaiverDoorCheckChip check={waiverCheckOf(b.contact)} />
               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{t('pendingBadge')}</Badge>
@@ -1281,7 +1619,9 @@ export default function SessionDetailPage() {
                 <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('confirmAttendanceTitle')}>
                   <Check className="h-4 w-4" />
                 </button>
-                <button onClick={() => markNoShow(b.id)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
+                {/* No confirm step from 'pending': nothing is being undone, and
+                    the way back is the Confirm button beside it. */}
+                <button onClick={() => markNoShow(b)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
                   <UserX className="h-4 w-4" />
                 </button>
                 <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
@@ -1291,10 +1631,42 @@ export default function SessionDetailPage() {
             </div>
           ))}
 
+          {/* Confirmed, with no check-in row behind them — see `confirmedBookings`. */}
+          {confirmedBookings.length > 0 && (
+            <>
+              <div className="px-1 pt-3 pb-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('confirmedSection')}</p>
+              </div>
+              {confirmedBookings.map((b) => (
+                <div key={b.id} className="flex items-center gap-3 py-2.5 border-b last:border-0">
+                  <div className="h-9 w-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    {b.firstname?.[0]}{b.lastname?.[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <RosterName contactId={b.contact}>{b.lastname} {b.firstname}</RosterName>
+                    {b.email && <p className="text-xs text-muted-foreground">{b.email}</p>}
+                  </div>
+                  <SeatFundingChip chip={seatChipFor(b.contact)} />
+                  <WaiverChip state={waiverStateOf(b.contact)} />
+                  <WaiverDoorCheckChip check={waiverCheckOf(b.contact)} />
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">{t('confirmedBadge')}</Badge>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPendingNoShow(b)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
+                      <UserX className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
           {/* No-shows */}
           {noShowBookings.length > 0 && (
             <>
-              {pendingBookings.length > 0 && (
+              {(pendingBookings.length > 0 || confirmedBookings.length > 0) && (
                 <div className="px-1 pt-3 pb-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('noShowsSection')}</p>
                 </div>
@@ -1427,7 +1799,11 @@ export default function SessionDetailPage() {
           </div>
         )}
 
-        {participants.map((p) => (
+        {participants.map((p) => {
+          // The seat behind this attendance row, where there is one. A kiosk or
+          // QR check-in has no booking, and there is nothing to mark absent.
+          const seat = p.contact ? bookingByContact.get(p.contact) : undefined
+          return (
           <div key={p.id} className="flex items-center gap-3 py-2.5 border-b last:border-0">
             <div className="h-9 w-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
               {p.firstname?.[0]}{p.lastname?.[0]}
@@ -1438,23 +1814,27 @@ export default function SessionDetailPage() {
                 <p className="text-xs text-muted-foreground">{t('confirmedFromBooking')}</p>
               )}
             </div>
-            {showsNoSubBadge(p.contact) && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0" title={t('noSubBadgeTitle')}>
-                <AlertTriangle className="h-3 w-3" />
-                {t('noSubBadge')}
-              </span>
-            )}
+            <SeatFundingChip chip={seatChipFor(p.contact)} />
             {/* A participant row may have NO booking at all — a staff add, or a
                 kiosk/self check-in — which is exactly the person whose waiver
                 nobody collected. `booking.waiver_state` cannot reach them, so
                 this reads the signer row. */}
             <WaiverChip state={waiverStateOf(p.contact)} />
             <WaiverDoorCheckChip check={waiverCheckOf(p.contact)} />
-            <button onClick={() => setPendingRemoval({ kind: 'participant', id: p.id, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
+            {/* THE WAY OUT OF 'confirmed'. Without it, a person recorded as
+                present could only be un-recorded by deleting the row, which
+                left their booking confirmed and unreachable. */}
+            {seat && seat.status !== 'no_show' && (
+              <button onClick={() => setPendingNoShow(seat)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowFromCheckInTitle')}>
+                <UserX className="h-4 w-4" />
+              </button>
+            )}
+            <button onClick={() => setPendingRemoval({ kind: 'participant', id: p.id, contactId: p.contact ?? null, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Mobile FAB — add participant */}
@@ -1541,6 +1921,38 @@ export default function SessionDetailPage() {
               {t('waitlistRemoveCancel')}
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Marking a CONFIRMED seat absent. Asks first, because it deletes the
+          attendance row a coach recorded and, like every no-show, fires the
+          `booking_no_show` automations and a no-show strike against the member.
+          The action is disabled while it is in flight: `conversions_count` is a
+          bare increment with no absolute writer, so a double click would
+          double-decrement it. */}
+      <Dialog open={pendingNoShow !== null} onOpenChange={(o) => !o && setPendingNoShow(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('noShowConfirmTitle')}</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="text-sm text-muted-foreground">
+            <p>
+              {t('noShowConfirmBody', {
+                name: pendingNoShow
+                  ? `${pendingNoShow.firstname ?? ''} ${pendingNoShow.lastname ?? ''}`.trim()
+                  : '',
+              })}
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingNoShow(null)} disabled={markingNoShow}>
+              {t('noSubConfirmCancel')}
+            </Button>
+            <Button onClick={confirmNoShow} disabled={markingNoShow}>
+              {markingNoShow ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              {t('noShowConfirmAction')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

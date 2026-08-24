@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { httpsCallable } from 'firebase/functions'
 import { useTranslations } from 'next-intl'
@@ -73,6 +73,17 @@ function formatSessionTime(startIso: string, endIso: string): string {
   const fmt = (iso: string) =>
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   return `${fmt(startIso)} – ${fmt(endIso)}`
+}
+
+// The page has no layout of its own, and nothing above it supplies a container:
+// the tenant layout mounts only the providers and the back bar. So every return
+// branch has to bring its own centred column — including the cancel
+// confirmation, which is the screen a member most often ends on. Same
+// content-column metrics as BioLinkShell, without adopting the shell itself:
+// this route already gets a PublicBackBar from the tenant layout, and the shell
+// renders a second one.
+function Frame({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={`mx-auto w-full max-w-lg px-5 py-8 ${className ?? ''}`}>{children}</div>
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -191,19 +202,25 @@ export default function ManageBookingPage() {
   }
 
   if (!token) {
-    return <p className="text-muted-foreground">{t('notFound')}</p>
+    return (
+      <Frame>
+        <p className="text-muted-foreground">{t('notFound')}</p>
+      </Frame>
+    )
   }
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-7 w-48" />
-        <div className="rounded-xl border p-5 space-y-3">
-          <Skeleton className="h-4 w-64" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="h-4 w-56" />
+      <Frame>
+        <div className="space-y-4">
+          <Skeleton className="h-7 w-48" />
+          <div className="rounded-xl border p-5 space-y-3">
+            <Skeleton className="h-4 w-64" />
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-56" />
+          </div>
         </div>
-      </div>
+      </Frame>
     )
   }
 
@@ -212,24 +229,28 @@ export default function ManageBookingPage() {
     // given up a place is the person most owed the sentence about her credit.
     const effects = cancelEffectKeys(cancelDone, 'did')
     return (
-      <div className="text-center py-12 space-y-3">
-        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
-        <p className="font-semibold text-lg">{t('cancelSuccess')}</p>
-        {effects.map((key) => (
-          <p key={key} className="text-sm text-muted-foreground max-w-sm mx-auto">
-            {tCancel(key)}
-          </p>
-        ))}
-      </div>
+      <Frame>
+        <div className="text-center py-12 space-y-3">
+          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+          <p className="font-semibold text-lg">{t('cancelSuccess')}</p>
+          {effects.map((key) => (
+            <p key={key} className="text-sm text-muted-foreground max-w-sm mx-auto">
+              {tCancel(key)}
+            </p>
+          ))}
+        </div>
+      </Frame>
     )
   }
 
   if (error && !details) {
     return (
-      <div className="text-center py-12 space-y-3">
-        <XCircle className="h-12 w-12 text-muted-foreground mx-auto" />
-        <p className="text-muted-foreground">{error}</p>
-      </div>
+      <Frame>
+        <div className="text-center py-12 space-y-3">
+          <XCircle className="h-12 w-12 text-muted-foreground mx-auto" />
+          <p className="text-muted-foreground">{error}</p>
+        </div>
+      </Frame>
     )
   }
 
@@ -241,7 +262,7 @@ export default function ManageBookingPage() {
   const sessionTimeStr = formatSessionTime(session.start, session.end)
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <Frame className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
 
       {/* Booking info card */}
@@ -390,6 +411,6 @@ export default function ManageBookingPage() {
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
+    </Frame>
   )
 }

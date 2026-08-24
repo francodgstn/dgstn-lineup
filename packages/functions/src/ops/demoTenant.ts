@@ -82,6 +82,9 @@ interface DemoActivity {
   hour: number
   /** Weekdays it runs on, `Date#getDay()` convention. */
   days: number[]
+  /** Free-text display chips, so the review tenant exercises the public
+   *  booking card's tag row rather than leaving it empty. */
+  tags?: string[]
 }
 
 const ACTIVITIES: DemoActivity[] = [
@@ -93,6 +96,7 @@ const ACTIVITIES: DemoActivity[] = [
     description: 'A gentle hour to start the day. All levels welcome.',
     hour: 8,
     days: [1, 3, 5],
+    tags: ['Beginner friendly', 'Mornings'],
   },
   {
     id: `${DEMO_TEAM_ID}-act-evening-strength`,
@@ -102,6 +106,7 @@ const ACTIVITIES: DemoActivity[] = [
     description: 'Technique and conditioning. Bring water.',
     hour: 18,
     days: [2, 4],
+    tags: ['Strength'],
   },
 ]
 
@@ -223,7 +228,7 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
         color: a.color,
         description: a.description,
         type: 'class',
-        level: 'all',
+        ...(a.tags?.length ? { tags: a.tags } : {}),
         // Openly bookable: with no Connect account there is no price to charge,
         // so this is the only door that can work — and it is the one a reviewer
         // should be able to walk through.

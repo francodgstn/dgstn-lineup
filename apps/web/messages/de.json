@@ -182,7 +182,9 @@
     "utilities": "Mehr",
     "subscriptionPlans": "Abo-Pläne",
     "memberSubscriptions": "Mitglieder-Abos",
-    "paymentsAndSubscriptions": "Zahlungen & Abos"
+    "paymentsAndSubscriptions": "Zahlungen & Abos",
+    "sidebarResizeLabel": "Seitenleiste anpassen",
+    "sidebarResizeHint": "Zum Anpassen ziehen — über den linken Rand hinaus zum Einklappen, Doppelklick zum Zurücksetzen"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -224,7 +226,7 @@
     "kioskDesc": "Ein Tablet-Check-in für deinen Empfang – Mitglieder und Walk-ins melden sich direkt vor Ort an.",
     "shopDescPriceList": "Zeigt deine Preise. Online-Zahlungen sind aus, daher werden Besucher gebeten, dich zu kontaktieren.",
     "surfaceAppointments": "Termine",
-    "appointmentsDesc": "Besucherinnen und Besucher wählen eine freie Zeit bei einem Coach und buchen sie selbst.",
+    "appointmentsDesc": "Teil der Buchung — Besucher wählen eine freie Zeit bei einem Coach und buchen sie selbst.",
     "surfaceEvents": "Events",
     "eventsDesc": "Deine veröffentlichten Events, mit ihrem Tagesprogramm."
   },
@@ -313,7 +315,13 @@
     "errorTeamGeneric": "Team konnte nicht erstellt werden. Bitte erneut versuchen.",
     "currency": "Währung",
     "language": "Sprache",
-    "languageHint": "Die Sprache, in der deine Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Beides lässt sich später ändern."
+    "languageHint": "Die Sprache, in der deine Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Beides lässt sich später ändern.",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "memberLanguage": "Mitgliedersprache",
+    "memberLanguageHint": "Die Sprache, in der Ihre Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Die Sprache Ihres eigenen Dashboards wählen Sie separat im Benutzermenü.",
+    "errorNameRequired": "Pflichtfeld",
+    "errorNameTooLong": "Max. 40 Zeichen"
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -1190,7 +1198,9 @@
     "eventDayOf": "Tag {day} von {total}",
     "eventFrom": "ab",
     "eventUntil": "bis",
-    "deleteEventConfirmTitle": "Dieses Event löschen?"
+    "deleteEventConfirmTitle": "Dieses Event löschen?",
+    "timezoneNotice": "Zeiten werden in {zone} angezeigt.",
+    "timezoneChange": "Ändern"
   },
   "Events": {
     "title": "Veranstaltungen",
@@ -1541,7 +1551,6 @@
     "createdImageErrorToast": "Aktivität erstellt, aber das Titelbild konnte nicht hochgeladen werden. Bearbeite die Aktivität, um es später hinzuzufügen.",
     "fieldName": "Name",
     "fieldDescription": "Beschreibung",
-    "fieldLevel": "Niveau",
     "fieldColor": "Farbe",
     "fieldImage": "Titelbild",
     "type_class": "Kurs",
@@ -1551,10 +1560,6 @@
     "fieldFreeTrial": "Als Schnupperstunde buchbar",
     "fieldDurationsMinutes": "Sitzungsdauern",
     "durationsMinutesHint": "Die Dauern, aus denen Kunden bei der Buchung dieses Angebots wählen können.",
-    "level_all": "Alle Niveaus",
-    "level_beginners": "Anfänger",
-    "level_intermediate": "Fortgeschrittene",
-    "level_advanced": "Experten",
     "freeTrialBadge": "Schnupper",
     "cancel": "Abbrechen",
     "archive": "Archivieren",
@@ -1564,8 +1569,8 @@
     "accessLabel": "Wer kann buchen",
     "access_open": "Für alle offen",
     "access_open_desc": "Alle können gratis buchen — keine Mitgliedschaft, keine Zahlung. Neue Personen werden zu Trial-Kontakten.",
-    "access_members": "Nur Mitglieder",
-    "access_members_desc": "Mitglieder buchen mit ihrer Mitgliedschaft. Neue Personen können trotzdem eine Klasse buchen, wenn unten „Gratis-Trial für Neue“ aktiv ist.",
+    "access_members": "Alle Mitglieder",
+    "access_members_desc": "Alle, die sich angemeldet haben, können buchen — auch ohne Abo. Neulinge können weiterhin eine Lektion buchen, wenn unten «Gratis-Probelektion für Neulinge» aktiviert ist.",
     "access_subscription": "Bestimmte Abos",
     "access_subscription_desc": "Nur Mitglieder mit einem der ausgewählten Abos können buchen. Neue Personen können trotzdem eine Klasse buchen, wenn unten „Gratis-Trial für Neue“ aktiv ist.",
     "accessBadgeSubscription": "Abonnement",
@@ -1636,7 +1641,6 @@
     "waitlistEnabledHint": "Ist eine Einheit ausgebucht, landen Besucher auf einer Warteliste statt in einer Sackgasse. Wird ein Platz frei, wird er automatisch der ersten Person angeboten.",
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
     "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
-    "level_none": "Nicht angegeben",
     "sectionBookingTitle": "Buchung und Preise",
     "sectionBookingSubtitle": "Wer das buchen kann und was es kostet.",
     "moreOptionsLabel": "Weitere Optionen",
@@ -1651,12 +1655,20 @@
     "scheduleSheetEmptyBody": "Für diese Aktivität sind keine Termine geplant — niemand kann sie sehen oder buchen.",
     "scheduleSheetEmptyCta": "Termin planen",
     "scheduleSheetOpenSchedule": "Zum Zeitplan",
-    "accessPickInCatalogue": "Welche Abos das buchen dürfen, legst du im Katalog fest — direkt neben den Abos.",
     "accessOpenCatalogue": "Katalog öffnen",
     "dropInRateInCatalogue": "Einen Mitgliederpreis dafür legst du im Katalog fest — es ist eine Regel für alle beteiligten Abos.",
     "benefitInCatalogue": "Den Mitgliederpreis für diese Dauern legst du im Katalog fest — neben den Abos, für die er gilt.",
     "dropInPriceValidation": "Gib einen Einzelpreis von mindestens 0.50 ein",
-    "durationsRequiredValidation": "Wähle mindestens eine Termindauer"
+    "durationsRequiredValidation": "Wähle mindestens eine Termindauer",
+    "accessBadgeMembers": "Mitglieder",
+    "accessPlansAfterSave": "Zuerst die Aktivität speichern, danach die Abos auswählen, mit denen sie gebucht werden kann.",
+    "fieldTags": "Schlagwörter",
+    "tagsHint": "Kurze Bezeichnungen, die öffentlich auf der Buchungsseite erscheinen — z. B. Für Anfänger, Gi, Kids.",
+    "tagsPlaceholder": "Bezeichnung eingeben und Enter drücken",
+    "tagsMax": "Maximal {max} Bezeichnungen.",
+    "tagRemove": "{tag} entfernen",
+    "accessSubscriptionPlansValidation": "Wähle mindestens ein Abo aus, mit dem diese Aktivität gebucht werden kann.",
+    "planLinksUnsaved": "Die Abo-Auswahl oben ist noch nicht gespeichert — zuerst dort speichern, sonst geht sie mit diesem Speichern verloren."
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -1715,7 +1727,6 @@
     "subTypePublic": "Auf öffentlicher Preisseite anzeigen",
     "subTypePublicDesc": "Diesen Plan auf deinem Bio-Link und der Website-Preistabelle anzeigen.",
     "subTypeCheckoutContact": "Kontakterfassung beim Checkout",
-    "subTypeCheckoutContactDesc": "Aus — kein Kontakt. Minimal — Mitglied mit Name + E-Mail anlegen. Voll — Mitglied anlegen und die Registrierung abschliessen lassen (Einwilligung + Pflichtfelder).",
     "subTypeContactMode_off": "Aus",
     "subTypeContactMode_minimal": "Minimal",
     "subTypeContactMode_full": "Voll",
@@ -1900,7 +1911,29 @@
     "paymentsExternalBeta": "Beta",
     "paymentsExternalLimitMatch": "Linyup versucht, den Kontakt über die E-Mail-Adresse zuzuordnen.",
     "paymentsExternalLimitLink": "Zahlungen werden nicht automatisch mit Buchung, Abo, Kurs oder Produkt verknüpft.",
-    "paymentsExternalLimitRefund": "Erstattungen, Pausen und Kündigungen musst du manuell im Dashboard deines Anbieters und in Linyup erledigen."
+    "paymentsExternalLimitRefund": "Erstattungen, Pausen und Kündigungen musst du manuell im Dashboard deines Anbieters und in Linyup erledigen.",
+    "customFieldRequiredHint": "Markiert das Feld im Kontaktformular als Pflichtfeld. Ob es im Buchungsformular Pflicht ist, legst du in den Buchungseinstellungen fest.",
+    "customFieldPublicBadge": "Im Buchungsformular verfügbar",
+    "customFieldPublicNextStep": "Damit wird das Feld nur verfügbar. Speichere und schalte es dann unter «Zu erfassende Kontaktdaten» in den Buchungseinstellungen ein, damit es wirklich abgefragt wird.",
+    "customFieldPublicNextStepLink": "Buchungseinstellungen öffnen",
+    "subTypeContactMode_off_desc": "Es wird kein Kontakt angelegt.",
+    "subTypeContactMode_minimal_desc": "Mitglied mit Name + E-Mail anlegen.",
+    "subTypeContactMode_full_desc": "Mitglied anlegen und die Registrierung abschliessen lassen (Einwilligung + Pflichtfelder).",
+    "regionTitle": "Region & Formate",
+    "regionHint": "Wie Datum und Uhrzeit in deinem Studio angezeigt werden. Alle im Team sehen dieselben Formate; die Sprache des Dashboards bleibt persönlich.",
+    "regionTimezone": "Zeitzone",
+    "regionTimezoneHint": "Wird für die Anzeige von Uhrzeiten und für das Datum deiner E-Mails verwendet. Tippe zum Suchen, z. B. Europe/Zurich.",
+    "regionTimezoneInvalid": "Unbekannte Zeitzone — wähle eine aus der Liste.",
+    "regionUseDeviceTimezone": "Dieses Gerät verwenden",
+    "regionWeekStart": "Woche beginnt am",
+    "regionWeekStartMonday": "Montag",
+    "regionWeekStartSunday": "Sonntag",
+    "regionDateFormat": "Datumsformat",
+    "regionTimeFormat": "Zeitformat",
+    "regionTime24h": "24 Stunden (18:30)",
+    "regionTime12h": "12 Stunden (6:30 PM)",
+    "regionPreview": "Vorschau",
+    "slugCheckFailed": "Diese URL konnte nicht geprüft werden. Versuche es vor dem Speichern erneut."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -1944,7 +1977,28 @@
     "range_thisMonth": "Dieser Monat",
     "range_custom": "Benutzerdefiniert",
     "empty": "Noch keine Buchungen.",
-    "emptySearch": "Keine Buchungen gefunden."
+    "emptySearch": "Keine Buchungen gefunden.",
+    "subtitleWindow": "{total} in diesem Zeitraum · {trials} Schnupper",
+    "windowTruncated": "Es werden die {count} neuesten angezeigt — grenze den Zeitraum ein, um alle zu sehen.",
+    "windowTooWideTitle": "Zu viele Kurse in diesem Zeitraum",
+    "windowTooWide": "Dieser Zeitraum umfasst mehr als {count} Kurse — zu viele, um sie auf einmal zu laden. Wähle einen kürzeren Zeitraum.",
+    "dateAxisLabel": "Filtern nach",
+    "axisClassDate": "Kursdatum",
+    "axisBookingDate": "Buchungsdatum",
+    "range_tomorrow": "Morgen",
+    "range_next7": "Nächste 7 Tage",
+    "range_next30": "Nächste 30 Tage",
+    "range_nextMonth": "Nächster Monat",
+    "rangeMaxSpan": "Max. {days} Tage",
+    "labelClassDate": "Kurs:",
+    "labelBookedOn": "Gebucht:",
+    "labelReference": "Ref.",
+    "searchPlaceholderWithReference": "Nach Name, E-Mail oder Referenz suchen…",
+    "referenceMatchHeading": "Buchungsreferenz {code}",
+    "referenceSearching": "Referenz wird gesucht…",
+    "referenceNotFound": "Keine Buchung mit der Referenz {code} gefunden.",
+    "referenceMultipleMatches": "{count} Buchungen haben dieselbe Referenz — prüfe Name und Kurs.",
+    "emptyWindow": "Keine Buchungen in diesem Zeitraum."
   },
   "ManageBooking": {
     "title": "Buchung verwalten",
@@ -2115,7 +2169,13 @@
     "analyticsHint": "Hilft uns, das Produkt zu verbessern",
     "analyticsOn": "Ein",
     "analyticsOff": "Aus",
-    "qrSurfaceDesc": "Beim Scannen öffnet sich diese Seite im Browser der Besucherin oder des Besuchers."
+    "qrSurfaceDesc": "Beim Scannen öffnet sich diese Seite im Browser der Besucherin oder des Besuchers.",
+    "switchStudio": "Studio wechseln",
+    "currentStudio": "Aktuelles Studio",
+    "createStudio": "Weiteres Studio erstellen",
+    "switchStudioFailed": "Studio konnte nicht gewechselt werden. Bitte versuche es erneut.",
+    "studioListFailed": "Deine Studios konnten nicht geladen werden.",
+    "studioListRetry": "Erneut versuchen"
   },
   "BioLink": {
     "title": "Bio-Link",
@@ -3486,6 +3546,35 @@
           "desc": "Online-Kurse, Geschenkkarten, Verzichtserklärungen, Finanzen und mehr. Aktiviere nur, was du brauchst.",
           "ack": "Ich habe geschaut",
           "label": "Plugins entdecken"
+        },
+        "bioLink": {
+          "label": "Fülle deine Bio-Link-Seite aus",
+          "desc": "Deine Links, deine Social-Profile und dein Look. Die Seite ist bereits online."
+        },
+        "publicPages": {
+          "label": "Alle öffentlichen Seiten ansehen",
+          "desc": "Jede Seite, die Mitglieder und Besucher erreichen können, in einer Liste.",
+          "ack": "Ich habe geschaut"
+        },
+        "qrCodes": {
+          "label": "Deine QR-Codes holen",
+          "desc": "Ein Code pro öffentlicher Seite — zum Ausdrucken oder an die Wand.",
+          "ack": "Ich habe geschaut"
+        },
+        "automations": {
+          "label": "Eine Automatisierung einrichten",
+          "desc": "Willkommensnachrichten, Erinnerungen, Nachfassen — ganz ohne dich.",
+          "ack": "Ich habe geschaut"
+        },
+        "paymentsReview": {
+          "label": "Deine Zahlungsseite prüfen",
+          "desc": "Jede eingehende Zahlung und alles, was noch offen ist.",
+          "ack": "Ich habe geschaut"
+        },
+        "shortcuts": {
+          "label": "Eine Verknüpfung anheften",
+          "desc": "Halte die Seiten, die du täglich brauchst, oben in der Seitenleiste.",
+          "ack": "Ich habe geschaut"
         }
       },
       "ackUndo": "Rückgängig",
@@ -4938,7 +5027,7 @@
     "toggleShowActivityDescriptionLabel": "Aktivitätsbeschreibung anzeigen",
     "toggleShowActivityDescriptionDesc": "Den Beschreibungstext der Aktivität auf dem Auswahlbildschirm anzeigen.",
     "toggleShowFitnessAppLabel": "Fitness-App-Feld anzeigen",
-    "toggleShowFitnessAppDesc": "Neue Gäste fragen, über welche Fitness-App sie kommen (z. B. Fitpass, ClassPass).",
+    "toggleShowFitnessAppDesc": "Neue Gäste fragen, über welche Partner-App sie kommen. Zur Auswahl stehen Ihre eigenen Partner-Abotypen (Aggregator) — solange Sie keine haben, wird die Frage nicht gestellt.",
     "toggleAppointmentsEnabledLabel": "Terminbuchung anzeigen",
     "toggleAppointmentsEnabledDesc": "Terminbuchung im öffentlichen Buchungsablauf anzeigen.",
     "ctaTitle": "CTA-Button (optional)",
@@ -4960,7 +5049,9 @@
     "toggleWaitlistEnabledDesc": "Lass Kundinnen und Kunden sich für eine volle Klasse anstellen und einen Platz erhalten, sobald einer frei wird. Aktivieren, um die Wartelisten-Option bei jeder Aktivität zu zeigen.",
     "noShowPublicNote": "Diese Bedingungen werden Besuchern auf Ihren öffentlichen Buchungsseiten vor der Buchung angezeigt. Die Gebühr wird per E-Mail als Zahlungslink verschickt — sie wird nie von einer gespeicherten Karte abgebucht.",
     "moreOptionsLabel": "Weitere Optionen",
-    "moreOptionsHint": "Buchungszeitraum, Buchungsschluss, abgefragte Felder und ein eigener Button"
+    "moreOptionsHint": "Buchungszeitraum, Buchungsschluss, abgefragte Felder und ein eigener Button",
+    "betaBadge": "Beta",
+    "betaBadgeHint": "Einsatzbereit — diese Funktion kann sich noch ändern."
   },
   "SettingsPlaces": {
     "pageTitle": "Standorte",
@@ -5234,7 +5325,24 @@
     "restoredToast": "{name} wiederhergestellt",
     "restoreFailed": "Wiederherstellen fehlgeschlagen. Lade neu und prüfe die Teilnehmerliste.",
     "removeFailed": "Entfernen fehlgeschlagen. Es wurde nichts geändert.",
-    "undo": "Rückgängig"
+    "undo": "Rückgängig",
+    "seatPaidBadge": "Drop-in bezahlt",
+    "seatPaidBadgeTitle": "Dieser Platz wurde online bezahlt",
+    "seatGiftCardBadge": "Geschenkkarte",
+    "seatGiftCardBadgeTitle": "Dieser Platz wurde mit einer Geschenkkarte bezahlt",
+    "seatCreditBadge": "Guthaben eingelöst",
+    "seatCreditBadgeTitle": "Für diesen Platz wurde ein Guthaben aus einem Paket eingelöst",
+    "seatUsageBadge": "Im Abo enthalten",
+    "seatUsageBadgeTitle": "Dieser Platz nutzt eine der im Abo enthaltenen Lektionen",
+    "seatAwaitingPaymentBadge": "Zahlung ausstehend",
+    "seatAwaitingPaymentBadgeTitle": "Bezahlvorgang gestartet, aber nicht abgeschlossen — dieser Platz ist noch nicht bezahlt",
+    "confirmedSection": "Bestätigt, nicht eingecheckt",
+    "confirmedBadge": "Bestätigt",
+    "markNoShowFromCheckInTitle": "Als Nichterscheinen markieren und Check-in entfernen",
+    "noShowConfirmTitle": "Als Nichterscheinen markieren?",
+    "noShowConfirmBody": "{name} wird als Nichterscheinen markiert und der Check-in wird entfernt. Es zählt als Absenz und kann Automationen für Nichterscheinen auslösen.",
+    "noShowConfirmAction": "Als Nichterscheinen markieren",
+    "noShowFailed": "Nichterscheinen konnte nicht markiert werden"
   },
   "OrgEvents": {
     "title": "Organisationsveranstaltungen",
@@ -6890,7 +6998,12 @@
     "versusBookingQuestions": "Diese Angaben werden beim Kontakt gespeichert und lassen sich später filtern. Für Angaben, die nur für eine einzelne Buchung zählen, nutze stattdessen die Buchungsfragen der Aktivität.",
     "field_phone": "Telefonnummer",
     "field_birthdate": "Geburtsdatum",
-    "field_address": "Adresse"
+    "field_address": "Adresse",
+    "notAskedYet": "Verfügbar — einschalten, um es im Buchungsformular abzufragen.",
+    "addFieldsPrompt": "Brauchst du eine weitere Angabe? Lege ein eigenes Feld an, dann erscheint es hier.",
+    "addFieldsLink": "Eigenes Feld hinzufügen",
+    "addFieldsPluginPrompt": "Nur die Felder oben? Mit eigenen Feldern erfasst du alles Weitere.",
+    "addFieldsPluginLink": "Eigene Felder aktivieren"
   },
   "QuickActions": {
     "newSession": "Neue Session",
@@ -7012,7 +7125,9 @@
     "pendingBody": "Am {date} wird alles endgültig gelöscht. Bis dahin funktioniert das Studio normal und du kannst dies jederzeit stoppen.",
     "pendingBillingNote": "Die Abos deiner Mitglieder wurden bereits gekündigt und lassen sich nicht neu starten — sie müssten erneut eine Mitgliedschaft kaufen.",
     "cancelAction": "Löschung stoppen",
-    "errorGeneric": "Das hat nicht geklappt. Es wurde nichts gelöscht."
+    "errorGeneric": "Das hat nicht geklappt. Es wurde nichts gelöscht.",
+    "bannerTitle": "Dieses Studio wird am {date} endgültig gelöscht.",
+    "bannerBody": "Bis dahin funktioniert das Studio ganz normal."
   },
   "TeamInvitation": {
     "title": "Sie wurden eingeladen",

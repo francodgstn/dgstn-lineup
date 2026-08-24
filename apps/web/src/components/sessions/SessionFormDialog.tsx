@@ -19,6 +19,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useCoaches, coachLabel } from '@/hooks/useCoaches'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
+import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
+import { toDateInputValue } from '@/lib/format'
 import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { PastItemNotice } from '@/components/sessions/PastItemNotice'
 import { useQueryClient } from '@tanstack/react-query'
@@ -27,6 +30,7 @@ import {
   ACTIVITIES_COLLECTION,
   resolveAutoConfirm,
   isPastSession,
+  weekdayOrder,
 } from '@linyup/shared'
 import type { Session, Activity } from '@linyup/shared'
 import { Loader2, Repeat2, Plus, AlertTriangle, MapPin } from 'lucide-react'
@@ -246,12 +250,25 @@ type SessionFormValues = z.infer<typeof sessionSchema>
 
 // ─── recurrence panel ─────────────────────────────────────────────────────────
 
-const DAYS_OF_WEEK = [1, 2, 3, 4, 5, 6, 0] as const
 
 function RecurrencePanel({ value, onChange, startDate }: {
   value: RecurrencePattern; onChange: (p: RecurrencePattern) => void; startDate: Date | undefined
 }) {
   const t = useTranslations('Sessions')
+  // The studio's regional settings decide how the preview reads and where the
+  // day picker starts: a Sunday-first studio seeing a Monday-first row here is
+  // the version of the bug people notice first, and it is this dialog that a
+  // coach types a schedule into.
+  //
+  // The ZONE, though, is the DEVICE's, and deliberately: `getPreviewDates`
+  // picks its dates with device-local weekday arithmetic (`cursor.getDay()`,
+  // `cursor.setDate()`) from a start date the device-local picker produced.
+  // Labelling those instants in the studio's zone would name a weekday the
+  // coach never ticked and a clock time they never typed. Week start, date
+  // order and hour cycle still come from the team — the override moves the zone
+  // and nothing else (see the `zone` option in hooks/useTeamFormat.ts).
+  const fmt = useTeamFormat({ zone: 'device' })
+  const daysOfWeek = weekdayOrder(fmt.weekStartsOn)
 
   function set<K extends keyof RecurrencePattern>(key: K, val: RecurrencePattern[K]) {
     onChange({ ...value, [key]: val })
@@ -289,7 +306,7 @@ function RecurrencePanel({ value, onChange, startDate }: {
         <div className="space-y-1.5">
           <span className="text-sm text-muted-foreground">{t('repeatOnDays')}</span>
           <div className="flex gap-1 flex-wrap">
-            {DAYS_OF_WEEK.map(day => (
+            {daysOfWeek.map(day => (
               <button key={day} type="button" onClick={() => toggleDay(day)}
                 className={`h-8 w-10 rounded-md text-xs font-medium transition-colors border ${
                   value.daysOfWeek.includes(day)
@@ -314,10 +331,14 @@ function RecurrencePanel({ value, onChange, startDate }: {
                 {cond === 'date' && (
                   <span className="inline-flex items-center gap-2">
                     {t('endsOnDate')}
+                    {/* The date field round-trips through `toDateInputValue`, not
+                        `toISOString()` — see its docstring: converting to UTC
+                        first makes midnight in any zone ahead of UTC serialise
+                        as the PREVIOUS day. */}
                     {value.endCondition === 'date' && (
                       <input type="date"
-                        value={value.endDate ? value.endDate.toISOString().slice(0, 10) : ''}
-                        min={startDate ? startDate.toISOString().slice(0, 10) : ''}
+                        value={toDateInputValue(value.endDate)}
+                        min={toDateInputValue(startDate)}
                         onChange={e => set('endDate', e.target.value ? new Date(e.target.value) : null)}
                         className="rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         onClick={e => e.stopPropagation()} />
@@ -346,8 +367,7 @@ function RecurrencePanel({ value, onChange, startDate }: {
           <p className="text-xs font-medium text-muted-foreground mb-2">{t('repeatPreview')}</p>
           {previewDates.map((d, i) => (
             <p key={i} className="text-xs text-muted-foreground">
-              {d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-              {' '}{d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {fmt.dateMedium(d)}{' '}{fmt.time(d)}
             </p>
           ))}
         </div>
@@ -420,6 +440,14 @@ export function SessionFormDialog({
 }) {
   const t = useTranslations('Sessions')
   const tCommon = useTranslations('Common')
+  // The setup checklist's `sessions` step (a future session people can actually
+  // book) is one of its COUNTED ones, and this dialog is a write the browser
+  // makes itself — so the checklist is invalidated beside every `onSaved()`
+  // rather than left to notice on its own. A recurring save writes only the
+  // `session_series` doc here and the occurrences arrive afterwards from
+  // `generateRecurringSessions`, which no invalidation can see; that case is
+  // what the checklist's own bounded poll exists for (hooks/useSetupChecklist.ts).
+  const invalidateChecklist = useInvalidateSetupChecklist()
 
   const seed = editing ?? duplicating ?? null
   const isSeries = !!editing?.seriesId
@@ -470,7 +498,16 @@ export function SessionFormDialog({
         notes:           seed?.notes ?? '',
         headline:        seed?.headline ?? '',
         headlinePublic:  seed?.headlinePublic ?? false,
-        allowBooking:    seed?.allowBooking ?? false,
+        // A NEW session opts IN to online booking; an EDIT or a DUPLICATE keeps
+        // exactly what its source had. The asymmetry is the whole point: a
+        // studio scheduling a class means it to be bookable (with the old
+        // default the setup checklist went green with the door shut — see
+        // hooks/useSetupChecklist.ts), while a legacy doc carrying no
+        // `allowBooking` field must stay closed rather than be flipped open by
+        // somebody merely opening the dialog to fix a typo.
+        allowBooking:    seed ? (seed.allowBooking ?? false) : true,
+        // Deliberately NOT changed with it: mandatory booking is a refinement of
+        // the door, not the door.
         bookingMandatory: seed?.bookingMandatory ?? false,
       },
     })
@@ -674,6 +711,7 @@ export function SessionFormDialog({
         })
         setBusyMsg(null)
         toast.success(t('seriesCreatingToast'))
+        invalidateChecklist()
         onSaved()
         close()
       } catch (err) {
@@ -694,6 +732,7 @@ export function SessionFormDialog({
         participants_count: 0,
         created_at: serverTimestamp(),
       })
+      invalidateChecklist()
       onSaved()
       close()
     } catch (err) {
@@ -712,6 +751,7 @@ export function SessionFormDialog({
         end:   Timestamp.fromDate(endDate),
         updatedAt: serverTimestamp(),
       })
+      invalidateChecklist()
       onSaved()
       close()
     } catch (err) {
@@ -750,6 +790,7 @@ export function SessionFormDialog({
         },
       }))
       setBusyMsg(t('seriesUpdated', { count: res.data.updatedCount || 1 }))
+      invalidateChecklist()
       onSaved()
       setTimeout(close, 1000)
     } catch (err) {

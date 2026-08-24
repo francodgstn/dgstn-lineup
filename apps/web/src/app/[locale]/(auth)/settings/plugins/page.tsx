@@ -11,6 +11,7 @@ import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { usePluginDiscovery } from '@/hooks/usePluginDiscovery'
+import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import {
   TEAMS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
@@ -630,6 +631,9 @@ function PluginUnlockDialog({
   onClose: () => void
 }) {
   const t = useTranslations('Plugins')
+  // `useInstalledPlugins` is a live snapshot and needs nothing; the setup
+  // checklist's "explore the plugins" step is a cached `getDocs` and does.
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
   const [key, setKey] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -642,6 +646,7 @@ function PluginUnlockDialog({
     setError(null)
     try {
       await httpsCallable(functions, 'unlockPlugin')({ teamId, pluginId: manifest.id, key: key.trim() })
+      void invalidateSetupChecklist()
       toast.success(`${t(manifest.nameKey as Parameters<typeof t>[0])} · ${t('unlockSuccess')}`)
       reset()
       onClose()
@@ -735,6 +740,7 @@ export default function PluginsPage() {
   const { canDiscover } = usePluginDiscovery()
   const { plan, isTrialing } = usePlan()
   const { openUpgradeModal } = useUpgradeModal()
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
   const searchParams = useSearchParams()
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
@@ -771,6 +777,12 @@ export default function PluginsPage() {
     setDetailPlugin(manifest)
   }, [searchParams, canDiscover, isInstalled])
 
+  // WHY THESE MUTATIONS INVALIDATE ANYTHING AT ALL: the page's own list is a
+  // live `onSnapshot` (`useInstalledPlugins`) and refreshes itself, but the setup
+  // checklist counts `installed_plugins` through a cached `getDocs`, so its
+  // "explore the plugins" step would sit open until the poll came round. Every
+  // write below that adds or removes an install therefore says so.
+  //
   // ── Install mutation ──
   const installMutation = useMutation({
     mutationFn: async (manifest: PluginManifest) => {
@@ -789,7 +801,10 @@ export default function PluginsPage() {
     onMutate: (manifest) => setInstallingId(manifest.id),
     onSettled: () => setInstallingId(null),
     onError: () => toast.error(t('errorInstall')),
-    onSuccess: (_, manifest) => toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' installed'),
+    onSuccess: (_, manifest) => {
+      void invalidateSetupChecklist()
+      toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' installed')
+    },
   })
 
   // ── Remove mutation (Studio/Org included plugins — client-side) ──
@@ -799,6 +814,7 @@ export default function PluginsPage() {
       const docRef = doc(db, TEAMS_COLLECTION, currentTeamId, INSTALLED_PLUGINS_SUBCOLLECTION, pluginId)
       await deleteDoc(docRef)
     },
+    onSuccess: () => { void invalidateSetupChecklist() },
     onError: () => toast.error(t('errorRemove')),
   })
 
@@ -811,7 +827,10 @@ export default function PluginsPage() {
     onMutate: (manifest) => setInstallingId(manifest.id),
     onSettled: () => setInstallingId(null),
     onError: () => toast.error(t('errorInstall')),
-    onSuccess: (_, manifest) => toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' activated'),
+    onSuccess: (_, manifest) => {
+      void invalidateSetupChecklist()
+      toast.success(t(manifest.nameKey as Parameters<typeof t>[0]) + ' activated')
+    },
   })
 
   const deactivateAddonMutation = useMutation({
@@ -819,6 +838,7 @@ export default function PluginsPage() {
       if (!currentTeamId) throw new Error('Not authenticated')
       await httpsCallable(functions, 'deactivatePluginAddon')({ teamId: currentTeamId, pluginId })
     },
+    onSuccess: () => { void invalidateSetupChecklist() },
     onError: () => toast.error(t('errorRemove')),
   })
 

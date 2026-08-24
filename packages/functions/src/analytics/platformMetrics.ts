@@ -2,6 +2,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { to } from '../utils/async'
+import { capturePlatformMailMetrics } from '../mail/mailMetrics'
 import {
   computePlatformMetrics,
   platformMetricsToDoc,
@@ -114,11 +115,20 @@ export const capturePlatformMetrics = onSchedule(
     const metrics = computePlatformMetrics(inputs, nowMs)
     const docData = platformMetricsToDoc(date, metrics)
 
+    // Mail volume is aggregated over the `mail_sends` ledger rather than derived
+    // from the account inputs, so it is fetched separately and merged in. A null
+    // means the aggregation failed: the snapshot is still worth writing without
+    // it, and `mail` is optional precisely so a day can lack the block.
+    const mail = await capturePlatformMailMetrics(db, date)
+
     const [writeErr] = await to(
       db
         .collection(PLATFORM_METRICS_COLLECTION)
         .doc(date)
-        .set({ ...docData, captured_at: FieldValue.serverTimestamp() }, { merge: true }),
+        .set(
+          { ...docData, ...(mail ? { mail } : {}), captured_at: FieldValue.serverTimestamp() },
+          { merge: true },
+        ),
     )
     if (writeErr) {
       console.error('capturePlatformMetrics: write failed', writeErr)

@@ -120,8 +120,43 @@ export function computePlatformMetrics(
 // conventions elsewhere in the repo. `captured_at` (a server Timestamp) is
 // added by the writer and is not part of this serializable mapping.
 
+/**
+ * Outbound email volume for the snapshot day.
+ *
+ * NOT derived from `AccountMetricInput` — it is aggregated over the `mail_sends`
+ * ledger, so it is written onto the snapshot doc by the capture job rather than
+ * produced by `platformMetricsToDoc`, and it is OPTIONAL: every snapshot taken
+ * before the ledger became a complete send log has no mail block at all, and a
+ * reader that treated an absent block as zero would draw a flat line through
+ * the whole pre-change history.
+ *
+ * NOTHING WRITES IT YET. The producer exists and is tested
+ * (`capturePlatformMailMetrics`, packages/functions/src/mail/mailMetrics.ts) but
+ * is not yet called from `capturePlatformMetrics`; see that function's header
+ * for the exact wiring. Readers must keep tolerating an absent block regardless
+ * — the pre-change history needs that anyway.
+ *
+ * `*_yesterday` counts the calendar day BEFORE `date`, in Europe/Zurich — the
+ * capture runs shortly after midnight, so the day it can report in full is the
+ * one that just ended. Both studio mail and Linyup's own system mail count
+ * here; the per-studio figures in the operator console are `team_id`-scoped and
+ * so cover studio mail only.
+ */
+export interface PlatformMailMetrics {
+  /** ADDRESSES handed to the provider — a ledger row is one provider call and
+   *  may carry several, so this sums `recipient_count` rather than counting
+   *  rows. "Emails", as an operator reads the word. */
+  sent_yesterday: number
+  /** SENDS dropped before the provider. Not addresses: a suppressed row reached
+   *  nobody and carries `recipient_count: 0`. */
+  suppressed_yesterday: number
+  /** As `sent_yesterday`, over the whole ledger. */
+  sent_cumulative: number
+}
+
 export interface PlatformMetricsDoc {
   date: string
+  mail?: PlatformMailMetrics
   accounts: {
     total: number
     teams: number

@@ -2,6 +2,7 @@ import { collection, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'fir
 import type { User } from 'firebase/auth'
 import { TRIAL_DAYS, isReservedSlug } from '@linyup/shared'
 import { db } from './firebase'
+import { checkTeamSlug } from './teamSlug'
 
 /**
  * Account/team provisioning shared by the signup wizard and the social-auth
@@ -18,6 +19,33 @@ function slugify(name: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 50)
+}
+
+// ─── the slug is the tenant's ADDRESS, so it has to be unique ─────────────────
+//
+// Uniqueness is decided by `checkTeamSlug` (lib/teamSlug.ts), which is the one
+// place that can answer it — see that module for why a client-side query cannot.
+// What lives here is only the WALK: signup has to pick a slug unattended, so it
+// tries the obvious one, then two suffixed ones, then falls back to a candidate
+// carrying the team's own id, which cannot collide with anything.
+//
+// A failed check is not evidence of a collision, so it must not fail signup: the
+// walk gives up and returns the first candidate. The studio can rename the slug
+// from Settings afterwards either way.
+
+async function resolveTeamSlug(teamName: string, teamId: string): Promise<string> {
+  const base = slugify(teamName) || 'team'
+  const first = isReservedSlug(base) ? `${base}-team` : base
+  const candidates = [first, `${first}-2`, `${first}-3`]
+  try {
+    for (const candidate of candidates) {
+      const check = await checkTeamSlug(candidate, teamId)
+      if (check.available) return check.normalizedSlug ?? candidate
+    }
+    return `${first}-${teamId.slice(0, 6).toLowerCase()}`
+  } catch {
+    return first
+  }
 }
 
 /** Whether the user already has a team (i.e. has finished signup before). */
@@ -54,8 +82,7 @@ export async function provisionTeam(
 ): Promise<string> {
   const teamRef = doc(collection(db, 'teams'))
   const teamId = teamRef.id
-  const rawSlug = slugify(teamName)
-  const slug = isReservedSlug(rawSlug) ? `${rawSlug}-team` : rawSlug
+  const slug = await resolveTeamSlug(teamName, teamId)
   const now = serverTimestamp()
   const { uid } = user
 

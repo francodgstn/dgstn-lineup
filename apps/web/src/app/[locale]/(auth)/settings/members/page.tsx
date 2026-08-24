@@ -2,11 +2,14 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTranslations } from 'next-intl'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
+import type { RegionalFormatter } from '@linyup/shared'
 import {
   MoreHorizontal,
   UserPlus,
@@ -84,14 +87,14 @@ interface InvitationDoc extends TeamInvitation {
 
 // Accepts an ISO string (from listTeamMembers), a Firestore Timestamp-like
 // object (legacy direct Firestore reads), or a plain Date / null.
-function formatDate(ts: string | { seconds: number } | Date | null | undefined): string {
+function formatDate(
+  fmt: RegionalFormatter,
+  ts: string | { seconds: number } | Date | null | undefined
+): string {
   if (!ts) return ''
-  if (typeof ts === 'string') {
-    const d = new Date(ts)
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  }
+  if (typeof ts === 'string') return fmt.custom(new Date(ts), { year: 'numeric', month: 'short', day: 'numeric' })
   const d = ts instanceof Date ? ts : new Date((ts as { seconds: number }).seconds * 1000)
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  return fmt.custom(d, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function roleIcon(role: TeamRole) {
@@ -349,10 +352,12 @@ function MemberEmail({ email }: { email: string }) {
 
 export default function TeamMembersPage() {
   const t = useTranslations('TeamMembers')
+  const fmt = useTeamFormat()
   const { currentTeamId: teamId, user } = useAuth()
   const { can } = useCapabilities()
   const { hasFeature, minimumPlanFor, isLoading: planLoading } = usePlan()
   const qc = useQueryClient()
+  const invalidateSetupChecklist = useInvalidateSetupChecklist()
 
   // A SECOND USER IS A STUDIO FEATURE (UX-42, decided 2026-08-18).
   //
@@ -451,6 +456,10 @@ export default function TeamMembersPage() {
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['team-members', teamId] })
     qc.invalidateQueries({ queryKey: ['team-invitations', teamId] })
+    // Removing a member can take the team back to one person, which reopens the
+    // setup checklist's "invite your coaches" step. (Accepting an invitation is
+    // a write this browser does not make — that one is the poll's job.)
+    void invalidateSetupChecklist()
   }
 
   // remove member
@@ -597,7 +606,7 @@ export default function TeamMembersPage() {
                     </div>
                     {m.email && <MemberEmail email={m.email} />}
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {t('joinedOn', { date: formatDate(m.joined) })}
+                      {t('joinedOn', { date: formatDate(fmt, m.joined) })}
                     </div>
                   </div>
                   {/* Role badge */}
@@ -680,7 +689,7 @@ export default function TeamMembersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{inv.email}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {t('invitedOn', { date: formatDate(inv.created as Parameters<typeof formatDate>[0]) })}
+                      {t('invitedOn', { date: formatDate(fmt, inv.created as Parameters<typeof formatDate>[1]) })}
                     </div>
                   </div>
                   <Badge variant={roleBadgeVariant(inv.role)} className="flex items-center gap-1 shrink-0">

@@ -13,6 +13,7 @@ import { useTrackNavigationDepth } from '@/hooks/useBackNavigation'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
+import { TeamDeletionBanner } from '@/components/layout/TeamDeletionBanner'
 import { UserMenu } from '@/components/layout/UserMenu'
 import { TeamQrButton } from '@/components/layout/TeamQrButton'
 import {
@@ -2120,13 +2121,18 @@ function NavSearch({
             this), so it holds against both backgrounds. */}
         <Search className="h-4 w-4 shrink-0 text-primary" />
         {/* Placeholder only — still no ⌘K badge, but for a MEASURED reason now
-            that this is a real box: it does not fit. The expanded sidebar is
-            w-60; minus the row's mx-2 and the three 32px icon buttons beside it,
-            this field is ~116px, and minus px-2.5 + the 16px icon + its gap the
-            label gets ~74px. "Search…" clears that; "Rechercher…", "Suchen…" and
-            "Cerca…" do not once a badge takes ~17px more, so three locales out of
-            four would ship a truncated placeholder to buy a hint that is already
-            in the tooltip. Revisit if the sidebar ever widens. */}
+            that this is a real box: it does not fit. At the DEFAULT rail width
+            (240px, the old w-60) — minus the row's mx-2 and the three 32px icon
+            buttons beside it — this field is ~116px, and minus px-2.5 + the 16px
+            icon + its gap the label gets ~74px. "Search…" clears that;
+            "Rechercher…", "Suchen…" and "Cerca…" do not once a badge takes ~17px
+            more, so three locales out of four would ship a truncated placeholder
+            to buy a hint that is already in the tooltip.
+            The rail is drag-resizable as of 2026-08-24, so this is no longer a
+            fixed constraint — it is the worst case across the range, which is
+            the one that has to hold. A badge gated on the live width would show
+            and hide itself as the rail moves; the tooltip says it at every
+            width. */}
         {!collapsed && <span className="truncate text-xs">{t('navSearchPlaceholder')}</span>}
       </button>
 
@@ -2510,9 +2516,15 @@ function SidebarContent({
           place to navigate to. (It used to live beside the user avatar, inside
           the account cluster, which was the wrong grouping in a third way.)
 
-          Orientation, not a control: there is no team switcher — a user's
-          `currentTeam` is a single value on their profile. Hidden when collapsed,
-          like every other piece of text in the sidebar. */}
+          ORIENTATION, NOT A CONTROL — and that is now a placement decision
+          rather than a product one. This row used to say there was no team
+          switcher at all; there is one as of 2026-08-24, in the account
+          dropdown at the foot of the sidebar (components/layout/TeamSwitcher),
+          because people already reach a second studio through an ordinary team
+          invitation and had no way to open it. It lives beside the identity it
+          changes rather than here, where the name is what tells you where you
+          are. Hidden when collapsed, like every other piece of text in the
+          sidebar. */}
       {!collapsed && team?.name && (
         <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
           <Link
@@ -2835,6 +2847,35 @@ function SidebarContent({
 
 // ─── layout ───────────────────────────────────────────────────────────────────
 
+// ── THE DESKTOP RAIL'S WIDTH ─────────────────────────────────────────────────
+// The rail is drag-resizable between these bounds. `SIDEBAR_DEFAULT` is the 240px
+// the rail shipped as (`w-60`), so a sidebar nobody has dragged is pixel-identical
+// to what it was before it could be dragged.
+//
+// DRAGGING PAST THE MINIMUM COLLAPSES IT to the icon rail, and persists that —
+// the drag is the primary collapse gesture (Franco, 2026-08-24) and the chevron
+// in the header stays as the shortcut. `SIDEBAR_COLLAPSE_SLOP` is the dead zone
+// below the minimum that has to be crossed first, so pulling the rail down to
+// its narrowest does not collapse it by accident: inside the slop the width
+// simply holds at the minimum.
+//
+// THE KEYBOARD CROSSES THE SAME DEAD ZONE. Arrow keys are not a second rule with
+// a second feel: `handleResizeKey` keeps a virtual position that may sit below
+// SIDEBAR_MIN exactly as the pointer's clientX may, holds the applied width at
+// the minimum while it is in there, and collapses on the press that takes it
+// past the slop. Reaching the narrowest rail and pressing once more must not be
+// the same keystroke as hiding the labels.
+const SIDEBAR_MIN = 180
+const SIDEBAR_MAX = 400
+const SIDEBAR_DEFAULT = 240
+const SIDEBAR_COLLAPSE_SLOP = 40
+// Keyboard step on the handle, so the control is not mouse-only.
+const SIDEBAR_KEY_STEP = 16
+const SIDEBAR_WIDTH_KEY = 'linyup_sidebar_width'
+// UNPREFIXED, unlike every key added since — and it stays that way. Renaming it
+// would silently reset the collapse preference of everyone who has ever set one.
+const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -2845,6 +2886,18 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   // mounted exactly once, above every page that uses `useBack`.
   useTrackNavigationDepth()
   const [collapsed, setCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
+  // While true the width transition is OFF. With it on, the rail eases towards
+  // each new width over 200ms and visibly trails the cursor for the whole drag.
+  const [resizing, setResizing] = useState(false)
+  // Tears the drag down if the layout unmounts mid-gesture — otherwise the
+  // window listeners and the body's `user-select: none` outlive it.
+  const endResize = useRef<(() => void) | null>(null)
+  // The keyboard's virtual position, mirroring the pointer's clientX: it is the
+  // only place the arrow keys can accumulate an overshoot below SIDEBAR_MIN,
+  // since the applied width is clamped at the minimum while inside the collapse
+  // slop. `null` = no overshoot outstanding, start from the real width again.
+  const keyOvershoot = useRef<number | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Settings detail pages now live under the /settings/* shell, which owns its rail
@@ -2853,10 +2906,21 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   const onSettingsPage =
     !pathname.startsWith('/settings') && SETTINGS_ITEMS.some((i) => i.href === pathname)
 
+  // BOTH sidebar preferences are restored HERE, in an effect, and neither is
+  // ever read during render: localStorage does not exist on the server, so a
+  // render-time read is an SSR/hydration mismatch. That is why the collapse read
+  // has always lived in an effect, and the width read joins it rather than
+  // starting a second, wrong, convention.
   useEffect(() => {
-    const stored = localStorage.getItem('sidebar-collapsed')
+    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
     if (stored === 'true') setCollapsed(true)
+    const storedWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
+    if (Number.isFinite(storedWidth) && storedWidth >= SIDEBAR_MIN && storedWidth <= SIDEBAR_MAX) {
+      setSidebarWidth(storedWidth)
+    }
   }, [])
+
+  useEffect(() => () => endResize.current?.(), [])
 
   useEffect(() => {
     setMobileOpen(false)
@@ -2878,11 +2942,136 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   if (!user) return null
 
+  const persistWidth = (w: number) => {
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w))
+    } catch {
+      /* ignore unavailable storage */
+    }
+  }
+  const persistCollapsed = (c: boolean) => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(c))
+    } catch {
+      /* ignore unavailable storage */
+    }
+  }
+
   const handleToggleCollapse = () => {
     setCollapsed((v) => {
-      localStorage.setItem('sidebar-collapsed', String(!v))
+      persistCollapsed(!v)
       return !v
     })
+  }
+
+  // The rail's left edge is the viewport's left edge — the aside is the first
+  // in-flow child of the shell — so the pointer's clientX IS the width it is
+  // asking for, with no offset to carry.
+  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setResizing(true)
+    // A pointer gesture sets the width outright; any overshoot the arrow keys
+    // had banked belongs to a gesture that is over.
+    keyOvershoot.current = null
+
+    // Without this the drag selects nav labels the length of the sidebar, and
+    // the cursor flickers back to the default over every element it crosses.
+    const prevUserSelect = document.body.style.userSelect
+    const prevCursor = document.body.style.cursor
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+
+    // Mirrored in plain locals so the pointerup handler persists what was last
+    // applied rather than the values captured when the drag began.
+    let width = sidebarWidth
+    let isCollapsed = collapsed
+
+    // On the window, not the 8px strip: the pointer leaves the handle on the
+    // first frame of any real drag, and pointerup routinely lands elsewhere.
+    const move = (ev: PointerEvent) => {
+      const x = ev.clientX
+      if (x < SIDEBAR_MIN - SIDEBAR_COLLAPSE_SLOP) {
+        isCollapsed = true
+        setCollapsed(true)
+        return
+      }
+      isCollapsed = false
+      width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, x))
+      setCollapsed(false)
+      setSidebarWidth(width)
+    }
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      document.body.style.userSelect = prevUserSelect
+      document.body.style.cursor = prevCursor
+      endResize.current = null
+      setResizing(false)
+      // Both preferences, always: a drag that ends in the icon rail has changed
+      // the collapse state as well as the width, and storing one without the
+      // other is how the two come back disagreeing on the next load.
+      persistWidth(width)
+      persistCollapsed(isCollapsed)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+    endResize.current = end
+  }
+
+  const handleResizeReset = () => {
+    keyOvershoot.current = null
+    setCollapsed(false)
+    persistCollapsed(false)
+    setSidebarWidth(SIDEBAR_DEFAULT)
+    persistWidth(SIDEBAR_DEFAULT)
+  }
+
+  const handleResizeKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Home') {
+      e.preventDefault()
+      handleResizeReset()
+      return
+    }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    if (collapsed) {
+      // Out of the icon rail in one press, back to the stored width. Stepping
+      // 16px at a time out of a 56px stub would take nine presses to reach a
+      // rail that can show a label.
+      if (e.key === 'ArrowRight') {
+        keyOvershoot.current = null
+        setCollapsed(false)
+        persistCollapsed(false)
+      }
+      return
+    }
+    // The virtual position, not the applied width — inside the slop those two
+    // differ, and stepping from the applied width would make every further
+    // ArrowLeft re-run the same 180 → 164 step and never cross anything.
+    const from = keyOvershoot.current ?? sidebarWidth
+    const next = from + (e.key === 'ArrowLeft' ? -SIDEBAR_KEY_STEP : SIDEBAR_KEY_STEP)
+    if (next < SIDEBAR_MIN - SIDEBAR_COLLAPSE_SLOP) {
+      // Same rule as the drag: past the minimum AND past the slop is the icon rail.
+      keyOvershoot.current = null
+      setCollapsed(true)
+      persistCollapsed(true)
+      return
+    }
+    if (next < SIDEBAR_MIN) {
+      // In the dead zone: bank the overshoot, hold the rail at its narrowest.
+      keyOvershoot.current = next
+      if (sidebarWidth !== SIDEBAR_MIN) {
+        setSidebarWidth(SIDEBAR_MIN)
+        persistWidth(SIDEBAR_MIN)
+      }
+      return
+    }
+    keyOvershoot.current = null
+    const clamped = Math.min(SIDEBAR_MAX, next)
+    setSidebarWidth(clamped)
+    persistWidth(clamped)
   }
 
   return (
@@ -2894,13 +3083,40 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             declare a lane instead of hardcoding a corner (see FloatingDock). */}
         <FloatingDock>
         <div className="flex bg-background">
-          {/* Desktop sidebar — fixed to viewport height, nav scrolls internally */}
+          {/* Desktop sidebar — fixed to viewport height, nav scrolls internally.
+              Expanded, the width is an inline style so it can be dragged; the
+              collapsed rail keeps the `w-14` class it has always had, so the
+              icon mode is byte-identical to before. No `relative` class here on
+              purpose: `sticky` already makes this the containing block for the
+              handle below, and both are position utilities — adding one would
+              be a coin toss over which wins. */}
           <aside
-            className={`hidden md:flex flex-col border-r bg-sidebar shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${
-              collapsed ? 'w-14' : 'w-60'
-            }`}
+            style={{ width: collapsed ? undefined : sidebarWidth }}
+            className={`hidden md:flex flex-col border-r bg-sidebar shrink-0 sticky top-0 h-screen ${
+              resizing ? '' : 'transition-[width] duration-200'
+            } ${collapsed ? 'w-14' : ''}`}
           >
             <SidebarContent collapsed={collapsed} onToggleCollapse={handleToggleCollapse} />
+            {/* THE RESIZE HANDLE — an 8px strip straddling the right border.
+                Focusable and keyboard-driven (←/→ to resize, Home to reset)
+                because a rail that can only be adjusted by dragging can only be
+                adjusted with a mouse. Double-click also resets. */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t('sidebarResizeLabel')}
+              aria-valuemin={SIDEBAR_MIN}
+              aria-valuemax={SIDEBAR_MAX}
+              aria-valuenow={collapsed ? undefined : sidebarWidth}
+              tabIndex={0}
+              title={t('sidebarResizeHint')}
+              onPointerDown={handleResizeStart}
+              onKeyDown={handleResizeKey}
+              onDoubleClick={handleResizeReset}
+              className={`absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize transition-colors hover:bg-primary/20 focus-visible:bg-primary/40 focus-visible:outline-none ${
+                resizing ? 'bg-primary/30' : ''
+              }`}
+            />
           </aside>
 
           {/* Mobile sheet drawer */}
@@ -2913,6 +3129,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* Main column: mobile header + scrollable content (no top bar on desktop) */}
           <div className="flex flex-col flex-1 min-w-0 min-h-screen">
             <AnnouncementBar />
+            {/* ABOVE the verify-email strip: a studio that is about to be erased
+                outranks an address that has not been confirmed. Self-gating on
+                `team.deletion_scheduled_for`, and shown to every role — the
+                owner-only card in Settings → Team is where this used to be
+                said, which left a coach with no way to learn it at all. */}
+            <TeamDeletionBanner />
             {/* ABOVE the content, full width, not inside the page container:
                 it is not about the page being looked at, and what it announces
                 — outbound email is switched off — is worth more than the strip

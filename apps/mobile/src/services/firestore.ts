@@ -165,9 +165,28 @@ export const FirestoreService = {
         socialLinks: profileData.socialLinks || [],
         profileImage: profileData.profileImage,
         referralEnabled: profileData.referralEnabled ?? false,
-        // The appointments toggle lives in bookingSettings (written by the admin
-        // Settings → Booking page) — there is no top-level flag on this doc.
-        appointmentsEnabled: profileData.bookingSettings?.appointmentsEnabled ?? false,
+        // BOTH HALVES, composed here once — this flag says the appointments UI
+        // is worth PROMOTING, not that a toggle is on. It gates invitations to
+        // book (the dashboard card, the "book new" entry point); a member's own
+        // booked appointments are a record and are never hidden behind it.
+        //
+        // The studio's toggle lives in bookingSettings (written by the admin
+        // Settings → Booking page; there is no top-level flag on this doc) and
+        // ABSENT MEANS ON, so on its own it is true for every studio that never
+        // opened that page. The content half is `active_public_surfaces
+        // .appointments`, computed server-side from the same inputs
+        // listAvailability reads, and it fails closed. Without it the dashboard
+        // promo card — which does not fetch availability itself — would invite
+        // every member of every studio to book a coach who has published none.
+        //
+        // This is the composition `appointmentPickerLive` performs on the web.
+        // It is inlined because the mobile app does not depend on @linyup/shared;
+        // the readers of this default are listed on `BookingSettings
+        // .appointmentsEnabled` in packages/shared/src/types/team.ts — add there,
+        // never copy the list.
+        appointmentsEnabled:
+          profileData.bookingSettings?.appointmentsEnabled !== false &&
+          profileData.active_public_surfaces?.appointments === true,
       } as TeamPublicProfile;
     } catch (error) {
       console.error('Error fetching team public profile:', error);

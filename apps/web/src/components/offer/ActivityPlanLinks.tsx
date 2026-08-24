@@ -26,7 +26,7 @@
 // per-pair slot to fall back on and no undo afterwards. Never make it
 // dismissible, never move it after the write.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
 import { doc, runTransaction } from 'firebase/firestore'
@@ -131,6 +131,8 @@ export function ActivityPlanLinks({
   plans,
   currency,
   canEdit,
+  hostedInForm,
+  onDirtyChange,
 }: {
   direction: EdgeDirection
   /** The fixed side when direction is 'from-offering'. */
@@ -141,6 +143,18 @@ export function ActivityPlanLinks({
   plans: SubscriptionType[]
   currency: string
   canEdit: boolean
+  /**
+   * Mounted INSIDE a form that already holds unsaved input — today the activity
+   * dialog. Two things change: the empty state names its destination without
+   * LINKING it (a client-side push out of a half-filled dialog discards every
+   * field the studio typed, which is the defect the in-place editor exists to
+   * remove), and the host is told when this editor holds ticks of its own.
+   */
+  hostedInForm?: boolean
+  /** Called whenever this editor gains or loses unsaved ticks, so a host with
+   *  its own Save can say that pressing it will not write them. Pass a STABLE
+   *  function (a setState updater) — it is an effect dependency. */
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const t = useTranslations('OfferCatalogue')
   const tb = useTranslations('Benefit')
@@ -168,6 +182,13 @@ export function ActivityPlanLinks({
   const setDraft = (key: string, next: RowDraft) => setDrafts((d) => ({ ...d, [key]: next }))
 
   const dirty = Object.keys(drafts).length > 0
+  // Reported upward rather than merely shown here: the host's Save writes the
+  // SAME document this editor writes, and it writes the STORED plan list — so a
+  // tick that has not been saved here is discarded by that Save.
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+    return () => onDirtyChange?.(false)
+  }, [dirty, onDirtyChange])
   const errors = rows
     .map((r) => {
       const d = draftFor(r.key, r.off, r.plan.id)
@@ -219,12 +240,16 @@ export function ActivityPlanLinks({
   // Both name a destination AND link it (UX-99): the mirror-image empty states
   // these replace each named one and went nowhere.
   if (direction === 'from-offering' && plans.length === 0) {
-    return (
+    return hostedInForm ? (
+      <p className="text-xs text-muted-foreground">{t('noPlans')}</p>
+    ) : (
       <EmptyLink text={t('noPlans')} action={t('noPlansAction')} href={'/offer/plans' as Route} />
     )
   }
   if (direction === 'from-plan' && offerings.length === 0) {
-    return (
+    return hostedInForm ? (
+      <p className="text-xs text-muted-foreground">{t('noActivities')}</p>
+    ) : (
       <EmptyLink
         text={t('noActivities')}
         action={t('noActivitiesAction')}

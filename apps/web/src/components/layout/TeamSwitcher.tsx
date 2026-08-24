@@ -1,0 +1,232 @@
+'use client'
+
+/**
+ * WHICH STUDIO AM I IN, AND HOW DO I GET TO THE OTHER ONE.
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ * Every layer below the UI has always supported a person belonging to more than
+ * one studio: membership is a document per team (`teams/{id}/team_members/{uid}`
+ * with `userId` denormalised on it), the collection-group index on that field
+ * already ships, the rules already let a caller read exactly their own
+ * memberships, and the server already reasons about the multi-team person —
+ * `purgeScheduledTeams` keeps an owner's login when they run a second studio.
+ * Only the UI was missing, and people reach two studios today through ordinary
+ * team invitations with no way to open the second one. The sidebar used to say
+ * so in a comment ("there is no team switcher"); that decision was reversed on
+ * 2026-08-24.
+ *
+ * ── IT HIDES ITSELF, BUT ONLY WHEN IT KNOWS ────────────────────────────────
+ * The studio LIST renders only for someone who is in more than one, so the
+ * account menu is unchanged for the overwhelming majority. "Create another
+ * studio" is always there, because it is the only way anyone gets to two.
+ *
+ * A FAILED READ IS NOT THAT SILENCE. An empty list and an errored query both
+ * leave nothing to render, and they mean opposite things: the first is "you are
+ * in one studio", the second is "your second studio is one network hiccup away
+ * and you cannot see it". So `isError` gets its own row — the failure said out
+ * loud, with a retry — and the block is blank only when the read succeeded and
+ * genuinely returned one studio.
+ *
+ * ── THE SWITCH IS A HARD NAVIGATION, ON PURPOSE ─────────────────────────────
+ * `AuthContext` re-subscribes when `currentTeam` changes, but dozens of pages
+ * hold TanStack caches and module state keyed to the old team. Reloading the
+ * document is one line that drops all of it; a soft navigation would leave the
+ * previous studio's contacts, sessions and counts on screen under the new
+ * studio's name. It lands on the dashboard rather than reloading in place,
+ * because a team-scoped detail URL (`/contacts/{id}`) does not exist in the
+ * studio being switched to.
+ *
+ * ── THIS IS NOT AN ORG HIERARCHY ────────────────────────────────────────────
+ * A flat list of the studios this login is a member of. Organizations are a
+ * separate concept with their own sidebar section (`OrgLinks`); nothing here
+ * nests, groups or rolls up.
+ */
+
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { collectionGroup, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore'
+import { useLocale, useTranslations } from 'next-intl'
+import { toast } from 'sonner'
+import { AlertTriangle, Building2, Check, Loader2, Plus } from 'lucide-react'
+import type { Route } from 'next'
+import { TEAMS_COLLECTION, USERS_COLLECTION } from '@linyup/shared'
+import { db } from '@/lib/firebase'
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from '@/i18n/navigation'
+import { routing } from '@/i18n/routing'
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+
+export type MyTeam = { id: string; name: string }
+
+/**
+ * The studios this login is a member of.
+ *
+ * One collection-group read of the caller's own membership documents (the rule
+ * on `{path=**}/team_members/{id}` returns exactly those), then one document
+ * read per studio for its name. Cached for five minutes: membership changes
+ * when somebody accepts an invitation, which is not something to re-ask on
+ * every menu open.
+ *
+ * IT COSTS NOTHING UNTIL THE MENU IS OPENED. The account dropdown's content
+ * lives behind base-ui's `Menu.Portal`, which does not render its children
+ * while the menu is closed — so this component, and this query, mount on the
+ * first open rather than on every page load.
+ *
+ * The rules spend one document access per returned membership
+ * (`isTeamMember`), against a budget of 20 for a multi-document read, so this
+ * shape holds for any realistic number of studios and would need to move
+ * server-side long before anyone reached twenty.
+ */
+export function useMyTeams() {
+  const { user } = useAuth()
+  const uid = user?.uid ?? null
+
+  return useQuery<MyTeam[]>({
+    queryKey: ['my-teams', uid],
+    enabled: !!uid,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      if (!uid) return []
+      const snap = await getDocs(
+        query(collectionGroup(db, 'team_members'), where('userId', '==', uid))
+      )
+      const ids = Array.from(
+        new Set(
+          snap.docs
+            // The denormalised stamp is READ, not reconstructed from the parent
+            // path: the collection-group rule on `{path=**}/team_members/{id}`
+            // gates on `resource.data.teamId != null && isTeamMember(...)`, so a
+            // membership document lacking the stamp is DENIED rather than
+            // returned — a `?? d.ref.parent.parent?.id` fallback here would be a
+            // branch nothing can enter, telling the next reader that unstamped
+            // legacy documents still arrive when the rules already refuse them.
+            .map((d) => d.get('teamId') as string | undefined)
+            .filter((id): id is string => !!id)
+        )
+      )
+      const teams = await Promise.all(
+        ids.map(async (id) => {
+          const snapshot = await getDoc(doc(db, TEAMS_COLLECTION, id))
+          if (!snapshot.exists()) return null
+          return { id, name: (snapshot.data().name as string | undefined) || id }
+        })
+      )
+      return (teams.filter(Boolean) as MyTeam[]).sort((a, b) => a.name.localeCompare(b.name))
+    },
+  })
+}
+
+/**
+ * Renders inside the account dropdown. Emits its own trailing separator so the
+ * caller only has to decide where the block goes.
+ */
+export function TeamSwitcher() {
+  const t = useTranslations('TopBar')
+  const locale = useLocale()
+  const router = useRouter()
+  const { user, currentTeamId } = useAuth()
+  const { data: teams = [], isError, isFetching, refetch } = useMyTeams()
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null)
+
+  async function switchTo(teamId: string) {
+    if (!user || teamId === currentTeamId || switchingTo) return
+    setSwitchingTo(teamId)
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, user.uid), { currentTeam: teamId })
+      // `useRouter` from @/i18n/navigation cannot be used here: this has to be a
+      // document load, not a client navigation. The prefix is added by hand for
+      // the same reason — `localePrefix: 'as-needed'` leaves the default locale
+      // unprefixed.
+      const prefix = locale === routing.defaultLocale ? '' : `/${locale}`
+      window.location.assign(`${prefix}/dashboard`)
+    } catch {
+      setSwitchingTo(null)
+      toast.error(t('switchStudioFailed'))
+    }
+  }
+
+  return (
+    <>
+      {isError && (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {t('switchStudio')}
+          </DropdownMenuLabel>
+          {/* The read failed, so how many studios this login has is UNKNOWN.
+              Saying so — and offering the retry — is the only thing that keeps
+              the empty block below meaning "one studio" and nothing else. */}
+          <DropdownMenuItem
+            closeOnClick={false}
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
+            )}
+            <span className="truncate">{t('studioListFailed')}</span>
+            <span className="ml-2 shrink-0 text-xs font-medium text-primary">
+              {t('studioListRetry')}
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      )}
+      {!isError && teams.length > 1 && (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {t('switchStudio')}
+          </DropdownMenuLabel>
+          {teams.map((team) => {
+            const isCurrent = team.id === currentTeamId
+            return (
+              <DropdownMenuItem
+                key={team.id}
+                disabled={!!switchingTo}
+                // The menu stays open while the switch is in flight, so the row
+                // can show it working and a failure lands on a menu that still
+                // shows which studio you are actually in. Picking the studio you
+                // are already in does nothing, so that one just closes.
+                closeOnClick={isCurrent}
+                onClick={() => void switchTo(team.id)}
+              >
+                {switchingTo === team.id ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : isCurrent ? (
+                  <Check className="mr-2 h-4 w-4 text-primary" />
+                ) : (
+                  <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="truncate">{team.name}</span>
+                {/* The tick carries the state visually; this is the same fact
+                    for a screen reader, which cannot see which row is ticked. */}
+                {isCurrent && <span className="sr-only">{t('currentStudio')}</span>}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+      )}
+      {/* Always shown, including to someone with a single studio — it is the
+          only route to a second one, so gating it on already having two would
+          make it unreachable.
+
+          IT REACHES THE EXISTING TEAM-CREATION FLOW rather than a second copy
+          of it: `provisionTeam` is generic and nothing in it assumes it is the
+          caller's first team. The wizard otherwise redirects anyone who already
+          has a `currentTeam` straight to the dashboard; `?new=1` is what skips
+          that bounce and opens it at its team step. THAT BRANCH LIVES IN
+          `app/[locale]/signup/page.tsx` — this entry is the only thing that
+          sets the flag, so the two move together or the item goes nowhere. */}
+      <DropdownMenuItem onClick={() => router.push('/signup?new=1' as Route)}>
+        <Plus className="mr-2 h-4 w-4" />
+        {t('createStudio')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+    </>
+  )
+}

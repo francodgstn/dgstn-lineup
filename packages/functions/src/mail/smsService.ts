@@ -21,6 +21,7 @@ import {
 } from '@linyup/shared'
 import { brevoSmsProvider } from './brevoSmsProvider'
 import { applySmsPolicy, envDefaultMode, resolveMessagingPolicy } from './messagingPolicy'
+import { ledgerRowSpendsKey } from './mailService'
 import type { OutboundSms, SmsProvider } from './smsTypes'
 
 // Master kill switch. Unlike mail this DEFAULTS OFF: SMS sends spend prepaid
@@ -136,15 +137,24 @@ export async function sendStudioSms(teamId: string, msg: OutboundSms): Promise<S
   const db = admin.firestore()
   const testMode = testModeEnabled.value() === 'true'
 
-  // Idempotency (shared mail_sends ledger, channel-tagged).
+  // Ledger slot (shared mail_sends send log, channel-tagged) + idempotency. Same
+  // shape as mailService: a keyed send is deduped on its key as the doc id, a
+  // keyless one gets an auto id — every send is recorded either way, so the SMS
+  // figure beside the email one counts sends rather than keyed sends.
   const ledgerRef = msg.idempotencyKey
     ? db.collection(MAIL_SENDS_COLLECTION).doc(msg.idempotencyKey)
-    : null
-  if (ledgerRef) {
+    : db.collection(MAIL_SENDS_COLLECTION).doc()
+  let ledgerIsNew = true
+  if (msg.idempotencyKey) {
     const existing = await ledgerRef.get()
-    if (existing.exists && existing.data()?.status !== 'failed') {
-      console.log(`[sms] idempotent skip for key ${msg.idempotencyKey}`)
-      return { providerMessageId: existing.data()?.provider_message_id, skipped: true }
+    if (existing.exists) {
+      // Same predicate as mail — it owns "did this reach the provider?" for
+      // both channels, so an SMS cannot answer it differently.
+      if (ledgerRowSpendsKey(existing.data()?.status)) {
+        console.log(`[sms] idempotent skip for key ${msg.idempotencyKey}`)
+        return { providerMessageId: existing.data()?.provider_message_id, skipped: true }
+      }
+      ledgerIsNew = false
     }
   }
 
@@ -184,23 +194,24 @@ export async function sendStudioSms(teamId: string, msg: OutboundSms): Promise<S
     tag: msg.tag,
   })
 
-  if (ledgerRef) {
-    const now = FieldValue.serverTimestamp()
-    await ledgerRef.set(
-      {
-        idempotency_key: msg.idempotencyKey,
-        provider: 'brevo',
-        provider_message_id: result.providerMessageId,
-        channel: 'sms',
-        stream: 'studio',
-        team_id: teamId,
-        status: 'sent',
-        updated_at: now,
-        created_at: now,
-      },
-      { merge: true },
-    )
-  }
+  const now = FieldValue.serverTimestamp()
+  await ledgerRef.set(
+    {
+      ...(msg.idempotencyKey ? { idempotency_key: msg.idempotencyKey } : {}),
+      provider: 'brevo',
+      provider_message_id: result.providerMessageId,
+      channel: 'sms',
+      stream: 'studio',
+      team_id: teamId,
+      status: 'sent',
+      recipient_count: 1,
+      updated_at: now,
+      // Stamped once, at creation — a resend after a 'failed' row must not move
+      // the send date onto the retry. Same rule as mailService.
+      ...(ledgerIsNew ? { created_at: now } : {}),
+    },
+    { merge: true },
+  )
 
   return { providerMessageId: result.providerMessageId, testMode }
 }

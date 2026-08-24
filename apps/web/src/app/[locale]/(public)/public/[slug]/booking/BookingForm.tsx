@@ -87,7 +87,9 @@ interface ActivityProfile {
   description?: string
   image?: string | null
   color?: string
-  level?: string
+  /** Free-text display labels the studio put on the activity — shown as chips
+   *  beside the type chip. Display-only; nothing here is a filter or a gate. */
+  tags?: string[]
   isFreeTrial?: boolean
   order?: number
   accessRule?: ActivityAccessRule
@@ -129,7 +131,6 @@ interface SessionProfile {
   activitySlug?: string
   activityColor?: string
   activityImage?: string | null
-  activityLevel?: string
   activityIsFreeTrial?: boolean
   start: Timestamp
   end: Timestamp
@@ -439,6 +440,19 @@ export default function BookingForm({
   // two must agree — the admin toggle reading one way and the public form the
   // other is a field a studio believes is on and visitors never see.
   const showFitnessApp = bookingSettings?.showFitnessAppField !== false
+  // The partner apps this studio actually accepts — its own active
+  // `source: 'aggregator'` subscription types, mirrored onto the public profile
+  // by `resolveTeamPartnerApps` (see its header for every sync that writes the
+  // field). The question is asked with the studio's own vocabulary and is not
+  // asked at all when the studio has named none.
+  //
+  // THIS MIRROR IS ALSO WHAT THE SERVER VALIDATES AGAINST — `bookSession` reads
+  // the same document (booking/contactFields.ts `loadTeamPartnerAppNames`)
+  // rather than re-querying the live collection, precisely so that what is
+  // offered here and what is accepted there cannot drift apart and drop a
+  // visitor's answer with no error.
+  const partnerApps = useMemo(() => team.partner_apps ?? [], [team.partner_apps])
+  const askFitnessApp = showFitnessApp && partnerApps.length > 0
 
   // Data loading
   const [activities, setActivities] = useState<ActivityProfile[]>([])
@@ -596,7 +610,7 @@ export default function BookingForm({
               description: data.description ?? undefined,
               image: data.image_url ?? null,
               color: data.color ?? undefined,
-              level: data.level ?? undefined,
+              tags: Array.isArray(data.tags) ? (data.tags as string[]) : undefined,
               isFreeTrial: data.isFreeTrial ?? false,
               order: typeof data.order === 'number' ? data.order : undefined,
               accessRule: data.accessRule ?? undefined,
@@ -1078,7 +1092,11 @@ export default function BookingForm({
           lastname: values.lastname,
           email: values.email,
           phone: showPhone ? values.phone || null : null,
-          aggregatorApp: showFitnessApp ? values.aggregatorApp || null : null,
+          // Only when the question was actually asked. The server narrows it
+          // again against the team's own partner-app names before it reaches
+          // the contact (booking/contactFields.ts), so this is a courtesy,
+          // never the check.
+          aggregatorApp: askFitnessApp ? values.aggregatorApp || null : null,
         },
         ...(values.contactFieldAnswers
           ? { contactFieldAnswers: values.contactFieldAnswers }
@@ -2004,6 +2022,17 @@ export default function BookingForm({
                               {t('badgeNoOpenSessions')}
                             </span>
                           )}
+                          {/* The studio's own words about the class ("Beginner
+                              friendly", "Gi") — LAST in the row, after every
+                              chip that says something about booking it. */}
+                          {a.tags?.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-muted text-muted-foreground text-xs px-2 py-0.5"
+                            >
+                              {tag}
+                            </span>
+                          ))}
                         </div>
                         {showDesc && a.description && (
                           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
@@ -2756,6 +2785,7 @@ export default function BookingForm({
           contactFields={contactFields}
           customFieldDefinitions={team.publicCustomFields}
           showAggregatorField={showFitnessApp}
+          aggregatorApps={partnerApps}
           submitting={isSubmitting}
           error={bookingError}
           onSubmit={onSubmitGuest}

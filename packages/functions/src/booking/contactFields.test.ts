@@ -157,3 +157,65 @@ describe('buildContactFieldPatch — the two base fields that are not strings', 
     )
   })
 })
+
+describe('buildContactFieldPatch — the partner-app answer', () => {
+  const allowed = ['FitPass Partner', 'SportPass']
+
+  it('stores the STUDIO’s spelling, whatever case was posted', () => {
+    assert.deepEqual(
+      buildContactFieldPatch({
+        fields: [],
+        answers: null,
+        definitions: DEFS,
+        partnerApp: { value: '  fitpass partner ', allowed },
+      }),
+      { acquisition_partner_app: 'FitPass Partner' }
+    )
+  })
+
+  it('drops a name this studio does not accept', () => {
+    // The public form is anonymous; the posted string is a claim, not a fact.
+    assert.deepEqual(
+      buildContactFieldPatch({
+        fields: [],
+        answers: null,
+        definitions: DEFS,
+        partnerApp: { value: 'ClassPass', allowed },
+      }),
+      {}
+    )
+    // …and a studio with no partner types accepts nothing at all.
+    assert.deepEqual(
+      buildContactFieldPatch({
+        fields: [],
+        answers: null,
+        definitions: DEFS,
+        partnerApp: { value: 'FitPass Partner', allowed: [] },
+      }),
+      {}
+    )
+  })
+
+  it('treats the "not using one" sentinel as no answer, leaving a stored value alone', () => {
+    // The form posts '' for "I don't use one" — which must not erase what a
+    // previous booking recorded, the same rule an untouched phone box gets.
+    for (const value of ['', '   ', null, undefined, 42]) {
+      assert.deepEqual(
+        buildContactFieldPatch({
+          fields: [],
+          answers: null,
+          definitions: DEFS,
+          partnerApp: { value, allowed },
+        }),
+        {}
+      )
+    }
+  })
+
+  it('writes nothing when the caller never asked', () => {
+    assert.deepEqual(
+      buildContactFieldPatch({ fields: [{ key: 'phone' }], answers: { phone: '079' }, definitions: DEFS }),
+      { phone: '079' }
+    )
+  })
+})

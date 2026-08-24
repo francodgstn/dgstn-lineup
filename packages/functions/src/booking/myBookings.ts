@@ -35,7 +35,11 @@
 // written without `joinedAt` is not in the index and would never appear in her
 // list — the same silent omission as the `type` filter above, one layer down.
 // Every rail that writes a booking stamps it; `myBookings.test.ts` re-derives
-// that set from the source rather than leaving it to this sentence.
+// that set from the source rather than leaving it to this sentence, and it
+// walks `apps/web/src` as well as this package: the staff "Add contact" dialog
+// on the session detail page writes a booking straight from the browser, with
+// no server seam to put a guard on, and a derivation that stopped at the
+// package boundary called this closed while that door was open.
 //
 // A booking document carries no session start (denormalising one would put the
 // session's clock in the hands of half a dozen writers plus every reschedule),

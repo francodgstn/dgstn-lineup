@@ -30,13 +30,31 @@
  * the flag that already existed) because it IS a decision about the studio — and
  * it stays undoable from How-to, which is where the restore control lives.
  *
+ * ── THE FIRST TIME, IT IS OPEN. AFTER THAT, WHATEVER THEY LEFT IT ──────────
+ * Three facts, three homes, and the bug was reading one off another:
+ *
+ *   never met this panel   per USER  (`users/{uid}.onboarding.seenIntros`)
+ *   not right now          per BROWSER (localStorage)
+ *   we are done with this  per TEAM  (`teams/{id}.setup_dismissed`)
+ *
+ * A missing localStorage key used to mean "minimized", so the ONE moment the
+ * panel is worth opening — the first time somebody reaches the app — was the one
+ * moment it stayed a pill. It now opens once per PERSON, because "the first time
+ * the app is accessed" is a fact about a person and not about a device, and a
+ * second machine is not a second first time. Everything after that reads the
+ * per-browser preference exactly as before, so nothing reopens itself.
+ *
+ * It is marked seen only when it is actually SHOWN — a studio that is already
+ * finished or has dismissed the guide never spends its one intro on a panel it
+ * never saw.
+ *
  * ── IT DISAPPEARS WHEN IT IS DONE ──────────────────────────────────────────
  * No congratulation card, no "all done!" state to dismiss. The last tick removes
  * it. A guide that has to be dismissed after it has finished being useful is one
  * more thing to close.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
 import { Check, ChevronDown, ChevronRight, Minus, Rocket, X } from 'lucide-react'
@@ -45,7 +63,13 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useSetupChecklist, type SetupSection, type SetupStep } from '@/hooks/useSetupChecklist'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
-import { setSetupDismissed, setSetupStepAcknowledged } from '@/lib/onboarding'
+import {
+  hasSeenIntro,
+  markIntroSeen,
+  setSetupDismissed,
+  setSetupStepAcknowledged,
+  SETUP_GUIDE_INTRO,
+} from '@/lib/onboarding'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -180,7 +204,7 @@ function StepRow({ step, teamId }: { step: SetupStep; teamId: string }) {
 
 export function SetupGuide() {
   const t = useTranslations('Onboarding')
-  const { currentTeamId, team } = useAuth()
+  const { currentTeamId, team, user, profile } = useAuth()
   // The EFFECTIVE plan, so a lapsed trial mutes its Studio-only steps the moment
   // it lapses rather than when the nightly cron gets to it.
   const { plan } = usePlan()
@@ -190,9 +214,11 @@ export function SetupGuide() {
     plan ?? undefined
   )
 
-  // Starts MINIMIZED after a reload, deliberately: a panel that reopens itself
-  // on every navigation is the thing this pattern is most often criticised for.
-  // The pill still carries the progress, so nothing is hidden — only folded.
+  // Starts MINIMIZED, then the first render that would actually SHOW the panel
+  // decides: open if this person has never met it, otherwise whatever they left
+  // it as. Nothing reopens itself on a navigation — the guide is mounted by the
+  // persistent (auth) layout, so it does not remount when a step takes the
+  // studio somewhere else, and only a hard reload re-runs the decision at all.
   const [minimized, setMinimized] = useState(true)
   const [hydrated, setHydrated] = useState(false)
   // ── AN ACCORDION: ONE SECTION OPEN AT A TIME ───────────────────────────────
@@ -210,8 +236,12 @@ export function SetupGuide() {
 
   useEffect(() => {
     // Read AFTER mount so the server and the first client render agree.
+    //
+    // MINIMIZED is deliberately NOT read here. Its absence cannot be
+    // interpreted until the per-USER fact has loaded — "never met this panel"
+    // and "folded it away" are two different answers and this key only knows
+    // one of them. See the intro effect below.
     try {
-      setMinimized(window.localStorage.getItem(MINIMIZED_KEY) !== 'false')
       const raw = window.localStorage.getItem(SECTION_KEY)
       if (raw !== null) {
         setOpenSection(raw === '' ? null : (raw as SetupSection))
@@ -220,8 +250,50 @@ export function SetupGuide() {
     } catch {
       /* private mode, or a stored value we can no longer parse — the defaults stand */
     }
-    setHydrated(true)
   }, [])
+
+  /**
+   * WOULD THIS RENDER ACTUALLY PUT THE PANEL ON SCREEN? The intro is spent only
+   * when it is really shown: a studio that is already finished, or has dismissed
+   * the guide, must not burn its one first-time on a panel nobody saw.
+   *
+   * `!!team` IS PART OF THE QUESTION, not a null-guard for the line below it.
+   * AuthContext exposes no team-loading flag: `team` is null while the
+   * `teams/{id}` snapshot is in flight, and null is indistinguishable from "not
+   * dismissed". Without this, a checklist query that resolved before the
+   * snapshot would latch `introDecided`, unfold the panel and write
+   * `markIntroSeen` for a studio that had in fact dismissed the guide — spending
+   * the one first-time forever, on nothing.
+   */
+  const wouldShow =
+    !!currentTeamId && !!team && !loading && team.setup_dismissed !== true && !allRequiredDone
+  const introDecided = useRef(false)
+
+  useEffect(() => {
+    if (introDecided.current || !wouldShow || !profile) return
+    introDecided.current = true
+
+    if (!hasSeenIntro(profile, SETUP_GUIDE_INTRO)) {
+      // FIRST TIME FOR THIS PERSON — open it, and record that they have met it.
+      // Not persisted to localStorage: opening it is not a choice they made, so
+      // it must not read back later as one.
+      setMinimized(false)
+      if (user) {
+        void markIntroSeen(user.uid, SETUP_GUIDE_INTRO).catch(() => {
+          /* they meet the panel once more, which is the harmless direction */
+        })
+      }
+    } else {
+      let stored: string | null = null
+      try {
+        stored = window.localStorage.getItem(MINIMIZED_KEY)
+      } catch {
+        /* private mode — the folded default stands */
+      }
+      setMinimized(stored !== 'false')
+    }
+    setHydrated(true)
+  }, [wouldShow, profile, user])
 
   const setMinimizedPersisted = useCallback((next: boolean) => {
     setMinimized(next)
