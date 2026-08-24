@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { TRIAL_DAYS } from '@linyup/shared'
+import { TRIAL_DAYS, SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '@linyup/shared'
 import { signUp } from '@/lib/auth'
 import { provisionTeam, userHasTeam } from '@/lib/provisioning'
 import { usePublicSignupEnabled, isSignupClosedError } from '@/lib/signupGate'
@@ -27,6 +27,9 @@ interface AuthedUser {
   email: string | null
   displayName: string | null
   photoURL: string | null
+  /** Carried through to `provisionTeam`, which records it on the team — the
+   *  mail gate reads it. A social sign-in arrives true; an email signup false. */
+  emailVerified: boolean
 }
 
 // ─── schemas ─────────────────────────────────────────────────────────────────
@@ -42,9 +45,23 @@ const accountSchema = z
     path: ['confirmPassword'],
   })
 
+// CURRENCY AND LANGUAGE ARE ASKED HERE, and they are asked here because of what
+// happens if they are not (found on the prod canary, 2026-08-23):
+//
+//  • `Team.language` decides the language of EVERY member-facing email this
+//    studio ever sends — booking confirmations, reminders, waitlist offers, the
+//    lot. Nothing set it and, until now, nothing in the app could: a studio
+//    created through signup mailed its members in English permanently.
+//  • `default_currency` is what every price the studio types is entered in. Left
+//    to a default, the first prices are authored in a currency nobody chose.
+//
+// Both default to something sensible rather than to nothing, so a studio that
+// skips past them is still correct in the common case.
 const teamSchema = z.object({
   name: z.string().min(2, 'At least 2 characters').max(60, 'Max 60 characters'),
   sport_type: z.string().optional(),
+  default_currency: z.string().min(3),
+  language: z.enum(['en', 'de', 'fr', 'it']),
 })
 
 type AccountData = z.infer<typeof accountSchema>
@@ -89,6 +106,7 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
         email: cred.user.email,
         displayName: cred.user.displayName,
         photoURL: cred.user.photoURL,
+        emailVerified: cred.user.emailVerified,
       })
     } catch (err) {
       const e = err as { code?: string }
@@ -125,6 +143,7 @@ function StepAccount({ onNext }: { onNext: (user: AuthedUser) => void }) {
             email: cred.user.email,
             displayName: cred.user.displayName,
             photoURL: cred.user.photoURL,
+            emailVerified: cred.user.emailVerified,
           })
         }}
       />
@@ -185,21 +204,45 @@ const SPORT_TYPES = [
   'Other',
 ]
 
+/** The languages the product speaks. Same four as `routing.locales`; named here
+ *  rather than imported from the i18n config because this list is about the
+ *  STUDIO's outbound mail, not about the URL the browser is on. */
+const TEAM_LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
+] as const
+
 function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const t = useTranslations('Signup')
+  const locale = useLocale()
   const planName = usePlanName()
   const {
     register,
     handleSubmit,
     control,
     formState: { errors, isSubmitting },
-  } = useForm<TeamData>({ resolver: zodResolver(teamSchema) })
+  } = useForm<TeamData>({
+    resolver: zodResolver(teamSchema),
+    // Seeded from the locale the visitor is already reading the page in — the
+    // best guess available, and one they can see and change before it is saved.
+    defaultValues: {
+      default_currency: DEFAULT_CURRENCY,
+      language: (['en', 'de', 'fr', 'it'] as const).includes(locale as 'en')
+        ? (locale as 'en' | 'de' | 'fr' | 'it')
+        : 'en',
+    },
+  })
 
   async function onSubmit(data: TeamData) {
     setError(null)
     try {
-      await provisionTeam(user, data.name, data.sport_type)
+      await provisionTeam(user, data.name, data.sport_type, {
+        defaultCurrency: data.default_currency,
+        language: data.language,
+      })
       onComplete()
     } catch {
       setError(t('errorTeamGeneric'))
@@ -236,6 +279,56 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
           )}
         />
       </div>
+
+      {/* Two selects on one row: neither needs the width, and stacking them
+          would make a two-field step look like a four-field one. */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="default_currency">{t('currency')}</Label>
+          <Controller
+            name="default_currency"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code} label={`${c.code} · ${c.name}`} />
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="language">{t('language')}</Label>
+          <Controller
+            name="language"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEAM_LANGUAGES.map((l) => (
+                    <SelectItem key={l.value} value={l.value}>
+                      {l.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+      </div>
+      {/* What the language actually decides, said once — it is not the UI
+          language (that follows the URL), it is what your members are written
+          to in. */}
+      <p className="text-xs text-muted-foreground -mt-2">{t('languageHint')}</p>
 
       {error && (
         <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
@@ -282,6 +375,7 @@ export default function SignupPage() {
       email: user.email,
       displayName: user.displayName,
       photoURL: user.photoURL,
+      emailVerified: user.emailVerified,
     })
     setStep('team')
   }, [loading, user, profile, authedUser, router])

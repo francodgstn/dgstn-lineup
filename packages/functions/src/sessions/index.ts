@@ -93,7 +93,24 @@ export const generateRecurringSessions = onCall(async (request) => {
 
   // Shape + dedupe both live in ./series — the same code the daily roller runs,
   // so creating a series and extending it can never drift apart again.
-  const generatedCount = await materializeOccurrences(db, seriesId, seriesData, occurrences)
+  //
+  // WRAPPED, because this is the one step here that can throw something that is
+  // not an HttpsError: `materializeOccurrences` deliberately re-throws a failed
+  // dedupe read, and an unhandled throw out of a gen2 callable reaches the
+  // client as the bare word "INTERNAL" — no code, no message, nothing to act
+  // on. It reached a studio exactly that way. The series itself is already
+  // committed at this point and the daily `rollSessionSeries` task will fill it
+  // in, so the failure is recoverable; it just has to be legible.
+  let generatedCount = 0
+  try {
+    generatedCount = await materializeOccurrences(db, seriesId, seriesData, occurrences)
+  } catch (err) {
+    console.error(`[sessions] materializeOccurrences failed for series ${seriesId}:`, err)
+    throw new HttpsError(
+      'internal',
+      `Could not create the sessions for this series (${seriesId}). They will be created automatically within a day.`
+    )
+  }
 
   await to(seriesRef.update(seriesHorizonUpdate(generationEnd, generatedCount)))
 

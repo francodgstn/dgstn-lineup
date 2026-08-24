@@ -179,7 +179,10 @@
     "headTileSearch": "Rechercher des pages…",
     "headTileNoMatch": "Aucun résultat",
     "headTileRemove": "Supprimer ce raccourci",
-    "utilities": "Plus"
+    "utilities": "Plus",
+    "subscriptionPlans": "Formules d'abonnement",
+    "memberSubscriptions": "Abonnements des membres",
+    "paymentsAndSubscriptions": "Paiements et abonnements"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -307,7 +310,10 @@
     "trialNotice": "Vous démarrez un essai de {days} jours du plan {plan}. Aucune carte requise.",
     "errorEmailInUse": "Un compte avec cet e-mail existe déjà.",
     "errorAccountGeneric": "Impossible de créer le compte. Veuillez réessayer.",
-    "errorTeamGeneric": "Impossible de créer votre équipe. Veuillez réessayer."
+    "errorTeamGeneric": "Impossible de créer votre équipe. Veuillez réessayer.",
+    "currency": "Devise",
+    "language": "Langue",
+    "languageHint": "La langue dans laquelle vos membres sont contactés : confirmations, rappels et reçus. Vous pourrez modifier les deux plus tard."
   },
   "Dashboard": {
     "title": "Tableau de bord",
@@ -380,15 +386,6 @@
     "demoViewLevel": "Niveau",
     "demoEmptyLevel": "Aucun contact avec un classement défini",
     "firstRunTitle": "Votre tableau de bord se remplit tout seul",
-    "firstRunBody": "Rien ne s'est encore passé, il n'y a donc rien à compter. Voici ce qui apparaîtra — et ce qui doit arriver d'abord.",
-    "firstRun_agenda_title": "L'agenda du jour",
-    "firstRun_agenda_body": "dès qu'une séance est au calendrier.",
-    "firstRun_figures_title": "Vos chiffres",
-    "firstRun_figures_body": "présence, réservations et abonnements, dès que vous aurez des contacts.",
-    "firstRun_money_title": "L'argent",
-    "firstRun_money_body": "recettes et paiements récents, dès le premier encaissement.",
-    "firstRun_trends_title": "Tendances hebdomadaires",
-    "firstRun_trends_body": "après quelques semaines de séances — une tendance a besoin de passé.",
     "trendsNoHistoryTitle": "Pas encore d'historique à représenter",
     "trendsNoHistoryBody": "Les tendances comparent les semaines entre elles. Après quelques séances, les graphiques apparaîtront ici d'eux-mêmes.",
     "chartEmptyTitle": "Rien à afficher pour l'instant",
@@ -412,7 +409,8 @@
     "chartTitleSessions": "Séances",
     "chartTitleContacts": "Contacts",
     "chartTitleTopActivities": "Activités principales",
-    "sectionDiscover": "Découvrir"
+    "sectionDiscover": "Découvrir",
+    "firstRunSetupBody": "Rien ne s'est encore passé, il n'y a donc rien à compter. Terminez la configuration et cette page se remplira d'elle-même."
   },
   "Contacts": {
     "noteColor_none": "Sans couleur",
@@ -934,7 +932,9 @@
     "subHistoryDeleteBody": "Cela supprime la trace du fait que {name} a eu cet abonnement. Aucun remboursement n'est effectué et l'abonnement actuel n'est pas modifié.",
     "affiliationRemoveTitle": "Retirer cette affiliation ?",
     "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu.",
-    "deletionScheduledBadge": "Suppression demandée · {date}"
+    "deletionScheduledBadge": "Suppression demandée · {date}",
+    "attention_cancelling": "Résilie",
+    "attention_billing_unlinked": "Facturation orpheline"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1014,7 +1014,6 @@
     "type_appointment": "Rendez-vous",
     "typeAutoSet": "Défini automatiquement depuis l'activité — vous pouvez le modifier si nécessaire.",
     "fieldAllowBooking": "Autoriser la réservation en ligne",
-    "locationPlaceholder": "Salle, dojo…",
     "deleteConfirm": "Supprimer la séance \"{label}\" ? Cette action est irréversible.",
     "fieldActivity": "Activité",
     "fieldLocation": "Lieu",
@@ -1049,8 +1048,6 @@
     "daySun": "Dim",
     "repeatPreview": "Prochaines séances",
     "repeatPreviewMore": "+{count} de plus",
-    "generatingSeries": "Génération des séances…",
-    "seriesCreated": "{count, plural, one {# séance créée} other {# séances créées}}",
     "partOfSeries": "Fait partie d’une série",
     "freqYearly": "Annuel",
     "seriesEveryDays": "Tous les {count} jours",
@@ -1103,7 +1100,19 @@
     "editConfirmTitle": "Des personnes sont inscrites à cette séance",
     "editConfirmBody": "{count, plural, one {# personne est} other {# personnes sont}} rattachées à cette séance. Modifier l'heure, le lieu ou l'activité change ce qui leur a été annoncé.",
     "editConfirmPast": "Cette séance a déjà eu lieu : vous modifiez donc le relevé de ce qui s'est passé.",
-    "editConfirmAction": "Enregistrer les modifications"
+    "editConfirmAction": "Enregistrer les modifications",
+    "newActivityNamePlaceholder": "Nom du cours",
+    "noPlacesHint": "Un lieu est une adresse que vous conservez : il a des salles, et tout ce que vous y planifiez y est regroupé.",
+    "createPlaceAction": "Ajouter un lieu",
+    "fieldLocationNote": "Précision de lieu",
+    "locationNotePlaceholder": "Entrée arrière, terrain 2…",
+    "locationHintWithPlace": "Précision en plus du lieu",
+    "locationHintNoPlace": "Texte libre, pour un lieu ponctuel que vous ne conservez pas",
+    "creatingSeries": "Création de la série…",
+    "seriesCreatingToast": "Série créée. Les cours sont en cours d'ajout à votre agenda.",
+    "seriesGenerateFailed": "La série a été créée, mais ses cours n'ont pas encore pu être ajoutés : {message}",
+    "seriesFillingIn": "Une série récurrente est encore en cours d'ajout à votre agenda…",
+    "seriesFillingInNamed": "{name} est encore en cours d'ajout à votre agenda…"
   },
   "Calendar": {
     "title": "Planning",
@@ -1645,7 +1654,9 @@
     "accessPickInCatalogue": "Les abonnements autorisés se définissent dans le catalogue, à côté des abonnements eux-mêmes.",
     "accessOpenCatalogue": "Ouvrir le catalogue",
     "dropInRateInCatalogue": "Un tarif membre sur ce prix se définit dans le catalogue — c'est une règle unique partagée par tous les abonnements concernés.",
-    "benefitInCatalogue": "Le tarif membre pour ces durées se définit dans le catalogue, à côté des abonnements concernés."
+    "benefitInCatalogue": "Le tarif membre pour ces durées se définit dans le catalogue, à côté des abonnements concernés.",
+    "dropInPriceValidation": "Saisissez un prix à la séance d'au moins 0.50",
+    "durationsRequiredValidation": "Choisissez au moins une durée de rendez-vous"
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -1862,10 +1873,10 @@
     "subTypeIntroErr_amount_invalid": "Saisissez un prix de lancement de 0 ou plus.",
     "subTypeIntroErr_below_minimum": "Un paiement doit être d'au moins 0.50. Utilisez 0 pour offrir les premières périodes.",
     "subTypeIntroErr_not_cheaper": "Le prix de lancement doit être inférieur au prix normal de l'abonnement.",
-    "paymentsRecordOnlyTitle": "Paiements que vous encaissez en dehors de Linyup",
+    "paymentsRecordOnlyTitle": "Gérer les paiements en dehors de Linyup",
     "paymentsRecordOnlyDescription": "Rien ci-dessous ne débite un membre. Ces réglages ne font qu'enregistrer l'argent que vous avez déjà encaissé — sur votre propre compte Stripe ou Payrexx, ou à la main — pour qu'il apparaisse sur la fiche du membre. Pour débiter des cartes dans Linyup, utilisez \"Accepter les paiements avec Linyup\" ci-dessus.",
     "paymentsExternalTitle": "Votre propre compte Stripe ou Payrexx",
-    "paymentsExternalDescription": "Vous encaissez le paiement dans le tableau de bord de votre prestataire ; Linyup reçoit la notification et la rattache au bon contact. Linyup ne débite personne ici.",
+    "paymentsExternalDescription": "Vous encaissez dans votre propre compte Stripe ou Payrexx. Linyup enregistre le paiement quand votre prestataire envoie les données.",
     "paymentsExternalHiddenOwnerOnly": "Les prestataires externes ne sont visibles que par le propriétaire de l'équipe.",
     "paymentsAddExternal": "Ajouter un prestataire",
     "paymentsEditExternal": "Modifier le prestataire",
@@ -1882,7 +1893,14 @@
     "customFieldPublicOnBooking": "Demander dans le formulaire de réservation",
     "customFieldPublicOnBookingHint": "Rend le nom et les options de ce champ visibles publiquement afin qu'il puisse figurer sur votre page de réservation. Laissez désactivé pour toute information confidentielle.",
     "subTypeActivitiesInCatalogue": "À définir dans le catalogue, où vous le voyez aussi du côté de l'activité.",
-    "subTypeActivitiesOpenCatalogue": "Ouvrir le catalogue"
+    "subTypeActivitiesOpenCatalogue": "Ouvrir le catalogue",
+    "language": "Langue des membres",
+    "languageHint": "La langue dans laquelle vos membres sont contactés : confirmations, rappels et reçus. La langue de votre propre tableau de bord se choisit séparément.",
+    "subTypeActivitiesAfterSave": "Enregistrez d'abord la formule : vous pourrez ensuite choisir ce qu'elle ouvre et ce qu'elle coûte à ses détenteurs.",
+    "paymentsExternalBeta": "Bêta",
+    "paymentsExternalLimitMatch": "Linyup tente de rapprocher le contact par e-mail.",
+    "paymentsExternalLimitLink": "Les paiements ne sont pas automatiquement reliés à une réservation, un abonnement, un cours ou un produit.",
+    "paymentsExternalLimitRefund": "Les remboursements, mises en pause et résiliations doivent être gérés manuellement dans le tableau de bord de votre prestataire et dans Linyup."
   },
   "Bookings": {
     "title": "Réservations",
@@ -3400,40 +3418,6 @@
     "signupClosedNotice": "L'inscription est actuellement sur invitation uniquement. Si vous avez été invité, continuez ci-dessous avec l'adresse e-mail de votre invitation."
   },
   "Onboarding": {
-    "replayTour": "Revoir la visite",
-    "tour": {
-      "welcomeTitle": "Bienvenue sur Linyup 👋",
-      "welcomeBody": "Voici une visite rapide de l'essentiel. Vous pouvez la revoir à tout moment depuis le menu du compte.",
-      "themeLangTitle": "Personnalisez",
-      "themeLangBody": "Ouvrez le menu du compte pour changer de langue ou basculer entre les modes clair et sombre.",
-      "featuresTitle": "Vos espaces de travail",
-      "featuresBody": "Tout votre quotidien : activités (ce que vous proposez), séances (quand elles ont lieu), réservations (qui vient) et paiements. Ainsi que ce que vous vendez et comment vous vous développez. Ouvrez une section pour voir ses pages.",
-      "shortcutsTitle": "Raccourcis",
-      "shortcutsBody": "Les pages que vous ouvrez apparaissent ici. Survolez une ligne et cliquez sur l'épingle pour garder vos préférées en haut.",
-      "searchTitle": "Recherche rapide",
-      "searchBody": "Allez partout en une frappe — tapez par ex. \"Act\" pour Activités ou \"Con\" pour Contacts.",
-      "howToTitle": "Guides & aide",
-      "howToBody": "Des guides pas à pas et de l'aide à la configuration vous attendent ici dès que besoin.",
-      "next": "Suivant",
-      "prev": "Retour",
-      "done": "Compris",
-      "activitiesTitle": "1. Activités — ce que vous enseignez",
-      "activitiesBody": "Une activité, c'est une chose que vous proposez : yoga débutant, judo enfants, une séance privée. Elle porte le prix, la capacité et qui peut réserver. Tout le reste dans Linyup part de là.",
-      "sessionsTitle": "2. Séances — quand elles ont lieu",
-      "sessionsBody": "Une séance, c'est une activité à un moment donné. Mettez-la au calendrier une fois et laissez-la se répéter chaque semaine — ou publiez vos disponibilités pour des rendez-vous individuels.",
-      "bookingsTitle": "3. Réservations — qui vient",
-      "bookingsBody": "Les gens réservent depuis votre page publique et chaque place arrive ici — avec la liste d'attente, le check-in et la liste du jour. Inscrire quelqu'un à la main fonctionne pareil.",
-      "paymentsTitle": "4. Paiements — être payé",
-      "paymentsBody": "Abonnements, entrées à l'unité, cours et produits se règlent ici. L'espèce et les virements s'enregistrent à la main ; connectez Stripe pour accepter les cartes en ligne.",
-      "checklistTitle": "Votre liste de configuration",
-      "helpTitle": "Bloqué ? Cherchez le point d'interrogation",
-      "helpBody": "Le point d'interrogation en haut de la barre latérale ouvre le guide : comment tout s'articule, ce que coûte quoi, et cette visite à tout moment.",
-      "checklistBody": "Le même parcours, avec vos données. Elle se coche toute seule et reste en haut du tableau de bord jusqu'à ce que vous soyez prêt.",
-      "quickAccessTitle": "Toujours à portée",
-      "quickAccessBody": "Les deux tuiles en haut sont votre retour le plus rapide — le tableau de bord, plus une page de votre choix. En dessous, les pages ouvertes s'accumulent en raccourcis ; épinglez celles que vous utilisez le plus.",
-      "utilitiesTitle": "La recherche et le reste",
-      "utilitiesBody": "La recherche vous emmène partout en une frappe — essayez « Act » pour Activités. À côté : le QR code de votre studio, les plugins, les réglages et How-to pour les guides et cette visite."
-    },
     "setup": {
       "title": "Configuration",
       "subtitle": "Quelques étapes pour lancer votre activité.",
@@ -3441,39 +3425,72 @@
       "dismiss": "Masquer",
       "optional": "facultatif",
       "sessionsNotBookableWarning": "Ce cours n'est pas encore réservable — activez « Autoriser la réservation en ligne ».",
-      "steps": {
-        "activities": {
-          "label": "Ajouter vos activités",
-          "desc": "Définissez les cours ou le coaching que vous proposez."
-        },
-        "sessions": {
-          "label": "Planifier une séance",
-          "desc": "Ajoutez votre premier cours ou créneau au calendrier."
-        },
-        "subscriptions": {
-          "label": "Créer des abonnements",
-          "desc": "Configurez les formules que les membres peuvent rejoindre."
-        },
-        "bioLink": {
-          "label": "Publier votre bio link",
-          "desc": "Mettez en ligne votre page de réservation publique."
-        },
-        "contacts": {
-          "label": "Ajouter un contact",
-          "desc": "Ajoutez votre premier membre ou prospect."
-        },
-        "ranks": {
-          "label": "Configurer les rangs",
-          "desc": "Configurez un système de rangs si vous en utilisez un."
-        }
-      },
       "doneTitle": "Votre studio est prêt",
       "doneBody": "Toutes les étapes de configuration sont faites — on peut vous trouver et réserver.",
       "doneAction": "Voir vos pages publiques",
       "doneDismiss": "Fermer",
       "next": "Suivant",
       "showSteps": "Afficher toutes les étapes",
-      "hideSteps": "Masquer les étapes"
+      "hideSteps": "Masquer les étapes",
+      "minimize": "Réduire",
+      "sections": {
+        "offer": "Ce que vous vendez",
+        "doors": "Ouvrir les portes",
+        "extra": "Étapes supplémentaires"
+      },
+      "requiresPlan": "Formule {plan}",
+      "steps": {
+        "activities": {
+          "label": "Ajoutez vos activités",
+          "desc": "Définissez les cours ou le coaching que vous proposez."
+        },
+        "pricing": {
+          "label": "Fixez vos tarifs",
+          "desc": "Une formule d'abonnement, ou un tarif à la séance.",
+          "ack": "Pas de tarifs pour l'instant"
+        },
+        "sessions": {
+          "label": "Mettez un cours réservable au calendrier",
+          "desc": "Mettez-le au calendrier et activez la réservation en ligne. Sinon, personne ne peut prendre de place."
+        },
+        "publicPage": {
+          "desc": "Votre description, vos liens, vos réseaux sociaux. La page est déjà en ligne.",
+          "label": "Complétez votre page bio link"
+        },
+        "payments": {
+          "label": "Configurez les paiements",
+          "desc": "Connectez Stripe pour accepter les paiements directement dans Linyup.",
+          "ack": "Nous n'acceptons que les espèces"
+        },
+        "branding": {
+          "label": "Ajoutez votre logo et vos couleurs",
+          "desc": "Toutes vos pages publiques les utilisent.",
+          "ack": "Pas nécessaire"
+        },
+        "bookingForm": {
+          "label": "Vérifiez ce que demande votre formulaire",
+          "desc": "Téléphone, date de naissance, vos propres questions. Les valeurs par défaut conviennent à la plupart.",
+          "ack": "Tout me semble bon"
+        },
+        "coaches": {
+          "label": "Invitez vos coachs",
+          "desc": "Donnez-leur leur propre accès, avec uniquement ce dont ils ont besoin.",
+          "ack": "Je travaille seul"
+        },
+        "pricingReview": {
+          "label": "Vérifiez ce que les gens paient vraiment",
+          "desc": "Tous les tarifs tels qu'un membre les voit, au même endroit.",
+          "ack": "Tout me semble bon"
+        },
+        "plugins": {
+          "desc": "Cours en ligne, cartes cadeaux, décharges, finances et plus. N'activez que ce dont vous avez besoin.",
+          "ack": "J'ai jeté un œil",
+          "label": "Explorez les plugins"
+        }
+      },
+      "ackUndo": "Annuler",
+      "ackNoteSkip": "Vous avez fermé cette étape vous-même",
+      "ackNoteReview": "Vous avez vérifié"
     }
   },
   "SubscriptionCancellation": {
@@ -3713,7 +3730,21 @@
     "readyBody": "Votre compte est configuré et peut accepter les paiements.",
     "chargesEnabled": "Paiements activés",
     "payoutsEnabled": "Virements activés",
-    "incompleteBody": "Votre compte de paiement nécessite encore quelques informations avant de pouvoir accepter les paiements."
+    "incompleteBody": "Votre compte de paiement nécessite encore quelques informations avant de pouvoir accepter les paiements.",
+    "setupNote": "Cela prend quelques minutes. Vous obtenez votre propre compte Stripe avec accès complet au tableau de bord, et Stripe se charge de la vérification. Vous utilisez déjà Stripe ? Connectez-vous pendant la configuration : les informations déjà vérifiées sont réutilisées.",
+    "disconnectNote": "Configuré avec le mauvais compte Stripe ? Dissociez-le ici et recommencez avec un autre compte.",
+    "disconnectAction": "Dissocier ce compte Stripe",
+    "disconnectCancel": "Le garder lié",
+    "disconnectConfirmTitle": "Dissocier ce compte Stripe ?",
+    "disconnectConfirmDesc": "Votre compte Stripe, son argent et son historique ne sont pas touchés : Linyup cesse simplement d'y envoyer des paiements. Tant que vous n'aurez pas connecté un autre compte, vous ne pourrez pas encaisser : votre boutique et vos réservations payantes se ferment. Les paiements passés sont conservés.",
+    "benefitsTitle": "Ce que vous obtenez",
+    "benefitCheckout": "Les membres paient directement dans Linyup les réservations, abonnements, cours et achats en boutique.",
+    "benefitLinked": "Chaque paiement est relié au membre et à ce qu'il a acheté.",
+    "benefitRefunds": "Remboursez les paiements directement dans Linyup. La fiche du membre et votre comptabilité restent synchronisées.",
+    "benefitRenewals": "Les abonnements se renouvellent, relancent et s'annulent automatiquement.",
+    "feeStripeNote": "Les frais de traitement de Stripe s'appliquent en plus. Voir <link>les tarifs Stripe</link>.",
+    "feeRefundNote": "En cas de remboursement, les frais Stripe sont à votre charge.",
+    "feesTitle": "Ce que vous payez"
   },
   "PaymentsDashboard": {
     "title": "Paiements",
@@ -3914,7 +3945,51 @@
     "mayDuplicateHelp": "Cette ligne est rattachée à la facture, pas au paiement. Si votre webhook Stripe envoie aussi des événements de paiement, le même montant peut apparaître deux fois dans cette liste.",
     "markPaidClosesLink": "Le lien de paiement envoyé à ce client sera annulé afin qu'il ne puisse pas être payé deux fois.",
     "markPaidAlreadyOnline": "Ce client avait déjà payé en ligne — rien n'a été enregistré ici.",
-    "markPaidLinkStillOpen": "Paiement enregistré, mais le lien de paiement n'a pas pu être annulé — annulez-le dans Stripe. S'il est tout de même payé, le montant est remboursé automatiquement."
+    "markPaidLinkStillOpen": "Paiement enregistré, mais le lien de paiement n'a pas pu être annulé — annulez-le dans Stripe. S'il est tout de même payé, le montant est remboursé automatiquement.",
+    "cancelBilling": "Arrêter la facturation",
+    "cancelBillingConfirmTitle": "Arrêter la facturation de cet abonnement ?",
+    "cancelBillingConfirmDesc": "L'abonnement est résilié dans Stripe et ne sera plus débité. Le membre conserve l'accès jusqu'à la fin de la période déjà payée. Impossible d'annuler cette action ici : il faudrait vendre un nouvel abonnement.",
+    "cancelBillingConfirmAction": "Arrêter la facturation",
+    "billingUnlinkedTitle": "La facturation continue sans abonnement correspondant",
+    "billingUnlinkedBody": "Stripe continue de débiter ce membre, mais l'abonnement ci-dessous n'est pas celui qui lui est attribué. Attribuez l'abonnement correspondant ou arrêtez la facturation.",
+    "unknownMember": "Membre",
+    "subRenewsOn": "Se renouvelle le {date}",
+    "titleWithSubscriptions": "Paiements et abonnements",
+    "subscriptionsEmpty": "Personne n'a encore d'abonnement.",
+    "subOffline": "Non facturé ici",
+    "allPaymentsHeading": "Paiements",
+    "colPlan": "Formule",
+    "colRenewal": "Renouvellement",
+    "searchSubscriptions": "Rechercher un membre ou une formule…",
+    "searchPartnerVisits": "Rechercher des visites…",
+    "noPaymentsForMember": "Aucun paiement enregistré pour ce membre.",
+    "window_1m": "Dernier mois",
+    "window_3m": "3 derniers mois",
+    "window_12m": "12 derniers mois",
+    "window_all": "Depuis le début",
+    "searchAllTime": "Chercher depuis le début",
+    "expandRow": "Afficher les paiements",
+    "collapseRow": "Masquer les paiements",
+    "filterNeedsAttention": "À traiter",
+    "noSubscriptionsNeedAttention": "Rien à traiter. Aucun paiement échoué, aucune résiliation, aucune facturation sans abonnement.",
+    "journalCorrected": "Corrigé en comptabilité",
+    "category_drop_in": "Séance à l'unité",
+    "category_course": "Cours",
+    "category_product": "Produit",
+    "category_gift_card": "Carte cadeau",
+    "category_other": "Autre",
+    "journalGross": "Débité",
+    "journalStripeFee": "Frais Stripe",
+    "journalPlatformFee": "Frais Linyup",
+    "journalNetLabel": "Vous recevez",
+    "journalFeeEstimated": "Les frais Stripe ne sont pas encore confirmés : ceci est une estimation.",
+    "category_membership": "Abonnement",
+    "journalHeading": "Dans votre comptabilité",
+    "journalRefunded": "Remboursé",
+    "journalFeeReturned": "Frais Linyup restitués",
+    "journalNetAfterRefund": "Il vous reste",
+    "journalStripeFeeKept": "Stripe conserve ses frais de traitement en cas de remboursement.",
+    "journalNetAfterRefundCost": "Cela vous coûte"
   },
   "PaymentErrors": {
     "setupIncomplete": "La configuration du compte de paiement n'est pas terminée, l'action n'a donc pas pu aboutir. Terminer la configuration dans Paramètres → Paiements.",
@@ -4671,7 +4746,14 @@
     "contactFieldAddressRoute": "Rue",
     "contactFieldAddressNumber": "N°",
     "contactFieldAddressPostalCode": "NPA",
-    "contactFieldAddressLocality": "Localité"
+    "contactFieldAddressLocality": "Localité",
+    "memberTitle": "Confirmez votre réservation",
+    "memberSubtitle": "Vous êtes connecté en tant que {name} : rien à remplir.",
+    "memberCovered": "Inclus dans votre abonnement",
+    "memberPayable": "Ce cours n'est pas inclus dans votre abonnement. Vous pouvez le réserver pour {price}.",
+    "memberContinueToPayment": "Continuer vers le paiement",
+    "memberSomeoneElseTitle": "Réserver pour quelqu'un d'autre",
+    "memberSomeoneElseSubtitle": "Réserver ce cours pour une autre personne"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Réserver un cours d'essai",
@@ -5511,6 +5593,8 @@
       "inbound_webhook": "Webhook entrant",
       "manual": "Manuel uniquement",
       "acquisition_stage_changed": "Étape d'acquisition franchie",
+      "subscription_cancel_requested": "Abonnement résilié",
+      "subscription_payment_failed": "Échec du paiement de l'abonnement",
       "payment_received": "Paiement reçu",
       "payment_refunded": "Paiement remboursé",
       "payment_disputed": "Contestation ouverte"
@@ -6292,11 +6376,6 @@
     },
     "utilitiesTitle": "Pour continuer",
     "utilities": {
-      "tour": {
-        "title": "Rejouer la visite guidée",
-        "body": "Reparcourez les zones principales de l'app, étape par étape.",
-        "action": "Lancer la visite"
-      },
       "checklist": {
         "title": "Checklist d'installation",
         "body": "L'avancement de la configuration de votre studio, lu depuis vos données réelles.",
@@ -6797,7 +6876,9 @@
     "demoAgeAdults": "Adultes (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extras",
-    "extraSubtitle": "Panneaux en attente, activés dans Paramètres → Expérimental."
+    "extraSubtitle": "Panneaux en attente, activés dans Paramètres → Expérimental.",
+    "reason_cancelling": "Abonnement bientôt résilié",
+    "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus"
   },
   "BookingContactFields": {
     "title": "Coordonnées à collecter",
@@ -6908,14 +6989,29 @@
     "summaryCoursePriced": "Vendu à l'unité · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
     "summaryCourseOpen": "Gratuit ou réservé aux connectés : aucun abonnement ne change qui peut l'ouvrir."
   },
-  "PagePurpose": {
-    "activities": "Ce que vous proposez",
-    "schedule": "Quand vous le proposez",
-    "subscriptions": "Ce que vous vendez",
-    "pricing": "Ce que les gens paient vraiment",
-    "activitiesNote": "Les cours et rendez-vous que vous proposez. Définis une fois ici, puis planifiés autant de fois que vous voulez.",
-    "scheduleNote": "Toutes les séances au calendrier, uniques ou récurrentes, avec leurs réservations.",
-    "subscriptionsNote": "Adhésions, cartes et forfaits. Leur prix, leur fréquence de renouvellement et ce qu'ils débloquent.",
-    "pricingNote": "Ce que paie chaque type de contact, recalculé avec les règles d'une vraie réservation."
+  "VerifyEmail": {
+    "title": "Confirmez {email}",
+    "body": "En attendant, aucun e-mail ne part vers vos membres : confirmations, rappels et reçus sont tous retenus.",
+    "resend": "Renvoyer le lien",
+    "sent": "Lien envoyé",
+    "recheck": "C'est confirmé"
+  },
+  "DeleteAccount": {
+    "title": "Supprimer ce studio",
+    "body": "Tout ce que contient ce studio — contacts, réservations, séances, documents et fichiers — est définitivement effacé. Rien ne pourra être récupéré ensuite : exportez d'abord ce que vous souhaitez conserver.",
+    "pointBilling": "Les abonnements de vos membres sont résiliés immédiatement, et annuler la suppression ne les rétablit pas.",
+    "pointWindow": "Les données sont effacées dans 30 jours. D'ici là, rien d'autre ne change et vous pouvez encore tout arrêter.",
+    "pointStripe": "Votre compte Stripe, son solde et son historique de paiements ne sont pas supprimés : ils vous appartiennent et constituent l'autre côté de transactions réelles.",
+    "startAction": "Supprimer ce studio…",
+    "confirmLabel": "Saisissez {name} pour confirmer",
+    "confirmAction": "Arrêter la facturation et programmer la suppression",
+    "back": "Laisser tomber",
+    "scheduledToast": "Facturation arrêtée. Ce studio sera effacé le {date}.",
+    "cancelledToast": "Suppression annulée. Vos données sont conservées.",
+    "pendingTitle": "Ce studio est programmé pour suppression",
+    "pendingBody": "Tout sera définitivement effacé le {date}. D'ici là, le studio fonctionne normalement et vous pouvez arrêter cela à tout moment.",
+    "pendingBillingNote": "Les abonnements de vos membres ont déjà été résiliés et ne peuvent pas être relancés : ils devraient racheter un abonnement.",
+    "cancelAction": "Arrêter la suppression",
+    "errorGeneric": "Cela n'a pas fonctionné. Rien n'a été supprimé."
   }
 }

@@ -83,6 +83,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import {
+  ArrowUpRight,
   Banknote,
   BookOpen,
   CreditCard,
@@ -132,6 +133,14 @@ function Figure({
         <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {caption}
         </p>
+        {/* EVERY FIGURE IS A LINK, and until now nothing said so: the only
+            affordance was a colour change on hover, which a touch device never
+            shows at all. Revenue was the one that made this a report — the
+            studio wanted a way to the payments list and did not know the number
+            already was one. A persistent arrow, on all of them rather than on
+            the one that was reported, because they are one block and a single
+            arrow would read as "this one is special". */}
+        <ArrowUpRight className="h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/figure:text-primary" />
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         {loading ? (
@@ -301,7 +310,9 @@ export function FiguresBlock({
           value={loading ? '' : internalSubs}
           subtitle={t('figSubscribedSub')}
           loading={loading}
-          href={'/subscriptions' as Route}
+          // Straight to the tab rather than through the redirect: one fewer
+          // navigation, and the figure keeps pointing at the list it counts.
+          href={'/payments?tab=subscriptions' as Route}
           note={aggregatorSubs > 0 ? t('figSubscribedAgg', { count: aggregatorSubs }) : undefined}
         />
         <Figure

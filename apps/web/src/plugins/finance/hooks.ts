@@ -11,6 +11,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -27,6 +28,7 @@ import {
   ACCOUNTING_SETTINGS_DOC,
   ACCOUNTING_SETTINGS_SUBCOLLECTION,
   FINANCE_MONTHLY_REPORTS_SUBCOLLECTION,
+  FINANCE_TRANSACTIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
   computeNextRunMs,
 } from '@linyup/shared'
@@ -40,9 +42,95 @@ import type {
   ChartTemplateId,
   EntryTemplateDraft,
   FinanceMonthlyReport,
+  FinanceTransaction,
 } from '@linyup/shared'
 
 // ─── Queries ────────────────────────────────────────────────────────────────
+
+/**
+ * The money JOURNAL for a window — what each payment actually booked.
+ *
+ * ── WHY THE PAYMENTS PAGE READS THIS AND NOT THE ACCOUNTING ENTRIES ─────────
+ * Two collections here are both called "accounting" and they are not the same
+ * thing. `accounting_entries` is double-entry bookkeeping the studio authors;
+ * `finance_transactions` is the journal a MONEY EVENT writes, one row per
+ * charge, carrying the category it booked as and the authoritative fee split.
+ * A payment never produces an accounting entry, so linking a payment to one
+ * would have been linking it to the wrong thing.
+ *
+ * It is read here rather than navigated to (Franco, 2026-08-23): a studio
+ * manager wants to know what a charge booked and what actually landed, not to
+ * open a ledger. So there is no journal SCREEN — the facts ride on the payment
+ * row that raised the question.
+ *
+ * Rules already allow the read (manager/owner); nothing in the app had ever
+ * used it.
+ */
+export interface PaymentJournal {
+  /** The charge row, keyed by the rail's own payment reference. */
+  charge?: FinanceTransaction
+  /** Every refund booked against that charge, oldest first. */
+  refunds: FinanceTransaction[]
+}
+
+export function useFinanceJournal(
+  teamId: string | null,
+  sinceMs: number | null,
+  enabled = true
+) {
+  return useQuery<Map<string, PaymentJournal>>({
+    queryKey: ['finance-journal', teamId, sinceMs],
+    enabled: !!teamId && enabled,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, TEAMS_COLLECTION, teamId!, FINANCE_TRANSACTIONS_SUBCOLLECTION),
+          ...(sinceMs !== null
+            ? [where('occurred_at', '>=', Timestamp.fromMillis(sinceMs))]
+            : []),
+          orderBy('occurred_at', 'desc'),
+          limit(500)
+        )
+      )
+
+      // ── TWO ROW TYPES, TWO DIFFERENT KEYS ───────────────────────────────
+      // A CHARGE is keyed by the rail's own payment reference (`source_ref`),
+      // which `financeSourceRefForPayment` reproduces from a payment row.
+      //
+      // A REFUND is keyed by the REFUND id, so it cannot be found that way at
+      // all — but it carries `source_doc`, the path of the payment it reverses,
+      // whose last segment is that same payment reference. That is the join,
+      // and it is why refunds are grouped here rather than looked up per row.
+      //
+      // The type filter is CLIENT-SIDE deliberately: `where('type','in',[…])`
+      // beside the date range would need a composite index, and this window is
+      // already bounded. Disputes and payouts fall out here.
+      const byRef = new Map<string, PaymentJournal>()
+      const entry = (ref: string) => {
+        let e = byRef.get(ref)
+        if (!e) byRef.set(ref, (e = { refunds: [] }))
+        return e
+      }
+      for (const d of snap.docs) {
+        const txn = { ...(d.data() as FinanceTransaction), id: d.id }
+        if (txn.type === 'charge' && txn.source_ref) {
+          entry(txn.source_ref).charge = txn
+        } else if (txn.type === 'refund' && txn.source_doc) {
+          const paymentRef = txn.source_doc.split('/').pop()
+          if (paymentRef) entry(paymentRef).refunds.push(txn)
+        }
+      }
+      // The query is newest-first; a breakdown reads better oldest-first.
+      for (const e of byRef.values()) {
+        e.refunds.sort(
+          (a, b) => (a.occurred_at?.toMillis?.() ?? 0) - (b.occurred_at?.toMillis?.() ?? 0)
+        )
+      }
+      return byRef
+    },
+  })
+}
 
 export function useAccountingSettings(teamId: string | null) {
   return useQuery<AccountingSettings | null>({

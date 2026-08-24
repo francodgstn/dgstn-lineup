@@ -2584,7 +2584,12 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {tPayments('stripeSubscriptionsTitle')}
           </p>
-          <MemberSubscriptionsSection teamId={teamId} contactId={contact.id} t={tPayments} />
+          <MemberSubscriptionsSection
+            teamId={teamId}
+            contactId={contact.id}
+            assignedTypeId={contact.subscription_type_id ?? null}
+            t={tPayments}
+          />
         </div>
       )}
 
@@ -2938,9 +2943,17 @@ function SetSubscriptionDialog({
   const [recurrence, setRecurrence] = useState(contact.subscription_recurrence ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // false = keep the contact's current billing running (default, non-destructive);
-  // true = cancel any live Stripe subscription as part of this reassignment.
-  const [stopCurrent, setStopCurrent] = useState(false)
+  // true = cancel any live Stripe subscription as part of this reassignment;
+  // false = leave it running.
+  //
+  // DEFAULTS TO STOPPING (2026-08-23). "Non-destructive" was the wrong frame:
+  // leaving the old billing running while a new plan is assigned charges the
+  // member TWICE, and the studio finds out from the member. The genuinely
+  // destructive outcome here is the one that keeps taking money for something
+  // that has been replaced — so the safe default is the one that stops it, and
+  // "keep it running" is the deliberate choice (a member moving to a second,
+  // additional membership).
+  const [stopCurrent, setStopCurrent] = useState(true)
 
   // Live Stripe subscriptions (billing) — distinct from the manual single field. Only
   // these can be "stopped" (the manual field is replaced by the assignment regardless).
@@ -3003,9 +3016,35 @@ function SetSubscriptionDialog({
     }
   }
 
+  /**
+   * Remove the plan from the contact — and, unless told otherwise, stop the
+   * billing behind it.
+   *
+   * THIS IS THE DIVERGENCE THE CANARY FOUND. Clearing used to null the
+   * contact's subscription fields and never touch Stripe, so a studio that
+   * froze a membership and then cleared the plan was left with a live (frozen)
+   * Stripe subscription, nothing on screen admitting it existed, and an
+   * apparent way back that RESUMED the billing. The two systems could diverge
+   * in one click and there was no way to reconcile them.
+   *
+   * The Stripe call goes FIRST, exactly as in `save()`: a failure there aborts
+   * before the contact is touched, so the two never end up half-applied in the
+   * direction that keeps charging.
+   */
   const handleClear = async () => {
     setSaving(true)
+    setError(null)
     try {
+      if (stopCurrent && liveStripeSubs.length > 0 && teamId) {
+        const cancelFn = httpsCallable<
+          { teamId: string; subscriptionId: string },
+          { ok: boolean }
+        >(functions, 'cancelMemberSubscription')
+        for (const sub of liveStripeSubs) {
+          await cancelFn({ teamId, subscriptionId: sub.subscriptionId })
+        }
+        qc.invalidateQueries({ queryKey: ['contact-member-subscriptions', teamId, contact.id] })
+      }
       await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
         subscription_type_id: null,
         subscription_type_name: null,
@@ -3016,6 +3055,9 @@ function SetSubscriptionDialog({
       })
       onSaved()
       onOpenChange(false)
+    } catch (err) {
+      console.error('[contact] clear subscription failed:', err)
+      setError(t('cancelError'))
     } finally {
       setSaving(false)
     }
@@ -3124,18 +3166,12 @@ function SetSubscriptionDialog({
                   </li>
                 ))}
               </ul>
+              {/* THE ORDER IS THE RECOMMENDATION. Stopping is first and
+                  selected: it governs BOTH buttons below — Save and Clear — so
+                  whichever way this dialog is left, the live billing does not
+                  quietly outlive the plan it was selling. */}
               {liveStripeSubs.length > 0 && (
                 <div className="pt-1 space-y-1.5">
-                  <label className="flex items-start gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="stopCurrent"
-                      checked={!stopCurrent}
-                      onChange={() => setStopCurrent(false)}
-                      className="mt-0.5 accent-primary"
-                    />
-                    <span className="text-sm">{t('keepCurrentOption')}</span>
-                  </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -3145,6 +3181,16 @@ function SetSubscriptionDialog({
                       className="mt-0.5 accent-primary"
                     />
                     <span className="text-sm">{t('stopCurrentOption')}</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="stopCurrent"
+                      checked={!stopCurrent}
+                      onChange={() => setStopCurrent(false)}
+                      className="mt-0.5 accent-primary"
+                    />
+                    <span className="text-sm">{t('keepCurrentOption')}</span>
                   </label>
                 </div>
               )}

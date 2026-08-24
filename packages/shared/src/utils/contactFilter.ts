@@ -292,7 +292,10 @@ export interface ContactFilterSubject {
   source?: string
   affiliation_summary?: { has_active?: boolean }
   subscription_type_id?: string
-  active_subscriptions?: { subscription_type_id: string }[]
+  /** `cancelling` is read by the attention reasons: a member who has asked
+   *  Stripe to stop is still live, still training, and is the one the studio has
+   *  the shortest window to talk to. */
+  active_subscriptions?: { subscription_type_id: string; cancelling?: boolean }[]
   group_ids?: string[]
   assigned_coach_ids?: string[]
   tags?: string[]
@@ -536,15 +539,70 @@ export type ContactAttentionReason =
    *  lowest band AND they have attended at least once. Never fires for a
    *  brand-new contact, whose "inactivity" is just newness. */
   | 'gone_quiet'
+  /**
+   * A live subscription that will not renew — the member cancelled in Stripe's
+   * billing portal, and the studio found out when the money stopped.
+   *
+   * IT READS A FACT THE CONTACT ALREADY CARRIES. `active_subscriptions` mirrors
+   * only LIVE subscriptions and each summary is stamped `cancelling` by
+   * `rollupMemberSubscriptions` — so this needed no new field, no new writer and
+   * no backfill. It also cannot outlive the thing it describes: the moment the
+   * subscription actually lapses it drops out of the mirror, and the reason goes
+   * with it.
+   */
+  | 'cancelling'
+  /**
+   * Stripe is still billing for a plan this contact is no longer assigned.
+   *
+   * The two systems CAN diverge in one click — clearing or reassigning a
+   * contact's plan does not, by itself, stop a live Stripe subscription — and
+   * until this existed the divergence was invisible: the contact showed no
+   * membership, the money kept arriving, and the only apparent way back was to
+   * RESUME the billing, which reinstated the very thing the studio had removed.
+   *
+   * Like `cancelling`, it reads facts the contact document already carries:
+   * `active_subscriptions` (live Stripe subscriptions, by type id) against
+   * `subscription_type_id` (the plan the studio has actually assigned).
+   */
+  | 'billing_unlinked'
 
 /** Descending urgency — the sort order and nothing else. Kept beside the union
  *  so a new reason cannot be added without placing it. */
 const ATTENTION_WEIGHT: Record<ContactAttentionReason, number> = {
   alerts: 5,
   pending_signup: 4,
+  // Above `trial_pending`, below an explicit flag: a member on the way out is a
+  // conversation with a DEADLINE — the period end — and unlike a quiet member
+  // there is a known date after which the chance is gone.
+  cancelling: 4,
+  // Below the people-facing reasons and above "gone quiet": money is moving that
+  // the studio has not accounted for, which is urgent — but a person going cold
+  // is not recoverable later and a billing record is.
+  billing_unlinked: 2,
   trial_pending: 3,
   new_lead: 2,
   gone_quiet: 1,
+}
+
+/**
+ * Is Stripe billing this contact for something the studio has not assigned them?
+ *
+ * TRUE when there is at least one LIVE subscription and NONE of them matches the
+ * plan on the contact — which covers both ways the two can drift apart: the plan
+ * cleared while the billing ran on, and the plan replaced by a different type
+ * while the old billing ran on. A member holding a second, additional membership
+ * is NOT flagged: one of their live subscriptions still matches.
+ *
+ * Exported because three surfaces ask it — the contact page, the payments
+ * Subscriptions tab and this file's attention reasons — and a second copy of the
+ * comparison is how they would start disagreeing about whose billing is orphaned.
+ */
+export function contactBillingIsUnlinked(subject: ContactFilterSubject): boolean {
+  const live = subject.active_subscriptions ?? []
+  if (live.length === 0) return false
+  const assigned = subject.subscription_type_id
+  if (!assigned) return true
+  return !live.some((s) => s.subscription_type_id === assigned)
 }
 
 /** Every reason this contact is waiting on the studio, most urgent first. */
@@ -558,6 +616,9 @@ export function contactAttentionReasons(
   if (subject.pending_signup === true) reasons.push('pending_signup')
   if (subject.acquisition_stage === 'trial_booked') reasons.push('trial_pending')
   if (subject.lead_acknowledged === false) reasons.push('new_lead')
+  if ((subject.active_subscriptions ?? []).some((s) => s.cancelling === true))
+    reasons.push('cancelling')
+  if (contactBillingIsUnlinked(subject)) reasons.push('billing_unlinked')
   if ((subject.total_sessions ?? 0) > 0) {
     const refMs =
       resolveTimestampMs(subject.last_session_at) ?? resolveTimestampMs(subject.created_at)

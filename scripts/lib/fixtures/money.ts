@@ -35,13 +35,18 @@
  */
 
 import admin from 'firebase-admin'
-import { rollupMemberSubscriptions } from '@linyup/shared'
+import {
+  buildConnectChargeTxn,
+  buildConnectRefundTxn,
+  rollupMemberSubscriptions,
+} from '@linyup/shared'
 import type { SubscriptionCancellationDetails } from '@linyup/shared'
 
 // ── Firestore path constants (mirror @linyup/shared/paths) ────────────────────
 const TEAMS_COLLECTION = 'teams'
 const CONTACTS_COLLECTION = 'contacts'
 const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
+const FINANCE_TRANSACTIONS_SUBCOLLECTION = 'finance_transactions'
 const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
 const SESSIONS_COLLECTION = 'sessions'
 const COURSES_COLLECTION = 'courses'
@@ -285,6 +290,89 @@ export async function seedMemberPayment(
       created_at: at,
       updated_at: at,
     })
+
+  // ── AND THE JOURNAL ROW THE WEBHOOK WOULD HAVE WRITTEN ────────────────────
+  // In production `finance_transactions` is written by the Connect webhook, not
+  // by the payment write — so a seed that only wrote `member_payments` left
+  // every seeded tenant with an EMPTY journal. The consequence was invisible
+  // until something read it: the monthly finance report, the CSV export and the
+  // per-payment "what did this book" line were all blank on every demo and
+  // every local run, and looked broken rather than unseeded.
+  //
+  // Built with `buildConnectChargeTxn` — the SAME builder the webhook uses — so
+  // the seeded row cannot drift from the real one, and the deterministic id
+  // means a re-run overwrites in place. A FAILED intent is skipped: no charge
+  // happened, and the journal records money events, not attempts.
+  if (status !== 'failed') {
+    // Stripe's published CH card pricing: 2.9% + CHF 0.30. The exact number
+    // does not matter to any assertion — that it is NON-ZERO does, because a
+    // zero here is what made the refund breakdown look free.
+    const stripeFeeRappen = Math.round(amountRappen * 0.029) + 30
+    const platformFeeRappen = Math.round(amountRappen * SEED_FEE_PERCENT)
+    const txn = buildConnectChargeTxn({
+      teamId,
+      paymentIntentId,
+      amount: amountRappen,
+      currency: spec.currency ?? 'CHF',
+      applicationFeeAmount: platformFeeRappen,
+      // The webhook FETCHES the balance transaction, so a real row carries
+      // Stripe's own fee and `fee_source: 'balance_transaction'`. Seeding
+      // `fees: null` looked like the modest choice and was the wrong one: it
+      // modelled the DEGRADED path as the norm, so every demo showed "this is
+      // an estimate" on rows that in production are exact, and — because
+      // Stripe's fee was zero — hid the fact that a refund leaves the studio
+      // out of pocket by it. Seed what Stripe would actually report.
+      fees: {
+        stripeFee: stripeFeeRappen,
+        applicationFee: platformFeeRappen,
+        net: amountRappen - stripeFeeRappen - platformFeeRappen,
+        balanceTxnId: `txn_seed_${spec.idSuffix}`,
+      },
+      kind: spec.kind ?? null,
+      contactId: spec.contactId ?? null,
+      occurredAtMs: daysFrom(-spec.daysAgo).getTime(),
+    })
+    await db
+      .collection(TEAMS_COLLECTION)
+      .doc(teamId)
+      .collection(FINANCE_TRANSACTIONS_SUBCOLLECTION)
+      .doc(txn.id)
+      .set({
+        ...txn,
+        occurred_at: tsOf(new Date(txn.occurred_at_ms)),
+        recorded_at: at,
+        status: 'recorded',
+      })
+
+    // A refunded payment books a SECOND row, and its numbers are the point:
+    // our platform fee comes back (positive) while Stripe's does NOT (zero), so
+    // the studio ends up out of pocket by Stripe's cut. Seeding only the charge
+    // left every demo unable to show that.
+    if (refunded) {
+      const refundTxn = buildConnectRefundTxn({
+        teamId,
+        refundId: `re_seed_${spec.idSuffix}`,
+        paymentIntentId,
+        amount: amountRappen,
+        feeReversed: platformFeeRappen,
+        currency: spec.currency ?? 'CHF',
+        kind: spec.kind ?? null,
+        contactId: spec.contactId ?? null,
+        occurredAtMs: daysFrom(-spec.daysAgo).getTime(),
+      })
+      await db
+        .collection(TEAMS_COLLECTION)
+        .doc(teamId)
+        .collection(FINANCE_TRANSACTIONS_SUBCOLLECTION)
+        .doc(refundTxn.id)
+        .set({
+          ...refundTxn,
+          occurred_at: tsOf(new Date(refundTxn.occurred_at_ms)),
+          recorded_at: at,
+          status: 'recorded',
+        })
+    }
+  }
 }
 
 /**

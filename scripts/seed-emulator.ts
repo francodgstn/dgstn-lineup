@@ -63,6 +63,8 @@ process.env.FIRESTORE_EMULATOR_HOST ??= 'localhost:8080'
 
 import admin from 'firebase-admin'
 import {
+  APP_SETTINGS_COLLECTION,
+  PUBLIC_SETTINGS_DOC,
   DEFAULT_PAYMENT_MODES,
   DEFAULT_KIOSK_CONFIG,
   toKioskPublicConfig,
@@ -3132,6 +3134,25 @@ async function main() {
       accentColor: '#0284c7',
     },
   ]
+
+  // -- SIGNUP HAS TO BE REACHABLE LOCALLY -------------------------------------
+  // `app_settings/public` is the world-readable flag BOTH halves of the signup
+  // gate read: the login page's "Create an account" link
+  // (`usePublicSignupEnabled`) and the `beforeSignup` blocking function that
+  // actually admits the account. Both fail CLOSED on a missing doc, by design —
+  // and nothing seeded it, so on a fresh emulator the link was invisible and
+  // signing up was refused outright. The whole flow was untestable on the one
+  // machine where it most needs to be testable.
+  //
+  // Written OPEN here and nowhere else. Staging and production carry their own
+  // value, toggled from the operator console; this is the emulator saying "yes,
+  // of course you can sign up on your own machine".
+  await db.collection(APP_SETTINGS_COLLECTION).doc(PUBLIC_SETTINGS_DOC).set({
+    public_signup_enabled: true,
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    updated_by: 'seed-emulator',
+  })
+  console.log('\n[open]  Public signup enabled (app_settings/public)')
 
   for (const account of accounts) {
     console.log(`\n🏟  Seeding ${account.plan} account (${account.email})…`)

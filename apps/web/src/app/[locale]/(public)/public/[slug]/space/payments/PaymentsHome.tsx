@@ -19,6 +19,11 @@ function formatDate(ms: number | null): string {
   return new Date(ms).toLocaleDateString()
 }
 
+/** What "this money did not arrive" actually looks like on a payment row.
+ *  'refunded' and 'partially_refunded' are deliberately absent: the money DID
+ *  arrive and was then returned, which is the row below. */
+const FAILED_PAYMENT_STATUSES = new Set(['failed', 'canceled', 'requires_payment_method'])
+
 export default function PaymentsHome() {
   const t = useTranslations('Space')
   const locale = useLocale()
@@ -107,8 +112,19 @@ export default function PaymentsHome() {
         ) : (
           <ul className="divide-y" style={{ borderColor: cardBorder }}>
             {payments.map((p) => {
+              // A REFUND IS NOT A FAILURE, and this line used to say it was.
+              // `failed` was `status !== 'succeeded'`, and the webhook writes
+              // 'refunded' / 'partially_refunded' onto a payment it reverses —
+              // so every refunded row rendered struck through under the word
+              // "failed", and the refunded branch below was unreachable for a
+              // FULL refund. The member was told a payment they had been given
+              // back had failed.
+              //
+              // Named states, not a negation: a status this surface does not
+              // know about must not be reported as a failure on the strength of
+              // not being one of ours.
               const refunded = p.refundedAmount > 0
-              const failed = p.status !== 'succeeded'
+              const failed = FAILED_PAYMENT_STATUSES.has(p.status)
               return (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">

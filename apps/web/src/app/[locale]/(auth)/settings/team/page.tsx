@@ -103,6 +103,7 @@ import { useByoStripeDoubleRecording } from '@/hooks/useConnect'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
+import { DeleteAccountCard } from '@/components/settings/DeleteAccountCard'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -139,10 +140,25 @@ interface AlertPreset {
 
 // ─── schemas ──────────────────────────────────────────────────────────────────
 
+/** The four languages the product speaks — same set as the i18n routing, named
+ *  here because this control is about OUTBOUND MAIL, not about the URL. */
+const TEAM_LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
+] as const
+
 const generalSchema = z.object({
   name: z.string().min(2, 'At least 2 characters').max(60, 'Max 60 characters'),
   description: z.string().max(500, 'Max 500 characters').optional(),
   sport_type: z.string().optional(),
+  // The language this studio writes to its MEMBERS in. It had no editor
+  // anywhere in the app until 2026-08-23 — declared on the type, read by ~15
+  // call sites in the functions to pick the language of every outbound mail,
+  // and writable only by a seed. A German studio created through signup mailed
+  // its members in English with no way to change it.
+  language: z.enum(['en', 'de', 'fr', 'it']),
   slug: z
     .string()
     .min(3, 'At least 3 characters')
@@ -375,6 +391,10 @@ function GeneralForm({
       name: team.name,
       description: team.description ?? '',
       sport_type: team.sport_type ?? '',
+      // 'en' is what the server already falls back to for a team with no value
+      // (`isLang(team.language) ? … : 'en'`), so the control shows the truth
+      // rather than an empty box that implies nothing has been decided.
+      language: (team.language ?? 'en') as 'en' | 'de' | 'fr' | 'it',
       slug: team.slug,
     },
   })
@@ -395,6 +415,7 @@ function GeneralForm({
         name: data.name,
         description: data.description ?? '',
         sport_type: data.sport_type ?? '',
+        language: data.language,
         slug: data.slug,
       })
       await qc.invalidateQueries({ queryKey: ['team', teamId] })
@@ -455,6 +476,32 @@ function GeneralForm({
             </Select>
           )}
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="language">{t('language')}</Label>
+        <Controller
+          name="language"
+          control={control}
+          render={({ field }) => (
+            <Select value={field.value} disabled={!canEdit} onValueChange={field.onChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TEAM_LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {/* Said plainly, because the obvious reading is the wrong one: this is
+            not the language of the dashboard (that follows the URL), it is the
+            language your members are written to in. */}
+        <p className="text-xs text-muted-foreground">{t('languageHint')}</p>
       </div>
 
       <div className="space-y-1.5">
@@ -1454,34 +1501,68 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
         canEdit={canEdit}
       />
 
-      <div className="space-y-3 pt-2">
+      <div className="space-y-4 pt-2">
+        {/* The heading alone. The paragraph that used to sit here restated
+            what both blocks below already say in their own words — and said it
+            first, so a reader met the caveat before the thing it was about. */}
         <div className="border-t pt-4">
           <p className="text-sm font-semibold">{t('paymentsRecordOnlyTitle')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {t('paymentsRecordOnlyDescription')}
-          </p>
         </div>
+
+      {/* ── TWO CARDS, CHEAPEST FIRST ─────────────────────────────────────────
+          Manual on top and the external provider below it: taking cash is what
+          most studios here actually do, needs no setup, and is the thing a
+          reader is most likely to be looking for. They are SEPARATE cards, not
+          one stacked card divided by a rule — they share only the heading above
+          them, and a studio setting up cash has no business scrolling past a
+          beta integration's caveats to find the input.
+
+          The provider card keeps the default surface rather than a tinted one:
+          a tint reads as a warning, and the caveats it carries are stated in
+          words already. */}
+      <Card>
+        <CardContent className="pt-6">
+          <PaymentModesCard teamId={teamId} current={team?.payment_modes} canEdit={canEdit} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          {/* Superseded keys `paymentsGateway` / `paymentsGatewayDescription`
-              still exist in the locale files; they said "Payment gateway" and
-              "…to collect member payments", which is the claim this rail cannot
-              honour — it holds no credentials and makes no API call. */}
+      <div>
+        {/* Superseded keys `paymentsGateway` / `paymentsGatewayDescription`
+            still exist in the locale files; they said "Payment gateway" and
+            "…to collect member payments", which is the claim this rail cannot
+            honour — it holds no credentials and makes no API call. */}
+        <div className="flex items-center gap-2">
           <p className="text-sm font-medium">{t('paymentsExternalTitle')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('paymentsExternalDescription')}</p>
-          {/* No owner-only note here: the body below says the stronger thing —
-              a non-owner cannot even SEE this list — and saying both would be
-              two lines of the same sentence. */}
+          {/* BETA, said out loud. This rail has never been exercised end to end
+              on production (Franco, 2026-08-24), and a studio deciding where to
+              take money is entitled to know that before it does. */}
+          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+            {t('paymentsExternalBeta')}
+          </Badge>
         </div>
-        {canEdit && (
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="h-4 w-4 mr-1" />
-            {t('paymentsAddExternal')}
-          </Button>
-        )}
+        <p className="text-xs text-muted-foreground mt-1">{t('paymentsExternalDescription')}</p>
+        {/* WHAT IT DOES NOT DO, before the setup button rather than after it.
+            Each line is a real limit of the rail, not a hedge: it receives a
+            notification and files it, so it knows roughly who paid and nothing
+            else. Order is what it CAN do, then the two things it cannot —
+            leading with a limitation reads as a warning about the whole idea.
+            Refunds share a line with pause and cancellation because they are
+            one habit, not three: whatever you do in the provider, do here. */}
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {(['paymentsExternalLimitMatch', 'paymentsExternalLimitLink', 'paymentsExternalLimitRefund'] as const).map(
+            (key) => (
+              <li key={key} className="flex gap-2">
+                <span aria-hidden className="select-none">•</span>
+                <span>{t(key)}</span>
+              </li>
+            )
+          )}
+        </ul>
+        {/* No owner-only note here: the body below says the stronger thing —
+            a non-owner cannot even SEE this list — and saying both would be
+            two lines of the same sentence. */}
       </div>
 
       {/* ABSENT-BECAUSE-FORBIDDEN is not absent-because-none. A manager cannot
@@ -1501,7 +1582,10 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
           detail={error instanceof Error ? error.message : null}
         />
       ) : integrations.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">{t('paymentsNoExternal')}</p>
+        // Left, small, no vertical padding: with the action moved to the bottom
+        // of the block, a centred line floated between the limits above it and
+        // the button below and belonged to neither.
+        <p className="text-xs text-muted-foreground">{t('paymentsNoExternal')}</p>
       ) : (
         <div className="divide-y border rounded-lg">
           {integrations.map((item) => {
@@ -1587,13 +1671,19 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
           </div>
         </div>
       )}
+      {/* The action AFTER what it commits you to, and left-aligned under it —
+          a top-right button asked for a decision above the three lines that
+          inform it. */}
+      {canEdit && (
+        <div>
+          <Button size="sm" variant="outline" onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1" />
+            {t('paymentsAddExternal')}
+          </Button>
+        </div>
+      )}
         </CardContent>
       </Card>
-
-        {/* Manual modes belong to this group for the same reason the card above
-            does: cash and TWINT are money the studio already took, written down
-            afterwards. */}
-        <PaymentModesCard teamId={teamId} current={team?.payment_modes} canEdit={canEdit} />
       </div>
 
       {/* Add/edit dialog */}
@@ -2359,6 +2449,15 @@ export default function TeamSettingsPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* THE DANGER ZONE, OUTSIDE the settings card and last on the tab. Its own
+          card, with its own border, because everything above it is reversible
+          and this is not. Owner-only — it renders nothing for anybody else
+          rather than rendering disabled, which would only raise the question of
+          who can. */}
+      {tab === 'general' && (
+        <DeleteAccountCard teamId={currentTeamId} team={team} canEdit={canEdit} />
       )}
     </div>
   )

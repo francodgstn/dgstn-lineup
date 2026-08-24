@@ -32,6 +32,9 @@ export interface EnabledTeam {
   id: string
   plan: SaasPlan
   name?: string
+  /** ISO 4217, as the studio set it (uppercase). The currency prices are
+   *  authored in — asked at signup, editable in Settings → Payments. */
+  default_currency?: string
   payments?: {
     connectEnabled?: boolean
     connectAccountId?: string
@@ -58,6 +61,7 @@ export async function loadEnabledTeam(teamId: string): Promise<EnabledTeam> {
     id: snap.id,
     plan: (data.plan as SaasPlan | undefined) ?? 'free',
     name: data.name as string | undefined,
+    default_currency: data.default_currency as string | undefined,
     payments: data.payments,
     data,
   }
@@ -124,7 +128,11 @@ export async function persistAccountStatus(
         capabilities: status.capabilities,
         requirements_currently_due: status.requirements_currently_due,
         requirements_disabled_reason: status.requirements_disabled_reason ?? null,
-        default_currency: 'chf',
+        // `default_currency` is deliberately NOT written here. It is set once,
+        // from the team, when the account document is created — and this
+        // function runs on every status refresh, so re-writing it meant a
+        // hard-coded 'chf' silently overwrote the studio's own currency minutes
+        // after onboarding. A status refresh has nothing to say about currency.
         updated_at: now,
       },
       { merge: true }

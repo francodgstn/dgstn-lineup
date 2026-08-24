@@ -1,10 +1,10 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { Link } from '@/i18n/navigation'
-import type { Route } from 'next'
-import { ArrowRight, BarChart3, Banknote, CalendarClock, Users } from 'lucide-react'
+import { ArrowRight, Rocket } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
 import type { SetupStep } from '@/hooks/useSetupChecklist'
 
 /**
@@ -18,55 +18,54 @@ import type { SetupStep } from '@/hooks/useSetupChecklist'
  * every card does not say "you haven't started yet", it says "this product is
  * empty".
  *
- * So on day one the dashboard is the setup checklist, this card and the
- * discovery panel. This card is the honest version of what it replaces: it
- * NAMES what will appear and what has to happen first, and points at the next
- * open step rather than at a skeleton.
+ * ── IT ANSWERS ONE QUESTION, AND HANDS OVER FOR THE OTHER ───────────────────
+ * This card used to do two jobs: explain the emptiness AND carry the work. It
+ * listed four things that would appear once data existed, each with its
+ * precondition, and then deep-linked the next open step — which is the same
+ * one-step-with-no-overview problem the dashboard queue had (canary item 8).
+ *
+ * Since 2026-08-23 the work has an owner: `SetupGuide`, a minimizable overlay
+ * the shell mounts on every page. So this card is down to one question — *why
+ * is this page empty?* — answered in a sentence, with the progress and one
+ * button that raises the guide. Four rows explaining what a dashboard is were
+ * a lot of reading for somebody who has not started yet, and the studio can see
+ * for themselves what appears the moment it does (Franco, 2026-08-23).
  */
 export function FirstRunCard({ steps }: { steps: SetupStep[] }) {
   const t = useTranslations('Dashboard')
   const tOnb = useTranslations('Onboarding')
 
-  const nextStep = steps.find((s) => !s.done) ?? null
-
-  const rows: { icon: React.ElementType; key: 'agenda' | 'figures' | 'money' | 'trends' }[] = [
-    { icon: CalendarClock, key: 'agenda' },
-    { icon: Users, key: 'figures' },
-    { icon: Banknote, key: 'money' },
-    { icon: BarChart3, key: 'trends' },
-  ]
+  const required = steps.filter((s) => !s.optional)
+  const done = required.filter((s) => s.done).length
+  const total = required.length
+  const pct = total ? (done / total) * 100 : 0
 
   return (
-    <Card className="h-full">
-      <CardContent className="flex h-full flex-col p-5">
-        <p className="font-semibold leading-tight">{t('firstRunTitle')}</p>
-        <p className="mt-0.5 text-sm text-muted-foreground">{t('firstRunBody')}</p>
+    <Card>
+      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="font-semibold leading-tight">{t('firstRunTitle')}</p>
+          <p className="text-sm text-muted-foreground">{t('firstRunSetupBody')}</p>
+        </div>
 
-        <ul className="mt-4 flex-1 space-y-2.5">
-          {rows.map(({ icon: Icon, key }) => (
-            <li key={key} className="flex items-start gap-2.5">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <Icon className="h-3.5 w-3.5" />
-              </span>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {t(`firstRun_${key}_title` as Parameters<typeof t>[0])}
-                </span>{' '}
-                — {t(`firstRun_${key}_body` as Parameters<typeof t>[0])}
-              </p>
-            </li>
-          ))}
-        </ul>
-
-        {nextStep && (
-          <Link
-            href={nextStep.href as Route}
-            className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          >
-            {tOnb(`setup.steps.${nextStep.key}.label` as Parameters<typeof tOnb>[0])}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        )}
+        <div className="flex shrink-0 items-center gap-4">
+          {/* The progress rides WITH the button, not above the text: on day one
+              it usually reads 0 of 5, and a zeroed bar spanning the card is the
+              same "this product is empty" impression the card exists to undo. */}
+          <div className="hidden items-center gap-2 sm:flex">
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              {tOnb('setup.progress', { done, total })}
+            </span>
+          </div>
+          <Button onClick={() => window.dispatchEvent(new Event(OPEN_SETUP_GUIDE_EVENT))}>
+            <Rocket className="h-4 w-4" />
+            {tOnb('setup.title')}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

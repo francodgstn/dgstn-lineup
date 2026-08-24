@@ -179,7 +179,10 @@
     "headTileSearch": "Seiten suchen…",
     "headTileNoMatch": "Keine Treffer",
     "headTileRemove": "Verknüpfung entfernen",
-    "utilities": "Mehr"
+    "utilities": "Mehr",
+    "subscriptionPlans": "Abo-Pläne",
+    "memberSubscriptions": "Mitglieder-Abos",
+    "paymentsAndSubscriptions": "Zahlungen & Abos"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -307,7 +310,10 @@
     "trialNotice": "Du startest eine {days}-tägige Testphase des {plan}-Plans. Keine Kreditkarte nötig.",
     "errorEmailInUse": "Ein Konto mit dieser E-Mail-Adresse existiert bereits.",
     "errorAccountGeneric": "Konto konnte nicht erstellt werden. Bitte erneut versuchen.",
-    "errorTeamGeneric": "Team konnte nicht erstellt werden. Bitte erneut versuchen."
+    "errorTeamGeneric": "Team konnte nicht erstellt werden. Bitte erneut versuchen.",
+    "currency": "Währung",
+    "language": "Sprache",
+    "languageHint": "Die Sprache, in der deine Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Beides lässt sich später ändern."
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -380,15 +386,6 @@
     "demoViewLevel": "Stufe",
     "demoEmptyLevel": "Keine Kontakte mit gesetztem Rang",
     "firstRunTitle": "Dein Dashboard füllt sich von selbst",
-    "firstRunBody": "Bisher ist nichts passiert, also gibt es nichts zu zählen. Das hier erscheint — und das muss zuerst passieren.",
-    "firstRun_agenda_title": "Tagesagenda",
-    "firstRun_agenda_body": "sobald eine Session im Kalender steht.",
-    "firstRun_figures_title": "Deine Zahlen",
-    "firstRun_figures_body": "Teilnahme, Buchungen und Abos, sobald du Kontakte hast.",
-    "firstRun_money_title": "Geld",
-    "firstRun_money_body": "Einnahmen und letzte Zahlungen, ab der ersten Zahlung.",
-    "firstRun_trends_title": "Wochentrends",
-    "firstRun_trends_body": "nach einigen Wochen mit Sessions — ein Trend braucht Vergangenheit.",
     "trendsNoHistoryTitle": "Noch keine Historie für Diagramme",
     "trendsNoHistoryBody": "Trends vergleichen Woche für Woche. Sobald ein paar Sessions gelaufen sind, erscheinen die Diagramme hier von selbst.",
     "chartEmptyTitle": "Noch nichts zu zeigen",
@@ -412,7 +409,8 @@
     "chartTitleSessions": "Einheiten",
     "chartTitleContacts": "Kontakte",
     "chartTitleTopActivities": "Top-Aktivitäten",
-    "sectionDiscover": "Entdecken"
+    "sectionDiscover": "Entdecken",
+    "firstRunSetupBody": "Es ist noch nichts passiert, also gibt es nichts zu zählen. Schliesse die Einrichtung ab, und diese Seite füllt sich von selbst."
   },
   "Contacts": {
     "noteColor_none": "Keine Farbe",
@@ -934,7 +932,9 @@
     "subHistoryDeleteBody": "Damit wird der Nachweis entfernt, dass {name} dieses Abo hatte. Es wird nichts erstattet und der aktuelle Stand ändert sich nicht.",
     "affiliationRemoveTitle": "Diese Zugehörigkeit entfernen?",
     "affiliationRemoveBody": "{name} verliert diese Zugehörigkeit und alles, was davon abhängt: Zugang zu geschützten Aktivitäten, Mitgliederpreise und eine anstehende Verlängerung.",
-    "deletionScheduledBadge": "Löschung beantragt · {date}"
+    "deletionScheduledBadge": "Löschung beantragt · {date}",
+    "attention_cancelling": "Kündigt",
+    "attention_billing_unlinked": "Abrechnung ohne Abo"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -1014,7 +1014,6 @@
     "type_appointment": "Termin",
     "typeAutoSet": "Automatisch aus der Aktivität übernommen — kann bei Bedarf überschrieben werden.",
     "fieldAllowBooking": "Online-Buchung erlauben",
-    "locationPlaceholder": "Halle, Dojo…",
     "deleteConfirm": "Einheit \"{label}\" löschen? Dies kann nicht rückgängig gemacht werden.",
     "fieldActivity": "Aktivität",
     "fieldLocation": "Ort",
@@ -1049,8 +1048,6 @@
     "daySun": "So",
     "repeatPreview": "Bevorstehende Einheiten",
     "repeatPreviewMore": "+{count} weitere",
-    "generatingSeries": "Einheiten werden erstellt…",
-    "seriesCreated": "{count, plural, one {# Einheit erstellt} other {# Einheiten erstellt}}",
     "partOfSeries": "Teil einer Serie",
     "freqYearly": "Jährlich",
     "seriesEveryDays": "Alle {count} Tage",
@@ -1103,7 +1100,19 @@
     "editConfirmTitle": "Für diese Session sind Personen eingetragen",
     "editConfirmBody": "{count, plural, one {# Person ist} other {# Personen sind}} dieser Session zugeordnet. Änderungen an Zeit, Ort oder Aktivität betreffen das, was ihnen mitgeteilt wurde.",
     "editConfirmPast": "Diese Session hat bereits stattgefunden — du bearbeitest also den Nachweis dessen, was war.",
-    "editConfirmAction": "Änderungen speichern"
+    "editConfirmAction": "Änderungen speichern",
+    "newActivityNamePlaceholder": "Name des Kurses",
+    "noPlacesHint": "Ein Ort ist eine feste Adresse: Er hat Räume, und alles, was du dort planst, wird unter ihm zusammengefasst.",
+    "createPlaceAction": "Ort hinzufügen",
+    "fieldLocationNote": "Ortsnotiz",
+    "locationNotePlaceholder": "Hintereingang, Platz 2…",
+    "locationHintWithPlace": "Zusatzinfo zum Ort",
+    "locationHintNoPlace": "Freitext für einen einmaligen Ort, den du nicht speicherst",
+    "creatingSeries": "Serie wird erstellt…",
+    "seriesCreatingToast": "Serie erstellt. Die Kurse werden deinem Kalender hinzugefügt.",
+    "seriesGenerateFailed": "Die Serie wurde erstellt, aber ihre Kurse konnten noch nicht hinzugefügt werden: {message}",
+    "seriesFillingIn": "Eine Serie wird noch in deinen Kalender eingetragen…",
+    "seriesFillingInNamed": "{name} wird noch in deinen Kalender eingetragen…"
   },
   "Calendar": {
     "title": "Zeitplan",
@@ -1645,7 +1654,9 @@
     "accessPickInCatalogue": "Welche Abos das buchen dürfen, legst du im Katalog fest — direkt neben den Abos.",
     "accessOpenCatalogue": "Katalog öffnen",
     "dropInRateInCatalogue": "Einen Mitgliederpreis dafür legst du im Katalog fest — es ist eine Regel für alle beteiligten Abos.",
-    "benefitInCatalogue": "Den Mitgliederpreis für diese Dauern legst du im Katalog fest — neben den Abos, für die er gilt."
+    "benefitInCatalogue": "Den Mitgliederpreis für diese Dauern legst du im Katalog fest — neben den Abos, für die er gilt.",
+    "dropInPriceValidation": "Gib einen Einzelpreis von mindestens 0.50 ein",
+    "durationsRequiredValidation": "Wähle mindestens eine Termindauer"
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -1862,10 +1873,10 @@
     "subTypeIntroErr_amount_invalid": "Geben Sie einen Einführungspreis von 0 oder mehr ein.",
     "subTypeIntroErr_below_minimum": "Eine Belastung muss mindestens 0.50 betragen. Verwenden Sie 0, um die ersten Perioden gratis zu machen.",
     "subTypeIntroErr_not_cheaper": "Der Einführungspreis muss tiefer sein als der reguläre Preis des Abos.",
-    "paymentsRecordOnlyTitle": "Zahlungen, die du ausserhalb von Linyup einziehst",
+    "paymentsRecordOnlyTitle": "Zahlungen ausserhalb von Linyup abwickeln",
     "paymentsRecordOnlyDescription": "Nichts hier unten belastet ein Mitglied. Es wird nur Geld erfasst, das du bereits eingezogen hast — über dein eigenes Stripe- oder Payrexx-Konto oder von Hand — damit es beim Mitglied erscheint. Um Karten direkt in Linyup zu belasten, nutze oben \"Zahlungen mit Linyup annehmen\".",
     "paymentsExternalTitle": "Dein eigenes Stripe- oder Payrexx-Konto",
-    "paymentsExternalDescription": "Du ziehst die Zahlung im Dashboard deines Anbieters ein; Linyup empfängt die Benachrichtigung und ordnet sie dem richtigen Kontakt zu. Linyup belastet hier niemanden.",
+    "paymentsExternalDescription": "Du kassierst in deinem eigenen Stripe- oder Payrexx-Konto. Linyup erfasst die Zahlung, sobald dein Anbieter die Daten sendet.",
     "paymentsExternalHiddenOwnerOnly": "Externe Anbieter sind nur für den Team-Inhaber sichtbar.",
     "paymentsAddExternal": "Anbieter hinzufügen",
     "paymentsEditExternal": "Anbieter bearbeiten",
@@ -1882,7 +1893,14 @@
     "customFieldPublicOnBooking": "Im Buchungsformular abfragen",
     "customFieldPublicOnBookingHint": "Macht Name und Optionen dieses Feldes öffentlich sichtbar, damit es auf deiner Buchungsseite erscheinen kann. Für Vertrauliches ausgeschaltet lassen.",
     "subTypeActivitiesInCatalogue": "Im Katalog festlegen — dort siehst du es auch von der Seite der Aktivität.",
-    "subTypeActivitiesOpenCatalogue": "Katalog öffnen"
+    "subTypeActivitiesOpenCatalogue": "Katalog öffnen",
+    "language": "Sprache für Mitglieder",
+    "languageHint": "Die Sprache, in der deine Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Die Sprache deines eigenen Dashboards wählst du separat.",
+    "subTypeActivitiesAfterSave": "Speichere den Plan zuerst — danach kannst du wählen, was er freischaltet und was Inhaber dafür zahlen.",
+    "paymentsExternalBeta": "Beta",
+    "paymentsExternalLimitMatch": "Linyup versucht, den Kontakt über die E-Mail-Adresse zuzuordnen.",
+    "paymentsExternalLimitLink": "Zahlungen werden nicht automatisch mit Buchung, Abo, Kurs oder Produkt verknüpft.",
+    "paymentsExternalLimitRefund": "Erstattungen, Pausen und Kündigungen musst du manuell im Dashboard deines Anbieters und in Linyup erledigen."
   },
   "Bookings": {
     "title": "Buchungen",
@@ -3400,40 +3418,6 @@
     "signupClosedNotice": "Die Registrierung ist derzeit nur auf Einladung möglich. Falls du eingeladen wurdest, fahre unten mit der E-Mail-Adresse aus deiner Einladung fort."
   },
   "Onboarding": {
-    "replayTour": "Tour erneut ansehen",
-    "tour": {
-      "welcomeTitle": "Willkommen bei Linyup 👋",
-      "welcomeBody": "Hier ist eine kurze Tour durch die wichtigsten Funktionen. Du kannst sie jederzeit über das Kontomenü erneut starten.",
-      "themeLangTitle": "Mach es zu deinem",
-      "themeLangBody": "Öffne das Kontomenü, um die Sprache zu wechseln oder zwischen hellem und dunklem Modus umzuschalten.",
-      "featuresTitle": "Deine Arbeitsbereiche",
-      "featuresBody": "Alles für den Alltag: Aktivitäten (was Sie anbieten), Termine (wann sie stattfinden), Buchungen (wer kommt) und Zahlungen. Dazu, was Sie verkaufen und wie Sie wachsen. Öffnen Sie einen Bereich, um die Seiten zu sehen.",
-      "shortcutsTitle": "Shortcuts",
-      "shortcutsBody": "Geöffnete Seiten erscheinen hier. Fahre über eine Zeile und klicke die Pinnadel, um deine meistgenutzten oben zu behalten.",
-      "searchTitle": "Schnellsuche",
-      "searchBody": "Springe mit einem Tastendruck überallhin – tippe z. B. \"Akt\" für Aktivitäten oder \"Kon\" für Kontakte.",
-      "howToTitle": "How-to & Anleitungen",
-      "howToBody": "Schritt-für-Schritt-Anleitungen und Einrichtungshilfe findest du hier, wann immer du sie brauchst.",
-      "next": "Weiter",
-      "prev": "Zurück",
-      "done": "Verstanden",
-      "activitiesTitle": "1. Aktivitäten — was du unterrichtest",
-      "activitiesBody": "Eine Aktivität ist ein Angebot: Yoga Basics, Kinder-Judo, ein Einzeltraining. Sie trägt Preis, Kapazität und die Frage, wer buchen darf. Alles andere in Linyup beginnt hier.",
-      "sessionsTitle": "2. Sessions — wann sie stattfinden",
-      "sessionsBody": "Eine Session ist eine Aktivität zu einer Zeit. Einmal in den Kalender legen und wöchentlich wiederholen lassen — oder Verfügbarkeiten veröffentlichen und Termine buchen lassen.",
-      "bookingsTitle": "3. Buchungen — wer kommt",
-      "bookingsBody": "Gebucht wird über deine öffentliche Seite, und jeder Platz landet hier — mit Warteliste, Check-in und Tagesliste. Manuelles Eintragen funktioniert gleich.",
-      "paymentsTitle": "4. Zahlungen — bezahlt werden",
-      "paymentsBody": "Abos, Einzeleintritte, Kurse und Produkte laufen hier zusammen. Bargeld und Überweisungen kannst du manuell erfassen; verbinde Stripe, wenn du online Karten akzeptieren willst.",
-      "checklistTitle": "Deine Einrichtungs-Checkliste",
-      "helpTitle": "Nicht weiter? Achte auf das Fragezeichen",
-      "helpBody": "Das Fragezeichen oben in der Seitenleiste öffnet die Anleitung: wie alles zusammenspielt, was was kostet — und diese Tour, wann immer du willst.",
-      "checklistBody": "Derselbe Weg, mit deinen eigenen Daten. Sie hakt sich selbst ab und steht oben im Dashboard, bis du startklar bist.",
-      "quickAccessTitle": "Immer griffbereit",
-      "quickAccessBody": "Die beiden Kacheln oben sind Ihr schnellster Weg zurück — das Dashboard und eine Seite Ihrer Wahl. Darunter sammeln sich geöffnete Seiten als Verknüpfungen; heften Sie die meistgenutzten an.",
-      "utilitiesTitle": "Suche und der Rest",
-      "utilitiesBody": "Die Suche bringt Sie mit einem Tastendruck überallhin — probieren Sie „Akt“ für Aktivitäten. Daneben: der QR-Code Ihres Studios, Plugins, Einstellungen und How-to für Anleitungen und diese Tour."
-    },
     "setup": {
       "title": "Einrichtung",
       "subtitle": "Ein paar Schritte, bis dein Betrieb läuft.",
@@ -3441,39 +3425,72 @@
       "dismiss": "Ausblenden",
       "optional": "optional",
       "sessionsNotBookableWarning": "Diese Klasse ist noch nicht buchbar — aktiviere „Online-Buchung erlauben“.",
-      "steps": {
-        "activities": {
-          "label": "Aktivitäten hinzufügen",
-          "desc": "Lege fest, welche Kurse oder Coachings du anbietest."
-        },
-        "sessions": {
-          "label": "Session planen",
-          "desc": "Trage deinen ersten Kurs oder Slot in den Kalender ein."
-        },
-        "subscriptions": {
-          "label": "Abos erstellen",
-          "desc": "Richte die Tarife ein, die Mitglieder buchen können."
-        },
-        "bioLink": {
-          "label": "Bio-Link veröffentlichen",
-          "desc": "Schalte deine öffentliche Buchungsseite live."
-        },
-        "contacts": {
-          "label": "Kontakt hinzufügen",
-          "desc": "Füge dein erstes Mitglied oder einen Interessenten hinzu."
-        },
-        "ranks": {
-          "label": "Ränge einrichten",
-          "desc": "Richte ein Rangsystem ein, falls du eines nutzt."
-        }
-      },
       "doneTitle": "Dein Studio ist bereit",
       "doneBody": "Alle Einrichtungsschritte sind erledigt — Leute finden dich und können buchen.",
       "doneAction": "Öffentliche Seiten ansehen",
       "doneDismiss": "Schliessen",
       "next": "Weiter",
       "showSteps": "Alle Schritte anzeigen",
-      "hideSteps": "Schritte ausblenden"
+      "hideSteps": "Schritte ausblenden",
+      "minimize": "Minimieren",
+      "sections": {
+        "offer": "Was du anbietest",
+        "doors": "Türen öffnen",
+        "extra": "Zusätzliche Schritte"
+      },
+      "requiresPlan": "{plan}-Plan",
+      "steps": {
+        "activities": {
+          "label": "Aktivitäten anlegen",
+          "desc": "Lege fest, welche Kurse oder Coachings du anbietest."
+        },
+        "pricing": {
+          "label": "Preise festlegen",
+          "desc": "Ein Abo-Plan oder ein Preis pro Kurs.",
+          "ack": "Vorerst keine Preise"
+        },
+        "sessions": {
+          "label": "Buchbaren Kurs in den Kalender stellen",
+          "desc": "Trag ihn in den Kalender ein und aktiviere die Online-Buchung. Sonst kann niemand einen Platz nehmen."
+        },
+        "publicPage": {
+          "desc": "Deine Beschreibung, deine Links, deine Social-Profile. Die Seite ist bereits online.",
+          "label": "Fülle deine Bio-Link-Seite aus"
+        },
+        "payments": {
+          "label": "Zahlungen einrichten",
+          "desc": "Verbinde Stripe, um Zahlungen direkt in Linyup anzunehmen.",
+          "ack": "Wir nehmen nur Bargeld"
+        },
+        "branding": {
+          "label": "Logo und Farben hinzufügen",
+          "desc": "Jede öffentliche Seite verwendet sie.",
+          "ack": "Nicht nötig"
+        },
+        "bookingForm": {
+          "label": "Prüfe, was dein Buchungsformular fragt",
+          "desc": "Telefon, Geburtsdatum, eigene Fragen. Die Voreinstellungen passen meistens.",
+          "ack": "Sieht alles gut aus"
+        },
+        "coaches": {
+          "label": "Lade deine Coaches ein",
+          "desc": "Gib ihnen einen eigenen Zugang, mit genau dem, was sie brauchen.",
+          "ack": "Ich arbeite allein"
+        },
+        "pricingReview": {
+          "label": "Prüfe, was Leute tatsächlich zahlen",
+          "desc": "Jeder Preis so, wie ein Mitglied ihn sieht, an einem Ort.",
+          "ack": "Sieht alles gut aus"
+        },
+        "plugins": {
+          "desc": "Online-Kurse, Geschenkkarten, Verzichtserklärungen, Finanzen und mehr. Aktiviere nur, was du brauchst.",
+          "ack": "Ich habe geschaut",
+          "label": "Plugins entdecken"
+        }
+      },
+      "ackUndo": "Rückgängig",
+      "ackNoteSkip": "Du hast das selbst geschlossen",
+      "ackNoteReview": "Du hast das geprüft"
     }
   },
   "SubscriptionCancellation": {
@@ -3713,7 +3730,21 @@
     "readyBody": "Dein Konto ist eingerichtet und kann Zahlungen annehmen.",
     "chargesEnabled": "Zahlungen aktiv",
     "payoutsEnabled": "Auszahlungen aktiv",
-    "incompleteBody": "Für dein Zahlungskonto fehlen noch einige Angaben, bevor du Zahlungen annehmen kannst."
+    "incompleteBody": "Für dein Zahlungskonto fehlen noch einige Angaben, bevor du Zahlungen annehmen kannst.",
+    "setupNote": "Dauert nur ein paar Minuten. Du bekommst dein eigenes Stripe-Konto mit vollem Dashboard-Zugriff, die Verifizierung übernimmt Stripe. Du nutzt Stripe schon? Melde dich beim Einrichten an — bereits geprüfte Angaben werden übernommen.",
+    "disconnectNote": "Mit dem falschen Stripe-Login eingerichtet? Verknüpfung hier lösen und mit einem anderen Konto neu starten.",
+    "disconnectAction": "Stripe-Konto trennen",
+    "disconnectCancel": "Verknüpft lassen",
+    "disconnectConfirmTitle": "Dieses Stripe-Konto trennen?",
+    "disconnectConfirmDesc": "Dein Stripe-Konto, dein Geld und deine Historie bleiben unberührt — es werden nur keine Zahlungen mehr von Linyup dorthin geleitet. Bis du ein anderes Konto verbindest, kannst du keine Zahlungen annehmen: Shop und kostenpflichtige Buchungen schliessen. Bisherige Zahlungen bleiben erhalten.",
+    "benefitsTitle": "Das bekommst du",
+    "benefitCheckout": "Mitglieder zahlen direkt in Linyup für Buchungen, Abos, Kurse und Shop-Einkäufe.",
+    "benefitLinked": "Jede Zahlung ist mit dem Mitglied und dem Gekauften verknüpft.",
+    "benefitRefunds": "Erstatte Zahlungen direkt in Linyup. Mitgliederakte und Buchhaltung bleiben synchron.",
+    "benefitRenewals": "Abos verlängern sich, wiederholen Zahlungen und enden automatisch.",
+    "feeStripeNote": "Dazu kommt Stripes eigene Bearbeitungsgebühr. Siehe <link>Stripe-Preise</link>.",
+    "feeRefundNote": "Bei einer Erstattung trägst du die Stripe-Gebühr.",
+    "feesTitle": "Das zahlst du"
   },
   "PaymentsDashboard": {
     "title": "Zahlungen",
@@ -3914,7 +3945,51 @@
     "mayDuplicateHelp": "Diese Zeile ist der Rechnung zugeordnet, nicht der Zahlung. Wenn Ihr Stripe-Webhook auch Zahlungsereignisse sendet, kann derselbe Betrag hier zweimal erscheinen.",
     "markPaidClosesLink": "Der an diese Kundin oder diesen Kunden gesendete Zahlungslink wird storniert, damit nicht zweimal bezahlt werden kann.",
     "markPaidAlreadyOnline": "Diese Person hat bereits online bezahlt — hier wurde nichts erfasst.",
-    "markPaidLinkStillOpen": "Zahlung erfasst, aber der Zahlungslink konnte nicht storniert werden — stornieren Sie ihn in Stripe. Wird er trotzdem bezahlt, wird die Belastung automatisch zurückerstattet."
+    "markPaidLinkStillOpen": "Zahlung erfasst, aber der Zahlungslink konnte nicht storniert werden — stornieren Sie ihn in Stripe. Wird er trotzdem bezahlt, wird die Belastung automatisch zurückerstattet.",
+    "cancelBilling": "Abrechnung beenden",
+    "cancelBillingConfirmTitle": "Abrechnung für dieses Abo beenden?",
+    "cancelBillingConfirmDesc": "Das Abo wird in Stripe gekündigt und nicht mehr belastet. Das Mitglied behält den Zugang bis zum Ende der bereits bezahlten Periode. Das lässt sich hier nicht rückgängig machen — es müsste ein neues Abo verkauft werden.",
+    "cancelBillingConfirmAction": "Abrechnung beenden",
+    "billingUnlinkedTitle": "Abrechnung läuft ohne passendes Abo weiter",
+    "billingUnlinkedBody": "Stripe belastet dieses Mitglied weiterhin, aber das Abo unten ist nicht das ihm zugewiesene. Weise entweder das passende Abo zu oder beende die Abrechnung.",
+    "unknownMember": "Mitglied",
+    "subRenewsOn": "Verlängert sich am {date}",
+    "titleWithSubscriptions": "Zahlungen & Abos",
+    "subscriptionsEmpty": "Noch hat niemand ein Abo.",
+    "subOffline": "Nicht hier abgerechnet",
+    "allPaymentsHeading": "Zahlungen",
+    "colPlan": "Abo",
+    "colRenewal": "Verlängerung",
+    "searchSubscriptions": "Mitglieder oder Abos suchen…",
+    "searchPartnerVisits": "Besuche suchen…",
+    "noPaymentsForMember": "Für dieses Mitglied sind noch keine Zahlungen erfasst.",
+    "window_1m": "Letzter Monat",
+    "window_3m": "Letzte 3 Monate",
+    "window_12m": "Letzte 12 Monate",
+    "window_all": "Gesamter Zeitraum",
+    "searchAllTime": "Stattdessen im gesamten Zeitraum suchen",
+    "expandRow": "Zahlungen anzeigen",
+    "collapseRow": "Zahlungen ausblenden",
+    "filterNeedsAttention": "Braucht Aufmerksamkeit",
+    "noSubscriptionsNeedAttention": "Nichts zu tun. Keine fehlgeschlagenen Zahlungen, keine Kündigungen, keine Abrechnung ohne Abo.",
+    "journalCorrected": "In der Buchhaltung storniert",
+    "category_drop_in": "Einzelstunde",
+    "category_course": "Kurs",
+    "category_product": "Produkt",
+    "category_gift_card": "Geschenkkarte",
+    "category_other": "Sonstiges",
+    "journalGross": "Belastet",
+    "journalStripeFee": "Stripe-Gebühr",
+    "journalPlatformFee": "Linyup-Gebühr",
+    "journalNetLabel": "Du erhältst",
+    "journalFeeEstimated": "Die Stripe-Gebühr ist noch nicht bestätigt, dies ist eine Schätzung.",
+    "category_membership": "Abo",
+    "journalHeading": "In deiner Buchhaltung",
+    "journalRefunded": "Erstattet",
+    "journalFeeReturned": "Linyup-Gebühr zurück",
+    "journalNetAfterRefund": "Dir bleibt",
+    "journalStripeFeeKept": "Stripe behält bei einer Erstattung seine Bearbeitungsgebühr.",
+    "journalNetAfterRefundCost": "Das kostet dich"
   },
   "PaymentErrors": {
     "setupIncomplete": "Die Einrichtung des Zahlungskontos ist noch nicht abgeschlossen, daher konnte dies nicht durchgeführt werden. Einrichtung unter Einstellungen → Zahlungen abschliessen.",
@@ -4671,7 +4746,14 @@
     "contactFieldAddressRoute": "Strasse",
     "contactFieldAddressNumber": "Nr.",
     "contactFieldAddressPostalCode": "PLZ",
-    "contactFieldAddressLocality": "Ort"
+    "contactFieldAddressLocality": "Ort",
+    "memberTitle": "Buchung bestätigen",
+    "memberSubtitle": "Du bist als {name} angemeldet — es gibt nichts auszufüllen.",
+    "memberCovered": "In deiner Mitgliedschaft enthalten",
+    "memberPayable": "Diese Klasse ist nicht in deiner Mitgliedschaft enthalten. Du kannst sie für {price} buchen.",
+    "memberContinueToPayment": "Weiter zur Zahlung",
+    "memberSomeoneElseTitle": "Für jemand anderen buchen",
+    "memberSomeoneElseSubtitle": "Diese Klasse stattdessen für eine andere Person buchen"
   },
   "PublicTrialBooking": {
     "titleBookTrialClass": "Probetraining buchen",
@@ -5511,6 +5593,8 @@
       "inbound_webhook": "Eingehender Webhook",
       "manual": "Nur manuell",
       "acquisition_stage_changed": "Akquisitionsphase vorangeschritten",
+      "subscription_cancel_requested": "Abo wird gekündigt",
+      "subscription_payment_failed": "Abo-Zahlung fehlgeschlagen",
       "payment_received": "Zahlung eingegangen",
       "payment_refunded": "Zahlung erstattet",
       "payment_disputed": "Rückbuchung eröffnet"
@@ -6292,11 +6376,6 @@
     },
     "utilitiesTitle": "Weiter geht's",
     "utilities": {
-      "tour": {
-        "title": "Geführte Tour wiederholen",
-        "body": "Geh die wichtigsten Bereiche der App noch einmal Schritt für Schritt durch.",
-        "action": "Tour starten"
-      },
       "checklist": {
         "title": "Einrichtungs-Checkliste",
         "body": "Der Einrichtungsfortschritt deines Studios, gelesen aus deinen echten Daten.",
@@ -6797,7 +6876,9 @@
     "demoAgeAdults": "Erwachsene (18–39)",
     "demoAgeMasters": "Masters (40+)",
     "extraTitle": "Extras",
-    "extraSubtitle": "Geparkte Panels, aktiviert unter Einstellungen → Experimentell."
+    "extraSubtitle": "Geparkte Panels, aktiviert unter Einstellungen → Experimentell.",
+    "reason_cancelling": "Abo läuft aus",
+    "reason_billing_unlinked": "Wird für ein Abo belastet, das sie nicht mehr haben"
   },
   "BookingContactFields": {
     "title": "Zu erfassende Kontaktdaten",
@@ -6908,14 +6989,29 @@
     "summaryCoursePriced": "Einmalverkauf · {plans, plural, =0 {kein Mitgliederpreis} one {# Abo mit Mitgliederpreis} other {# Abos mit Mitgliederpreis}}",
     "summaryCourseOpen": "Kostenlos oder nur mit Anmeldung — kein Abo ändert, wer ihn öffnen kann."
   },
-  "PagePurpose": {
-    "activities": "Was du anbietest",
-    "schedule": "Wann du es anbietest",
-    "subscriptions": "Was du verkaufst",
-    "pricing": "Was Leute tatsächlich zahlen",
-    "activitiesNote": "Die Kurse und Termine, die du anbietest. Einmal hier definiert, dann beliebig oft angesetzt.",
-    "scheduleNote": "Alle Termine im Kalender, einzeln oder wiederkehrend, mit den jeweiligen Buchungen.",
-    "subscriptionsNote": "Mitgliedschaften, Pakete und Abos. Was sie kosten, wie oft sie verlängert werden und was sie freischalten.",
-    "pricingNote": "Was jede Art von Kontakt zahlt — mit denselben Regeln berechnet wie bei einer echten Buchung."
+  "VerifyEmail": {
+    "title": "Bestätige {email}",
+    "body": "Bis dahin gehen keine E-Mails an deine Mitglieder raus — Bestätigungen, Erinnerungen und Belege werden zurückgehalten.",
+    "resend": "Link erneut senden",
+    "sent": "Link gesendet",
+    "recheck": "Ich habe bestätigt"
+  },
+  "DeleteAccount": {
+    "title": "Dieses Studio löschen",
+    "body": "Alles, was dieses Studio enthält — Kontakte, Buchungen, Termine, Dokumente und Dateien — wird endgültig gelöscht. Danach lässt sich nichts wiederherstellen; exportiere vorher, was du behalten möchtest.",
+    "pointBilling": "Die Abos deiner Mitglieder werden sofort gekündigt — ein Abbruch der Löschung stellt sie nicht wieder her.",
+    "pointWindow": "Die Daten werden in 30 Tagen gelöscht. Bis dahin ändert sich nichts weiter und du kannst es noch stoppen.",
+    "pointStripe": "Dein Stripe-Konto, sein Guthaben und seine Zahlungshistorie werden nicht gelöscht — sie gehören dir und sind die Gegenseite echter Transaktionen.",
+    "startAction": "Dieses Studio löschen…",
+    "confirmLabel": "Tippe {name} zur Bestätigung",
+    "confirmAction": "Abrechnung beenden und Löschung planen",
+    "back": "Abbrechen",
+    "scheduledToast": "Abrechnung beendet. Dieses Studio wird am {date} gelöscht.",
+    "cancelledToast": "Löschung abgebrochen. Deine Daten bleiben erhalten.",
+    "pendingTitle": "Dieses Studio ist zur Löschung vorgemerkt",
+    "pendingBody": "Am {date} wird alles endgültig gelöscht. Bis dahin funktioniert das Studio normal und du kannst dies jederzeit stoppen.",
+    "pendingBillingNote": "Die Abos deiner Mitglieder wurden bereits gekündigt und lassen sich nicht neu starten — sie müssten erneut eine Mitgliedschaft kaufen.",
+    "cancelAction": "Löschung stoppen",
+    "errorGeneric": "Das hat nicht geklappt. Es wurde nichts gelöscht."
   }
 }

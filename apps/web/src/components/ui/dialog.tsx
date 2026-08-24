@@ -167,12 +167,24 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
  * The scrolling middle row. Its presence is what switches `DialogContent` into
  * a pinned header/footer layout — see THE SCROLL RULE at the top of this file.
  * Carries no spacing of its own: pass the rhythm its children need.
+ *
+ * ── WHY IT SAYS `overflow-x-hidden` TOO ────────────────────────────────────
+ * `overflow-y: auto` alone does NOT leave the other axis alone: CSS promotes
+ * `overflow-x: visible` to `auto` whenever the other axis is not visible. So
+ * every dialog with a body silently gained a horizontal scrollbar the moment
+ * any child was a pixel too wide — reported on the subscription form during the
+ * prod canary of 2026-08-23.
+ *
+ * This is the BACKSTOP, not the fix. The fix is that the child wraps or shrinks
+ * (the price row there now does both), because hiding an overflow hides a
+ * control. It is here because a scrollbar under a form is never the right answer
+ * for any dialog, so the default should not be able to produce one.
  */
 function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-body"
-      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
+      className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden", className)}
       {...props}
     />
   )

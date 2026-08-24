@@ -73,3 +73,33 @@ resource "google_service_account_iam_member" "deploy_acts_as_admin" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${var.deploy_sa_email}"
 }
+
+# ── Custom-token signing (createCustomToken → IAM signBlob) ───────────────────
+# A gen2 function holds no service-account private key, so the Admin SDK signs
+# custom tokens by calling the IAM signBlob API as its own identity. That call
+# needs roles/iam.serviceAccountTokenCreator ON ITSELF; roles/editor does not
+# include the permission.
+#
+# Every contact session in the product is such a token — the census of callers
+# is packages/functions/src/utils/contactSession.ts's buildContactSession — so
+# without this grant passwordless contact login fails everywhere (web Space,
+# public surfaces, mobile app) with auth/insufficient-permission. The failure is
+# invisible to a deploy and to every test: it only appears when a real person
+# tries to sign in, which is how it reached all three environments unnoticed
+# (found in prod 2026-08-22, and in staging where it had been failing since at
+# least 2026-08-17).
+resource "google_service_account_iam_member" "functions_runtime_token_creator" {
+  service_account_id = google_service_account.functions_runtime.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.functions_runtime.email}"
+}
+
+# The SA the functions ACTUALLY run as today (the default compute SA). Kept as a
+# list so this does not have to be reopened when the runtime identity changes.
+resource "google_service_account_iam_member" "extra_token_creator" {
+  for_each = toset(var.extra_token_creator_sa_emails)
+
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${each.value}"
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${each.value}"
+}

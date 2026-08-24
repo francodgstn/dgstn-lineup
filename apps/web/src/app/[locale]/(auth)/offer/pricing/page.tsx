@@ -763,7 +763,6 @@ export default function PricingPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('title')}
-        purpose="pricing"
         quickLinks={[
           { href: '/offer/activities' as Route, label: tq('pricingToActivities') },
           { href: '/offer/plans' as Route, label: tq('pricingToSubscriptions') },

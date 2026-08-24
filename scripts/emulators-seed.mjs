@@ -15,6 +15,14 @@ import { join, dirname } from 'path'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
+// THE EMULATOR CAN LOAD ZERO FUNCTIONS AND SAY NOTHING. Its default discovery
+// timeout is short, and on a cold Windows run the functions build plus the
+// module graph regularly outruns it — the CLI then serves an EMPTY function
+// registry, so every callable the app makes answers `internal` with no clue
+// anywhere as to why. `emulators-run.mjs` has raised it since it was written;
+// this script, which is the one most people start, did not.
+process.env.FUNCTIONS_DISCOVERY_TIMEOUT ??= '120'
+
 function run(cmd, args, opts = {}) {
   return spawn(cmd, args, { stdio: 'inherit', shell: true, cwd: ROOT, ...opts })
 }

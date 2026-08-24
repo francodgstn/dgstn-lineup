@@ -46,10 +46,28 @@ export type AutomationTriggerType =
   // Delta-aware affiliation triggers — carry the specific type_key that was added/removed
   | 'affiliation_added'
   | 'affiliation_removed'
-  // Money events read off the payment document. automation/paymentEvents.ts owns the
-  // census of their edges; docs/automations-money-triggers.md says why the two
-  // SUBSCRIPTION money events are not among them (they are reached through the
-  // contact, because neither leaves a payment row with a contact on it).
+  // ── The two billing events a studio would otherwise learn about from the bank
+  //
+  // Both are fired from `onContactWrite`, not from the Stripe webhook, and that
+  // is the whole reason they are cheap: the rollup
+  // (`rollupMemberSubscriptions`) already lands both facts on the CONTACT — a
+  // live subscription stamped `cancelling`, and a failed invoice as the
+  // 'past_due' rollup status. So they are contact-document deltas like every
+  // other trigger here, they work for every write path (webhook, manager
+  // callable, seed) rather than for one, and no money handler had to be touched
+  // to add them.
+  //
+  /** A live subscription is set to end — the member cancelled, usually in
+   *  Stripe's billing portal, and the studio has until the period end to talk to
+   *  them. Fires on the transition INTO cancelling, once per subscription. */
+  | 'subscription_cancel_requested'
+  /** An invoice failed and the membership is now past due. Fires on the
+   *  transition INTO 'past_due', never while it stays there. */
+  | 'subscription_payment_failed'
+  // Money events read off the PAYMENT document — automation/paymentEvents.ts owns the
+  // census of their edges. The split from the two above is where the SUBJECT is, not
+  // tidiness: a failed recurring charge writes a payment row with no contactId on it,
+  // and a cancellation writes no payment row at all. docs/automations-money-triggers.md.
   | 'payment_received'
   | 'payment_refunded'
   | 'payment_disputed'

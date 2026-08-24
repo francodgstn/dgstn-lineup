@@ -26,6 +26,8 @@ export { generateApiKey } from './auth/generateApiKey'
 
 // Signup gating (limited launch) — blocking function + invite email trigger
 export { beforeSignup } from './auth/beforeSignup'
+export { confirmEmailVerified } from './auth/confirmEmailVerified'
+export { requestTeamDeletion, cancelTeamDeletion } from './teams/deleteAccount'
 export { onSignupInviteCreated } from './auth/onSignupInviteCreated'
 
 // Affiliations
@@ -258,7 +260,7 @@ export {
 } from './domains/publicDomain'
 
 // Stripe Connect (member → studio payments; studio's own Stripe balance + platform fee)
-export { startConnectOnboarding, getConnectStatus } from './connect'
+export { startConnectOnboarding, getConnectStatus, disconnectConnectAccount } from './connect'
 export {
   createMemberPayment,
   createMemberSubscription,

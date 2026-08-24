@@ -20,16 +20,30 @@ import type { PaymentLineItem } from './payment'
 import type { SaasPlan } from './team'
 import type { SubscriptionCancellationDetails } from '../utils/subscriptionLifecycle'
 
-// ─── Onboarding model ───────────────────────────────────────────────────────────
-// Studio picks one. Both create an Accounts-v2 connected account with
-// controller properties; they differ in dashboard access and loss liability.
+// ─── Onboarding model (HISTORICAL — the two members are indistinguishable) ──────
+// This began as a real choice: `byo` would link a studio's PRE-EXISTING Stripe
+// account (studio bears losses), `managed` would create a platform-branded one
+// (Stripe bears losses). The implementation never split that way — a Stripe
+// test-mode constraint collapsed both onto ONE account configuration in June
+// 2026 — and this comment went on describing the abandoned design, in the
+// present tense, until 2026-08-23.
 //
-//   byo     — "link my existing Stripe account": full Stripe dashboard, studio
-//             collects requirements via Stripe, studio bears negative-balance /
-//             chargeback liability (controller.losses.payments = account).
-//   managed — embedded ~2-min setup: platform-branded onboarding, Stripe-handled
-//             KYC, loss liability assigned to Stripe (controller.losses.payments
-//             = stripe), recommended for direct charges.
+// What onboarding ACTUALLY produces — dashboard access, responsibilities, and
+// why there is only one configuration — is stated ONCE, at the owner:
+// packages/functions/src/utils/connect/client.ts, on MODEL_DASHBOARD. Do not
+// restate it here. This comment restated it once and was wrong for two months.
+//
+// Both members therefore produce a byte-identical connected account. The value
+// is carried and persisted (teams/{id}.payments.connectModel,
+// connect_accounts/{acct}.model) but branches NO behaviour — computePlatformFee
+// accepts it and deliberately ignores it. It survives because existing documents
+// store it; new onboarding always records 'managed'.
+//
+// Nothing in this repo links a pre-existing Stripe account: that needs the
+// Standard OAuth flow (connect.stripe.com/oauth/authorize), which is not
+// implemented. Signing into Stripe from the hosted onboarding link only prefills
+// verified details onto the new account. The studio-facing copy and the
+// two-option picker that promised otherwise were removed on 2026-08-23.
 export type ConnectOnboardingModel = 'byo' | 'managed'
 
 // ─── Take-rate (platform application fee) ────────────────────────────────────────

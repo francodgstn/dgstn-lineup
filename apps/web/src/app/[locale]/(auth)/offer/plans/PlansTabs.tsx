@@ -45,9 +45,10 @@ export function PlansTabs() {
 
   return (
     <div className="space-y-6">
+      {/* `subscriptionPlans` is the SAME key the nav row uses, so the page and
+          the way into it cannot end up called different things. */}
       <PageHeader
-        title={t('subscriptions')}
-        purpose="subscriptions"
+        title={t('subscriptionPlans')}
         quickLinks={quickLinks}
         action={
           <>

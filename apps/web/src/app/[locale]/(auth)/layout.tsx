@@ -82,8 +82,9 @@ import { Input } from '@/components/ui/input'
 import { SearchInput } from '@/components/ui/search-input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Logo } from '@/components/Logo'
-import { ProductTour } from '@/components/onboarding/ProductTour'
 import { FreeDowngradeBanner } from '@/components/onboarding/FreeDowngradeBanner'
+import { VerifyEmailBanner } from '@/components/onboarding/VerifyEmailBanner'
+import { SetupGuide } from '@/components/onboarding/SetupGuide'
 import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
 import { FloatingDock } from '@/components/layout/FloatingDock'
@@ -234,7 +235,17 @@ const NAV_SECTIONS: NavSection[] = [
       },
       // Core manager surface: cash/manual payments work with no gateway at all,
       // so Payments is always available (record + assign + Connect/BYO management).
-      { id: 'payments', href: '/payments', labelKey: 'payments', icon: Wallet },
+      // PAYMENTS AND SUBSCRIPTIONS ARE ONE DESTINATION. The member roster used
+      // to be its own page and briefly its own nav row; it is a tab here now,
+      // because "who is paying me" and "who holds a plan" are the same question
+      // asked twice and a studio should not have to guess which screen answers
+      // it (Franco, 2026-08-23). `/subscriptions` redirects in.
+      {
+        id: 'payments',
+        href: '/payments',
+        labelKey: 'paymentsAndSubscriptions',
+        icon: Wallet,
+      },
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
       { id: 'automations', href: '/automations', labelKey: 'automations', icon: Workflow },
@@ -261,7 +272,10 @@ const NAV_SECTIONS: NavSection[] = [
       // item at all; the roster now owns both, so the umbrella is gone and the
       // route id stays `plans` only because the href does. On every plan, so
       // never gated.
-      { id: 'plans', href: '/offer/plans', labelKey: 'subscriptions', icon: IdCard },
+      // "Subscriptions" named the wrong thing: it reads as the list of
+      // subscriptions people HOLD, which is `/subscriptions` — a different page
+      // entirely. This one is the catalogue of plans on sale.
+      { id: 'plans', href: '/offer/plans', labelKey: 'subscriptionPlans', icon: IdCard },
       // The affiliation ROSTER — who is affiliated, at what status, expiring when.
       // It had no nav item at all: reachable only from a link inside the types
       // manager and one dashboard figure, which is the same shape UX-99 fixed
@@ -431,7 +445,6 @@ function NavLink({
     return (
       <button
         type="button"
-        data-tour={`nav-${item.labelKey}`}
         onClick={() => {
           openUpgradeModal({ minPlan: item.minPlan })
           onClick?.()
@@ -456,7 +469,6 @@ function NavLink({
     <Link
       href={item.href as Route}
       onClick={onClick}
-      data-tour={`nav-${item.labelKey}`}
       title={collapsed ? label : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
         isActive
@@ -502,7 +514,6 @@ function NavTile({
   label,
   icon: Icon,
   exact,
-  dataTour,
   onClick,
   children,
 }: {
@@ -514,7 +525,6 @@ function NavTile({
   label: string
   icon: React.ElementType
   exact?: boolean
-  dataTour?: string
   onClick?: () => void
   /** The edit affordance on an adjustable tile. Rendered as a sibling overlay so
    *  it is not inside the <Link> — a button inside an anchor is invalid, and
@@ -529,7 +539,6 @@ function NavTile({
       <Link
         href={href as Route}
         onClick={onClick}
-        data-tour={dataTour}
         title={label}
         className={`flex flex-col items-center justify-center gap-1.5 rounded-lg px-2 py-3 text-center text-xs transition-all ${
           isActive
@@ -1170,7 +1179,6 @@ function HeadTiles({
         label={t(DASHBOARD_ITEM.labelKey as Parameters<typeof t>[0])}
         icon={DASHBOARD_ITEM.icon}
         exact={DASHBOARD_ITEM.exact}
-        dataTour={`nav-${DASHBOARD_ITEM.labelKey}`}
         onClick={onLinkClick}
       />
       {tile ? (
@@ -1179,7 +1187,6 @@ function HeadTiles({
           label={tile.label}
           icon={tile.icon}
           exact={tile.exact}
-          dataTour="nav-headTile"
           onClick={onLinkClick}
         >
           <HeadTilePicker
@@ -1493,7 +1500,7 @@ function ShortcutsNav({
   if (entries.length === 0) {
     if (collapsed) return null
     return (
-      <div data-tour="nav-shortcuts" className="relative mt-3 py-1">
+      <div className="relative mt-3 py-1">
         <div aria-hidden className={SHORTCUTS_RULE} />
         <GroupLabel>{t('navGroupShortcuts')}</GroupLabel>
         <p className="px-3 py-1 pr-2 text-xs leading-relaxed text-muted-foreground/60">
@@ -1568,7 +1575,7 @@ function ShortcutsNav({
   const dropLine = <div className="mx-2 my-0.5 h-0.5 rounded bg-primary/60" />
 
   return (
-    <div data-tour="nav-shortcuts" className={collapsed ? 'mt-3 pt-3' : 'relative mt-3 py-1'}>
+    <div className={collapsed ? 'mt-3 pt-3' : 'relative mt-3 py-1'}>
       {/* Expanded only: a hairline beside a 40px icon rail marks nothing. */}
       {!collapsed && <div aria-hidden className={SHORTCUTS_RULE} />}
       {/* Header row: the group label, with "clear all" pushed to the right.
@@ -2091,7 +2098,6 @@ function NavSearch({
       <button
         type="button"
         ref={triggerRef}
-        data-tour="nav-search"
         onClick={openPanel}
         title={`${t('navSearchPlaceholder')} (${modKeyLabel()}K)`}
         aria-label={t('navSearchPlaceholder')}
@@ -2137,7 +2143,6 @@ function NavSearch({
       <div aria-hidden className="fixed inset-0 z-40 animate-in fade-in-0 duration-150 bg-background/80" />
       <div
         ref={wrapRef}
-        data-tour="nav-search"
         // Grows out of the trigger, spilling a little into the content area.
         // Capped so it never runs off a narrow viewport.
         style={{ left: anchor.left, top: anchor.top }}
@@ -2518,12 +2523,21 @@ function SidebarContent({
             {team.name}
           </Link>
           <TeamQrButton />
+          {/* THE OCCASIONAL UTILITIES MOVED UP HERE (2026-08-23), beside the QR,
+              so the search field below can take the whole row. Both controls on
+              this row are about the STUDIO rather than about a destination —
+              the QR encodes its links, the menu opens its settings, its plugins
+              and its how-to — which is why they sit together, and why the row
+              below is now one thing: search. */}
+          <UtilityFlyout onLinkClick={onLinkClick} />
         </div>
       )}
 
-      {/* Utility row — search, then the "⋯" utilities. First of the two pinned
-          rows; the head pair sits under it, and the scroll area starts below
-          them both.
+      {/* Search row. First of the two pinned rows; the head pair sits under it,
+          and the scroll area starts below them both. Expanded, search has this
+          row to ITSELF — the "⋯" utilities moved up to the studio-name row
+          above on 2026-08-23; collapsed, they stack here as centred icons
+          because there is no studio row to move them to.
 
           Search is a mini-input rather than the full-width field it used to be a
           row above: the field cost a whole row for something used in bursts, and
@@ -2536,7 +2550,6 @@ function SidebarContent({
         // No bottom rule: this row reads as part of the header block above it,
         // and a second line so close to the studio row's was clutter. The same
         // went for the head pair below — see the seam there.
-        data-tour="nav-utilities"
         className={`mx-2 pt-2 pb-1.5 shrink-0 flex gap-1 ${
           collapsed ? 'flex-col items-center' : 'items-center'
         }`}
@@ -2558,8 +2571,13 @@ function SidebarContent({
             2026-08-20).
 
             Search stays out of the group in both modes: it is a primary action
-            (and ⌘K), not an occasional one. */}
-        <UtilityFlyout onLinkClick={onLinkClick} includeQr={collapsed} />
+            (and ⌘K), not an occasional one.
+
+            COLLAPSED ONLY, since 2026-08-23. Expanded, this control now sits on
+            the studio-name row above and the search field has this row to
+            itself; collapsed there is no studio row to move it to (no text at
+            w-14), which is the same reason `includeQr` exists. */}
+        {collapsed && <UtilityFlyout onLinkClick={onLinkClick} includeQr />}
       </div>
 
       {/* THE HEAD PAIR — where things stand, and what is on today.
@@ -2596,7 +2614,6 @@ function SidebarContent({
         // separating anything (Franco, 2026-08-21). What marks the boundary is
         // on the scroller instead — a shadow that only appears once something
         // is actually scrolled under it.
-        data-tour="nav-quick-access"
         className="mx-2 shrink-0 pt-1 pb-2"
       >
         {collapsed ? (
@@ -2660,7 +2677,7 @@ function SidebarContent({
         {/* Features — the Run / Offer / Grow working areas. Extra top margin on
             the sections: unlike the other macro groups, the first thing here is
             another (section) header, which otherwise sits too close to the label. */}
-        <div className="mt-3 pt-3" data-tour="nav-features">
+        <div className="mt-3 pt-3">
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
@@ -2873,7 +2890,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <UpgradeModalProvider>
         <RecentContactsProvider>
         <OpenTabsProvider>
-        <ProductTour />
         {/* Owns every floating control's position — page FABs and shell overlays
             declare a lane instead of hardcoding a corner (see FloatingDock). */}
         <FloatingDock>
@@ -2897,6 +2913,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* Main column: mobile header + scrollable content (no top bar on desktop) */}
           <div className="flex flex-col flex-1 min-w-0 min-h-screen">
             <AnnouncementBar />
+            {/* ABOVE the content, full width, not inside the page container:
+                it is not about the page being looked at, and what it announces
+                — outbound email is switched off — is worth more than the strip
+                of vertical space it costs. */}
+            <VerifyEmailBanner />
             <MobileHeader onMobileMenu={() => setMobileOpen(true)} />
             <OpenTabsStrip />
             <main className="flex-1">
@@ -2915,6 +2936,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               </div>
             </main>
           </div>
+          {/* The setup checklist, as an overlay that survives navigation — the
+              steps span five areas and every one of them leaves the page the
+              list would otherwise live on. Self-gates: it renders nothing once
+              the required steps are done, or once the team has hidden it. */}
+          <SetupGuide />
           {/* AI assistant — self-gates on the (locked) plugin being installed. */}
           <AssistantLauncher />
           {/* In-app feedback — self-gates on the ops-controlled global flag. */}
