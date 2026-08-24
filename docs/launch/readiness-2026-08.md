@@ -110,7 +110,9 @@ staging only).
 
 ## Next
 
-Seed alignment — see [`../seed-alignment-plan.md`](../seed-alignment-plan.md).
+Seed alignment — **done** (PRs #80/#81/#82); the schema reference is
+[`../seed-truth-2026-08.md`](../seed-truth-2026-08.md), and the closed plan is
+archived at [`../archive/seed-alignment-plan.md`](../archive/seed-alignment-plan.md).
 It matters more than it looks: the launch model is sandbox→promote, and a
 founder's sign-off is only worth something if the sandbox data reflects the
 current schema.

@@ -1,3 +1,19 @@
+> ## CLOSED — archived 2026-08-24
+>
+> Branch `claude/fareharbor-feature-analysis-b58f2c` is **merged into `main`**, and
+> the wave-3 features it hands over (gift cards, waitlist, promo codes, waivers)
+> shipped and are deployed to production. The premise stated below — *"Nothing here
+> is deployed"* — is no longer true; do not read it as current.
+>
+> **Where the live versions are:** `docs/waitlist.md`, `docs/promo-codes.md`,
+> `docs/waivers.md`, `docs/plugins.md` (which now also carries this file's
+> `minPlan` rule), and the open register in `docs/open-defects.md`.
+>
+> **Kept for one reason:** §3's *"deliberately descoped, do not assume these
+> exist"* list — recipient≠purchaser gift-card emails, the outstanding-liability
+> strip, the historical `'other'` → `gift_card` rewrite, and a confirmation email
+> on a paid waitlist claim — is recorded nowhere else.
+
 # Wave 3 branch — what shipped, what might break, what is still open
 
 Branch `claude/fareharbor-feature-analysis-b58f2c`, ~280 files against `main`.

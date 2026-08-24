@@ -1,5 +1,11 @@
 # Security audit — Linyup — 2026-07
 
+> **RECORD — audit run 2026-07; not re-run since.** Findings are stated as they
+> were on that date and many have shipped. This file stays in `docs/` (not the
+> archive) because other documents cite its findings by number — notably
+> `app-check-rollout.md`, which depends on finding #3 — so the numbering must keep
+> resolving. **Verify any finding against the code before acting on it.**
+
 A full read-through of every externally reachable surface of the Linyup platform:
 Firestore rules (~1,260 lines), Storage rules, all Cloud Functions exports, every public
 web route, contact/passwordless auth, the operator console, mobile auth, secret hygiene,

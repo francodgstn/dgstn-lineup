@@ -366,7 +366,7 @@ broadest storage match in the file. Note that the narrower `products/` and
 not confined to activities.
 
 **2. The silent partial failure** is a UX finding, not a rule bug — it is UX-24 in
-`docs/ux-review-2026-08.md`, and this reproduction is what upgraded it from
+`docs/archive/ux-review-2026-08.md`, and this reproduction is what upgraded it from
 `traced` to `observed`. It is being fixed there, including the branch that
 distinguishes "activity saved, image failed" from "nothing saved", so a retry
 cannot mint a duplicate. Fixing the rule does **not** close UX-24: any other
