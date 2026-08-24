@@ -120,6 +120,15 @@ function whose contract is that an absent audience means public.
 already sold is not — that would be the studio keeping a customer's money and
 giving nothing back.
 
+**The plan requirement lives in the MANIFEST (`minPlan`), never in a second
+runtime gate.** A callable that also calls `requirePlan(...)` is a second door on
+the same room: the two drift, and the one nobody remembers is the one that
+refuses a paying studio. `createPromoCode` carried exactly such a duplicate
+(`requirePlan(teamId, 'studio')`) and it was removed when Promo Codes became a
+plugin. A per-plugin limit like `PROMO_CODE_LIMITS` is a **ceiling, not a
+door** — it caps how many a studio may create, it never decides whether they
+may create at all.
+
 **It resolves the team install, then the org one.** `org_id` IS the grant, the
 same doctrine `useInstalledPlugins` states on the client. This function once read
 the team path only, which made every org-level install invisible to every
