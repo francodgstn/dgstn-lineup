@@ -7013,5 +7013,27 @@
     "pendingBillingNote": "Your members' subscriptions were already cancelled and cannot be restarted — they would need to buy a membership again.",
     "cancelAction": "Stop the deletion",
     "errorGeneric": "That didn't work. Nothing has been deleted."
+  },
+  "TeamInvitation": {
+    "title": "You've been invited",
+    "subtitle": "Join the team on Linyup",
+    "unnamedTeam": "This team",
+    "roleLine": "You'll join as {role}",
+    "sentTo": "Invitation sent to {email}",
+    "role_manager": "Manager",
+    "role_coach": "Coach",
+    "role_viewer": "Viewer",
+    "signInRequired": "Sign in to accept this invitation. You can use any account — we recommend the address the invitation was sent to.",
+    "signInBtn": "Sign in to accept",
+    "acceptBtn": "Accept invitation",
+    "accepting": "Joining…",
+    "acceptedTitle": "You've joined {team}",
+    "acceptedBody": "Your account now has access to this team.",
+    "goToDashboard": "Go to dashboard",
+    "error_invalid": "This invitation link is not valid. Ask the team to send you a new one.",
+    "error_expired": "This invitation has expired. Invitations are valid for 7 days — ask the team to send you a new one.",
+    "error_alreadyAccepted": "This invitation has already been accepted. Sign in to reach the team.",
+    "error_planRequired": "This team's plan no longer includes an extra user, so the invitation can't be accepted. Ask the team owner to upgrade.",
+    "error_generic": "Something went wrong. Please try again, or ask the team to send you a new invitation."
   }
 }

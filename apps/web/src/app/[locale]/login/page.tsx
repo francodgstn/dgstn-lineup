@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { Route } from 'next'
 import { useTranslations } from 'next-intl'
 import { useRouter, Link } from '@/i18n/navigation'
 import { useForm } from 'react-hook-form'
@@ -21,6 +22,26 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+/**
+ * Where to go after a successful sign-in, from `?next=`.
+ *
+ * Read off `window` rather than `useSearchParams()` deliberately: that hook
+ * forces the page into dynamic rendering (or a Suspense boundary) and this is
+ * the sign-in screen, which should keep prerendering. The value is only ever
+ * read inside a submit handler, never during render, so there is no hydration
+ * mismatch to pay for it.
+ *
+ * A single leading slash is REQUIRED and a double one is refused: `//evil.com`
+ * is protocol-relative, so accepting it would turn the login page into an open
+ * redirect for anyone who can get a link clicked.
+ */
+function nextPath(): Route | null {
+  if (typeof window === 'undefined') return null
+  const raw = new URLSearchParams(window.location.search).get('next')
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null
+  return raw as Route
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const t = useTranslations('Login')
@@ -40,7 +61,7 @@ export default function LoginPage() {
     setError(null)
     try {
       await signIn(data.email, data.password)
-      router.push('/dashboard')
+      router.push(nextPath() ?? '/dashboard')
     } catch {
       setError(t('errorInvalidCredentials'))
     }
@@ -91,7 +112,10 @@ export default function LoginPage() {
           <SocialAuthButtons
             onAuthed={async (cred) => {
               const hasTeam = await userHasTeam(cred.user.uid)
-              router.replace(hasTeam ? '/dashboard' : '/signup')
+              // `next` outranks the team check: an invitee arrives here WITHOUT a
+              // team precisely because accepting the invitation is what gives them
+              // one, so sending them to /signup would strand them.
+              router.replace(nextPath() ?? (hasTeam ? '/dashboard' : '/signup'))
             }}
           />
 
