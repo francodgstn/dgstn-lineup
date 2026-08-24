@@ -1,3 +1,15 @@
+> ## CLOSED — archived 2026-08-24
+>
+> **Both phases are complete** (PRs #80, #81, #82). Phase 1 produced
+> `docs/seed-truth-2026-08.md`, which is still live and still the schema reference.
+> Phase 2 closed the gaps it found; only a snapshot re-bootstrap remained at the
+> time of closing.
+>
+> **Do not re-run the audit prompt below.** It is written in the imperative and
+> reads like open work — it is the record of what was asked for, kept so the
+> reasoning behind the truth doc survives. The three migration bugs it surfaced
+> were invisible in the Firebase console, which is why the record is worth having.
+
 # Seed alignment — the Phase 1 audit
 
 Four seeders (`scripts/seed-{emulator,lead,sandbox,staging}.ts`, ~430 KB total)

@@ -1,3 +1,14 @@
+> ## CLOSED — archived 2026-08-24
+>
+> A point-in-time review of `apps/web` run against commit `8b1dea3` on 2026-08-17.
+> Much of what it found has since shipped — including via the 24-item prod canary
+> pass of 2026-08-23 (`docs/launch/canary-2026-08-fixes.md`).
+>
+> **Findings here are NOT a work list.** Verify any individual finding against the
+> code before acting on it; several are already fixed. Decisions that came out of
+> the review live in `docs/ux-review-open-decisions.md`, and reproduced defects
+> that are genuinely still open live in `docs/open-defects.md`.
+
 # UX review — Linyup web app — 2026-08
 
 The first full UI/UX review of `apps/web`, run against `8b1dea3` on 2026-08-17: one

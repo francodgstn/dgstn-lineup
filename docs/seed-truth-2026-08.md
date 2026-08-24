@@ -1,6 +1,7 @@
 # Seed truth — the 2026-08 coverage audit
 
-Phase 1 of `docs/seed-alignment-plan.md`. **Analysis only**: no seeder was run, no
+Phase 1 of `docs/archive/seed-alignment-plan.md` (that plan is now closed; this
+document is the live deliverable and remains the schema reference). **Analysis only**: no seeder was run, no
 emulator was started, and no seed code was changed to produce this. The Phase 2
 worklist that consumes it is appended to that plan.
 
