@@ -1948,10 +1948,18 @@ export async function fireEventRules(
     )
       continue
 
-    // Delta scoping for subscription_added / subscription_removed:
-    // if the rule specifies a subscriptionTypeId, only fire when the delta matches.
+    // Delta scoping for the subscription-type family: if the rule specifies a
+    // subscriptionTypeId, only fire when the delta matches.
+    //
+    // `subscription_cancel_requested` belongs here because it CARRIES that delta.
+    // It was emitting one nothing matched on, so a rule narrowed to one plan fired
+    // when any plan was cancelled — a control that silently does nothing, which is
+    // found by a studio rather than by a test. The builder's select must agree;
+    // automation/subscriptionScope.test.ts reads both files and pins it.
     if (
-      (triggerType === 'subscription_added' || triggerType === 'subscription_removed') &&
+      (triggerType === 'subscription_added' ||
+        triggerType === 'subscription_removed' ||
+        triggerType === 'subscription_cancel_requested') &&
       rule.trigger.subscriptionTypeId &&
       rule.trigger.subscriptionTypeId !== delta?.subscriptionTypeId
     )

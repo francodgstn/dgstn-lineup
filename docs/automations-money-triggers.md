@@ -88,22 +88,20 @@ as `{{payload.*}}`; the payment row is the record. `paymentEvents.test.ts` reads
 
 `trigger.paymentKind` narrows the three payment-row triggers to one
 `MemberPayment.kind`, so "when someone buys a course, send the welcome guide" is one
-rule. It mirrors `trigger.subscriptionTypeId` exactly — see Open, below, for the way
-that mirror is currently one-sided.
+rule. It mirrors `trigger.subscriptionTypeId`, which narrows the subscription family
+the same way.
 
-All three honour a delay, through the same Cloud Tasks path as every other event
-trigger. `delayedRules.test.ts` reads both the engine and the rule builder and fails the
-build if the two ever disagree about that.
+**A scope is only real if the ENGINE narrows on it.** `subscription_cancel_requested`
+shipped emitting a `subscriptionTypeId` delta that `fireEventRules` never matched on,
+so a rule narrowed to one plan fired when any plan was cancelled — the builder offered
+a control that silently did nothing. Nothing typed catches that: the delta field is
+optional, the branch is a valid boolean expression, and the rule fires; only the
+narrowing is missing. It was found by driving the emulator, and
+`automation/subscriptionScope.test.ts` now reads both files and pins them in agreement.
 
-## Open
-
-- **`subscription_cancel_requested` carries a `subscriptionTypeId` delta that
-  `fireEventRules` does not match on.** Its scoping branch names
-  `subscription_added` / `subscription_removed` only, so a rule narrowed to one
-  subscription type fires for a cancellation of any of them. Either add the trigger to
-  that branch and to the builder's subscription-type select, or stop emitting the delta
-  — an emitted delta nothing reads is a control that silently does nothing. Found by an
-  emulator run, not by a test.
+All three payment triggers honour a delay, through the same Cloud Tasks path as every
+other event trigger. `delayedRules.test.ts` reads both the engine and the rule builder
+and fails the build if the two ever disagree about that.
 
 ## Known gaps
 

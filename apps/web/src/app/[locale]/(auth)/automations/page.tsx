@@ -226,6 +226,16 @@ const MAX_DELAY_MINUTES = 30 * 24 * 60
 // delayedRules parity test, which reads this file.
 const PAYMENT_TRIGGERS: string[] = ['payment_received', 'payment_refunded', 'payment_disputed']
 
+// The triggers that carry a subscription_type_id in their delta, and so the ones the
+// subscription-type scope applies to. Must agree with the matching branch in
+// fireEventRules — a select the engine ignores is worse than no select at all, and
+// that is exactly how subscription_cancel_requested shipped.
+const SUBSCRIPTION_SCOPED_TRIGGERS: string[] = [
+  'subscription_added',
+  'subscription_removed',
+  'subscription_cancel_requested',
+]
+
 // What a payment can have bought, in the order the select offers it.
 //
 // Written as a Record over the shared MemberPayment union, not as a free-hand array,
@@ -1723,9 +1733,7 @@ function RuleDialog({
           ...(values.trigger_type === 'inbound_webhook' && webhookEndpointId
             ? { webhook_endpoint_id: webhookEndpointId }
             : {}),
-          ...((values.trigger_type === 'subscription_added' ||
-            values.trigger_type === 'subscription_removed') &&
-          triggerSubTypeId
+          ...(SUBSCRIPTION_SCOPED_TRIGGERS.includes(values.trigger_type) && triggerSubTypeId
             ? { subscriptionTypeId: triggerSubTypeId }
             : {}),
           ...((values.trigger_type === 'affiliation_added' ||
@@ -1912,8 +1920,8 @@ function RuleDialog({
               </div>
             )}
 
-            {/* Delta trigger scope — which subscription type was added/removed */}
-            {(triggerType === 'subscription_added' || triggerType === 'subscription_removed') && (
+            {/* Delta trigger scope — which subscription type the event was about */}
+            {SUBSCRIPTION_SCOPED_TRIGGERS.includes(triggerType) && (
               <div>
                 <Label className="text-xs">{t('dialogs.rule.subscriptionTypeLabel')}</Label>
                 <Select value={triggerSubTypeId} onValueChange={(v) => setTriggerSubTypeId(v ?? '')}>
