@@ -18,6 +18,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { checkTeamSlug } from '@/lib/teamSlug'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -216,10 +217,16 @@ function OwnerOnlyNote() {
 
 // ─── data helpers ─────────────────────────────────────────────────────────────
 
+// Asked of the server (`lib/teamSlug.ts`), which owns this question and is the
+// only place that can answer it. This used to be a client `where('slug','==',…)`
+// over `teams`, which the rules refuse the moment a matching document belongs to
+// a studio the caller is not in — i.e. it threw for exactly the case it exists
+// to detect, and `onSlugBlur` had no catch, so the spinner stuck and the form
+// saved a slug that was already taken.
 async function isSlugAvailable(slug: string, teamId: string): Promise<boolean> {
   if (isReservedSlug(slug)) return false
-  const snap = await getDocs(query(collection(db, TEAMS_COLLECTION), where('slug', '==', slug)))
-  return snap.docs.every((d) => d.id === teamId)
+  const check = await checkTeamSlug(slug, teamId)
+  return check.available
 }
 
 function useTeam(teamId: string | null) {
@@ -414,9 +421,19 @@ function GeneralForm({
     if (!SLUG_REGEX.test(slug) || slug.length < 3) return
     setSlugChecking(true)
     setSlugError(null)
-    const available = await isSlugAvailable(slug, teamId)
-    setSlugChecking(false)
-    if (!available) setSlugError(isReservedSlug(slug) ? t('slugReserved') : t('slugTaken'))
+    try {
+      const available = await isSlugAvailable(slug, teamId)
+      if (!available) setSlugError(isReservedSlug(slug) ? t('slugReserved') : t('slugTaken'))
+    } catch {
+      // FAILS CLOSED, and deliberately: `onSubmit` refuses while `slugError` is
+      // set, so a check that could not run blocks Save. Two studios sharing a
+      // slug send one studio's members to the other's public page and there is
+      // no error anywhere to notice it; being asked to retry a blurred field is
+      // the cheaper failure. Editing the slug again clears this and re-checks.
+      setSlugError(t('slugCheckFailed'))
+    } finally {
+      setSlugChecking(false)
+    }
   }
 
   async function onSubmit(data: GeneralData) {

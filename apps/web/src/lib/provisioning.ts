@@ -1,19 +1,8 @@
-import {
-  collection,
-  collectionGroup,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  setDoc,
-  serverTimestamp,
-  Timestamp,
-  where,
-} from 'firebase/firestore'
+import { collection, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
 import { TRIAL_DAYS, isReservedSlug } from '@linyup/shared'
 import { db } from './firebase'
+import { checkTeamSlug } from './teamSlug'
 
 /**
  * Account/team provisioning shared by the signup wizard and the social-auth
@@ -34,50 +23,27 @@ function slugify(name: string): string {
 
 // ─── the slug is the tenant's ADDRESS, so it has to be unique ─────────────────
 //
-// Every public route resolves a studio with
-// `collectionGroup('public_profile').where('slug','==',slug).limit(1)`, so two
-// studios holding one slug do not collide loudly — `/public/{slug}` simply
-// resolves to whichever document the index hands back, and the loser's members
-// land on a stranger's booking page. One login used to mean one studio, which
-// hid this; the account menu's "create another studio" does not.
+// Uniqueness is decided by `checkTeamSlug` (lib/teamSlug.ts), which is the one
+// place that can answer it — see that module for why a client-side query cannot.
+// What lives here is only the WALK: signup has to pick a slug unattended, so it
+// tries the obvious one, then two suffixed ones, then falls back to a candidate
+// carrying the team's own id, which cannot collide with anything.
 //
-// CHECKED AGAINST THE PUBLIC MIRROR, NOT `teams`. The rules let a signed-in user
-// read only a team they belong to or created, and a `where('slug','==',…)` list
-// query over `teams` is evaluated against every matching document — so the query
-// is refused by exactly the case it exists to detect (somebody ELSE's team).
-// `teams/{id}/public_profile/{id}` is world-readable and carries the same slug.
-//
-// It is best-effort by construction and says so: the mirror is written by
-// `syncTeamPublicProfile` after the team doc lands, so a studio created seconds
-// ago is not visible here yet, and a check that could not run (offline, rules)
-// is not evidence of a collision. The last candidate therefore is not a guess —
-// it carries the team's own id and cannot collide with anything.
-
-async function slugIsFree(slug: string): Promise<boolean> {
-  const snap = await getDocs(
-    query(
-      collectionGroup(db, 'public_profile'),
-      where('slug', '==', slug),
-      where('type', '==', 'team'),
-      limit(1)
-    )
-  )
-  return snap.empty
-}
+// A failed check is not evidence of a collision, so it must not fail signup: the
+// walk gives up and returns the first candidate. The studio can rename the slug
+// from Settings afterwards either way.
 
 async function resolveTeamSlug(teamName: string, teamId: string): Promise<string> {
   const base = slugify(teamName) || 'team'
   const first = isReservedSlug(base) ? `${base}-team` : base
-  // A short walk, then the id: three reads bound the worst case, and the studio
-  // can rename the slug from Settings afterwards either way.
   const candidates = [first, `${first}-2`, `${first}-3`]
   try {
     for (const candidate of candidates) {
-      if (await slugIsFree(candidate)) return candidate
+      const check = await checkTeamSlug(candidate, teamId)
+      if (check.available) return check.normalizedSlug ?? candidate
     }
     return `${first}-${teamId.slice(0, 6).toLowerCase()}`
   } catch {
-    // The check itself failed. Signup must not fail with it.
     return first
   }
 }

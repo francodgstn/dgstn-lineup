@@ -1932,7 +1932,8 @@
     "regionTimeFormat": "Time format",
     "regionTime24h": "24-hour (18:30)",
     "regionTime12h": "12-hour (6:30 PM)",
-    "regionPreview": "Preview"
+    "regionPreview": "Preview",
+    "slugCheckFailed": "Could not check this URL. Try again before saving."
   },
   "Bookings": {
     "title": "Bookings",

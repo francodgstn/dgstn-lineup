@@ -1932,7 +1932,8 @@
     "regionTimeFormat": "Zeitformat",
     "regionTime24h": "24 Stunden (18:30)",
     "regionTime12h": "12 Stunden (6:30 PM)",
-    "regionPreview": "Vorschau"
+    "regionPreview": "Vorschau",
+    "slugCheckFailed": "Diese URL konnte nicht geprüft werden. Versuche es vor dem Speichern erneut."
   },
   "Bookings": {
     "title": "Buchungen",
