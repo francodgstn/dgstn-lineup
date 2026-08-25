@@ -151,8 +151,6 @@ damage in any contract year is limited to **twice the annual fee** for your
 plan. Where you are on the free plan, that limit is twice the annual fee of the
 next paid plan.
 
-Claims must be brought within one year of you becoming aware of the damage.
-
 ## 3.12 Changes to these terms
 
 We may update these terms. We will give you at least **six weeks' notice** by

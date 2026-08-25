@@ -57,8 +57,11 @@ and the staff you invite.
 We will:
 
 - process your contacts' personal data only on your documented instructions,
-  which include your use of the service's features. Using a feature is an
-  instruction to process the data that feature needs;
+  **including as regards any transfer to a country outside Switzerland or the
+  EEA**, unless we are required to process it by law — in which case we will tell
+  you before doing so, unless the law forbids that. Your instructions include
+  your use of the service's features: using a feature is an instruction to
+  process the data that feature needs;
 - ensure people authorised to process it are bound by confidentiality;
 - take appropriate technical and organisational security measures (§4.6);
 - respect the sub-processor conditions in §4.5;
@@ -67,7 +70,8 @@ We will:
   assessments;
 - tell you without undue delay if we become aware of a personal-data breach
   affecting your data;
-- on termination, return or delete the data as set out in §4.8;
+- on termination, at your choice return or delete the data as set out in §4.8,
+  and delete any existing copies unless we are required to keep them by law;
 - make available the information reasonably needed to demonstrate compliance with
   this agreement.
 
@@ -76,7 +80,9 @@ If we believe an instruction breaches data-protection law, we will tell you.
 ## 4.5 Sub-processors
 
 You give general authorisation for us to engage the sub-processors below. We
-remain responsible for their performance.
+impose on each of them, by contract, data-protection obligations materially the
+same as those in this agreement, and **we remain fully responsible to you for
+their performance**.
 
 | Sub-processor | Purpose | Location of processing |
 |---|---|---|
@@ -85,8 +91,10 @@ remain responsible for their performance.
 | Stripe Payments Europe, Ltd. | Payment processing | Ireland (EU), with group processing in the United States |
 | PostHog, Inc. | Product analytics (session recording off) | EU region (Frankfurt); provider based in the United States |
 
-We will give you notice by email to the account owner before adding or replacing
-a sub-processor, and you may object on reasonable data-protection grounds.
+We will give you at least **20 days' notice** by email to the account owner before
+adding or replacing a sub-processor. You may object within that period on
+reasonable data-protection grounds; if we cannot resolve your objection, either of
+us may end the agreement.
 
 ## 4.6 Security
 

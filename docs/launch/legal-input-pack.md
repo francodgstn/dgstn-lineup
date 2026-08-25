@@ -197,21 +197,56 @@ Free 1.7%, Coach 1.2%, Studio 0.7%, Organization 0.4%, no minimum and no fixed
 component (`CONNECT_TAKE_RATE`, `shared/src/types/connect.ts`). Stripe's own
 processing fees are separate and charged by Stripe.
 
+### Resolved on 2026-08-25, after checking the comparators
+
+**Sub-processor notice → 20 days**, with an objection right and a termination
+route if unresolved. Fairgate's window, now named in §4.5 (it previously promised
+notice with no period at all). **The mechanism is still manual** — nothing in the
+product sends this; it is an email somebody has to remember.
+
+**§3.11 stands as drafted** (Franco: "keep as is, like KLARA, fine for now"). It
+mirrors KLARA §10 — liable for intent and gross negligence, slight and medium
+excluded so far as the law permits, life/body/health carved out — plus ClubDesk's
+2× annual-fee cap that KLARA does not have. Still worth a lawyer's eye on the
+exact gross-negligence boundary, since Art. 100 OR is where a loose one fails.
+
+**The one-year claim limitation was REMOVED.** It came from Eversports, which is
+Austrian. Neither Swiss comparator has one: KLARA's AGB contains no limitation
+clause at all, and ClubDesk relies on its cap. More to the point, **Art. 129 OR
+does not permit the statutory limitation periods to be altered by agreement**, so
+a contractual one-year period is doubtful in Switzerland whatever the drafting.
+Statutory limitation now applies, which is both the aligned answer and the safer
+one.
+
+**The DPA was reviewed against Art. 28(3) GDPR and Fairgate's AVV.** Three real
+gaps were closed:
+
+| Gap | Fix |
+|---|---|
+| Instructions clause did not mention third-country transfers, which Art. 28(3)(a) requires expressly | §4.4 now covers transfers and the required-by-law exception, with notice unless the law forbids it |
+| No flow-down of obligations to sub-processors — Art. 28(4) requires them bound by contract to materially the same terms | §4.5 now states the flow-down and full responsibility |
+| Deletion clause did not mention **copies**, which Art. 28(3)(g) requires | §4.4 now covers copies, with the legal-retention exception |
+
+Also confirmed from KLARA's §"Datenlöschung": it deletes account data three
+months after termination and enables a full data export on dissolution. Our
+30-day windows plus the contacts export (`exportContacts`) are the stricter
+position.
+
 ### Still for the lawyer
 
 1. **Does activation-based acceptance suffice** for B2B contract formation under
    Swiss law, and does the stored record (version, timestamp, uid, email — **no
-   IP**) meet the evidentiary bar? IP was left out deliberately: it is personal
-   data about the Customer, easy to add later and impossible to un-collect.
-2. **Is §3.11 correctly framed for Art. 100 OR?** It is written to the
-   continental shape rather than the Anglo cap-and-carve-out, but the exact
-   wording of the gross-negligence carve-out is the part that decides whether it
-   holds.
-3. **Does the DPA satisfy GDPR Art. 28** as well as the FADP, for EU-established
-   Customers, now that the place-of-establishment concession is gone?
-4. **Sub-processor notice.** The DPA promises notice by email to the account
-   owner with an objection right; Fairgate uses a **20-day** window with a
-   termination route. A window should be named, and there is **no mechanism**
-   behind the promise today — it is an operational commitment fulfilled by hand.
-5. **The one-year claim limitation** in §3.11 — permissible, and is one year the
-   right number? Eversports uses one year from knowledge, three from the act.
+   IP**) meet the evidentiary bar? The market answer is settled — four of five
+   comparators form on an act, and KLARA §3 makes registering carry the
+   confirmation of capacity and authority — but market practice is not a legal
+   opinion. IP was left out deliberately: personal data about the Customer, easy
+   to add later and impossible to un-collect.
+2. **Is §3.11's gross-negligence boundary worded to survive Art. 100 OR?** The
+   shape is right and matches KLARA; the wording is what decides it.
+3. **Does the DPA now satisfy Art. 28 in full**, after the three fixes above, for
+   EU-established Customers under GDPR as well as the FADP? The structural gaps
+   found by comparison are closed; whether the list is COMPLETE is a lawyer's
+   call, not a diff.
+4. **Should the mandatory-law reservation come back?** Offered and declined on
+   2026-08-25 (see Decision 1's correction). KLARA keeps a narrow one; the
+   removal rests on Linyup being B2B-only.
