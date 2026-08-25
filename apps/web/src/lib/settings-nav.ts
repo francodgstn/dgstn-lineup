@@ -15,7 +15,6 @@ import {
   ListTodo,
   Mail,
   Puzzle,
-  Send,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -88,7 +87,11 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // pane; its per-plugin editor sub-routes open full-screen at /plugins/*).
   { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true },
   { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio', gate: 'ownerOnly' },
-  { id: 'teamOutreach', href: '/settings/team?tab=outreach', labelKey: 'teamOutreach', icon: Send, group: 'studio' },
+  // Outreach folded into Emails (2026-08-25): sender identity, placeholders,
+  // templates and the system toggles are one subject, and were already sharing
+  // the `EmailSettings` i18n namespace. `?tab=outreach` redirects to /settings/emails,
+  // so a pinned `teamOutreach` id resolves to nothing and simply drops out of the
+  // pin list (the catalogue is a Map lookup) rather than breaking it.
   { id: 'teamEmails', href: '/settings/emails', labelKey: 'teamEmails', icon: Mail, group: 'studio' },
   { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio', gate: 'ownerOnly' },
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },

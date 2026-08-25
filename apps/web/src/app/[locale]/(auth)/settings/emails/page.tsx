@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { OutreachCards } from './OutreachCards'
 import { SystemEmailsCard } from './SystemEmailsCard'
 import { BookingInstructionsCard } from './BookingInstructionsCard'
 import { SmsSenderCard } from './SmsSenderCard'
@@ -33,7 +34,7 @@ export default function SettingsEmailsPage() {
   const t = useTranslations('SettingsEmails')
   const ta = useTranslations('Automations')
   const tCommon = useTranslations('Common')
-  const { currentTeamId } = useAuth()
+  const { currentTeamId, team } = useAuth()
   const qc = useQueryClient()
 
   const { data: templates = [], isLoading } = useQuery<OutreachTemplate[]>({
@@ -192,6 +193,13 @@ export default function SettingsEmailsPage() {
         </h1>
         <p className="text-muted-foreground text-sm mt-1">{t('subtitle')}</p>
       </div>
+
+      {/* ── Sender identity + reusable placeholders ──
+          First, because everything below is sent AS this sender: templates and
+          the system toggles are meaningless until the studio knows what address
+          its members will see. Came from Settings → Team's Outreach tab when the
+          two halves were merged (2026-08-25). */}
+      {currentTeamId && team && <OutreachCards teamId={currentTeamId} team={team} />}
 
       {/* ── Templates ── */}
       <Card>
