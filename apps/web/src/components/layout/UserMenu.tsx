@@ -6,7 +6,19 @@ import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import { persistLocale } from '@/i18n/persistLocale'
-import { Sun, Moon, Monitor, Rocket, LogOut, BarChart3, Settings } from 'lucide-react'
+import {
+  Sun,
+  Moon,
+  Monitor,
+  Rocket,
+  LogOut,
+  BarChart3,
+  Settings,
+  FileText,
+  ShieldCheck,
+  Lock,
+  ExternalLink,
+} from 'lucide-react'
 import { posthog } from '@/lib/posthog'
 import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
 import { TeamSwitcher } from '@/components/layout/TeamSwitcher'
@@ -220,6 +232,37 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
               <Rocket className="h-4 w-4 mr-2" />
               {tOnb('setup.title')}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+
+            {/* THE LEGAL DOCUMENTS, and this is where people look for them: an
+                account menu is the conventional home for Terms and Privacy in a
+                product with no page footer, which this app shell does not have.
+                They live on the marketing site (linyup.com), not in the app —
+                one published copy, the same one a prospect reads and the same
+                one the signup step links to — so these are external links and
+                open in a new tab rather than dropping the studio out of its
+                workspace. */}
+            {(
+              [
+                { href: 'https://linyup.com/terms', icon: FileText, key: 'legalTerms' },
+                { href: 'https://linyup.com/dpa', icon: ShieldCheck, key: 'legalDpa' },
+                { href: 'https://linyup.com/privacy', icon: Lock, key: 'legalPrivacy' },
+              ] as const
+            ).map(({ href, icon: Icon, key }) => (
+              <DropdownMenuItem
+                key={key}
+                // `window.open`, not `asChild` + <a>: this menu is base-ui and
+                // does not take `asChild`, and the other items here already
+                // navigate from onClick. `noopener` is not optional on a
+                // target=_blank — without it the opened page gets a handle on
+                // this one through `window.opener`.
+                onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}
+              >
+                <Icon className="h-4 w-4 mr-2" />
+                {tNav(key)}
+                <ExternalLink className="h-3 w-3 ml-auto opacity-50" />
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuSeparator />
 
             <DropdownMenuItem onClick={handleSignOut} variant="destructive">

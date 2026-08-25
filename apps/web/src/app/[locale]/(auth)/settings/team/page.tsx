@@ -99,7 +99,6 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Loader2,
 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
@@ -115,6 +114,7 @@ import { useByoStripeDoubleRecording } from '@/hooks/useConnect'
 import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
 import { DeleteAccountCard } from '@/components/settings/DeleteAccountCard'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -555,22 +555,12 @@ function GeneralForm({
         <p className="text-xs text-muted-foreground">{t('slugHelp')}</p>
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
-        {/* Kept as a real submit button (this section IS a <form>), but sized
-            and coloured like SettingsSaveBar so it does not read as a different
-            kind of action from every other save in settings. */}
-        {saved && !isSubmitting && (
-          <span className="text-xs text-muted-foreground">{t('saved')}</span>
-        )}
-        <Button
-          size="sm"
-          type="submit"
-          disabled={!canEdit || isSubmitting || !isDirty || !!slugError || slugChecking}
-        >
-          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isSubmitting ? t('saving') : t('save')}
-        </Button>
-      </div>
+      <SettingsSaveBar
+        type="submit"
+        saving={isSubmitting}
+        saved={saved}
+        disabled={!canEdit || !isDirty || !!slugError || slugChecking}
+      />
     </form>
   )
 }
@@ -756,13 +746,12 @@ function RegionalForm({
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
-        {saved && !saving && <span className="text-xs text-muted-foreground">{t('saved')}</span>}
-        <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !dirty || !zoneValid}>
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {saving ? t('saving') : t('save')}
-        </Button>
-      </div>
+      <SettingsSaveBar
+        onSave={onSave}
+        saving={saving}
+        saved={saved}
+        disabled={!canEdit || !dirty || !zoneValid}
+      />
     </div>
   )
 }
@@ -2114,6 +2103,59 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
   )
 }
 
+/**
+ * Which terms this studio agreed to, and when.
+ *
+ * `provisionTeam` has recorded this since 2026-08-25 and NOTHING showed it —
+ * evidence nobody can see is worth less than it cost to collect, and the studio
+ * has at least as much right to it as we do.
+ *
+ * ABSENT MEANS NEVER ASKED, not refused: every studio created before that date
+ * carries no value at all, so the block renders nothing rather than implying
+ * the studio declined something. The links stay reachable from the account menu
+ * either way.
+ */
+function TermsAcceptedNote({ team }: { team: Team }) {
+  const t = useTranslations('TeamSettings')
+  const fmt = useTeamFormat()
+  const accepted = team.terms_accepted
+  if (!accepted) return null
+
+  const atMs =
+    (accepted.accepted_at as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null
+
+  return (
+    <div className="space-y-1 pt-4 border-t">
+      <p className="text-sm font-medium">{t('termsAcceptedTitle')}</p>
+      <p className="text-xs text-muted-foreground">
+        {t('termsAcceptedBody', {
+          version: accepted.version,
+          date: atMs ? fmt.date(new Date(atMs)) : '—',
+          email: accepted.accepted_by_email || '—',
+        })}
+      </p>
+      <p className="flex flex-wrap gap-x-3 text-xs">
+        <a
+          href="https://linyup.com/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          {t('termsLink')}
+        </a>
+        <a
+          href="https://linyup.com/dpa"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          {t('dpaLink')}
+        </a>
+      </p>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'custom-fields'
@@ -2226,6 +2268,7 @@ export default function TeamSettingsPage() {
           and this is not. Owner-only — it renders nothing for anybody else
           rather than rendering disabled, which would only raise the question of
           who can. */}
+      {tab === 'general' && <TermsAcceptedNote team={team} />}
       {tab === 'general' && (
         <DeleteAccountCard teamId={currentTeamId} team={team} canEdit={canEdit} />
       )}

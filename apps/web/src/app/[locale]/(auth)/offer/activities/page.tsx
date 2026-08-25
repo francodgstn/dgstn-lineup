@@ -1583,7 +1583,7 @@ export default function ActivitiesPage() {
   // Archiving the last activity puts the "add an activity" step back.
   const invalidateSetupChecklist = useInvalidateSetupChecklist()
   const t = useTranslations('Activities')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   // The button's label IS the catalogue's page title, so the two cannot drift.
   const tCat = useTranslations('OfferCatalogue')
   // Opened straight from the dashboard's quick action. Read ONCE, in a lazy
@@ -1733,7 +1733,7 @@ export default function ActivitiesPage() {
           a plan name.) */}
       <PageHeader
         title={t('title')}
-        quickLinks={[{ href: '/schedule' as Route, label: tq('activitiesToSchedule') }]}
+        quickLinks={[{ href: '/schedule' as Route, label: tNav('calendar') }]}
         action={
           <>
             {/* The catalogue was a quick link, which is a line of muted text

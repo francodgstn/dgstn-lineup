@@ -902,7 +902,7 @@ function Header({
   t: ReturnType<typeof useTranslations>
   showQuickLinks?: boolean
 }) {
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   return (
     <div className="flex items-start gap-2">
       <Ticket className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -916,7 +916,7 @@ function Header({
             Not shown in the locked branch below: there are no codes to check. */}
         {showQuickLinks && (
           <QuickLinks
-            links={[{ href: '/offer/pricing' as Route, label: tq('promoCodesToPricing') }]}
+            links={[{ href: '/offer/pricing' as Route, label: tNav('pricing') }]}
           />
         )}
       </div>

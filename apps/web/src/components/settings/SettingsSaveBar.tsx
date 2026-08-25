@@ -39,12 +39,22 @@ import { cn } from '@/lib/utils'
 
 export function SettingsSaveBar({
   onSave,
+  type = 'button',
   saving = false,
   saved = false,
   disabled = false,
   className,
 }: {
-  onSave: () => void
+  /** Omit when `type="submit"` — the form's own onSubmit runs instead. */
+  onSave?: () => void
+  /**
+   * `submit` for a section that IS a `<form>`. It exists because the team page
+   * had hand-rolled a near-copy of this bar for exactly that case, and the copy
+   * then drifted — it lost `justify-end` and sat bottom-LEFT, which is the
+   * inconsistency this component was written to end. A prop is cheaper than a
+   * second implementation that looks right on the day it is written.
+   */
+  type?: 'button' | 'submit'
   /** In flight — swaps the label and shows the spinner. */
   saving?: boolean
   /** Show the "Saved" confirmation. Omit if the caller toasts instead. */
@@ -56,13 +66,17 @@ export function SettingsSaveBar({
   const t = useTranslations('Common')
 
   return (
-    <div className={cn('flex items-center justify-end gap-3', className)}>
+    // `pt-2` is part of the control, not the caller's problem. Settings sections
+    // stack with a `border-t` at the top of each, so a save bar with only the
+    // list's own gap beneath it reads as glued to the NEXT section's divider —
+    // which is what it looked like on Settings → General before this.
+    <div className={cn('flex items-center justify-end gap-3 pt-2', className)}>
       {/* Placed BEFORE the button so it reads "Saved · [Save]" in LTR and never
           pushes the button off the trailing edge as it appears and disappears. */}
       {saved && !saving && (
         <span className="text-xs text-muted-foreground">{t('saved')}</span>
       )}
-      <Button size="sm" onClick={onSave} disabled={disabled || saving}>
+      <Button size="sm" type={type} onClick={onSave} disabled={disabled || saving}>
         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
         {saving ? t('saving') : t('save')}
       </Button>
