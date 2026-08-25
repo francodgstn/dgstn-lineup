@@ -223,10 +223,9 @@
     "surfaceKiosk": "Kiosque",
     "kioskDesc": "Un écran de check-in sur tablette pour votre accueil – membres et visiteurs s'enregistrent sur place.",
     "shopDescPriceList": "Affiche vos tarifs. Les paiements en ligne sont désactivés : les visiteurs sont invités à vous contacter.",
-    "surfaceAppointments": "Rendez-vous",
-    "appointmentsDesc": "Intégré à la réservation — les visiteurs choisissent un créneau libre avec un coach et le réservent eux-mêmes.",
     "surfaceEvents": "Événements",
-    "eventsDesc": "Vos événements publiés, avec leur programme jour par jour."
+    "eventsDesc": "Vos événements publiés, avec leur programme jour par jour.",
+    "appointmentsEmpty": "La réservation de rendez-vous est active, mais aucun horaire n'est encore réservable."
   },
   "ShopSettings": {
     "title": "Boutique",
@@ -6987,7 +6986,9 @@
     "extraTitle": "Extras",
     "extraSubtitle": "Panneaux en attente, activés dans Paramètres → Expérimental.",
     "reason_cancelling": "Abonnement bientôt résilié",
-    "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus"
+    "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus",
+    "seatsAttended": "présents",
+    "metaAttended": "{count} présents"
   },
   "BookingContactFields": {
     "title": "Coordonnées à collecter",

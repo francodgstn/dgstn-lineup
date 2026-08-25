@@ -38,20 +38,33 @@ function toDate(ts: { toDate(): Date } | null | undefined): Date | null {
   return ts ? ts.toDate() : null
 }
 
-function SeatMeter({ session }: { session: Session }) {
+function SeatMeter({ session, state }: { session: Session; state: 'past' | 'next' | 'later' }) {
   const t = useTranslations('NewDashboard')
   const booked = session.bookings_count ?? 0
   const cap = session.max_participants ?? null
   const trials = session.trial_bookings_count ?? 0
+  // BOOKED AND ATTENDED ARE DIFFERENT QUESTIONS, and the row was answering only
+  // the first for every session including the ones that already happened —
+  // so a class where nobody turned up read identically to a full one.
+  //
+  // Before it starts, booked is the only fact there is. Once it is past, the
+  // number worth seeing is who actually came, so the meter switches: attended
+  // becomes the figure and booked is what it is measured against.
+  const attended = session.participants_count ?? 0
+  const showAttendance = state === 'past'
+  const primary = showAttendance ? attended : booked
+  const against = showAttendance ? booked : cap
   const full = cap != null && cap > 0 && booked >= cap
   const pct = cap && cap > 0 ? Math.min(100, Math.round((booked / cap) * 100)) : 0
 
   return (
     <div className="w-[74px] shrink-0 text-right">
       <p className="text-sm font-semibold leading-none tabular-nums">
-        {cap != null && cap > 0 ? `${booked}/${cap}` : booked}
+        {against != null && against > 0 ? `${primary}/${against}` : primary}
       </p>
-      {cap != null && cap > 0 ? (
+      {showAttendance ? (
+        <p className="mt-0.5 text-[11px] leading-none text-muted-foreground">{t('seatsAttended')}</p>
+      ) : cap != null && cap > 0 ? (
         <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
           <div
             className={cn('h-full rounded-full', full ? 'bg-amber-500' : 'bg-primary')}
@@ -121,7 +134,7 @@ function SessionRow({
           {meta}
         </p>
       </div>
-      <SeatMeter session={session} />
+      <SeatMeter session={session} state={state} />
     </Link>
   )
 }
@@ -164,11 +177,25 @@ export function TodayPanel({ teamId }: { teamId: string | null }) {
         : day.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'short' })
 
   const booked = rows.reduce((sum, s) => sum + (s.bookings_count ?? 0), 0)
+  // Only counted for sessions that have finished — an attended tally that
+  // included this evening's classes would read as a turnout nobody has had yet.
+  const attended = rows.reduce(
+    (sum, s) =>
+      (toDate(s.start)?.getTime() ?? 0) < nowMs ? sum + (s.participants_count ?? 0) : sum,
+    0
+  )
   const meta = isLoading
     ? ''
     : rows.length === 0
       ? ''
-      : `${t('metaSessions', { count: rows.length })} · ${t('metaBooked', { count: booked })}`
+      : [
+          t('metaSessions', { count: rows.length }),
+          t('metaBooked', { count: booked }),
+          // Appended only once somebody has actually turned up — a "0 attended"
+          // on a day that has not started yet is a fact about the clock, not
+          // about the studio, and reads like a bad morning.
+          ...(attended > 0 ? [t('metaAttended', { count: attended })] : []),
+        ].join(' · ')
 
   const navButton =
     'rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'

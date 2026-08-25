@@ -223,10 +223,9 @@
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "Ein Tablet-Check-in für deinen Empfang – Mitglieder und Walk-ins melden sich direkt vor Ort an.",
     "shopDescPriceList": "Zeigt deine Preise. Online-Zahlungen sind aus, daher werden Besucher gebeten, dich zu kontaktieren.",
-    "surfaceAppointments": "Termine",
-    "appointmentsDesc": "Teil der Buchung — Besucher wählen eine freie Zeit bei einem Coach und buchen sie selbst.",
     "surfaceEvents": "Events",
-    "eventsDesc": "Deine veröffentlichten Events, mit ihrem Tagesprogramm."
+    "eventsDesc": "Deine veröffentlichten Events, mit ihrem Tagesprogramm.",
+    "appointmentsEmpty": "Terminbuchung ist aktiv, aber es sind noch keine Zeiten buchbar."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -6987,7 +6986,9 @@
     "extraTitle": "Extras",
     "extraSubtitle": "Geparkte Panels, aktiviert unter Einstellungen → Experimentell.",
     "reason_cancelling": "Abo läuft aus",
-    "reason_billing_unlinked": "Wird für ein Abo belastet, das sie nicht mehr haben"
+    "reason_billing_unlinked": "Wird für ein Abo belastet, das sie nicht mehr haben",
+    "seatsAttended": "anwesend",
+    "metaAttended": "{count} anwesend"
   },
   "BookingContactFields": {
     "title": "Zu erfassende Kontaktdaten",

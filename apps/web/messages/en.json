@@ -223,10 +223,9 @@
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot.",
     "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you.",
-    "surfaceAppointments": "Appointments",
-    "appointmentsDesc": "Part of booking — visitors pick a coach's free time and book it themselves.",
     "surfaceEvents": "Events",
-    "eventsDesc": "Your published events, with their day-by-day programme."
+    "eventsDesc": "Your published events, with their day-by-day programme.",
+    "appointmentsEmpty": "Appointment booking is on, but no times are bookable yet."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -6987,7 +6986,9 @@
     "extraTitle": "Extra",
     "extraSubtitle": "Parked panels, switched on in Settings → Experimental.",
     "reason_cancelling": "Subscription set to end",
-    "reason_billing_unlinked": "Billed for a plan they no longer hold"
+    "reason_billing_unlinked": "Billed for a plan they no longer hold",
+    "seatsAttended": "attended",
+    "metaAttended": "{count} attended"
   },
   "BookingContactFields": {
     "title": "Contact details to collect",

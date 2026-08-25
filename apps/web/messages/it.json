@@ -223,10 +223,9 @@
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "Uno schermo di check-in su tablet per la reception – membri e walk-in si registrano sul posto.",
     "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti.",
-    "surfaceAppointments": "Appuntamenti",
-    "appointmentsDesc": "Parte della prenotazione — i visitatori scelgono un orario libero con un coach e lo prenotano da soli.",
     "surfaceEvents": "Eventi",
-    "eventsDesc": "I tuoi eventi pubblicati, con il programma giorno per giorno."
+    "eventsDesc": "I tuoi eventi pubblicati, con il programma giorno per giorno.",
+    "appointmentsEmpty": "La prenotazione degli appuntamenti è attiva, ma non ci sono ancora orari prenotabili."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -6987,7 +6986,9 @@
     "extraTitle": "Extra",
     "extraSubtitle": "Pannelli in sospeso, attivati in Impostazioni → Sperimentale.",
     "reason_cancelling": "Abbonamento in scadenza",
-    "reason_billing_unlinked": "Addebitato per un abbonamento che non ha più"
+    "reason_billing_unlinked": "Addebitato per un abbonamento che non ha più",
+    "seatsAttended": "presenti",
+    "metaAttended": "{count} presenti"
   },
   "BookingContactFields": {
     "title": "Dati di contatto da raccogliere",
