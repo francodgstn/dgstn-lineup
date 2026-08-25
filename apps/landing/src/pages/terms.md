@@ -19,8 +19,14 @@ These terms are between **Franco D'Agostino, trading as "D'Agostino Production"*
 the business that creates an account — "you", "the Customer".
 
 Linyup is offered to **businesses only** (coaches, studios, clubs and similar
-organisations). It is not a consumer service. By accepting these terms you
-confirm you are acting for a business and are authorised to bind it.
+organisations). It is not a consumer service, and Swiss consumer-protection rules
+do not apply to it.
+
+**The agreement takes effect when your studio is created.** By creating a studio
+you confirm that you are acting for a business and are authorised to bind it, and
+you accept these terms and the [Data Processing Agreement](/dpa), which forms
+part of them. The version in force at that moment is the one that applies, and it
+is recorded against your studio with the date.
 
 Full provider details are in the [Legal Notice](/legal).
 
@@ -67,8 +73,20 @@ Stripe directly for that, you are the merchant of record for those transactions,
 and you are responsible for the goods and services you sell, for refunds, and for
 any tax arising. We are not a party to those transactions.
 
-We charge a platform fee on payments processed through the service where your
-plan provides for one; the applicable fee is shown before you enable payments.
+We charge a platform fee on payments your members make through the service. The
+fee depends on your plan and is a percentage of the amount charged, with no
+minimum and no fixed component:
+
+| Plan | Platform fee |
+|---|---|
+| Free | 1.7% |
+| Coach | 1.2% |
+| Studio | 0.7% |
+| Organization | 0.4% |
+
+Stripe's own processing fees are separate and are charged by Stripe under your
+agreement with them. If we change these rates we will give you notice under
+§3.12 before the change takes effect.
 
 ## 3.6 Fees for Linyup itself
 
@@ -91,10 +109,12 @@ practical we will contact you first.
 
 ## 3.8 Availability
 
-We work to keep the service available but **we do not currently offer a
-contractual uptime commitment or service-level agreement**. The service is
-provided on an "as is" and "as available" basis, and maintenance, third-party
-outages and faults can interrupt it.
+We work to keep the service as consistently available as we can, but **we do not
+guarantee uninterrupted availability and offer no service-level agreement**.
+Planned maintenance, security or capacity work, and events outside our control —
+faults in public networks, power failures, or an outage at one of the providers
+listed in the [Data Processing Agreement](/dpa) — can restrict or interrupt the
+service temporarily.
 
 ## 3.9 Your content and our service
 
@@ -121,25 +141,34 @@ work.
 
 ## 3.11 Liability
 
-Nothing in these terms excludes liability that cannot be excluded by law,
-including for death or personal injury caused by negligence, or for fraud.
+We are liable only for damage caused intentionally or by gross negligence.
+Liability for slight negligence is excluded, except for damage to life, body or
+health, and except where liability cannot be excluded by law.
 
-Subject to that, and to the extent permitted by law, we are not liable for
-indirect or consequential loss, loss of profit, loss of business or loss of data,
-and our total liability arising out of or in connection with this agreement in
-any twelve-month period is limited to the fees you paid us in that period.
+Subject to that, we are not liable for indirect or consequential loss, loss of
+profit, loss of business, or loss of data, and our total liability for all
+damage in any contract year is limited to **twice the annual fee** for your
+plan. Where you are on the free plan, that limit is twice the annual fee of the
+next paid plan.
+
+Claims must be brought within one year of you becoming aware of the damage.
 
 ## 3.12 Changes to these terms
 
-We may update these terms. Where a change is material we will give you
-reasonable notice and, where required, ask you to accept the new version. The
-version you accepted is recorded against your studio, together with the date.
+We may update these terms. We will give you at least **six weeks' notice** by
+email to the account owner before a change takes effect. If you object in
+writing before it takes effect, we will discuss it with you, and if we cannot
+agree either of us may end the agreement at that point. Continuing to use the
+service after the change takes effect means the new version applies.
+
+The version in force when you created your studio is recorded against it,
+together with the date.
 
 ## 3.13 Governing law
 
-These terms are governed by Swiss law, and the courts of Basel, Switzerland have
-exclusive jurisdiction, without prejudice to any mandatory protection available
-to you under the law of your place of establishment.
+These terms are governed by Swiss law, excluding its conflict-of-law rules and
+the UN Convention on Contracts for the International Sale of Goods. The courts of
+Basel, Switzerland have exclusive jurisdiction.
 
 ## 3.14 Contact
 

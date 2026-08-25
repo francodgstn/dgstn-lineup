@@ -135,19 +135,66 @@ clause as notice by email to the account owner, which is achievable today.
 
 ---
 
-## 8. Open questions for the lawyer
+## 8. Decisions taken, and what is left for the lawyer
 
-1. **Governing law and forum** — Swiss (Basel) presumably, but the Customer base
-   is Swiss-and-EU, so the DPA needs to satisfy GDPR Art. 28 as well as FADP.
-2. **Which contracts exist**: one ToS with the DPA as an annexe, or two documents?
-   The numbering already assumes a set (`legal.md` is "1.", `privacy.md` is "2.",
-   and `privacy.md:14` cross-references a **"Section 9" that does not exist**).
-   Whatever is drafted must resolve that dangling reference.
-3. **Acceptance mechanics** — click-wrap at signup is what Track B builds. Confirm
-   that is sufficient for formation under Swiss law for a B2B contract, and what
-   the record must contain (identity, timestamp, version, IP?).
-4. **Liability cap and SLA** — there is no SLA today, and no uptime commitment
-   anywhere in the product or docs. Silence is a choice; make it a deliberate one.
-5. **Payments** — the Customer contracts with Stripe directly via Connect for
-   member payments. The ToS should be clear that Linyup is not the merchant of
-   record for those, only for its own subscription fees.
+Franco settled these on **2026-08-25**, after benchmarking the Swiss and
+Austrian comparators (Webling, ClubDesk, Fairgate, Eversports). The draft already
+reflects them; what follows is why, so a reviewer argues with the reasoning
+rather than rediscovering it.
+
+**DECIDED — 1. Governing law.** Swiss law, exclusive jurisdiction in **Basel**,
+conflict-of-law rules and the CISG excluded. Aligned with the field: every
+comparator uses its own seat (Webling → Winterthur, Eversports → Vienna). The
+earlier draft's concession — "without prejudice to mandatory protection at your
+place of establishment" — was **removed**; no comparator offers it.
+
+**DECIDED — 2. Two documents.** Terms (`# 3.`) and DPA (`# 4.`), the DPA forming
+part of the Terms with a precedence clause. Direct Swiss precedent: ClubDesk
+concluded that accepting the AGB automatically concludes the AVV, keeping it a
+separate document without separate signing.
+
+**DECIDED — 3. Activation-based acceptance, not click-wrap.** Creating the studio
+forms the agreement; a notice on the team step says so and links both documents.
+Chosen for lower friction, matching Eversports and Webling. Amendments: **six
+weeks' notice** by email with a **written objection right** and a termination
+route if no agreement (Eversports' shape).
+*The trade, recorded because it is reversible:* click-wrap is stronger evidence
+of assent. The RECORD is identical either way — `provisionTeam` stamps version,
+timestamp, uid and email onto the team — so restoring the tick-box is a UI change
+on step two, not a data-model change.
+
+**DECIDED — 4. No SLA; ClubDesk's liability shape, not Webling's.** No
+availability guarantee, with the causes named (maintenance, network, power,
+provider outage). Liability limited to **intent and gross negligence**, slight
+negligence excluded except for life/body/health, consequential loss excluded, and
+capped at **twice the annual plan fee** per contract year — with the free plan
+capped at twice the next paid plan's fee, because a cap of "fees paid" is **zero**
+for a free customer.
+*Why not Webling:* its blanket disclaimer of all liability is very likely partly
+void, since **Art. 100 OR** does not permit excluding liability for intent or
+gross negligence. Declining an SLA and writing an unenforceable liability clause
+are separate choices; only the first was wanted.
+
+**DECIDED — 5. Platform fees confirmed** and now stated in §3.5 as a table:
+Free 1.7%, Coach 1.2%, Studio 0.7%, Organization 0.4%, no minimum and no fixed
+component (`CONNECT_TAKE_RATE`, `shared/src/types/connect.ts`). Stripe's own
+processing fees are separate and charged by Stripe.
+
+### Still for the lawyer
+
+1. **Does activation-based acceptance suffice** for B2B contract formation under
+   Swiss law, and does the stored record (version, timestamp, uid, email — **no
+   IP**) meet the evidentiary bar? IP was left out deliberately: it is personal
+   data about the Customer, easy to add later and impossible to un-collect.
+2. **Is §3.11 correctly framed for Art. 100 OR?** It is written to the
+   continental shape rather than the Anglo cap-and-carve-out, but the exact
+   wording of the gross-negligence carve-out is the part that decides whether it
+   holds.
+3. **Does the DPA satisfy GDPR Art. 28** as well as the FADP, for EU-established
+   Customers, now that the place-of-establishment concession is gone?
+4. **Sub-processor notice.** The DPA promises notice by email to the account
+   owner with an objection right; Fairgate uses a **20-day** window with a
+   termination route. A window should be named, and there is **no mechanism**
+   behind the promise today — it is an operational commitment fulfilled by hand.
+5. **The one-year claim limitation** in §3.11 — permissible, and is one year the
+   right number? Eversports uses one year from knowledge, three from the act.

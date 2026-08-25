@@ -322,8 +322,7 @@
     "memberLanguageHint": "Die Sprache, in der Ihre Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Die Sprache Ihres eigenen Dashboards wählen Sie separat im Benutzermenü.",
     "errorNameRequired": "Pflichtfeld",
     "errorNameTooLong": "Max. 40 Zeichen",
-    "acceptTerms": "Ich habe die <terms>Nutzungsbedingungen</terms> und den <dpa>Auftragsverarbeitungsvertrag</dpa> gelesen und akzeptiere sie im Namen dieses Studios.",
-    "errorTermsRequired": "Bitte akzeptiere die Bedingungen, um dein Studio zu erstellen."
+    "acceptTerms": "Mit der Erstellung deines Studios akzeptierst du in dessen Namen die <terms>Nutzungsbedingungen</terms> und den <dpa>Auftragsverarbeitungsvertrag</dpa>."
   },
   "Dashboard": {
     "title": "Dashboard",

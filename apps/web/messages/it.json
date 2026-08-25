@@ -322,8 +322,7 @@
     "memberLanguageHint": "La lingua in cui vengono scritti i messaggi ai tuoi membri — conferme, promemoria e ricevute. La lingua della tua dashboard si sceglie separatamente, dal menu utente.",
     "errorNameRequired": "Obbligatorio",
     "errorNameTooLong": "Massimo 40 caratteri",
-    "acceptTerms": "Ho letto e accetto i <terms>termini di servizio</terms> e il <dpa>contratto sul trattamento dei dati</dpa> per conto di questo studio.",
-    "errorTermsRequired": "Accetta i termini per creare il tuo studio."
+    "acceptTerms": "Creando il tuo studio accetti per suo conto i <terms>termini di servizio</terms> e il <dpa>contratto sul trattamento dei dati</dpa>."
   },
   "Dashboard": {
     "title": "Dashboard",
