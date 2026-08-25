@@ -85,8 +85,7 @@
       "bookingPage": "essai page de réservation",
       "teamGeneral": "studio nom logo image de marque",
       "teamPayments": "paiements passerelle stripe payrexx devise modes de paiement",
-      "teamOutreach": "messages sms rappels",
-      "teamEmails": "e-mails modèles expéditeur",
+      "teamEmails": "mail modèles expéditeur messages sms rappels outreach variables domaine",
       "teamAlerts": "notifications",
       "teamRanking": "classement points gamification",
       "teamCustomFields": "champs attributs",
@@ -107,7 +106,6 @@
     "teamAlerts": "Alertes",
     "teamRanking": "Niveaux",
     "teamPayments": "Paramètres de paiement",
-    "teamOutreach": "Outreach",
     "teamEmails": "E-mails",
     "teamAffiliations": "Affiliations",
     "teamCustomFields": "Champs personnalisés",
@@ -184,7 +182,10 @@
     "memberSubscriptions": "Abonnements des membres",
     "paymentsAndSubscriptions": "Paiements et abonnements",
     "sidebarResizeLabel": "Redimensionner la barre latérale",
-    "sidebarResizeHint": "Faites glisser pour redimensionner — au-delà de la gauche pour réduire, double-cliquez pour réinitialiser"
+    "sidebarResizeHint": "Faites glisser pour redimensionner — au-delà de la gauche pour réduire, double-cliquez pour réinitialiser",
+    "legalTerms": "Conditions d'utilisation",
+    "legalDpa": "Contrat de sous-traitance",
+    "legalPrivacy": "Politique de confidentialité"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -225,10 +226,9 @@
     "surfaceKiosk": "Kiosque",
     "kioskDesc": "Un écran de check-in sur tablette pour votre accueil – membres et visiteurs s'enregistrent sur place.",
     "shopDescPriceList": "Affiche vos tarifs. Les paiements en ligne sont désactivés : les visiteurs sont invités à vous contacter.",
-    "surfaceAppointments": "Rendez-vous",
-    "appointmentsDesc": "Intégré à la réservation — les visiteurs choisissent un créneau libre avec un coach et le réservent eux-mêmes.",
     "surfaceEvents": "Événements",
-    "eventsDesc": "Vos événements publiés, avec leur programme jour par jour."
+    "eventsDesc": "Vos événements publiés, avec leur programme jour par jour.",
+    "appointmentsEmpty": "La réservation de rendez-vous est active, mais aucun horaire n'est encore réservable."
   },
   "ShopSettings": {
     "title": "Boutique",
@@ -321,7 +321,8 @@
     "memberLanguage": "Langue des membres",
     "memberLanguageHint": "La langue dans laquelle vos membres sont contactés — confirmations, rappels et reçus. La langue de votre propre tableau de bord se choisit séparément, dans le menu utilisateur.",
     "errorNameRequired": "Obligatoire",
-    "errorNameTooLong": "40 caractères maximum"
+    "errorNameTooLong": "40 caractères maximum",
+    "acceptTerms": "En créant votre studio, vous acceptez en son nom les <terms>conditions d'utilisation</terms> et le <dpa>contrat de sous-traitance des données</dpa>."
   },
   "Dashboard": {
     "title": "Tableau de bord",
@@ -942,7 +943,9 @@
     "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu.",
     "deletionScheduledBadge": "Suppression demandée · {date}",
     "attention_cancelling": "Résilie",
-    "attention_billing_unlinked": "Facturation orpheline"
+    "attention_billing_unlinked": "Facturation orpheline",
+    "exportCsv": "Exporter en CSV",
+    "exportFailed": "Échec de l'export. Veuillez réessayer."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1933,7 +1936,11 @@
     "regionTime24h": "24 heures (18:30)",
     "regionTime12h": "12 heures (6:30 PM)",
     "regionPreview": "Aperçu",
-    "slugCheckFailed": "Impossible de vérifier cette URL. Réessayez avant d'enregistrer."
+    "slugCheckFailed": "Impossible de vérifier cette URL. Réessayez avant d'enregistrer.",
+    "termsAcceptedTitle": "Conditions acceptées",
+    "termsAcceptedBody": "Version {version}, acceptée le {date} par {email}.",
+    "termsLink": "Conditions d'utilisation",
+    "dpaLink": "Contrat de sous-traitance"
   },
   "Bookings": {
     "title": "Réservations",
@@ -2531,7 +2538,6 @@
     "rowGroups": "Groupes",
     "rowCustomFields": "Champs perso",
     "rowForms": "Formulaires",
-    "formsNote": "Bientôt disponible",
     "rowAnalytics": "Analyses",
     "rowAiInsights": "Insights IA",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2545,13 @@
     "rowCentralAdmin": "Administration centrale & vue unifiée",
     "rowCrossTeam": "Événements & messages inter-équipes",
     "rowApi": "Accès API",
-    "rowPermissions": "Rôles & permissions avancés"
+    "rowPermissions": "Rôles & permissions avancés",
+    "rowPlaces": "Lieux et salles",
+    "rowDocuments": "Documents",
+    "documentsNote": "Publiez et partagez des documents. Les décharges signables nécessitent Studio.",
+    "rowCustomDomain": "Domaine personnalisé",
+    "rowGiftCards": "Cartes cadeaux",
+    "rowPromoCodes": "Codes promo"
   },
   "Plugins": {
     "title": "Plugins",
@@ -6755,13 +6767,7 @@
     "failedTransient": "Impossible d'annuler cette réservation : elle est toujours active. Merci de réessayer."
   },
   "QuickLinks": {
-    "plansToPricing": "Vérifier ce qu'un membre paie réellement",
-    "availabilityToActivities": "Définir les types de rendez-vous et les durées proposés par ces horaires",
-    "promoCodesToPricing": "Voir vos codes actifs à côté des prix qu'ils réduisent",
-    "activitiesToSchedule": "Voir ces cours dans le calendrier",
-    "pricingToActivities": "Modifier les activités derrière ces prix",
-    "pricingToSubscriptions": "Modifier les abonnements derrière ces prix",
-    "toPaymentSettings": "Définir votre devise et votre mode d'encaissement"
+    "related": "Voir aussi :"
   },
   "Site": {
     "loading": "Chargement…",
@@ -6986,7 +6992,9 @@
     "extraTitle": "Extras",
     "extraSubtitle": "Panneaux en attente, activés dans Paramètres → Expérimental.",
     "reason_cancelling": "Abonnement bientôt résilié",
-    "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus"
+    "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus",
+    "seatsAttended": "présents",
+    "metaAttended": "{count} présents"
   },
   "BookingContactFields": {
     "title": "Coordonnées à collecter",

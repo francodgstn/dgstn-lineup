@@ -265,7 +265,7 @@
       "forms": {
         "title": "Formulaires",
         "description": "Formulaires personnalisés pour tout.",
-        "detail": "Créez des formulaires personnalisés pour les inscriptions, l'accueil, les décharges et plus — collectez exactement les données dont vous avez besoin. Bientôt disponible."
+        "detail": "Créez des formulaires personnalisés pour les inscriptions, l'accueil, les décharges et plus — collectez exactement les données dont vous avez besoin."
       },
       "api": {
         "title": "Accès API",
@@ -286,6 +286,26 @@
         "title": "Mode kiosque",
         "description": "Transformez une tablette d'accueil en écran de comptoir.",
         "detail": "Un écran fixe et épuré pour la tablette à votre entrée : horaire en direct, cours en cours/à venir, QR de check-in de l'équipe, inscription sur place et un diaporama de veille en cas d'inactivité."
+      },
+      "places": {
+        "title": "Lieux et salles",
+        "description": "Où se déroule chaque séance.",
+        "detail": "Définissez vos lieux et les salles qu'ils contiennent, puis affectez-y une séance. Les salles apparaissent sur la page de réservation et dans le calendrier : personne n'a à demander quelle porte."
+      },
+      "documents": {
+        "title": "Documents",
+        "description": "Publiez ce qu'il faut lire — et signer.",
+        "detail": "Partagez conditions, règlement intérieur et fiches d'information sur vos pages publiques. Les décharges signables, avec versions figées et registre de qui a accepté quoi, sont disponibles à partir de Studio."
+      },
+      "giftCards": {
+        "title": "Cartes cadeaux",
+        "description": "Vendez un crédit qu'une autre personne dépensera.",
+        "detail": "Vendez une carte cadeau dans votre boutique ; le bénéficiaire l'utilise pour des cours, des abonnements, des formations ou des produits. Les soldes sont suivis automatiquement — une carte en circulation est de l'argent déjà encaissé."
+      },
+      "promoCodes": {
+        "title": "Codes promo",
+        "description": "Lancez une campagne sans tout brader.",
+        "detail": "Créez un code qui réduit le prix d'une séance à l'unité, d'un rendez-vous, d'une formation ou d'un produit. Limitez-le par usage, par date, par audience ou à une seule personne — et voyez ce que chaque code a réellement rapporté."
       }
     }
   },
@@ -398,7 +418,8 @@
         "Événements & messages inter-équipes",
         "API & rôles avancés"
       ]
-    }
+    },
+    "cmpDocumentsNote": "Les décharges signables nécessitent Studio."
   },
   "payments": {
     "eyebrow": "Soyez payé",
@@ -470,6 +491,7 @@
     "links": {
       "privacy": "Confidentialité",
       "terms": "CGU",
+      "dpa": "Traitement des données",
       "legal": "Mentions légales",
       "contact": "Contact",
       "cookies": "Paramètres des cookies"

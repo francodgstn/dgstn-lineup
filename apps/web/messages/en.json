@@ -85,8 +85,7 @@
       "bookingPage": "trial booking link",
       "teamGeneral": "studio name logo branding",
       "teamPayments": "payments gateway stripe payrexx currency payment modes",
-      "teamOutreach": "messages sms reminders",
-      "teamEmails": "mail templates sender",
+      "teamEmails": "mail templates sender messages sms reminders outreach placeholders domain",
       "teamAlerts": "notifications",
       "teamRanking": "leaderboard points gamification",
       "teamCustomFields": "fields attributes",
@@ -107,7 +106,6 @@
     "teamAlerts": "Alerts",
     "teamRanking": "Ranking",
     "teamPayments": "Payment settings",
-    "teamOutreach": "Outreach",
     "teamEmails": "Emails",
     "teamAffiliations": "Affiliations",
     "teamCustomFields": "Custom fields",
@@ -184,7 +182,10 @@
     "memberSubscriptions": "Member subscriptions",
     "paymentsAndSubscriptions": "Payments & Subscriptions",
     "sidebarResizeLabel": "Resize sidebar",
-    "sidebarResizeHint": "Drag to resize — drag past the left to collapse, double-click to reset"
+    "sidebarResizeHint": "Drag to resize — drag past the left to collapse, double-click to reset",
+    "legalTerms": "Terms of Service",
+    "legalDpa": "Data Processing Agreement",
+    "legalPrivacy": "Privacy Policy"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -225,10 +226,9 @@
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "A tablet check-in screen for your front desk — members and walk-ins sign in on the spot.",
     "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you.",
-    "surfaceAppointments": "Appointments",
-    "appointmentsDesc": "Part of booking — visitors pick a coach's free time and book it themselves.",
     "surfaceEvents": "Events",
-    "eventsDesc": "Your published events, with their day-by-day programme."
+    "eventsDesc": "Your published events, with their day-by-day programme.",
+    "appointmentsEmpty": "Appointment booking is on, but no times are bookable yet."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -321,7 +321,8 @@
     "memberLanguage": "Member language",
     "memberLanguageHint": "The language your members are written to in — confirmations, reminders and receipts. Your own dashboard language is chosen separately, from the user menu.",
     "errorNameRequired": "Required",
-    "errorNameTooLong": "Max 40 characters"
+    "errorNameTooLong": "Max 40 characters",
+    "acceptTerms": "By creating your studio you accept the <terms>Terms of Service</terms> and the <dpa>Data Processing Agreement</dpa> on its behalf."
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -942,7 +943,9 @@
     "affiliationRemoveBody": "{name} loses this affiliation and anything that depends on it — access to gated activities, member pricing and any renewal it was due.",
     "deletionScheduledBadge": "Deletion requested · {date}",
     "attention_cancelling": "Cancelling",
-    "attention_billing_unlinked": "Billing unlinked"
+    "attention_billing_unlinked": "Billing unlinked",
+    "exportCsv": "Export CSV",
+    "exportFailed": "Export failed. Please try again."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1933,7 +1936,11 @@
     "regionTime24h": "24-hour (18:30)",
     "regionTime12h": "12-hour (6:30 PM)",
     "regionPreview": "Preview",
-    "slugCheckFailed": "Could not check this URL. Try again before saving."
+    "slugCheckFailed": "Could not check this URL. Try again before saving.",
+    "termsAcceptedTitle": "Terms accepted",
+    "termsAcceptedBody": "Version {version}, accepted on {date} by {email}.",
+    "termsLink": "Terms of Service",
+    "dpaLink": "Data Processing Agreement"
   },
   "Bookings": {
     "title": "Bookings",
@@ -2531,7 +2538,6 @@
     "rowGroups": "Groups",
     "rowCustomFields": "Custom fields",
     "rowForms": "Forms",
-    "formsNote": "Coming soon",
     "rowAnalytics": "Analytics",
     "rowAiInsights": "AI insights",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2545,13 @@
     "rowCentralAdmin": "Central admin & unified data",
     "rowCrossTeam": "Cross-team events & messaging",
     "rowApi": "API access",
-    "rowPermissions": "Advanced roles & permissions"
+    "rowPermissions": "Advanced roles & permissions",
+    "rowPlaces": "Places & rooms",
+    "rowDocuments": "Documents",
+    "documentsNote": "Publish and share documents. Signable waivers need Studio.",
+    "rowCustomDomain": "Custom domain",
+    "rowGiftCards": "Gift cards",
+    "rowPromoCodes": "Promo codes"
   },
   "Plugins": {
     "title": "Plugins",
@@ -6755,13 +6767,7 @@
     "failedTransient": "We couldn't cancel this booking — it is still active. Please try again."
   },
   "QuickLinks": {
-    "plansToPricing": "Check what a member actually pays",
-    "availabilityToActivities": "Set the appointment types and lengths these hours offer",
-    "promoCodesToPricing": "See your live codes next to the prices they cut",
-    "activitiesToSchedule": "See these classes on the calendar",
-    "pricingToActivities": "Edit the activities behind these prices",
-    "pricingToSubscriptions": "Edit the plans behind these prices",
-    "toPaymentSettings": "Set your currency and how you take payment"
+    "related": "Related:"
   },
   "Site": {
     "loading": "Loading…",
@@ -6986,7 +6992,9 @@
     "extraTitle": "Extra",
     "extraSubtitle": "Parked panels, switched on in Settings → Experimental.",
     "reason_cancelling": "Subscription set to end",
-    "reason_billing_unlinked": "Billed for a plan they no longer hold"
+    "reason_billing_unlinked": "Billed for a plan they no longer hold",
+    "seatsAttended": "attended",
+    "metaAttended": "{count} attended"
   },
   "BookingContactFields": {
     "title": "Contact details to collect",

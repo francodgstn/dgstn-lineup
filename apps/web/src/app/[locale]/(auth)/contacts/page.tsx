@@ -57,6 +57,7 @@ import type {
 import { formatCurrency } from '@/lib/format'
 import { useAskedDocuments, type AskedDocument } from '@/hooks/useContactDocuments'
 import { AskToSignDialog } from '@/components/contacts/AskToSignDialog'
+import { ExportContactsButton } from '@/components/contacts/ExportContactsButton'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import {
@@ -2779,13 +2780,19 @@ export default function ContactsPage() {
             </div>
           )}
         </div>
-        <button
-          onClick={openCreateDialog}
-          className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <UserPlus className="h-4 w-4" />
-          {t('addContact')}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Hidden for a coach, whose data access is own-scoped — the whole
+              roster in one file is exactly what that scoping prevents. This is
+              UX only; `exportContacts` asserts manager server-side regardless. */}
+          {!ownScoped && currentTeamId && <ExportContactsButton teamId={currentTeamId} />}
+          <button
+            onClick={openCreateDialog}
+            className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            {t('addContact')}
+          </button>
+        </div>
       </div>
 
       {/* Contact-cap warning. Tier-specific, never per-contact metered: Free

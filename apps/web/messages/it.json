@@ -85,8 +85,7 @@
       "bookingPage": "prova pagina prenotazioni",
       "teamGeneral": "studio nome logo branding",
       "teamPayments": "pagamenti gateway stripe payrexx valuta metodi di pagamento",
-      "teamOutreach": "messaggi sms promemoria",
-      "teamEmails": "email modelli mittente",
+      "teamEmails": "mail modelli mittente messaggi sms promemoria outreach segnaposto dominio",
       "teamAlerts": "notifiche",
       "teamRanking": "classifica punti gamification",
       "teamCustomFields": "campi attributi",
@@ -107,7 +106,6 @@
     "teamAlerts": "Avvisi",
     "teamRanking": "Livelli",
     "teamPayments": "Impostazioni pagamenti",
-    "teamOutreach": "Outreach",
     "teamEmails": "Email",
     "teamAffiliations": "Affiliazioni",
     "teamCustomFields": "Campi personalizzati",
@@ -184,7 +182,10 @@
     "memberSubscriptions": "Abbonamenti dei membri",
     "paymentsAndSubscriptions": "Pagamenti e abbonamenti",
     "sidebarResizeLabel": "Ridimensiona la barra laterale",
-    "sidebarResizeHint": "Trascina per ridimensionare — oltre il bordo sinistro per comprimere, doppio clic per ripristinare"
+    "sidebarResizeHint": "Trascina per ridimensionare — oltre il bordo sinistro per comprimere, doppio clic per ripristinare",
+    "legalTerms": "Termini di servizio",
+    "legalDpa": "Contratto sul trattamento dei dati",
+    "legalPrivacy": "Informativa sulla privacy"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -225,10 +226,9 @@
     "surfaceKiosk": "Kiosk",
     "kioskDesc": "Uno schermo di check-in su tablet per la reception – membri e walk-in si registrano sul posto.",
     "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti.",
-    "surfaceAppointments": "Appuntamenti",
-    "appointmentsDesc": "Parte della prenotazione — i visitatori scelgono un orario libero con un coach e lo prenotano da soli.",
     "surfaceEvents": "Eventi",
-    "eventsDesc": "I tuoi eventi pubblicati, con il programma giorno per giorno."
+    "eventsDesc": "I tuoi eventi pubblicati, con il programma giorno per giorno.",
+    "appointmentsEmpty": "La prenotazione degli appuntamenti è attiva, ma non ci sono ancora orari prenotabili."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -321,7 +321,8 @@
     "memberLanguage": "Lingua dei membri",
     "memberLanguageHint": "La lingua in cui vengono scritti i messaggi ai tuoi membri — conferme, promemoria e ricevute. La lingua della tua dashboard si sceglie separatamente, dal menu utente.",
     "errorNameRequired": "Obbligatorio",
-    "errorNameTooLong": "Massimo 40 caratteri"
+    "errorNameTooLong": "Massimo 40 caratteri",
+    "acceptTerms": "Creando il tuo studio accetti per suo conto i <terms>termini di servizio</terms> e il <dpa>contratto sul trattamento dei dati</dpa>."
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -942,7 +943,9 @@
     "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto.",
     "deletionScheduledBadge": "Cancellazione richiesta · {date}",
     "attention_cancelling": "In disdetta",
-    "attention_billing_unlinked": "Fatturazione orfana"
+    "attention_billing_unlinked": "Fatturazione orfana",
+    "exportCsv": "Esporta CSV",
+    "exportFailed": "Esportazione non riuscita. Riprova."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -1933,7 +1936,11 @@
     "regionTime24h": "24 ore (18:30)",
     "regionTime12h": "12 ore (6:30 PM)",
     "regionPreview": "Anteprima",
-    "slugCheckFailed": "Non è stato possibile verificare questo URL. Riprova prima di salvare."
+    "slugCheckFailed": "Non è stato possibile verificare questo URL. Riprova prima di salvare.",
+    "termsAcceptedTitle": "Termini accettati",
+    "termsAcceptedBody": "Versione {version}, accettata il {date} da {email}.",
+    "termsLink": "Termini di servizio",
+    "dpaLink": "Contratto sul trattamento dei dati"
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -2531,7 +2538,6 @@
     "rowGroups": "Gruppi",
     "rowCustomFields": "Campi personalizzati",
     "rowForms": "Moduli",
-    "formsNote": "Prossimamente",
     "rowAnalytics": "Analisi",
     "rowAiInsights": "Insight AI",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2545,13 @@
     "rowCentralAdmin": "Amministrazione centrale e dati unificati",
     "rowCrossTeam": "Eventi e messaggi tra team",
     "rowApi": "Accesso API",
-    "rowPermissions": "Ruoli e permessi avanzati"
+    "rowPermissions": "Ruoli e permessi avanzati",
+    "rowPlaces": "Luoghi e sale",
+    "rowDocuments": "Documenti",
+    "documentsNote": "Pubblica e condividi documenti. Le liberatorie firmabili richiedono Studio.",
+    "rowCustomDomain": "Dominio personalizzato",
+    "rowGiftCards": "Carte regalo",
+    "rowPromoCodes": "Codici promozionali"
   },
   "Plugins": {
     "title": "Plugin",
@@ -6755,13 +6767,7 @@
     "failedTransient": "Non siamo riusciti ad annullare questa prenotazione: è ancora attiva. Riprova."
   },
   "QuickLinks": {
-    "plansToPricing": "Verifica quanto paga davvero un membro",
-    "availabilityToActivities": "Imposta i tipi di appuntamento e le durate offerte da questi orari",
-    "promoCodesToPricing": "Vedi i codici attivi accanto ai prezzi che riducono",
-    "activitiesToSchedule": "Vedi queste lezioni nel calendario",
-    "pricingToActivities": "Modifica le attività dietro questi prezzi",
-    "pricingToSubscriptions": "Modifica gli abbonamenti dietro questi prezzi",
-    "toPaymentSettings": "Imposta la valuta e come incassi i pagamenti"
+    "related": "Correlati:"
   },
   "Site": {
     "loading": "Caricamento…",
@@ -6986,7 +6992,9 @@
     "extraTitle": "Extra",
     "extraSubtitle": "Pannelli in sospeso, attivati in Impostazioni → Sperimentale.",
     "reason_cancelling": "Abbonamento in scadenza",
-    "reason_billing_unlinked": "Addebitato per un abbonamento che non ha più"
+    "reason_billing_unlinked": "Addebitato per un abbonamento che non ha più",
+    "seatsAttended": "presenti",
+    "metaAttended": "{count} presenti"
   },
   "BookingContactFields": {
     "title": "Dati di contatto da raccogliere",

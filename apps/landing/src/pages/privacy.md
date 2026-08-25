@@ -11,7 +11,7 @@ lastUpdated: 25 June 2026
 > Linyup acting as the **controller** for website visitors and Customers.
 > Where a studio uploads its own contacts into the product, Linyup acts as a
 > **processor** on the studio's behalf; that relationship is governed by a
-> separate Data Processing Agreement (see Section 9), not by this policy.
+> separate [Data Processing Agreement](/dpa), not by this policy.
 
 ## 2.1 Who is responsible
 
@@ -78,7 +78,7 @@ We use carefully selected providers who process data on our behalf under contrac
 | Provider | Purpose | Location |
 |---|---|---|
 | Google Cloud / Firebase (Google) | Hosting, database, file storage, and serverless functions | EU / Switzerland (europe-west6, Zurich) |
-| Brevo (Sendinblue SAS) | Transactional and marketing email | France (EU) |
+| Brevo (Sendinblue SAS) | Transactional and marketing email, and SMS | France (EU) |
 | PostHog (PostHog, Inc.) | Privacy-friendly product analytics (cookieless) | EU region (Frankfurt); provider based in the United States |
 | Stripe (Stripe Payments Europe, Ltd.) | Payment processing | Ireland (EU), with group processing in the United States |
 
@@ -121,7 +121,7 @@ The service is intended for businesses (coaches and studios), not for use by chi
 When you use Linyup to manage your own people (your "contacts," such as your members, students, or clients), you remain the controller of that data and Linyup acts as your processor. This means:
 
 - you decide what data to collect and how to use it, and you are responsible for having a lawful basis and for informing your contacts;
-- we process that data only on your documented instructions, as set out in our Data Processing Agreement (DPA);
+- we process that data only on your documented instructions, as set out in our [Data Processing Agreement](/dpa);
 - where you store data about minors, you are responsible for any required guardian consent.
 
 ## 2.10 Changes

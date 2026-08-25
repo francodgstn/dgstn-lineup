@@ -21,19 +21,16 @@
 //   documents      → /documents
 //   events         → /events
 //
-// APPOINTMENTS IS NESTED UNDER BOOKING (`SurfaceDef.child`) because it is not a
-// front door: `'appointments'` is deliberately not a `PublicSurface` (see
-// types/team.ts) — visitors reach the picker through /public/{slug}/booking, so
-// as a peer row it put a second "booking" in the same mental slot. It keeps a row
-// of its own rather than folding into Booking's, because it carries two things
-// Booking's row cannot say. First, the fail-closed live state: Booking is always
-// live, while `appointmentPickerLive` composes the studio's toggle with whether
-// anything is bookable behind it — the toggle alone would say "live" over an
-// empty picker (UX-28). Second, the pointer to /schedule/availability, which is
-// nowhere near /settings/booking — APPOINTMENTS HAS TWO MANAGEMENT HOMES, which
-// is why its action switches: the toggle lives in /settings/booking and the
-// bookable hours behind it in /schedule/availability, and a row that is dark for
-// the first reason must not send the studio to the second.
+// APPOINTMENTS HAVE NO ROW HERE, and did not get one back (2026-08-25). They
+// were a peer row, then a row nested under Booking, and are now neither:
+// `'appointments'` is deliberately not a `PublicSurface` (see types/team.ts) —
+// visitors reach the picker through /public/{slug}/booking, so a row of its own
+// put a second "booking" in one mental slot however it was indented.
+//
+// The one thing its row uniquely carried is kept: `appointmentPickerLive`
+// composes the studio's toggle with whether anything is actually bookable, so a
+// picker can be ON and empty, and that state has no other surface anywhere. It
+// is appended to Booking's description instead (UX-28).
 //
 // That spread is the reason this page exists (UX-28) and the reason it must be
 // findable: it is linked from the main nav's Grow section AND the Settings rail,
@@ -50,8 +47,7 @@
 //    (copy/open) and which surface visitors land on. This is the page's anchor.
 //  • Surface list — every public surface as a compact row (icon · title · desc ·
 //    preview · single CTA). Live surfaces read full-strength with a "Live" marker
-//    and sort first; not-yet-set-up ones are dimmed and sink below. The sort runs
-//    over PARENTS only, so a nested row stays with the row it is a mode of. Rows
+//    and sort first; not-yet-set-up ones are dimmed and sink below. Rows
 //    beat a card grid here because the page is a directory: hierarchy (link
 //    first, live channels next, untapped ones quietly available) matters more
 //    than symmetry.
@@ -72,7 +68,7 @@ import type { PublicSurface } from '@linyup/shared'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck, CalendarClock,
+  Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck,
   UserPlus, ClipboardList, FileText, CalendarRange, ExternalLink, Copy, Check, Plus, Settings2,
 } from 'lucide-react'
 
@@ -108,12 +104,8 @@ function SetupLink({ href, label }: { href: Route; label: string }) {
 
 // One public surface = one compact row. Live rows read full-strength with a
 // "Live" marker; not-live rows dim so the eye lands on what's actually public.
-// A `nested` row indents under the row above it and wears a smaller tile: it is a
-// mode of that surface, not a rival front door, and it keeps every part a
-// top-level row has (its own live dot, preview and CTA) because those are the
-// reason it is still a row.
 function SurfaceRow({
-  icon: Icon, title, desc, live, previewUrl, action, nested, t,
+  icon: Icon, title, desc, live, previewUrl, action, t,
 }: {
   icon: React.ElementType
   title: string
@@ -121,24 +113,23 @@ function SurfaceRow({
   live: boolean
   previewUrl: string | null
   action: React.ReactNode
-  nested?: boolean
   t: (k: string) => string
 }) {
   return (
     <div
-      className={`flex items-center gap-3 transition-colors hover:bg-muted/40 ${
-        nested ? 'py-2.5 pl-9 pr-3 sm:pl-14 sm:pr-4' : 'px-3 py-3 sm:px-4'
-      } ${live ? '' : 'opacity-65'}`}
+      className={`flex items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/40 sm:px-4 ${
+        live ? '' : 'opacity-65'
+      }`}
     >
       <div
-        className={`grid shrink-0 place-items-center rounded-lg ${nested ? 'h-7 w-7' : 'h-9 w-9'} ${
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
           live ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
         }`}
       >
-        <Icon className={nested ? 'h-4 w-4' : 'h-[18px] w-[18px]'} />
+        <Icon className="h-[18px] w-[18px]" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`truncate font-medium leading-tight ${nested ? 'text-sm' : ''}`}>{title}</p>
+        <p className="truncate font-medium leading-tight">{title}</p>
         <p className="mt-0.5 truncate text-xs text-muted-foreground leading-snug">{desc}</p>
       </div>
       {live && (
@@ -163,11 +154,9 @@ function SurfaceRow({
   )
 }
 
-// What one row draws. Split out from SurfaceDef so `child` can be typed as
-// exactly this — a leaf. Nesting stops at one level BY TYPE rather than by
-// convention: the render loop draws a parent and its child and nothing below
-// that, so a grandchild must not be expressible, or it would type-check, lint
-// and then render nothing at all.
+// What one row draws. Flat: the appointments child was the only nesting this
+// ever had, and it was dropped with it — a `child` nobody sets is a mechanism
+// the next reader has to understand before discovering it is unused.
 type SurfaceRowDef = {
   icon: React.ElementType
   title: string
@@ -179,11 +168,6 @@ type SurfaceRowDef = {
 
 type SurfaceDef = SurfaceRowDef & {
   key: string
-  /** A surface reached THROUGH this one, rendered as a subordinate row that
-   *  travels with its parent through the live-first sort. Today: Appointments
-   *  under Booking. It carries no `key` — the parent's key identifies the whole
-   *  group to React, and a second one would be dead. */
-  child?: SurfaceRowDef
 }
 
 export default function PublicPageHub() {
@@ -274,22 +258,23 @@ export default function PublicPageHub() {
       action: <ManageLink href={'/public-page/space' as Route} label={t('manage')} />,
     },
     {
-      key: 'booking', icon: CalendarCheck, title: t('surfaceBooking'), desc: t('bookingDesc'),
+      key: 'booking', icon: CalendarCheck, title: t('surfaceBooking'),
+      // APPOINTMENTS HAVE NO ROW OF THEIR OWN (2026-08-25). They are reached
+      // through booking, and `'appointments'` was never a `PublicSurface` — a
+      // deep-link destination, not a front door — so a peer row put a second
+      // "booking" in the reader's head for one concept.
+      //
+      // ONE SIGNAL SURVIVED THE DELETION, deliberately: the picker can be
+      // switched ON and still return nothing, because a window with no
+      // appointment activity behind it yields no slots. That state has no other
+      // surface anywhere, so it is appended to this row's description rather
+      // than lost with the row that used to carry it (UX-28).
+      desc:
+        flags.appointmentsEnabled && !flags.appointmentsLive
+          ? `${t('bookingDesc')} ${t('appointmentsEmpty')}`
+          : t('bookingDesc'),
       live: flags.bookingLive, previewUrl: publicUrl('booking'),
       action: <ManageLink href={'/settings/booking' as Route} label={t('manage')} />,
-      child: {
-        // Nested, not merged — see the header. Dark until BOTH halves are true,
-        // and the action names which half is missing: the toggle first (nothing
-        // else can matter while it is off), then the hours. A row asserting
-        // "Live" over a picker that returns no slots is the same lie as the
-        // missing row it replaced.
-        icon: CalendarClock, title: t('surfaceAppointments'),
-        desc: t('appointmentsDesc'),
-        live: flags.appointmentsLive, previewUrl: publicUrl('appointments'),
-        action: flags.appointmentsEnabled
-          ? <ManageLink href={'/schedule/availability' as Route} label={t('manage')} />
-          : <SetupLink href={'/settings/booking' as Route} label={t('setUp')} />,
-      },
     },
     {
       key: 'kiosk', icon: MonitorCheck, title: t('surfaceKiosk'), desc: t('kioskDesc'),
@@ -396,9 +381,7 @@ export default function PublicPageHub() {
         <p className="mt-3 text-xs text-muted-foreground">{t('defaultLandingHint')}</p>
       </Card>
 
-      {/* Surface list — one row per public surface, live-first. The divider sits
-          between GROUPS, so a nested row reads as part of the row above it
-          rather than as the next entry in the list. */}
+      {/* Surface list — one row per public surface, live-first. */}
       <Card className="gap-0 py-0">
         <div className="divide-y divide-border">
           {orderedSurfaces.map((s) => (
@@ -412,18 +395,6 @@ export default function PublicPageHub() {
                 action={s.action}
                 t={t}
               />
-              {s.child && (
-                <SurfaceRow
-                  icon={s.child.icon}
-                  title={s.child.title}
-                  desc={s.child.desc}
-                  live={s.child.live}
-                  previewUrl={s.child.previewUrl}
-                  action={s.child.action}
-                  nested
-                  t={t}
-                />
-              )}
             </div>
           ))}
         </div>

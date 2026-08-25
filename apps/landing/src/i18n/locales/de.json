@@ -265,7 +265,7 @@
       "forms": {
         "title": "Formulare",
         "description": "Eigene Formulare für jeden Ablauf.",
-        "detail": "Erstelle eigene Formulare für Anmeldungen, Aufnahme, Verzichtserklärungen und mehr — erfasse genau die Daten, die du brauchst. Demnächst verfügbar."
+        "detail": "Erstelle eigene Formulare für Anmeldungen, Aufnahme, Verzichtserklärungen und mehr — erfasse genau die Daten, die du brauchst."
       },
       "api": {
         "title": "API-Zugriff",
@@ -286,6 +286,26 @@
         "title": "Kiosk-Modus",
         "description": "Mach ein Tablet am Eingang zum Empfangsbildschirm.",
         "detail": "Ein fester, reduzierter Bildschirm für das Tablet an deinem Eingang: Live-Plan, aktuelle/nächste Klasse, Team-Check-in-QR, Walk-in-Anmeldung und eine Standby-Diashow im Leerlauf."
+      },
+      "places": {
+        "title": "Orte & Räume",
+        "description": "Wo jede Session stattfindet.",
+        "detail": "Lege deine Standorte und die Räume darin fest und weise ihnen Sessions zu. Räume erscheinen auf der Buchungsseite und im Kalender – niemand muss nach der richtigen Tür fragen."
+      },
+      "documents": {
+        "title": "Dokumente",
+        "description": "Veröffentliche, was gelesen – und unterschrieben – werden muss.",
+        "detail": "Teile Bedingungen, Hausregeln und Infoblätter auf deinen öffentlichen Seiten. Unterschreibbare Verzichtserklärungen mit eingefrorenen Versionen und einem Nachweis, wer was akzeptiert hat, gibt es ab Studio."
+      },
+      "giftCards": {
+        "title": "Geschenkkarten",
+        "description": "Verkaufe Guthaben, das jemand anderes einlöst.",
+        "detail": "Verkaufe eine Geschenkkarte in deinem Shop, und die beschenkte Person löst sie für Kurse, Abos, Online-Kurse oder Produkte ein. Guthaben werden automatisch verfolgt – eine offene Karte ist bereits eingenommenes Geld."
+      },
+      "promoCodes": {
+        "title": "Aktionscodes",
+        "description": "Mach eine Aktion, ohne alles zu rabattieren.",
+        "detail": "Erstelle einen Code, der den Preis eines Drop-ins, eines Termins, eines Kurses oder eines Produkts senkt. Begrenze ihn nach Nutzung, Datum, Zielgruppe oder auf eine Person – und sieh, was jeder Code tatsächlich gebracht hat."
       }
     }
   },
@@ -398,7 +418,8 @@
         "Teamübergreifende Events & Nachrichten",
         "API & erweiterte Rollen"
       ]
-    }
+    },
+    "cmpDocumentsNote": "Unterschreibbare Verzichtserklärungen erfordern Studio."
   },
   "payments": {
     "eyebrow": "Bezahlt werden",
@@ -470,6 +491,7 @@
     "links": {
       "privacy": "Datenschutz",
       "terms": "AGB",
+      "dpa": "Auftragsverarbeitung",
       "legal": "Impressum",
       "contact": "Kontakt",
       "cookies": "Cookie-Einstellungen"

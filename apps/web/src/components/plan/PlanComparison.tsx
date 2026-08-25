@@ -60,13 +60,18 @@ const GROUPS: { heading: string; rows: CmpRow[] }[] = [
       { label: 'rowGoals', values: [true, true, true, true] },
       { label: 'rowGroups', values: [false, true, true, true] },
       { label: 'rowCustomFields', values: [false, true, true, true] },
-      { label: 'rowForms', note: 'formsNote', values: [false, 'addon', true, true] },
+      { label: 'rowPlaces', values: [true, true, true, true] },
+      { label: 'rowDocuments', note: 'documentsNote', values: [true, true, true, true] },
+      { label: 'rowForms', values: [false, 'addon', true, true] },
       { label: 'rowMobileApp', values: [false, true, true, true] },
       { label: 'rowGamification', values: [false, 'addon', true, true] },
       { label: 'rowReferrals', values: [false, 'addon', true, true] },
       { label: 'rowCourses', values: [false, 'addon', true, true] },
       { label: 'rowWebsite', values: [false, 'addon', true, true] },
+      { label: 'rowCustomDomain', values: [false, true, true, true] },
       { label: 'rowProducts', values: [false, 'addon', true, true] },
+      { label: 'rowGiftCards', values: [false, 'addon', true, true] },
+      { label: 'rowPromoCodes', values: [false, false, true, true] },
       { label: 'rowFinance', note: 'financeNote', values: [false, 'addon', true, true] },
       { label: 'rowKiosk', note: 'kioskNote', values: [false, false, true, true] },
       { label: 'rowAnalytics', values: [false, false, true, true] },
@@ -119,7 +124,10 @@ export function PlanComparison({ currentPlan }: { currentPlan: SaasPlan | null }
         </AccordionTrigger>
         <AccordionContent>
           <div className="overflow-x-auto">
-            <Table className="min-w-[640px]">
+            {/* `table-fixed` so the declared column widths BIND. Auto layout
+                sizes to content, and the contacts note (a long sentence) grew the
+                label column until it pushed the plan columns off their share. */}
+            <Table className="min-w-[640px] table-fixed">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[40%]" />
@@ -148,10 +156,10 @@ export function PlanComparison({ currentPlan }: { currentPlan: SaasPlan | null }
                       const values = row.contacts ? contactsValues : row.values!
                       return (
                         <TableRow key={row.label}>
-                          <TableCell className="text-sm font-medium">
+                          <TableCell className="align-top text-sm font-medium">
                             {t(row.label)}
                             {row.note && (
-                              <span className="mt-0.5 block max-w-[36ch] text-[11px] font-normal leading-snug text-muted-foreground">
+                              <span className="mt-0.5 block text-[11px] font-normal leading-snug text-balance text-muted-foreground">
                                 {t(row.note as Parameters<typeof t>[0])}
                               </span>
                             )}

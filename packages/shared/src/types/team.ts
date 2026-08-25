@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { TermsAcceptance } from '../legal'
 // Type-only import — no runtime cycle. document.ts imports only types
 // (Timestamp, WaiverConfig), and waiver.ts's only runtime import is
 // utils/identity, which imports nothing from here.
@@ -682,6 +683,13 @@ export interface Team {
    * pre-existing population is unaffected rather than silenced.
    */
   owner_email_verified?: boolean
+  // ── The contract ───────────────────────────────────────────────────────────
+  // Which version of the Terms + DPA this studio accepted, when, and who bound
+  // it. Written once by `provisionTeam` at signup. ABSENT means never asked —
+  // every team created before this shipped — never "refused"; see
+  // shared/src/legal.ts for why this is a record and not a gate.
+  terms_accepted?: TermsAcceptance
+
   // ── Self-service account deletion (GDPR) ───────────────────────────────────
   // Set by `requestTeamDeletion`, cleared by `cancelTeamDeletion`, executed by
   // the `purgeScheduledTeams` daily sweep. The billing is stopped at REQUEST

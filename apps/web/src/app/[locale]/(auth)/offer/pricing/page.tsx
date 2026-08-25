@@ -4,12 +4,15 @@
 // (@/lib/pricingSurface, itself a thin wrapper over @linyup/shared's
 // resolvePaymentOptions) so nothing here can ever disagree with what a real
 // booking/checkout would charge:
-//   1. Price preview — pick a persona (guest / member / a subscription type)
+//   1. Health — cross-entity pricing inconsistencies, each with a fix link.
+//      FIRST, because it is the only section that says something is WRONG; the
+//      others describe what is. Problems reported last are read last.
+//   2. Price preview — pick a persona (guest / member / a subscription type)
 //      and see exactly what every class, appointment, course and product
 //      would cost them right now.
-//   2. What you sell — one card per subscription type: its prices + what it
+//   3. What you sell — one card per subscription type: its prices + what it
 //      unlocks (reverse lookup over activities/courses).
-//   3. Health — cross-entity pricing inconsistencies, each with a fix link.
+//   4. Discounts — a modifier of the prices above it, so it reads after them.
 // No editing here — every fix link routes to the surface that owns the data.
 
 import { useMemo, useState } from 'react'
@@ -730,7 +733,7 @@ function DiscountsSection({ teamId, currency }: { teamId: string | null; currenc
 
 export default function PricingPage() {
   const t = useTranslations('OfferPricing')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   const { currentTeamId, team } = useAuth()
   const currency = team?.default_currency ?? 'CHF'
 
@@ -764,8 +767,8 @@ export default function PricingPage() {
       <PageHeader
         title={t('title')}
         quickLinks={[
-          { href: '/offer/activities' as Route, label: tq('pricingToActivities') },
-          { href: '/offer/plans' as Route, label: tq('pricingToSubscriptions') },
+          { href: '/offer/activities' as Route, label: tNav('activities') },
+          { href: '/offer/plans' as Route, label: tNav('subscriptions') },
         ]}
       />
 
@@ -777,6 +780,11 @@ export default function PricingPage() {
         </div>
       ) : (
         <>
+          {/* HEALTH FIRST (2026-08-25). It is the only section that can tell a
+              studio something is WRONG; the other three describe what is. A
+              page whose problems are reported last is a page whose problems get
+              read last. */}
+          <HealthSection warnings={warnings} />
           <PricingPreviewSection
             classes={classes}
             appointments={appointments}
@@ -797,7 +805,6 @@ export default function PricingPage() {
           {/* Between what you sell and whether it hangs together: a discount is
               a modifier of the prices above it, so it reads in that order. */}
           <DiscountsSection teamId={currentTeamId} currency={currency} />
-          <HealthSection warnings={warnings} />
         </>
       )}
     </div>

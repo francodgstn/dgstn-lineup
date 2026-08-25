@@ -24,7 +24,7 @@ import { Plus } from 'lucide-react'
  *  /offer/affiliations stub; the page component redirects those on. */
 export function PlansTabs() {
   const t = useTranslations('Nav')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   const tCat = useTranslations('OfferCatalogue')
   const tSettings = useTranslations('TeamSettings')
   // The panel owns the dialog; the header owns the button that opens it, so the
@@ -35,12 +35,14 @@ export function PlansTabs() {
   // replays it through the real resolver for each persona. The catalogue is NOT
   // in this line — it is a button, because "what does this plan actually open"
   // is asked far too often to be muted text.
+  // Names, not prompts, and they come from `Nav` so this line and the sidebar
+  // cannot disagree about what a page is called. Activities was added here on
+  // 2026-08-25: a plan is what unlocks an activity, so it is the destination a
+  // studio reaches for next and it had no pointer.
   const quickLinks = [
-    { href: '/offer/pricing' as Route, label: tq('plansToPricing') },
-    // Was a stray `text-xs` link floating beside the Add button — the one
-    // destination every selling page needs, styled unlike every other
-    // cross-page pointer in the app.
-    { href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') },
+    { href: '/offer/activities' as Route, label: tNav('activities') },
+    { href: '/offer/pricing' as Route, label: tNav('pricing') },
+    { href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') },
   ]
 
   return (

@@ -265,7 +265,7 @@
       "forms": {
         "title": "Forms",
         "description": "Custom forms for any flow.",
-        "detail": "Build custom forms for sign-ups, intake, waivers and more — collect exactly the data you need, your way. Coming soon."
+        "detail": "Build custom forms for sign-ups, intake, waivers and more — collect exactly the data you need, your way."
       },
       "api": {
         "title": "API access",
@@ -286,6 +286,26 @@
         "title": "Kiosk mode",
         "description": "Turn an entrance tablet into a front-desk screen.",
         "detail": "A fixed, low-chrome screen for the tablet at your entrance: live schedule, now/next class, a team check-in QR, walk-in signup, and a standby slideshow when idle."
+      },
+      "places": {
+        "title": "Places & rooms",
+        "description": "Where each session happens.",
+        "detail": "Define your venues and the rooms inside them, then put a session in one. Rooms show on the booking page and the calendar, so nobody has to ask which door."
+      },
+      "documents": {
+        "title": "Documents",
+        "description": "Publish what people need to read — and sign.",
+        "detail": "Share terms, house rules and information sheets on your public pages. Signable waivers, with frozen versions and a record of who accepted what, are available on Studio."
+      },
+      "giftCards": {
+        "title": "Gift cards",
+        "description": "Sell credit someone else can spend.",
+        "detail": "Sell a gift card in your shop, and let the recipient spend it on classes, memberships, courses or products. Balances are tracked for you, and an outstanding card is money already taken."
+      },
+      "promoCodes": {
+        "title": "Promo codes",
+        "description": "Run a campaign without discounting everything.",
+        "detail": "Create a code that cuts the price of a drop-in, an appointment, a course or a product. Limit it by use, by date, by audience or to one person — and see what each code actually earned."
       }
     }
   },
@@ -398,7 +418,8 @@
         "Cross-team events & messaging",
         "API & advanced roles"
       ]
-    }
+    },
+    "cmpDocumentsNote": "Signable waivers need Studio."
   },
   "payments": {
     "eyebrow": "Get paid",
@@ -470,6 +491,7 @@
     "links": {
       "privacy": "Privacy",
       "terms": "Terms",
+      "dpa": "Data processing",
       "legal": "Legal",
       "contact": "Contact",
       "cookies": "Cookie settings"
