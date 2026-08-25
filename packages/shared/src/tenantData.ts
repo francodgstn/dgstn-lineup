@@ -42,6 +42,7 @@ import {
   ORGANIZATIONS_COLLECTION,
   MAIL_SUPPRESSIONS_COLLECTION,
   MAIL_SENDS_COLLECTION,
+  PLATFORM_NOTICES_COLLECTION,
   SMS_SUPPRESSIONS_COLLECTION,
   PROJECTS_COLLECTION,
   CATEGORIES_COLLECTION,
@@ -161,6 +162,12 @@ export const PLATFORM_COLLECTIONS: string[] = [
   ORGANIZATIONS_COLLECTION,
   MAIL_SUPPRESSIONS_COLLECTION,
   MAIL_SENDS_COLLECTION,
+  // Operator → Customer notices. PLATFORM, not tenant data, and the distinction
+  // is the point: it is Linyup's record of ITS OWN communications, and purging a
+  // studio must not erase the proof that the studio was notified. The recipients
+  // subcollection holds addresses, but it is keyed by notice rather than by team,
+  // so a per-team teardown has nothing to walk.
+  PLATFORM_NOTICES_COLLECTION,
   // Phone-number opt-outs span tenants (a number opts out globally, like a
   // bounced email address) — never part of a per-team teardown.
   SMS_SUPPRESSIONS_COLLECTION,

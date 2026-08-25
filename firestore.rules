@@ -1925,6 +1925,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Operator → Customer notices, and the recipient list each one was actually
+    // sent to. Deny-all to clients, like the mail ledger above and for the same
+    // reason: the recipients subcollection is a list of every studio's owner
+    // address, so a readable notice is a readable customer list. Written by
+    // `sendPlatformNotice` and read by the operator console, both Admin SDK.
+    match /platform_notices/{noticeId} {
+      allow read, write: if false;
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
     // ── In-app feedback (see shared types/feedback.ts) ────────────────────────
     // Signed-in users create submissions; the operator console reads/updates
     // them via Admin SDK. Strict key + shape validation; identity fields must
