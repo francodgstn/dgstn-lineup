@@ -1,6 +1,18 @@
-import { AffiliationSummary, ContactResidence, AffiliationStatus } from '../types';
+import { AffiliationSummary, ContactResidence, AffiliationStatus, Contact, RankingSystem } from '../types';
 
-// Rank / belt configuration
+/**
+ * @deprecated HMD's belt scale, hardcoded.
+ *
+ * It is NOT the source of truth and must not be used for a migrated contact:
+ * ranking systems are tenant configuration (`RankingSystem` on the team, or on
+ * the organisation when it has any), HMD is about to insert two new belts into
+ * its own scale, and this table is one of three hand-maintained copies of it.
+ *
+ * It survives for exactly one case — a contact still carrying the pre-migration
+ * scalar `rank` with no configured systems to resolve against — and that case
+ * disappears with the migration. Read through `resolvePrimaryRank` instead,
+ * which reaches this only as a last resort.
+ */
 export const RANKS = [
   { rank: 0, belt: 'No belt', badgeColor: '#AAAAAA' },
   { rank: 1, belt: 'White', badgeColor: '#DDDDDD' },
@@ -19,10 +31,70 @@ export const RANKS = [
   { rank: 14, belt: 'Master', badgeColor: '#111111' },
 ];
 
+/** @deprecated Resolves against the hardcoded HMD table — see RANKS. */
 export const getRankInfo = (rank?: number) => {
   if (rank == null) return null;
   return RANKS.find((r) => r.rank === rank) || null;
 };
+
+/** What the badge needs to draw a level, whatever scale it came from. */
+export interface ResolvedRank {
+  system: RankingSystem | null;
+  value: number;
+  label: string;
+  color: string;
+  secondColor?: string;
+  emoji?: string;
+  imageUrl?: string;
+}
+
+/**
+ * THE contact's belt — resolved against the tenant's CONFIGURED ranking systems.
+ *
+ * This app read `contact.rank`, a scalar the HMD migration deletes, so every
+ * migrated member's profile rendered "NO BELT". The stored fact is
+ * `contact.ranks`, keyed by ranking-system id.
+ *
+ * Returns null when there is nothing to show — no systems configured, or no
+ * level recorded — and callers must hide the belt rather than invent a default.
+ * A tenant that does not use ranks should not be shown an empty one.
+ */
+export function resolvePrimaryRank(
+  contact: Pick<Contact, 'ranks' | 'rank'>,
+  systems: RankingSystem[] | undefined | null,
+): ResolvedRank | null {
+  const list = systems ?? [];
+  const system = list.find((s) => s.is_primary) ?? list[0] ?? null;
+
+  if (system) {
+    const value = contact.ranks?.[system.id];
+    if (value == null) return null;
+    const level = (system.levels ?? []).find((l) => l.value === value);
+    if (!level) return null; // a level the scale no longer defines
+    return {
+      system,
+      value,
+      label: level.label,
+      color: level.color ?? '#DDDDDD',
+      secondColor: level.secondColor,
+      emoji: level.emoji,
+      imageUrl: level.imageUrl,
+    };
+  }
+
+  // Last resort: an unmigrated contact with the legacy scalar and no configured
+  // systems to read it against. Dies with the migration — see RANKS.
+  const legacy = getRankInfo(contact.rank);
+  return legacy
+    ? {
+        system: null,
+        value: legacy.rank,
+        label: legacy.belt,
+        color: legacy.badgeColor,
+        secondColor: (legacy as { secondColor?: string }).secondColor,
+      }
+    : null;
+}
 
 // Returns white or black text depending on background luminance
 export const contrastTextColor = (hex: string) => {

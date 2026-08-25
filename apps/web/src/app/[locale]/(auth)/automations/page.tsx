@@ -19,6 +19,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -1142,6 +1143,7 @@ function ActionEditor({
 }) {
   const t = useTranslations('Automations')
   const { team } = useAuth()
+  const { rankingSystems } = useRankingSystems()
   const resolvedActionLabels = labelOverrides ?? defaultActionTypeLabels(t)
   function add() {
     onChange([...actions, { type: 'send_email', templateId: '' }])
@@ -1153,14 +1155,21 @@ function ActionEditor({
     onChange(actions.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
   }
 
-  // Built-in fields + the team's ranking systems + custom fields (plugin definitions).
+  // Built-in fields + the EFFECTIVE ranking systems + custom fields (plugin
+  // definitions).
+  //
+  // Effective, not `team.ranking_systems`: an org-managed tenant keeps its
+  // systems on the organisation, so this list was empty and an HMD studio saw
+  // no rank field to automate at all. The server-side engine validates against
+  // the same rule (`isKnownRankingSystem` over `resolveRankingSystems`), so a
+  // rule built here is one the engine will actually run.
   const updateFieldOptions = useMemo<UpdateFieldOption[]>(
     () => [
       ...STATIC_UPDATE_FIELD_OPTIONS,
-      ...(team?.ranking_systems ?? []).map(rankSystemOption),
+      ...rankingSystems.map(rankSystemOption),
       ...(team?.custom_field_definitions ?? []).map(customFieldOption),
     ],
-    [team]
+    [team, rankingSystems]
   )
 
   const selectedFieldMeta = (action: FormAction) =>

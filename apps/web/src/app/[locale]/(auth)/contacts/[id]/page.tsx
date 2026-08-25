@@ -32,6 +32,7 @@ import { httpsCallable } from 'firebase/functions'
 import { formatCurrency } from '@/lib/format'
 import { ConsentHistoryPanel } from '@/components/contacts/ConsentHistoryPanel'
 import { useAuth } from '@/contexts/AuthContext'
+import { RankBadge } from '@/components/ranking/RankBadge'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Badge } from '@/components/ui/badge'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
@@ -2113,10 +2114,7 @@ function ProfileTab({
                                       : 'bg-background text-muted-foreground hover:text-foreground'
                                   }`}
                                 >
-                                  <div
-                                    className="h-2.5 w-2.5 rounded-full shrink-0 border border-border"
-                                    style={{ background: level.color }}
-                                  />
+                                  <RankBadge level={level} size="sm" />
                                   {level.label}
                                 </button>
                               )

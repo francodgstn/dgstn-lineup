@@ -7158,5 +7158,17 @@
     "error_alreadyAccepted": "Diese Einladung wurde bereits angenommen. Melden Sie sich an, um zum Team zu gelangen.",
     "error_planRequired": "Der Plan dieses Teams enthält keinen zusätzlichen Benutzer mehr, daher kann die Einladung nicht angenommen werden. Bitten Sie den Team-Inhaber um ein Upgrade.",
     "error_generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut oder bitten Sie das Team um eine neue Einladung."
+  },
+  "Ranking": {
+    "levelPlaceholder": "Stufe {number}",
+    "removeLevel": "Stufe entfernen",
+    "splitOn": "Zweifarbig",
+    "splitOff": "Einfarbig",
+    "emojiLabel": "Emoji für diese Stufe",
+    "emojiPlaceholder": "🐧",
+    "imageAdd": "Bild",
+    "imageRemove": "Bild entfernen",
+    "imageTooLarge": "Dieses Bild ist zu gross — maximal 2 MB.",
+    "imageUploadFailed": "Das Bild konnte nicht hochgeladen werden. Bitte erneut versuchen."
   }
 }

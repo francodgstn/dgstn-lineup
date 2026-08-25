@@ -13,13 +13,13 @@ export const RANK_PRESETS: RankPreset[] = [
       { value: 1,  label: 'White',          color: '#DDDDDD' },
       { value: 2,  label: 'Yellow',         color: '#FFDC00' },
       { value: 3,  label: 'Orange',         color: '#FF851B' },
-      { value: 4,  label: 'Orange/Green',   color: '#FF851B' },
+      { value: 4,  label: 'Orange/Green',   color: '#FF851B', secondColor: '#1c9c2b' },
       { value: 5,  label: 'Green',          color: '#1c9c2b' },
-      { value: 6,  label: 'Green/Blue',     color: '#1c9c2b' },
+      { value: 6,  label: 'Green/Blue',     color: '#1c9c2b', secondColor: '#0074D9' },
       { value: 7,  label: 'Blue',           color: '#0074D9' },
-      { value: 8,  label: 'Blue/Red',       color: '#0074D9' },
+      { value: 8,  label: 'Blue/Red',       color: '#0074D9', secondColor: '#d41010' },
       { value: 9,  label: 'Red',            color: '#d41010' },
-      { value: 10, label: 'Red/Black',      color: '#d41010' },
+      { value: 10, label: 'Red/Black',      color: '#d41010', secondColor: '#111111' },
       { value: 11, label: 'Black I Dan',    color: '#111111' },
       { value: 12, label: 'Black II Dan',   color: '#111111' },
       { value: 13, label: 'Black III Dan',  color: '#111111' },
@@ -51,18 +51,38 @@ export const RANK_PRESETS: RankPreset[] = [
     ],
   },
   {
-    // Swiss swimming — swimsports.ch foundation tests (Grundlagentests), the
-    // animal-named levels used across Swiss swim schools, plus the WSC safety check.
+    // Swiss swimming — swimsports.ch. Seven animal-named foundation tests
+    // (Grundlagentests), then three stroke-proficiency levels.
+    //
+    //   1 Krebs        safe entry and exit, eyes open underwater, breathing
+    //   2 Seepferd     gliding on front and back, no leg movement
+    //   3 Frosch       10 m alternating leg kick, front and back
+    //   4 Pinguin      10 m proper backstroke
+    //   5 Tintenfisch  six complete front-crawl cycles
+    //   6 Krokodil     25 m backstroke including a start
+    //   7 Eisbär       includes the official Water Safety Check (WSC)
+    //   8-9            breaststroke and elementary butterfly: introduction, then distance
+    //   10             50 m crawl/backstroke with flip turns, 25 m breaststroke/butterfly
+    //
+    // The WSC is part of Eisbär, not a level of its own. Levels 8-10 are labelled
+    // by what they test, because they have no animal name — a club renames them
+    // to whatever its own material calls them.
+    //
+    // The animals carry an emoji: a seven-year-old recognises the penguin long
+    // before they read "Pinguin". (Seepferd takes a fish — Unicode has no
+    // seahorse.)
     name: 'Swiss Swimming (swimsports.ch)',
     levels: [
-      { value: 0, label: 'Krebs',       color: '#E24B4A' },
-      { value: 1, label: 'Seepferd',    color: '#FFDC00' },
-      { value: 2, label: 'Frosch',      color: '#1c9c2b' },
-      { value: 3, label: 'Pinguin',     color: '#0074D9' },
-      { value: 4, label: 'Tintenfisch', color: '#8B5CF6' },
-      { value: 5, label: 'Krokodil',    color: '#0F6E56' },
-      { value: 6, label: 'Eisbär',      color: '#93C5FD' },
-      { value: 7, label: 'WSC',         color: '#d41010' },
+      { value: 0, label: 'Krebs',        color: '#E24B4A', emoji: '🦀' },
+      { value: 1, label: 'Seepferd',     color: '#FFDC00', emoji: '🐠' },
+      { value: 2, label: 'Frosch',       color: '#1c9c2b', emoji: '🐸' },
+      { value: 3, label: 'Pinguin',      color: '#0074D9', emoji: '🐧' },
+      { value: 4, label: 'Tintenfisch',  color: '#8B5CF6', emoji: '🦑' },
+      { value: 5, label: 'Krokodil',     color: '#0F6E56', emoji: '🐊' },
+      { value: 6, label: 'Eisbär (WSC)', color: '#93C5FD', emoji: '🐻‍❄️' },
+      { value: 7, label: 'Brust & Delfin — Einführung', color: '#2B6CB0', emoji: '🏊' },
+      { value: 8, label: 'Brust & Delfin — Distanz',    color: '#1E40AF', emoji: '🏊' },
+      { value: 9, label: 'Schwimmtest',  color: '#1A365D', emoji: '🏅' },
     ],
   },
   {

@@ -21,10 +21,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ColorPicker } from '@/components/ui/color-picker'
 import { Plus, Pencil, Trash2, Shield } from 'lucide-react'
 import type { RankingSystem, RankLevel } from '@linyup/shared'
 import { RANK_PRESETS } from '@/lib/rank-presets'
+import { RankLevelFields } from '@/components/ranking/RankLevelFields'
+import { RankBadge } from '@/components/ranking/RankBadge'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,12 +48,16 @@ function RankSystemDialog({
   initial,
   existingIds,
   onSave,
+  storagePath,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   initial: RankSystemFormState | null
   existingIds: string[]
   onSave: (form: RankSystemFormState) => Promise<void>
+  /** Where uploaded badge artwork goes — see the Storage rule for
+   *  `organizations/{orgId}/ranking`. */
+  storagePath: string
 }) {
   const t = useTranslations('OrgRanking')
   const [form, setForm] = useState<RankSystemFormState>(initial ?? emptyForm())
@@ -63,17 +68,35 @@ function RankSystemDialog({
   const setField = <K extends keyof RankSystemFormState>(k: K, v: RankSystemFormState[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }))
 
-  const setLevel = (i: number, field: keyof RankLevel, val: string | number) =>
+  const setLevel = (i: number, field: keyof RankLevel, val: string | number | undefined) =>
     setForm((prev) => {
       const lvls = [...prev.levels]
-      lvls[i] = { ...lvls[i], [field]: val }
+      // `undefined` CLEARS the field — turning a split belt solid, or removing
+      // an emoji, has to be expressible, and spreading `undefined` in would
+      // otherwise leave the old value standing.
+      const next = { ...lvls[i] } as RankLevel
+      if (val === undefined) delete next[field as keyof RankLevel]
+      else (next as unknown as Record<string, unknown>)[field] = val
+      lvls[i] = next
       return { ...prev, levels: lvls }
     })
 
   const addLevel = () =>
     setForm((prev) => ({
       ...prev,
-      levels: [...prev.levels, { value: prev.levels.length, label: '', color: '#6b7280' }],
+      levels: [
+        ...prev.levels,
+        {
+          // ONE ABOVE THE HIGHEST, not the array length. `prev.levels.length`
+          // mints a duplicate as soon as a level has been removed — [0,1,2],
+          // remove the middle, add: two levels then share value 2, and the
+          // lookup that resolves a contact's rank picks whichever comes first.
+          // The team-settings editor already did it this way; this one did not.
+          value: prev.levels.length ? Math.max(...prev.levels.map((l) => l.value)) + 1 : 0,
+          label: '',
+          color: '#6b7280',
+        },
+      ],
     }))
 
   const removeLevel = (i: number) =>
@@ -145,25 +168,15 @@ function RankSystemDialog({
               </Button>
             </div>
             {form.levels.map((l, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <ColorPicker
-                  value={l.color ?? '#6b7280'}
-                  onChange={(hex) => setLevel(i, 'color', hex)}
-                  className="h-8 w-8"
-                />
-                <Input
-                  value={l.label}
-                  onChange={(e) => setLevel(i, 'label', e.target.value)}
-                  placeholder={t('levelPlaceholder', { number: i })}
-                  className="flex-1"
-                  required
-                />
-                {form.levels.length > 1 && (
-                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeLevel(i)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
+              <RankLevelFields
+                key={i}
+                level={l}
+                index={i}
+                storagePath={storagePath}
+                canRemove={form.levels.length > 1}
+                onChange={(field, value) => setLevel(i, field, value)}
+                onRemove={() => removeLevel(i)}
+              />
             ))}
           </div>
           </DialogBody>
@@ -299,10 +312,13 @@ export default function OrgRankingPage() {
                   </>
                 )}
               </div>
+              {/* Sorted by VALUE, which is the scale's own order. Rendering in
+                  array order made this strip disagree with the dashboard donut
+                  whenever the two differed. */}
               <div className="flex gap-1 flex-wrap">
-                {s.levels.map((l) => (
+                {[...s.levels].sort((a, b) => a.value - b.value).map((l) => (
                   <div key={l.value} className="flex items-center gap-1">
-                    <div className="h-3 w-3 rounded-full border border-border shrink-0" style={{ background: l.color }} />
+                    <RankBadge level={l} size="sm" />
                     <span className="text-xs text-muted-foreground">{l.label}</span>
                   </div>
                 ))}
@@ -318,6 +334,7 @@ export default function OrgRankingPage() {
         initial={editing}
         existingIds={systems.filter((s) => !editing || s.id !== editing.id).map((s) => s.id)}
         onSave={handleSave}
+        storagePath={`organizations/${orgId}/ranking`}
       />
 
       <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>

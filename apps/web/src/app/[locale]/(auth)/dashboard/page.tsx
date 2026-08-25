@@ -74,6 +74,7 @@
 
 import { useTranslations, useLocale } from 'next-intl'
 import { useAuth } from '@/contexts/AuthContext'
+import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { usePlan } from '@/hooks/usePlan'
 import { useSetupChecklist } from '@/hooks/useSetupChecklist'
 import { useExperimentalFeatures } from '@/hooks/useExperimentalFeatures'
@@ -133,6 +134,9 @@ function Header({ children }: { children: React.ReactNode }) {
 export default function DashboardPage() {
   const t = useTranslations('NewDashboard')
   const { currentTeamId, team } = useAuth()
+  // Org-aware: an org-managed tenant keeps its ranking systems on the ORG, and
+  // reading `team.ranking_systems` here left the donut's Level view empty.
+  const { rankingSystems } = useRankingSystems()
   const { plan, isAtLeast, isLoading: planLoading } = usePlan()
   // The parked panels at the foot of the page. Off unless a studio asked for
   // them; see ExtraSection.
@@ -251,7 +255,7 @@ export default function DashboardPage() {
                 <RosterDonut
                   contacts={contacts}
                   thresholds={team?.engagement_thresholds}
-                  rankingSystems={team?.ranking_systems}
+                  rankingSystems={rankingSystems}
                   loading={contactsLoading}
                 />
               </div>

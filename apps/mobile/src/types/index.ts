@@ -58,6 +58,16 @@ export interface Contact {
   /** @deprecated synced from affiliation_summary.has_active */
   membership_status?: AffiliationStatus;
   affiliation_summary?: AffiliationSummary;
+  /** Current level per ranking-system id, e.g. `{ hmd: 5, kd: 2 }`. THE field —
+   *  it mirrors `Contact.ranks` on the web. */
+  ranks?: Record<string, number>;
+  /**
+   * @deprecated The pre-migration single scalar. The HMD migration DELETES this
+   * field (`scripts/migration/transforms/contacts.ts`), so a migrated contact
+   * reads `undefined` here — which is exactly how every belt in this app came to
+   * render as "NO BELT". Read `ranks` instead; this survives only so a contact
+   * who has not been migrated yet still shows something.
+   */
   rank?: number;
   weight?: number;
   taxnumber?: string;
@@ -321,4 +331,35 @@ export interface PerformanceCheckin {
   profile_key?: ProfileKey;
   primary_lever?: string;
   anchor?: string;
+}
+
+
+// --- Ranking systems -------------------------------------------------------
+// Mirrors RankingSystem/RankLevel in @linyup/shared. Declared here rather than
+// imported because apps/mobile does not depend on the shared package (see its
+// package.json) - adding that dependency means Metro configuration and is a
+// change of its own, not a bug fix.
+//
+// secondColor is the one field the shared type has no room for: it renders the
+// two-tone badge for a split belt. Nothing writes it today - the platform stores
+// one colour per level - so it is populated only by the deprecated legacy table.
+
+export interface RankLevel {
+  value: number;
+  label: string;
+  /** Primary colour, or the background behind an emoji. */
+  color?: string;
+  /** Second colour of a SPLIT level (Orange/Green, Blue/Red). */
+  secondColor?: string;
+  /** A single emoji standing for the level — a swim school's sea animal, say. */
+  emoji?: string;
+  /** Uploaded badge artwork. Wins over `emoji` when both are set. */
+  imageUrl?: string;
+}
+
+export interface RankingSystem {
+  id: string;
+  name: string;
+  levels: RankLevel[];
+  is_primary?: boolean;
 }

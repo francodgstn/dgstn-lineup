@@ -15,6 +15,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { RankBadge } from '@/components/ranking/RankBadge'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 // The Archived tab's query moved to a hook of its own so the sidebar search can
@@ -1631,8 +1632,10 @@ function ContactRow({
   const contactLabel = `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() || contactHref
   // ctrl/⌘/middle-click opens the contact in a background tab (keeps the list).
   const openContactInNewTab = () => openInNewTab(contactHref, contactLabel, 'contact')
-  const rankColor = rankingSystems.length > 0
-    ? getPrimaryRank(contact, rankingSystems)?.level.color
+  // The whole LEVEL, not just its colour — a level may identify itself by an
+  // emoji or uploaded artwork instead, and RankBadge decides which one wins.
+  const rankLevel = rankingSystems.length > 0
+    ? getPrimaryRank(contact, rankingSystems)?.level
     : undefined
 
   return (
@@ -1657,11 +1660,10 @@ function ContactRow({
         {/* Avatar */}
         <div className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center bg-muted text-muted-foreground text-sm font-semibold relative">
           {initials(contact)}
-          {rankColor && (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background"
-              style={{ background: rankColor }}
-            />
+          {rankLevel && (
+            <span className="absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-background bg-background">
+              <RankBadge level={rankLevel} size="sm" />
+            </span>
           )}
         </div>
 
@@ -2826,10 +2828,13 @@ export default function ContactsPage() {
       )}
 
       {/* Overview — collapsed by default, always visible */}
+      {/* `rankingSystems` is the EFFECTIVE list resolved above. This used to pass
+          `team.ranking_systems`, which left the belt breakdown blank for every
+          org-managed tenant while the list and filter beside it were fine. */}
       <OverviewPanel
         contacts={active}
         loading={loadingActive}
-        rankingSystems={team?.ranking_systems}
+        rankingSystems={rankingSystems}
         engagementThresholds={team?.engagement_thresholds}
       />
 

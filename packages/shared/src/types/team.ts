@@ -164,10 +164,71 @@ export function resolveSignupDocumentIds(input: {
   return pick(input.settings?.signupDocumentIds) ?? pick(input.legacyPluginConfig?.signupDocumentIds) ?? []
 }
 
+/**
+ * One level of a ranking system, and how it LOOKS.
+ *
+ * Clubs identify a level visually, and they do not all do it the same way: a
+ * martial art has a belt colour (sometimes two, for a split belt), a swim school
+ * has an animal per level, and plenty of clubs have their own badge artwork.
+ * All four are the same field's job — "how do we show this level" — so they live
+ * together and resolve through ONE precedence rule (`rankLevelBadge`) rather
+ * than each renderer inventing its own.
+ */
 export interface RankLevel {
   value: number
   label: string
+  /** Primary colour. The belt, or the background behind an emoji. */
   color?: string
+  /**
+   * Second colour of a SPLIT level — Orange/Green, Blue/Red. Absent means a
+   * solid one. The badge is drawn as two halves, which is what the belt itself
+   * looks like; approximating it with the primary colour alone loses the
+   * distinction between two adjacent grades.
+   */
+  secondColor?: string
+  /**
+   * A single emoji standing for the level — 🐧 for Pinguin, 🦀 for Krebs.
+   *
+   * EMOJI RATHER THAN AN ICON NAME, deliberately. An icon name is only
+   * meaningful against a specific icon set, and this product has two: the web
+   * resolves lucide names, the member app renders MaterialCommunityIcons. A name
+   * valid in one is not necessarily valid in the other, so a club choosing an
+   * icon would be choosing one that renders on some of their members' screens.
+   * An emoji is text — it needs no mapping, no bundle and no fallback table, and
+   * it renders the same everywhere. It also happens to cover the swim-school
+   * case almost exactly.
+   */
+  emoji?: string
+  /**
+   * A club's own badge artwork, uploaded to Storage. Wins over `emoji` when both
+   * are set — a club that troubled to upload a badge meant it to be used.
+   */
+  imageUrl?: string
+}
+
+/** How a level should be drawn, resolved ONCE so every surface agrees. */
+export type RankBadge =
+  | { kind: 'image'; imageUrl: string; label: string }
+  | { kind: 'emoji'; emoji: string; color?: string; label: string }
+  | { kind: 'split'; color: string; secondColor: string; label: string }
+  | { kind: 'solid'; color: string; label: string }
+
+/**
+ * THE precedence for rendering a level: uploaded artwork, then emoji, then a
+ * split colour, then a solid one.
+ *
+ * One function because the badge is drawn in at least five places across the web
+ * app and the member app, and "which of these four fields wins" is exactly the
+ * kind of question each of them would answer slightly differently.
+ */
+export function rankLevelBadge(level: RankLevel, fallbackColor = '#DDDDDD'): RankBadge {
+  if (level.imageUrl) return { kind: 'image', imageUrl: level.imageUrl, label: level.label }
+  if (level.emoji) return { kind: 'emoji', emoji: level.emoji, color: level.color, label: level.label }
+  const color = level.color ?? fallbackColor
+  if (level.secondColor) {
+    return { kind: 'split', color, secondColor: level.secondColor, label: level.label }
+  }
+  return { kind: 'solid', color, label: level.label }
 }
 
 export interface RankingSystem {
