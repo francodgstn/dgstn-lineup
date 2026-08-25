@@ -32,7 +32,7 @@ import { AppointmentAvailabilityManager } from '@/components/appointments/Appoin
 export default function BookableHoursPage() {
   const { currentTeamId, user } = useAuth()
   const t = useTranslations('Appointments')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
 
   return (
     <div className="space-y-6">
@@ -53,7 +53,7 @@ export default function BookableHoursPage() {
       <PageHeader
         title={t('bookableHoursTitle')}
         subtitle={t('bookableHoursSubtitle')}
-        quickLinks={[{ href: '/offer/activities' as Route, label: tq('availabilityToActivities') }]}
+        quickLinks={[{ href: '/offer/activities' as Route, label: tNav('activities') }]}
       />
 
       {currentTeamId && user ? (

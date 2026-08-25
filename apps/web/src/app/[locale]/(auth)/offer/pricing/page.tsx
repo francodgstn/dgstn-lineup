@@ -730,7 +730,7 @@ function DiscountsSection({ teamId, currency }: { teamId: string | null; currenc
 
 export default function PricingPage() {
   const t = useTranslations('OfferPricing')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   const { currentTeamId, team } = useAuth()
   const currency = team?.default_currency ?? 'CHF'
 
@@ -764,8 +764,8 @@ export default function PricingPage() {
       <PageHeader
         title={t('title')}
         quickLinks={[
-          { href: '/offer/activities' as Route, label: tq('pricingToActivities') },
-          { href: '/offer/plans' as Route, label: tq('pricingToSubscriptions') },
+          { href: '/offer/activities' as Route, label: tNav('activities') },
+          { href: '/offer/plans' as Route, label: tNav('subscriptions') },
         ]}
       />
 

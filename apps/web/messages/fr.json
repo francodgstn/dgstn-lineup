@@ -6755,13 +6755,7 @@
     "failedTransient": "Impossible d'annuler cette réservation : elle est toujours active. Merci de réessayer."
   },
   "QuickLinks": {
-    "plansToPricing": "Vérifier ce qu'un membre paie réellement",
-    "availabilityToActivities": "Définir les types de rendez-vous et les durées proposés par ces horaires",
-    "promoCodesToPricing": "Voir vos codes actifs à côté des prix qu'ils réduisent",
-    "activitiesToSchedule": "Voir ces cours dans le calendrier",
-    "pricingToActivities": "Modifier les activités derrière ces prix",
-    "pricingToSubscriptions": "Modifier les abonnements derrière ces prix",
-    "toPaymentSettings": "Définir votre devise et votre mode d'encaissement"
+    "related": "Voir aussi :"
   },
   "Site": {
     "loading": "Chargement…",

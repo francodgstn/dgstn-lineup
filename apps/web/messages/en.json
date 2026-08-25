@@ -6755,13 +6755,7 @@
     "failedTransient": "We couldn't cancel this booking — it is still active. Please try again."
   },
   "QuickLinks": {
-    "plansToPricing": "Check what a member actually pays",
-    "availabilityToActivities": "Set the appointment types and lengths these hours offer",
-    "promoCodesToPricing": "See your live codes next to the prices they cut",
-    "activitiesToSchedule": "See these classes on the calendar",
-    "pricingToActivities": "Edit the activities behind these prices",
-    "pricingToSubscriptions": "Edit the plans behind these prices",
-    "toPaymentSettings": "Set your currency and how you take payment"
+    "related": "Related:"
   },
   "Site": {
     "loading": "Loading…",

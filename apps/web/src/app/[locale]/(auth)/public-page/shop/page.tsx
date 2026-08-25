@@ -65,7 +65,7 @@ function ChannelRow({
 
 export default function ShopSettingsPage() {
   const t = useTranslations('ShopSettings')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   const { currentTeamId, team } = useAuth()
   const { publicUrl, flags } = usePublicSurfaces()
 
@@ -107,7 +107,7 @@ export default function ShopSettingsPage() {
           )
         }
         quickLinks={[
-          { href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') },
+          { href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') },
         ]}
       />
 

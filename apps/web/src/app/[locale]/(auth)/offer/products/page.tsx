@@ -133,7 +133,7 @@ function parseAmount(text: string): number | null {
 
 export default function ProductsPage() {
   const t = useTranslations('Products')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   const tCommon = useTranslations('Common')
   const { user, currentTeamId, team, teamRole } = useAuth()
   const queryClient = useQueryClient()
@@ -161,6 +161,7 @@ export default function ProductsPage() {
     ((team?.settings as { productCollectionNote?: string } | undefined)?.productCollectionNote ??
       '') as string
   const canEditTeamDefault = teamRole === 'owner'
+  const [showCollection, setShowCollection] = useState(false)
   const [defaultNote, setDefaultNote] = useState(teamDefaultNote)
   const [savingDefault, setSavingDefault] = useState(false)
   // The team doc is a live snapshot; re-seed when it changes underneath us, but
@@ -381,10 +382,25 @@ export default function ProductsPage() {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Button onClick={openCreate} disabled={atCap} size="sm">
-            <Plus className="h-4 w-4 mr-1.5" />
-            {t('newProduct')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Collection & handover is a set-once team default, not a thing a
+                studio touches while adding products — so it sits behind a
+                toggle rather than occupying a permanent block above the list it
+                has nothing to do with. */}
+            <Button
+              onClick={() => setShowCollection((v) => !v)}
+              variant="outline"
+              size="sm"
+              aria-expanded={showCollection}
+            >
+              <Truck className="h-4 w-4 mr-1.5" />
+              {t('defaultCollectionTitle')}
+            </Button>
+            <Button onClick={openCreate} disabled={atCap} size="sm">
+              <Plus className="h-4 w-4 mr-1.5" />
+              {t('newProduct')}
+            </Button>
+          </div>
           <span className="text-xs text-muted-foreground">
             {t('quota', { count: products.length, max: limits.maxProductsPerTeam })}
           </span>
@@ -394,13 +410,19 @@ export default function ProductsPage() {
           cross-page pointer, instead of a `text-xs` link tucked under the quota
           counter where it looked like a footnote about the quota. */}
       <QuickLinks
-        links={[{ href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') }]}
+        links={[{ href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') }]}
       />
 
       {/* Team-wide collection default — written once, inherited by every product
           that says nothing of its own. Read-only for a manager: the team doc is
           owner-writable, and showing a field that cannot be saved would be a
-          worse answer than showing the text that is in force. */}
+          worse answer than showing the text that is in force.
+
+          Collapsed by default (2026-08-25). It stays MOUNTED when open rather
+          than becoming a dialog: it is a field with a save button, and a studio
+          that opens it to check the wording should be able to see the product
+          list it applies to at the same time. */}
+      {showCollection && (
       <div className="rounded-lg border bg-card p-4 space-y-2">
         <div className="flex items-center gap-2">
           <Truck className="h-4 w-4 text-muted-foreground" />
@@ -435,6 +457,7 @@ export default function ProductsPage() {
           </p>
         )}
       </div>
+      )}
 
       {/* List */}
       {isLoading ? (

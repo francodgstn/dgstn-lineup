@@ -93,7 +93,7 @@ function CourseCard({ course, onOpen, currency }: { course: Course; onOpen: () =
 
 export default function OnlineCoursesPage() {
   const t = useTranslations('Courses')
-  const tq = useTranslations('QuickLinks')
+  const tNav = useTranslations('Nav')
   const { user, currentTeamId, team } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -215,7 +215,7 @@ export default function OnlineCoursesPage() {
           cross-page pointer, instead of a `text-xs` link tucked under the quota
           counter where it looked like a footnote about the quota. */}
       <QuickLinks
-        links={[{ href: '/settings/team?tab=payments' as Route, label: tq('toPaymentSettings') }]}
+        links={[{ href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') }]}
       />
 
       {/* Status filter */}

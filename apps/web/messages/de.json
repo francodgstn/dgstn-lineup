@@ -6755,13 +6755,7 @@
     "failedTransient": "Diese Buchung konnte nicht storniert werden — sie ist weiterhin aktiv. Bitte erneut versuchen."
   },
   "QuickLinks": {
-    "plansToPricing": "Prüfen, was ein Mitglied tatsächlich bezahlt",
-    "availabilityToActivities": "Terminarten und Dauern festlegen, die diese Zeiten anbieten",
-    "promoCodesToPricing": "Aktive Codes neben den Preisen sehen, die sie reduzieren",
-    "activitiesToSchedule": "Diese Lektionen im Kalender ansehen",
-    "pricingToActivities": "Die Aktivitäten hinter diesen Preisen bearbeiten",
-    "pricingToSubscriptions": "Die Abos hinter diesen Preisen bearbeiten",
-    "toPaymentSettings": "Währung festlegen und wie du Zahlungen annimmst"
+    "related": "Verwandt:"
   },
   "Site": {
     "loading": "Laden…",
