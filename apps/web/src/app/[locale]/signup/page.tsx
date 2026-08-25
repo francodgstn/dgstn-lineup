@@ -7,7 +7,12 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { doc, setDoc } from 'firebase/firestore'
-import { TRIAL_DAYS, SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '@linyup/shared'
+import {
+  TRIAL_DAYS,
+  SUPPORTED_CURRENCIES,
+  DEFAULT_CURRENCY,
+  CURRENT_TERMS_VERSION,
+} from '@linyup/shared'
 import { signUp } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { persistLocale } from '@/i18n/persistLocale'
@@ -94,6 +99,11 @@ const teamSchema = z.object({
   sport_type: z.string().optional(),
   default_currency: z.string().min(3),
   language: z.enum(['en', 'de', 'fr', 'it']),
+  // The contract. `literal(true)` rather than `boolean()` so an unticked box is
+  // a validation failure and not a silent `false` — accepting is the only way
+  // past this step. The message is rendered from the `Signup` namespace rather
+  // than from zod, so it is translated like everything else on the form.
+  accepted_terms: z.literal(true),
 })
 
 type AccountData = z.infer<ReturnType<typeof buildAccountSchema>>
@@ -304,6 +314,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
       await provisionTeam(user, data.name, data.sport_type, {
         defaultCurrency: data.default_currency,
         language: data.language,
+        termsVersion: CURRENT_TERMS_VERSION,
       })
       // Record the PERSON's facts alongside the team's. The UI locale is NOT
       // asked for — the visitor is reading this page in a language and that is
@@ -419,6 +430,50 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
       {/* UX-7 interim: self-service signup silently provisions a 30-day trial
           (lib/provisioning.ts) and never said so anywhere. State it once,
           here, before the studio is created. */}
+      {/* The contract-formation moment. It sits on THIS step, not step 1,
+          because the contracting party is the studio being named here — and
+          because the social and magic-link paths skip step 1 entirely, so this
+          is the only place every route into the product passes through. */}
+      <div className="space-y-1">
+        <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            {...register('accepted_terms')}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
+            aria-describedby={errors.accepted_terms ? 'terms-error' : undefined}
+          />
+          <span>
+            {t.rich('acceptTerms', {
+              terms: (chunks) => (
+                <a
+                  href="https://linyup.com/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  {chunks}
+                </a>
+              ),
+              dpa: (chunks) => (
+                <a
+                  href="https://linyup.com/dpa"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
+          </span>
+        </label>
+        {errors.accepted_terms && (
+          <p id="terms-error" className="text-xs text-destructive pl-6.5">
+            {t('errorTermsRequired')}
+          </p>
+        )}
+      </div>
+
       <p className="text-center text-xs text-muted-foreground">
         {t('trialNotice', { plan: planName('studio'), days: TRIAL_DAYS })}
       </p>

@@ -26,8 +26,12 @@ const analyticsEnabled = !!import.meta.env.PUBLIC_POSTHOG_KEY;
       <span class="tag">{t('footer.tagline')}</span>
       <div class="foot-links">
         {/* Legal pages are English-only at the site root for now; localised
-            versions and Terms (at signup launch) follow later. */}
+            versions follow later. Terms + DPA landed with the signup acceptance
+            step — the checkbox there links straight here, so these must not be
+            removed without also removing that link. */}
         <a href="/privacy">{t('footer.links.privacy')}</a>
+        <a href="/terms">{t('footer.links.terms')}</a>
+        <a href="/dpa">{t('footer.links.dpa')}</a>
         <a href="/legal">{t('footer.links.legal')}</a>
         {analyticsEnabled && (
           <button type="button" class="link-btn" data-open-consent>

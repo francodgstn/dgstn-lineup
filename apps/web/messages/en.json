@@ -321,7 +321,9 @@
     "memberLanguage": "Member language",
     "memberLanguageHint": "The language your members are written to in — confirmations, reminders and receipts. Your own dashboard language is chosen separately, from the user menu.",
     "errorNameRequired": "Required",
-    "errorNameTooLong": "Max 40 characters"
+    "errorNameTooLong": "Max 40 characters",
+    "acceptTerms": "I have read and accept the <terms>Terms of Service</terms> and the <dpa>Data Processing Agreement</dpa> on behalf of this studio.",
+    "errorTermsRequired": "Please accept the terms to create your studio."
   },
   "Dashboard": {
     "title": "Dashboard",

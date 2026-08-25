@@ -1,4 +1,5 @@
 export * from './paths'
+export * from './legal'
 export * from './publicRoutes'
 export * from './tenantData'
 export * from './slugs'

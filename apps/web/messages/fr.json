@@ -321,7 +321,9 @@
     "memberLanguage": "Langue des membres",
     "memberLanguageHint": "La langue dans laquelle vos membres sont contactés — confirmations, rappels et reçus. La langue de votre propre tableau de bord se choisit séparément, dans le menu utilisateur.",
     "errorNameRequired": "Obligatoire",
-    "errorNameTooLong": "40 caractères maximum"
+    "errorNameTooLong": "40 caractères maximum",
+    "acceptTerms": "J'ai lu et j'accepte les <terms>conditions d'utilisation</terms> et le <dpa>contrat de sous-traitance des données</dpa> au nom de ce studio.",
+    "errorTermsRequired": "Veuillez accepter les conditions pour créer votre studio."
   },
   "Dashboard": {
     "title": "Tableau de bord",
