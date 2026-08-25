@@ -218,8 +218,16 @@ function evaluateRequirement(
       // clock stretch for somebody who stopped turning up.
       const windows: Array<{ fromMs: number; toMs: number; qualifies: boolean; missing: string[] }> = []
       let from = anchor
-      while (true) {
+      // BOUNDED, and both guards are load-bearing rather than defensive habit.
+      // `NaN > nowMs` is FALSE, so a single malformed date — an exam timestamp
+      // that arrived as NaN, which a bad Firestore value or a failed parse
+      // produces — would never satisfy the break and would spin this forever, on
+      // the server, holding a request open. The step guard catches any future
+      // arithmetic that stops advancing; the century cap catches everything else.
+      const MAX_WINDOWS = 100
+      while (windows.length < MAX_WINDOWS) {
         const to = addDuration(from, 12, 'months')
+        if (!Number.isFinite(to) || to <= from) break
         if (to > facts.nowMs) break
         const missing: string[] = []
         for (const spec of req.perYear) {
