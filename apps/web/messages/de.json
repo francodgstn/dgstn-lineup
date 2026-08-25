@@ -2531,7 +2531,6 @@
     "rowGroups": "Gruppen",
     "rowCustomFields": "Eigene Felder",
     "rowForms": "Formulare",
-    "formsNote": "Demnächst verfügbar",
     "rowAnalytics": "Analysen",
     "rowAiInsights": "KI-Insights",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2538,13 @@
     "rowCentralAdmin": "Zentrale Verwaltung & Datenüberblick",
     "rowCrossTeam": "Teamübergreifende Events & Nachrichten",
     "rowApi": "API-Zugang",
-    "rowPermissions": "Erweiterte Rollen & Rechte"
+    "rowPermissions": "Erweiterte Rollen & Rechte",
+    "rowPlaces": "Orte & Räume",
+    "rowDocuments": "Dokumente",
+    "documentsNote": "Dokumente veröffentlichen und teilen. Unterschreibbare Verzichtserklärungen erfordern Studio.",
+    "rowCustomDomain": "Eigene Domain",
+    "rowGiftCards": "Geschenkkarten",
+    "rowPromoCodes": "Aktionscodes"
   },
   "Plugins": {
     "title": "Plugins",

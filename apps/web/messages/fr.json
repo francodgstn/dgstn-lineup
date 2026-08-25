@@ -2531,7 +2531,6 @@
     "rowGroups": "Groupes",
     "rowCustomFields": "Champs perso",
     "rowForms": "Formulaires",
-    "formsNote": "Bientôt disponible",
     "rowAnalytics": "Analyses",
     "rowAiInsights": "Insights IA",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2538,13 @@
     "rowCentralAdmin": "Administration centrale & vue unifiée",
     "rowCrossTeam": "Événements & messages inter-équipes",
     "rowApi": "Accès API",
-    "rowPermissions": "Rôles & permissions avancés"
+    "rowPermissions": "Rôles & permissions avancés",
+    "rowPlaces": "Lieux et salles",
+    "rowDocuments": "Documents",
+    "documentsNote": "Publiez et partagez des documents. Les décharges signables nécessitent Studio.",
+    "rowCustomDomain": "Domaine personnalisé",
+    "rowGiftCards": "Cartes cadeaux",
+    "rowPromoCodes": "Codes promo"
   },
   "Plugins": {
     "title": "Plugins",

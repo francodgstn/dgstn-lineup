@@ -18,7 +18,12 @@ function Card({
       data-variant={variant}
       className={cn(
         "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        variant === "default" && "ring-2 ring-border shadow-sm",
+        // A HAIRLINE, not a ring. `ring-2` reads as a thick border and made every
+        // ordinary page look like the dashboard, which is the one surface that is
+        // supposed to look different — the `accent` variant below is the
+        // dashboard's, and it cannot say "primary work" while everything else is
+        // shouting too (2026-08-25).
+        variant === "default" && "border border-border shadow-sm",
         variant === "accent" && "border-2 border-border border-l-[4px] border-l-primary shadow-md",
         className
       )}

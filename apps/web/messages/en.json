@@ -2531,7 +2531,6 @@
     "rowGroups": "Groups",
     "rowCustomFields": "Custom fields",
     "rowForms": "Forms",
-    "formsNote": "Coming soon",
     "rowAnalytics": "Analytics",
     "rowAiInsights": "AI insights",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2538,13 @@
     "rowCentralAdmin": "Central admin & unified data",
     "rowCrossTeam": "Cross-team events & messaging",
     "rowApi": "API access",
-    "rowPermissions": "Advanced roles & permissions"
+    "rowPermissions": "Advanced roles & permissions",
+    "rowPlaces": "Places & rooms",
+    "rowDocuments": "Documents",
+    "documentsNote": "Publish and share documents. Signable waivers need Studio.",
+    "rowCustomDomain": "Custom domain",
+    "rowGiftCards": "Gift cards",
+    "rowPromoCodes": "Promo codes"
   },
   "Plugins": {
     "title": "Plugins",

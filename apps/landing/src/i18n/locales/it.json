@@ -286,6 +286,26 @@
         "title": "Modalità chiosco",
         "description": "Trasforma un tablet all'ingresso in uno schermo da reception.",
         "detail": "Uno schermo fisso ed essenziale per il tablet all'ingresso: orario in tempo reale, lezione in corso/successiva, QR di check-in del team, iscrizione in loco e una presentazione in standby quando inattivo."
+      },
+      "places": {
+        "title": "Luoghi e sale",
+        "description": "Dove si svolge ogni sessione.",
+        "detail": "Definisci le tue sedi e le sale al loro interno, poi assegna una sessione a una di esse. Le sale compaiono nella pagina di prenotazione e nel calendario: nessuno deve chiedere quale porta."
+      },
+      "documents": {
+        "title": "Documenti",
+        "description": "Pubblica ciò che va letto — e firmato.",
+        "detail": "Condividi termini, regolamento e schede informative sulle tue pagine pubbliche. Le liberatorie firmabili, con versioni congelate e un registro di chi ha accettato cosa, sono disponibili da Studio."
+      },
+      "giftCards": {
+        "title": "Carte regalo",
+        "description": "Vendi credito che spenderà qualcun altro.",
+        "detail": "Vendi una carta regalo nel tuo shop e chi la riceve la usa per lezioni, abbonamenti, corsi o prodotti. I saldi vengono tracciati automaticamente: una carta in circolazione è denaro già incassato."
+      },
+      "promoCodes": {
+        "title": "Codici promozionali",
+        "description": "Fai una campagna senza scontare tutto.",
+        "detail": "Crea un codice che riduce il prezzo di un ingresso singolo, di un appuntamento, di un corso o di un prodotto. Limitalo per utilizzi, data, pubblico o a una sola persona — e scopri quanto ha reso davvero ogni codice."
       }
     }
   },
@@ -398,7 +418,8 @@
         "Eventi e messaggi tra team",
         "API e ruoli avanzati"
       ]
-    }
+    },
+    "cmpDocumentsNote": "Le liberatorie firmabili richiedono Studio."
   },
   "payments": {
     "eyebrow": "Fatti pagare",

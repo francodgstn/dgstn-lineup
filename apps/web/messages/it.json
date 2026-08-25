@@ -2531,7 +2531,6 @@
     "rowGroups": "Gruppi",
     "rowCustomFields": "Campi personalizzati",
     "rowForms": "Moduli",
-    "formsNote": "Prossimamente",
     "rowAnalytics": "Analisi",
     "rowAiInsights": "Insight AI",
     "rowWhatsapp": "WhatsApp",
@@ -2539,7 +2538,13 @@
     "rowCentralAdmin": "Amministrazione centrale e dati unificati",
     "rowCrossTeam": "Eventi e messaggi tra team",
     "rowApi": "Accesso API",
-    "rowPermissions": "Ruoli e permessi avanzati"
+    "rowPermissions": "Ruoli e permessi avanzati",
+    "rowPlaces": "Luoghi e sale",
+    "rowDocuments": "Documenti",
+    "documentsNote": "Pubblica e condividi documenti. Le liberatorie firmabili richiedono Studio.",
+    "rowCustomDomain": "Dominio personalizzato",
+    "rowGiftCards": "Carte regalo",
+    "rowPromoCodes": "Codici promozionali"
   },
   "Plugins": {
     "title": "Plugin",
