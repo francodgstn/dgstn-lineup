@@ -144,9 +144,18 @@ rather than rediscovering it.
 
 **DECIDED — 1. Governing law.** Swiss law, exclusive jurisdiction in **Basel**,
 conflict-of-law rules and the CISG excluded. Aligned with the field: every
-comparator uses its own seat (Webling → Winterthur, Eversports → Vienna). The
-earlier draft's concession — "without prejudice to mandatory protection at your
-place of establishment" — was **removed**; no comparator offers it.
+comparator uses its own seat (Webling → Winterthur, ClubDesk → **Basel**,
+Eversports → Vienna). The earlier draft's concession — "without prejudice to
+mandatory protection at your place of establishment" — was **removed**.
+
+CORRECTION, recorded because the decision was taken on a claim that turned out to
+be wrong: it was removed on the basis that no comparator offers it. **KLARA does**
+— its §13 applies Swiss law "vorbehältlich zwingenden Rechts des jeweiligen
+Wohnsitzlandes des Nutzers" and expressly reserves mandatory venues. KLARA sells
+to Swiss SMEs including sole traders, so mandatory consumer law bites harder for
+them than for a B2B-only product, which is a real distinction — but the removal
+now rests on that distinction rather than on the field being unanimous. Franco was
+offered KLARA's narrow reservation on 2026-08-25 and left it out.
 
 **DECIDED — 2. Two documents.** Terms (`# 3.`) and DPA (`# 4.`), the DPA forming
 part of the Terms with a precedence clause. Direct Swiss precedent: ClubDesk
@@ -155,7 +164,12 @@ separate document without separate signing.
 
 **DECIDED — 3. Activation-based acceptance, not click-wrap.** Creating the studio
 forms the agreement; a notice on the team step says so and links both documents.
-Chosen for lower friction, matching Eversports and Webling. Amendments: **six
+This is the MAJORITY practice in the field, not a shortcut: Webling forms the
+contract on its activation email, Eversports on activation after the operator
+supplies its details, and KLARA §3 makes the act of REGISTERING carry the user's
+confirmation that they are legally capable and authorised to represent — which is
+the load-bearing part for B2B formation, and what §3.1 of the draft now says.
+Only Fairgate uses an explicit tick-box. Amendments: **six
 weeks' notice** by email with a **written objection right** and a termination
 route if no agreement (Eversports' shape).
 *The trade, recorded because it is reversible:* click-wrap is stronger evidence
@@ -163,13 +177,16 @@ of assent. The RECORD is identical either way — `provisionTeam` stamps version
 timestamp, uid and email onto the team — so restoring the tick-box is a UI change
 on step two, not a data-model change.
 
-**DECIDED — 4. No SLA; ClubDesk's liability shape, not Webling's.** No
-availability guarantee, with the causes named (maintenance, network, power,
-provider outage). Liability limited to **intent and gross negligence**, slight
-negligence excluded except for life/body/health, consequential loss excluded, and
-capped at **twice the annual plan fee** per contract year — with the free plan
-capped at twice the next paid plan's fee, because a cap of "fees paid" is **zero**
-for a free customer.
+**DECIDED — 4. No SLA; ClubDesk's and KLARA's liability shape, not Webling's.**
+No availability guarantee, with the causes named (maintenance, network, power,
+provider outage). Liability limited to **intent and gross negligence**, with
+**slight AND medium negligence** excluded so far as the law permits — the wider
+exclusion is KLARA's, adopted 2026-08-25 — except for life/body/health.
+Consequential loss excluded, and capped at **twice the annual plan fee** per
+contract year, with the free plan capped at twice the next paid plan's fee,
+because a cap of "fees paid" is **zero** for a free customer.
+Note the belt-and-braces: KLARA relies on the negligence tiers with NO monetary
+cap, ClubDesk uses a cap; this draft has both.
 *Why not Webling:* its blanket disclaimer of all liability is very likely partly
 void, since **Art. 100 OR** does not permit excluding liability for intent or
 gross negligence. Declining an SLA and writing an unenforceable liability clause

@@ -141,9 +141,9 @@ work.
 
 ## 3.11 Liability
 
-We are liable only for damage caused intentionally or by gross negligence.
-Liability for slight negligence is excluded, except for damage to life, body or
-health, and except where liability cannot be excluded by law.
+We are liable for damage caused intentionally or by gross negligence. Liability
+for slight and medium negligence is excluded so far as the law permits, except
+for damage to life, body or health.
 
 Subject to that, we are not liable for indirect or consequential loss, loss of
 profit, loss of business, or loss of data, and our total liability for all
