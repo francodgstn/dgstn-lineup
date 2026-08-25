@@ -20,6 +20,8 @@ import {
 import { db } from '@/lib/firebase'
 import { checkTeamSlug } from '@/lib/teamSlug'
 import { useAuth } from '@/contexts/AuthContext'
+import { RankLevelFields } from '@/components/ranking/RankLevelFields'
+import { RankBadge } from '@/components/ranking/RankBadge'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { CustomFieldsTab } from '@/plugins/custom-fields/CustomFieldsTab'
@@ -36,7 +38,6 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useOpenTabs } from '@/contexts/OpenTabsContext'
-import { ColorPicker } from '@/components/ui/color-picker'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -1081,12 +1082,16 @@ function RankSystemDialog({
   initial,
   existingIds,
   onSave,
+  storagePath,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   initial: RankSystemFormState | null
   existingIds: string[]
   onSave: (s: RankSystemFormState) => void
+  /** Where uploaded badge artwork goes — see the Storage rule for
+   *  `teams/{teamId}/ranking`. */
+  storagePath: string
 }) {
   const t = useTranslations('TeamSettings')
   const [form, setForm] = useState<RankSystemFormState>(initial ?? emptySystem())
@@ -1135,7 +1140,18 @@ function RankSystemDialog({
 
   const updateLevel = (idx: number, patch: Partial<RankLevel>) => {
     setForm((f) => {
-      const levels = f.levels.map((l, i) => (i === idx ? { ...l, ...patch } : l))
+      const levels = f.levels.map((l, i) => {
+        if (i !== idx) return l
+        const next = { ...l, ...patch } as RankLevel
+        // An `undefined` in the patch CLEARS the field — turning a split belt
+        // solid, or removing an emoji. Spreading it in leaves the key present
+        // with an undefined value, which Firestore refuses outright when the
+        // levels array is written back.
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === undefined) delete (next as unknown as Record<string, unknown>)[k]
+        }
+        return next
+      })
       return { ...f, levels }
     })
   }
@@ -1227,29 +1243,15 @@ function RankSystemDialog({
               )}
               <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                 {form.levels.map((level, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-5 text-right shrink-0">
-                      {level.value}
-                    </span>
-                    <ColorPicker
-                      value={level.color ?? '#9CA3AF'}
-                      onChange={(hex) => updateLevel(idx, { color: hex })}
-                      className="h-7 w-7 shrink-0"
-                    />
-                    <Input
-                      value={level.label}
-                      onChange={(e) => updateLevel(idx, { label: e.target.value })}
-                      placeholder={t('rankingLevelLabel')}
-                      className="h-7 text-sm flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeLevel(idx)}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  <RankLevelFields
+                    key={idx}
+                    level={level}
+                    index={idx}
+                    storagePath={storagePath}
+                    canRemove
+                    onChange={(field, value) => updateLevel(idx, { [field]: value } as Partial<RankLevel>)}
+                    onRemove={() => removeLevel(idx)}
+                  />
                 ))}
               </div>
             </div>
@@ -1286,11 +1288,7 @@ function RankSystemDialog({
               >
                 <div className="flex gap-0.5 shrink-0 mt-0.5">
                   {preset.levels.slice(0, 5).map((l, i) => (
-                    <div
-                      key={i}
-                      className="h-3 w-3 rounded-full border border-border"
-                      style={{ background: l.color }}
-                    />
+                    <RankBadge key={i} level={l} size="sm" />
                   ))}
                   {preset.levels.length > 5 && (
                     <span className="text-xs text-muted-foreground ml-0.5">
@@ -1486,14 +1484,13 @@ function RankingTab({
                 )}
               </div>
 
-              {/* Level color strip */}
+              {/* Level strip, sorted by VALUE — the scale's own order. Array
+                  order made this disagree with the other surfaces whenever the
+                  two differed. */}
               <div className="flex gap-1 flex-wrap">
-                {s.levels.map((l) => (
+                {[...s.levels].sort((a, b) => a.value - b.value).map((l) => (
                   <div key={l.value} className="flex items-center gap-1">
-                    <div
-                      className="h-3 w-3 rounded-full border border-border shrink-0"
-                      style={{ background: l.color }}
-                    />
+                    <RankBadge level={l} size="sm" />
                     <span className="text-xs text-muted-foreground">{l.label}</span>
                   </div>
                 ))}
@@ -1515,6 +1512,7 @@ function RankingTab({
         initial={editing}
         existingIds={systems.filter((s) => !editing || s.id !== editing.id).map((s) => s.id)}
         onSave={handleSave}
+        storagePath={`teams/${teamId}/ranking`}
       />
 
       <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>

@@ -113,6 +113,8 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
             <BeltBadge
               primaryColor={rankInfo?.color ?? '#DDDDDD'}
               secondaryColor={rankInfo?.secondColor}
+              emoji={rankInfo?.emoji}
+              imageUrl={rankInfo?.imageUrl}
               size={26}
             />
             <Text style={styles.collapsedRank}>{rankTitle.toUpperCase()}</Text>
@@ -171,6 +173,8 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
               <BeltBadge
                 primaryColor={rankInfo?.color ?? '#DDDDDD'}
                 secondaryColor={rankInfo?.secondColor}
+                emoji={rankInfo?.emoji}
+                imageUrl={rankInfo?.imageUrl}
                 size={32}
               />
               <Text variant="headlineMedium" style={styles.rankTitle}>

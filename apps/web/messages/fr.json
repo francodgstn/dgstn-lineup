@@ -7150,5 +7150,17 @@
     "error_alreadyAccepted": "Cette invitation a déjà été acceptée. Connectez-vous pour accéder à l'équipe.",
     "error_planRequired": "Le forfait de cette équipe n'inclut plus d'utilisateur supplémentaire, l'invitation ne peut donc pas être acceptée. Demandez au propriétaire de l'équipe de passer à un forfait supérieur.",
     "error_generic": "Une erreur s'est produite. Veuillez réessayer ou demander à l'équipe une nouvelle invitation."
+  },
+  "Ranking": {
+    "levelPlaceholder": "Niveau {number}",
+    "removeLevel": "Supprimer le niveau",
+    "splitOn": "Deux couleurs",
+    "splitOff": "Une couleur",
+    "emojiLabel": "Emoji pour ce niveau",
+    "emojiPlaceholder": "🐧",
+    "imageAdd": "Image",
+    "imageRemove": "Supprimer l'image",
+    "imageTooLarge": "Cette image est trop volumineuse — 2 Mo maximum.",
+    "imageUploadFailed": "L'image n'a pas pu être téléversée. Veuillez réessayer."
   }
 }

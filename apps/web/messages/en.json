@@ -7150,5 +7150,17 @@
     "error_alreadyAccepted": "This invitation has already been accepted. Sign in to reach the team.",
     "error_planRequired": "This team's plan no longer includes an extra user, so the invitation can't be accepted. Ask the team owner to upgrade.",
     "error_generic": "Something went wrong. Please try again, or ask the team to send you a new invitation."
+  },
+  "Ranking": {
+    "levelPlaceholder": "Level {number}",
+    "removeLevel": "Remove level",
+    "splitOn": "Two colours",
+    "splitOff": "One colour",
+    "emojiLabel": "Emoji for this level",
+    "emojiPlaceholder": "🐧",
+    "imageAdd": "Image",
+    "imageRemove": "Remove image",
+    "imageTooLarge": "That image is too large — 2 MB maximum.",
+    "imageUploadFailed": "The image could not be uploaded. Please try again."
   }
 }

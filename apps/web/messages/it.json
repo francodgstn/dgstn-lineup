@@ -7150,5 +7150,17 @@
     "error_alreadyAccepted": "Questo invito è già stato accettato. Accedi per raggiungere il team.",
     "error_planRequired": "Il piano di questo team non include più un utente aggiuntivo, quindi l'invito non può essere accettato. Chiedi al proprietario del team di effettuare l'upgrade.",
     "error_generic": "Qualcosa è andato storto. Riprova o chiedi al team un nuovo invito."
+  },
+  "Ranking": {
+    "levelPlaceholder": "Livello {number}",
+    "removeLevel": "Rimuovi livello",
+    "splitOn": "Due colori",
+    "splitOff": "Un colore",
+    "emojiLabel": "Emoji per questo livello",
+    "emojiPlaceholder": "🐧",
+    "imageAdd": "Immagine",
+    "imageRemove": "Rimuovi immagine",
+    "imageTooLarge": "Immagine troppo grande — massimo 2 MB.",
+    "imageUploadFailed": "Impossibile caricare l'immagine. Riprova."
   }
 }

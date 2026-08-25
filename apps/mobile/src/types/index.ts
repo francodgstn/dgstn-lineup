@@ -347,9 +347,14 @@ export interface PerformanceCheckin {
 export interface RankLevel {
   value: number;
   label: string;
+  /** Primary colour, or the background behind an emoji. */
   color?: string;
-  /** Second half of a two-tone badge. Not part of the stored level. */
+  /** Second colour of a SPLIT level (Orange/Green, Blue/Red). */
   secondColor?: string;
+  /** A single emoji standing for the level — a swim school's sea animal, say. */
+  emoji?: string;
+  /** Uploaded badge artwork. Wins over `emoji` when both are set. */
+  imageUrl?: string;
 }
 
 export interface RankingSystem {

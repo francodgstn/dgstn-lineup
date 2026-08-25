@@ -44,6 +44,8 @@ export interface ResolvedRank {
   label: string;
   color: string;
   secondColor?: string;
+  emoji?: string;
+  imageUrl?: string;
 }
 
 /**
@@ -75,6 +77,8 @@ export function resolvePrimaryRank(
       label: level.label,
       color: level.color ?? '#DDDDDD',
       secondColor: level.secondColor,
+      emoji: level.emoji,
+      imageUrl: level.imageUrl,
     };
   }
 
