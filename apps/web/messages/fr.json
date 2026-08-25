@@ -182,7 +182,10 @@
     "memberSubscriptions": "Abonnements des membres",
     "paymentsAndSubscriptions": "Paiements et abonnements",
     "sidebarResizeLabel": "Redimensionner la barre latérale",
-    "sidebarResizeHint": "Faites glisser pour redimensionner — au-delà de la gauche pour réduire, double-cliquez pour réinitialiser"
+    "sidebarResizeHint": "Faites glisser pour redimensionner — au-delà de la gauche pour réduire, double-cliquez pour réinitialiser",
+    "legalTerms": "Conditions d'utilisation",
+    "legalDpa": "Contrat de sous-traitance",
+    "legalPrivacy": "Politique de confidentialité"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -1933,7 +1936,11 @@
     "regionTime24h": "24 heures (18:30)",
     "regionTime12h": "12 heures (6:30 PM)",
     "regionPreview": "Aperçu",
-    "slugCheckFailed": "Impossible de vérifier cette URL. Réessayez avant d'enregistrer."
+    "slugCheckFailed": "Impossible de vérifier cette URL. Réessayez avant d'enregistrer.",
+    "termsAcceptedTitle": "Conditions acceptées",
+    "termsAcceptedBody": "Version {version}, acceptée le {date} par {email}.",
+    "termsLink": "Conditions d'utilisation",
+    "dpaLink": "Contrat de sous-traitance"
   },
   "Bookings": {
     "title": "Réservations",

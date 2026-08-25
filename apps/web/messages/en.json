@@ -182,7 +182,10 @@
     "memberSubscriptions": "Member subscriptions",
     "paymentsAndSubscriptions": "Payments & Subscriptions",
     "sidebarResizeLabel": "Resize sidebar",
-    "sidebarResizeHint": "Drag to resize — drag past the left to collapse, double-click to reset"
+    "sidebarResizeHint": "Drag to resize — drag past the left to collapse, double-click to reset",
+    "legalTerms": "Terms of Service",
+    "legalDpa": "Data Processing Agreement",
+    "legalPrivacy": "Privacy Policy"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1933,7 +1936,11 @@
     "regionTime24h": "24-hour (18:30)",
     "regionTime12h": "12-hour (6:30 PM)",
     "regionPreview": "Preview",
-    "slugCheckFailed": "Could not check this URL. Try again before saving."
+    "slugCheckFailed": "Could not check this URL. Try again before saving.",
+    "termsAcceptedTitle": "Terms accepted",
+    "termsAcceptedBody": "Version {version}, accepted on {date} by {email}.",
+    "termsLink": "Terms of Service",
+    "dpaLink": "Data Processing Agreement"
   },
   "Bookings": {
     "title": "Bookings",

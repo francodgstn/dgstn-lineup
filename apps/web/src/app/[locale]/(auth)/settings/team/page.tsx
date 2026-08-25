@@ -114,6 +114,7 @@ import { useByoStripeDoubleRecording } from '@/hooks/useConnect'
 import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
+import { useTeamFormat } from '@/hooks/useTeamFormat'
 import { DeleteAccountCard } from '@/components/settings/DeleteAccountCard'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -2102,6 +2103,59 @@ function PaymentsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean }) 
   )
 }
 
+/**
+ * Which terms this studio agreed to, and when.
+ *
+ * `provisionTeam` has recorded this since 2026-08-25 and NOTHING showed it —
+ * evidence nobody can see is worth less than it cost to collect, and the studio
+ * has at least as much right to it as we do.
+ *
+ * ABSENT MEANS NEVER ASKED, not refused: every studio created before that date
+ * carries no value at all, so the block renders nothing rather than implying
+ * the studio declined something. The links stay reachable from the account menu
+ * either way.
+ */
+function TermsAcceptedNote({ team }: { team: Team }) {
+  const t = useTranslations('TeamSettings')
+  const fmt = useTeamFormat()
+  const accepted = team.terms_accepted
+  if (!accepted) return null
+
+  const atMs =
+    (accepted.accepted_at as { toMillis?: () => number } | undefined)?.toMillis?.() ?? null
+
+  return (
+    <div className="space-y-1 pt-4 border-t">
+      <p className="text-sm font-medium">{t('termsAcceptedTitle')}</p>
+      <p className="text-xs text-muted-foreground">
+        {t('termsAcceptedBody', {
+          version: accepted.version,
+          date: atMs ? fmt.date(new Date(atMs)) : '—',
+          email: accepted.accepted_by_email || '—',
+        })}
+      </p>
+      <p className="flex flex-wrap gap-x-3 text-xs">
+        <a
+          href="https://linyup.com/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          {t('termsLink')}
+        </a>
+        <a
+          href="https://linyup.com/dpa"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          {t('dpaLink')}
+        </a>
+      </p>
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 type SettingsTab = 'general' | 'alerts' | 'ranking' | 'payments' | 'custom-fields'
@@ -2214,6 +2268,7 @@ export default function TeamSettingsPage() {
           and this is not. Owner-only — it renders nothing for anybody else
           rather than rendering disabled, which would only raise the question of
           who can. */}
+      {tab === 'general' && <TermsAcceptedNote team={team} />}
       {tab === 'general' && (
         <DeleteAccountCard teamId={currentTeamId} team={team} canEdit={canEdit} />
       )}

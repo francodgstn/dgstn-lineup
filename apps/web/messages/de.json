@@ -182,7 +182,10 @@
     "memberSubscriptions": "Mitglieder-Abos",
     "paymentsAndSubscriptions": "Zahlungen & Abos",
     "sidebarResizeLabel": "Seitenleiste anpassen",
-    "sidebarResizeHint": "Zum Anpassen ziehen — über den linken Rand hinaus zum Einklappen, Doppelklick zum Zurücksetzen"
+    "sidebarResizeHint": "Zum Anpassen ziehen — über den linken Rand hinaus zum Einklappen, Doppelklick zum Zurücksetzen",
+    "legalTerms": "Nutzungsbedingungen",
+    "legalDpa": "Auftragsverarbeitungsvertrag",
+    "legalPrivacy": "Datenschutzerklärung"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -1933,7 +1936,11 @@
     "regionTime24h": "24 Stunden (18:30)",
     "regionTime12h": "12 Stunden (6:30 PM)",
     "regionPreview": "Vorschau",
-    "slugCheckFailed": "Diese URL konnte nicht geprüft werden. Versuche es vor dem Speichern erneut."
+    "slugCheckFailed": "Diese URL konnte nicht geprüft werden. Versuche es vor dem Speichern erneut.",
+    "termsAcceptedTitle": "Bedingungen akzeptiert",
+    "termsAcceptedBody": "Version {version}, akzeptiert am {date} von {email}.",
+    "termsLink": "Nutzungsbedingungen",
+    "dpaLink": "Auftragsverarbeitungsvertrag"
   },
   "Bookings": {
     "title": "Buchungen",
