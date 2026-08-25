@@ -99,7 +99,6 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Loader2,
 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
@@ -555,22 +554,12 @@ function GeneralForm({
         <p className="text-xs text-muted-foreground">{t('slugHelp')}</p>
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
-        {/* Kept as a real submit button (this section IS a <form>), but sized
-            and coloured like SettingsSaveBar so it does not read as a different
-            kind of action from every other save in settings. */}
-        {saved && !isSubmitting && (
-          <span className="text-xs text-muted-foreground">{t('saved')}</span>
-        )}
-        <Button
-          size="sm"
-          type="submit"
-          disabled={!canEdit || isSubmitting || !isDirty || !!slugError || slugChecking}
-        >
-          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isSubmitting ? t('saving') : t('save')}
-        </Button>
-      </div>
+      <SettingsSaveBar
+        type="submit"
+        saving={isSubmitting}
+        saved={saved}
+        disabled={!canEdit || !isDirty || !!slugError || slugChecking}
+      />
     </form>
   )
 }
@@ -756,13 +745,12 @@ function RegionalForm({
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
-        {saved && !saving && <span className="text-xs text-muted-foreground">{t('saved')}</span>}
-        <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !dirty || !zoneValid}>
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {saving ? t('saving') : t('save')}
-        </Button>
-      </div>
+      <SettingsSaveBar
+        onSave={onSave}
+        saving={saving}
+        saved={saved}
+        disabled={!canEdit || !dirty || !zoneValid}
+      />
     </div>
   )
 }
