@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import {
   PLATFORM_NOTICE_TEMPLATES,
+  PLATFORM_NOTICE_VARIABLES,
+  noticePlaceholdersIn,
   platformNoticeAudienceProblem,
+  platformNoticePlaceholderProblem,
+  renderNoticeText,
   type PlatformNoticeAudience,
   type PlatformNoticeTemplateId,
   type SaasPlan,
@@ -45,6 +49,7 @@ export function NoticeComposer() {
   const [createdAfter, setCreatedAfter] = useState('')
   const [createdBefore, setCreatedBefore] = useState('')
   const [includeManagers, setIncludeManagers] = useState(false)
+  const [values, setValues] = useState<Record<string, string>>({})
 
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [busy, setBusy] = useState(false)
@@ -63,6 +68,32 @@ export function NoticeComposer() {
     createdBefore: createdBefore ? new Date(createdBefore).getTime() : null,
   }
   const audienceProblem = platformNoticeAudienceProblem(audience)
+
+  // Only the variables this notice actually uses get an input. Showing all of
+  // them invites filling one the text never references, which then looks
+  // answered and is not.
+  const usedIds = [...new Set([...noticePlaceholdersIn(subject), ...noticePlaceholdersIn(body)])]
+  const operatorVars = PLATFORM_NOTICE_VARIABLES.filter(
+    (v) => v.scope === 'operator' && usedIds.includes(v.id)
+  )
+  const recipientVars = PLATFORM_NOTICE_VARIABLES.filter(
+    (v) => v.scope === 'recipient' && usedIds.includes(v.id)
+  )
+  const placeholderProblem = platformNoticePlaceholderProblem(subject, body, values)
+
+  // What one studio would actually receive. Recipient values are stand-ins here
+  // — the real ones resolve per studio at send time — but seeing the sentence
+  // finished is what catches a token nobody filled.
+  const previewSubject = renderNoticeText(subject, {
+    ...values,
+    studio_name: 'Example Studio',
+    plan: 'studio',
+  }).text
+  const previewBody = renderNoticeText(body, {
+    ...values,
+    studio_name: 'Example Studio',
+    plan: 'studio',
+  }).text
 
   // Any edit to the audience invalidates a preview taken against the previous
   // one — otherwise the count on screen belongs to a different set than the one
@@ -115,10 +146,11 @@ export function NoticeComposer() {
           templateId: PlatformNoticeTemplateId
           audience: PlatformNoticeAudience
           includeManagers: boolean
+          values: Record<string, string>
         },
         SendResult
       >(functions, 'sendPlatformNotice')
-      const { data } = await fn({ subject, body, templateId, audience, includeManagers })
+      const { data } = await fn({ subject, body, templateId, audience, includeManagers, values })
       setSent(data)
       setPreview(null)
     } catch (err) {
@@ -128,7 +160,13 @@ export function NoticeComposer() {
     }
   }
 
-  const canSend = !!preview && !preview.overLimit && preview.recipientCount > 0 && !!subject.trim() && !!body.trim()
+  const canSend =
+    !!preview &&
+    !preview.overLimit &&
+    preview.recipientCount > 0 &&
+    !!subject.trim() &&
+    !!body.trim() &&
+    !placeholderProblem
 
   return (
     <section className="space-y-4 rounded-lg border p-5">
@@ -183,11 +221,52 @@ export function NoticeComposer() {
           placeholder="Plain text. Blank lines become paragraphs."
         />
         <span className="block text-xs text-muted-foreground">
-          Plain text — blank lines become paragraphs, and the Linyup layout is applied at send time.
-          Placeholders like <code>{'{{effective_date}}'}</code> are NOT substituted; replace them
-          before sending.
+          Plain text — blank lines become paragraphs, and the Linyup layout is applied at send
+          time. Placeholders like <code>{'{{effective_date}}'}</code> get inputs below; the send is
+          refused while any is unfilled.
         </span>
       </label>
+
+      {usedIds.length > 0 && (
+        <fieldset className="space-y-3 rounded-md border p-4">
+          <legend className="px-1 text-sm font-medium">Fill in the placeholders</legend>
+          {operatorVars.map((v) => (
+            <label key={v.id} className="block space-y-1 text-sm">
+              <span className="font-medium">
+                {v.label} <code className="text-xs text-muted-foreground">{`{{${v.id}}}`}</code>
+              </span>
+              <input
+                value={values[v.id] ?? ''}
+                onChange={(e) => setValues((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                placeholder={v.hint}
+              />
+            </label>
+          ))}
+          {recipientVars.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Filled per studio at send time:{' '}
+              {recipientVars.map((v) => `{{${v.id}}}`).join(', ')}
+            </p>
+          )}
+          {placeholderProblem && <p className="text-xs text-red-600">{placeholderProblem}</p>}
+        </fieldset>
+      )}
+
+      {(subject.trim() || body.trim()) && (
+        <details className="rounded-md border p-4" open={!!placeholderProblem}>
+          <summary className="cursor-pointer text-sm font-medium">
+            Preview — what one studio receives
+          </summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-sm font-medium">{previewSubject || <em>No subject</em>}</p>
+            <pre className="whitespace-pre-wrap rounded bg-muted/50 p-3 text-xs">{previewBody}</pre>
+            <p className="text-xs text-muted-foreground">
+              Studio name and plan are stand-ins here; the real values resolve per studio.
+            </p>
+          </div>
+        </details>
+      )}
 
       <fieldset className="space-y-3 rounded-md border p-4">
         <legend className="px-1 text-sm font-medium">Audience</legend>

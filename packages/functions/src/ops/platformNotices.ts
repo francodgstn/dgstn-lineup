@@ -28,6 +28,8 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
   USERS_COLLECTION,
   platformNoticeAudienceProblem,
+  platformNoticePlaceholderProblem,
+  renderNoticeText,
   tenantHiddenFromPlatformMetrics,
   type PlatformNoticeAudience,
   type PlatformNoticeTemplateId,
@@ -176,12 +178,20 @@ export const sendPlatformNotice = onCall({ timeoutSeconds: 540 }, async (request
     templateId?: PlatformNoticeTemplateId
     audience?: PlatformNoticeAudience
     includeManagers?: boolean
+    values?: Record<string, string>
   }
 
   const subject = typeof data.subject === 'string' ? data.subject.trim() : ''
   const body = typeof data.body === 'string' ? data.body.trim() : ''
   if (!subject) throw new HttpsError('invalid-argument', 'A subject is required')
   if (!body) throw new HttpsError('invalid-argument', 'A body is required')
+
+  // THE SERVER REFUSES AN UNSUBSTITUTED NOTICE, not just the composer. The
+  // failure this prevents is a customer reading "takes effect on
+  // {{effective_date}}", and a UI-only guard is one stale tab away from it.
+  const values = (data.values ?? {}) as Record<string, string>
+  const placeholderProblem = platformNoticePlaceholderProblem(subject, body, values)
+  if (placeholderProblem) throw new HttpsError('invalid-argument', placeholderProblem)
 
   const audience = parseAudience(data.audience)
   const includeManagers = data.includeManagers === true
@@ -210,6 +220,7 @@ export const sendPlatformNotice = onCall({ timeoutSeconds: 540 }, async (request
     templateId: data.templateId ?? 'blank',
     audience,
     includeManagers,
+    values,
     status: 'sending',
     created_by: operator,
     created_at: FieldValue.serverTimestamp(),
@@ -217,23 +228,31 @@ export const sendPlatformNotice = onCall({ timeoutSeconds: 540 }, async (request
     recipient_count: recipientCount,
   })
 
-  // Both halves: `buildEmailTemplate` returns the branded HTML and a plain-text
-  // twin derived from it. Sending HTML alone is what puts a legal notice in a
-  // spam folder.
-  const { html, text } = buildEmailTemplate({
-    title: subject,
-    body: body
-      .split('\n\n')
-      .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-      .join(''),
-    footer: 'You are receiving this because you run a studio on Linyup.',
-  })
-
   let sent = 0
   let skipped = 0
   let failed = 0
 
   for (const team of teams) {
+    // Rendered PER STUDIO, not once: recipient-scoped variables ({{studio_name}},
+    // {{plan}}) resolve differently for each. The operator's values are merged
+    // underneath them, so a notice using neither renders identically for
+    // everyone at the cost of a little repeated work.
+    const scoped = { ...values, studio_name: team.teamName, plan: team.plan ?? 'free' }
+    const renderedSubject = renderNoticeText(subject, scoped).text
+    const renderedBody = renderNoticeText(body, scoped).text
+
+    // Both halves: `buildEmailTemplate` returns the branded HTML and a plain-text
+    // twin derived from it. Sending HTML alone is what puts a legal notice in a
+    // spam folder.
+    const { html, text } = buildEmailTemplate({
+      title: renderedSubject,
+      body: renderedBody
+        .split('\n\n')
+        .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+        .join(''),
+      footer: 'You are receiving this because you run a studio on Linyup.',
+    })
+
     const mailSendIds: string[] = []
     let outcome: 'sent' | 'skipped' | 'failed' | 'no_recipient' = 'no_recipient'
     let error: string | null = null
@@ -247,7 +266,7 @@ export const sendPlatformNotice = onCall({ timeoutSeconds: 540 }, async (request
         try {
           const result = await sendSystemMail({
             to: email,
-            subject,
+            subject: renderedSubject,
             html,
             text,
             tags: ['platform-notice'],

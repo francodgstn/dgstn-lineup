@@ -218,3 +218,122 @@ export function platformNoticeAudienceProblem(a: PlatformNoticeAudience): string
   }
   return null
 }
+
+// ─── placeholders ────────────────────────────────────────────────────────────
+//
+// THE ONLY FAILURE THAT MATTERS HERE is a customer receiving "takes effect on
+// {{effective_date}}". Everything below is arranged so that cannot happen:
+// ONE renderer, used by the preview and by the send, and a check that names
+// every unresolved token so both the composer and the callable can refuse.
+//
+// Two scopes, and the distinction is not cosmetic:
+//   • OPERATOR values are typed once and are identical for everyone.
+//   • RECIPIENT values are resolved per studio at send time, so the body has to
+//     be rendered per recipient rather than once — which is why the send loop
+//     builds the mail inside the per-team loop.
+
+export type PlatformNoticeVariableScope = 'operator' | 'recipient'
+
+export interface PlatformNoticeVariable {
+  id: string
+  label: string
+  scope: PlatformNoticeVariableScope
+  hint: string
+}
+
+export const PLATFORM_NOTICE_VARIABLES: PlatformNoticeVariable[] = [
+  {
+    id: 'change',
+    label: 'What is changing',
+    scope: 'operator',
+    hint: 'One or two sentences describing the change.',
+  },
+  {
+    id: 'effective_date',
+    label: 'Effective date',
+    scope: 'operator',
+    hint: 'Write it the way a reader would say it, e.g. 15 September 2026.',
+  },
+  {
+    id: 'reason',
+    label: 'Reason',
+    scope: 'operator',
+    hint: 'Why it is happening, or what was done about it.',
+  },
+  { id: 'studio_name', label: 'Studio name', scope: 'recipient', hint: 'The studio being written to.' },
+  { id: 'plan', label: 'Plan', scope: 'recipient', hint: "The studio's current plan." },
+]
+
+/** Values resolved per studio. Kept separate from the operator's values so the
+ *  renderer cannot be handed a recipient value by mistake at compose time. */
+export interface PlatformNoticeRecipientContext {
+  studio_name: string
+  plan: string
+}
+
+const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g
+
+/** Every placeholder token in the text, in order, deduplicated. */
+export function noticePlaceholdersIn(text: string): string[] {
+  const found: string[] = []
+  for (const m of text.matchAll(PLACEHOLDER_RE)) {
+    const id = m[1]
+    if (id && !found.includes(id)) found.push(id)
+  }
+  return found
+}
+
+/**
+ * Substitute, and report what could not be.
+ *
+ * It does NOT fall back to the raw token, to a blank, or to the id — every
+ * unresolved placeholder is returned in `missing` and left in place, so the
+ * caller has to decide. Silently emptying one produces "takes effect on ",
+ * which reads as finished text and is worse than the obviously-broken version.
+ */
+export function renderNoticeText(
+  text: string,
+  values: Record<string, string | undefined>
+): { text: string; missing: string[] } {
+  const missing: string[] = []
+  const out = text.replace(PLACEHOLDER_RE, (whole, id: string) => {
+    const v = values[id]
+    if (typeof v === 'string' && v.trim() !== '') return v
+    if (!missing.includes(id)) missing.push(id)
+    return whole
+  })
+  return { text: out, missing }
+}
+
+/**
+ * Which operator values does this notice still need?
+ *
+ * Recipient-scoped variables are excluded: they are resolved at send time and
+ * are not the operator's to fill, so listing them here would ask for something
+ * that cannot be typed. An UNKNOWN token — one matching no declared variable —
+ * IS reported, because it is almost always a typo for a real one and would
+ * otherwise ship verbatim.
+ */
+export function platformNoticePlaceholderProblem(
+  subject: string,
+  body: string,
+  values: Record<string, string | undefined>
+): string | null {
+  const used = [...new Set([...noticePlaceholdersIn(subject), ...noticePlaceholdersIn(body)])]
+  const recipientIds = new Set(
+    PLATFORM_NOTICE_VARIABLES.filter((v) => v.scope === 'recipient').map((v) => v.id)
+  )
+  const declared = new Set(PLATFORM_NOTICE_VARIABLES.map((v) => v.id))
+
+  const unknown = used.filter((id) => !declared.has(id))
+  if (unknown.length > 0) {
+    return `Unknown placeholder${unknown.length > 1 ? 's' : ''}: ${unknown.map((u) => `{{${u}}}`).join(', ')}`
+  }
+  const unfilled = used.filter(
+    (id) => !recipientIds.has(id) && !(values[id] && values[id]!.trim() !== '')
+  )
+  if (unfilled.length > 0) {
+    return `Fill in: ${unfilled.map((u) => `{{${u}}}`).join(', ')}`
+  }
+  return null
+}
