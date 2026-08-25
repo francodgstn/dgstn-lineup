@@ -944,7 +944,9 @@
     "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu.",
     "deletionScheduledBadge": "Suppression demandée · {date}",
     "attention_cancelling": "Résilie",
-    "attention_billing_unlinked": "Facturation orpheline"
+    "attention_billing_unlinked": "Facturation orpheline",
+    "exportCsv": "Exporter en CSV",
+    "exportFailed": "Échec de l'export. Veuillez réessayer."
   },
   "TeamAffiliations": {
     "title": "Affiliations",

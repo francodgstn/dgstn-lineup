@@ -944,7 +944,9 @@
     "affiliationRemoveBody": "{name} loses this affiliation and anything that depends on it — access to gated activities, member pricing and any renewal it was due.",
     "deletionScheduledBadge": "Deletion requested · {date}",
     "attention_cancelling": "Cancelling",
-    "attention_billing_unlinked": "Billing unlinked"
+    "attention_billing_unlinked": "Billing unlinked",
+    "exportCsv": "Export CSV",
+    "exportFailed": "Export failed. Please try again."
   },
   "TeamAffiliations": {
     "title": "Affiliations",

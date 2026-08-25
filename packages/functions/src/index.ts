@@ -372,6 +372,7 @@ export { voidManualPayment } from './payments/voidManualPayment'
 // the plugin-gated monthly CSV export.
 export { monthlyFinanceReports } from './finance/monthlyReports'
 export { exportFinanceReport } from './finance/exportReport'
+export { exportContacts } from './contacts/exportContacts'
 
 // Accounting (finance plugin) — double-entry ledger derived from the journal.
 export { onFinanceTransactionWrite } from './accounting/onFinanceTransactionWrite'

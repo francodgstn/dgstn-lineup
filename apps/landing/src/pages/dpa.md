@@ -112,9 +112,11 @@ anonymised.
 Deleting your studio starts a **30-day** reversible window, after which the
 studio and its data are permanently removed.
 
-On request before deletion, we will provide a copy of your contact data in a
-commonly used machine-readable format. Some exports are available in the
-application; others we run on request within a reasonable period.
+You can export your contact book yourself at any time, from the Contacts page,
+as a CSV file — including archived contacts and any custom fields you defined.
+Financial records have their own export. For anything else, we will provide a
+copy in a commonly used machine-readable format on request, within a reasonable
+period.
 
 **One limitation, stated plainly:** deleting a studio does not close the Stripe
 connected account you created. That account is yours and is governed by your own

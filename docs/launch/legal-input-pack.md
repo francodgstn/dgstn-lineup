@@ -89,22 +89,25 @@ return/deletion clause that claims total erasure would be inaccurate today.
 
 ---
 
-## 5. Return and portability — the weakest area
+## 5. Return and portability
 
 A DPA normally commits the processor to return the controller's data on
 termination. What exists:
 
+- **Contacts CSV export** — `functions/src/contacts/exportContacts.ts`, reached
+  from the Contacts page. Manager-only, includes archived contacts and every
+  custom field the studio defined, and **refuses rather than truncating** when an
+  export exceeds the inline size limit. Added 2026-08-25 precisely so the DPA's
+  return-of-data clause describes something that exists.
 - **Finance/report CSV export** — `functions/src/finance/exportReport.ts`, plus
   CSV on the payments and custom-forms surfaces.
-- **No contacts export.** There is no CSV or JSON export of the contact book from
-  the contacts page. A studio leaving today cannot self-serve its own roster.
 - Migration tooling (`scripts/migration/`) exists but is operator-run, one
   direction, and HMD-specific.
 
-**Recommendation:** either build a contacts export before signing a DPA that
-promises return-on-termination, or word the clause as "on written request, within
-N days, in a commonly used machine-readable format" and be prepared to run it by
-hand. The second is honest and cheap; the first is better product anyway.
+**Still not self-serve:** bookings, attendance and waiver acceptances have no
+export. They are recoverable by hand, so the clause should promise a
+machine-readable copy "on request within a reasonable period" rather than imply
+everything is a button.
 
 ---
 
