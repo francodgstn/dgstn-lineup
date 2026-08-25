@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { effectiveRankingSystems, rankingSystemsManagedByOrg } from '@linyup/shared'
 import type { RankingSystem, Organization } from '@linyup/shared'
 
 interface RankingSystemsResult {
@@ -15,9 +16,21 @@ interface RankingSystemsResult {
 }
 
 /**
- * Returns the effective ranking systems for the current team.
- * When the team belongs to an org that has ranking_systems defined,
- * those take precedence over the team's own ranking_systems.
+ * THE effective ranking systems for the current team.
+ *
+ * The rule itself lives in `effectiveRankingSystems` (@linyup/shared) so that
+ * this hook, the automation builder and the server-side automation engine give
+ * the same answer. Only the READ is here.
+ *
+ * Two behaviours worth knowing, both corrected here:
+ *
+ *  - An organisation with NO systems of its own does not blank its studios.
+ *    This used to return the org's list whenever an `org_id` existed, so a
+ *    studio inside such an org saw none of its OWN systems — configuration it
+ *    could still see in its settings, applying nowhere.
+ *  - Callers that need this must use the hook. Several surfaces read
+ *    `team.ranking_systems` directly and were therefore blank for any
+ *    org-managed tenant; they now come through here.
  */
 export function useRankingSystems(): RankingSystemsResult {
   const { team } = useAuth()
@@ -35,19 +48,10 @@ export function useRankingSystems(): RankingSystemsResult {
     },
   })
 
-  if (orgId) {
-    return {
-      rankingSystems: orgRankingSystems ?? [],
-      managedByOrg: (orgRankingSystems?.length ?? 0) > 0,
-      orgId,
-      loading: orgLoading,
-    }
-  }
-
   return {
-    rankingSystems: team?.ranking_systems ?? [],
-    managedByOrg: false,
-    orgId: null,
-    loading: false,
+    rankingSystems: effectiveRankingSystems(team?.ranking_systems, orgRankingSystems),
+    managedByOrg: rankingSystemsManagedByOrg(orgRankingSystems),
+    orgId,
+    loading: orgId ? orgLoading : false,
   }
 }

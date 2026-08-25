@@ -2819,10 +2819,13 @@ export default function ContactsPage() {
       )}
 
       {/* Overview — collapsed by default, always visible */}
+      {/* `rankingSystems` is the EFFECTIVE list resolved above. This used to pass
+          `team.ranking_systems`, which left the belt breakdown blank for every
+          org-managed tenant while the list and filter beside it were fine. */}
       <OverviewPanel
         contacts={active}
         loading={loadingActive}
-        rankingSystems={team?.ranking_systems}
+        rankingSystems={rankingSystems}
         engagementThresholds={team?.engagement_thresholds}
       />
 

@@ -31,7 +31,7 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { FirestoreService } from '../services/firestore';
-import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus } from '../types';
+import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus, RankingSystem } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
 import { waiverRefusal } from '../utils/waiverRefusal';
@@ -128,6 +128,7 @@ export const ProfileScreen: React.FC = () => {
 
   const [teamProfile, setTeamProfile] = useState<TeamPublicProfile | null>(null);
   const [affiliationTerm, setAffiliationTerm] = useState<string>('Affiliation');
+  const [rankingSystems, setRankingSystems] = useState<RankingSystem[]>([]);
   const [subscriptionTypeName, setSubscriptionTypeName] = useState<string | null>(null);
   const [affiliationCollapsed, setAffiliationCollapsed] = useState(true);
   const [teamCardCollapsed, setTeamCardCollapsed] = useState(true);
@@ -181,6 +182,8 @@ export const ProfileScreen: React.FC = () => {
         setTeamProfile(loadedProfile);
         const term = await FirestoreService.getOrgAffiliationTerm(contact.teamId);
         setAffiliationTerm(term);
+        // Org-aware: an org-managed tenant keeps its ranking systems on the ORG.
+        setRankingSystems(await FirestoreService.getRankingSystems(contact.teamId));
         if (contact.subscription_type_id) {
           const name = await FirestoreService.getSubscriptionTypeName(contact.teamId, contact.subscription_type_id);
           setSubscriptionTypeName(name);
@@ -502,6 +505,7 @@ export const ProfileScreen: React.FC = () => {
         <View>
           <AffiliationCard
             contact={contact}
+            rankingSystems={rankingSystems}
             teamProfile={teamProfile}
             initials={initials}
             collapsed={affiliationCollapsed}
@@ -1091,6 +1095,7 @@ export const ProfileScreen: React.FC = () => {
 
         <BadgesCard
           contact={contact}
+          rankingSystems={rankingSystems}
           badgeThresholds={gamificationSettings?.badge_thresholds}
           coachBadges={gamificationSettings?.coach_badges}
         />

@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Icon, Surface, Text, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Contact, BadgeThresholds, CoachBadgeConfig } from '../../types';
+import { Contact, BadgeThresholds, CoachBadgeConfig, RankingSystem } from '../../types';
+import { resolvePrimaryRank } from '../../utils/profileUtils';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -28,6 +29,8 @@ interface BadgesCardProps {
   contact: Contact;
   badgeThresholds?: BadgeThresholds | null;
   coachBadges?: CoachBadgeConfig[] | null;
+  /** The tenant's effective ranking systems. Empty = no Rank badge group. */
+  rankingSystems?: RankingSystem[];
 }
 
 const DEFAULT_THRESHOLDS: BadgeThresholds = {
@@ -58,8 +61,36 @@ const DEFAULT_COACH_BADGES: CoachBadgeConfig[] = [
   { key: 'flying_kick', label: 'Flying Kick', icon: 'rocket-launch', description: 'Achieved flying kicks' },
 ];
 
-const getBadgeGroups = (contact: Contact, thresholds: BadgeThresholds, coachBadgeList: CoachBadgeConfig[]): BadgeGroup[] => {
-  const rank = contact.rank ?? 0;
+/**
+ * Rank badges as PROPORTIONS of whatever scale the tenant configured.
+ *
+ * These were absolute numbers against HMD's 15-belt ladder — `rank >= 3`,
+ * `>= 7`, `>= 11`, `>= 14` — which meant two things: every badge but the first
+ * became unearnable the moment the migration moved ranks out of the scalar this
+ * file read, and the whole group was meaningless for a club on a five-level
+ * scale.
+ *
+ * The fractions below reproduce HMD's own thresholds exactly on a 0-14 ladder
+ * (3/14, 7/14, 11/14) while meaning something on any other. `master` is the top
+ * of the scale rather than a fraction, because "the highest grade" is the claim.
+ */
+const RANK_BADGE_FRACTIONS = { intermediate: 0.2, advanced: 0.5, blackBelt: 0.75 } as const;
+
+const getBadgeGroups = (
+  contact: Contact,
+  thresholds: BadgeThresholds,
+  coachBadgeList: CoachBadgeConfig[],
+  rankingSystems: RankingSystem[],
+): BadgeGroup[] => {
+  const resolved = resolvePrimaryRank(contact, rankingSystems);
+  const levels = [...(resolved?.system?.levels ?? [])].sort((a, b) => a.value - b.value);
+  const position = resolved ? levels.findIndex((l) => l.value === resolved.value) : -1;
+  const top = levels.length - 1;
+  const fraction = position >= 0 && top > 0 ? position / top : 0;
+  /** The label a tenant's own scale gives the level at `f` — so the badge says
+   *  "Reach Blue" for HMD and "Reach Purple" for a BJJ club, instead of naming
+   *  one organisation's belts to everybody. */
+  const labelAt = (f: number) => levels[Math.ceil(f * top)]?.label ?? '';
   const sessions = contact.total_sessions_count ?? 0;
   const maxStreak = contact.max_streak ?? 0;
   const monthScore = contact.current_month_score ?? 0;
@@ -75,19 +106,23 @@ const getBadgeGroups = (contact: Contact, thresholds: BadgeThresholds, coachBadg
   const lb = thresholds.leaderboard;
   const ex = thresholds.explorer;
 
-  const groups: BadgeGroup[] = [
-    {
+  const groups: BadgeGroup[] = []
+
+  // Only when the tenant actually uses ranks. A club with no ranking system was
+  // shown five permanently-locked belt badges that meant nothing to it.
+  if (resolved && levels.length > 1) {
+    groups.push({
       title: 'Rank',
       icon: 'shield-outline',
       badges: [
-        { id: 'beginner', label: 'Beginner', description: 'Start your journey', icon: 'white-balance-sunny', gradient: ['#E0E0E0', '#BDBDBD'], earned: rank >= 0 },
-        { id: 'intermediate', label: 'Intermediate', description: 'Reach Orange belt', icon: 'shield-half-full', gradient: ['#FF9A3C', '#FF6B1B'], earned: rank >= 3 },
-        { id: 'advanced', label: 'Advanced', description: 'Reach Blue belt', icon: 'shield-star', gradient: ['#42A5F5', '#1565C0'], earned: rank >= 7 },
-        { id: 'black-belt', label: 'Black Belt', description: 'Reach Black belt', icon: 'karate', gradient: ['#555555', '#1A1A1A'], earned: rank >= 11 },
-        { id: 'master', label: 'Master', description: 'Achieve Master rank', icon: 'crown', gradient: ['#FFD700', '#F59E0B'], earned: rank >= 14 },
+        { id: 'beginner', label: 'Beginner', description: 'Start your journey', icon: 'white-balance-sunny', gradient: ['#E0E0E0', '#BDBDBD'], earned: true },
+        { id: 'intermediate', label: 'Intermediate', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.intermediate)}`, icon: 'shield-half-full', gradient: ['#FF9A3C', '#FF6B1B'], earned: fraction >= RANK_BADGE_FRACTIONS.intermediate },
+        { id: 'advanced', label: 'Advanced', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.advanced)}`, icon: 'shield-star', gradient: ['#42A5F5', '#1565C0'], earned: fraction >= RANK_BADGE_FRACTIONS.advanced },
+        { id: 'black-belt', label: 'Black Belt', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.blackBelt)}`, icon: 'karate', gradient: ['#555555', '#1A1A1A'], earned: fraction >= RANK_BADGE_FRACTIONS.blackBelt },
+        { id: 'master', label: 'Master', description: `Reach ${levels[top]?.label ?? 'the highest grade'}`, icon: 'crown', gradient: ['#FFD700', '#F59E0B'], earned: position === top },
       ],
-    },
-  ];
+    })
+  }
 
   const attendanceBadges: Badge[] = [];
   if (a.enabled !== false) {
@@ -172,7 +207,7 @@ const getBadgeGroups = (contact: Contact, thresholds: BadgeThresholds, coachBadg
   return groups;
 };
 
-export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds, coachBadges }) => {
+export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds, coachBadges, rankingSystems }) => {
   const theme = useTheme();
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
   const mergedThresholds = useMemo<BadgeThresholds>(() => ({
@@ -184,7 +219,7 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
   }), [badgeThresholds]);
 
   const resolvedCoachBadges = coachBadges || DEFAULT_COACH_BADGES;
-  const groups = useMemo(() => getBadgeGroups(contact, mergedThresholds, resolvedCoachBadges), [contact, mergedThresholds, resolvedCoachBadges]);
+  const groups = useMemo(() => getBadgeGroups(contact, mergedThresholds, resolvedCoachBadges, rankingSystems ?? []), [contact, mergedThresholds, resolvedCoachBadges, rankingSystems]);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() =>
     new Set(getBadgeGroups(contact, {
@@ -193,7 +228,7 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
       score: { ...DEFAULT_THRESHOLDS.score, ...badgeThresholds?.score },
       leaderboard: { ...DEFAULT_THRESHOLDS.leaderboard, ...badgeThresholds?.leaderboard },
       explorer: { ...DEFAULT_THRESHOLDS.explorer, ...badgeThresholds?.explorer },
-    }, coachBadges || DEFAULT_COACH_BADGES).map(g => g.title))
+    }, coachBadges || DEFAULT_COACH_BADGES, rankingSystems ?? []).map(g => g.title))
   );
   const allBadges = groups.flatMap(g => g.badges);
   const earnedCount = allBadges.filter(b => b.earned).length;

@@ -1,6 +1,6 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
-import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach } from '../types';
+import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
 import { detectPerformanceProfile } from '../utils/performanceProfile';
 import { httpsCallable } from 'firebase/functions';
 
@@ -191,6 +191,34 @@ export const FirestoreService = {
     } catch (error) {
       console.error('Error fetching team public profile:', error);
       return null;
+    }
+  },
+
+  /**
+   * The ranking systems that apply to a team — the organisation's when it has
+   * any, otherwise the team's own.
+   *
+   * Same rule as `effectiveRankingSystems` in @linyup/shared and the same shape
+   * as `getOrgAffiliationTerm` below; a structural copy because this app has no
+   * dependency on that package. WHEN SET is load-bearing: an organisation with
+   * none configured has not taken the feature away from its studios.
+   */
+  async getRankingSystems(teamId: string): Promise<RankingSystem[]> {
+    try {
+      const teamSnap = await getDoc(doc(db, 'teams', teamId));
+      const teamSystems = teamSnap.exists()
+        ? ((teamSnap.data().ranking_systems as RankingSystem[] | undefined) ?? [])
+        : [];
+      const orgId = teamSnap.exists() ? (teamSnap.data().org_id as string | undefined) : undefined;
+      if (!orgId) return teamSystems;
+
+      const orgSnap = await getDoc(doc(db, 'organizations', orgId));
+      const orgSystems = orgSnap.exists()
+        ? ((orgSnap.data().ranking_systems as RankingSystem[] | undefined) ?? [])
+        : [];
+      return orgSystems.length > 0 ? orgSystems : teamSystems;
+    } catch {
+      return [];
     }
   },
 

@@ -23,6 +23,8 @@ import {
   TEAMS_COLLECTION, CONTACT_GROUPS_SUBCOLLECTION,
 } from '@linyup/shared'
 import { loadConsentLedgers } from '../waivers/consentLedger'
+import { resolveRankingSystems } from './ranking'
+import { isKnownRankingSystem } from '@linyup/shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -860,13 +862,16 @@ async function executeActionsForContact(
             )?.find((d) => d.id === customFieldId)
           : undefined
         // Rank fields ('ranks.{systemId}') — validate the system id against the
-        // team's configured ranking systems, never write an arbitrary key.
+        // team's EFFECTIVE ranking systems, never write an arbitrary key.
+        //
+        // "Effective" means the organisation's when it has any, which is the
+        // whole point of the fix: this read used to be `teamData.ranking_systems`
+        // alone, and an org-managed tenant keeps its systems on the ORG, so the
+        // list was empty and every rank automation was silently dropped below.
         const rankSystemId = field.startsWith('ranks.') ? field.slice('ranks.'.length) : null
         const isKnownRank =
           rankSystemId != null &&
-          ((teamData.ranking_systems as Array<{ id: string }> | undefined) ?? []).some(
-            (r) => r.id === rankSystemId
-          )
+          isKnownRankingSystem(await resolveRankingSystems(teamData), rankSystemId)
         const allowed =
           customDef != null ||
           isKnownRank ||

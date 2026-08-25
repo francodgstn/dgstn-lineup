@@ -2,13 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, LayoutAnimation, Platform, StyleSheet, TextInput, UIManager, View } from 'react-native';
 import { Card, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Contact, TeamPublicProfile } from '../../types';
+import { Contact, RankingSystem, TeamPublicProfile } from '../../types';
 import {
   getAffiliationLabel,
   getAffiliationColors,
   calculateAge,
   formatGender,
-  getRankInfo,
+  resolvePrimaryRank,
 } from '../../utils/profileUtils';
 import { BeltBadge } from './BeltBadge';
 
@@ -32,6 +32,9 @@ interface AffiliationCardProps {
   onCancelWeightEdit: () => void;
   isSavingWeight: boolean;
   affiliationTerm?: string;
+  /** The tenant's effective ranking systems. Absent/empty = this tenant does not
+   *  use ranks, and the belt simply reads "NO BELT". */
+  rankingSystems?: RankingSystem[];
 }
 
 const PillHandle: React.FC<{
@@ -58,6 +61,7 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
   onSaveWeight,
   onCancelWeightEdit,
   affiliationTerm = 'Affiliation',
+  rankingSystems,
 }) => {
   const theme = useTheme();
   const chevronAnim = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
@@ -75,12 +79,15 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
     outputRange: ['0deg', '180deg'],
   });
 
-  const rankInfo = getRankInfo(contact.rank || 0);
+  // Resolved against the tenant's CONFIGURED ranking systems. This read
+  // `contact.rank`, a scalar the HMD migration deletes, so every migrated
+  // member saw "NO BELT"; null now means genuinely nothing to show.
+  const rankInfo = resolvePrimaryRank(contact, rankingSystems);
 
   const age = calculateAge(contact.birthdate);
   const genderLabel = formatGender(contact.gender);
 
-  const rankTitle = rankInfo?.belt || 'NO BELT';
+  const rankTitle = rankInfo?.label ?? 'NO BELT';
   const studentName = [contact.firstname, contact.lastname].filter(Boolean).join(' ').toUpperCase();
   const rankSub = `MEMBER: ${studentName}`;
   const affiliationSummary = contact.affiliation_summary;
@@ -104,7 +111,7 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
         >
           <View style={styles.collapsedTopRow}>
             <BeltBadge
-              primaryColor={rankInfo?.badgeColor || '#DDDDDD'}
+              primaryColor={rankInfo?.color ?? '#DDDDDD'}
               secondaryColor={rankInfo?.secondColor}
               size={26}
             />
@@ -162,7 +169,7 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
             </View>
             <View style={styles.rankTitleRow}>
               <BeltBadge
-                primaryColor={rankInfo?.badgeColor || '#DDDDDD'}
+                primaryColor={rankInfo?.color ?? '#DDDDDD'}
                 secondaryColor={rankInfo?.secondColor}
                 size={32}
               />
