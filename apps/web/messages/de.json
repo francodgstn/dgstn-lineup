@@ -85,8 +85,7 @@
       "bookingPage": "probetraining buchungsseite",
       "teamGeneral": "studio name logo branding",
       "teamPayments": "zahlungen gateway stripe payrexx währung zahlungsarten",
-      "teamOutreach": "nachrichten sms erinnerungen",
-      "teamEmails": "e-mails vorlagen absender",
+      "teamEmails": "mail vorlagen absender nachrichten sms erinnerungen outreach platzhalter domain",
       "teamAlerts": "benachrichtigungen",
       "teamRanking": "rangliste punkte gamification",
       "teamCustomFields": "felder attribute",
@@ -107,7 +106,6 @@
     "teamAlerts": "Benachrichtigungen",
     "teamRanking": "Ranking",
     "teamPayments": "Zahlungseinstellungen",
-    "teamOutreach": "Outreach",
     "teamEmails": "E-Mails",
     "teamAffiliations": "Zugehörigkeiten",
     "teamCustomFields": "Benutzerdefinierte Felder",
@@ -321,7 +319,8 @@
     "memberLanguage": "Mitgliedersprache",
     "memberLanguageHint": "Die Sprache, in der Ihre Mitglieder angeschrieben werden — Bestätigungen, Erinnerungen und Belege. Die Sprache Ihres eigenen Dashboards wählen Sie separat im Benutzermenü.",
     "errorNameRequired": "Pflichtfeld",
-    "errorNameTooLong": "Max. 40 Zeichen"
+    "errorNameTooLong": "Max. 40 Zeichen",
+    "acceptTerms": "Mit der Erstellung deines Studios akzeptierst du in dessen Namen die <terms>Nutzungsbedingungen</terms> und den <dpa>Auftragsverarbeitungsvertrag</dpa>."
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -942,7 +941,9 @@
     "affiliationRemoveBody": "{name} verliert diese Zugehörigkeit und alles, was davon abhängt: Zugang zu geschützten Aktivitäten, Mitgliederpreise und eine anstehende Verlängerung.",
     "deletionScheduledBadge": "Löschung beantragt · {date}",
     "attention_cancelling": "Kündigt",
-    "attention_billing_unlinked": "Abrechnung ohne Abo"
+    "attention_billing_unlinked": "Abrechnung ohne Abo",
+    "exportCsv": "CSV exportieren",
+    "exportFailed": "Export fehlgeschlagen. Bitte versuche es erneut."
   },
   "TeamAffiliations": {
     "title": "Affiliationen",

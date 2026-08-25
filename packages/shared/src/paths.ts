@@ -44,6 +44,12 @@ export const SIGNUP_INVITES_COLLECTION = 'signup_invites'
 export const SAAS_SUBSCRIPTIONS_COLLECTION = 'saas_subscriptions'
 // Daily platform-wide operator metric snapshots (doc id = YYYY-MM-DD).
 // Written by the capturePlatformMetrics function; read by the operator console.
+// Operator → Customer notices, and the resolved recipient list each one was
+// actually sent to. See types/platformNotice.ts for why the list is stored
+// rather than re-derived.
+export const PLATFORM_NOTICES_COLLECTION = 'platform_notices'
+export const PLATFORM_NOTICE_RECIPIENTS_SUBCOLLECTION = 'recipients'
+
 export const PLATFORM_METRICS_COLLECTION = 'platform_metrics'
 export const ORGANIZATIONS_COLLECTION = 'organizations'
 export const ORG_MEMBERS_SUBCOLLECTION = 'org_members'

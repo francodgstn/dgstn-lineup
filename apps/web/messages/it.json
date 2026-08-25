@@ -85,8 +85,7 @@
       "bookingPage": "prova pagina prenotazioni",
       "teamGeneral": "studio nome logo branding",
       "teamPayments": "pagamenti gateway stripe payrexx valuta metodi di pagamento",
-      "teamOutreach": "messaggi sms promemoria",
-      "teamEmails": "email modelli mittente",
+      "teamEmails": "mail modelli mittente messaggi sms promemoria outreach segnaposto dominio",
       "teamAlerts": "notifiche",
       "teamRanking": "classifica punti gamification",
       "teamCustomFields": "campi attributi",
@@ -107,7 +106,6 @@
     "teamAlerts": "Avvisi",
     "teamRanking": "Livelli",
     "teamPayments": "Impostazioni pagamenti",
-    "teamOutreach": "Outreach",
     "teamEmails": "Email",
     "teamAffiliations": "Affiliazioni",
     "teamCustomFields": "Campi personalizzati",
@@ -321,7 +319,8 @@
     "memberLanguage": "Lingua dei membri",
     "memberLanguageHint": "La lingua in cui vengono scritti i messaggi ai tuoi membri — conferme, promemoria e ricevute. La lingua della tua dashboard si sceglie separatamente, dal menu utente.",
     "errorNameRequired": "Obbligatorio",
-    "errorNameTooLong": "Massimo 40 caratteri"
+    "errorNameTooLong": "Massimo 40 caratteri",
+    "acceptTerms": "Creando il tuo studio accetti per suo conto i <terms>termini di servizio</terms> e il <dpa>contratto sul trattamento dei dati</dpa>."
   },
   "Dashboard": {
     "title": "Dashboard",
@@ -942,7 +941,9 @@
     "affiliationRemoveBody": "{name} perde questa affiliazione e tutto ciò che ne dipende: l'accesso alle attività riservate, i prezzi soci e ogni rinnovo previsto.",
     "deletionScheduledBadge": "Cancellazione richiesta · {date}",
     "attention_cancelling": "In disdetta",
-    "attention_billing_unlinked": "Fatturazione orfana"
+    "attention_billing_unlinked": "Fatturazione orfana",
+    "exportCsv": "Esporta CSV",
+    "exportFailed": "Esportazione non riuscita. Riprova."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",

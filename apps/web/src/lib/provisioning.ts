@@ -72,6 +72,16 @@ export interface TeamProvisioningOptions {
    * wizard now asks.
    */
   language?: 'en' | 'de' | 'fr' | 'it'
+  /**
+   * The terms version the signup form showed and the Customer ticked. Passed in
+   * rather than read from the constant here so the record names the text that
+   * was ACTUALLY on screen — if a deploy changes the constant while someone has
+   * the form open, the honest record is the one they saw, not the new one.
+   *
+   * Optional so the social-auth path and any other caller still compiles, but a
+   * team provisioned without it carries no contract record at all.
+   */
+  termsVersion?: string
 }
 
 export async function provisionTeam(
@@ -115,6 +125,19 @@ export async function provisionTeam(
     sport_type: sportType || '',
     ...(options.defaultCurrency ? { default_currency: options.defaultCurrency } : {}),
     ...(options.language ? { language: options.language } : {}),
+    // The contract record. Written in the SAME write that creates the studio, so
+    // a team cannot exist without the acceptance that was collected alongside
+    // it — there is no window where one landed and the other did not.
+    ...(options.termsVersion
+      ? {
+          terms_accepted: {
+            version: options.termsVersion,
+            accepted_at: now,
+            accepted_by_uid: uid,
+            accepted_by_email: user.email ?? '',
+          },
+        }
+      : {}),
     links: defaultLinks,
     settings: {},
     plan: 'studio',

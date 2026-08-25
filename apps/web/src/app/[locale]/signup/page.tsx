@@ -7,7 +7,12 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { doc, setDoc } from 'firebase/firestore'
-import { TRIAL_DAYS, SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '@linyup/shared'
+import {
+  TRIAL_DAYS,
+  SUPPORTED_CURRENCIES,
+  DEFAULT_CURRENCY,
+  CURRENT_TERMS_VERSION,
+} from '@linyup/shared'
 import { signUp } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { persistLocale } from '@/i18n/persistLocale'
@@ -304,6 +309,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
       await provisionTeam(user, data.name, data.sport_type, {
         defaultCurrency: data.default_currency,
         language: data.language,
+        termsVersion: CURRENT_TERMS_VERSION,
       })
       // Record the PERSON's facts alongside the team's. The UI locale is NOT
       // asked for — the visitor is reading this page in a language and that is
@@ -419,6 +425,42 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
       {/* UX-7 interim: self-service signup silently provisions a 30-day trial
           (lib/provisioning.ts) and never said so anywhere. State it once,
           here, before the studio is created. */}
+      {/* THE CONTRACT-FORMATION MOMENT, and it is ACTIVATION-BASED rather than a
+          tick-box: creating the studio is what forms the agreement, and this
+          line is the notice that says so. Franco chose this over click-wrap on
+          2026-08-25 to keep the step frictionless — the same shape Eversports
+          and Webling use. Click-wrap is the stronger evidence of assent, so if
+          that trade is ever revisited, the box goes back HERE, on step two,
+          which is the only place every auth path passes through.
+
+          The RECORD is unaffected either way: `provisionTeam` stamps the
+          version, timestamp and who accepted onto the team in the same write
+          that creates it. */}
+      <p className="text-xs text-muted-foreground">
+        {t.rich('acceptTerms', {
+          terms: (chunks) => (
+            <a
+              href="https://linyup.com/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              {chunks}
+            </a>
+          ),
+          dpa: (chunks) => (
+            <a
+              href="https://linyup.com/dpa"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              {chunks}
+            </a>
+          ),
+        })}
+      </p>
+
       <p className="text-center text-xs text-muted-foreground">
         {t('trialNotice', { plan: planName('studio'), days: TRIAL_DAYS })}
       </p>

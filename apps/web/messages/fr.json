@@ -85,8 +85,7 @@
       "bookingPage": "essai page de réservation",
       "teamGeneral": "studio nom logo image de marque",
       "teamPayments": "paiements passerelle stripe payrexx devise modes de paiement",
-      "teamOutreach": "messages sms rappels",
-      "teamEmails": "e-mails modèles expéditeur",
+      "teamEmails": "mail modèles expéditeur messages sms rappels outreach variables domaine",
       "teamAlerts": "notifications",
       "teamRanking": "classement points gamification",
       "teamCustomFields": "champs attributs",
@@ -107,7 +106,6 @@
     "teamAlerts": "Alertes",
     "teamRanking": "Niveaux",
     "teamPayments": "Paramètres de paiement",
-    "teamOutreach": "Outreach",
     "teamEmails": "E-mails",
     "teamAffiliations": "Affiliations",
     "teamCustomFields": "Champs personnalisés",
@@ -321,7 +319,8 @@
     "memberLanguage": "Langue des membres",
     "memberLanguageHint": "La langue dans laquelle vos membres sont contactés — confirmations, rappels et reçus. La langue de votre propre tableau de bord se choisit séparément, dans le menu utilisateur.",
     "errorNameRequired": "Obligatoire",
-    "errorNameTooLong": "40 caractères maximum"
+    "errorNameTooLong": "40 caractères maximum",
+    "acceptTerms": "En créant votre studio, vous acceptez en son nom les <terms>conditions d'utilisation</terms> et le <dpa>contrat de sous-traitance des données</dpa>."
   },
   "Dashboard": {
     "title": "Tableau de bord",
@@ -942,7 +941,9 @@
     "affiliationRemoveBody": "{name} perd cette affiliation et tout ce qui en dépend : l'accès aux activités réservées, les tarifs membres et tout renouvellement prévu.",
     "deletionScheduledBadge": "Suppression demandée · {date}",
     "attention_cancelling": "Résilie",
-    "attention_billing_unlinked": "Facturation orpheline"
+    "attention_billing_unlinked": "Facturation orpheline",
+    "exportCsv": "Exporter en CSV",
+    "exportFailed": "Échec de l'export. Veuillez réessayer."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
