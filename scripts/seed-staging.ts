@@ -84,6 +84,8 @@ import {
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import { partnerAppNames } from './lib/partnerApps'
+import { normalizeActivityTags } from '@linyup/shared'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -883,6 +885,11 @@ async function seedTeam(opts: TeamSeed) {
       bookingSettings,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
+      // What syncTeamPublicProfile would compute (see scripts/lib/partnerApps.ts).
+      // Without it the bio-link booking form hides the fitness-app question, and
+      // re-seeding staging (which auto-deploys from main) reproduces exactly the
+      // stale shape the backfill:partner-apps precondition exists to repair.
+      partner_apps: partnerAppNames(subscriptionTypeDefs),
       updated_at: ts(now()),
     })
 
@@ -964,7 +971,7 @@ async function seedTeam(opts: TeamSeed) {
     name: string
     slug: string
     color: string
-    level: string
+    tags: string[]
     isFreeTrial: boolean
     type: 'class'
     base_score: number
@@ -981,7 +988,7 @@ async function seedTeam(opts: TeamSeed) {
       name: 'Brazilian Jiu-Jitsu',
       slug: 'bjj',
       color: accentColor,
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       base_score: 12,
@@ -997,7 +1004,7 @@ async function seedTeam(opts: TeamSeed) {
       name: 'MMA',
       slug: 'mma',
       color: '#dc2626',
-      level: 'intermediate',
+      tags: ['intermediate'],
       isFreeTrial: false,
       type: 'class',
       base_score: 15,
@@ -1018,7 +1025,7 @@ async function seedTeam(opts: TeamSeed) {
       name: 'Kickboxing',
       slug: 'kickboxing',
       color: '#ea580c',
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       base_score: 10,
@@ -1030,7 +1037,7 @@ async function seedTeam(opts: TeamSeed) {
       name: 'Yoga & Mobility',
       slug: 'yoga-mobility',
       color: '#059669',
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       base_score: 8,
@@ -1071,7 +1078,8 @@ async function seedTeam(opts: TeamSeed) {
         ? { dropIn: { enabled: true, priceAmount: a.dropIn.priceAmount } }
         : {}),
       ...(a.trialEnabled ? { trialEnabled: true } : {}),
-      level: a.level,
+      // Tags mirrored only when non-empty, exactly as syncActivityPublicProfile does.
+      ...(a.tags?.length ? { tags: normalizeActivityTags(a.tags) } : {}),
     })
   }
 
@@ -1108,7 +1116,6 @@ async function seedTeam(opts: TeamSeed) {
       type: 'appointment',
       providerId: uid,
       providerName: displayName,
-      level: 'all',
       durations: appointmentDurations,
       memberBenefit: appointmentMemberBenefit,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
@@ -1134,7 +1141,6 @@ async function seedTeam(opts: TeamSeed) {
       image_url: null,
       // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
       isFreeTrial: false,
-      level: 'all',
       // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
       // both mirrored verbatim, exactly as syncActivityPublicProfile does
       // (public-safe: the subscription-type ids are already public in the shop).
@@ -1349,7 +1355,6 @@ async function seedTeam(opts: TeamSeed) {
           activityColor: act?.color ?? null,
           activitySlug: act?.slug ?? null,
           activityIsFreeTrial: act?.isFreeTrial ?? false,
-          activityLevel: act?.level ?? null,
           activityImage: null,
           start: ts(base),
           end: ts(end),
@@ -1693,6 +1698,7 @@ async function seedTeam(opts: TeamSeed) {
           lastname: cs.lastname,
           fullname: `${cs.lastname} ${cs.firstname}`,
           joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
+          checkedInAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
           checkedInBy: 'seed',
         })
     }

@@ -59,6 +59,7 @@ import {
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   GIFT_CARDS_SUBCOLLECTION,
   TENANT_DATA_COLLECTIONS,
+  normalizeActivityTags,
 } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -70,6 +71,7 @@ import {
 } from './lib/affiliations'
 import { buildStorefrontPageLinks, seedStorePromoCode } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import { partnerAppNames } from './lib/partnerApps'
 import {
   planSeedConnectAccounts,
   linkSeedConnectAccount,
@@ -991,24 +993,6 @@ async function seedLeadTenant(profile: LeadProfile) {
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
   // would produce). price.id must equal the raw subscription_types price id or the
   // shop's Buy button stays disabled.
-// Mirrors resolveTeamPartnerApps (packages/functions/src/sync/syncTeamPublicProfile.ts):
-// aggregator types only, `active === false` dropped, blank names dropped, deduped
-// case-insensitively. Hand-written here because the seeders write the mirror directly.
-function partnerAppNames(defs: { source?: string; active?: boolean; name?: string }[]): string[] {
-  const seen = new Set<string>()
-  const names: string[] = []
-  for (const d of defs) {
-    if (d.source !== 'aggregator') continue
-    if (d.active === false) continue
-    const name = typeof d.name === 'string' ? d.name.trim() : ''
-    if (!name) continue
-    const key = name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    names.push(name)
-  }
-  return names
-}
 
   const publicSubTypes = profile.subscriptions.map((st) => {
     const entry: {
@@ -1211,6 +1195,11 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
           ...(a.memberBenefit.amount != null ? { amount: a.memberBenefit.amount } : {}),
         }
       : null
+    // `level` was DROPPED from the schema (replaced by `tags`). Derive a tag from
+    // the profile's level so a real level survives as a tag, never the defunct
+    // field ('all' is not a meaningful tag). The profile keeps `level` as seeder
+    // INPUT; the Firestore write uses `tags`.
+    const activityTags = a.level && a.level !== 'all' ? [a.level] : []
     await db
       .collection('activities')
       .doc(actIds[i])
@@ -1219,7 +1208,7 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
         name: a.name,
         slug: a.slug,
         color: a.color,
-        level: a.level,
+        tags: activityTags,
         description: a.description,
         ...(a.prerequisites ? { prerequisites: a.prerequisites } : {}),
         // EXTENDS the team-wide list — never restates it. Mirrored the same way
@@ -1282,7 +1271,8 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
         ...(a.trialEnabled ? { trialEnabled: true } : {}),
         // Mirrored so the public cards can price the trial ("Trial CHF 15").
         ...(a.trialPrice != null ? { trialPriceAmount: a.trialPrice } : {}),
-        level: a.level,
+        // Tags mirrored ONLY when present, exactly as syncActivityPublicProfile does.
+        ...(activityTags.length ? { tags: normalizeActivityTags(activityTags) } : {}),
       })
   }
 
@@ -1330,7 +1320,6 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
         type: 'appointment',
         providerId: uidOf(providerKey),
         providerName: staffName(providerKey),
-        level: 'all',
         // Per-duration BASE pricing (major units, team currency). No access
         // rule / isFreeTrial: the price is the only gate for appointments.
         durations: apt.durations.map((d) => ({
@@ -1363,7 +1352,6 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
         // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
         // No accessRule — appointment mirrors dropped the access gate.
         isFreeTrial: false,
-        level: 'all',
         // Duration menu ("from CHF 45" on public cards) + the member-benefit
         // rule, both mirrored verbatim, exactly as syncActivityPublicProfile
         // does (public-safe: the type ids are already public in the shop).
@@ -1659,7 +1647,6 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
         activityColor: a.color,
         activitySlug: a.slug,
         activityIsFreeTrial: a.isFreeTrial,
-        activityLevel: a.level,
         activityImage: actImageUrls[s.actIdx],
         start: ts(s.date),
         end: ts(s.end),
