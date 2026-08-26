@@ -108,7 +108,7 @@ module "iam" {
   # Functions run as the default compute SA, which must be able to sign custom
   # tokens as itself — see the variable's docs in modules/iam.
   extra_token_creator_sa_emails = [
-    "${data.google_project.this.number}-compute@developer.gserviceaccount.com",
+    "${local.project_number}-compute@developer.gserviceaccount.com",
   ]
 
   depends_on = [module.services]
@@ -151,6 +151,32 @@ module "monitoring" {
   env         = "staging"
   alert_email = var.alert_email
   uptime_host = var.uptime_host
+
+  depends_on = [module.services]
+}
+
+# ── App Hosting backends (web + operator console) ─────────────────────────────
+# Adopted into terraform 2026-08-26 (previously CLI-created; analysis A2/A5).
+# The europe-west4 backends already exist and are imported — see the module
+# header and infra/README.md for the import commands. The Developer Connect
+# connection + repo link are Console-managed and referenced by name.
+module "app_hosting" {
+  source     = "../../modules/app-hosting"
+  project_id = var.project_id
+  location   = "europe-west4"
+  app_id     = "1:157648925506:web:5e3aa70930d777f8374edb"
+  repository = "projects/linyup-staging/locations/europe-west4/connections/apphosting-github-conn-2gwprb/gitRepositoryLinks/francodgstn-dgstn-linyup"
+
+  backends = {
+    "linyup-web-eu" = {
+      root_directory  = "/apps/web"
+      service_account = "firebase-app-hosting-compute@linyup-staging.iam.gserviceaccount.com"
+    }
+    "linyup-admin-eu" = {
+      root_directory  = "/apps/admin"
+      service_account = "linyup-admin@linyup-staging.iam.gserviceaccount.com"
+    }
+  }
 
   depends_on = [module.services]
 }
