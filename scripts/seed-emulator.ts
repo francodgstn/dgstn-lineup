@@ -69,6 +69,7 @@ import {
   DEFAULT_KIOSK_CONFIG,
   PLAN_PRICING,
   toKioskPublicConfig,
+  normalizeActivityTags,
   // Taken from the shared constant rather than hand-copied, so the seeded rule
   // stays the same rule onTeamCreated provisions.
   TRIAL_CLEANUP_RULE,
@@ -729,7 +730,7 @@ async function seedTeam(opts: {
     name: string
     slug: string
     color: string
-    level: string
+    tags: string[]
     isFreeTrial: boolean
     type: 'class'
     accessRule: { type: string; subscriptionTypeIds?: string[] }
@@ -748,7 +749,7 @@ async function seedTeam(opts: {
       name: 'Brazilian Jiu-Jitsu',
       slug: 'bjj',
       color: accentColor,
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       accessRule: { type: 'open' },
@@ -762,7 +763,7 @@ async function seedTeam(opts: {
       name: 'MMA',
       slug: 'mma',
       color: '#dc2626',
-      level: 'intermediate',
+      tags: ['intermediate'],
       isFreeTrial: false,
       type: 'class',
       accessRule: { type: 'subscription', subscriptionTypeIds: mmaSubIds },
@@ -789,7 +790,7 @@ async function seedTeam(opts: {
       name: 'Kickboxing',
       slug: 'kickboxing',
       color: '#ea580c',
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       accessRule: { type: 'open' },
@@ -799,7 +800,7 @@ async function seedTeam(opts: {
       name: 'Yoga & Mobility',
       slug: 'yoga-mobility',
       color: '#059669',
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       accessRule: { type: 'open' },
@@ -841,7 +842,8 @@ async function seedTeam(opts: {
       // Class member rate mirrored verbatim (as syncActivityPublicProfile does)
       // so the public booking page can show the struck-through drop-in price.
       ...(a.memberBenefit ? { memberBenefit: a.memberBenefit } : {}),
-      level: a.level,
+      // Tags mirrored only when non-empty, exactly as syncActivityPublicProfile does.
+      ...(a.tags?.length ? { tags: normalizeActivityTags(a.tags) } : {}),
     })
   }
 
@@ -876,7 +878,6 @@ async function seedTeam(opts: {
       type: 'appointment',
       providerId: uid,
       providerName: displayName,
-      level: 'all',
       durations: appointmentDurations,
       memberBenefit: appointmentMemberBenefit,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
@@ -901,7 +902,6 @@ async function seedTeam(opts: {
       image_url: null,
       // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
       isFreeTrial: false,
-      level: 'all',
       // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
       // both mirrored verbatim, exactly as syncActivityPublicProfile does
       // (public-safe: the subscription-type ids are already public in the shop).
@@ -1126,7 +1126,6 @@ async function seedTeam(opts: {
           activityColor: act?.color ?? null,
           activitySlug: act?.slug ?? null,
           activityIsFreeTrial: act?.isFreeTrial ?? false,
-          activityLevel: act?.level ?? null,
           activityImage: null,
           start: ts(base),
           end: ts(end),
@@ -2949,7 +2948,6 @@ async function seedFreeTeam() {
       slug: 'vinyasa-flow',
       color: '#0d9488',
       isFreeTrial: true,
-      level: 'all',
       isActive: true,
       created_at: ts(daysFromNow(-60)),
     })
@@ -2962,7 +2960,6 @@ async function seedFreeTeam() {
     color: '#0d9488',
     image_url: null,
     isFreeTrial: true,
-    level: 'all',
   })
 
   // EXACTLY the Free plan's contact cap, DERIVED so it self-corrects if the cap

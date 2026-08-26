@@ -59,6 +59,7 @@ import {
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   GIFT_CARDS_SUBCOLLECTION,
   TENANT_DATA_COLLECTIONS,
+  normalizeActivityTags,
 } from '@linyup/shared'
 import {
   CONTACT_AFFILIATIONS_SUBCOLLECTION,
@@ -1194,6 +1195,11 @@ async function seedLeadTenant(profile: LeadProfile) {
           ...(a.memberBenefit.amount != null ? { amount: a.memberBenefit.amount } : {}),
         }
       : null
+    // `level` was DROPPED from the schema (replaced by `tags`). Derive a tag from
+    // the profile's level so a real level survives as a tag, never the defunct
+    // field ('all' is not a meaningful tag). The profile keeps `level` as seeder
+    // INPUT; the Firestore write uses `tags`.
+    const activityTags = a.level && a.level !== 'all' ? [a.level] : []
     await db
       .collection('activities')
       .doc(actIds[i])
@@ -1202,7 +1208,7 @@ async function seedLeadTenant(profile: LeadProfile) {
         name: a.name,
         slug: a.slug,
         color: a.color,
-        level: a.level,
+        tags: activityTags,
         description: a.description,
         ...(a.prerequisites ? { prerequisites: a.prerequisites } : {}),
         // EXTENDS the team-wide list — never restates it. Mirrored the same way
@@ -1265,7 +1271,8 @@ async function seedLeadTenant(profile: LeadProfile) {
         ...(a.trialEnabled ? { trialEnabled: true } : {}),
         // Mirrored so the public cards can price the trial ("Trial CHF 15").
         ...(a.trialPrice != null ? { trialPriceAmount: a.trialPrice } : {}),
-        level: a.level,
+        // Tags mirrored ONLY when present, exactly as syncActivityPublicProfile does.
+        ...(activityTags.length ? { tags: normalizeActivityTags(activityTags) } : {}),
       })
   }
 
@@ -1313,7 +1320,6 @@ async function seedLeadTenant(profile: LeadProfile) {
         type: 'appointment',
         providerId: uidOf(providerKey),
         providerName: staffName(providerKey),
-        level: 'all',
         // Per-duration BASE pricing (major units, team currency). No access
         // rule / isFreeTrial: the price is the only gate for appointments.
         durations: apt.durations.map((d) => ({
@@ -1346,7 +1352,6 @@ async function seedLeadTenant(profile: LeadProfile) {
         // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
         // No accessRule — appointment mirrors dropped the access gate.
         isFreeTrial: false,
-        level: 'all',
         // Duration menu ("from CHF 45" on public cards) + the member-benefit
         // rule, both mirrored verbatim, exactly as syncActivityPublicProfile
         // does (public-safe: the type ids are already public in the shop).
@@ -1642,7 +1647,6 @@ async function seedLeadTenant(profile: LeadProfile) {
         activityColor: a.color,
         activitySlug: a.slug,
         activityIsFreeTrial: a.isFreeTrial,
-        activityLevel: a.level,
         activityImage: actImageUrls[s.actIdx],
         start: ts(s.date),
         end: ts(s.end),
