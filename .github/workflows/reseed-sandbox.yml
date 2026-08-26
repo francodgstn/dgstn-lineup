@@ -1,0 +1,86 @@
+name: Reseed Sandbox (/try demos)
+
+# Scheduled DAILY refresh of the public `/try` demo tenants on linyup-sandbox.
+#
+# WHY THIS EXISTS. The `/try` demos are the live prospect playground. Without a
+# refresh they (a) accumulate whatever a curious visitor did to them and (b)
+# drift away from "today" — the seed builds sessions/dates relative to the run
+# date, so a month-old seed shows a month-old calendar. This wipes and reseeds
+# them every morning so they stay clean and current. It deliberately REVERSES the
+# old "data is never reset automatically" note (CLAUDE.md), scoped to `/try` only.
+#
+# DATA-ONLY. This never deploys code — deploy-sandbox.yml stays the manual,
+# tag-driven path for functions/rules. This only wipes + reseeds Firestore/Auth,
+# and runs `sandbox:reset` which PRESERVES lead tenants (`lead-*`): only the
+# `/try` playground is touched. `--yes` skips the typed confirmation (no TTY).
+#
+# TIMING. 03:00 UTC ≈ 04:00 (CET, winter) / 05:00 (CEST, summer) Europe/Zurich —
+# a low-traffic hour, so it never wipes a demo mid-pitch. GitHub schedules are
+# best-effort and can be delayed by several minutes; fine for a daily refresh.
+# Scheduled workflows only fire from the DEFAULT branch, so this must be on main.
+#
+# UNATTENDED — and deliberately NOT the gated `sandbox` GitHub environment. A
+# scheduled job that targets a reviewer-gated environment queues for manual
+# approval every single day, which defeats the whole point. So this uses
+# REPO-LEVEL secrets:
+#   • GCP_WIF_PROVIDER + GCP_DEPLOY_SA — the same identity that already authorises
+#     this exact reset on the manual deploy path (the deploy SA holds
+#     roles/firebase.admin on linyup-sandbox). If these are currently scoped to
+#     the `sandbox` environment rather than the repo, add repo-level copies, or
+#     the auth step here will fail (a visible failure, not a silent queue).
+#   • STRIPE_CONNECT_TEST_ACCOUNT — OPTIONAL. Set it (repo secret) to bring the
+#     demos back PAYMENT-ENABLED (fixes B2 — shop/drop-in/priced trials/appointments).
+#     Unset, the seeders write the honest payments-closed state and log one
+#     warning; no failure.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  reseed:
+    name: Wipe + reseed /try demo data (leads preserved)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+          cache: 'pnpm'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        run: pnpm --filter @linyup/shared run build
+
+      - name: Build functions
+        run: pnpm --filter @linyup/functions run build
+
+      # sandbox:reset PRESERVES lead tenants (only /try is wiped); --yes skips the
+      # typed confirmation. GOOGLE_CLOUD_PROJECT is pinned so reset-sandbox-db.ts's
+      # project guard passes regardless of what the auth step exported.
+      # STRIPE_CONNECT_TEST_ACCOUNT is optional (see the header) — passed through
+      # so the seeders link the test Connect account when it is set.
+      - name: Reseed /try demo data (destructive — leads preserved)
+        env:
+          GOOGLE_CLOUD_PROJECT: linyup-sandbox
+          STRIPE_CONNECT_TEST_ACCOUNT: ${{ secrets.STRIPE_CONNECT_TEST_ACCOUNT }}
+        run: |
+          pnpm sandbox:reset --yes
+          pnpm sandbox:seed
