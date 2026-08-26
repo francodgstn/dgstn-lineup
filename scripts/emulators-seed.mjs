@@ -50,6 +50,42 @@ function runToCompletion(cmd, args) {
   })
 }
 
+// Is something ALREADY listening here? (The inverse of waitForPort.) Resolves
+// true on a successful connect, false on error or after a short timeout.
+function probePortInUse(port, timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const sock = createConnection(port, '127.0.0.1')
+    const done = (inUse) => {
+      sock.destroy()
+      resolve(inUse)
+    }
+    sock.on('connect', () => done(true))
+    sock.on('error', () => done(false))
+    setTimeout(() => done(false), timeoutMs)
+  })
+}
+
+// REFUSE if an emulator is already running. `seed-emulator.ts` issues a DELETE
+// against Firestore + Auth as its FIRST act, and the bare `waitForPort(8080)`
+// below would be satisfied by ANOTHER session's emulator on :8080 — this would
+// then wipe that session's data, and if it runs with --export-on-exit, overwrite
+// its snapshot on Ctrl+C (the "Emulator port collision" trap, and how
+// snapshots/all and snapshots/hmd-migration get clobbered). So probe the wipe
+// targets first and stop loudly, the way emulators-demo.mjs fails on a missing
+// snapshot rather than guessing.
+for (const port of [8080, 9099]) {
+  if (await probePortInUse(port)) {
+    console.error(`\n❌ Something is already listening on :${port} — another Firebase emulator`)
+    console.error('   (or a different seed/dev suite) is already running.')
+    console.error('   `pnpm emulators:seed` WIPES Firestore + Auth as its FIRST act, so it')
+    console.error("   refuses rather than silently erasing that session's data — and any")
+    console.error('   --export-on-exit snapshot it would overwrite on Ctrl+C.')
+    console.error('   Stop the other emulator first (Ctrl+C in its terminal, or bluntly')
+    console.error('   `taskkill /F /IM java.exe`), then run this again.\n')
+    process.exit(1)
+  }
+}
+
 console.log('==> Building @linyup/shared…')
 const sharedBuildCode = await runToCompletion('pnpm', ['--filter', '@linyup/shared', 'run', 'build'])
 if (sharedBuildCode !== 0) {
