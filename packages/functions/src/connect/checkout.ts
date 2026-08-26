@@ -28,6 +28,7 @@ import {
   type IntroCouponSpec,
 } from '../utils/connect/client'
 import { resolveBaseUrl } from '../utils/env'
+import { sha256Hex } from '../utils/crypto'
 import { requireChargeableAccount, type EnabledTeam } from './access'
 
 // ─── Amount guards — ONE floor, ONE error shape ─────────────────────────────────
@@ -574,8 +575,20 @@ export function rateLimitKey(raw: string | undefined): string {
   return (raw || 'unknown').replace(/[^\w.:-]/g, '_').slice(0, 60)
 }
 
-function rateLimitIp(ipRaw: string | undefined): string {
-  return rateLimitKey(ipRaw)
+/**
+ * The IP as a bucket key — HASHED. An IP is only ever a bucket key here (the doc
+ * id and the stored `ip` field both derive from it), never read back as an
+ * address, so there is no reason to keep the raw client address at all — and
+ * keeping it in `connect_checkout_attempts`, which had no purge, meant an
+ * unbounded store of identifiable access logs against the 30-day retention the
+ * privacy policy promises (A11). Hashing the way the promo per-person cap hashes
+ * emails preserves the bucketing (same IP → same bucket) while storing no
+ * address. 'unknown' (the shared no-IP bucket) is not an address and stays
+ * readable. Both the spend and the peek go through here, so they cannot drift.
+ */
+export function rateLimitIp(ipRaw: string | undefined): string {
+  const trimmed = ipRaw?.trim()
+  return trimmed ? sha256Hex(trimmed) : 'unknown'
 }
 
 function currentRateLimitBucket(nowMs = Date.now()): number {

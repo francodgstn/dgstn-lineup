@@ -3,9 +3,13 @@
 // for the shape and the reasoning. This sweep only executes what was decided
 // thirty days earlier; it makes no decisions of its own.
 //
-// ORDER MATTERS, and it is: detach the Connect link, then erase the tenant,
-// then remove the owner's Auth account if it holds nothing else. Erasing first
-// would delete the `payments.connectAccountId` this needs to read.
+// ORDER MATTERS, and it is: export the waiver ledger, then detach the Connect
+// link, then erase the tenant, then remove the owner's Auth account if it holds
+// nothing else. The export is FIRST because it is the one step that must succeed
+// before anything irreversible happens: a failed export leaves the team
+// scheduled and retried, never deleted unexported (`requireTeamConsentExportToGcs`
+// throws). Erasing before the detach would delete the `payments.connectAccountId`
+// this needs to read.
 //
 // `purgeTeam` does the erasing, so the collection list stays driven by
 // TENANT_DATA_COLLECTIONS and there is nothing here to keep in step.
@@ -15,6 +19,7 @@ import { Timestamp } from 'firebase-admin/firestore'
 import { TEAMS_COLLECTION, TEAM_MEMBERS_SUBCOLLECTION } from '@linyup/shared'
 import { purgeTeam } from '../saas-billing/purgeTeam'
 import { detachConnectAccount } from '../teams/deleteAccount'
+import { requireTeamConsentExportToGcs } from '../waivers/consentExport'
 
 /** A bound, not a target. A sweep that suddenly wants to erase dozens of
  *  tenants is a bug, and this is what keeps the first run of that bug small. */
@@ -55,6 +60,21 @@ export async function purgeScheduledTeams(): Promise<PurgeScheduledTeamsResult> 
       .where('role', '==', 'owner')
       .get()
     const ownerIds = owners.docs.map((d) => d.id)
+
+    // Preserve the waiver ledger BEFORE any irreversible teardown step —
+    // purgeTeam recursively erases `documents`, and a liability release is the
+    // one artefact a departing studio needs for years afterwards. A Cloud
+    // Function has no local disk, so this writes to GCS (under consent-ledgers/,
+    // OUTSIDE the teams/{teamId}/ prefix purgeTeam deletes). It THROWS on
+    // failure, so a team whose ledger cannot be saved is left scheduled and
+    // retried tomorrow, never torn down unexported. Done before detaching
+    // Connect so nothing irreversible happens until the ledger is safe.
+    try {
+      await requireTeamConsentExportToGcs(db, teamId)
+    } catch (err) {
+      console.error(`[purgeScheduledTeams] consent export ${teamId} failed; left scheduled:`, err)
+      continue
+    }
 
     const accountId = team.payments?.connectAccountId as string | undefined
     if (accountId) await detachConnectAccount(teamId, accountId)
