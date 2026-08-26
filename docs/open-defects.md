@@ -371,3 +371,175 @@ not confined to activities.
 distinguishes "activity saved, image failed" from "nothing saved", so a retry
 cannot mint a duplicate. Fixing the rule does **not** close UX-24: any other
 upload failure (offline, size, content-type) reaches the same silent path.
+
+---
+
+## Newly recorded, 2026-08-25 — events + ranking
+
+Found while reading the events and ranking code end to end before building the
+rank-progression engine. All were read in the source at `b559addc`; none is
+inferred from a symptom. The ranking-system org-awareness bugs, the duplicate
+`RankLevel.value` bug and the mobile scalar-rank bug found in the same pass are
+**not** here — they shipped in PR#105.
+
+### `attendees` is an RSVP list wearing the word "attendance"
+
+`events/{id}/attendees/{contactId}` is written by `handleEventInvitationResponse`
+on `action: 'attend'` and deleted on `'decline'`. Nothing ever reconciles it
+against who turned up, so a contact who accepts and never appears stays an
+"attendee" permanently, and `attendees_count` counts acceptances.
+
+Actual presence is the separate top-level `checkins` collection, counted by
+`participants_count` / `completed_checkins_count`.
+
+The two vocabularies have crossed: **`trackEventAttendees` is a trigger on
+`checkins`** that maintains those two counters and never touches
+`attendees_count` at all. Its own header says "Ported from
+hmd-lineup/functions/src/trackEventAttendees", so the name arrived with the code
+and the meaning drifted underneath it.
+
+Renaming the function is free. Renaming the subcollection is a data migration, so
+the cheap honest fix is the UI label plus the function name.
+
+### A manager can send event invitations but cannot see who accepted
+
+`events/[id]/page.tsx` gates the Attendees tab on
+`isOrgAdmin || can('reports.view')`, while the Invitations tab beside it is
+ungated. So a team manager invites people and then cannot see the responses —
+`reports.view` is an odd capability to govern "who is coming to my event".
+
+### One plugin's check-in payload lives in core
+
+`isCheckinCompleted` (`packages/shared/src/utils/checkins.ts`) is a switch on
+event type with no plugin hook, and its `default` branch reads
+`Array.isArray(checkinData.categories)` — the fighting-cup shape. Core therefore
+knows one tenant-specific plugin's payload, and a second plugin needing custom
+completion logic has nowhere to put it but that same branch.
+
+### `EventTypeConfig.contact_requirements` is declared and read by nothing
+
+`packages/shared/src/types/event.ts` documents it as "contact fields that must be
+set" (e.g. `['weight','birthdate']`). Repo-wide there are no readers outside the
+type declaration and its build output. Either wire it into the check-in flow as a
+prompt, or delete it — a declared-but-unenforced gate reads as a guarantee.
+
+### A team's custom check-in fields are authored and never rendered
+
+`EventTypeConfig.checkin_fields` has a full field builder in
+`settings/event-types`, which saves and counts them. But `resolveFormType` in
+`CheckinPanel` never consults `EventTypeConfig` — it dispatches on built-in slug
+or plugin manifest only. A studio can build a custom check-in form and never see
+it at check-in.
+
+### Level `value: 0` cannot complete an exam
+
+`isCheckinCompleted`'s exam branch is
+`Object.values(disciplines).some((v) => (v ?? 0) > 0)`, and `ExamCheckinForm`
+repeats the `> 0` guard and renders a stored 0 as "Not examined". Every preset's
+FIRST level uses `value: 0` — BJJ White, Swiss "Krebs", HMD "No belt" — so
+awarding the entry grade is unrecordable. The sentinel for "not examined" should
+be absence of the key, not the value zero.
+
+### Deleting a ranking level or system silently orphans every contact holding it
+
+Neither ranking editor queries, counts or warns. `handleDelete` is a plain
+`filter` + `updateDoc`, and the confirm copy is a static string with no contact
+count. After a delete, `getPrimaryRank`'s `levels.find(l => l.value === value)`
+misses and falls back to a floor-match, so a contact silently displays a
+*different* belt.
+
+### `getPrimaryRank` compares rank numbers across different systems
+
+When no system is `is_primary`, it picks one with
+`Object.entries(ranks).sort(([, a], [, b]) => b - a)[0]` — a raw numeric compare
+between unrelated scales, so a Korean Dragon 7 outranks a Hwal Moo Do 3 and
+decides which belt the contact appears to hold.
+
+### The org-managed ranking banner links to a page with no ranking UI
+
+`settings/team/page.tsx` renders "Ranking systems are managed by your
+organization — Edit in organization settings" linking to `/org/{orgId}/settings`.
+The editor is at `/org/{orgId}/ranking`; the settings page contains no ranking
+UI. The banner text and link label are also hardcoded English while the rest of
+the tab is translated.
+
+### `ExamCheckinForm` is untranslated and points org tenants at the wrong place
+
+Seven hardcoded English strings, and its empty state says "Add ranking systems in
+Team Settings" — wrong for an org-managed tenant, whose systems live on the
+organisation and whose team tab is locked.
+
+### The rank filter cannot express "this belt and above"
+
+`contactFilter.ts` matches ranks by exact set membership
+(`levels.includes(rank)`) with no comparison operator. "Blue and above" — the
+normal way a coach thinks about a roster — requires ticking every level
+individually, and silently goes wrong the moment a level is inserted.
+
+### HMD migration: exam history arrives in a shape nothing reads
+
+`passes/08-events.ts` copies the source `checkins` verbatim, so a legacy exam
+check-in keeps hmd-lineup's payload (`exams.hmd_rank`, `is_hmd_exam`,
+`is_graded`). Linyup's shape is `checkin_data.disciplines: { [systemId]: level }`.
+The history is therefore present on disk and invisible to every reader — and it
+is exactly the input the rank-progression engine's backfill needs. A remap pass
+is a prerequisite for the belt work, not a tidy-up.
+
+### HMD migration: fighting-cup categories are dropped
+
+hmd-lineup kept categories in a **global** `categories` collection; Linyup keeps
+them per-event at `events/{id}/categories`. No migration pass references the
+source collection, so migrated cup check-ins carry `categories: [id]` arrays
+pointing at ids that exist nowhere in the target. Historic cup line-ups are not
+reconstructable without a new pass.
+
+### HMD migration: rank values are carried over unvalidated
+
+`transforms/contacts.ts` writes `ranks[systemId] = Number(hmdRank)` with no check
+that the number exists in `HMD_BELT_LEVELS`. A bad source value becomes a rank
+that renders as a floor-matched neighbour (see `getPrimaryRank` above).
+
+### Unverified in PR#105, by admission
+
+Two things shipped typechecked but unseen: the **member app's** rank rendering
+was never run on a device (it is the code that decides whether a migrated HMD
+member sees their belt or "NO BELT"), and the `image` arm of `RankBadge` was
+never exercised with a real upload. The other three arms — split, emoji, solid —
+were checked in a browser against computed styles.
+
+---
+
+## Queued, not a defect — the two website builders have diverged
+
+**Requested 2026-08-25 (Franco): align the org website builder with the team
+one, reusing components as far as possible.** Recorded here rather than started,
+because it is its own workflow.
+
+What is actually there today — two parallel implementations, near-identical in
+size and drifting apart:
+
+| | team (`plugins/website/`) | org (`org/[orgId]/website/`) |
+|---|---|---|
+| Section editor | `SectionEditor.tsx`, 556 lines | `OrgSectionEditor.tsx`, 569 lines |
+| Defaults | `defaults.ts`, 84 | `defaults.ts`, 80 |
+| Hooks | `hooks.ts`, 125 | `hooks.ts`, 99 |
+| Menu tree | `MenuPanel.tsx` | **absent** |
+| Embed widgets | `EmbedWidgets.tsx` | **absent** |
+| Preview overlay | `PreviewOverlay.tsx` | **absent** |
+
+The types are separate too: `WebsiteSection` / `WebsiteSectionType` in
+`types/website.ts`, `OrgSiteSection` / `OrgSiteSectionType` in
+`types/orgWebsite.ts`.
+
+**The cost is not duplication, it is drift.** The header-menu tree shipped for
+teams (`MenuTarget` — `kind: 'section' | 'surface' | 'url' | 'none'` — in
+`types/website.ts`) has no counterpart in `orgWebsite.ts` at all, so an
+organisation cannot arrange its header the way a studio can. Every future
+website feature is now two builds, and whichever tier is not in front of the
+author quietly falls behind.
+
+Worth deciding at the start, because it shapes the whole job: whether the two
+converge on ONE section model with a tenant discriminator (the promising
+direction — it is how `RankLevelFields` fixed the same shape of divergence
+between the two ranking editors), or stay separate models sharing only leaf
+components. The first removes the drift; the second only slows it.
