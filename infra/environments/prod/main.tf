@@ -156,3 +156,39 @@ module "monitoring" {
 
   depends_on = [module.services]
 }
+
+# ── App Hosting backends (web + operator console) ─────────────────────────────
+# EU migration (us-central1 → europe-west4), 2026-08-26. Like sandbox and unlike
+# staging, these backends are CREATED by terraform, not imported: the Developer
+# Connect connection + repo link were pre-established standalone (Console →
+# Developer Connect, europe-west4) before the backends existed, so
+# `terraform apply` provisions both outright. Prod has two backends: the web app
+# and the operator console.
+#
+# CREATING the backends is low-risk — a new backend serves nothing until a
+# domain points at it, and the live us-central1 pair keeps serving. The RISKY
+# step is the domain cutover on the LIVE app.linyup.com / ops.linyup.com; do that
+# (and the deploy-prod.yml rollout-id flip linyup-web/linyup-admin → -eu, then
+# the old-backend delete) only AFTER sandbox has validated this exact path.
+module "app_hosting" {
+  source     = "../../modules/app-hosting"
+  project_id = var.project_id
+  location   = "europe-west4"
+  app_id     = "1:576514050360:web:f85b1c9c1dc0d7efbc99cd"
+  repository = "projects/linyup-prod/locations/europe-west4/connections/apphosting-github-conn-eu/gitRepositoryLinks/francodgstn-dgstn-linyup"
+
+  backends = {
+    "linyup-web-eu" = {
+      root_directory  = "/apps/web"
+      service_account = "firebase-app-hosting-compute@linyup-prod.iam.gserviceaccount.com"
+      environment     = "prod"
+    }
+    "linyup-admin-eu" = {
+      root_directory  = "/apps/admin"
+      service_account = "linyup-admin@linyup-prod.iam.gserviceaccount.com"
+      environment     = "prod"
+    }
+  }
+
+  depends_on = [module.services]
+}

@@ -158,3 +158,30 @@ module "monitoring" {
 
   depends_on = [module.services]
 }
+
+# ── App Hosting backend (web) ─────────────────────────────────────────────────
+# EU migration (us-central1 → europe-west4), 2026-08-26. Unlike staging, this
+# backend is CREATED by terraform, not imported: the Developer Connect
+# connection + repo link were pre-established standalone (Console → Developer
+# Connect, europe-west4) before the backend existed, so `terraform apply`
+# provisions it outright. Sandbox has ONE backend — there is no operator console
+# here. After apply: flip the deploy-sandbox.yml rollout target
+# (linyup-web → linyup-web-eu), cut the domain over in the Console, then delete
+# the old us-central1 linyup-web backend.
+module "app_hosting" {
+  source     = "../../modules/app-hosting"
+  project_id = var.project_id
+  location   = "europe-west4"
+  app_id     = "1:1006203712444:web:5f1a15e86998c7a42671b9"
+  repository = "projects/linyup-sandbox/locations/europe-west4/connections/apphosting-github-conn-eu/gitRepositoryLinks/francodgstn-dgstn-linyup"
+
+  backends = {
+    "linyup-web-eu" = {
+      root_directory  = "/apps/web"
+      service_account = "firebase-app-hosting-compute@linyup-sandbox.iam.gserviceaccount.com"
+      environment     = "sandbox"
+    }
+  }
+
+  depends_on = [module.services]
+}
