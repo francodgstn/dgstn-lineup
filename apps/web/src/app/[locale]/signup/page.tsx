@@ -306,7 +306,7 @@ function StepTeam({ user, onComplete }: { user: AuthedUser; onComplete: () => vo
   async function onSubmit(data: TeamData) {
     setError(null)
     try {
-      await provisionTeam(user, data.name, data.sport_type, {
+      await provisionTeam(data.name, data.sport_type, {
         defaultCurrency: data.default_currency,
         language: data.language,
         termsVersion: CURRENT_TERMS_VERSION,

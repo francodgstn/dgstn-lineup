@@ -272,8 +272,8 @@ export const MULTIPLE_USERS_PLAN_REFUSAL = 'multiple-users-plan-required'
 // non-UI logic; do not re-introduce feature-flag gates for plugin features.
 export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
   // Free = the full Coach feature set. The tier is differentiated by limits
-  // (10-contact hard cap, single user, no plugin add-ons, bio-link branding),
-  // not by feature flags.
+  // (15-contact hard cap — see PLAN_PRICING.free.includedContacts — single user,
+  // no plugin add-ons, bio-link branding), not by feature flags.
   free: [
     'contacts',
     'sessions',

@@ -7,7 +7,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "test": "mocha --require ts-node/register 'src/**/*.test.ts'",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-linyup \"mocha --spec 'src/**/*.rules-test.ts' --ignore 'src/**/*.test.ts'\"",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-linyup \"mocha --spec 'src/**/*.rules-test.ts' --ignore 'src/**/*.test.ts'\"",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

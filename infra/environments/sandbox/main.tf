@@ -112,7 +112,7 @@ module "iam" {
   # Functions run as the default compute SA, which must be able to sign custom
   # tokens as itself — see the variable's docs in modules/iam.
   extra_token_creator_sa_emails = [
-    "${data.google_project.this.number}-compute@developer.gserviceaccount.com",
+    "${local.project_number}-compute@developer.gserviceaccount.com",
   ]
 
   depends_on = [module.services]
@@ -155,6 +155,36 @@ module "monitoring" {
   env         = "sandbox"
   alert_email = var.alert_email
   uptime_host = var.uptime_host
+
+  depends_on = [module.services]
+}
+
+# ── App Hosting backend (web) ─────────────────────────────────────────────────
+# EU migration (us-central1 → europe-west4), 2026-08-26. terraform CREATES this
+# backend (region, environment, service account) with NO codebase — a standalone
+# Developer Connect connection is rejected by the backend API, and only App
+# Hosting's own FIREBASE-app flow can mint an acceptable one. So `terraform apply`
+# provisions the bare backend, then the repo is connected by hand in the Console
+# (App Hosting → linyup-web-eu → settings → connect repository, root dir
+# apps/web); the module's `ignore_changes = [codebase]` leaves that connection
+# alone. Sandbox has ONE backend — no operator console here.
+#
+# After apply + connect + first rollout: flip the deploy-sandbox.yml rollout
+# target (linyup-web → linyup-web-eu), cut the domain over, then delete the old
+# us-central1 linyup-web backend.
+module "app_hosting" {
+  source     = "../../modules/app-hosting"
+  project_id = var.project_id
+  location   = "europe-west4"
+  app_id     = "1:1006203712444:web:5f1a15e86998c7a42671b9"
+  # repository intentionally unset — codebase is connected in the Console (above).
+
+  backends = {
+    "linyup-web-eu" = {
+      service_account = "firebase-app-hosting-compute@linyup-sandbox.iam.gserviceaccount.com"
+      environment     = "sandbox"
+    }
+  }
 
   depends_on = [module.services]
 }

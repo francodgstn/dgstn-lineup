@@ -9,6 +9,7 @@ import { expirePendingBookings } from './expirePendingBookings'
 import { expireOrgMemberInvitations } from './expireOrgMemberInvitations'
 import { purgeProvisionalContacts } from './purgeProvisionalContacts'
 import { purgeVerificationCodes } from './purgeVerificationCodes'
+import { purgeCheckoutAttempts } from './purgeCheckoutAttempts'
 import { purgeUnverifiedSignups } from './purgeUnverifiedSignups'
 import { purgeScheduledTeams } from './purgeScheduledTeams'
 import { anonymizeScheduledContacts } from './anonymizeScheduledContacts'
@@ -76,6 +77,11 @@ export const dailyTasks = onSchedule(
       // and (on the contact rail) a plaintext code, and nothing ever deleted
       // them — see the module header for why this is not just tidiness.
       { name: 'purgeVerificationCodes', handler: purgeVerificationCodes },
+      // Dead hourly rate-limit buckets in connect_checkout_attempts — a store
+      // that only grew, and until the subject was hashed also held raw client
+      // IPs past the 30-day promise. Deleting a bucket past its hour removes no
+      // capability. See the module header.
+      { name: 'purgeCheckoutAttempts', handler: purgeCheckoutAttempts },
       // Signups that never proved their address AND never did anything. Both
       // halves are required — see the module header for why deleting on the
       // first half alone would be the worst thing this file could do.

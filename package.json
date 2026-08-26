@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.15.0",
+  "//engines.pnpm": "The <12 ceiling is for the Firebase App Hosting pnpm buildpack ONLY: it IGNORES the packageManager pin above and installs the LATEST pnpm satisfying engines.pnpm. pnpm 12.0.0 (released 2026-08-26) ships a tarball layout buildpack google.nodejs.pnpm@0.1.1 cannot run ('dist/pnpm.mjs' MODULE_NOT_FOUND), which broke every App Hosting build; 11.24.0 works. CI/local use the 9.15.0 packageManager pin and are unaffected. Raise the ceiling once the buildpack supports pnpm 12.",
   "engines": {
     "node": ">=22",
-    "pnpm": ">=9"
+    "pnpm": ">=9 <12"
   },
   "scripts": {
     "build": "turbo run build",
@@ -51,6 +52,7 @@
     "backfill:subscription-lifecycle": "tsx scripts/backfill-subscription-lifecycle.ts",
     "backfill:gateway-data": "tsx scripts/backfill-gateway-data.ts",
     "backfill:booking-joined-at": "tsx scripts/backfill-booking-joined-at.ts",
+    "backfill:partner-apps": "tsx scripts/backfill-partner-apps.ts",
     "typecheck:seeds": "tsc -p tsconfig.seedcheck.json",
     "verify:waiver-ledger": "tsx scripts/verify-waiver-ledger.ts"
   },

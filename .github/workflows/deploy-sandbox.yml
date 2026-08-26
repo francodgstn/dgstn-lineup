@@ -20,7 +20,7 @@ name: Deploy Sandbox
 # workflow_dispatch stays as the escape hatch: re-running a half-failed deploy
 # shouldn't require minting a throwaway tag.
 #
-# PREREQUISITE — automatic rollouts must be OFF for the sandbox `linyup-web`
+# PREREQUISITE — automatic rollouts must be OFF for the sandbox `linyup-web-eu`
 # App Hosting backend (Console → App Hosting → backend → ⚙ Settings →
 # Deployment / rollouts). Otherwise every push to `main` still ships the web app
 # behind this workflow's back, and the frontend drifts ahead of the backend it
@@ -131,7 +131,7 @@ jobs:
       #
       # We roll out the exact commit being deployed ($GITHUB_SHA — on a tag push
       # that is the tagged commit) rather than a branch tip, so a concurrent merge
-      # to main can't sneak into the rollout. Sandbox has ONE backend, linyup-web;
+      # to main can't sneak into the rollout. Sandbox has ONE backend, linyup-web-eu;
       # there is no admin console here (prod and staging have both).
       #
       # Retry wrapper, same as prod: the WIF→STS token exchange occasionally
@@ -139,7 +139,7 @@ jobs:
       - name: Roll out web app (App Hosting, sandbox)
         run: |
           for attempt in 1 2 3 4 5; do
-            if npx firebase-tools apphosting:rollouts:create linyup-web --project sandbox --git-commit "$GITHUB_SHA" --non-interactive; then
+            if npx firebase-tools apphosting:rollouts:create linyup-web-eu --project sandbox --git-commit "$GITHUB_SHA" --non-interactive; then
               exit 0
             fi
             echo "::warning::web rollout attempt $attempt failed; retrying in 30s…"

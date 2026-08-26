@@ -152,3 +152,124 @@ describe('firestore.rules — tenant governance fields', function () {
     )
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// team_members SELF-PROVISION — the regression net for the 2026-08-26 takeover.
+//
+// A signup bootstrap rule once let a new owner write their OWN membership; it was
+// tied to nothing about `teamId`, so any authenticated principal (a passwordless
+// `contact:` session included) could write an owner membership into someone
+// else's team and, because `hasTeamRole` reads the role off that very doc, become
+// its owner. It was first bounded (create-only + createdBy tie), then removed
+// ENTIRELY once the `createStudioTeam` callable (Admin SDK) took over signup — no
+// client writes team_members anymore. So team_members is now owner-write only;
+// these tests keep every client self-provision shut and prove the owner path and
+// the callable-driven signup still work.
+//
+// Runs against the isolated `demo-linyup-*` emulator only.
+describe('firestore.rules — team_members self-provision', function () {
+  this.timeout(30_000)
+
+  const VICTIM = 'victimTeam'
+  // Shaped like a passwordless CONTACT session uid (`contact:{id}`), because
+  // that was the cheapest identity that reached the hole.
+  const ATTACKER = 'contact:attacker-1'
+
+  before(async () => {
+    testEnv = await initializeTestEnvironment({
+      projectId: 'demo-linyup-takeover',
+      firestore: { rules: RULES, host: '127.0.0.1', port: 8080 },
+    })
+  })
+  after(async () => {
+    await testEnv?.cleanup()
+  })
+  beforeEach(async () => {
+    await testEnv.clearFirestore()
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'teams', VICTIM), {
+        name: 'Victim Studio',
+        slug: 'victim-studio',
+        plan: 'studio',
+        createdBy: 'realOwner',
+      })
+      await setDoc(doc(db, 'teams', VICTIM, 'team_members', 'realOwner'), {
+        role: 'owner',
+        capabilities: [],
+      })
+      // A manager who legitimately belongs to the victim team — for the
+      // self-escalation guard below.
+      await setDoc(doc(db, 'teams', VICTIM, 'team_members', 'managerV'), {
+        role: 'manager',
+        capabilities: [],
+      })
+    })
+  })
+
+  it('a stranger CANNOT self-provision owner on a team they did not create', async () => {
+    // THE takeover write. This is the one that used to succeed.
+    const db = testEnv.authenticatedContext(ATTACKER).firestore()
+    await assertFails(
+      setDoc(doc(db, 'teams', VICTIM, 'team_members', ATTACKER), {
+        role: 'owner',
+        userId: ATTACKER,
+      })
+    )
+  })
+
+  it('a stranger CANNOT self-provision a NON-owner role either', async () => {
+    // The only write rule needs an existing owner ROLE, which a stranger has none
+    // of; a viewer seat is refused for the same reason as an owner one.
+    const db = testEnv.authenticatedContext(ATTACKER).firestore()
+    await assertFails(
+      setDoc(doc(db, 'teams', VICTIM, 'team_members', ATTACKER), {
+        role: 'viewer',
+        userId: ATTACKER,
+      })
+    )
+  })
+
+  it('an existing member CANNOT rewrite their own doc to escalate to owner', async () => {
+    // They are not an owner, so the only write rule refuses — an existing member
+    // cannot escalate their own role (there is no self-provision branch to abuse).
+    const db = testEnv.authenticatedContext('managerV').firestore()
+    await assertFails(
+      updateDoc(doc(db, 'teams', VICTIM, 'team_members', 'managerV'), { role: 'owner' })
+    )
+  })
+
+  it('signup no longer self-provisions from the client — team_members is Admin-SDK only', async () => {
+    // Team creation now runs through the createStudioTeam callable (Admin SDK,
+    // which bypasses rules) and writes the owner membership THERE. The client
+    // self-provision bootstrap was removed, so a creator can still create the TEAM
+    // doc but can no longer write their own team_members doc directly from a
+    // client — the only remaining write rule needs an existing owner role.
+    const uid = 'freshOwner'
+    const db = testEnv.authenticatedContext(uid).firestore()
+    await assertSucceeds(
+      setDoc(doc(db, 'teams', 'freshTeam'), {
+        name: 'Fresh',
+        slug: 'fresh',
+        plan: 'studio',
+        plan_status: 'trial',
+        createdBy: uid,
+      })
+    )
+    await assertFails(
+      setDoc(doc(db, 'teams', 'freshTeam', 'team_members', uid), { role: 'owner', userId: uid })
+    )
+  })
+
+  it('an owner can still add a co-owner on a paid plan (the studio seat feature)', async () => {
+    // The first disjunct: an owner on studio/org may write SOMEBODY ELSE'S
+    // membership. Proves the fix did not touch the legitimate multi-user path.
+    const db = testEnv.authenticatedContext('realOwner').firestore()
+    await assertSucceeds(
+      setDoc(doc(db, 'teams', VICTIM, 'team_members', 'invitedUser'), {
+        role: 'manager',
+        userId: 'invitedUser',
+      })
+    )
+  })
+})

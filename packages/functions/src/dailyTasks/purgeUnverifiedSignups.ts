@@ -27,6 +27,16 @@
 // TENANT_DATA_COLLECTIONS and nothing has to be hand-copied here. The Auth user
 // goes last: if the purge fails, the account survives to be swept again
 // tomorrow, which is the correct direction to fail in.
+//
+// ── WHY NO CONSENT EXPORT HERE (the Q13 gate's ONE exemption) ───────────────
+// The two production teardown paths that CAN destroy a signature —
+// `scripts/purge-team.ts` and `dailyTasks/purgeScheduledTeams.ts` — export the
+// waiver ledger before deleting. This path deliberately does not, and does not
+// need to: it only ever sweeps a team that is UNTOUCHED — no contacts, no
+// sessions, no payments (the checks above). A waiver acceptance is real tenant
+// data, so a team that has none by definition collected no signature, and there
+// is nothing to preserve. The exemption is named here as explicitly as the
+// inclusions are on the other two paths, rather than left to be inferred.
 
 import * as admin from 'firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'

@@ -67,7 +67,9 @@ import {
   PUBLIC_SETTINGS_DOC,
   DEFAULT_PAYMENT_MODES,
   DEFAULT_KIOSK_CONFIG,
+  PLAN_PRICING,
   toKioskPublicConfig,
+  normalizeActivityTags,
   // Taken from the shared constant rather than hand-copied, so the seeded rule
   // stays the same rule onTeamCreated provisions.
   TRIAL_CLEANUP_RULE,
@@ -122,7 +124,9 @@ import {
   seedEventProgram,
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
-import { seedTeamMoney } from './lib/fixtures/money'
+import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamFinance } from './lib/fixtures/finance'
+import { partnerAppNames } from './lib/partnerApps'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -417,24 +421,6 @@ async function seedTeam(opts: {
 
   // Mirror written to public_profile (what syncSubscriptionTypesToPublicProfile
   // would produce) so the bio-link / website pricing table works deterministically.
-// Mirrors resolveTeamPartnerApps (packages/functions/src/sync/syncTeamPublicProfile.ts):
-// aggregator types only, `active === false` dropped, blank names dropped, deduped
-// case-insensitively. Hand-written here because the seeders write the mirror directly.
-function partnerAppNames(defs: { source?: string; active?: boolean; name?: string }[]): string[] {
-  const seen = new Set<string>()
-  const names: string[] = []
-  for (const d of defs) {
-    if (d.source !== 'aggregator') continue
-    if (d.active === false) continue
-    const name = typeof d.name === 'string' ? d.name.trim() : ''
-    if (!name) continue
-    const key = name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    names.push(name)
-  }
-  return names
-}
 
   const publicSubTypes = subscriptionTypeDefs
     .filter((st) => st.active !== false)
@@ -744,7 +730,7 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
     name: string
     slug: string
     color: string
-    level: string
+    tags: string[]
     isFreeTrial: boolean
     type: 'class'
     accessRule: { type: string; subscriptionTypeIds?: string[] }
@@ -763,7 +749,7 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       name: 'Brazilian Jiu-Jitsu',
       slug: 'bjj',
       color: accentColor,
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       accessRule: { type: 'open' },
@@ -777,7 +763,7 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       name: 'MMA',
       slug: 'mma',
       color: '#dc2626',
-      level: 'intermediate',
+      tags: ['intermediate'],
       isFreeTrial: false,
       type: 'class',
       accessRule: { type: 'subscription', subscriptionTypeIds: mmaSubIds },
@@ -804,7 +790,7 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       name: 'Kickboxing',
       slug: 'kickboxing',
       color: '#ea580c',
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       accessRule: { type: 'open' },
@@ -814,7 +800,7 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       name: 'Yoga & Mobility',
       slug: 'yoga-mobility',
       color: '#059669',
-      level: 'all',
+      tags: [],
       isFreeTrial: true,
       type: 'class',
       accessRule: { type: 'open' },
@@ -856,7 +842,8 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       // Class member rate mirrored verbatim (as syncActivityPublicProfile does)
       // so the public booking page can show the struck-through drop-in price.
       ...(a.memberBenefit ? { memberBenefit: a.memberBenefit } : {}),
-      level: a.level,
+      // Tags mirrored only when non-empty, exactly as syncActivityPublicProfile does.
+      ...(a.tags?.length ? { tags: normalizeActivityTags(a.tags) } : {}),
     })
   }
 
@@ -891,7 +878,6 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       type: 'appointment',
       providerId: uid,
       providerName: displayName,
-      level: 'all',
       durations: appointmentDurations,
       memberBenefit: appointmentMemberBenefit,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
@@ -916,7 +902,6 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
       image_url: null,
       // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
       isFreeTrial: false,
-      level: 'all',
       // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
       // both mirrored verbatim, exactly as syncActivityPublicProfile does
       // (public-safe: the subscription-type ids are already public in the shop).
@@ -1141,7 +1126,6 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
           activityColor: act?.color ?? null,
           activitySlug: act?.slug ?? null,
           activityIsFreeTrial: act?.isFreeTrial ?? false,
-          activityLevel: act?.level ?? null,
           activityImage: null,
           start: ts(base),
           end: ts(end),
@@ -2159,10 +2143,39 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
   // Each of these was a shipped feature with zero data behind it on every
   // surface. See scripts/lib/fixtures/engagement.ts.
   await seedContactNotes(teamId, uid)
+  // The Juniors group below is DATA; contact-groups is the GATE — the group
+  // picker, contact detail and the automation `in_group` condition all sit behind
+  // /plugins/contact-groups, so without the install the seeded group is a
+  // leaderboard nobody can open (the same trap gift cards and gamification
+  // document above).
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('installed_plugins')
+    .doc('contact-groups')
+    .set({
+      pluginId: 'contact-groups',
+      teamId,
+      installedAt: ts(daysFromNow(-90)),
+      installedBy: uid,
+      status: 'active',
+      config: {},
+    })
   await seedDynamicContactGroup(teamId, uid)
   await seedEventProgram(teamId, uid)
   await seedSessionWaitlist({ teamId })
   await seedCoursePurchase(teamId)
+
+  // ── one-off sales, then the journal (studio+ only) ─────────────────────────
+  // Finance is a studio-tier plugin; seedTeamFinance installs it AND replays
+  // every member_payments row into the journal, so it must run LAST (after
+  // seedTeamMoney above and the sales below). Without this the Finance plugin
+  // (beta) is only exercisable against the cloud sandbox — the slowest place to
+  // find a bug in it. Mirrors seed-sandbox.
+  if (plan === 'studio' || plan === 'organization') {
+    await seedTeamSales({ teamId })
+    await seedTeamFinance({ teamId, uid })
+  }
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
@@ -2812,9 +2825,10 @@ async function seedDocuments(
 }
 
 // ── free-plan team ────────────────────────────────────────────────────────────
-// Minimal tenant pinned EXACTLY at the Free plan's 10-contact hard cap, to
-// exercise: blocked manual adds, portal "Powered by Linyup" badge, locked
-// member invites, and fully upgrade-locked plugins.
+// Minimal tenant pinned EXACTLY at the Free plan's contact hard cap
+// (PLAN_PRICING.free.includedContacts, derived below), to exercise: blocked
+// manual adds, portal "Powered by Linyup" badge, locked member invites, and
+// fully upgrade-locked plugins.
 
 async function seedFreeTeam() {
   const uid = 'seed-free-uid'
@@ -2934,7 +2948,6 @@ async function seedFreeTeam() {
       slug: 'vinyasa-flow',
       color: '#0d9488',
       isFreeTrial: true,
-      level: 'all',
       isActive: true,
       created_at: ts(daysFromNow(-60)),
     })
@@ -2947,11 +2960,15 @@ async function seedFreeTeam() {
     color: '#0d9488',
     image_url: null,
     isFreeTrial: true,
-    level: 'all',
   })
 
-  // Exactly 10 active contacts — at the hard cap
-  const freeContacts = [
+  // EXACTLY the Free plan's contact cap, DERIVED so it self-corrects if the cap
+  // moves — the hard cap was raised 10 → 15 (2026-06-18) and this seed was left
+  // at 10, which made the block, the over-cap upgrade prompt and the meter-at-
+  // limit all unreachable, and printed a tenant that *claims* to be at cap yet
+  // takes more contacts fine (so "is the cap wired?" reads as broken).
+  const freeCap = PLAN_PRICING.free.includedContacts ?? 15
+  const freeNamePool = [
     { firstname: 'Mia', lastname: 'Keller', gender: 'F' },
     { firstname: 'Jonas', lastname: 'Frei', gender: 'M' },
     { firstname: 'Lea', lastname: 'Steiner', gender: 'F' },
@@ -2962,7 +2979,15 @@ async function seedFreeTeam() {
     { firstname: 'Luca', lastname: 'Wyss', gender: 'M' },
     { firstname: 'Anna', lastname: 'Roth', gender: 'F' },
     { firstname: 'Felix', lastname: 'Baumann', gender: 'M' },
+    { firstname: 'Nina', lastname: 'Weber', gender: 'F' },
+    { firstname: 'Leon', lastname: 'Meier', gender: 'M' },
+    { firstname: 'Sara', lastname: 'Huber', gender: 'F' },
+    { firstname: 'David', lastname: 'Schmid', gender: 'M' },
+    { firstname: 'Clara', lastname: 'Zbinden', gender: 'F' },
   ]
+  const freeContacts = Array.from({ length: freeCap }, (_, i) =>
+    freeNamePool[i] ?? { firstname: `Member${i + 1}`, lastname: 'Free', gender: i % 2 ? 'M' : 'F' }
+  )
   for (let i = 0; i < freeContacts.length; i++) {
     const c = freeContacts[i]
     const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
@@ -3194,7 +3219,9 @@ async function main() {
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
-  console.log('   │ free (at cap 10/10) │ free@linyup.com      │ linyup123    │ active     │')
+  console.log(
+    `   │ free (at cap ${PLAN_PRICING.free.includedContacts}/${PLAN_PRICING.free.includedContacts}) │ free@linyup.com      │ linyup123    │ active     │`
+  )
   console.log('   │ coach               │ coach@linyup.com     │ linyup123    │ trial      │')
   console.log('   │ studio (mgr+coach)  │ studio@linyup.com      │ linyup123    │ active     │')
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')

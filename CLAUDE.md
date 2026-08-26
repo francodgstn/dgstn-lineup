@@ -834,9 +834,15 @@ The sandbox hosts **live prospect demos**, so nothing lands in it unattended:
   is separate: it rolls out via App Hosting's own GitHub integration, configured
   in the Firebase Console (Console → App Hosting → backend → Deployment
   settings), not in this repo.
-- **Data is never reset automatically.** Nothing scheduled or push-triggered
-  wipes data. The one exception is `purgeProvisionalContacts` (in `dailyTasks`),
-  which hard-deletes *expired provisional* contacts across all tenants nightly.
+- **The `/try` demos reset on a schedule; nothing else does.**
+  `.github/workflows/reseed-sandbox.yml` wipes + reseeds the `/try` playground
+  **daily** (~04:00 Zurich / 03:00 UTC) so it stays clean and current (the seed
+  builds dates relative to the run day) — **lead tenants are always preserved**.
+  It is data-only (never deploys code) and runs unattended, so it uses repo-level
+  secrets rather than the reviewer-gated `sandbox` environment. Beyond that reseed,
+  no push-triggered or scheduled job wipes data, except `purgeProvisionalContacts`
+  (in `dailyTasks`), which hard-deletes *expired provisional* contacts across all
+  tenants nightly.
 - **`pnpm sandbox:reset` PRESERVES lead tenants.** It wipes only the `/try`
   playground; `lead-*` teams, their data and their logins survive. It asks for a
   typed confirmation (`--yes` to skip in CI, `--dry-run` to preview counts first,

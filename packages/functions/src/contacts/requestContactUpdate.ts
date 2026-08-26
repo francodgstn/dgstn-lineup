@@ -79,6 +79,23 @@ export const requestContactUpdate = onCall(async (request) => {
     if (verifiedAt.toMillis() < thirtyMinutesAgo.toMillis())
       throw new HttpsError('deadline-exceeded', 'Verification expired. Please start over.')
 
+    // BIND the code to the target contact. A verified code proves control of the
+    // EMAIL it was sent to and nothing more, so it may only author an update for a
+    // contact that email actually matched (recorded on the code doc when it was
+    // sent). Without this, contactId/teamId are both taken from the request body,
+    // so any verified code — trivially minted for the caller's OWN email —
+    // authorized a pending update request against an ARBITRARY contact in an
+    // ARBITRARY team, proposing attacker-chosen data under the real member's name.
+    const matchedContactIds = Array.isArray(codeData.matchedContactIds)
+      ? (codeData.matchedContactIds as unknown[]).map((v) => String(v))
+      : []
+    if (!matchedContactIds.includes(contactId)) {
+      throw new HttpsError(
+        'permission-denied',
+        'This verification code does not authorize updating this contact.'
+      )
+    }
+
     console.log(`Code-based contact update request from contact ${contactId} for team ${teamId}`)
   }
 

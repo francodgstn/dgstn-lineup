@@ -1,52 +1,21 @@
-import { collection, doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
-import type { User } from 'firebase/auth'
-import { TRIAL_DAYS, isReservedSlug } from '@linyup/shared'
-import { db } from './firebase'
-import { checkTeamSlug } from './teamSlug'
+import { doc, getDoc } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from './firebase'
 
 /**
  * Account/team provisioning shared by the signup wizard and the social-auth
  * flow. Sign-in (email, social, or magic link) only authenticates the user;
- * these helpers create the Firestore profile + team documents.
+ * `provisionTeam` turns that account into a studio.
+ *
+ * The team, the owner membership and the user profile are written server-side in
+ * ONE atomic batch by the `createStudioTeam` callable
+ * (packages/functions/src/teams/createStudioTeam.ts) — NOT from the browser. That
+ * closes the bootstrap that made the 2026-08-26 team takeover (#106) possible: a
+ * `team_members` self-provision rule has to grant a write to a not-yet-member,
+ * i.e. to "anyone". The callable also owns slug uniqueness (a privileged query
+ * the client cannot run) and refuses contact/kiosk sessions, so a studio is only
+ * ever owned by a durable personal account.
  */
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 50)
-}
-
-// ─── the slug is the tenant's ADDRESS, so it has to be unique ─────────────────
-//
-// Uniqueness is decided by `checkTeamSlug` (lib/teamSlug.ts), which is the one
-// place that can answer it — see that module for why a client-side query cannot.
-// What lives here is only the WALK: signup has to pick a slug unattended, so it
-// tries the obvious one, then two suffixed ones, then falls back to a candidate
-// carrying the team's own id, which cannot collide with anything.
-//
-// A failed check is not evidence of a collision, so it must not fail signup: the
-// walk gives up and returns the first candidate. The studio can rename the slug
-// from Settings afterwards either way.
-
-async function resolveTeamSlug(teamName: string, teamId: string): Promise<string> {
-  const base = slugify(teamName) || 'team'
-  const first = isReservedSlug(base) ? `${base}-team` : base
-  const candidates = [first, `${first}-2`, `${first}-3`]
-  try {
-    for (const candidate of candidates) {
-      const check = await checkTeamSlug(candidate, teamId)
-      if (check.available) return check.normalizedSlug ?? candidate
-    }
-    return `${first}-${teamId.slice(0, 6).toLowerCase()}`
-  } catch {
-    return first
-  }
-}
 
 /** Whether the user already has a team (i.e. has finished signup before). */
 export async function userHasTeam(uid: string): Promise<boolean> {
@@ -54,11 +23,6 @@ export async function userHasTeam(uid: string): Promise<boolean> {
   return snap.exists() && !!snap.data()?.currentTeam
 }
 
-/**
- * Create a team, the owner membership, and the user profile, then point the
- * user's `currentTeam` at it. Safe for users who authenticated via any method
- * (social sign-ins carry displayName/photoURL; email signups don't).
- */
 export interface TeamProvisioningOptions {
   /** ISO 4217, uppercase. Every price the studio types is authored in it. */
   defaultCurrency?: string
@@ -84,104 +48,34 @@ export interface TeamProvisioningOptions {
   termsVersion?: string
 }
 
+/**
+ * Create the studio (team + owner membership + user profile) for the currently
+ * signed-in account and return its id. Identity — uid, email, displayName,
+ * email-verified — is taken from the verified auth token on the server, never
+ * from the client, so no `user` argument is needed or trusted here.
+ */
 export async function provisionTeam(
-  user: Pick<User, 'uid' | 'email' | 'displayName' | 'photoURL' | 'emailVerified'>,
   teamName: string,
   sportType: string | undefined,
   options: TeamProvisioningOptions = {}
 ): Promise<string> {
-  const teamRef = doc(collection(db, 'teams'))
-  const teamId = teamRef.id
-  const slug = await resolveTeamSlug(teamName, teamId)
-  const now = serverTimestamp()
-  const { uid } = user
-
-  // New teams start on a full-access Studio trial so they experience the marquee
-  // features; Coach + add-ons becomes the downgrade path at trial end.
-  const trialEndsAt = Timestamp.fromDate(new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000))
-
-  const defaultLinks = [
+  const call = httpsCallable<
     {
-      label: 'Book Now',
-      description: 'Reserve your spot in a session',
-      url: '',
-      showInBioLink: true,
-      target: 'booking',
+      name: string
+      sportType?: string
+      defaultCurrency?: string
+      language?: 'en' | 'de' | 'fr' | 'it'
+      termsVersion?: string
     },
-    {
-      label: 'Membership Signup',
-      description: 'Join our community and become a member',
-      url: '',
-      showInBioLink: true,
-      target: 'signup',
-    },
-  ]
+    { teamId: string; slug: string }
+  >(functions, 'createStudioTeam')
 
-  // Team document
-  await setDoc(teamRef, {
-    name: teamName.trim(),
-    slug,
-    description: '',
-    sport_type: sportType || '',
-    ...(options.defaultCurrency ? { default_currency: options.defaultCurrency } : {}),
-    ...(options.language ? { language: options.language } : {}),
-    // The contract record. Written in the SAME write that creates the studio, so
-    // a team cannot exist without the acceptance that was collected alongside
-    // it — there is no window where one landed and the other did not.
-    ...(options.termsVersion
-      ? {
-          terms_accepted: {
-            version: options.termsVersion,
-            accepted_at: now,
-            accepted_by_uid: uid,
-            accepted_by_email: user.email ?? '',
-          },
-        }
-      : {}),
-    links: defaultLinks,
-    settings: {},
-    plan: 'studio',
-    plan_status: 'trial',
-    // WRITTEN FOR EVERY NEW TEAM, true or false, and read by the mail gate
-    // (`mailService.sendEntityMail`). A social sign-in arrives already verified;
-    // an email/password signup does not, and cannot send mail as this studio
-    // until it does. Teams created before 2026-08-23 carry no value at all and
-    // the gate treats that as "not asked" rather than "not verified".
-    owner_email_verified: user.emailVerified === true,
-    trial_ends_at: trialEndsAt,
-    created: now,
-    createdBy: uid,
-    primaryContact: uid,
+  const res = await call({
+    name: teamName,
+    sportType,
+    defaultCurrency: options.defaultCurrency,
+    language: options.language,
+    termsVersion: options.termsVersion,
   })
-
-  // Owner membership
-  await setDoc(doc(db, 'teams', teamId, 'team_members', uid), {
-    userId: uid,
-    teamId,
-    role: 'owner',
-    joined: now,
-    addedBy: uid,
-  })
-
-  // User profile — merge so we keep created_at on a profile that already exists
-  // (e.g. a social user who signed in earlier but hadn't created a team yet).
-  const existing = await getDoc(doc(db, 'users', uid))
-  await setDoc(
-    doc(db, 'users', uid),
-    {
-      email: user.email ?? '',
-      ...(user.displayName ? { displayName: user.displayName } : {}),
-      ...(user.photoURL ? { photoURL: user.photoURL } : {}),
-      currentTeam: teamId,
-      // The sweep's candidate query filters on this, so it has to EXIST — an
-      // absent field is not matched by `where('email_verified', '==', false)`,
-      // and an unverified signup that was never written here would simply never
-      // be looked at.
-      email_verified: user.emailVerified === true,
-      ...(existing.exists() ? {} : { created_at: now }),
-    },
-    { merge: true }
-  )
-
-  return teamId
+  return res.data.teamId
 }

@@ -17,7 +17,10 @@ import type { PublicCoach } from '@linyup/shared'
  *
  * Roster = team_members where `is_coach !== false` (absent ⇒ included — mirrors
  * the /coaches page + listTeamMembers). Name resolution: users/{uid}.displayName
- * → email → uid; photoUrl only when users/{uid}.photoURL is set.
+ * → uid — NEVER the coach's email: this roster is world-readable, so an
+ * unnamed coach would otherwise leak a staff email address to anyone. uid is an
+ * opaque, non-PII last resort (a nameless public coach is a data-quality issue
+ * for the studio to fix by setting a display name). photoUrl only when set.
  *
  * Always merges onto public_profile — must never clobber sibling fields written
  * by syncTeamPublicProfile or the other public_profile syncs.
@@ -56,7 +59,8 @@ export async function rebuildTeamPublicCoaches(teamId: string): Promise<void> {
       const uid = memberDoc.id
       const userDoc = userById.get(uid)
       const u = userDoc?.exists ? userDoc.data()! : null
-      const name = ((u?.displayName as string | undefined) || (u?.email as string | undefined) || uid) as string
+      // NEVER fall back to the coach's email — this roster is world-readable.
+      const name = ((u?.displayName as string | undefined) || uid) as string
       const photoUrl = u?.photoURL as string | undefined
       return photoUrl ? { uid, name, photoUrl } : { uid, name }
     })
