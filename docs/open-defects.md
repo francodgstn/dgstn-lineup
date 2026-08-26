@@ -543,3 +543,40 @@ converge on ONE section model with a tenant discriminator (the promising
 direction — it is how `RankLevelFields` fixed the same shape of divergence
 between the two ranking editors), or stay separate models sharing only leaf
 components. The first removes the drift; the second only slows it.
+
+---
+
+## Queued, not a defect — org lists have no search, and the org event list has no filters
+
+**Requested 2026-08-25 (Franco).** Recorded with the org-navigation rework
+(`docs/org-navigation.md`), because it is the same surface and should land with
+it rather than as a separate pass over the same pages.
+
+`CLAUDE.md` already states the rule under UI/UX porting principles: *"every list
+page with >1 filter has a search field + collapsible filter panel."* The org area
+does not follow it.
+
+Verified across the org list pages — zero occurrences of "search" in
+`teams`, `events`, `members` and `places`; **ten in `affiliations`**, which has a
+working search. So this is not a technical gap in the org area, it is an
+inconsistency: the pattern is already there once, applied to one page out of five.
+
+**The org event list is the sharpest case, and the asymmetry is the argument.**
+`useOrgEvents(orgId, upcoming)` offers exactly one control — an upcoming/past
+toggle. No search, no type filter. Meanwhile the team-side schedule already has
+both: its list applies type and coach filtering to sessions *and* events before
+the activity sub-filter narrows sessions further (and correctly exempts events
+from that sub-filter via `item.kind !== 'session'`). The org, whose list is the
+longer of the two by construction — HMD is migrating roughly two decades of
+events — has less.
+
+The quick filter that matters is **event type** (camp / competition / exam /
+seminar / the plugin's cup), because that is how anyone actually looks for an
+event, and it is exactly the question the rank-progression work makes people ask
+constantly: *which camps did this contact attend in 2024?* Type filtering should
+read the same resolved list `useEventTypes` already builds, so a plugin-contributed
+type appears in the filter without anyone touching the org page.
+
+Worth doing at the same time, on the same pages: `teams` and `members` are short
+today and will not stay that way for a federation, and `places` is a lookup list
+whose whole use is finding one entry.
