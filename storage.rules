@@ -99,7 +99,10 @@ service firebase.storage {
     // stay staff-only and image-only. (Storage grants if ANY matching rule allows;
     // the broad teams/{teamId} match below still covers staff reads/writes.)
     match /teams/{teamId}/products/{allPaths=**} {
-      allow read: if true;
+      // GET only — a known image URL is public (the shop), but anonymous LIST was
+      // honored and let anyone who knows a teamId enumerate the prefix (A12).
+      // Staff LIST still works via the broad teams/{teamId} member match below.
+      allow get: if true;
       allow write: if isTeamMemberStorage(teamId)
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
@@ -116,14 +119,18 @@ service firebase.storage {
     // photo. (Storage grants if ANY matching rule allows; the broad
     // teams/{teamId} match below still covers staff reads/writes.)
     match /teams/{teamId}/ranking/{allPaths=**} {
-      allow read: if true;
+      // GET only — see products above (A12). Staff LIST via the broad member match.
+      allow get: if true;
       allow write: if isTeamMemberStorage(teamId)
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
 
     match /teams/{teamId}/documents/{allPaths=**} {
-      allow read: if true;
+      // GET only — a published+public document's images are public, but anonymous
+      // LIST was honored and would enumerate images in DRAFT documents and waiver
+      // drafts a studio has not published (A12). Staff LIST via the broad match.
+      allow get: if true;
       allow write: if isTeamMemberStorage(teamId)
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
@@ -146,14 +153,20 @@ service firebase.storage {
     // The org-level twin of teams/{teamId}/ranking above. An organisation that
     // owns its studios' ranking systems owns their badge artwork with them.
     match /organizations/{orgId}/ranking/{allPaths=**} {
-      allow read: if true;
+      // GET only — public badge artwork (A12). No broad org match grants staff
+      // list, so LIST is granted to org admins explicitly; anonymous LIST denied.
+      allow get: if true;
+      allow list: if isOrgAdminStorage(orgId);
       allow write: if isOrgAdminStorage(orgId)
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
 
     match /organizations/{orgId}/site/{allPaths=**} {
-      allow read: if true;
+      // GET only — public org-site images (A12). LIST to org admins explicitly
+      // (no broad org match grants it); anonymous LIST denied.
+      allow get: if true;
+      allow list: if isOrgAdminStorage(orgId);
       allow write: if isOrgAdminStorage(orgId)
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');

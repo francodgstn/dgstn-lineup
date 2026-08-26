@@ -19,15 +19,24 @@ App Check is inert today — nothing is rejected:
 
 ## Scope (what enforcement covers)
 
-Enforced, once on — the **web-only** public callables:
+`APP_CHECK_ENFORCE=true` enforces on every callable that declares
+`enforceAppCheck: APP_CHECK_ENFORCE`. **Derive that set by grep — never from a list here.**
+This section previously named "five web-only callables" and claimed
+`sendContactVerificationCode` was "explicitly excluded", while the code enforced neither
+claim: the auth callables declared the *same* flag, and there were nine web declarers, not
+five. To see the current web-enforced set:
 
-- `createDropInCheckout` (`booking/dropIn.ts`)
-- `createMembershipCheckout`, `createProductCheckout`, `createCourseCheckout` (`connect/payments.ts`)
-- `submitForm` (`forms/submitForm.ts`)
+```bash
+grep -rn 'enforceAppCheck: APP_CHECK_ENFORCE' packages/functions/src | grep -v _MOBILE
+```
 
-**Explicitly excluded: `sendContactVerificationCode`.** The Expo mobile app calls it and, on
-the Firebase JS SDK under Expo, cannot produce App Check attestation tokens — enforcing it
-would break student-app login. Mobile enforcement is a separate future phase (see Caveats).
+**The mobile-reachable callables are on a SEPARATE flag, by construction.**
+`sendContactVerificationCode` and `loginContactWithCode` — the student app's only login path,
+which the Expo JS SDK cannot attest — declare `enforceAppCheck: APP_CHECK_ENFORCE_MOBILE`
+(default false), so `APP_CHECK_ENFORCE=true` **cannot** reach them. That set is likewise
+grep-derived and pinned by `packages/functions/src/auth/appCheckMobile.test.ts`, which fails
+the build if any callable the mobile app calls ever ends up on the bare web flag. Mobile
+enforcement is the separate `APP_CHECK_ENFORCE_MOBILE` flip (see Caveats).
 
 ## Staged rollout — do these in order
 
@@ -44,9 +53,9 @@ would break student-app login. Mobile enforcement is a separate future phase (se
    requests. (`APP_CHECK_ENFORCE` is still `false`, so this changes nothing user-facing yet.)
 
 3. **Watch the monitor logs.** In Cloud Functions logs, filter for `[appcheck-monitor]`. On
-   real staging traffic through the five callables above, these warnings should drop to ~zero
-   as clients start sending valid tokens. If they persist, the web key/registration is wrong —
-   fix before proceeding.
+   real staging traffic through the web-enforced callables (grep above), these warnings should
+   drop to ~zero as clients start sending valid tokens. If they persist, the web
+   key/registration is wrong — fix before proceeding.
 
 4. **Flip enforcement (staging → prod).** Set `APP_CHECK_ENFORCE=true` in
    `packages/functions/.env.staging`, redeploy functions, and smoke-test a drop-in checkout +
@@ -61,10 +70,13 @@ monitor mode instantly). The web key can stay set — it's harmless without enfo
 
 - **reCAPTCHA v3 false positives.** It scores requests; a small fraction of real users can be
   rejected. Watch error rates after step 4; keep the rollback (above) handy.
-- **Mobile is not covered.** Enforcing App Check for the mobile-reachable callables needs
-  native attestation — `@react-native-firebase/app-check` (Play Integrity / App Attest) plus
-  an EAS **dev build** (not Expo Go). That's a separate project; until then keep
-  `sendContactVerificationCode` and the other mobile callables unenforced.
+- **Mobile is not covered, and cannot be flipped on by accident.** The mobile-reachable
+  callables sit behind their own `APP_CHECK_ENFORCE_MOBILE` flag (default false), so the web
+  flip above leaves them alone. Enforcing them needs native attestation —
+  `@react-native-firebase/app-check` (Play Integrity / App Attest) plus an EAS **dev build**
+  (not Expo Go) — and only *then* set `APP_CHECK_ENFORCE_MOBILE=true`. Adding a new callable the
+  mobile app will call? Put it on `APP_CHECK_ENFORCE_MOBILE`, not `APP_CHECK_ENFORCE`;
+  `auth/appCheckMobile.test.ts` fails the build if a mobile-reachable one is on the web flag.
 - **Local testing.** To exercise App Check locally against a real project, set the optional
   `NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN` (register the printed debug token in the Firebase
   console). Never set it in production.

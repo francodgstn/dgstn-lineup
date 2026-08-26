@@ -119,7 +119,7 @@ jobs:
       - name: Roll out web app (App Hosting, prod)
         run: |
           for attempt in 1 2 3 4 5; do
-            if npx firebase-tools apphosting:rollouts:create linyup-web --project production --git-commit "$GITHUB_SHA" --non-interactive; then
+            if npx firebase-tools apphosting:rollouts:create linyup-web-eu --project production --git-commit "$GITHUB_SHA" --non-interactive; then
               exit 0
             fi
             echo "::warning::web rollout attempt $attempt failed; retrying in 30s…"
@@ -131,7 +131,7 @@ jobs:
       - name: Roll out operator console (App Hosting, prod)
         run: |
           for attempt in 1 2 3 4 5; do
-            if npx firebase-tools apphosting:rollouts:create linyup-admin --project production --git-commit "$GITHUB_SHA" --non-interactive; then
+            if npx firebase-tools apphosting:rollouts:create linyup-admin-eu --project production --git-commit "$GITHUB_SHA" --non-interactive; then
               exit 0
             fi
             echo "::warning::operator console rollout attempt $attempt failed; retrying in 30s…"

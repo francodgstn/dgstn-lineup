@@ -9,7 +9,7 @@ import { CONTACTS_COLLECTION, TEAMS_COLLECTION, type SaasPlan } from '@linyup/sh
 import { buildContactSession } from '../utils/contactSession'
 import { canCreateContact } from '../utils/contactCap'
 import { bucketRateLimit } from '../utils/rateLimit'
-import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
+import { APP_CHECK_ENFORCE_MOBILE, monitorAppCheck } from '../utils/appCheck'
 import { assertVerifiableCodeById } from './verificationCode'
 
 // Provisional shop registrations purge after this window unless a payment confirms
@@ -18,7 +18,7 @@ const PROVISIONAL_TTL_MS = 7 * 24 * 60 * 60 * 1000
 // Anti-flooding: at most this many NEW shop registrations per team per day.
 const REGISTRATIONS_PER_TEAM_PER_DAY = 20
 
-export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_MOBILE }, async (request) => {
   monitorAppCheck(request, 'loginContactWithCode')
   const data = request.data as {
     codeId?: string

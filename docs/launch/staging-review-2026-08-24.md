@@ -89,11 +89,24 @@ now spans both roots.
 2. **`pnpm backfill:booking-joined-at`** (new, `scripts/backfill-booking-joined-at.ts`).
    Dry-run by default, `--apply` to write. Every seat a studio has already hand-added
    stays invisible on the list pages until this runs.
-3. **`scripts/backfill-public-subscription-types.ts`** after the functions deploy.
-   Existing tenants have no `partner_apps` on their public profile, so the
-   fitness-app question stays hidden for every live studio until something writes
-   it. No new script is needed — that one already touches every subscription type
-   of every team, and the new trigger makes that touch write `partner_apps`.
+3. **`pnpm backfill:partner-apps`** (new, `scripts/backfill-partner-apps.ts`) after the
+   functions deploy. Existing tenants have no `partner_apps` on their public profile, so the
+   fitness-app question stays hidden for a live studio that sells through a partner until
+   something writes it. **The previous note here was wrong**:
+   `backfill-public-subscription-types.ts` does NOT materialise `partner_apps` — it is guarded
+   (`!isActiveAggregator || alreadyPublic → continue`), so it writes nothing for a team whose
+   aggregator types are already `public`, or that has none, and is a total no-op where
+   everything is already public. The new script writes `partner_apps` with the SAME resolver
+   the sync uses (`resolveTeamPartnerApps`), unconditionally, dry-run by default.
+   *Mitigating fact:* `syncTeamPublicProfile` also writes `partner_apps` on ANY `teams/{teamId}`
+   write, so a studio self-heals the next time it edits its settings — the data gap is
+   transient; the wrong precondition was the durable problem.
+
+   ⚠️ Separately, do NOT run `backfill-public-subscription-types.ts --apply` **blind**. Its
+   `--apply` applies pre-2026-06-11 semantics the code has since reversed and can publish a
+   studio's legacy partner types (with their `payoutPerVisit` terms) into its world-readable
+   shop. Dry-run against each env and read the per-document list first; `--apply` only if every
+   named type is one the studio actually sells.
 4. **Re-bootstrap the emulator snapshots.** The seeders changed: participant rows
    now carry `checkedInAt`, and the public-profile mirrors now carry
    `partner_apps`. Existing snapshots predate both.

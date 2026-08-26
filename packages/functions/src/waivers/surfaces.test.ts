@@ -741,11 +741,11 @@ describe('THE SELF-DECLARATION REACHES THE TAB, AND IS LABELLED AS ONE', () => {
 describe('EXPORT BEFORE TEARDOWN (Q13)', () => {
   const root = join(__dirname, '..', '..', '..', '..')
   const lib = readFileSync(join(root, 'scripts', 'lib', 'exportConsentLedger.ts'), 'utf8')
+  const reader = readFileSync(join(__dirname, 'consentExport.ts'), 'utf8')
 
-  it('both teardown paths export first', () => {
+  it('the sandbox/lead script paths export before recursiveDelete', () => {
     for (const rel of ['scripts/reset-sandbox-db.ts', 'scripts/seed-lead.ts']) {
-      const src = readFileSync(join(root, rel), 'utf8')
-      const c = code(src)
+      const c = code(readFileSync(join(root, rel), 'utf8'))
       assert.ok(c.includes('requireConsentExport('), `${rel} must export before it deletes`)
       assert.ok(
         c.indexOf('requireConsentExport(') < c.indexOf('recursiveDelete('),
@@ -754,17 +754,61 @@ describe('EXPORT BEFORE TEARDOWN (Q13)', () => {
     }
   })
 
+  // The two PRODUCTION paths that erase a real studio through purgeTeam — the
+  // exact paths A4 found unguarded. The CLI writes to disk; the scheduled Cloud
+  // Function has no disk and writes to GCS. Their delete primitive is purgeTeam,
+  // not recursiveDelete.
+  it('the CLI purge-team.ts exports (to disk) before the real purgeTeam', () => {
+    const c = code(readFileSync(join(root, 'scripts', 'purge-team.ts'), 'utf8'))
+    assert.ok(c.includes('requireConsentExport('), 'purge-team.ts must export before it deletes')
+    assert.ok(
+      c.indexOf('requireConsentExport(') < c.indexOf('purgeTeam(teamId!, false)'),
+      'purge-team.ts must export BEFORE the real purgeTeam, not after'
+    )
+  })
+
+  it('the scheduled purge exports (to GCS) before purgeTeam', () => {
+    const c = code(readFileSync(join(__dirname, '..', 'dailyTasks', 'purgeScheduledTeams.ts'), 'utf8'))
+    assert.ok(
+      c.includes('requireTeamConsentExportToGcs('),
+      'purgeScheduledTeams must export before it deletes'
+    )
+    assert.ok(
+      c.indexOf('requireTeamConsentExportToGcs(') < c.indexOf('purgeTeam(teamId, false)'),
+      'purgeScheduledTeams must export BEFORE purgeTeam, not after'
+    )
+  })
+
+  // The ONE exemption, stated as explicitly as the inclusions: purgeUnverifiedSignups
+  // only sweeps UNTOUCHED teams, which by definition hold no signature.
+  it('purgeUnverifiedSignups NAMES its exemption and calls no exporter', () => {
+    const src = readFileSync(join(__dirname, '..', 'dailyTasks', 'purgeUnverifiedSignups.ts'), 'utf8')
+    assert.match(src, /WHY NO CONSENT EXPORT HERE/)
+    assert.equal(code(src).includes('requireConsentExport('), false)
+    assert.equal(code(src).includes('requireTeamConsentExportToGcs('), false)
+  })
+
   it('a failed export REFUSES the run rather than proceeding on a guess', () => {
+    // The scripts gate throws; the shared reader throws on a failed read; the GCS
+    // gate does not catch its upload — a failure propagates to the scheduled
+    // caller, which leaves the team scheduled and retries.
     assert.match(lib, /throw err/)
   })
 
-  it('it archives the four subcollections a signature is made of', () => {
+  it('the ONE shared reader archives the four subcollections a signature is made of', () => {
     for (const name of ['versions', 'acceptances', 'signers', 'notices']) {
-      assert.ok(lib.includes(`collection('${name}')`), `the archive must carry ${name}`)
+      assert.ok(reader.includes(`collection('${name}')`), `the archive must carry ${name}`)
     }
     // …and nothing that no longer exists: `guardian_requests` went with the
     // emailed-guardian mechanism, and a read of a collection nobody writes is a
     // read that quietly starts describing a shape the product does not have.
-    assert.equal(lib.includes('guardian_requests'), false)
+    assert.equal(reader.includes('guardian_requests'), false)
+  })
+
+  it('the fs exporter DELEGATES to the shared reader — no re-inlined read loop to drift', () => {
+    assert.ok(lib.includes('readTeamConsentLedger('), 'the fs exporter must use the shared reader')
+    // The read of the four subcollections must live in ONE place, not be copied
+    // back into the script — that copy is exactly the drift this guards.
+    assert.equal(lib.includes("collection('acceptances')"), false)
   })
 })

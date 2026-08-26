@@ -221,16 +221,23 @@ service cloud.firestore {
              && (callerIsAllScoped(contactRes.data.teamId) || callerOwnsContact(contactRes));
     }
 
-    // Does the caller hold capability `cap` in teamId? Reads the capabilities
-    // denormalized on the member doc (owner is always all-capable). Members written
-    // before denormalization have no capabilities field: they fall back to their
-    // historical access — every role could write EXCEPT viewer (now read-only) —
-    // so unmigrated viewers are correctly denied writes while others are unaffected.
+    // Does the caller hold capability `cap` in teamId? Owner is always all-capable
+    // (the role line below); everyone else must hold `cap` in the capabilities set
+    // syncMemberCapabilities denormalizes onto their member doc. A member doc with
+    // NO capabilities field is DENIED — fail closed.
+    //
+    // This used to fall OPEN for such docs ("any non-viewer can do anything"),
+    // which was a within-tenant escalation: an unmigrated coach held contacts /
+    // activities / schedule manage and finance reads regardless of what the studio
+    // configured, and the permission UI showed a restriction the rules did not
+    // enforce. The only docs that ever lacked the field are OWNERS (verified live
+    // in prod + staging, 2026-08-26), and they pass on the role line, so closing
+    // the fallthrough locks out nobody — and a future unmigrated non-owner is
+    // under-privileged (visibly wrong) rather than over-privileged (silently wrong).
     function hasTeamCapability(teamId, cap) {
       let m = get(/databases/$(database)/documents/teams/$(teamId)/team_members/$(request.auth.uid)).data;
       return m.role == 'owner'
-             || cap in m.get('capabilities', [])
-             || (!('capabilities' in m) && m.role != 'viewer');
+             || cap in m.get('capabilities', []);
     }
 
     // Write access to a contact = read access (team + own-scope) AND the manage
