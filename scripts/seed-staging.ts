@@ -84,6 +84,7 @@ import {
   seedStoreCourses,
 } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import { partnerAppNames } from './lib/partnerApps'
 import {
   appointmentOccurrences,
   buildAppointmentSessionDocs,
@@ -883,6 +884,11 @@ async function seedTeam(opts: TeamSeed) {
       bookingSettings,
       membershipRequiredFields: null,
       membershipOptionalFields: null,
+      // What syncTeamPublicProfile would compute (see scripts/lib/partnerApps.ts).
+      // Without it the bio-link booking form hides the fitness-app question, and
+      // re-seeding staging (which auto-deploys from main) reproduces exactly the
+      // stale shape the backfill:partner-apps precondition exists to repair.
+      partner_apps: partnerAppNames(subscriptionTypeDefs),
       updated_at: ts(now()),
     })
 
@@ -1693,6 +1699,7 @@ async function seedTeam(opts: TeamSeed) {
           lastname: cs.lastname,
           fullname: `${cs.lastname} ${cs.firstname}`,
           joinedAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
+          checkedInAt: ts(daysFromNow(sessionDefs[i].dayOffset)),
           checkedInBy: 'seed',
         })
     }

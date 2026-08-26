@@ -70,6 +70,7 @@ import {
 } from './lib/affiliations'
 import { buildStorefrontPageLinks, seedStorePromoCode } from './lib/storefront'
 import { memberCapsFor, COACH_DEFAULT_CAPABILITIES } from './lib/roles'
+import { partnerAppNames } from './lib/partnerApps'
 import {
   planSeedConnectAccounts,
   linkSeedConnectAccount,
@@ -991,24 +992,6 @@ async function seedLeadTenant(profile: LeadProfile) {
   // Public mirror of the subscription types (what syncSubscriptionTypesToPublicProfile
   // would produce). price.id must equal the raw subscription_types price id or the
   // shop's Buy button stays disabled.
-// Mirrors resolveTeamPartnerApps (packages/functions/src/sync/syncTeamPublicProfile.ts):
-// aggregator types only, `active === false` dropped, blank names dropped, deduped
-// case-insensitively. Hand-written here because the seeders write the mirror directly.
-function partnerAppNames(defs: { source?: string; active?: boolean; name?: string }[]): string[] {
-  const seen = new Set<string>()
-  const names: string[] = []
-  for (const d of defs) {
-    if (d.source !== 'aggregator') continue
-    if (d.active === false) continue
-    const name = typeof d.name === 'string' ? d.name.trim() : ''
-    if (!name) continue
-    const key = name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    names.push(name)
-  }
-  return names
-}
 
   const publicSubTypes = profile.subscriptions.map((st) => {
     const entry: {
