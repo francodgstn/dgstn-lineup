@@ -6,7 +6,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getTeam } from '../utils/teams'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { bucketRateLimit } from '../utils/rateLimit'
-import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
+import { APP_CHECK_ENFORCE_MOBILE, monitorAppCheck } from '../utils/appCheck'
 import { reviewAccessCodeFor } from '../ops/reviewAccess'
 
 
@@ -14,7 +14,7 @@ const CODE_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
 const MAX_CODES_PER_HOUR = 5
 const MAX_CODES_PER_IP_PER_HOUR = 20
 
-export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (request) => {
+export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_MOBILE }, async (request) => {
   monitorAppCheck(request, 'sendContactVerificationCode')
   const data = request.data as { email?: string; teamId?: string }
   const { email } = data
