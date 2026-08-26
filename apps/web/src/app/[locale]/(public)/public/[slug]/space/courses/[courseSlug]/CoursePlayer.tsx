@@ -16,6 +16,7 @@ import {
   COURSE_LESSONS_SUBCOLLECTION,
 } from '@linyup/shared'
 import { formatCurrency } from '@/lib/format'
+import { sanitizeRichHtml } from '@/lib/sanitizeHtml'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { loadFailureDetail, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useSpaceAuth } from '../../SpaceAuthProvider'
@@ -508,11 +509,14 @@ export default function CoursePlayer({ courseSlug, from }: Props) {
                   <MediaPlayer lesson={selectedLesson} />
                 )}
 
-                {/* Rich-text body — same .prose-notes styling as the editor (WYSIWYG) */}
+                {/* Rich-text body — same .prose-notes styling as the editor (WYSIWYG).
+                    SANITIZED: lesson bodies are written client-side with no server-side
+                    sanitization, and this renders to contacts (and to anonymous visitors
+                    for a free course), so raw HTML here would be stored XSS. */}
                 {selectedLesson.body && (
                   <div
                     className="prose-notes prose-relaxed max-w-none"
-                    dangerouslySetInnerHTML={{ __html: selectedLesson.body }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(selectedLesson.body) }}
                   />
                 )}
 
