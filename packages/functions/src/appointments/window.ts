@@ -19,6 +19,7 @@ import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
 import { loadContactPaymentSnapshot } from '../booking/access'
+import { checkoutRateLimit } from '../connect/checkout'
 import { attachWaiverContact, enforceWaiverGate, parseWaiverSubmissions } from '../waivers/gate'
 import {
   AVAILABILITY_COLLECTION,
@@ -54,6 +55,14 @@ import { resolveContactFieldPatchForBooking } from '../booking/contactFields'
 
 const DEFAULT_RANGE_DAYS = 28
 const MAX_RANGE_DAYS = 60
+
+// listAvailability is a public BROWSE surface — the picker refetches as the
+// visitor changes activity/day, so one genuine session makes many calls. The
+// default checkout ceiling (30/h) would lock a browsing user out, so this read
+// gets a higher ceiling: still bounds an anonymous enumerator to a trivially
+// cheap number of teamId-scoped scans per hour. The two write callables below
+// keep the default 30/h.
+const AVAILABILITY_RATE_LIMIT_PER_HOUR = 240
 
 interface BusyInterval {
   start: number
@@ -171,6 +180,7 @@ function accumulateCandidates(
 // ─── listAvailability (public) ─────────────────────────────────────────────────
 
 export const listAvailability = onCall(async (request) => {
+  await checkoutRateLimit(request.rawRequest?.ip, 'availability', AVAILABILITY_RATE_LIMIT_PER_HOUR)
   const data = request.data as {
     teamId?: string
     providerId?: string
@@ -384,6 +394,7 @@ export const listAvailability = onCall(async (request) => {
 // duration always resolves free, for anyone.
 
 export const bookAppointment = onCall(async (request) => {
+  await checkoutRateLimit(request.rawRequest?.ip, 'book-appointment')
   const data = request.data as {
     teamId?: string
     providerId?: string

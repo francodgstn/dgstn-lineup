@@ -19,6 +19,7 @@ import {
   buildVerificationCodeEmail,
 } from './templates'
 import { resolveBookingAccessGate } from './access'
+import { checkoutRateLimit } from '../connect/checkout'
 import {
   buildContactFieldPatch,
   expandContactFieldPatch,
@@ -509,6 +510,7 @@ interface BookingCommitResult {
 }
 
 export const bookSession = onCall(async (request) => {
+  await checkoutRateLimit(request.rawRequest?.ip, 'book')
   const data = request.data as {
     teamId?: string
     sessionId?: string
