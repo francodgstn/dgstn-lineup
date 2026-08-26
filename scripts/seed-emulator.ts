@@ -67,6 +67,7 @@ import {
   PUBLIC_SETTINGS_DOC,
   DEFAULT_PAYMENT_MODES,
   DEFAULT_KIOSK_CONFIG,
+  PLAN_PRICING,
   toKioskPublicConfig,
   // Taken from the shared constant rather than hand-copied, so the seeded rule
   // stays the same rule onTeamCreated provisions.
@@ -2812,9 +2813,10 @@ async function seedDocuments(
 }
 
 // ── free-plan team ────────────────────────────────────────────────────────────
-// Minimal tenant pinned EXACTLY at the Free plan's 10-contact hard cap, to
-// exercise: blocked manual adds, portal "Powered by Linyup" badge, locked
-// member invites, and fully upgrade-locked plugins.
+// Minimal tenant pinned EXACTLY at the Free plan's contact hard cap
+// (PLAN_PRICING.free.includedContacts, derived below), to exercise: blocked
+// manual adds, portal "Powered by Linyup" badge, locked member invites, and
+// fully upgrade-locked plugins.
 
 async function seedFreeTeam() {
   const uid = 'seed-free-uid'
@@ -2950,8 +2952,13 @@ async function seedFreeTeam() {
     level: 'all',
   })
 
-  // Exactly 10 active contacts — at the hard cap
-  const freeContacts = [
+  // EXACTLY the Free plan's contact cap, DERIVED so it self-corrects if the cap
+  // moves — the hard cap was raised 10 → 15 (2026-06-18) and this seed was left
+  // at 10, which made the block, the over-cap upgrade prompt and the meter-at-
+  // limit all unreachable, and printed a tenant that *claims* to be at cap yet
+  // takes more contacts fine (so "is the cap wired?" reads as broken).
+  const freeCap = PLAN_PRICING.free.includedContacts ?? 15
+  const freeNamePool = [
     { firstname: 'Mia', lastname: 'Keller', gender: 'F' },
     { firstname: 'Jonas', lastname: 'Frei', gender: 'M' },
     { firstname: 'Lea', lastname: 'Steiner', gender: 'F' },
@@ -2962,7 +2969,15 @@ async function seedFreeTeam() {
     { firstname: 'Luca', lastname: 'Wyss', gender: 'M' },
     { firstname: 'Anna', lastname: 'Roth', gender: 'F' },
     { firstname: 'Felix', lastname: 'Baumann', gender: 'M' },
+    { firstname: 'Nina', lastname: 'Weber', gender: 'F' },
+    { firstname: 'Leon', lastname: 'Meier', gender: 'M' },
+    { firstname: 'Sara', lastname: 'Huber', gender: 'F' },
+    { firstname: 'David', lastname: 'Schmid', gender: 'M' },
+    { firstname: 'Clara', lastname: 'Zbinden', gender: 'F' },
   ]
+  const freeContacts = Array.from({ length: freeCap }, (_, i) =>
+    freeNamePool[i] ?? { firstname: `Member${i + 1}`, lastname: 'Free', gender: i % 2 ? 'M' : 'F' }
+  )
   for (let i = 0; i < freeContacts.length; i++) {
     const c = freeContacts[i]
     const id = `${teamId}-contact-${i.toString().padStart(3, '0')}`
@@ -3194,7 +3209,9 @@ async function main() {
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
   console.log('   ├─────────────────────┼──────────────────────┼──────────────┼────────────┤')
-  console.log('   │ free (at cap 10/10) │ free@linyup.com      │ linyup123    │ active     │')
+  console.log(
+    `   │ free (at cap ${PLAN_PRICING.free.includedContacts}/${PLAN_PRICING.free.includedContacts}) │ free@linyup.com      │ linyup123    │ active     │`
+  )
   console.log('   │ coach               │ coach@linyup.com     │ linyup123    │ trial      │')
   console.log('   │ studio (mgr+coach)  │ studio@linyup.com      │ linyup123    │ active     │')
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
