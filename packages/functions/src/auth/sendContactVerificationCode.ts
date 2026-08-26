@@ -79,13 +79,18 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
   }
 
   const contactsSnap = await contactsQuery.get()
+  // PRE-VERIFICATION RESPONSE — the caller is anonymous and has proven NOTHING
+  // about this email yet, so this must carry only what the "which account?" picker
+  // renders (first/last name), never PII. `phone`, `birthdate` and `gender` used to
+  // be here and were returned to any anonymous caller for a shared email; they are
+  // display-irrelevant and are deliberately omitted. `id`/`teamId` are kept (the
+  // picker needs them, and the contactId is no longer a takeover vector once
+  // switchActiveContact requires a live session and requestContactUpdate binds the
+  // code), but nothing sensitive is disclosed before the code is verified.
   const matchedContacts = contactsSnap.docs.map((doc) => ({
     id: doc.id,
     firstname: doc.get('firstname') || '',
     lastname: doc.get('lastname') || '',
-    phone: doc.get('phone') || '',
-    birthdate: doc.get('birthdate') || null,
-    gender: doc.get('gender') || '',
     teamId: doc.get('teamId') || null,
   }))
 

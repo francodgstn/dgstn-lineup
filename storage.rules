@@ -38,6 +38,38 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/courses/$(courseId)).data.accessRule.type == 'free';
     }
 
+    // The calling contact session's single active subscription type id.
+    function callerCourseSubTypeId() {
+      return firestore.get(/databases/(default)/documents/contacts/$(request.auth.token.contactId)).data.get('subscription_type_id', '');
+    }
+    // Whether the calling contact bought this course (lifetime entitlement).
+    function contactPurchasedCourse(courseId) {
+      return request.auth != null
+        && request.auth.token.contactId != null
+        && firestore.exists(/databases/(default)/documents/courses/$(courseId)/purchases/$(request.auth.token.contactId));
+    }
+    // Tier-aware contact-session read of course MEDIA — mirrors canReadPublishedCourse
+    // in firestore.rules. This must exist independently of the Firestore lesson read:
+    // Storage has no get/list split (read grants listAll on a {allPaths=**} prefix),
+    // and media object paths are predictable timestamps, so a contact could enumerate
+    // and download gated media without ever passing the Firestore tier check. Gate the
+    // object store on the SAME tiers Firestore enforces.
+    function contactMayReadCourseMedia(teamId, courseId) {
+      let c = firestore.get(/databases/(default)/documents/courses/$(courseId)).data;
+      return isContactSessionForTeam(teamId) && c.status == 'published' && (
+           c.accessRule.type == 'free'
+        || c.accessRule.type == 'registered'
+        || (c.accessRule.type == 'subscription'
+            && c.accessRule.subscriptionTypeIds.hasAny([callerCourseSubTypeId()]))
+        || (c.accessRule.type == 'purchase'
+            && (contactPurchasedCourse(courseId)
+                || c.accessRule.get('subscriptionTypeIds', []).hasAny([callerCourseSubTypeId()])
+                || (c.get('benefit', null) is map
+                    && c.benefit.get('effect', '') == 'included'
+                    && c.benefit.get('subscriptionTypeIds', []).hasAny([callerCourseSubTypeId()]))))
+      );
+    }
+
     match /users/{userId}/{allPaths=**} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null && request.auth.uid == userId
@@ -46,15 +78,17 @@ service firebase.storage {
     }
 
     // Course media lives under teams/{teamId}/courses/{courseId}/... This more-specific
-    // match adds PUBLIC read of free published-course media, and contact-session read of
-    // gated media, on top of staff access. (Storage grants if ANY matching rule allows;
-    // the broad teams/{teamId} match below still applies for writes + staff reads.)
-    // Subscription-tier gating is NOT re-checked here: a media URL is only discoverable
-    // by first passing the Firestore lesson read, which does enforce the subscription.
+    // match adds PUBLIC read of free published-course media, and TIER-AWARE contact-session
+    // read of gated media, on top of staff access. (Storage grants if ANY matching rule
+    // allows; the broad teams/{teamId} match below still applies for writes + staff reads.)
+    // The tier IS re-checked here (contactMayReadCourseMedia): the old rule granted any
+    // contact of the team read of ANY tier's media, and because Storage read == list and
+    // paths are predictable, a free-tier member could enumerate and download a studio's
+    // paid subscription/purchase course content for free.
     match /teams/{teamId}/courses/{courseId}/{allPaths=**} {
       allow read: if isPublishedFreeCourse(courseId)
         || isTeamMemberStorage(teamId)
-        || isContactSessionForTeam(teamId);
+        || contactMayReadCourseMedia(teamId, courseId);
       allow write: if isTeamMemberStorage(teamId)
         && request.resource.size < 50 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');

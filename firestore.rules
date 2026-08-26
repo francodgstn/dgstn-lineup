@@ -1089,10 +1089,21 @@ service cloud.firestore {
       // above, and a recursive wildcard here could not exclude credit_grants /
       // usage_windows from its write grant.
       match /{subcollection}/{docId} {
+        // `contact_notes` is the studio's PRIVATE staff commentary about a contact
+        // (behavioural / health / financial), authored in the staff-only Notes tab
+        // and by the automation engine — never a member-facing surface. So the
+        // contact-facing read predicates (isSelfContact / sharesContactEmail) are
+        // withheld for it: a member must not read the confidential notes the studio
+        // keeps about them. Staff (canAccessContact) and admins still read it. Every
+        // OTHER subcollection keeps the self-read (a contact reads their own
+        // bookings, goals, credit balance, …). Rules are additive, so this
+        // exclusion has to live on the catch-all itself — a separate staff-only
+        // match would be OR'd with this grant and change nothing.
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
-                      || isSelfContact(contactId)
-                      || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
+                      || (subcollection != 'contact_notes'
+                          && (isSelfContact(contactId)
+                              || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)))));
         allow write: if subcollection != 'credit_grants'
                       && subcollection != 'usage_windows'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));

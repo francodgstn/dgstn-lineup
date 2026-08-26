@@ -2275,6 +2275,30 @@ export const rebookSession = onCall(async (request) => {
     })
   }
 
+  // SAME-ACTIVITY only on the public (token) door. rebookSession never runs the
+  // booking ACCESS gate that bookSession does (resolveBookingAccessGate —
+  // subscription coverage, credit spend, drop-in price), so permitting a move to a
+  // DIFFERENT activity let a token holder who booked a FREE/open class rebook into
+  // a members-only or drop-in-priced activity and take a free `pending` seat it
+  // neither qualified for nor paid for (and escape the once-per-trial limit).
+  // accessRule and the drop-in price are per-ACTIVITY, so restricting the
+  // self-service move to the same activity keeps the access + payment posture
+  // identical to the original booking — which is exactly what getBookingDetails
+  // already offers the client (its availableSessions query is scoped to the same
+  // activityId). Staff at the desk may move across activities, mirroring the cutoff
+  // exemption above.
+  if (!staffCaller) {
+    const oldActivityId = (oldSession.activityId as string | undefined) ?? null
+    const newActivityId = (newSession.activityId as string | undefined) ?? null
+    if (oldActivityId !== newActivityId) {
+      throw new HttpsError(
+        'permission-denied',
+        'A booking can only be moved to another session of the same activity.',
+        { reason: 'different_activity' }
+      )
+    }
+  }
+
   const newBookingToken = generateSecureToken()
   const newSessionRef = db.collection('sessions').doc(newSessionId)
   const newBookingRef = newSessionRef.collection('bookings').doc(contactId)
