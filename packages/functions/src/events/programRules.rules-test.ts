@@ -74,6 +74,16 @@ async function seed() {
       role: 'org_admin',
     })
 
+    // TEAM_A genuinely belongs to ORG — the server-written membership proof that
+    // currentTeamInOrg checks (written alongside team.org_id when a studio accepts
+    // an org invitation). Without it a member studio could reach org-shared data
+    // only by forging team.org_id, which the rules deliberately no longer trust.
+    await setDoc(doc(db, 'organizations', ORG, 'org_teams', TEAM_A), {
+      teamId: TEAM_A,
+      orgId: ORG,
+      status: 'active',
+    })
+
     // A team-scoped event and an org-scoped one (the latter has NO teamId —
     // that is exactly what used to lock org events out of their subcollections).
     await setDoc(doc(db, 'events', EVENT_TEAM), {
