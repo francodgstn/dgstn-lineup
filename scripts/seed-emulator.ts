@@ -123,7 +123,8 @@ import {
   seedEventProgram,
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
-import { seedTeamMoney } from './lib/fixtures/money'
+import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamFinance } from './lib/fixtures/finance'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -2160,10 +2161,39 @@ function partnerAppNames(defs: { source?: string; active?: boolean; name?: strin
   // Each of these was a shipped feature with zero data behind it on every
   // surface. See scripts/lib/fixtures/engagement.ts.
   await seedContactNotes(teamId, uid)
+  // The Juniors group below is DATA; contact-groups is the GATE — the group
+  // picker, contact detail and the automation `in_group` condition all sit behind
+  // /plugins/contact-groups, so without the install the seeded group is a
+  // leaderboard nobody can open (the same trap gift cards and gamification
+  // document above).
+  await db
+    .collection('teams')
+    .doc(teamId)
+    .collection('installed_plugins')
+    .doc('contact-groups')
+    .set({
+      pluginId: 'contact-groups',
+      teamId,
+      installedAt: ts(daysFromNow(-90)),
+      installedBy: uid,
+      status: 'active',
+      config: {},
+    })
   await seedDynamicContactGroup(teamId, uid)
   await seedEventProgram(teamId, uid)
   await seedSessionWaitlist({ teamId })
   await seedCoursePurchase(teamId)
+
+  // ── one-off sales, then the journal (studio+ only) ─────────────────────────
+  // Finance is a studio-tier plugin; seedTeamFinance installs it AND replays
+  // every member_payments row into the journal, so it must run LAST (after
+  // seedTeamMoney above and the sales below). Without this the Finance plugin
+  // (beta) is only exercisable against the cloud sandbox — the slowest place to
+  // find a bug in it. Mirrors seed-sandbox.
+  if (plan === 'studio' || plan === 'organization') {
+    await seedTeamSales({ teamId })
+    await seedTeamFinance({ teamId, uid })
+  }
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
