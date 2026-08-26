@@ -13,6 +13,7 @@ import { to } from './async'
 import { sendEmail } from './email'
 import { logActivity } from './users'
 import { substituteVariables, renderBody, buildOutreachEmail } from './outreachEmail'
+import { sanitizeRichHtml } from './sanitizeHtml'
 import { pluginActionHandlers } from '../plugins/index'
 import type {
   PluginActionId, PluginTriggerId, ContactGroup, ConsentLedger, EngagementThresholds,
@@ -949,13 +950,15 @@ async function executeActionsForContact(
       // add_note — append a timestamped note to the contact (contact_notes
       // subcollection), same shape the contact-detail Notes tab reads/writes.
       if (action.type === 'add_note') {
-        const content = substituteVariables(
-          action.note,
-          contact,
-          teamName,
-          now,
-          teamData,
-          payload
+        // SANITIZE: `{{firstname}}` (and other contact fields) are substituted RAW,
+        // and contact.firstname is anonymous-controllable (a public form submission
+        // creates a contact with an attacker-supplied name). The note is later
+        // rendered via dangerouslySetInnerHTML on the staff contact page, so an
+        // unsanitized `<img onerror=…>`/`<script>` in a name would execute as stored
+        // XSS in the authenticated admin session. sanitizeRichHtml strips scripts/
+        // event handlers while keeping the note's legitimate formatting.
+        const content = sanitizeRichHtml(
+          substituteVariables(action.note, contact, teamName, now, teamData, payload)
         ).trim()
         if (content) {
           await admin

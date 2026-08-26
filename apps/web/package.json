@@ -41,6 +41,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "firebase": "^11.2.0",
+    "isomorphic-dompurify": "^3.23.0",
     "jspdf": "^2.5.2",
     "lucide-react": "^0.475.0",
     "marked": "^15.0.0",
