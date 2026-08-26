@@ -157,7 +157,13 @@ export function DocumentShareDialog({
           </div>
 
           <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-1.5">
-            <span className="text-xs font-mono flex-1 truncate text-muted-foreground">{url}</span>
+            {/* min-w-0 is what makes `truncate` actually bind on a flex child:
+                without it the span takes its content's intrinsic width and a long
+                document URL widened the whole dialog, pushing the copy/open
+                buttons past the card edge. Same fix as QRDialog. */}
+            <span className="min-w-0 flex-1 truncate text-xs font-mono text-muted-foreground">
+              {url}
+            </span>
             <button
               type="button"
               onClick={copyUrl}
