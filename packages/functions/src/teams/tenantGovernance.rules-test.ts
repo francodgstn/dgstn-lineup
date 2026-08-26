@@ -156,12 +156,15 @@ describe('firestore.rules — tenant governance fields', function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // team_members SELF-PROVISION — the regression net for the 2026-08-26 takeover.
 //
-// The signup rule that lets a new owner write their OWN membership used to be
+// A signup bootstrap rule once let a new owner write their OWN membership; it was
 // tied to nothing about `teamId`, so any authenticated principal (a passwordless
 // `contact:` session included) could write an owner membership into someone
-// else's team and, because `hasTeamRole` reads the role off that very doc,
-// become its owner. It was reproduced end-to-end before the fix; these are the
-// tests that keep it shut.
+// else's team and, because `hasTeamRole` reads the role off that very doc, become
+// its owner. It was first bounded (create-only + createdBy tie), then removed
+// ENTIRELY once the `createStudioTeam` callable (Admin SDK) took over signup — no
+// client writes team_members anymore. So team_members is now owner-write only;
+// these tests keep every client self-provision shut and prove the owner path and
+// the callable-driven signup still work.
 //
 // Runs against the isolated `demo-linyup-*` emulator only.
 describe('firestore.rules — team_members self-provision', function () {
@@ -216,8 +219,8 @@ describe('firestore.rules — team_members self-provision', function () {
   })
 
   it('a stranger CANNOT self-provision a NON-owner role either', async () => {
-    // The first disjunct needs owner ROLE (they have none); the second needs
-    // createdBy (not them). A viewer seat is refused for the same reason.
+    // The only write rule needs an existing owner ROLE, which a stranger has none
+    // of; a viewer seat is refused for the same reason as an owner one.
     const db = testEnv.authenticatedContext(ATTACKER).firestore()
     await assertFails(
       setDoc(doc(db, 'teams', VICTIM, 'team_members', ATTACKER), {
@@ -228,18 +231,20 @@ describe('firestore.rules — team_members self-provision', function () {
   })
 
   it('an existing member CANNOT rewrite their own doc to escalate to owner', async () => {
-    // resource != null, so the create-only self-provision branch does not apply;
-    // and they are not an owner, so the owner branch does not either. This is the
-    // half of the fix that `resource == null` provides.
+    // They are not an owner, so the only write rule refuses — an existing member
+    // cannot escalate their own role (there is no self-provision branch to abuse).
     const db = testEnv.authenticatedContext('managerV').firestore()
     await assertFails(
       updateDoc(doc(db, 'teams', VICTIM, 'team_members', 'managerV'), { role: 'owner' })
     )
   })
 
-  it('the real signup path still works — creator writes their own owner doc', async () => {
-    // provisionTeam writes the team doc (createdBy = self) then the owner
-    // membership, both as the creator. The fix must not break this.
+  it('signup no longer self-provisions from the client — team_members is Admin-SDK only', async () => {
+    // Team creation now runs through the createStudioTeam callable (Admin SDK,
+    // which bypasses rules) and writes the owner membership THERE. The client
+    // self-provision bootstrap was removed, so a creator can still create the TEAM
+    // doc but can no longer write their own team_members doc directly from a
+    // client — the only remaining write rule needs an existing owner role.
     const uid = 'freshOwner'
     const db = testEnv.authenticatedContext(uid).firestore()
     await assertSucceeds(
@@ -251,7 +256,7 @@ describe('firestore.rules — team_members self-provision', function () {
         createdBy: uid,
       })
     )
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(db, 'teams', 'freshTeam', 'team_members', uid), { role: 'owner', userId: uid })
     )
   })

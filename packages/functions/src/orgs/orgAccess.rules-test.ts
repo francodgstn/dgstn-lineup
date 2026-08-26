@@ -170,26 +170,32 @@ describe('firestore.rules — organization access', function () {
   it('a forged team.org_id does NOT unlock the org’s shared collections', async () => {
     const attacker = testEnv.authenticatedContext('attackerU').firestore()
 
-    // The forge writes the rules DO permit: a team you created, its owner
-    // membership (self-provision, post-#106), and pointing your currentTeam at it.
+    // The forge writes the rules still permit: a team you created (org_id is
+    // UNCONSTRAINED on create — the whole point of the attack) and pointing your
+    // own currentTeam at it.
     await assertSucceeds(
       setDoc(doc(attacker, 'teams', 'fakeTeam'), {
         name: 'Forged',
         slug: 'forged',
-        org_id: ORG, // <-- unconstrained on create; the whole point of the attack
+        org_id: ORG,
         createdBy: 'attackerU',
-      })
-    )
-    await assertSucceeds(
-      setDoc(doc(attacker, 'teams', 'fakeTeam', 'team_members', 'attackerU'), {
-        role: 'owner',
-        userId: 'attackerU',
       })
     )
     await assertSucceeds(setDoc(doc(attacker, 'users', 'attackerU'), { currentTeam: 'fakeTeam' }))
 
-    // …but the read is gated on org_teams membership, which the attacker cannot
-    // forge (allow write: if false), so the shared collection stays shut.
+    // A membership in their OWN forged team, seeded directly — the client
+    // self-provision path is gone (a real creator gets this via createStudioTeam),
+    // but granting it here makes isTeamMember(fakeTeam) hold so the ONLY thing
+    // still missing is the server-written org_teams row.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'teams', 'fakeTeam', 'team_members', 'attackerU'), {
+        role: 'owner',
+        userId: 'attackerU',
+      })
+    })
+
+    // …the read is gated on org_teams membership, which the attacker cannot forge
+    // (allow write: if false), so the shared collection stays shut.
     await assertFails(getDocs(query(collection(attacker, 'organizations', ORG, 'org_places'))))
   })
 

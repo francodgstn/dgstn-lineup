@@ -469,43 +469,28 @@ service cloud.firestore {
         // Also allow users to read their own membership record (needed for initial team lookup)
         allow read: if isTeamMember(teamId) || memberId == request.auth.uid;
 
-        // Only owners can add/remove/update team members, OR a user self-provisioning as owner on signup.
+        // Only owners can add/remove/update team members. There is deliberately
+        // NO client self-provision branch anymore: team creation runs through the
+        // `createStudioTeam` callable (Admin SDK, which bypasses rules) and writes
+        // the initial owner membership there, so no client ever writes
+        // team_members directly. The bootstrap disjunct that used to let a new
+        // owner self-provision at signup was removed once that callable shipped
+        // and the web app rolled out — a self-provision rule has to grant a write
+        // to a NOT-yet-member (i.e. to "anyone"), which is exactly the footgun the
+        // 2026-08-26 org/team takeovers (#106/#112) exploited; bootstrapping in the
+        // callable removes the whole class of hole rather than bounding it.
         //
         // A SECOND USER IS A STUDIO FEATURE (`multiple_managers` in PLAN_FEATURES).
         // An owner may always write their OWN membership doc; writing SOMEBODY
         // ELSE's is a seat-creating seam reachable straight from a client, so it
-        // refuses on exactly the tier the callables do
-        // (`requireExtraUserPlan`) — otherwise that gate is one Firestore write
-        // from being bypassed. This said `!= 'free'` until 2026-08-18, which was
-        // the same contradiction UX-42 settled everywhere else.
-        //
-        // Literals because rules cannot import the flag; `seatGate.test.ts` pins
-        // this list to PLAN_FEATURES so the two cannot drift.
-        //
-        // Invitation acceptance does NOT come through here — it runs on the
-        // Admin SDK and is gated in the callable.
-        // The self-provision branch is CREATE-ONLY and only on a team THIS user
-        // created. Before 2026-08-26 it required nothing about `teamId`, so ANY
-        // authenticated principal — including a passwordless `contact:` session,
-        // whose entry price is booking one public class — could write an
-        // owner-role membership into someone else's team; and because
-        // `hasTeamRole` reads the role off this very document, that write made
-        // them a full owner. Reproduced end-to-end against these rules in
-        // `teams/tenantGovernance.rules-test.ts`.
-        //
-        // Two clauses close it: `resource == null` (a CREATE — an existing
-        // member cannot rewrite their own doc to escalate) and the `createdBy`
-        // tie (only the team's own creator, at signup). A `contact:*`/`kiosk:*`
-        // session uid can never equal a real signup uid, so `createdBy` rejects
-        // those sessions for free. `provisionTeam` writes the team doc
-        // (`createdBy = uid`) BEFORE the membership, so the get() sees it.
-        allow write: if (hasTeamRole(teamId, 'owner') &&
+        // refuses on exactly the tier the callables do (`requireExtraUserPlan`) —
+        // otherwise that gate is one Firestore write from being bypassed. Literals
+        // because rules cannot import the flag; `seatGate.test.ts` pins this list
+        // to PLAN_FEATURES so the two cannot drift. Invitation acceptance does NOT
+        // come through here — it runs on the Admin SDK and is gated in the callable.
+        allow write: if hasTeamRole(teamId, 'owner') &&
                        (memberId == request.auth.uid ||
-                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') in ['studio', 'organization'])) ||
-                       (resource == null && memberId == request.auth.uid &&
-                        request.resource.data.role == 'owner' &&
-                        request.resource.data.userId == request.auth.uid &&
-                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('createdBy', '') == request.auth.uid);
+                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') in ['studio', 'organization']);
       }
 
       // Customizable role config (currently only the Coach role). Team members read it
