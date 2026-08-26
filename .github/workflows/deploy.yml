@@ -96,8 +96,23 @@ jobs:
       # cleanup policy non-interactively (otherwise it prompts and exits 1 after a
       # successful deploy) and skips the confirmation prompt when functions are
       # removed from source.
+      # Retry wrapper, same as prod and sandbox. The WIF→STS token exchange
+      # occasionally fails ("Failed to authenticate") and the per-minute
+      # function-mutation quota can 429 on a full re-vendor; both are transient
+      # and converge on re-run. Staging deploys unattended on every push to main,
+      # so it is the one environment where a transient failure has no human to
+      # re-dispatch it — which is exactly why it needs the wrapper most.
       - name: Deploy to Firebase (Staging)
-        run: npx firebase-tools deploy --project staging --only functions,hosting:landing,firestore,storage --non-interactive --force
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if npx firebase-tools deploy --project staging --only functions,hosting:landing,firestore,storage --non-interactive --force; then
+              exit 0
+            fi
+            echo "::warning::firebase deploy attempt $attempt failed; retrying in 30s…"
+            sleep 30
+          done
+          echo "::error::firebase deploy failed after 5 attempts"
+          exit 1
 
       # Optional reseed — manual dispatch + reseed_data=true only, so routine
       # deploys never wipe staging data. Reuses the ADC from the auth step; the
