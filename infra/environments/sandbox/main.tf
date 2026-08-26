@@ -160,24 +160,27 @@ module "monitoring" {
 }
 
 # ── App Hosting backend (web) ─────────────────────────────────────────────────
-# EU migration (us-central1 → europe-west4), 2026-08-26. Unlike staging, this
-# backend is CREATED by terraform, not imported: the Developer Connect
-# connection + repo link were pre-established standalone (Console → Developer
-# Connect, europe-west4) before the backend existed, so `terraform apply`
-# provisions it outright. Sandbox has ONE backend — there is no operator console
-# here. After apply: flip the deploy-sandbox.yml rollout target
-# (linyup-web → linyup-web-eu), cut the domain over in the Console, then delete
-# the old us-central1 linyup-web backend.
+# EU migration (us-central1 → europe-west4), 2026-08-26. terraform CREATES this
+# backend (region, environment, service account) with NO codebase — a standalone
+# Developer Connect connection is rejected by the backend API, and only App
+# Hosting's own FIREBASE-app flow can mint an acceptable one. So `terraform apply`
+# provisions the bare backend, then the repo is connected by hand in the Console
+# (App Hosting → linyup-web-eu → settings → connect repository, root dir
+# apps/web); the module's `ignore_changes = [codebase]` leaves that connection
+# alone. Sandbox has ONE backend — no operator console here.
+#
+# After apply + connect + first rollout: flip the deploy-sandbox.yml rollout
+# target (linyup-web → linyup-web-eu), cut the domain over, then delete the old
+# us-central1 linyup-web backend.
 module "app_hosting" {
   source     = "../../modules/app-hosting"
   project_id = var.project_id
   location   = "europe-west4"
   app_id     = "1:1006203712444:web:5f1a15e86998c7a42671b9"
-  repository = "projects/linyup-sandbox/locations/europe-west4/connections/apphosting-github-conn-eu/gitRepositoryLinks/francodgstn-dgstn-linyup"
+  # repository intentionally unset — codebase is connected in the Console (above).
 
   backends = {
     "linyup-web-eu" = {
-      root_directory  = "/apps/web"
       service_account = "firebase-app-hosting-compute@linyup-sandbox.iam.gserviceaccount.com"
       environment     = "sandbox"
     }
