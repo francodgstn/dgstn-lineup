@@ -454,12 +454,28 @@ service cloud.firestore {
         //
         // Invitation acceptance does NOT come through here — it runs on the
         // Admin SDK and is gated in the callable.
+        // The self-provision branch is CREATE-ONLY and only on a team THIS user
+        // created. Before 2026-08-26 it required nothing about `teamId`, so ANY
+        // authenticated principal — including a passwordless `contact:` session,
+        // whose entry price is booking one public class — could write an
+        // owner-role membership into someone else's team; and because
+        // `hasTeamRole` reads the role off this very document, that write made
+        // them a full owner. Reproduced end-to-end against these rules in
+        // `teams/tenantGovernance.rules-test.ts`.
+        //
+        // Two clauses close it: `resource == null` (a CREATE — an existing
+        // member cannot rewrite their own doc to escalate) and the `createdBy`
+        // tie (only the team's own creator, at signup). A `contact:*`/`kiosk:*`
+        // session uid can never equal a real signup uid, so `createdBy` rejects
+        // those sessions for free. `provisionTeam` writes the team doc
+        // (`createdBy = uid`) BEFORE the membership, so the get() sees it.
         allow write: if (hasTeamRole(teamId, 'owner') &&
                        (memberId == request.auth.uid ||
                         get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', 'free') in ['studio', 'organization'])) ||
-                       (isAuthed() && memberId == request.auth.uid &&
+                       (resource == null && memberId == request.auth.uid &&
                         request.resource.data.role == 'owner' &&
-                        request.resource.data.userId == request.auth.uid);
+                        request.resource.data.userId == request.auth.uid &&
+                        get(/databases/$(database)/documents/teams/$(teamId)).data.get('createdBy', '') == request.auth.uid);
       }
 
       // Customizable role config (currently only the Coach role). Team members read it
