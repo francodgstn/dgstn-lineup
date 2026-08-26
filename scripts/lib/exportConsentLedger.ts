@@ -30,6 +30,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { Firestore } from 'firebase-admin/firestore'
+import { readTeamConsentLedger } from '../../packages/functions/src/waivers/consentExport'
 
 export interface ConsentExportResult {
   teamId: string
@@ -52,70 +53,28 @@ export async function exportConsentLedger(
   teamId: string,
   outDir: string
 ): Promise<ConsentExportResult> {
-  const documentsSnap = await db.collection('documents').where('teamId', '==', teamId).get()
+  // The WHAT — which collections a signature is made of, and the skip-if-nothing
+  // rule — lives in the ONE shared reader, so this path and the scheduled
+  // GCS path (dailyTasks/purgeScheduledTeams.ts) can never disagree on it.
+  const nowIso = new Date().toISOString()
+  const ledger = await readTeamConsentLedger(db, teamId, nowIso)
 
   const result: ConsentExportResult = {
     teamId,
-    documents: documentsSnap.size,
-    versions: 0,
-    acceptances: 0,
-    signers: 0,
+    documents: ledger.counts.documents,
+    versions: ledger.counts.versions,
+    acceptances: ledger.counts.acceptances,
+    signers: ledger.counts.signers,
     file: null,
   }
-  if (documentsSnap.empty) return result
-
-  const policySnap = await db
-    .collection('teams')
-    .doc(teamId)
-    .collection('waiver_policy')
-    .doc('current')
-    .get()
-
-  const documents = []
-  for (const doc of documentsSnap.docs) {
-    // The subcollections that make a signature mean something: the frozen TEXT
-    // (an acceptance stores only its hash, so without the versions the events
-    // are fingerprints of nothing), the append-only EVENTS, the current-state
-    // SIGNER rows, and the declared-but-unwritten NOTICE rows.
-    const [versions, acceptances, signers, notices] = await Promise.all([
-      doc.ref.collection('versions').get(),
-      doc.ref.collection('acceptances').get(),
-      doc.ref.collection('signers').get(),
-      doc.ref.collection('notices').get(),
-    ])
-    result.versions += versions.size
-    result.acceptances += acceptances.size
-    result.signers += signers.size
-
-    documents.push({
-      id: doc.id,
-      document: doc.data(),
-      versions: versions.docs.map((d) => ({ id: d.id, ...d.data() })),
-      acceptances: acceptances.docs.map((d) => ({ id: d.id, ...d.data() })),
-      signers: signers.docs.map((d) => ({ id: d.id, ...d.data() })),
-      notices: notices.docs.map((d) => ({ id: d.id, ...d.data() })),
-    })
-  }
-
-  // Nothing was ever signed here. Say so and write no file — see above.
-  if (result.acceptances === 0 && result.versions === 0) return result
+  // Null archive = nothing was ever signed here. Write no file — an empty file
+  // would train whoever runs this to ignore the output.
+  if (!ledger.archive) return result
 
   fs.mkdirSync(outDir, { recursive: true })
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const stamp = nowIso.replace(/[:.]/g, '-')
   const file = path.join(outDir, `consent-ledger-${teamId}-${stamp}.json`)
-  fs.writeFileSync(
-    file,
-    JSON.stringify(
-      {
-        exported_at: new Date().toISOString(),
-        teamId,
-        waiver_policy: policySnap.data() ?? null,
-        documents,
-      },
-      null,
-      2
-    ) + '\n'
-  )
+  fs.writeFileSync(file, JSON.stringify(ledger.archive, null, 2) + '\n')
   result.file = file
   return result
 }

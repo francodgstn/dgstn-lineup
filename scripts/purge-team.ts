@@ -37,14 +37,19 @@
  *     realistic failure is a mistyped team id that happens to exist.
  *   - Requires an interactive typed confirmation of the team id; --yes is the
  *     non-interactive escape hatch and the ONLY way it runs without a TTY.
+ *   - Exports the team's waiver/consent ledger to disk BEFORE deleting anything
+ *     and REFUSES the run if that export fails (Q13). --no-consent-export is the
+ *     typed escape hatch for a tenant you know holds no signatures.
  */
 
+import * as path from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import admin from 'firebase-admin'
 import { applicationDefault } from 'firebase-admin/app'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { purgeTeam } from '../packages/functions/src/saas-billing/purgeTeam'
+import { requireConsentExport } from './lib/exportConsentLedger'
 
 const { values } = parseArgs({
   options: {
@@ -52,6 +57,7 @@ const { values } = parseArgs({
     project: { type: 'string' },
     apply: { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
+    'no-consent-export': { type: 'boolean', default: false },
   },
 })
 
@@ -59,10 +65,16 @@ const teamId = values.team?.trim()
 const projectId = values.project?.trim()
 const apply = values.apply
 const skipPrompt = values.yes
+const skipConsentExport = values['no-consent-export']
+
+/** Where the pre-teardown consent ledgers land, same as the reset/seed scripts. */
+const CONSENT_EXPORT_DIR = path.resolve(process.cwd(), 'exports', 'consent-ledgers')
 
 function usage(msg: string): never {
   console.error(`\n❌ ${msg}\n`)
-  console.error('   Usage: pnpm purge:team --team <teamId> --project <projectId> [--apply] [--yes]')
+  console.error(
+    '   Usage: pnpm purge:team --team <teamId> --project <projectId> [--apply] [--yes] [--no-consent-export]'
+  )
   console.error('   Dry run is the default; --apply is required to delete anything.\n')
   process.exit(1)
 }
@@ -117,6 +129,13 @@ async function main(): Promise<void> {
       process.exit(1)
     }
   }
+
+  // Export the waiver ledger BEFORE anything is deleted — purgeTeam recursively
+  // erases `documents`, taking every acceptance, version snapshot and signer row
+  // with it, and a liability release is the one artefact a departing studio needs
+  // for years afterwards. REFUSES (throws) on a failed export; --no-consent-export
+  // is the typed escape hatch for a tenant known to hold none.
+  await requireConsentExport(db, [teamId!], CONSENT_EXPORT_DIR, { skip: skipConsentExport })
 
   await purgeTeam(teamId!, false)
 
