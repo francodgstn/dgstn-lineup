@@ -21,16 +21,21 @@ variable "app_id" {
 
 variable "repository" {
   type        = string
+  default     = null
   description = <<-EOT
-    Full resource name of the Developer Connect gitRepositoryLink the backends
-    build from, e.g.
+    OPTIONAL. Full resource name of a FIREBASE-app Developer Connect
+    gitRepositoryLink the backends build from, e.g.
     projects/<p>/locations/europe-west4/connections/<conn>/gitRepositoryLinks/<link>.
 
-    The connection + link are NOT managed here (Firebase creates them with its
-    own GitHub App when you Connect the repository in the Console, which does not
-    import cleanly into terraform's google_developer_connect_connection). They
-    are a set-once, per-project artifact; this module only owns the backends that
-    reference them. Read the current value with:
+    Leave NULL (the default) to create the backends with no codebase and connect
+    the repo by hand in the App Hosting settings UI afterwards — the supported
+    path for a new project, because the backend API accepts a codebase only when
+    its connection was minted by App Hosting's own FIREBASE-app flow (a standalone
+    Developer Connect connection is a DEVELOPER_CONNECT-app link and is rejected).
+    `ignore_changes = [codebase]` then keeps that hand-made connection intact.
+
+    Set it only where a FIREBASE-app link already exists and is in state (staging).
+    Read the current value with:
       gcloud developer-connect connections git-repository-links list \
         --project <p> --location europe-west4 --connection <conn>
   EOT
@@ -38,16 +43,21 @@ variable "repository" {
 
 variable "backends" {
   description = <<-EOT
-    backend_id => backend config. root_directory is stored with a LEADING SLASH
-    ("/apps/web"), matching what `apphosting:backends:create --root-dir apps/web`
-    writes — a value without the slash will show a permanent diff on import.
-    service_account must already hold roles/firebaseapphosting.computeRunner:
-    the shared firebase-app-hosting-compute SA for the web app, the dedicated
-    linyup-admin SA for the operator console (it writes Firestore + the SMTP
-    secret). environment selects apphosting.<env>.yaml; null uses apphosting.yaml.
+    backend_id => backend config. service_account must already hold
+    roles/firebaseapphosting.computeRunner: the shared firebase-app-hosting-compute
+    SA for the web app, the dedicated linyup-admin SA for the operator console (it
+    writes Firestore + the SMTP secret). environment selects apphosting.<env>.yaml;
+    null uses apphosting.yaml.
+
+    root_directory applies ONLY when var.repository is set (terraform renders the
+    codebase). Where the repo is Console-connected (var.repository null) it is
+    unused — you enter the root directory in the UI instead — so omit it there.
+    When set, store it with a LEADING SLASH ("/apps/web"), matching what
+    `apphosting:backends:create --root-dir apps/web` writes, or import shows a
+    permanent diff.
   EOT
   type = map(object({
-    root_directory  = string
+    root_directory  = optional(string)
     service_account = string
     environment     = optional(string)
     display_name    = optional(string)
