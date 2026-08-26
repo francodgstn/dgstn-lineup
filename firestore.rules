@@ -162,6 +162,29 @@ service cloud.firestore {
         || get(/databases/$(database)/documents/organizations/$(orgId)/org_members/$(request.auth.uid)).data.get('role', '') == 'org_admin';
     }
 
+    // A member of a studio that GENUINELY belongs to `orgId` may read that org's
+    // shared collections. "Genuinely belongs" is proven by the server-written
+    // organizations/{orgId}/org_teams/{teamId} doc (Cloud-Functions-only, written
+    // in the SAME batch that sets the team's org_id when an org invitation is
+    // accepted — see orgs/index.ts), NOT by teams/{teamId}.org_id: that field is
+    // client-writable and unconstrained on team create, so trusting it let anyone
+    // forge a team carrying a target org's id and read its shared data.
+    // isTeamMember pins the current team to one the caller actually belongs to.
+    //
+    // The membership must be ACTIVE. When a studio is unlinked (org lapse or
+    // removal, orgs/lifecycle.ts) its team.org_id is DELETED but this row is kept
+    // as status:'inactive' — so an existence check alone would let an ex-member
+    // keep reading the federation's shared data. Absent/malformed status reads as
+    // 'active' (the accept batch always writes 'active', and pre-status rows are
+    // live members).
+    function currentTeamInOrg(orgId) {
+      let ct = getUserCurrentTeam();
+      return isAuthed()
+        && isTeamMember(ct)
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/org_teams/$(ct))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/org_teams/$(ct)).data.get('status', 'active') == 'active';
+    }
+
     // Check if resource's teamId matches user's current team OR if teacher field matches user (backward compat)
     function belongsToUserTeam(res) {
       return (res.data.teamId != null && res.data.teamId == getUserCurrentTeam() && isTeamMember(res.data.teamId))
@@ -1104,9 +1127,9 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.scope == 'org'
                         && resource.data.orgId != null
                         && isOrgMember(resource.data.orgId))
-                    || (isAuthed() && resource.data.scope == 'org'
+                    || (resource.data.scope == 'org'
                         && resource.data.orgId != null
-                        && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == resource.data.orgId)
+                        && currentTeamInOrg(resource.data.orgId))
                     || hasRole('admin');
       allow update: if (belongsToUserTeam(resource)
                           && hasTeamCapability(resource.data.teamId, 'events.manage'))
@@ -1151,8 +1174,7 @@ service cloud.firestore {
                          // current team belongs to that org (mirrors org_places
                          // and the parent event's own read rule).
                       || (itemOrg() != null && isOrgMember(itemOrg()))
-                      || (itemOrg() != null
-                            && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.get('org_id', null) == itemOrg())
+                      || (itemOrg() != null && currentTeamInOrg(itemOrg()))
                       || hasRole('admin'));
 
         // CREATE is the one operation that pays for a get() on the parent: the
@@ -1500,9 +1522,14 @@ service cloud.firestore {
       allow get: if isAuthed() && (
         isTeamMember(resource.data.team_id) || hasRole('admin')
       );
-      // Collection LIST: resource.data is NOT available for query rules.
-      // Security relies on the app always filtering by team_id == user's team.
-      allow list: if isAuthed();
+      // Collection LIST: scoped to the caller's own team. Referencing
+      // resource.data.team_id forces the client query to filter
+      // `where('team_id','==', <team>)` and makes Firestore REJECT any unscoped
+      // or cross-tenant list — the same shape the single-doc get() rule uses.
+      // (Was `if isAuthed()`, which let any authenticated principal — a contact
+      // session included — enumerate every studio's referral graph + reward
+      // amounts; client-side filtering is not enforcement.)
+      allow list: if isAuthed() && isTeamMember(resource.data.team_id);
       allow write: if false;
     }
 
@@ -1813,12 +1840,21 @@ service cloud.firestore {
       match /org_members/{memberId} {
         // A user can always read their own membership doc (needed for collectionGroup sidebar query)
         allow read: if isOrgMember(orgId) || memberId == request.auth.uid;
-        // org_admin can manage members; creator can self-provision as org_admin on org creation
-        allow write: if hasOrgRole(orgId, 'org_admin')
-                     || (isAuthed()
-                         && memberId == request.auth.uid
-                         && request.resource.data.role == 'org_admin'
-                         && request.resource.data.userId == request.auth.uid);
+        // org_admin can manage members. There is deliberately NO client
+        // self-provision branch here (unlike the team-side signup): org creation
+        // and every membership change run on the Admin SDK, which bypasses rules.
+        // `createOrganization` writes the creator's org_admin row, and
+        // `grantOrgMembership` (invite-accept + add-member) is the only other
+        // writer — no client flow writes org_members directly (verified: zero
+        // client setDoc/updateDoc callers).
+        //
+        // The removed disjunct required nothing about WHICH org this was, so ANY
+        // authenticated principal (a passwordless `contact:` session included)
+        // could write itself an `org_admin` row into ANY org; because hasOrgRole
+        // reads the role off this very document, that write made them org_admin —
+        // the org-scoped twin of the 2026-08-26 team-membership takeover (#106),
+        // reaching every member studio's contact PII via isOrgAdminOfTeam.
+        allow write: if hasOrgRole(orgId, 'org_admin');
         allow delete: if hasOrgRole(orgId, 'org_admin');
       }
 
@@ -1867,9 +1903,7 @@ service cloud.firestore {
       // managed by org admins. Sub-team members read via their current team's org_id
       // so the affiliation type dropdown can populate (mirrors org_places).
       match /affiliation_types/{typeId} {
-        allow read:   if isOrgMember(orgId)
-                      || (isAuthed()
-                          && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow read:   if isOrgMember(orgId) || currentTeamInOrg(orgId);
         allow write:  if hasOrgRole(orgId, 'org_admin');
         allow delete: if hasOrgRole(orgId, 'org_admin');
       }
@@ -1895,9 +1929,7 @@ service cloud.firestore {
       // Org-wide places: shared down to every sub-studio (read), managed by org admins.
       // Sub-team members read via their current team's org_id (mirrors org-scope events).
       match /org_places/{placeId} {
-        allow read:  if isOrgMember(orgId)
-                     || (isAuthed()
-                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow read:  if isOrgMember(orgId) || currentTeamInOrg(orgId);
         allow write: if hasOrgRole(orgId, 'org_admin');
       }
 
@@ -1906,9 +1938,7 @@ service cloud.firestore {
       // exactly like org_places. Applying it to an event and saving back always
       // produces a TEAM template — a club can never write to the org's.
       match /org_program_templates/{templateId} {
-        allow read:  if isOrgMember(orgId)
-                     || (isAuthed()
-                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow read:  if isOrgMember(orgId) || currentTeamInOrg(orgId);
         allow write: if hasOrgRole(orgId, 'org_admin');
       }
 
@@ -1916,9 +1946,7 @@ service cloud.firestore {
       // Sub-team members read via their current team's org_id so useInstalledPlugins
       // can merge org plugins alongside team plugins without a separate auth check.
       match /installed_plugins/{pluginId} {
-        allow read:  if isOrgMember(orgId)
-                     || (isAuthed()
-                         && get(/databases/$(database)/documents/teams/$(getUserCurrentTeam())).data.org_id == orgId);
+        allow read:  if isOrgMember(orgId) || currentTeamInOrg(orgId);
         allow write: if hasOrgRole(orgId, 'org_admin');
       }
     }
