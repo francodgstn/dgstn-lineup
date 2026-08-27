@@ -74,12 +74,22 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const kindLabel = isOrg ? t('scopeOrganisation') : t('scopeStudio')
   const name = current.name || kindLabel
 
-  // The accent the deleted band carried. Studio scope stays NEUTRAL, on the
-  // band's own rule: a badge on the default case is noise rather than
-  // information.
+  // BOTH SCOPES ARE BOXED; ONLY THE COLOUR DIFFERS (Franco, 2026-08-27).
+  //
+  // Studio scope was left deliberately unboxed at first, on the rule the deleted
+  // indicator band followed: a badge on the DEFAULT case is noise rather than
+  // information. That rule is right about badges and wrong about this control,
+  // because it made the SHAPE change between scopes — and a control that changes
+  // shape is harder to learn than one that changes colour. Boxed in both, the
+  // eye finds the same object in the same place every time and reads the colour
+  // for which place it is.
+  //
+  // The org keeps the loud amber; the studio gets the product's own primary at
+  // low opacity, which is present enough to draw the box and quiet enough not to
+  // compete with the nav rows below — it is the ordinary case, not an alert.
   const accent = isOrg
     ? 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15'
-    : 'border-transparent hover:bg-accent'
+    : 'border-primary/20 bg-primary/5 hover:bg-primary/10'
 
   // NO ICON WHEN THERE IS A LABEL. Expanded, the eyebrow already says which KIND
   // of place this is, in words — a glyph beside it was the same fact twice, and
@@ -93,7 +103,7 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const Icon = isOrg ? Landmark : Building2
   const identity = collapsed ? (
     <Icon
-      className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+      className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-primary/70'}`}
     />
   ) : (
     <span className="flex min-w-0 flex-1 flex-col items-start">
