@@ -5230,7 +5230,9 @@
     "customFieldsIntro": "Compila le informazioni richieste da questo tipo di evento.",
     "customFieldsRequiredHint": "Compila tutti i campi obbligatori prima del check-in.",
     "fieldRequired": "Obbligatorio",
-    "fieldSelectPlaceholder": "Seleziona…"
+    "fieldSelectPlaceholder": "Seleziona…",
+    "saveFailed": "Impossibile salvare questo check-in.",
+    "addFailed": "{count} su {total} non è stato possibile aggiungerli. {detail}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Passa al piano {label}",

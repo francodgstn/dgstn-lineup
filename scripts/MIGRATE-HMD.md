@@ -95,7 +95,7 @@ pnpm migrate:hmd \
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
 
-Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `exam-checkins` · `event-categories` · `referrals` · `team-subcollections` · `places` · `verify`
+Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `exam-checkins` · `cup-checkins` · `event-categories` · `referrals` · `team-subcollections` · `places` · `verify`
 
 **Run a single pass** (e.g. after a failure mid-way):
 
@@ -136,6 +136,8 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `events` + invitations/attendees | Copied as `scope='org', orgId='hmd', teamId=null` |
 | Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |
 | Exam check-in results (`exam-checkins`) | hmd-lineup kept the result at the TOP LEVEL (`exams.hmd_rank` / `kd_rank`, `is_graded`); Linyup reads `checkin_data.disciplines: { [systemId]: level }`. Remapped in place, `is_completed` recomputed. **Nothing is deleted** — the legacy payload is copied to `checkin_data.legacy` and also left where it was, because `is_graded` records that the award was already applied and is what stops a later rank backfill promoting somebody twice |
+| Fighting-cup check-in entries (`cup-checkins`) | The same top-level drift as the exam payload: hmd-lineup stored `categories` and `weight` on the check-in itself, Linyup reads `checkin_data`. Without the remap a migrated cup entry opens EMPTY — no divisions ticked, no weight — with the competitor's entry sitting one level up in the same document. **Nothing is deleted**; the legacy fields are copied to `checkin_data.legacy` and left in place. `is_completed` is deliberately NOT recomputed here: the stored value is the source app's own record of what a grader decided, and it is a better answer than re-deriving it |
+| Event type slug (`events`) | hmd-lineup's `fighting_cup` becomes Linyup's `hmd_fighting_cup` — the id the plugin declares. Plugin resolution is an exact match, so unmapped every migrated cup lost its Categories tab, its check-in form and its export, and the rank-progression engine (which matches participation on these ids) would never count a cup toward the one-camp-one-tournament-one-exam requirement. The map is `SOURCE_EVENT_TYPE_MAP` in `migration/config.ts`; the denormalised copy on each check-in is remapped with it. `traditional_cup` is deliberately NOT mapped — Linyup has no equivalent and collapsing it into `competition` would merge two things HMD tells apart |
 | Fighting-cup categories (`event-categories`) | hmd-lineup kept categories in a **global** `categories` collection; Linyup keeps them per-event. Only the ids a migrated check-in actually references are copied to `events/{eventId}/categories/{categoryId}`, doc id preserved so the existing arrays resolve |
 | `referrals` | Copied as-is |
 | Team subcollections | Copied from source (several with a field-rename/flatten transform — see "Team subcollections pass-through" below); **canonical subscription types are seeded** (see below); `public_profile` is deliberately **not** copied — it's fully derived, see that section |

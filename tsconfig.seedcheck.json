@@ -17,6 +17,7 @@
     "scripts/seed-staging.ts",
     "scripts/seed-lead.ts",
     "scripts/lib/**/*.ts",
-    "scripts/migration/**/*.ts"
+    "scripts/migration/**/*.ts",
+    "scripts/migrate-hmd.ts"
   ]
 }
