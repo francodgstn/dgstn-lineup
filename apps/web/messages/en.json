@@ -2207,7 +2207,12 @@
     "createStudio": "Create another studio",
     "switchStudioFailed": "Could not switch studio. Please try again.",
     "studioListFailed": "Could not load your studios.",
-    "studioListRetry": "Try again"
+    "studioListRetry": "Try again",
+    "scopeStudio": "Studio",
+    "scopeOrganisation": "Organisation",
+    "switchOrganisation": "Organisations",
+    "flipToPrevious": "Switch to {name}",
+    "flipLast": "Last"
   },
   "BioLink": {
     "title": "Bio link",
@@ -2851,7 +2856,14 @@
     "pluginsUninstalledSuccess": "Plugin removed from organization.",
     "pluginsErrorInstall": "Could not install plugin. Please try again.",
     "pluginsErrorUninstall": "Could not remove plugin. Please try again.",
-    "tabProgramTemplates": "Programme templates"
+    "tabProgramTemplates": "Programme templates",
+    "navStudios": "Studios",
+    "railGroupStandards": "Standards you set",
+    "railGroupShared": "Shared resources",
+    "railGroupAdministration": "Administration",
+    "railSearchPlaceholder": "Search organisation settings",
+    "railNoResults": "No organisation settings match your search.",
+    "manageTitle": "Organisation settings"
   },
   "OrgTeams": {
     "title": "Teams",
