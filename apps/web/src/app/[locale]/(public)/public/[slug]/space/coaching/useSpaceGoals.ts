@@ -37,6 +37,7 @@ import {
   orderBy,
   query,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
@@ -218,8 +219,12 @@ export function useAddGoalEvaluation() {
       statusAfter?: GoalStatus
     }) => {
       if (!contactId) throw new Error('Not signed in')
-      await addDoc(
-        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goal.id, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION),
+      // ONE BATCH. The evaluation and the status it moves the goal to are a
+      // single fact; landing one without the other leaves a goal whose status
+      // its own newest evaluation contradicts, with nothing to reconcile them.
+      const batch = writeBatch(db)
+      batch.set(
+        doc(collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goal.id, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION)),
         {
           evaluated_at: Timestamp.now(),
           evaluated_by: 'student',
@@ -238,8 +243,9 @@ export function useAddGoalEvaluation() {
       // succeed — the goal is hers — and only when the form actually offered
       // and changed a status.
       if (goal.created_by === 'student' && statusAfter && statusAfter !== goal.status) {
-        await updateDoc(goalDoc(contactId, goal.id), { status: statusAfter })
+        batch.update(goalDoc(contactId, goal.id), { status: statusAfter })
       }
+      await batch.commit()
     },
     onError: (err) => reportPublicActionFailure('space/add-evaluation', err),
     onSuccess: (_result, vars) => {

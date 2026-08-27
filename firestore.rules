@@ -1051,6 +1051,15 @@ service cloud.firestore {
       // the mobile and Space clients are built to that rule, so no UI ever
       // attempts the write this denies.
       //
+      // `created_by` is IMMUTABLE for everyone, staff included — it records who
+      // authored the goal, which is a historical fact rather than a setting. It
+      // is also load-bearing twice over in the arms above: the member's own-goal
+      // arm keys on it, and so does the coach-task arm. A member could otherwise
+      // flip their own goal to `created_by: 'coach'` and have the UI render a
+      // "set by your coach" chip on something they wrote themselves. (Only a
+      // CHANGED value counts — `affectedKeys()` is a diff, so a client echoing
+      // the field back unchanged is unaffected.)
+      //
       // `latest_score` / `last_evaluated_at` / `overdue_at` are denormalized by
       // Cloud Functions ONLY (trackGoalEvaluations, trackGoals, and the daily
       // stampOverdueGoals job all write via the Admin SDK, which bypasses these
@@ -1075,7 +1084,7 @@ service cloud.firestore {
                              && resource.data.status in ['open', 'achieved']
                              && request.resource.data.status in ['open', 'achieved']
                              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completed_at'])))
-                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['latest_score', 'last_evaluated_at', 'overdue_at']);
+                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['latest_score', 'last_evaluated_at', 'overdue_at', 'created_by']);
         allow delete: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.created_by == 'student');

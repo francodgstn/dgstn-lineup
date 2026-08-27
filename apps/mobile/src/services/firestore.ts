@@ -1,5 +1,5 @@
 import { db, getFunctions } from '../config/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
 import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalCreatedBy, GoalEvaluation, GoalType, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
 import { detectPerformanceProfile, resolveCoachingDimensions } from '../utils/goalContract';
 import { httpsCallable } from 'firebase/functions';
@@ -979,11 +979,15 @@ export const FirestoreService = {
   ): Promise<void> {
     try {
       const evalsRef = collection(db, 'contacts', contactId, 'goals', goalId, 'evaluations');
-      await addDoc(evalsRef, data);
+      // ONE BATCH: the evaluation and the status it moves the goal to are a
+      // single fact. Landing one without the other leaves a goal whose status
+      // its own newest evaluation contradicts, and nothing reconciles them.
+      const batch = writeBatch(db);
+      batch.set(doc(evalsRef), data);
       if (goalCreatedBy === 'student') {
-        const goalRef = doc(db, 'contacts', contactId, 'goals', goalId);
-        await updateDoc(goalRef, { status: data.status_after });
+        batch.update(doc(db, 'contacts', contactId, 'goals', goalId), { status: data.status_after });
       }
+      await batch.commit();
     } catch (error) {
       console.error('Error adding goal evaluation:', error);
       throw error;
@@ -999,11 +1003,12 @@ export const FirestoreService = {
   ): Promise<void> {
     try {
       const evalRef = doc(db, 'contacts', contactId, 'goals', goalId, 'evaluations', evalId);
-      await updateDoc(evalRef, { ...data, edited: true });
+      const batch = writeBatch(db);
+      batch.update(evalRef, { ...data, edited: true });
       if (data.status_after && goalCreatedBy === 'student') {
-        const goalRef = doc(db, 'contacts', contactId, 'goals', goalId);
-        await updateDoc(goalRef, { status: data.status_after });
+        batch.update(doc(db, 'contacts', contactId, 'goals', goalId), { status: data.status_after });
       }
+      await batch.commit();
     } catch (error) {
       console.error('Error updating goal evaluation:', error);
       throw error;

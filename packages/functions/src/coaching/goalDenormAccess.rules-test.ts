@@ -283,4 +283,42 @@ describe('firestore.rules — coaching denormalized fields', function () {
       }),
     )
   })
+
+  // ── `created_by` is immutable ─────────────────────────────────────────────
+  //
+  // Authorship is a historical fact, and it is load-bearing: the member's
+  // own-goal arm and the coach-task arm both key on it. A member flipping their
+  // own goal to 'coach' would render a "set by your coach" chip on something
+  // they wrote themselves.
+
+  it('a self-contact CANNOT flip their OWN goal to created_by: coach', async () => {
+    const db = contactSession()
+    await assertFails(
+      updateDoc(doc(db, 'contacts', CONTACT, 'goals', 'studentGoal'), { created_by: 'coach' }),
+    )
+  })
+
+  it('a self-contact CANNOT flip a coach-assigned TASK to created_by: student', async () => {
+    const db = contactSession()
+    await assertFails(
+      updateDoc(doc(db, 'contacts', CONTACT, 'goals', 'coachTask'), { created_by: 'student' }),
+    )
+  })
+
+  it('even a team owner CANNOT rewrite created_by — it is history, not a setting', async () => {
+    const db = ownerSession()
+    await assertFails(
+      updateDoc(doc(db, 'contacts', CONTACT, 'goals', 'studentGoal'), { created_by: 'coach' }),
+    )
+  })
+
+  it('sanity: echoing created_by back UNCHANGED is not blocked (affectedKeys is a diff)', async () => {
+    const db = contactSession()
+    await assertSucceeds(
+      updateDoc(doc(db, 'contacts', CONTACT, 'goals', 'studentGoal'), {
+        created_by: 'student',
+        status: 'in_progress',
+      }),
+    )
+  })
 })

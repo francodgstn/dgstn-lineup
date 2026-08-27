@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
   collection, query, orderBy, getDocs, addDoc, updateDoc, deleteDoc,
-  doc, serverTimestamp, Timestamp,
+  doc, serverTimestamp, Timestamp, writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
@@ -398,15 +398,20 @@ function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, on
     setExpanded((e) => !e)
   }
 
+  // ONE BATCH, not two awaits. An evaluation and the status it moves the goal to
+  // are a single fact: if the second write never lands, the goal keeps a status
+  // its own newest evaluation contradicts, and nothing later reconciles them.
   const handleAddEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
-    await addDoc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), {
+    const batch = writeBatch(db)
+    batch.set(doc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION)), {
       evaluated_at: serverTimestamp(),
       evaluated_by: 'coach',
       score,
       notes: notes || null,
       status_after: statusAfter,
     })
-    await updateDoc(goalRef, { status: statusAfter })
+    batch.update(goalRef, { status: statusAfter })
+    await batch.commit()
     setShowEvalDialog(false)
     await loadEvals()
     qc.invalidateQueries({ queryKey: ['contact-goals', contactId] })
@@ -414,10 +419,12 @@ function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, on
 
   const handleEditEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
     if (!editingEval) return
-    await updateDoc(doc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), editingEval.id), {
+    const batch = writeBatch(db)
+    batch.update(doc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), editingEval.id), {
       score, notes: notes || null, status_after: statusAfter, edited: true,
     })
-    await updateDoc(goalRef, { status: statusAfter })
+    batch.update(goalRef, { status: statusAfter })
+    await batch.commit()
     setEditingEval(null)
     await loadEvals()
     qc.invalidateQueries({ queryKey: ['contact-goals', contactId] })
