@@ -69,7 +69,7 @@ import { normalizeTabPath } from '@/lib/tab-routes'
 import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
-import { ORG_NAV_ITEMS, orgHref } from '@/lib/org-nav'
+import { ORG_NAV_ITEMS, ORG_RAIL_ITEMS, orgHref } from '@/lib/org-nav'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
 import { ScopeFlip, ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
@@ -631,6 +631,22 @@ function UtilityFlyout({
 }) {
   const t = useTranslations('Nav')
   const label = t('utilities')
+  // THE ROW FOLLOWS THE SCOPE. These three destinations were hardcoded studio
+  // paths, so in org scope "All settings" and "Explore plugins" walked the
+  // reader straight out of the organisation and into the studio's settings —
+  // silently, because both screens look plausible on arrival. An organisation
+  // has its own of each; How-to is the product's help and belongs to neither.
+  //
+  // The QR is studio-only for the same reason and is not swapped: it encodes a
+  // STUDIO's public links, and there is no org equivalent to put in its place.
+  const { current: scope } = useScope()
+  const orgId = scope?.kind === 'org' ? scope.id : null
+  const settingsItem: NavItem = orgId
+    ? { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') }
+    : ALL_SETTINGS_ITEM
+  const pluginsItem: NavItem = orgId
+    ? { ...EXPLORE_PLUGINS_ITEM, href: orgHref(orgId, 'plugins') }
+    : EXPLORE_PLUGINS_ITEM
   return (
     <NavFlyout
       label={label}
@@ -648,9 +664,9 @@ function UtilityFlyout({
       {/* A labelled column, not the icon strip this used to be: once the menu is
           open there is room for names, and the same shape serves both modes. */}
       <div className="flex min-w-40 flex-col gap-0.5">
-        {includeQr && <TeamQrButton showLabel />}
-        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} showLabel />
-        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} showLabel />
+        {includeQr && !orgId && <TeamQrButton showLabel />}
+        <UtilityIconLink item={pluginsItem} onClick={onLinkClick} showLabel />
+        <UtilityIconLink item={settingsItem} onClick={onLinkClick} showLabel />
         <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} showLabel />
       </div>
     </NavFlyout>
@@ -2333,6 +2349,7 @@ function SidebarContent({
 }) {
   const t = useTranslations('Nav')
   const tp = useTranslations('Plugins')
+  const tOrg = useTranslations('Org')
   const pathname = usePathname()
   const { team, currentTeamId } = useAuth()
   // WHICH SCOPE THE URL SAYS WE ARE IN. Derived, never stored — see
@@ -2469,7 +2486,47 @@ function SidebarContent({
   // through the ordinary path with everything else. Dashboard stays here because
   // it is the one destination that is not a section row and never was.
   const settingsIds = new Set(SETTINGS_ITEMS.map((i) => i.id))
-  const searchEntries: SearchEntry[] = [
+
+  // IN ORG SCOPE THE SEARCH INDEXES THE ORGANISATION, not the studio.
+  //
+  // It used to index the studio's destinations in both scopes, which was worse
+  // than finding nothing: standing in an organisation, every result led OUT of
+  // it, to pages whose rows were not even on screen. The rest of the sidebar
+  // already swaps; this is the last piece that did not.
+  //
+  // The org catalogue is small and flat — the four rows plus the rail — so it is
+  // built here rather than through the shortcut-able `catalogue`, which carries
+  // pinning and gating that only mean something for a studio.
+  const orgSearchEntries: SearchEntry[] = orgScopeId
+    ? [...ORG_NAV_ITEMS, ...ORG_RAIL_ITEMS].map((item) => ({
+        id: item.id,
+        href: orgHref(orgScopeId, item.path),
+        label:
+          item.dynamicLabel === 'affiliationTerm'
+            ? affiliationTerm
+            : tOrg(item.labelKey as Parameters<typeof tOrg>[0]),
+        icon: item.icon,
+        keywords: '',
+        canShortcut: false,
+        kind: (item.group ? 'settings' : 'page') as SearchKind,
+      }))
+    : []
+
+  const searchEntries: SearchEntry[] = orgScopeId ? [
+    // How-to is the product's own help and belongs to neither scope, so it is
+    // the one studio-side entry that survives the swap.
+    ...[HOW_TO_ITEM].map((item) => ({
+      id: item.id,
+      href: item.href,
+      label: t(item.labelKey as Parameters<typeof t>[0]),
+      icon: item.icon,
+      exact: item.exact,
+      keywords: kwOf(item.id),
+      canShortcut: false,
+      kind: 'page' as SearchKind,
+    })),
+    ...orgSearchEntries,
+  ] : [
     ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
       href: item.href,
@@ -2640,6 +2697,18 @@ function SidebarContent({
           live?" region. They are no longer in the same box — one is pinned, the
           other scrolls — and a highlight cannot span a scroll boundary, so the
           anchor keeps the half that is a fixed, always-visible target. */}
+      {/* NOT IN ORG SCOPE. The pair is Dashboard plus the studio's own most-used
+          surface, pinned because they are "the things reached from anywhere" —
+          but that is a claim about a STUDIO. An organisation has neither: no
+          dashboard, no schedule, and its home is the studios list which is
+          already the first row below. Leaving them here put two studio
+          destinations above the org's own navigation, which is the hierarchy
+          inversion the pinning exists to prevent, pointed the other way.
+
+          The same reasoning already removed Shortcuts and the plugin rows in org
+          scope (they are pinned PER STUDIO). This was missed because it sits
+          above the scroll area rather than inside it (Franco, 2026-08-27). */}
+      {!orgScopeId && (
       <div
         // The seam between what is pinned and what scrolls. It carries NO rule:
         // the header block already has the studio row's line, and a second one
@@ -2673,6 +2742,7 @@ function SidebarContent({
           />
         )}
       </div>
+      )}
 
       {/* Nav — the scrolling half of the pane.
           `min-h-0` on the wrapper because a flex child will not shrink below its
