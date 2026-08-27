@@ -71,6 +71,7 @@ import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { ORG_NAV_ITEMS, orgHref } from '@/lib/org-nav'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
+import { ScopeFlip, ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { useArchivedContacts } from '@/hooks/useArchivedContacts'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
@@ -2866,8 +2867,13 @@ function SidebarContent({
         </nav>
       </div>
 
-      {/* User account + QR at bottom */}
+      {/* User account + QR at bottom. The flip sits WITH the scope identity
+          rather than in the utility row: it is about where you are standing,
+          which is the question the account menu below already answers. */}
       <div className="border-t py-2 px-2 shrink-0">
+        <div className={`mb-1 flex ${collapsed ? 'justify-center' : 'justify-end'}`}>
+          <ScopeFlip collapsed={collapsed} />
+        </div>
         <UserMenu collapsed={collapsed} />
       </div>
     </div>
@@ -3109,6 +3115,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     // sidebar mounts. It costs one pathname read and the already-cached
     // `useOrgLinks` query.
     <ScopeProvider>
+    <ScopeFlipShortcut />
     <NavPinsProvider>
       <UpgradeModalProvider>
         <RecentContactsProvider>
