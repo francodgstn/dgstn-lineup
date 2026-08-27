@@ -72,6 +72,7 @@ import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { ORG_NAV_ITEMS, ORG_RAIL_ITEMS, orgHref } from '@/lib/org-nav'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
 import { ScopeFlip, ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
+import { ScopeSwitcher } from '@/components/layout/ScopeSwitcher'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { useArchivedContacts } from '@/hooks/useArchivedContacts'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
@@ -2356,7 +2357,6 @@ function SidebarContent({
   // contexts/ScopeContext.tsx. Null means the current studio.
   const { current: scope } = useScope()
   const orgScopeId = scope?.kind === 'org' ? scope.id : null
-  const tTop = useTranslations('TopBar')
   const { isInstalled } = useInstalledPlugins()
   const { isAtLeast } = usePlan()
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
@@ -2588,40 +2588,48 @@ function SidebarContent({
         )}
       </div>
 
-      {/* WHICH STUDIO — its own row, with the QR beside it. The QR belongs here
-          rather than with the utility icons: it encodes THIS studio's public
-          links, so it is a property of the name it sits next to, not another
-          place to navigate to. (It used to live beside the user avatar, inside
-          the account cluster, which was the wrong grouping in a third way.)
+      {/* WHERE YOU ARE STANDING — and the control that changes it. One object.
 
-          ORIENTATION, NOT A CONTROL — and that is now a placement decision
-          rather than a product one. This row used to say there was no team
-          switcher at all; there is one as of 2026-08-24, in the account
-          dropdown at the foot of the sidebar (components/layout/TeamSwitcher),
-          because people already reach a second studio through an ordinary team
-          invitation and had no way to open it. It lives beside the identity it
-          changes rather than here, where the name is what tells you where you
-          are. Hidden when collapsed, like every other piece of text in the
-          sidebar. */}
-      {!collapsed && team?.name && (
-        <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
-          <Link
-            href={'/dashboard' as Route}
-            onClick={onLinkClick}
-            className="min-w-0 flex-1 truncate rounded px-1 text-xs font-medium transition-colors hover:text-primary"
-          >
-            {team.name}
-          </Link>
-          <TeamQrButton />
-          {/* THE OCCASIONAL UTILITIES MOVED UP HERE (2026-08-23), beside the QR,
-              so the search field below can take the whole row. Both controls on
-              this row are about the STUDIO rather than about a destination —
-              the QR encodes its links, the menu opens its settings, its plugins
-              and its how-to — which is why they sit together, and why the row
-              below is now one thing: search. */}
-          <UtilityFlyout onLinkClick={onLinkClick} />
-        </div>
-      )}
+          THIS ROW USED TO BE ORIENTATION ONLY, and that was argued: the name
+          told you where you were, and the switcher lived in the account menu at
+          the foot because reaching a SECOND STUDIO was a rare thing somebody did
+          after an invitation (2026-08-24).
+
+          The scope model invalidated the premise rather than the reasoning.
+          "Which place am I standing in" stopped being a rare question — an
+          organisation and a studio each have an Events, a Places, a Website, a
+          Plugins, a Members and a Settings — and moving between them is
+          something an org admin who also runs a studio does all day. A question
+          asked constantly should not be answered at one end of the sidebar and
+          changed at the other (Franco, 2026-08-27).
+
+          THE ROW SURVIVES COLLAPSE NOW. It used to be `!collapsed` only, so the
+          icon rail said nothing at all about which scope you were in — a gap
+          rather than a decision. The trigger has a w-8 form.
+
+          THE QR IS STUDIO-ONLY and is HIDDEN in org scope rather than
+          repointed: it encodes a STUDIO's public links off its own public
+          profile, and an organisation has no equivalent document — a repointed
+          QR would silently be the current studio's, which looks plausible and
+          is wrong. */}
+      <div
+        className={`mx-2 flex shrink-0 items-center gap-1 border-b py-1.5 ${
+          collapsed ? 'flex-col' : ''
+        }`}
+      >
+        <ScopeSwitcher collapsed={collapsed} />
+        {!collapsed && !orgScopeId && <TeamQrButton />}
+        {/* THE FLIP MOVED UP WITH THE IDENTITY (2026-08-27). It answers a
+            different question from the switcher — "back to where I just was"
+            rather than "show me everywhere" — but it is a question about the
+            same thing, and leaving it at the foot split one subject across both
+            ends of the pane. It still owns Alt+O and still renders nothing when
+            there is nowhere to flip to. */}
+        {!collapsed && <ScopeFlip collapsed={false} />}
+        {/* THE OCCASIONAL UTILITIES, beside the identity they belong to. Their
+            destinations follow the scope — see UtilityFlyout. */}
+        {!collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}
+      </div>
 
       {/* Search row. First of the two pinned rows; the head pair sits under it,
           and the scroll area starts below them both. Expanded, search has this
@@ -2772,20 +2780,6 @@ function SidebarContent({
           onScroll={(e) => setNavScrolled(e.currentTarget.scrollTop > 0)}
           className="h-full overflow-y-auto py-2 px-2"
         >
-        {/* THE SCOPE INDICATOR — the design's single biggest risk is somebody
-            not noticing which scope they are in, and the answer is not more
-            words. It is a different ACCENT and a persistent band, so the
-            difference is visible before anything is read. Only drawn in org
-            scope: the studio is the default place to stand, and a badge on the
-            common case is noise rather than information. */}
-        {orgScopeId && !collapsed && (
-          <div className="mb-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-amber-700 dark:text-amber-400">
-              {tTop('scopeOrganisation')}
-            </p>
-            <p className="truncate text-sm font-semibold">{scope?.name || ' '}</p>
-          </div>
-        )}
         {/* ORG SCOPE REPLACES THE STUDIO'S ROWS ENTIRELY — it does not sit
             beside them. That is the whole point of a scope: one Events, one
             Places, one Settings on screen at a time, so the word never needs a
@@ -2952,13 +2946,10 @@ function SidebarContent({
         </nav>
       </div>
 
-      {/* User account + QR at bottom. The flip sits WITH the scope identity
-          rather than in the utility row: it is about where you are standing,
-          which is the question the account menu below already answers. */}
+      {/* User account at the bottom. The scope identity, its switcher and the
+          flip all moved to the header row (2026-08-27) — what is left here is
+          the person, not the place. */}
       <div className="border-t py-2 px-2 shrink-0">
-        <div className={`mb-1 flex ${collapsed ? 'justify-center' : 'justify-end'}`}>
-          <ScopeFlip collapsed={collapsed} />
-        </div>
         <UserMenu collapsed={collapsed} />
       </div>
     </div>

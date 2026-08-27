@@ -60,7 +60,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 
 export type MyTeam = { id: string; name: string }
@@ -263,7 +262,6 @@ export function TeamSwitcher() {
         <Plus className="mr-2 h-4 w-4" />
         {t('createStudio')}
       </DropdownMenuItem>
-      <DropdownMenuSeparator />
     </>
   )
 }

@@ -21,7 +21,6 @@ import {
 } from 'lucide-react'
 import { posthog } from '@/lib/posthog'
 import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
-import { TeamSwitcher } from '@/components/layout/TeamSwitcher'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,11 +118,16 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
 
-            {/* WHICH STUDIO, directly under the line that names it. Self-gating:
-                the studio list appears only for a login that is in more than
-                one, so for most people this adds a single "create another"
-                row. Emits its own trailing separator. */}
-            <TeamSwitcher />
+            {/* THE STUDIO/ORGANISATION SWITCHER IS NOT HERE ANY MORE
+                (2026-08-27). It moved to the sidebar's header row, where the
+                scope is NAMED — the indicator and the control are one object
+                now, because "which place am I standing in" is a question the
+                scope model made constant, and answering it at one end of the
+                sidebar while changing it at the other was the split this
+                removes. See components/layout/ScopeSwitcher.tsx.
+
+                What is left in this menu is the PERSON: their email, the theme,
+                the language, sign-out. */}
 
             {/* Theme toggle — Light / Dark / System (follow OS) */}
             <div className="px-2 py-1.5">
