@@ -108,6 +108,7 @@ import { ConnectPaymentsCard } from '@/components/connect/ConnectPaymentsCard'
 import { PaymentModesCard } from '@/components/payments/PaymentModesCard'
 import { BillingCurrencyCard, useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
 import { RANK_PRESETS } from '@/lib/rank-presets'
+import { useRankHolderCount } from '@/lib/rank-utils'
 import { useRankingSystems } from '@/hooks/useRankingSystems'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
@@ -1072,6 +1073,7 @@ function RankSystemDialog({
   existingIds,
   onSave,
   storagePath,
+  holderTeamIds,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -1081,12 +1083,17 @@ function RankSystemDialog({
   /** Where uploaded badge artwork goes — see the Storage rule for
    *  `teams/{teamId}/ranking`. */
   storagePath: string
+  /** Whose contacts a removed level would orphan — this studio. `null` when
+   *  that is not known, which is not the same as nobody. */
+  holderTeamIds: string[] | null
 }) {
   const t = useTranslations('TeamSettings')
   const [form, setForm] = useState<RankSystemFormState>(initial ?? emptySystem())
   const [presetOpen, setPresetOpen] = useState(false)
   const [idTouched, setIdTouched] = useState(false)
   const [idError, setIdError] = useState('')
+  const [pendingRemove, setPendingRemove] = useState<number | null>(null)
+  const levelHolders = useRankHolderCount()
 
   const isEdit = !!initial
 
@@ -1096,6 +1103,7 @@ function RankSystemDialog({
       setIdTouched(false)
       setIdError('')
       setPresetOpen(false)
+      setPendingRemove(null)
     }
   }, [open, initial])
 
@@ -1147,6 +1155,28 @@ function RankSystemDialog({
 
   const removeLevel = (idx: number) => {
     setForm((f) => ({ ...f, levels: f.levels.filter((_, i) => i !== idx) }))
+  }
+
+  // Removing a level is destructive to CONTACTS, not just to this form: every
+  // `Contact.ranks[systemId]` sitting on that value is orphaned and thereafter
+  // renders as the nearest level below it (see `getPrimaryRank`). So ask — but
+  // only where somebody can actually be holding it.
+  const requestRemoveLevel = (idx: number) => {
+    const value = form.levels[idx]?.value
+    const wasSaved = isEdit && initial?.levels.some((l) => l.value === value)
+    // A level added in this dialog has never been written, so no contact can
+    // hold it. Confirming that would be pure noise plus a wasted round trip.
+    if (value === undefined || !wasSaved) {
+      removeLevel(idx)
+      return
+    }
+    setPendingRemove(idx)
+    levelHolders.start(holderTeamIds, form.id, [value])
+  }
+
+  const closeRemoveConfirm = () => {
+    setPendingRemove(null)
+    levelHolders.reset()
   }
 
   const applyPreset = (preset: (typeof RANK_PRESETS)[number]) => {
@@ -1239,7 +1269,7 @@ function RankSystemDialog({
                     storagePath={storagePath}
                     canRemove
                     onChange={(field, value) => updateLevel(idx, { [field]: value } as Partial<RankLevel>)}
-                    onRemove={() => removeLevel(idx)}
+                    onRemove={() => requestRemoveLevel(idx)}
                   />
                 ))}
               </div>
@@ -1259,6 +1289,43 @@ function RankSystemDialog({
               {t('save')}
             </Button>
           </DialogFooter>
+
+          {/* Rendered inside the popup so base-ui treats it as a nested
+              dialog rather than a second competing top layer. */}
+          <AlertDialog
+            open={pendingRemove !== null}
+            onOpenChange={(v) => {
+              if (!v) closeRemoveConfirm()
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t('removeRankLevelTitle')}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {levelHolders.count === undefined
+                    ? t('rankHoldersChecking')
+                    : levelHolders.count === null
+                      ? t('rankHoldersUnknown')
+                      : levelHolders.count === 0
+                        ? t('rankHoldersNoneLevel')
+                        : `${t('rankHoldersLevelCount', { count: levelHolders.count })} ${t('rankHoldersLevelWarning')}`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  type="button"
+                  variant="destructive"
+                  onClick={() => {
+                    if (pendingRemove !== null) removeLevel(pendingRemove)
+                    closeRemoveConfirm()
+                  }}
+                >
+                  {t('removeRankLevelConfirm')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </DialogContent>
       </Dialog>
 
@@ -1313,6 +1380,7 @@ function RankingTab({
   const [editing, setEditing] = useState<RankSystemFormState | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const systemHolders = useRankHolderCount()
 
   const {
     rankingSystems: effectiveSystems,
@@ -1362,7 +1430,24 @@ function RankingTab({
   const handleDelete = async (id: string) => {
     const next = systems.filter((s) => s.id !== id)
     await saveToFirestore(next)
+    closeDelete()
+  }
+
+  const openDelete = (s: RankingSystem) => {
+    setDeleting(s.id)
+    // Counted per level and summed. Firestore cannot ask "does this field
+    // exist", so a contact orphaned at a value this system no longer carries
+    // falls outside the count — which is why the copy says "holding one of its
+    // levels" rather than "in this system".
+    systemHolders.start(
+      [teamId],
+      s.id,
+      s.levels.map((l) => l.value),
+    )
+  }
+  const closeDelete = () => {
     setDeleting(null)
+    systemHolders.reset()
   }
 
   const openAdd = () => {
@@ -1390,9 +1475,12 @@ function RankingTab({
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-muted/50 border text-sm">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
           <span className="text-muted-foreground">
-            Ranking systems are managed by your organization.{' '}
-            <Link href={`/org/${orgId}/settings` as Route} className="text-primary hover:underline">
-              Edit in organization settings
+            {t('rankingManagedByOrg')}{' '}
+            {/* The editor is its own page. This used to point at
+                `/org/{orgId}/settings`, which has no ranking UI at all, so the
+                one link out of a read-only tab led nowhere useful. */}
+            <Link href={`/org/${orgId}/ranking` as Route} className="text-primary hover:underline">
+              {t('rankingManagedByOrgLink')}
             </Link>
           </span>
         </div>
@@ -1465,7 +1553,7 @@ function RankingTab({
                 )}
                 {canManage && (
                   <button
-                    onClick={() => setDeleting(s.id)}
+                    onClick={() => openDelete(s)}
                     className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -1502,9 +1590,15 @@ function RankingTab({
         existingIds={systems.filter((s) => !editing || s.id !== editing.id).map((s) => s.id)}
         onSave={handleSave}
         storagePath={`teams/${teamId}/ranking`}
+        holderTeamIds={[teamId]}
       />
 
-      <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
+      <Dialog
+        open={!!deleting}
+        onOpenChange={(v) => {
+          if (!v) closeDelete()
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('deleteRankingSystem')}</DialogTitle>
@@ -1514,8 +1608,17 @@ function RankingTab({
               name: systems.find((s) => s.id === deleting)?.name ?? '',
             })}
           </p>
+          <p className="text-sm text-muted-foreground py-1">
+            {systemHolders.count === undefined
+              ? t('rankHoldersChecking')
+              : systemHolders.count === null
+                ? t('rankHoldersUnknown')
+                : systemHolders.count === 0
+                  ? t('rankHoldersNoneSystem')
+                  : `${t('rankHoldersSystemCount', { count: systemHolders.count })} ${t('rankHoldersSystemWarning')}`}
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
+            <Button variant="outline" onClick={closeDelete}>
               Cancel
             </Button>
             <Button

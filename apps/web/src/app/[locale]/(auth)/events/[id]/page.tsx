@@ -556,9 +556,23 @@ export default function EventDetailPage() {
     ? pluginSlot<{ eventId: string }>(eventPlugin.id, 'CategoryManager')
     : null
 
-  // Attendees tab: visible to org admins (cross-team events) and to members who can
-  // view reports (owner/manager) — a coach/viewer sees the event but not the roster.
-  const canSeeAttendees = isOrgAdmin || can('reports.view')
+  // Attendees tab: who accepted an invitation to THIS event. That is not a
+  // report, and gating it on `reports.view` alone hid the answers from the
+  // person who asked the question: whoever runs the event (`events.manage`)
+  // sends the invitations from this very page, and the Invitations tab beside
+  // this one is not gated at all — so the sending half was visible while the
+  // replies were not. `reports.view` stays because a manager who only reads
+  // numbers still legitimately sees the roster; org admins keep it for
+  // cross-team events.
+  //
+  // THIS IS TIDINESS, NOT A SECURITY BOUNDARY, and the distinction matters
+  // because the obvious reading of a capability check is that it withholds
+  // something. `firestore.rules` grants read on `events/{id}/attendees` to
+  // `belongsToUserTeam` — every member of the owning team, no capability
+  // required — so a coach or viewer who types the URL is served the roster by
+  // the database whatever this page renders. Deciding they should NOT be is a
+  // rules change, not a change here.
+  const canSeeAttendees = isOrgAdmin || can('events.manage') || can('reports.view')
 
   const checkinLabel = (() => {
     const total = event.participants_count ?? 0
@@ -771,7 +785,7 @@ export default function EventDetailPage() {
       )}
 
       {/* ── Attendees tab ────────────────────────────────────────────────────── */}
-      {tab === 'attendees' && (
+      {tab === 'attendees' && canSeeAttendees && (
         <div className="rounded-xl border overflow-hidden bg-card">
           {attendeesQ.isLoading && (
             Array.from({ length: 4 }).map((_, i) => (

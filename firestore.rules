@@ -142,6 +142,26 @@ service cloud.firestore {
       return e.get('scope', '') == 'org' && orgId != null && hasOrgRole(orgId, 'org_admin');
     }
 
+    // A MEMBER STUDIO of the organisation that owns this event.
+    //
+    // The parent event's own read rule already admits `currentTeamInOrg`, but its
+    // subcollections did not — and `belongsToUserTeam` starts `teamId != null`,
+    // which an org-scoped event never satisfies (transforms/events.ts sets
+    // `teamId: null` on every migrated HMD event). So a studio could open a
+    // federation camp and read NEITHER its categories nor its RSVPs: the
+    // check-in screen reported "no categories configured" and the attendee list
+    // rendered as "nobody responded", both of which are a permission denial
+    // wearing the costume of an empty result.
+    //
+    // READ ONLY, deliberately. Authoring an org event's divisions stays with the
+    // org admin who owns the event; a member studio needs to SEE them to check a
+    // competitor in.
+    function currentTeamInOrgOfEvent(eventId) {
+      let e = get(/databases/$(database)/documents/events/$(eventId)).data;
+      let orgId = e.get('orgId', null);
+      return e.get('scope', '') == 'org' && orgId != null && currentTeamInOrg(orgId);
+    }
+
     // The tenant stamp denormalised onto an event subcollection document must
     // match the parent event's own. Without this, a manager could inject rows
     // into ANOTHER studio's event carrying their own teamId — each write would
@@ -1145,7 +1165,8 @@ service cloud.firestore {
       // Per-event categories (used by fighting_cup and any plugin with hasCategories)
       match /categories/{category} {
         allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)))
-                     || isOrgAdminOfEvent(event);
+                     || isOrgAdminOfEvent(event)
+                     || currentTeamInOrgOfEvent(event);
         allow write: if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)))
                      || isOrgAdminOfEvent(event)
                      || hasRole('admin');
@@ -1154,7 +1175,8 @@ service cloud.firestore {
       // RSVP attendees — written by Cloud Functions
       match /attendees/{attendee} {
         allow read:  if belongsToUserTeam(get(/databases/$(database)/documents/events/$(event)))
-                     || isOrgAdminOfEvent(event);
+                     || isOrgAdminOfEvent(event)
+                     || currentTeamInOrgOfEvent(event);
         allow write: if false;
       }
 
@@ -1835,7 +1857,22 @@ service cloud.firestore {
     // Organizations (multi-team tier)
     // ----------------------------------------------
     match /organizations/{orgId} {
-      allow read: if isOrgMember(orgId);
+      // A MEMBER STUDIO reads this too, and the asymmetry that kept it out was an
+      // oversight rather than a decision: every org SUBcollection below —
+      // org_places, affiliation_types, org_program_templates, installed_plugins —
+      // already carries `|| currentTeamInOrg(orgId)`, while the settings a studio
+      // most needs live on the ROOT: `ranking_systems`, `affiliation_term`,
+      // `lock_affiliation`.
+      //
+      // The consequence was silent and total: `useRankingSystems` resolves an
+      // org-managed studio's belts from exactly this document, so the read was
+      // denied and the studio fell back to its own (empty) list — no belts on the
+      // contact page, none in the exam form, none in the filter. Every migrated
+      // HMD studio would have been in that state.
+      //
+      // READ only. Writing stays `hasOrgRole(orgId, 'org_admin')` below: a studio
+      // reads the organisation's standards, it does not set them.
+      allow read: if isOrgMember(orgId) || currentTeamInOrg(orgId);
       allow create: if isAuthed() && request.resource.data.createdBy == request.auth.uid;
       allow update: if hasOrgRole(orgId, 'org_admin');
       allow delete: if false; // Cloud Functions only

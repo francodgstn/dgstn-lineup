@@ -25,8 +25,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Check, Search, Download, UserPlus, ClipboardList, Loader2 } from 'lucide-react'
-import { CONTACTS_COLLECTION, CHECKINS_COLLECTION, isCheckinCompleted } from '@linyup/shared'
-import type { Contact, EventCheckin, RankingSystem, EventType, Team } from '@linyup/shared'
+import {
+  CONTACTS_COLLECTION, CHECKINS_COLLECTION, TEAMS_COLLECTION, EVENT_TYPES_SUBCOLLECTION,
+  isCheckinCompleted,
+} from '@linyup/shared'
+import type {
+  Contact, EventCheckin, RankingSystem, EventType, EventTypeConfig, EventTypeField, Team,
+} from '@linyup/shared'
 import { GenericCheckinForm } from './forms/GenericCheckinForm'
 import { CampCheckinForm } from './forms/CampCheckinForm'
 import { ExamCheckinForm } from './forms/ExamCheckinForm'
@@ -88,6 +93,27 @@ function resolveFormType(eventType: EventType): FormType {
   return 'generic'
 }
 
+/**
+ * A team-authored event type may carry its OWN check-in fields
+ * (`EventTypeConfig.checkin_fields`, built in Settings → Event types). This
+ * router never saw them, so a studio could design a check-in form and then find
+ * an empty sheet at the door.
+ *
+ * There is deliberately no arm above for them: those documents get Firestore
+ * auto-ids, so a custom type is never a built-in slug and never a plugin's
+ * event type id — it always lands on 'generic', which is why the fields ride ON
+ * the generic form as a prop instead of becoming a fourth component.
+ */
+function customCheckinFields(
+  formType: FormType,
+  eventType: EventType,
+  eventTypes: EventTypeConfig[],
+): EventTypeField[] | undefined {
+  if (formType !== 'generic') return undefined
+  const fields = eventTypes.find((cfg) => cfg.id === eventType)?.checkin_fields
+  return fields && fields.length > 0 ? fields : undefined
+}
+
 // ─── data hooks ───────────────────────────────────────────────────────────────
 
 function useCheckins(eventId: string) {
@@ -100,6 +126,30 @@ function useCheckins(eventId: string) {
         where('event.id', '==', eventId),
       ))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventCheckin)
+    },
+  })
+}
+
+/**
+ * The team's own event types, WITH their `checkin_fields`.
+ *
+ * `useEventTypes` reads the same documents but flattens them into a picker
+ * shape that drops the fields, so this reads them again — under that hook's
+ * cache key, with the same query and the same result type, so the two share one
+ * fetch rather than each paying for their own.
+ */
+function useTeamEventTypes(teamId: string | null) {
+  return useQuery<EventTypeConfig[]>({
+    queryKey: ['event-types', teamId],
+    enabled: !!teamId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      if (!teamId) return []
+      const snap = await getDocs(query(
+        collection(db, TEAMS_COLLECTION, teamId, EVENT_TYPES_SUBCOLLECTION),
+        orderBy('name'),
+      ))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventTypeConfig)
     },
   })
 }
@@ -155,6 +205,7 @@ function useOrgTeams(orgId: string | undefined, enabled: boolean) {
 function AddCheckinDialog({
   teamId,
   eventType,
+  hasCheckinFields,
   checkedInIds,
   onAdd,
   onClose,
@@ -162,6 +213,9 @@ function AddCheckinDialog({
   teamId: string
   /** Decides whether a base check-in leaves anything to finalise — see below. */
   eventType: EventType
+  /** True when the event type's own authored fields give it a second step that
+   *  `isCheckinCompleted` cannot see. */
+  hasCheckinFields: boolean
   checkedInIds: Set<string>
   /** Writes a base (incomplete) check-in for each contact. */
   onAdd: (contacts: Contact[]) => Promise<void>
@@ -310,8 +364,13 @@ function AddCheckinDialog({
               done, and there is no second step to send them to. Only exam, camp
               and the plugin types leave anything to finalise. Printing "fill in
               their details afterwards" on a seminar would describe a screen that
-              does not exist. */}
-          {!isCheckinCompleted(eventType, {}) && (
+              does not exist.
+
+              A team-authored type is the one case the predicate cannot answer:
+              its fields live in the tenant's configuration, so `isCheckinCompleted`
+              auto-confirms it and would hide a note that IS true. Hence the
+              second term — see the note on `customFields` below. */}
+          {(!isCheckinCompleted(eventType, {}) || hasCheckinFields) && (
             <p className="text-xs text-muted-foreground">{t('addCheckinBaseNote')}</p>
           )}
           <Button onClick={commit} disabled={picked.size === 0 || adding}>
@@ -376,6 +435,21 @@ export function CheckinPanel({
   }, [checkins, search])
 
   const formType = resolveFormType(eventType)
+
+  // A team-authored event type's own check-in fields — see customCheckinFields.
+  //
+  // NOTE: `isCheckinCompleted` (@linyup/shared) has no arm for these, and its
+  // default arm auto-confirms, so a custom-field check-in is CONFIRMED the
+  // moment it is written whether or not the fields were filled. Required fields
+  // are enforced by the form, not by completion. Making completion depend on
+  // them means teaching that predicate about tenant configuration — it runs on
+  // the server too, where it is handed only the event type slug and the data —
+  // so it needs a plugin/tenant hook in shared, which is a change of its own.
+  const { data: teamEventTypes = [] } = useTeamEventTypes(currentTeamId ?? null)
+  const customFields = useMemo(
+    () => customCheckinFields(formType, eventType, teamEventTypes),
+    [formType, eventType, teamEventTypes],
+  )
 
   const PluginCheckinForm = useMemo((): ComponentType<PluginCheckinFormProps> | null => {
     if (typeof formType === 'object') {
@@ -641,6 +715,7 @@ export function CheckinPanel({
         <AddCheckinDialog
           teamId={selectedAddTeamId || currentTeamId}
           eventType={eventType}
+          hasCheckinFields={!!customFields}
           checkedInIds={checkedInIds}
           onAdd={handleAddBaseCheckins}
           onClose={() => setAddDialogOpen(false)}
@@ -665,6 +740,7 @@ export function CheckinPanel({
                 <GenericCheckinForm
                   contact={sheetTarget.contact}
                   existing={sheetTarget.existing?.checkin_data}
+                  fields={customFields}
                   onSubmit={handleSubmit}
                   onCancel={() => setSheetTarget(null)}
                   busy={busy}

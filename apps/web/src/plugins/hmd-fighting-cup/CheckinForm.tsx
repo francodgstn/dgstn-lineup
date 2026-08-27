@@ -25,6 +25,13 @@ function filterCategories(categories: EventCategory[], contact: Contact, weight:
   const gender = contact.gender
 
   return categories.filter((cat) => {
+    // A RETIRED division is never offered for a NEW entry. The migration that
+    // reconstructs HMD's historic categories writes soft-deleted ones too —
+    // deliberately, because a twenty-year-old check-in references them and the
+    // lineup export has to be able to name what it says the competitor entered.
+    // Naming a past division and offering it today are different questions, and
+    // the hook that feeds both deliberately answers only the first.
+    if ((cat as { deleted_at?: unknown }).deleted_at) return false
     if (cat.gender && cat.gender !== 'both' && gender && cat.gender !== gender) return false
     if (age !== null) {
       if (cat.min_age != null && age < cat.min_age) return false

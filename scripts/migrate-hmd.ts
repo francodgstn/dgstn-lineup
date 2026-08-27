@@ -14,7 +14,7 @@
  *   --from-team <teamId>          Resume contacts/sessions from a specific team
  *   --verify                      Run verification after migration
  *
- * Passes: setup | auth-users | users | teams | activities | session-series | contacts | sessions | events | referrals | team-subcollections | places | verify
+ * Passes: setup | auth-users | users | teams | activities | session-series | contacts | sessions | events | exam-checkins | event-categories | referrals | team-subcollections | places | verify
  */
 
 import { parseArgs } from 'node:util'
@@ -31,6 +31,8 @@ import { pass04SessionSeries }      from './migration/passes/04-session-series'
 import { pass05Contacts }           from './migration/passes/05-contacts'
 import { pass06Sessions }           from './migration/passes/06-sessions'
 import { pass08Events }             from './migration/passes/08-events'
+import { pass09ExamCheckins }       from './migration/passes/09-exam-checkins'
+import { pass09EventCategories }    from './migration/passes/09-event-categories'
 import { pass10Referrals }          from './migration/passes/10-referrals'
 import { pass11TeamSubcollections } from './migration/passes/11-team-subcollections'
 import { pass12Places }             from './migration/passes/12-places'
@@ -140,6 +142,9 @@ async function run() {
   if (!only || only === 'contacts')            await pass05Contacts(cfg, teamIds)
   if (!only || only === 'sessions')            await pass06Sessions(cfg, teamIds, activityMap)
   if (!only || only === 'events')              await pass08Events(cfg)
+  // Both read the check-ins pass08 has just written, so they follow it.
+  if (!only || only === 'exam-checkins')       await pass09ExamCheckins(cfg)
+  if (!only || only === 'event-categories')    await pass09EventCategories(cfg)
   if (!only || only === 'referrals')           await pass10Referrals(cfg)
   if (!only || only === 'team-subcollections') await pass11TeamSubcollections(cfg, teamIds)
   if (!only || only === 'places')              await pass12Places(cfg, teamIds)

@@ -1940,7 +1940,19 @@
     "termsAcceptedTitle": "Terms accepted",
     "termsAcceptedBody": "Version {version}, accepted on {date} by {email}.",
     "termsLink": "Terms of Service",
-    "dpaLink": "Data Processing Agreement"
+    "dpaLink": "Data Processing Agreement",
+    "rankingManagedByOrg": "Ranking systems are managed by the organization.",
+    "rankingManagedByOrgLink": "Open organization ranking",
+    "removeRankLevelTitle": "Remove this level?",
+    "removeRankLevelConfirm": "Remove level",
+    "rankHoldersChecking": "Checking who is affected…",
+    "rankHoldersUnknown": "Could not check who is affected. Anyone holding a removed level keeps the stored number and will be shown the nearest level below it.",
+    "rankHoldersNoneLevel": "No contact holds this level, so removing it affects nobody.",
+    "rankHoldersLevelCount": "Contacts at this level: {count}.",
+    "rankHoldersLevelWarning": "Their rank keeps the removed number and will be shown as the nearest level below it until you correct it.",
+    "rankHoldersNoneSystem": "No contact holds one of its levels, so deleting it affects nobody.",
+    "rankHoldersSystemCount": "Contacts holding one of its levels: {count}.",
+    "rankHoldersSystemWarning": "Their rank will no longer match any configured level."
   },
   "Bookings": {
     "title": "Bookings",
@@ -2857,7 +2869,9 @@
     "accessLevelLabel": "Access level",
     "accessLevelView": "View — read contacts, sessions, events",
     "accessLevelManage": "Manage — full admin access",
-    "requestAccessSubmit": "Request access"
+    "requestAccessSubmit": "Request access",
+    "searchPlaceholder": "Search by studio name…",
+    "emptySearch": "No results for “{query}”."
   },
   "OrgAffiliations": {
     "title": "Affiliations",
@@ -2960,7 +2974,9 @@
     "inviteRevoke": "Revoke",
     "inviteRevoked": "Invitation revoked",
     "confirmRevokeTitle": "Revoke this invitation?",
-    "confirmRevokeMessage": "The link sent to {email} stops working immediately. You can invite the same address again at any time."
+    "confirmRevokeMessage": "The link sent to {email} stops working immediately. You can invite the same address again at any time.",
+    "searchPlaceholder": "Search by name or email…",
+    "emptySearch": "No results for “{query}”."
   },
   "OrgBilling": {
     "title": "Billing",
@@ -5199,7 +5215,22 @@
     "sheetTitleUpdate": "Update checkin",
     "addCheckinBaseNote": "They are checked in straight away. Fill in each person's details afterwards from the list.",
     "addCheckinConfirm": "Check in",
-    "addCheckinConfirmCount": "Check in {count}"
+    "addCheckinConfirmCount": "Check in {count}",
+    "examIntro": "Record the achieved rank level for each discipline examined.",
+    "examNoSystems": "No ranking systems configured.",
+    "examNoSystemsTeamLink": "Set them up in Team settings",
+    "examNoSystemsOrgLink": "Set them up in organization settings",
+    "examNotExamined": "Not examined",
+    "examSelectAtLeastOne": "Select at least one discipline result before checking in.",
+    "submitCheckIn": "Check in",
+    "submitUpdate": "Update",
+    "genericMarkAttendance": "Mark attendance for <strong>{name}</strong>.",
+    "genericNoExtraData": "No additional data required for this event type.",
+    "genericSubmitUpdate": "Update check-in",
+    "customFieldsIntro": "Fill in the details this event type collects.",
+    "customFieldsRequiredHint": "Fill in every required field before checking in.",
+    "fieldRequired": "Required",
+    "fieldSelectPlaceholder": "Select…"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Upgrade to {label}",
@@ -5389,7 +5420,11 @@
     "deleteConfirmDescription": "{title} will be removed from all clubs' event lists.",
     "delete": "Delete",
     "errorRequired": "Required",
-    "errorEndAfterStart": "End must be after start"
+    "errorEndAfterStart": "End must be after start",
+    "searchPlaceholder": "Search by title…",
+    "filterAllTypes": "All types",
+    "emptySearch": "No results for “{query}”.",
+    "emptyTypeFilter": "No events of this type."
   },
   "OrgEventDetail": {
     "backToEvents": "Organization events",
@@ -5436,11 +5471,23 @@
     "deleteDialogTitle": "Delete ranking system?",
     "deleteDialogBody": "Contacts in all teams who have ranks assigned to this system will lose those ranks.",
     "delete": "Delete",
-    "toastSaved": "Saved."
+    "toastSaved": "Saved.",
+    "removeLevelTitle": "Remove this level?",
+    "removeLevelConfirm": "Remove level",
+    "holdersChecking": "Checking who is affected across the member studios…",
+    "holdersUnknown": "Could not check who is affected in the member studios. Anyone holding a removed level keeps the stored number and will be shown the nearest level below it.",
+    "holdersNoneLevel": "No contact in any member studio holds this level, so removing it affects nobody.",
+    "holdersLevelCount": "Contacts at this level across the member studios: {count}.",
+    "holdersLevelWarning": "Their rank keeps the removed number and will be shown as the nearest level below it until it is corrected.",
+    "holdersNoneSystem": "No contact in any member studio holds one of its levels, so deleting it affects nobody.",
+    "holdersSystemCount": "Contacts holding one of its levels across the member studios: {count}.",
+    "holdersSystemWarning": "Their rank will no longer match any configured level."
   },
   "OrgPlaces": {
     "title": "Org places",
-    "subtitle": "Locations shared with every studio in this organization."
+    "subtitle": "Locations shared with every studio in this organization.",
+    "searchPlaceholder": "Search by name or address…",
+    "emptySearch": "No results for “{query}”."
   },
   "EventTypesSettings": {
     "title": "Event types",

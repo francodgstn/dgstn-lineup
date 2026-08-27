@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, query, where, getDoc, doc, getCountFromServer, limit } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -10,6 +10,7 @@ import { useOrg } from '@/contexts/OrgContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -279,6 +280,16 @@ export default function OrgTeamsPage() {
   const [removeTarget, setRemoveTarget] = useState<OrgTeamRow | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  // Client-side, over the rows already in hand — the studio name is the only
+  // thing anyone types here, and it is denormalised onto the row for the table.
+  const term = search.trim().toLowerCase()
+  const visible = useMemo(() => {
+    const rows = teams ?? []
+    if (!term) return rows
+    return rows.filter((row) => (row.teamName ?? row.teamId).toLowerCase().includes(term))
+  }, [teams, term])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -339,6 +350,19 @@ export default function OrgTeamsPage() {
         )}
       </div>
 
+      {/* Search — mounted once there is a list to narrow. A field over a page
+          that has no teams yet is a control with nothing to do. */}
+      {!isLoading && (teams?.length ?? 0) > 0 && (
+        <div className="max-w-xs">
+          <SearchInput
+            className="h-9 text-sm"
+            placeholder={t('searchPlaceholder')}
+            value={search}
+            onValueChange={setSearch}
+          />
+        </div>
+      )}
+
       <div className="rounded-md border">
         {isLoading ? (
           <div className="p-4 space-y-3">
@@ -355,6 +379,13 @@ export default function OrgTeamsPage() {
               </Button>
             )}
           </div>
+        ) : visible.length === 0 ? (
+          // Its own copy, not `noTeams` — a search that matched nothing and an
+          // organization with no teams are different situations, and reusing the
+          // second reads as the teams having disappeared.
+          <div className="py-16 text-center text-muted-foreground text-sm">
+            {t('emptySearch', { query: search.trim() })}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -368,7 +399,7 @@ export default function OrgTeamsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {teams.map((row) => (
+              {visible.map((row) => (
                 <tr key={row.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 font-medium">{row.teamName ?? row.teamId}</td>
                   <td className="px-4 py-3 text-muted-foreground text-sm hidden md:table-cell">
