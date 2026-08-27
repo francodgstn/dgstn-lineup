@@ -25,6 +25,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { coachLabel, type CoachOption } from '@/hooks/useCoaches'
+import { usePlaces } from '@/hooks/usePlaces'
+import { useAuth } from '@/contexts/AuthContext'
 import { useTranslations } from 'next-intl'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -46,6 +48,7 @@ import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTi
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
+import { PlacesSheet } from '@/components/schedule/PlacesSheet'
 import {
   ACTIVITIES_COLLECTION,
   AVAILABILITY_COLLECTION,
@@ -53,7 +56,7 @@ import {
   SESSIONS_COLLECTION,
   isExpiredAppointmentHold,
 } from '@linyup/shared'
-import type { Availability, AvailabilityException, AppointmentBooking, Session, Activity } from '@linyup/shared'
+import type { Availability, AvailabilityException, AppointmentBooking, Session, Activity, Place } from '@linyup/shared'
 import { useActivities } from '@/hooks/useActivities'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, CalendarOff, ChevronRight, Trash2, X, User } from 'lucide-react'
@@ -83,6 +86,22 @@ function formatSlotTime(ts: { toDate(): Date }): string {
 
 function formatDaysOfWeek(daysOfWeek: number[]): string {
   return daysOfWeek.map((d) => DAY_LABELS[d]).join(', ')
+}
+
+/** WHERE label for a schedule's summary row: the linked place (+ room) first,
+ *  then the free-text location note on top of it — same order as the form.
+ *  A legacy doc that only ever carried `location` displays exactly as before. */
+function formatWhere(
+  tmpl: Pick<Availability, 'placeId' | 'roomId' | 'location'>,
+  placeById: Map<string, Place>,
+): string | null {
+  const place = tmpl.placeId ? placeById.get(tmpl.placeId) : undefined
+  const room = place?.rooms?.find((r) => r.id === tmpl.roomId)
+  const parts = [
+    place ? `${place.name}${room ? ` · ${room.name}` : ''}` : null,
+    tmpl.location || null,
+  ].filter((p): p is string => !!p)
+  return parts.length ? parts.join(' · ') : null
 }
 
 // ─── time-off (availability exception) date helpers ────────────────────────────
@@ -249,6 +268,10 @@ const templateSchema = z
     // 'range' = a daily window clients self-book within; 'times' = an explicit list
     // of start times. Both are lazy — no Session is ever pre-generated.
     mode: z.enum(['range', 'times']),
+    // Place is the PRIMARY selector (mirrors the session form); location stays
+    // a free-text SECONDARY note beneath it — see the "WHERE" block below.
+    placeId: z.string().optional(),
+    roomId: z.string().optional(),
     location: z.string().max(120).optional(),
     onlineUrl: z.string().url('Enter a valid URL').optional().or(z.literal('')),
     daysOfWeek: z.array(z.number()).min(1, 'Select at least one day'),
@@ -294,7 +317,7 @@ function toTemplateFormValues(
   if (!editing) {
     return {
       title: '', providerId: defaultProviderId, activityIds: [], mode: 'range',
-      location: '', onlineUrl: '', daysOfWeek: [],
+      placeId: '', roomId: '', location: '', onlineUrl: '', daysOfWeek: [],
       startDate: new Date().toISOString().split('T')[0], endDate: '',
       windowStart: '09:00', windowEnd: '17:00', granularityMinutes: 15, times: [], bufferMinutes: 0,
     }
@@ -304,6 +327,11 @@ function toTemplateFormValues(
     providerId: editing.providerId,
     activityIds: editing.activityIds ?? [],
     mode: editing.mode ?? 'range',
+    // Backward compatible: a legacy doc only ever carried `location` — `placeId`/
+    // `roomId` simply come back empty and the form falls back to the free-text
+    // note exactly as it always displayed.
+    placeId: editing.placeId || '',
+    roomId: editing.roomId || '',
     location: editing.location || '',
     onlineUrl: editing.onlineUrl || '',
     daysOfWeek: editing.recurrence.daysOfWeek,
@@ -336,8 +364,14 @@ function TemplateDialog({
 }) {
   const t = useTranslations('Appointments')
   const tActivities = useTranslations('Activities')
+  // The place picker + the "Location note" label/hint are the SESSION form's —
+  // reused verbatim (key + copy) rather than restated, so the two forms read as
+  // siblings instead of drifting into two names for the same thing.
+  const tSessions = useTranslations('Sessions')
+  const { team } = useAuth()
   const qc = useQueryClient()
   const [creatingActivity, setCreatingActivity] = useState(false)
+  const [placesOpen, setPlacesOpen] = useState(false)
   const initialProviderId = defaultProviderId || userId
   const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } =
     useForm<TemplateFormValues>({
@@ -353,6 +387,12 @@ function TemplateDialog({
   }, [open, editing, initialProviderId, reset])
 
   const mode = watch('mode')
+  // Same ['places', teamId, orgId] query key the session form's picker and the
+  // PlacesSheet share — a place created from here appears in both with no
+  // extra wiring.
+  const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
+  const watchedPlaceId = watch('placeId')
+  const placeRooms = places.find((p) => p.id === watchedPlaceId)?.rooms ?? []
   const selectedDays = watch('daysOfWeek') || []
   const timesList = watch('times') || []
 
@@ -431,6 +471,11 @@ function TemplateDialog({
         data.providerId,
       title: data.title,
       activityIds: data.activityIds,
+      // Place is the PRIMARY where; location is the free-text note on top of it
+      // (or the fallback while no place is picked) — same split as the session
+      // form's `basePayload`.
+      placeId: data.placeId || null,
+      roomId: data.roomId || null,
       location: data.location || null, onlineUrl: data.onlineUrl || null,
       recurrence,
       mode: data.mode,
@@ -452,6 +497,17 @@ function TemplateDialog({
   }
 
   return (
+    <>
+    {/* Mounted beside the modal, not inside it — same reasoning as
+        SessionFormDialog: the sheet portals to the body either way, and
+        opening it must never unmount the fields it was opened to fill in. */}
+    <PlacesSheet
+      open={placesOpen}
+      onOpenChange={setPlacesOpen}
+      teamId={teamId}
+      userId={userId}
+      orgId={team?.org_id ?? null}
+    />
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Width matches SessionFormDialog (sm:max-w-3xl) — the two schedule
           creation dialogs should feel like siblings. */}
@@ -622,9 +678,95 @@ function TemplateDialog({
               {errors.activityIds && <p className="text-destructive text-xs">{errors.activityIds.message}</p>}
             </div>
 
-            <div className="flex items-center justify-between gap-4 p-3">
-              <Label htmlFor="location" className="font-medium">{t('fieldLocation')}</Label>
-              <Input id="location" placeholder="Gym, studio…" {...register('location')} className="h-9 w-48" />
+            {/* ── WHERE: PLACE FIRST, LOCATION UNDER IT — same layout as the
+                session form (SessionFormDialog). Place is the field that gets
+                TRACKED — a venue the studio keeps, with rooms; location is a
+                free-text note, either the quick alternative before any place
+                exists or a detail added on top of one. Always rendered, even
+                with zero places, so a studio that never made one still learns
+                what a Place is instead of typing "Gym" into free text forever. */}
+            {places.length > 0 ? (
+              <div className="flex items-center justify-between gap-4 p-3">
+                <Label className="font-medium">{tSessions('fieldPlace')}</Label>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Controller name="placeId" control={control} render={({ field }) => (
+                    <Select
+                      value={field.value || '__none'}
+                      onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
+                    >
+                      <SelectTrigger className="w-36">
+                        <span className="flex flex-1 text-left text-sm truncate">
+                          {field.value
+                            ? places.find((p) => p.id === field.value)?.name ?? field.value
+                            : <span className="text-muted-foreground">{tSessions('placeNone')}</span>}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">{tSessions('placeNone')}</SelectItem>
+                        {places.map((p) => (
+                          <SelectItem
+                            key={p.id}
+                            value={p.id}
+                            // Composed text must ride on `label`, or the trigger prints the raw
+                            // place id (select.tsx only derives a label from a plain string child).
+                            label={`${p.name}${p.scope === 'org' ? ' · org' : ''}`}
+                          />
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )} />
+                  {placeRooms.length > 0 && (
+                    <Controller name="roomId" control={control} render={({ field }) => (
+                      <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
+                        <SelectTrigger className="w-32">
+                          <span className="flex flex-1 text-left text-sm truncate">
+                            {field.value
+                              ? placeRooms.find((r) => r.id === field.value)?.name ?? field.value
+                              : <span className="text-muted-foreground">{tSessions('roomNone')}</span>}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">{tSessions('roomNone')}</SelectItem>
+                          {placeRooms.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )} />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3">
+                <div className="rounded-md border border-dashed p-3 space-y-2">
+                  <p className="text-sm font-medium">{tSessions('fieldPlace')}</p>
+                  <p className="text-xs text-muted-foreground">{tSessions('noPlacesHint')}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPlacesOpen(true)}
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                    {tSessions('createPlaceAction')}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* SUBORDINATE to the block above, and its copy says which of the
+                two it is: an addition once a place is picked, the quick
+                alternative while none is. Same key as the session form's note
+                field (`fieldLocationNote`) — not `fieldLocation`, which in
+                German/French is the same word as `fieldPlace`. */}
+            <div className="flex items-center justify-between gap-4 p-3 pl-6">
+              <Label htmlFor="location" className="min-w-0 font-medium">
+                {tSessions('fieldLocationNote')}
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  {watchedPlaceId ? tSessions('locationHintWithPlace') : tSessions('locationHintNoPlace')}
+                </span>
+              </Label>
+              <Input id="location" placeholder={tSessions('locationNotePlaceholder')} {...register('location')} className="h-9 w-48 shrink-0" />
             </div>
 
             <div className="p-3">
@@ -708,6 +850,7 @@ function TemplateDialog({
         </form>
       </DialogContent>
     </Dialog>
+    </>
   )
 }
 
@@ -1102,6 +1245,7 @@ export function AppointmentAvailabilityManager({ teamId, userId, variant = 'page
   variant?: 'page' | 'sheet'
 }) {
   const t = useTranslations('Appointments')
+  const { team } = useAuth()
   const qc = useQueryClient()
   const templatesQ = useAvailabilityTemplates(teamId)
   const exceptionsQ = useAvailabilityExceptions(teamId)
@@ -1110,6 +1254,10 @@ export function AppointmentAvailabilityManager({ teamId, userId, variant = 'page
   const activities = activitiesQ.data ?? []
   const appointmentActivities = activities.filter((a) => a.type === 'appointment')
   const activityNameById = new Map(activities.map((a) => [a.id, a.name]))
+  // Resolves a schedule's `placeId` for the summary row below — a schedule
+  // saved with a Place but no free-text note must still show WHERE it is.
+  const { data: places = [] } = usePlaces(teamId, team?.org_id ?? null)
+  const placeById = new Map(places.map((p) => [p.id, p]))
   const [templateDialog, setTemplateDialog] = useState<{
     open: boolean
     editing: (Availability & { id: string }) | null
@@ -1355,9 +1503,9 @@ export function AppointmentAvailabilityManager({ teamId, userId, variant = 'page
                                     ? `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${tmpl.window.start}–${tmpl.window.end}`
                                     : `${formatDaysOfWeek(tmpl.recurrence.daysOfWeek)} · ${(tmpl.times ?? []).join(', ')}`}
                                 </p>
-                                {tmpl.location && (
+                                {formatWhere(tmpl, placeById) && (
                                   <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                                    <MapPin className="h-3 w-3" />{tmpl.location}
+                                    <MapPin className="h-3 w-3" />{formatWhere(tmpl, placeById)}
                                   </p>
                                 )}
                                 {tmpl.onlineUrl && (

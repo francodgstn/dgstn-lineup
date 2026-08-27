@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { Card, CardContent } from '@/components/ui/card'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
 
@@ -78,60 +79,65 @@ export function NoShowPolicyCard() {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-4">
-      <div className="flex items-start gap-2.5">
-        <AlertTriangle className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">{t('noShowPolicyTitle')}</h2>
-            <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!canEdit} />
+    // House convention: the shared `Card` (bg-card + border + shadow-sm), same
+    // as CancellationPolicyCard right above it on this page. `pt-6` because
+    // there is no CardHeader here.
+    <Card>
+      <CardContent className="space-y-4 pt-6">
+        <div className="flex items-start gap-2.5">
+          <AlertTriangle className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">{t('noShowPolicyTitle')}</h2>
+              <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!canEdit} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('noShowPolicySubtitle')}</p>
+            {!canEdit && <p className="text-xs text-muted-foreground mt-0.5">{t('ownerOnly')}</p>}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('noShowPolicySubtitle')}</p>
-          {!canEdit && <p className="text-xs text-muted-foreground mt-0.5">{t('ownerOnly')}</p>}
         </div>
-      </div>
 
-      {enabled && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">
-              {t('noShowFeeAmountLabel', { currency })}
-            </label>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={feeAmount}
-              disabled={!canEdit}
-              onChange={(e) => setFeeAmount(e.target.value)}
-              className="h-9 text-sm"
-            />
+        {enabled && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">
+                {t('noShowFeeAmountLabel', { currency })}
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={feeAmount}
+                disabled={!canEdit}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">{t('noShowThresholdLabel')}</label>
+              <Input
+                type="number"
+                min={1}
+                step="1"
+                value={threshold}
+                disabled={!canEdit}
+                onChange={(e) => setThreshold(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <p className="sm:col-span-2 text-xs text-muted-foreground">{t('noShowThresholdHint')}</p>
+            {/* Two things the owner cannot see from here and would otherwise
+                discover from a customer: these terms now appear on the public
+                booking screens, and the fee is EMAILED as a payment link rather
+                than taken off a card. `noShowPolicySubtitle` above still says
+                "automatically charge", which overstates the second one. */}
+            <p className="sm:col-span-2 text-xs text-muted-foreground">{t('noShowPublicNote')}</p>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t('noShowThresholdLabel')}</label>
-            <Input
-              type="number"
-              min={1}
-              step="1"
-              value={threshold}
-              disabled={!canEdit}
-              onChange={(e) => setThreshold(e.target.value)}
-              className="h-9 text-sm"
-            />
-          </div>
-          <p className="sm:col-span-2 text-xs text-muted-foreground">{t('noShowThresholdHint')}</p>
-          {/* Two things the owner cannot see from here and would otherwise
-              discover from a customer: these terms now appear on the public
-              booking screens, and the fee is EMAILED as a payment link rather
-              than taken off a card. `noShowPolicySubtitle` above still says
-              "automatically charge", which overstates the second one. */}
-          <p className="sm:col-span-2 text-xs text-muted-foreground">{t('noShowPublicNote')}</p>
-        </div>
-      )}
+        )}
 
-      {canEdit && (
-        <SettingsSaveBar onSave={save} saving={saving} disabled={!dirty || !valid} />
-      )}
-    </div>
+        {canEdit && (
+          <SettingsSaveBar onSave={save} saving={saving} disabled={!dirty || !valid} />
+        )}
+      </CardContent>
+    </Card>
   )
 }

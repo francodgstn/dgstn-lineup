@@ -255,6 +255,8 @@ export default function PaymentsDashboardPage() {
   // Contacts namespace, and read from there rather than copied into a second
   // one — four locales of the same six words is four ways for them to drift.
   const tRecurrence = useTranslations('Contacts')
+  const tNav = useTranslations('Nav')
+  const tPlugins = useTranslations('Plugins')
   const { currentTeamId, team } = useAuth()
   const teamId = currentTeamId ?? null
   const connectReady = !!team?.payments?.connectAccountId
@@ -502,11 +504,20 @@ export default function PaymentsDashboardPage() {
         title={t('titleWithSubscriptions')}
         quickLinks={[
           {
+            // The destination's NAME, like every other row in this line — the
+            // sentence it used to carry ("View in your books") read as a
+            // different kind of thing beside the plain names beside it. The
+            // href still falls back to the marketplace when Finance is not
+            // installed, so the way in survives.
             href: (isInstalled('finance')
               ? '/plugins/finance'
               : '/settings/plugins?plugin=finance') as Route,
-            label: isInstalled('finance') ? t('financeLink') : t('financeLinkInstall'),
+            label: tPlugins('financeNavLabel'),
           },
+          // What is being charged FOR, and where the charging is configured —
+          // the two questions a payments list sends you to answer.
+          { href: '/offer/plans' as Route, label: tNav('subscriptionPlans') },
+          { href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') },
         ]}
         action={
           <>

@@ -5,6 +5,9 @@
 // Two key shapes exist (see automationLibrary.ts):
 //   - Library items:  '{library_key}:{lang}'  → AUTOMATION_LIBRARY translations
 //   - Starter kit:    'sys_*'                 → SYSTEM_TEMPLATES (EN)
+//
+// Moved here from settings/emails/ (2026-08-27) alongside TemplateEditor.tsx —
+// same depth under settings/, so the relative import below is unchanged.
 import { AUTOMATION_LIBRARY, type SupportedLanguage } from '../../automations/automationLibrary'
 import { SYSTEM_TEMPLATES } from '../../automations/systemDefaults'
 

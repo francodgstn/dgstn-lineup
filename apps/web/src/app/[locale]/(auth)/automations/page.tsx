@@ -2268,9 +2268,11 @@ export default function AutomationsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
-            {/* Email templates + system-email toggles live in Settings → Emails */}
+            {/* Templates moved out of Settings → Emails into their own section
+                when that page was split; this button says "Manage templates",
+                so it must follow them or it lands on a page without them. */}
             <Link
-              href={'/settings/emails' as Route}
+              href={'/settings/email-templates' as Route}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
               <Mail className="h-4 w-4 mr-1.5" />

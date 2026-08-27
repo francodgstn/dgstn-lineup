@@ -5,6 +5,13 @@
 // applied at send time and shown here read-only via the live preview, rendered
 // with the SAME wrapInLayout/buildTeamFooter the Cloud Functions use
 // (@linyup/shared — single source of truth, no drift).
+//
+// Moved here from settings/emails/ (2026-08-27) when Settings → Emails split
+// into Emails (sender identity, system emails, SMS, booking instructions) and
+// Email templates (this editor + the placeholder reference below) — the two
+// no longer share a page, but the editor's dependencies were already
+// self-contained (no relative imports into the old folder), so the move was a
+// straight file relocation.
 import { useEffect, useMemo, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'

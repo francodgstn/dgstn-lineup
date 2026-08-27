@@ -96,7 +96,8 @@
       "billing": "rechnung tarif upgrade abo",
       "plugin:finance:/plugins/finance": "buchhaltung accounting kontenplan hauptbuch berichte export csv treuhänder bilanz erfolgsrechnung buchungen",
       "promoCodes": "rabatt gutschein coupon kampagne aktion code",
-      "dashboardPreview": "neues dashboard vorschau alternative start uebersicht"
+      "dashboardPreview": "neues dashboard vorschau alternative start uebersicht",
+      "teamEmailTemplates": "Vorlagen Platzhalter E-Mail Formulierung Text"
     },
     "allSettings": "Alle Einstellungen",
     "howTo": "Anleitungen",
@@ -185,7 +186,8 @@
     "sidebarResizeHint": "Zum Anpassen ziehen — über den linken Rand hinaus zum Einklappen, Doppelklick zum Zurücksetzen",
     "legalTerms": "Nutzungsbedingungen",
     "legalDpa": "Auftragsverarbeitungsvertrag",
-    "legalPrivacy": "Datenschutzerklärung"
+    "legalPrivacy": "Datenschutzerklärung",
+    "teamEmailTemplates": "E-Mail-Vorlagen"
   },
   "PublicHub": {
     "title": "Öffentliche Seiten",
@@ -1952,7 +1954,10 @@
     "rankHoldersLevelWarning": "Ihr Rang behält die entfernte Zahl und wird bis zur Korrektur als nächsttiefere Stufe angezeigt.",
     "rankHoldersNoneSystem": "Kein Kontakt hat eine seiner Stufen – das Löschen betrifft niemanden.",
     "rankHoldersSystemCount": "Kontakte mit einer seiner Stufen: {count}.",
-    "rankHoldersSystemWarning": "Ihr Rang entspricht dann keiner konfigurierten Stufe mehr."
+    "rankHoldersSystemWarning": "Ihr Rang entspricht dann keiner konfigurierten Stufe mehr.",
+    "sectionTeam": "Team",
+    "sectionRegionFormat": "Region & Format",
+    "sectionOther": "Weiteres"
   },
   "Bookings": {
     "title": "Buchungen",
@@ -6015,7 +6020,10 @@
     "reminderSmsNote": "SMS-Erinnerungen werden nur zwischen 08:00 und 21:00 Uhr versendet.",
     "resetConfirmTitle": "Auf den Standardtext zurücksetzen?",
     "deactivateConfirmTitle": "Diese Vorlage deaktivieren?",
-    "deactivateAction": "Deaktivieren"
+    "deactivateAction": "Deaktivieren",
+    "emailsSubtitle": "Verwalten Sie Ihre Absenderidentität, automatische Systemmails, den Hinweis zur Buchungsbestätigung und den SMS-Absender.",
+    "templatesSubtitle": "Vordefinierte und individuelle Vorlagen, die Ihre Automatisierungen und Kampagnen versenden, sowie wiederverwendbare Platzhalter, die Sie in jede davon einfügen können.",
+    "templatesLinkNote": "Vordefinierte und individuelle Outreach-Vorlagen sowie die Platzhalterübersicht finden Sie jetzt auf der Seite <link>E-Mail-Vorlagen</link>."
   },
   "Finance": {
     "exportCsv": "CSV exportieren",
@@ -6814,7 +6822,8 @@
     "failedTransient": "Diese Buchung konnte nicht storniert werden — sie ist weiterhin aktiv. Bitte erneut versuchen."
   },
   "QuickLinks": {
-    "related": "Verwandt:"
+    "related": "Verwandt:",
+    "availabilityToActivities": "Termin-Aktivitäten verwalten"
   },
   "Site": {
     "loading": "Laden…",

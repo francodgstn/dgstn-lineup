@@ -161,7 +161,11 @@ export default function ProductsPage() {
     ((team?.settings as { productCollectionNote?: string } | undefined)?.productCollectionNote ??
       '') as string
   const canEditTeamDefault = teamRole === 'owner'
-  const [showCollection, setShowCollection] = useState(false)
+  // Was an inline collapsible section; a click on the button and the field it
+  // revealed elsewhere on the page read as unrelated. A DIALOG ties the click
+  // to what it opens, the same way every other edit on this page (product
+  // create/edit, delete confirm) already does.
+  const [collectionDialogOpen, setCollectionDialogOpen] = useState(false)
   const [defaultNote, setDefaultNote] = useState(teamDefaultNote)
   const [savingDefault, setSavingDefault] = useState(false)
   // The team doc is a live snapshot; re-seed when it changes underneath us, but
@@ -170,6 +174,18 @@ export default function ProductsPage() {
     setDefaultNote(teamDefaultNote)
   }, [teamDefaultNote])
   const defaultDirty = defaultNote.trim() !== teamDefaultNote.trim()
+
+  function openCollectionDialog() {
+    setDefaultNote(teamDefaultNote)
+    setCollectionDialogOpen(true)
+  }
+
+  // Cancelling (or the dialog's own close button) discards any unsaved typing —
+  // the draft never leaks into the trigger button behind it.
+  function closeCollectionDialog() {
+    setCollectionDialogOpen(false)
+    setDefaultNote(teamDefaultNote)
+  }
 
   async function saveDefaultNote() {
     if (!currentTeamId) return
@@ -181,6 +197,7 @@ export default function ProductsPage() {
           .slice(0, MAX_PRODUCT_COLLECTION_NOTE),
       })
       toast.success(t('saved'))
+      setCollectionDialogOpen(false)
     } catch {
       toast.error(t('errorSave'))
     } finally {
@@ -384,14 +401,13 @@ export default function ProductsPage() {
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-2">
             {/* Collection & handover is a set-once team default, not a thing a
-                studio touches while adding products — so it sits behind a
-                toggle rather than occupying a permanent block above the list it
+                studio touches while adding products — so it opens in its own
+                dialog rather than occupying a permanent block above the list it
                 has nothing to do with. */}
             <Button
-              onClick={() => setShowCollection((v) => !v)}
+              onClick={openCollectionDialog}
               variant="outline"
               size="sm"
-              aria-expanded={showCollection}
             >
               <Truck className="h-4 w-4 mr-1.5" />
               {t('defaultCollectionTitle')}
@@ -418,46 +434,55 @@ export default function ProductsPage() {
           owner-writable, and showing a field that cannot be saved would be a
           worse answer than showing the text that is in force.
 
-          Collapsed by default (2026-08-25). It stays MOUNTED when open rather
-          than becoming a dialog: it is a field with a save button, and a studio
-          that opens it to check the wording should be able to see the product
-          list it applies to at the same time. */}
-      {showCollection && (
-      <div className="rounded-lg border bg-card p-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <Truck className="h-4 w-4 text-muted-foreground" />
-          <p className="text-sm font-medium">{t('defaultCollectionTitle')}</p>
-        </div>
-        <p className="text-xs text-muted-foreground">{t('defaultCollectionHint')}</p>
-        {canEditTeamDefault ? (
-          <>
-            <Textarea
-              rows={2}
-              maxLength={MAX_PRODUCT_COLLECTION_NOTE}
-              value={defaultNote}
-              onChange={(e) => setDefaultNote(e.target.value)}
-              placeholder={t('collectionPlaceholder')}
-            />
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={saveDefaultNote}
-                disabled={!defaultDirty || savingDefault}
-              >
+          A DIALOG (2026-08-27): the button click and the field it revealed used
+          to feel disconnected because the field appeared elsewhere on the page.
+          Same save/cancel footer convention as the product create/edit dialog
+          below — Cancel discards the draft (`closeCollectionDialog` re-seeds it
+          from the team doc), Save writes and closes on success. */}
+      <Dialog
+        open={collectionDialogOpen}
+        onOpenChange={(v) => {
+          if (!v) closeCollectionDialog()
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-muted-foreground" />
+              {t('defaultCollectionTitle')}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t('defaultCollectionHint')}</p>
+            {canEditTeamDefault ? (
+              <Textarea
+                rows={3}
+                maxLength={MAX_PRODUCT_COLLECTION_NOTE}
+                value={defaultNote}
+                onChange={(e) => setDefaultNote(e.target.value)}
+                placeholder={t('collectionPlaceholder')}
+                autoFocus
+              />
+            ) : (
+              <p className="text-sm">
+                {defaultNote.trim() || (
+                  <span className="text-muted-foreground">{t('defaultCollectionEmpty')}</span>
+                )}
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeCollectionDialog}>
+              {t('cancel')}
+            </Button>
+            {canEditTeamDefault && (
+              <Button onClick={saveDefaultNote} disabled={!defaultDirty || savingDefault}>
                 {t('save')}
               </Button>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm">
-            {defaultNote.trim() || (
-              <span className="text-muted-foreground">{t('defaultCollectionEmpty')}</span>
             )}
-          </p>
-        )}
-      </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* List */}
       {isLoading ? (

@@ -59,6 +59,7 @@ import { useAskedDocuments, type AskedDocument } from '@/hooks/useContactDocumen
 import { AskToSignDialog } from '@/components/contacts/AskToSignDialog'
 import { ExportContactsButton } from '@/components/contacts/ExportContactsButton'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import {
   useContactGroups, useInvalidateContactGroups, createGroupFromFilter, useContactFilterContext,
@@ -2421,6 +2422,7 @@ export default function ContactsPage() {
   const { openUpgradeModal } = useUpgradeModal()
   const qc = useQueryClient()
   const t = useTranslations('Contacts')
+  const tNav = useTranslations('Nav')
 
   // Coaches (own-scoped) see only their assigned contacts and have no
   // archived/deleted admin views (those queries would be denied by the rules).
@@ -2758,14 +2760,15 @@ export default function ContactsPage() {
           <div className="flex items-center gap-1.5">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           </div>
-          {!loadingActive && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('subtitle', {
-                total: active.length + archived.length,
-                active: active.filter((c) => c.affiliation_summary?.has_active === true).length,
-              })}
-            </p>
-          )}
+          {/* The head-count used to sit here. The list itself already answers
+              "how many", and the two pages a studio reaches for from a contact
+              list — what they booked, and what they paid — had no pointer. */}
+          <QuickLinks
+            links={[
+              { href: '/bookings' as Route, label: tNav('bookings') },
+              { href: '/payments' as Route, label: tNav('paymentsAndSubscriptions') },
+            ]}
+          />
           {!loadingActive && !usage.isUnlimited && (
             <div className="mt-1.5 flex items-center gap-2 max-w-xs">
               <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">

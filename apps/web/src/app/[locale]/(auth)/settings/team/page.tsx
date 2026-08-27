@@ -28,7 +28,7 @@ import { CustomFieldsTab } from '@/plugins/custom-fields/CustomFieldsTab'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -334,7 +334,9 @@ function EngagementThresholdsForm({
   ]
 
   return (
-    <div className="space-y-3 pt-4 border-t">
+    // No own top divider any more — it is now the first section inside the
+    // "Other" Card (UI polish, Settings → General 3-card split).
+    <div className="space-y-3">
       <div>
         <p className="text-sm font-medium">{t('engagementTitle')}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{t('engagementHelp')}</p>
@@ -371,7 +373,12 @@ function TabBarPreference() {
   const t = useTranslations('TeamSettings')
   const { enabled, setEnabled } = useOpenTabs()
   return (
-    <div className="space-y-3 pt-4 border-t">
+    // `pt-6`, not `pt-4` — this divider sits right below
+    // EngagementThresholdsForm's own SettingsSaveBar (same "Other" Card), and
+    // `pt-4` alone read as the save button touching the divider (UI polish,
+    // Settings → General). SettingsSaveBar already adds `pt-2` above itself;
+    // this is the gap BELOW it, which nothing previously supplied.
+    <div className="space-y-3 pt-6 border-t">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium">{t('tabBarTitle')}</p>
@@ -646,12 +653,12 @@ function RegionalForm({
   }
 
   return (
-    <div className="space-y-4 pt-4 border-t">
-      <div>
-        <p className="text-sm font-medium">{t('regionTitle')}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{t('regionHint')}</p>
-        {!canEdit && <OwnerOnlyNote />}
-      </div>
+    // No own heading/divider here any more — this now lives inside its own
+    // "Region & format" Card, whose CardHeader carries the title and the hint
+    // (`regionTitle`/`regionHint`) that used to be repeated in-line right below
+    // it (UI polish, Settings → General 3-card split).
+    <div className="space-y-4">
+      {!canEdit && <OwnerOnlyNote />}
 
       <div className="space-y-1.5">
         <Label htmlFor="regional-timezone">{t('regionTimezone')}</Label>
@@ -2329,30 +2336,61 @@ export default function TeamSettingsPage() {
         </p>
       </div>
 
-      {/* Payments + Outreach manage their own stacked cards; the rest share one wrapper. */}
+      {/* Payments + Outreach manage their own stacked cards; General is now its
+          own 3-card split (see below); the remaining tabs share one wrapper. */}
       {tab === 'payments' ? (
         <PaymentsTab teamId={currentTeamId} canEdit={canEdit} />
+      ) : tab === 'general' ? (
+        // THREE CARDS, ONE PER TOPIC — this used to be one long Card holding
+        // four stacked sub-forms with hairline dividers between them (UI polish,
+        // 2026-08). Every field, its validation and its own save action are
+        // UNCHANGED; only the wrapper each section sits in moved.
+        //   Team            -> identity: name, description, sport, slug
+        //   Region & format -> RegionalForm: timezone, week start, date/time format
+        //   Other           -> engagement bands + the per-device tab-bar toggle
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('sectionTeam')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GeneralForm team={team} teamId={currentTeamId} canEdit={canEdit} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('sectionRegionFormat')}</CardTitle>
+              <CardDescription>{t('regionHint')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Keyed on the team: the draft below is seeded from
+                  `team.regional` at mount only, and the TeamSwitcher can change
+                  `currentTeamId` under a mounted settings page. Without the
+                  remount the form would keep team A's zone and formats and save
+                  them onto team B's document. */}
+              <RegionalForm
+                key={currentTeamId}
+                team={team}
+                teamId={currentTeamId}
+                canEdit={canEdit}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('sectionOther')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EngagementThresholdsForm team={team} teamId={currentTeamId} canEdit={canEdit} />
+              <TabBarPreference />
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <Card>
           <CardContent className="pt-6">
-            {tab === 'general' && (
-              <>
-                <GeneralForm team={team} teamId={currentTeamId} canEdit={canEdit} />
-                {/* Keyed on the team: the draft below is seeded from
-                    `team.regional` at mount only, and the TeamSwitcher can
-                    change `currentTeamId` under a mounted settings page. Without
-                    the remount the form would keep team A's zone and formats and
-                    save them onto team B's document. */}
-                <RegionalForm
-                  key={currentTeamId}
-                  team={team}
-                  teamId={currentTeamId}
-                  canEdit={canEdit}
-                />
-                <EngagementThresholdsForm team={team} teamId={currentTeamId} canEdit={canEdit} />
-                <TabBarPreference />
-              </>
-            )}
             {tab === 'alerts' && <AlertPresetsTab teamId={currentTeamId} canEdit={canEdit} />}
             {tab === 'ranking' && (
               <RankingTab teamId={currentTeamId} team={team} canEdit={canEdit} />
