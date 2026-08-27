@@ -284,7 +284,13 @@ export function TeamSwitcher() {
 
           Entering an org is ORDINARY NAVIGATION, unlike switching studio: the
           current team does not change, so there is no cache keyed to the wrong
-          tenant and none of the hard-reload reasoning below applies. */}
+          tenant and none of the hard-reload reasoning below applies.
+
+          IT LINKS TO THE SCOPE ROOT, not to a page. Where an organisation opens
+          depends on whether you run it or merely belong to one of its studios,
+          and `/org/{id}` is the one place that decides — see that route. Naming
+          a page here would mean resolving a role for every organisation in the
+          list before this menu could render a single row. */}
       {orgs.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
@@ -296,7 +302,7 @@ export function TeamSwitcher() {
               <DropdownMenuItem
                 key={org.id}
                 disabled={!!switchingTo}
-                onClick={() => router.push(`/org/${org.id}/teams` as Route)}
+                onClick={() => router.push(`/org/${org.id}` as Route)}
               >
                 {isCurrent ? (
                   <Check className="mr-2 h-4 w-4 text-primary" />

@@ -23,6 +23,7 @@ import {
   Blocks,
   Building2,
   CalendarRange,
+  Compass,
   CreditCard,
   Globe,
   IdCard,
@@ -34,6 +35,7 @@ import {
   Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import type { OrgRole } from '@linyup/shared'
 
 /** Where an org destination lives: a sidebar row, or a group in the rail. */
 export type OrgRailGroupKey = 'standards' | 'shared' | 'administration'
@@ -99,6 +101,78 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   // same shape `/settings` has.
   { id: 'org-manage', path: 'manage', labelKey: 'manageTitle', icon: Settings2, ownsHeader: true },
 ]
+
+/**
+ * THE ROWS A **MEMBER STUDIO** SEES — the other audience in org scope.
+ *
+ * Two different people open an organisation and only one of them runs it:
+ *
+ *   an ORG MEMBER   — has an `org_members` row. Gets ORG_NAV_ITEMS above.
+ *   a MEMBER STUDIO — their STUDIO is in `org_teams`; they have no row of their
+ *                     own. Gets this list.
+ *
+ * The second used to get the first list, and it did not survive contact with
+ * the security rules: `org_teams` is readable by `isOrgMember(orgId) ||
+ * isTeamMember(teamId)`, so listing the roster returns a sibling studio's row
+ * that fails both arms and Firestore denies the WHOLE query. A studio owner
+ * therefore opened Studios and read "No teams have joined this organization
+ * yet" about the federation they are a member of (Franco, 2026-08-27).
+ *
+ * The fix is not to widen the rule. A federation's roster, its billing, its
+ * members and its website are the organisers' business, and the honest answer
+ * to "what is an organisation to a studio that belongs to one" is a different
+ * question with a different answer:
+ *
+ *   Overview           — what this organisation is, what your studio's standing
+ *                        in it is, and what it hands down to you. The one new
+ *                        page; everything on it was already readable.
+ *   Events             — the federation's own calendar. `events` admits
+ *                        `currentTeamInOrg`, and the page already gates its
+ *                        authoring on `isAdmin`.
+ *   Programme templates — the camp programmes the org authors and a studio
+ *                        applies. Same story: readable, and the manager already
+ *                        takes `canEdit={isAdmin}`.
+ *
+ * The two shared rows are here because they ALREADY worked read-only for this
+ * audience — nothing was relaxed to include them. Studios, Website and the
+ * management rail are absent because they do not.
+ *
+ * Franco's framing (2026-08-28), and the reason this is a list rather than a
+ * refusal: a studio in a federation should be able to reach it "as a high level
+ * summary… or other generic org wide stuff". This is the first entry in that
+ * list; a way to get in touch, and an org feed, are named as later work.
+ */
+export const ORG_STUDIO_NAV_ITEMS: OrgNavItem[] = [
+  { id: 'org-overview', path: 'overview', labelKey: 'navOverview', icon: Compass, ownsHeader: true },
+  { id: 'org-events', path: 'events', labelKey: 'tabEvents', icon: CalendarRange },
+  {
+    id: 'org-program-templates',
+    path: 'program-templates',
+    labelKey: 'tabProgramTemplates',
+    icon: ListTodo,
+  },
+]
+
+/**
+ * Which row list this person gets. `null` role = a member studio.
+ *
+ * The org-member list is the default for anyone who HAS a seat, viewer
+ * included: an `org_viewer` satisfies `isOrgMember` in the rules, so every row
+ * in it loads for them, and the pages that can be edited already gate their own
+ * controls on `isAdmin`.
+ */
+export function orgNavItemsForRole(role: OrgRole | null): OrgNavItem[] {
+  return role == null ? ORG_STUDIO_NAV_ITEMS : ORG_NAV_ITEMS
+}
+
+/**
+ * Where `/org/{orgId}` lands. An organiser opens the roster; a member studio
+ * opens the summary — the roster is the one page their own membership does not
+ * let them read.
+ */
+export function orgLandingPath(role: OrgRole | null): string {
+  return role == null ? 'overview' : 'teams'
+}
 
 /**
  * THE RAIL — everything configurational, grouped.
@@ -168,6 +242,7 @@ export function orgItemForPath(pathname: string): OrgNavItem | null {
   if (!segment) return null
   return (
     ORG_NAV_ITEMS.find((i) => i.path === segment) ??
+    ORG_STUDIO_NAV_ITEMS.find((i) => i.path === segment) ??
     ORG_RAIL_ITEMS.find((i) => i.path === segment) ??
     null
   )

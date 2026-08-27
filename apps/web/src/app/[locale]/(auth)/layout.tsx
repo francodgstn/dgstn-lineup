@@ -69,7 +69,8 @@ import { normalizeTabPath } from '@/lib/tab-routes'
 import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
-import { ORG_NAV_ITEMS, ORG_RAIL_ITEMS, orgHref } from '@/lib/org-nav'
+import { ORG_RAIL_ITEMS, orgHref, orgNavItemsForRole } from '@/lib/org-nav'
+import { useOrgRole } from '@/hooks/useOrgRole'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
 import { ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
 import { ScopeSwitcher } from '@/components/layout/ScopeSwitcher'
@@ -891,10 +892,23 @@ function OrgNavRows({
   const t = useTranslations('Org')
   const pathname = usePathname()
 
+  // WHICH ROWS depends on whether this person RUNS the organisation or merely
+  // belongs to one of its studios — two audiences, two catalogues, see
+  // `orgNavItemsForRole`. The read is shared with `OrgProvider` through one
+  // react-query key, so asking here costs nothing.
+  const { role, loading } = useOrgRole(orgId)
+
+  // RENDER NOTHING RATHER THAN THE WRONG THING. Defaulting to either list while
+  // the role is unresolved shows one set of destinations and then replaces it a
+  // moment later, which reads as the app changing its mind about who you are.
+  // The rows are the only thing held back; the scope identity above them has
+  // already said where you are.
+  if (loading) return <div className="mt-3 pt-3" />
+
   return (
     <div className="mt-3 pt-3">
       <div className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
-        {ORG_NAV_ITEMS.map((item) => {
+        {orgNavItemsForRole(role).map((item) => {
           const href = orgHref(orgId, item.path)
           const isActive = pathname === href || pathname.startsWith(href + '/')
           const Icon = item.icon
@@ -2496,6 +2510,9 @@ function SidebarContent({
   // the row and the search catalogue below read the same string — a per-row hook
   // would also mean ~20 subscriptions to one cached query.
   const affiliationTerm = useAffiliationTerm()
+  // Shares one react-query key with `OrgNavRows` and `OrgProvider` — see
+  // `useOrgRole`. Null outside org scope, where none of it is read.
+  const { role: orgRole, isOrgAdmin: orgIsAdmin } = useOrgRole(orgScopeId)
   const navLabel = (item: NavItem) =>
     item.dynamicLabel === 'affiliationTerm'
       ? affiliationTerm
@@ -2624,11 +2641,22 @@ function SidebarContent({
   // it, to pages whose rows were not even on screen. The rest of the sidebar
   // already swaps; this is the last piece that did not.
   //
-  // The org catalogue is small and flat — the four rows plus the rail — so it is
+  // The org catalogue is small and flat — the rows plus the rail — so it is
   // built here rather than through the shortcut-able `catalogue`, which carries
   // pinning and gating that only mean something for a studio.
+  //
+  // IT INDEXES WHAT THIS PERSON CAN REACH, which is not the same set for
+  // everyone: a member studio has three destinations and no rail, and an
+  // `org_viewer` has the rail without its admin-only entries. A search result
+  // that lands on a permission denial is worse than no result, because the
+  // person now believes the page exists for them and something is broken.
   const orgSearchEntries: SearchEntry[] = orgScopeId
-    ? [...ORG_NAV_ITEMS, ...ORG_RAIL_ITEMS].map((item) => ({
+    ? [
+        ...orgNavItemsForRole(orgRole),
+        // The rail belongs to the organisation's own people. `OrgRail` filters
+        // it exactly this way; search agreeing with it is the point.
+        ...(orgRole == null ? [] : ORG_RAIL_ITEMS.filter((i) => !i.adminOnly || orgIsAdmin)),
+      ].map((item) => ({
         id: item.id,
         href: orgHref(orgScopeId, item.path),
         label:
