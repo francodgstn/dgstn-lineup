@@ -7,7 +7,9 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import {
+  collectionGroup, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where,
+} from 'firebase/firestore'
 
 // Security-rules tests for the event program. This is a MULTI-TENANT boundary:
 // program items carry denormalised teamId/orgId/scope precisely so the rules can
@@ -105,6 +107,19 @@ async function seed() {
 
     await setDoc(doc(db, 'events', EVENT_ORG, 'categories', 'c1'), { name: 'U18' })
     await setDoc(doc(db, 'events', EVENT_ORG, 'attendees', 'a1'), { contactId: 'c1' })
+
+    // managerA is in BOTH studios — the two-studio login the switcher needs.
+    await setDoc(doc(db, 'teams', TEAM_B, 'team_members', 'managerA'), {
+      role: 'manager', capabilities: ['events.manage'], teamId: TEAM_B, userId: 'managerA',
+    })
+    // The two existing memberships predate `userId`/`teamId` being stamped in
+    // this fixture; the collection-group rule reads them off the document.
+    await setDoc(doc(db, 'teams', TEAM_A, 'team_members', 'managerA'), {
+      role: 'manager', capabilities: ['events.manage'], teamId: TEAM_A, userId: 'managerA',
+    })
+    await setDoc(doc(db, 'teams', TEAM_B, 'team_members', 'managerB'), {
+      role: 'manager', capabilities: ['events.manage'], teamId: TEAM_B, userId: 'managerB',
+    })
 
     // A check-in belonging to TEAM_A. `teamId` IS the tenant boundary for this
     // collection, which is what the update tests below are about.
@@ -388,6 +403,38 @@ describe('firestore.rules — event program items', function () {
           event: { id: EVENT_ORG }, contact: { id: 'ct2' }, teamId: TEAM_A, is_completed: false,
         }),
       )
+    })
+  })
+  // ── "which studios am I in?" ──────────────────────────────────────────────
+  // The collection-group query behind the studio switcher. It was denied for
+  // EVERY user until 2026-08-27 — twice over, for two different reasons — and
+  // nobody noticed because the switcher hides its list for anyone in a single
+  // studio, so an empty result and a correct result looked identical. These
+  // assertions are what make the empty case mean something.
+  describe('team_members collection group — my own memberships', () => {
+    const myMemberships = (db: ReturnType<typeof asManagerA>, uid: string) =>
+      getDocs(query(collectionGroup(db, 'team_members'), where('userId', '==', uid)))
+
+    it('returns every studio the caller belongs to, across teams', async () => {
+      const snap = await assertSucceeds(myMemberships(asManagerA(), 'managerA'))
+      assert.deepEqual(
+        snap.docs.map((d) => d.data().teamId).sort(),
+        [TEAM_A, TEAM_B],
+      )
+    })
+
+    it('CANNOT read another person’s memberships', async () => {
+      // The query is the only thing that scopes this — so the rule has to
+      // refuse rather than trust it.
+      await assertFails(myMemberships(asManagerA(), 'managerB'))
+    })
+
+    it('an unfiltered collection-group sweep is refused', async () => {
+      await assertFails(getDocs(collectionGroup(asManagerA(), 'team_members')))
+    })
+
+    it('an anonymous caller gets nothing', async () => {
+      await assertFails(myMemberships(asAnon(), 'managerA'))
     })
   })
 })

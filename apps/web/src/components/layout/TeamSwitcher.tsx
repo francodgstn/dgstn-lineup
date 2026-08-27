@@ -112,12 +112,14 @@ export function useMyTeams() {
         new Set(
           snap.docs
             // The denormalised stamp is READ, not reconstructed from the parent
-            // path: the collection-group rule on `{path=**}/team_members/{id}`
-            // gates on `resource.data.teamId != null && isTeamMember(...)`, so a
-            // membership document lacking the stamp is DENIED rather than
-            // returned — a `?? d.ref.parent.parent?.id` fallback here would be a
-            // branch nothing can enter, telling the next reader that unstamped
-            // legacy documents still arrive when the rules already refuse them.
+            // path. The collection-group rule gates on the document's own
+            // `userId`, and a document with no `teamId` is one this map simply
+            // drops — a `?? d.ref.parent.parent?.id` fallback would invent a
+            // team id for a membership that never claimed one.
+            //
+            // (This comment used to describe the rule as gating on
+            // `isTeamMember(resource.data.teamId)`. It did, and that rule denied
+            // every query it was supposed to allow — see firestore.rules.)
             .map((d) => d.get('teamId') as string | undefined)
             .filter((id): id is string => !!id)
         )
