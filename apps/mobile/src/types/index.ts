@@ -288,6 +288,14 @@ export interface ContactAlert {
   archived_at: Date | null;
 }
 
+// ─── Coaching contract ───────────────────────────────────────────────────────
+// Hand-mirrored from packages/shared/src/types/goal.ts — apps/mobile does not
+// depend on @linyup/shared (see the RankingSystem note further down this file:
+// wiring the workspace package in needs a Metro/monorepo resolution change of
+// its own, not a type fix). Keep these shapes byte-for-byte equivalent to the
+// shared source; if they drift, fix it there and re-copy, don't patch here.
+
+export type GoalType = 'goal' | 'task'; // 'goal' = long-term with evaluations; 'task' = boolean homework
 export type GoalStatus = 'open' | 'in_progress' | 'achieved' | 'abandoned';
 export type GoalCreatedBy = 'coach' | 'student';
 export type PerformanceContext = 'self' | '1to1';
@@ -297,7 +305,7 @@ export type ProfileKey = 'burnout_risk' | 'overreaching' | 'stuck' | 'coasting' 
 export interface GoalEvaluation {
   id: string;
   evaluated_at: any; // Firestore Timestamp
-  evaluated_by: 'coach' | 'student';
+  evaluated_by: GoalCreatedBy;
   score: number; // 1-5
   notes?: string | null;
   status_after: GoalStatus;
@@ -306,31 +314,50 @@ export interface GoalEvaluation {
 
 export interface Goal {
   id: string;
+  type: GoalType;
   title: string;
   description?: string | null;
   status: GoalStatus;
-  categories: string[]; // team-configurable tags, zero or more
+  categories: string[]; // dimension keys — see FirestoreService.getCoachingDimensions
   created_by: GoalCreatedBy;
   created_at: any;
   target_date?: any; // Firestore Timestamp or null
+  completed_at?: any | null; // set when a task is marked done (status → 'achieved')
+
+  /**
+   * The goal this step serves, for `type: 'task'`. Null/absent = unparented,
+   * grouped under a VIRTUAL "General" heading (no document backs it). Always
+   * null on `type: 'goal'`.
+   */
+  parent_goal_id?: string | null;
+
+  /** Denormalized from the newest evaluation, written by the `onGoalWrite`
+   *  Cloud Function trigger — never set from the client. */
+  latest_score?: number | null;
+  last_evaluated_at?: any | null;
+
+  /** Stamped by the daily job the first time this goal is observed past its
+   *  `target_date` — never set from the client. */
+  overdue_at?: any | null;
 }
 
 export interface PerformanceIndicator {
   key: string;
   label: string;
-  icon?: string;
 }
 
 export interface PerformanceCheckin {
   id: string;
   taken_at: any;
-  filled_by: 'coach' | 'student';
+  filled_by: GoalCreatedBy;
   scores: Record<string, number>;
   notes?: string | null;
   context: PerformanceContext;
-  profile_key?: ProfileKey;
-  primary_lever?: string;
-  anchor?: string;
+  /** Absent/null when the team's dimensions are not the canonical five — see
+   *  utils/goalContract.ts's `detectPerformanceProfile`. */
+  profile_key?: ProfileKey | null;
+  primary_lever?: string | null;
+  anchor?: string | null;
 }
 
 

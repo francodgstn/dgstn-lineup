@@ -16,6 +16,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FirestoreService } from '../../services/firestore';
 import { Goal, GoalEvaluation, GoalStatus, PerformanceIndicator } from '../../types';
+import { groupGoalsWithSteps } from '../../utils/goalContract';
 import { Timestamp } from 'firebase/firestore';
 
 interface Props {
@@ -41,13 +42,15 @@ const STATUS_COLORS: Record<GoalStatus, string> = {
 
 const ALL_STATUSES: GoalStatus[] = ['open', 'in_progress', 'achieved', 'abandoned'];
 
-const DEFAULT_CATEGORIES: PerformanceIndicator[] = [
-  { key: 'technique', label: 'Technique' },
-  { key: 'attitude', label: 'Attitude' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'physical', label: 'Physical' },
-  { key: 'mental', label: 'Mental' },
-];
+// Categories are the team's resolved coaching dimensions — the same list the
+// performance check-in rates against (see FirestoreService.getCoachingDimensions
+// and packages/shared/src/types/goal.ts's "ONE VOCABULARY"). There used to be a
+// second, hardcoded DEFAULT_CATEGORIES list here; that was drift, not design.
+
+function formatGoalDate(value: any): string {
+  const d = value?.toDate ? value.toDate() : typeof value === 'string' ? new Date(value) : null;
+  return d ? d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+}
 
 // ─── Star rating display ─────────────────────────────────────────────────────
 
@@ -68,6 +71,7 @@ const StarDisplay: React.FC<{ score: number; size?: number }> = ({ score, size =
 };
 
 // ─── Touchable stars for input ────────────────────────────────────────────────
+// `value` of 0 renders as "unrated" — nothing filled in.
 
 const StarInput: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => (
   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -144,6 +148,11 @@ const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
 interface EvalModalProps {
   visible: boolean;
   currentStatus: GoalStatus;
+  /** False for a coach-created goal: firestore.rules only lets a member move
+   *  a goal's status when they created it, so the picker for "what status did
+   *  this evaluation leave the goal in" is not offered — the score + note
+   *  still save on their own. */
+  allowStatusChange: boolean;
   initialScore?: number;
   initialNotes?: string | null;
   initialStatusAfter?: GoalStatus;
@@ -154,6 +163,7 @@ interface EvalModalProps {
 const AddEvalModal: React.FC<EvalModalProps> = ({
   visible,
   currentStatus,
+  allowStatusChange,
   initialScore,
   initialNotes,
   initialStatusAfter,
@@ -161,20 +171,23 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
   onSubmit,
 }) => {
   const theme = useTheme();
-  const [score, setScore] = useState(initialScore ?? 3);
+  // Unset until the member actually taps a star — a default of 3 let a save
+  // happen with zero interaction.
+  const [score, setScore] = useState<number | null>(initialScore ?? null);
   const [notes, setNotes] = useState(initialNotes ?? '');
   const [statusAfter, setStatusAfter] = useState<GoalStatus>(initialStatusAfter ?? currentStatus);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setScore(initialScore ?? 3);
+      setScore(initialScore ?? null);
       setNotes(initialNotes ?? '');
       setStatusAfter(initialStatusAfter ?? currentStatus);
     }
   }, [visible, currentStatus, initialScore, initialNotes, initialStatusAfter]);
 
   const handleSubmit = async () => {
+    if (score === null) return;
     setSubmitting(true);
     try {
       await onSubmit(score, notes.trim(), statusAfter);
@@ -204,7 +217,7 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
           <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
             Score
           </Text>
-          <StarInput value={score} onChange={setScore} />
+          <StarInput value={score ?? 0} onChange={setScore} />
         </View>
 
         <TextInput
@@ -217,28 +230,34 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
           style={{ backgroundColor: theme.colors.surface }}
         />
 
-        <View>
-          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-            Status after
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {ALL_STATUSES.map(s => (
-              <Chip
-                key={s}
-                selected={statusAfter === s}
-                onPress={() => setStatusAfter(s)}
-                style={statusAfter === s ? { backgroundColor: STATUS_COLORS[s] + '30' } : undefined}
-                textStyle={statusAfter === s ? { color: STATUS_COLORS[s], fontWeight: '700' } : undefined}
-              >
-                {STATUS_LABELS[s]}
-              </Chip>
-            ))}
+        {allowStatusChange ? (
+          <View>
+            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+              Status after
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {ALL_STATUSES.map(s => (
+                <Chip
+                  key={s}
+                  selected={statusAfter === s}
+                  onPress={() => setStatusAfter(s)}
+                  style={statusAfter === s ? { backgroundColor: STATUS_COLORS[s] + '30' } : undefined}
+                  textStyle={statusAfter === s ? { color: STATUS_COLORS[s], fontWeight: '700' } : undefined}
+                >
+                  {STATUS_LABELS[s]}
+                </Chip>
+              ))}
+            </View>
           </View>
-        </View>
+        ) : (
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            Recorded against the goal's current status ({STATUS_LABELS[currentStatus]}) — your coach set this goal, so only they can move its status.
+          </Text>
+        )}
 
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
           <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
-          <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting}>
+          <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting || score === null}>
             Save
           </Button>
         </View>
@@ -420,10 +439,96 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
   );
 };
 
+// ─── Task row ─────────────────────────────────────────────────────────────────
+// A task is boolean homework: no star evaluation, just done / not done.
+// Mirrors the web admin's TaskCard.toggleDone.
+
+interface TaskRowProps {
+  task: Goal;
+  contactId: string;
+  onChanged: () => void;
+  nested?: boolean;
+}
+
+const TaskRow: React.FC<TaskRowProps> = ({ task, contactId, onChanged, nested }) => {
+  const theme = useTheme();
+  const [toggling, setToggling] = useState(false);
+  const isDone = task.status === 'achieved';
+
+  const handleToggle = async () => {
+    setToggling(true);
+    try {
+      await FirestoreService.updateGoal(
+        contactId,
+        task.id,
+        isDone
+          ? { status: 'open', completed_at: null }
+          : { status: 'achieved', completed_at: Timestamp.now() },
+      );
+      onChanged();
+    } catch (error) {
+      console.error('Error toggling task:', error);
+      Alert.alert('Could not update task', 'Please try again in a moment.');
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const targetDateStr = task.target_date ? formatGoalDate(task.target_date) : null;
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: nested ? 10 : 14,
+        marginLeft: nested ? 14 : 0,
+        marginBottom: 8,
+        borderRadius: 10,
+        backgroundColor: nested ? theme.colors.surfaceVariant : theme.colors.surface,
+        borderWidth: nested ? 0 : 1,
+        borderColor: theme.colors.outlineVariant,
+      }}
+    >
+      <TouchableRipple onPress={handleToggle} disabled={toggling} borderless style={{ borderRadius: 14, marginTop: 1 }}>
+        <Icon
+          source={isDone ? 'check-circle' : 'circle-outline'}
+          size={22}
+          color={isDone ? '#22C55E' : theme.colors.onSurfaceVariant}
+        />
+      </TouchableRipple>
+      <View style={{ flex: 1 }}>
+        <Text
+          variant="bodyMedium"
+          style={{
+            color: isDone ? theme.colors.onSurfaceVariant : theme.colors.onSurface,
+            fontWeight: '600',
+            textDecorationLine: isDone ? 'line-through' : 'none',
+          }}
+        >
+          {task.title}
+        </Text>
+        {task.description ? (
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+            {task.description}
+          </Text>
+        ) : null}
+        {targetDateStr ? (
+          <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+            Target: {targetDateStr}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+};
+
 // ─── Goal Card ────────────────────────────────────────────────────────────────
 
 interface GoalCardProps {
   goal: Goal;
+  steps: Goal[];
   contactId: string;
   categoryOptions: PerformanceIndicator[];
   onEvaluationAdded: () => void;
@@ -431,13 +536,17 @@ interface GoalCardProps {
   onDeleteGoal?: () => void;
 }
 
-const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, onEvaluationAdded, onEditGoal, onDeleteGoal }) => {
+const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOptions, onEvaluationAdded, onEditGoal, onDeleteGoal }) => {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   const [evaluations, setEvaluations] = useState<GoalEvaluation[]>([]);
   const [loadingEvals, setLoadingEvals] = useState(false);
   const [showEvalModal, setShowEvalModal] = useState(false);
   const [editingEval, setEditingEval] = useState<GoalEvaluation | null>(null);
+
+  // firestore.rules only lets a member move a goal's status when they
+  // created it themselves — a coach's goal is the coach's to move.
+  const allowStatusChange = goal.created_by === 'student';
 
   const loadEvaluations = useCallback(async () => {
     setLoadingEvals(true);
@@ -457,13 +566,18 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
   };
 
   const handleAddEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
-    await FirestoreService.addGoalEvaluation(contactId, goal.id, {
-      evaluated_at: Timestamp.now(),
-      evaluated_by: 'student',
-      score,
-      notes: notes || null,
-      status_after: statusAfter,
-    });
+    await FirestoreService.addGoalEvaluation(
+      contactId,
+      goal.id,
+      {
+        evaluated_at: Timestamp.now(),
+        evaluated_by: 'student',
+        score,
+        notes: notes || null,
+        status_after: statusAfter,
+      },
+      goal.created_by,
+    );
     setShowEvalModal(false);
     await loadEvaluations();
     onEvaluationAdded();
@@ -471,11 +585,17 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
 
   const handleEditEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
     if (!editingEval) return;
-    await FirestoreService.updateGoalEvaluation(contactId, goal.id, editingEval.id, {
-      score,
-      notes: notes || null,
-      status_after: statusAfter,
-    });
+    await FirestoreService.updateGoalEvaluation(
+      contactId,
+      goal.id,
+      editingEval.id,
+      {
+        score,
+        notes: notes || null,
+        status_after: statusAfter,
+      },
+      goal.created_by,
+    );
     setEditingEval(null);
     await loadEvaluations();
     onEvaluationAdded();
@@ -567,17 +687,19 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
                 style={{ backgroundColor: theme.colors.surfaceVariant, height: 24 }}
                 textStyle={{ fontSize: 11, marginVertical: 0 }}
               >
-                {(() => {
-                  const d = goal.target_date?.toDate
-                    ? goal.target_date.toDate()
-                    : typeof goal.target_date === 'string'
-                      ? new Date(goal.target_date)
-                      : null;
-                  return `Target: ${d ? d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`;
-                })()}
+                {`Target: ${formatGoalDate(goal.target_date)}`}
               </Chip>
             ) : null}
           </View>
+
+          {/* Steps (tasks) nested under this goal */}
+          {steps.length > 0 && (
+            <View style={{ marginTop: 10 }}>
+              {steps.map(step => (
+                <TaskRow key={step.id} task={step} contactId={contactId} onChanged={onEvaluationAdded} nested />
+              ))}
+            </View>
+          )}
 
           {/* Expand/collapse footer */}
           <TouchableRipple onPress={handleExpand} borderless style={{ borderRadius: 8, marginTop: 8, alignSelf: 'flex-end' }}>
@@ -639,6 +761,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
       <AddEvalModal
         visible={showEvalModal}
         currentStatus={goal.status}
+        allowStatusChange={allowStatusChange}
         onDismiss={() => setShowEvalModal(false)}
         onSubmit={handleAddEval}
       />
@@ -646,6 +769,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
       <AddEvalModal
         visible={editingEval !== null}
         currentStatus={goal.status}
+        allowStatusChange={allowStatusChange}
         initialScore={editingEval?.score}
         initialNotes={editingEval?.notes}
         initialStatusAfter={editingEval?.status_after}
@@ -661,7 +785,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, contactId, categoryOptions, o
 export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
   const theme = useTheme();
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<PerformanceIndicator[]>(DEFAULT_CATEGORIES);
+  const [categoryOptions, setCategoryOptions] = useState<PerformanceIndicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -669,12 +793,12 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
   const loadGoals = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, teamCats] = await Promise.all([
+      const [data, dims] = await Promise.all([
         FirestoreService.getGoals(contactId),
-        teamId ? FirestoreService.getTeamGoalCategories(teamId) : Promise.resolve(null),
+        teamId ? FirestoreService.getCoachingDimensions(teamId) : Promise.resolve([]),
       ]);
       setGoals(data);
-      if (teamCats && teamCats.length > 0) setCategoryOptions(teamCats);
+      setCategoryOptions(dims);
     } finally {
       setLoading(false);
     }
@@ -691,6 +815,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
     targetDate: Date | null,
   ) => {
     await FirestoreService.createGoal(contactId, {
+      type: 'goal',
       title,
       description: description || null,
       status: 'open',
@@ -698,6 +823,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
       created_by: 'student',
       created_at: Timestamp.now(),
       target_date: targetDate ? Timestamp.fromDate(targetDate) : null,
+      parent_goal_id: null,
     });
     setShowAddModal(false);
     await loadGoals();
@@ -738,6 +864,9 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
     );
   };
 
+  const { goals: goalGroups, generalSteps } = groupGoalsWithSteps(goals);
+  const isEmpty = goalGroups.length === 0 && generalSteps.length === 0;
+
   return (
     <View style={{ marginBottom: 16 }}>
       {/* Section heading — outside cards */}
@@ -752,25 +881,42 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
 
       {loading ? (
         <ActivityIndicator size="small" style={{ marginVertical: 24 }} />
-      ) : goals.length === 0 ? (
+      ) : isEmpty ? (
         <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
           <Icon source="flag-outline" size={40} color={theme.colors.onSurfaceVariant} />
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
-            No goals yet — your coach will add goals here
+            No goals or tasks yet — your coach will add them here
           </Text>
         </View>
       ) : (
-        goals.map(goal => (
-          <GoalCard
-            key={goal.id}
-            goal={goal}
-            contactId={contactId}
-            categoryOptions={categoryOptions}
-            onEvaluationAdded={loadGoals}
-            onEditGoal={goal.created_by === 'student' ? () => setEditingGoal(goal) : undefined}
-            onDeleteGoal={goal.created_by === 'student' ? () => handleDeleteGoal(goal) : undefined}
-          />
-        ))
+        <>
+          {goalGroups.map(({ goal, steps }) => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              steps={steps}
+              contactId={contactId}
+              categoryOptions={categoryOptions}
+              onEvaluationAdded={loadGoals}
+              onEditGoal={goal.created_by === 'student' ? () => setEditingGoal(goal) : undefined}
+              onDeleteGoal={goal.created_by === 'student' ? () => handleDeleteGoal(goal) : undefined}
+            />
+          ))}
+
+          {generalSteps.length > 0 && (
+            <View style={{ marginTop: goalGroups.length > 0 ? 4 : 0 }}>
+              <Text
+                variant="titleSmall"
+                style={{ fontWeight: '700', color: theme.colors.onSurfaceVariant, marginBottom: 8, paddingHorizontal: 4 }}
+              >
+                General
+              </Text>
+              {generalSteps.map(step => (
+                <TaskRow key={step.id} task={step} contactId={contactId} onChanged={loadGoals} />
+              ))}
+            </View>
+          )}
+        </>
       )}
 
       <AddGoalModal
