@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { DateTimePicker } from '@/components/ui/date-picker'
@@ -37,11 +38,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { EVENTS_COLLECTION } from '@linyup/shared'
-import type { Event, EventType } from '@linyup/shared'
+import { eventTypeLabel } from '@/lib/eventTypeLabel'
+import { BUILTIN_EVENT_TYPES, EVENTS_COLLECTION } from '@linyup/shared'
+import type { Event } from '@linyup/shared'
 import type { Route } from 'next'
-
-const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
 
 function createEventSchema(t: ReturnType<typeof useTranslations>) {
   return z
@@ -61,8 +61,27 @@ function createEventSchema(t: ReturnType<typeof useTranslations>) {
 
 type EventFormData = z.infer<ReturnType<typeof createEventSchema>>
 
-function eventTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
-  return (EVENT_TYPES as string[]).includes(type) ? t(`type_${type}` as Parameters<typeof t>[0]) : type
+/**
+ * Display label for an event type id, for every surface on this page — the badge
+ * on a row, the type filter and the create/edit form — so a type never reads one
+ * way in the filter and another in the list.
+ *
+ * The labels come from the `Events` namespace, not `OrgEvents`: that is where a
+ * plugin-contributed type registers its copy (`type_hmd_fighting_cup`), and
+ * `OrgEvents` carries the built-ins only, so a plugin type resolved there would
+ * render its raw id.
+ */
+function useEventTypeLabel() {
+  const t = useTranslations('Events')
+  return useCallback(
+    (id: string) =>
+      eventTypeLabel(
+        id,
+        (k) => t.has(k as Parameters<typeof t>[0]),
+        (k) => t(k as Parameters<typeof t>[0]),
+      ),
+    [t],
+  )
 }
 
 function formatDate(ts: { toDate(): Date } | null | undefined) {
@@ -107,6 +126,7 @@ function OrgEventDialog({
   editing: Event | null
 }) {
   const t = useTranslations('OrgEvents')
+  const labelForType = useEventTypeLabel()
   const qc = useQueryClient()
   const eventSchema = useMemo(() => createEventSchema(t), [t])
   const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<EventFormData>({
@@ -170,8 +190,8 @@ function OrgEventDialog({
                 <Select value={field.value} onValueChange={(v) => { if (v) field.onChange(v) }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {EVENT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type} className="capitalize">{eventTypeLabel(t, type)}</SelectItem>
+                    {BUILTIN_EVENT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type} className="capitalize">{labelForType(type)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -220,6 +240,11 @@ function OrgEventDialog({
 
 const ORG_EVENT_TABS = ['upcoming', 'past'] as const
 
+// Sentinel for "no type filter" — a Select item needs a non-empty value, and the
+// same `__all__` marker is what the org affiliations list uses for its type
+// selector.
+const ALL_TYPES = '__all__'
+
 export default function OrgEventsPage() {
   const t = useTranslations('OrgEvents')
   const { orgId } = useParams<{ orgId: string }>()
@@ -227,14 +252,53 @@ export default function OrgEventsPage() {
   const { isAdmin } = useOrg()
   const qc = useQueryClient()
 
+  const labelForType = useEventTypeLabel()
+
   const [tab, setTab] = useTabParam(ORG_EVENT_TABS, 'upcoming')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Event | null>(null)
   const [deleting, setDeleting] = useState<Event | null>(null)
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES)
 
   const upcoming = useOrgEvents(orgId, true)
   const past = useOrgEvents(orgId, false)
   const current = tab === 'upcoming' ? upcoming : past
+
+  // The built-in slugs plus whatever types the loaded events actually carry, so a
+  // plugin-contributed type ('hmd_fighting_cup') is offered here without this page
+  // knowing that plugins exist. `useEventTypes` is deliberately not used: it is
+  // team-scoped and this page has an org, not a team.
+  //
+  // Derived from BOTH tabs rather than the visible one — the option list must not
+  // change under the person who set it when they flip upcoming/past, and an org
+  // that has run for two decades has types that only appear in its past.
+  const typeOptions = useMemo(() => {
+    const present = new Set<string>()
+    for (const e of [...(upcoming.data ?? []), ...(past.data ?? [])]) {
+      if (e.type) present.add(e.type)
+    }
+    BUILTIN_EVENT_TYPES.forEach((id) => present.delete(id))
+    const extra = [...present].sort((a, b) => labelForType(a).localeCompare(labelForType(b)))
+    return [...BUILTIN_EVENT_TYPES, ...extra]
+  }, [upcoming.data, past.data, labelForType])
+
+  // Type and search compose, and both compose with the upcoming/past tab that
+  // chose `current` in the first place.
+  const term = search.trim().toLowerCase()
+  const visible = useMemo(() => {
+    const rows = current.data ?? []
+    return rows.filter((e) => {
+      if (typeFilter !== ALL_TYPES && e.type !== typeFilter) return false
+      if (term && !(e.title ?? '').toLowerCase().includes(term)) return false
+      return true
+    })
+  }, [current.data, typeFilter, term])
+
+  // The controls are keyed off both tabs for the same reason the options are:
+  // a filter row that vanishes when you switch to an empty tab takes the filter
+  // you set with it.
+  const hasAnyEvent = (upcoming.data?.length ?? 0) + (past.data?.length ?? 0) > 0
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['org-events', orgId] })
@@ -281,6 +345,32 @@ export default function OrgEventsPage() {
         ))}
       </div>
 
+      {/* Filter row — stacked on a phone, one line from sm up, so it can never
+          overflow sideways. */}
+      {!current.isLoading && hasAnyEvent && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="sm:max-w-xs sm:flex-1">
+            <SearchInput
+              className="h-9 text-sm"
+              placeholder={t('searchPlaceholder')}
+              value={search}
+              onValueChange={setSearch}
+            />
+          </div>
+          <Select value={typeFilter} onValueChange={(v) => { if (v) setTypeFilter(v) }}>
+            <SelectTrigger className="h-9 w-full text-sm sm:w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_TYPES}>{t('filterAllTypes')}</SelectItem>
+              {typeOptions.map((id) => (
+                <SelectItem key={id} value={id}>{labelForType(id)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {current.isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
@@ -295,9 +385,16 @@ export default function OrgEventsPage() {
             </Button>
           )}
         </div>
+      ) : visible.length === 0 ? (
+        // Its own copy, not `emptyUpcoming`/`emptyPast` — a filter that matched
+        // nothing and a tab with no events in it are different situations, and
+        // reusing the second reads as the events having disappeared.
+        <div className="py-16 text-center text-sm text-muted-foreground">
+          {term ? t('emptySearch', { query: search.trim() }) : t('emptyTypeFilter')}
+        </div>
       ) : (
         <div className="space-y-2">
-          {current.data.map((event) => (
+          {visible.map((event) => (
             <div key={event.id} className="flex items-start gap-3 rounded-lg border p-3 hover:bg-muted/20 transition-colors">
               <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <CalendarDays className="h-4 w-4 text-primary" />
@@ -308,7 +405,7 @@ export default function OrgEventsPage() {
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{event.title}</span>
-                  <Badge variant="secondary" className="text-xs capitalize shrink-0">{eventTypeLabel(t, event.type)}</Badge>
+                  <Badge variant="secondary" className="text-xs capitalize shrink-0">{labelForType(event.type)}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {formatDate(event.start as { toDate(): Date })}

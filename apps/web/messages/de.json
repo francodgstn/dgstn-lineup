@@ -1943,6 +1943,18 @@
     "termsAcceptedBody": "Version {version}, akzeptiert am {date} von {email}.",
     "termsLink": "Nutzungsbedingungen",
     "dpaLink": "Auftragsverarbeitungsvertrag",
+    "rankingManagedByOrg": "Die Rangsysteme werden von der Organisation verwaltet.",
+    "rankingManagedByOrgLink": "Rangsysteme der Organisation öffnen",
+    "removeRankLevelTitle": "Diese Stufe entfernen?",
+    "removeRankLevelConfirm": "Stufe entfernen",
+    "rankHoldersChecking": "Es wird geprüft, wer betroffen ist …",
+    "rankHoldersUnknown": "Es konnte nicht geprüft werden, wer betroffen ist. Wer eine entfernte Stufe hat, behält die gespeicherte Zahl und wird mit der nächsttieferen Stufe angezeigt.",
+    "rankHoldersNoneLevel": "Kein Kontakt hat diese Stufe – das Entfernen betrifft niemanden.",
+    "rankHoldersLevelCount": "Kontakte auf dieser Stufe: {count}.",
+    "rankHoldersLevelWarning": "Ihr Rang behält die entfernte Zahl und wird bis zur Korrektur als nächsttiefere Stufe angezeigt.",
+    "rankHoldersNoneSystem": "Kein Kontakt hat eine seiner Stufen – das Löschen betrifft niemanden.",
+    "rankHoldersSystemCount": "Kontakte mit einer seiner Stufen: {count}.",
+    "rankHoldersSystemWarning": "Ihr Rang entspricht dann keiner konfigurierten Stufe mehr.",
     "sectionTeam": "Team",
     "sectionRegionFormat": "Region & Format",
     "sectionOther": "Weiteres"
@@ -2862,7 +2874,9 @@
     "accessLevelLabel": "Zugriffsstufe",
     "accessLevelView": "Ansehen — Kontakte, Einheiten und Veranstaltungen lesen",
     "accessLevelManage": "Verwalten — vollständiger Admin-Zugriff",
-    "requestAccessSubmit": "Zugriff anfordern"
+    "requestAccessSubmit": "Zugriff anfordern",
+    "searchPlaceholder": "Nach Studioname suchen…",
+    "emptySearch": "Keine Ergebnisse für „{query}“."
   },
   "OrgAffiliations": {
     "title": "Affiliationen",
@@ -2965,7 +2979,9 @@
     "inviteRevoke": "Zurückziehen",
     "inviteRevoked": "Einladung zurückgezogen",
     "confirmRevokeTitle": "Diese Einladung zurückziehen?",
-    "confirmRevokeMessage": "Der an {email} gesendete Link funktioniert sofort nicht mehr. Du kannst dieselbe Adresse jederzeit erneut einladen."
+    "confirmRevokeMessage": "Der an {email} gesendete Link funktioniert sofort nicht mehr. Du kannst dieselbe Adresse jederzeit erneut einladen.",
+    "searchPlaceholder": "Nach Name oder E-Mail suchen…",
+    "emptySearch": "Keine Ergebnisse für „{query}“."
   },
   "OrgBilling": {
     "title": "Abrechnung",
@@ -5204,7 +5220,22 @@
     "sheetTitleUpdate": "Check-in aktualisieren",
     "addCheckinBaseNote": "Sie werden sofort eingecheckt. Die Details jeder Person können Sie danach in der Liste ergänzen.",
     "addCheckinConfirm": "Einchecken",
-    "addCheckinConfirmCount": "{count} einchecken"
+    "addCheckinConfirmCount": "{count} einchecken",
+    "examIntro": "Erfassen Sie für jede geprüfte Disziplin den erreichten Grad.",
+    "examNoSystems": "Noch keine Rangsysteme konfiguriert.",
+    "examNoSystemsTeamLink": "In den Team-Einstellungen einrichten",
+    "examNoSystemsOrgLink": "In den Organisationseinstellungen einrichten",
+    "examNotExamined": "Nicht geprüft",
+    "examSelectAtLeastOne": "Wählen Sie mindestens ein Disziplin-Ergebnis, bevor Sie einchecken.",
+    "submitCheckIn": "Einchecken",
+    "submitUpdate": "Aktualisieren",
+    "genericMarkAttendance": "Anwesenheit für <strong>{name}</strong> erfassen.",
+    "genericNoExtraData": "Für diesen Event-Typ sind keine weiteren Angaben nötig.",
+    "genericSubmitUpdate": "Check-in aktualisieren",
+    "customFieldsIntro": "Erfassen Sie die Angaben, die dieser Event-Typ sammelt.",
+    "customFieldsRequiredHint": "Füllen Sie alle Pflichtfelder aus, bevor Sie einchecken.",
+    "fieldRequired": "Pflichtfeld",
+    "fieldSelectPlaceholder": "Auswählen…"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Auf {label} upgraden",
@@ -5394,7 +5425,11 @@
     "deleteConfirmDescription": "{title} wird aus den Veranstaltungslisten aller Vereine entfernt.",
     "delete": "Löschen",
     "errorRequired": "Erforderlich",
-    "errorEndAfterStart": "Das Ende muss nach dem Beginn liegen"
+    "errorEndAfterStart": "Das Ende muss nach dem Beginn liegen",
+    "searchPlaceholder": "Nach Titel suchen…",
+    "filterAllTypes": "Alle Typen",
+    "emptySearch": "Keine Ergebnisse für „{query}“.",
+    "emptyTypeFilter": "Keine Veranstaltungen dieses Typs."
   },
   "OrgEventDetail": {
     "backToEvents": "Organisationsveranstaltungen",
@@ -5441,11 +5476,23 @@
     "deleteDialogTitle": "Rangsystem löschen?",
     "deleteDialogBody": "Kontakte in allen Vereinen, denen in diesem System Ränge zugewiesen sind, verlieren diese Ränge.",
     "delete": "Löschen",
-    "toastSaved": "Gespeichert."
+    "toastSaved": "Gespeichert.",
+    "removeLevelTitle": "Diese Stufe entfernen?",
+    "removeLevelConfirm": "Stufe entfernen",
+    "holdersChecking": "Es wird geprüft, wer in den Mitgliedsstudios betroffen ist …",
+    "holdersUnknown": "Es konnte nicht geprüft werden, wer in den Mitgliedsstudios betroffen ist. Wer eine entfernte Stufe hat, behält die gespeicherte Zahl und wird mit der nächsttieferen Stufe angezeigt.",
+    "holdersNoneLevel": "Kein Kontakt in einem Mitgliedsstudio hat diese Stufe – das Entfernen betrifft niemanden.",
+    "holdersLevelCount": "Kontakte auf dieser Stufe in den Mitgliedsstudios: {count}.",
+    "holdersLevelWarning": "Ihr Rang behält die entfernte Zahl und wird bis zur Korrektur als nächsttiefere Stufe angezeigt.",
+    "holdersNoneSystem": "Kein Kontakt in einem Mitgliedsstudio hat eine seiner Stufen – das Löschen betrifft niemanden.",
+    "holdersSystemCount": "Kontakte mit einer seiner Stufen in den Mitgliedsstudios: {count}.",
+    "holdersSystemWarning": "Ihr Rang entspricht dann keiner konfigurierten Stufe mehr."
   },
   "OrgPlaces": {
     "title": "Standorte der Organisation",
-    "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden."
+    "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden.",
+    "searchPlaceholder": "Nach Name oder Adresse suchen…",
+    "emptySearch": "Keine Ergebnisse für „{query}“."
   },
   "EventTypesSettings": {
     "title": "Ereignistypen",

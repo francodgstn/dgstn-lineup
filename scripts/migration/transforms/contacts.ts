@@ -1,4 +1,4 @@
-import { RANKING_HMD, RANKING_KD, ORG_ID } from '../config'
+import { RANKING_HMD, RANKING_KD, ORG_ID, rankingSystemLevelValues } from '../config'
 import { matchSubscriptionType, pickSubscriptionPrice } from './subscriptions'
 
 // ── Affiliation mapping (Phase 2) ─────────────────────────────────────────────
@@ -50,6 +50,62 @@ function mapAcquisitionChannel(
   if (c.includes('facebook') || c.includes('instagram') || c.includes('social')) return 'social'
   if (c.includes('event') || c.includes('seminar') || c.includes('camp')) return 'event'
   return 'other'
+}
+
+// ── Rank validation ──────────────────────────────────────────────────────────
+//
+// A rank is written straight through as a number, and a number the belt scale
+// does not contain still writes cleanly: Firestore accepts it, and the app then
+// floor-matches it to a lower belt or renders nothing at all. So a bad rank is
+// invisible in the console and wrong on the contact's badge — the one failure
+// mode nobody spots.
+//
+// It is NEVER a throw. A migration that dies on one bad row abandons a run that
+// has already written thousands of good ones; the operator needs the list, not
+// a stack trace. Each one is named as it happens and the total is printed once
+// when the run ends, so a warning that scrolled past mid-migration still gets
+// counted at the bottom.
+
+let invalidRankCount = 0
+let totalRegistered = false
+
+function reportInvalidRank(src: Record<string, unknown>, systemId: string, raw: unknown): void {
+  invalidRankCount++
+
+  // The transform sees the doc DATA, not the doc id, so the contact is named
+  // with whatever it actually carries.
+  const who =
+    [src.firstname, src.lastname].filter(Boolean).join(' ').trim() ||
+    (src.email as string | undefined) ||
+    (src.id as string | undefined) ||
+    'unnamed contact'
+
+  console.warn(
+    `  ⚠ ${who} (team ${String(src.teamId ?? '—')}): ${systemId} rank ` +
+      `${JSON.stringify(raw)} is not a level in the ${systemId} scale — written as-is`,
+  )
+
+  if (!totalRegistered) {
+    totalRegistered = true
+    process.on('exit', () => {
+      console.warn(
+        `\n⚠ ${invalidRankCount} migrated rank value(s) are not levels in their ranking ` +
+          `scale. Each is named above; fix them on the contact or add the missing levels ` +
+          `to the ranking system.`,
+      )
+    })
+  }
+}
+
+/** Numeric rank for `ranks[systemId]`, warning when the scale has no such level. */
+function validatedRank(src: Record<string, unknown>, systemId: string, raw: unknown): number {
+  const value = Number(raw)
+  const levels = rankingSystemLevelValues(systemId)
+  // A null `levels` means this migration does not create that system at all —
+  // a different problem, and one this function is not the place to invent an
+  // answer for, so the value passes through unremarked.
+  if (levels && !levels.has(value)) reportInvalidRank(src, systemId, raw)
+  return value
 }
 
 export function transformContact(src: Record<string, unknown>): Record<string, unknown> {
@@ -120,8 +176,8 @@ export function transformContact(src: Record<string, unknown>): Record<string, u
   const hmdRank = disciplines?.hmd_rank ?? src.rank
   const kdRank  = disciplines?.kd_rank
 
-  if (hmdRank != null) ranks[RANKING_HMD] = Number(hmdRank)
-  if (kdRank  != null) ranks[RANKING_KD]  = Number(kdRank)
+  if (hmdRank != null) ranks[RANKING_HMD] = validatedRank(src, RANKING_HMD, hmdRank)
+  if (kdRank  != null) ranks[RANKING_KD]  = validatedRank(src, RANKING_KD,  kdRank)
 
   if (Object.keys(ranks).length > 0) out.ranks = ranks
   delete out.rank

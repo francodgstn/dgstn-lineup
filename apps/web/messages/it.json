@@ -1943,6 +1943,18 @@
     "termsAcceptedBody": "Versione {version}, accettata il {date} da {email}.",
     "termsLink": "Termini di servizio",
     "dpaLink": "Contratto sul trattamento dei dati",
+    "rankingManagedByOrg": "I sistemi di gradi sono gestiti dall'organizzazione.",
+    "rankingManagedByOrgLink": "Apri i gradi dell'organizzazione",
+    "removeRankLevelTitle": "Rimuovere questo livello?",
+    "removeRankLevelConfirm": "Rimuovi livello",
+    "rankHoldersChecking": "Verifica di chi è interessato…",
+    "rankHoldersUnknown": "Non è stato possibile verificare chi è interessato. Chi ha un livello rimosso mantiene il valore salvato e verrà mostrato al livello immediatamente inferiore.",
+    "rankHoldersNoneLevel": "Nessun contatto ha questo livello: rimuoverlo non riguarda nessuno.",
+    "rankHoldersLevelCount": "Contatti a questo livello: {count}.",
+    "rankHoldersLevelWarning": "Il loro grado mantiene il valore rimosso e verrà mostrato al livello immediatamente inferiore finché non viene corretto.",
+    "rankHoldersNoneSystem": "Nessun contatto ha uno dei suoi livelli: eliminarlo non riguarda nessuno.",
+    "rankHoldersSystemCount": "Contatti con uno dei suoi livelli: {count}.",
+    "rankHoldersSystemWarning": "Il loro grado non corrisponderà più a nessun livello configurato.",
     "sectionTeam": "Team",
     "sectionRegionFormat": "Regione e formato",
     "sectionOther": "Altro"
@@ -2862,7 +2874,9 @@
     "accessLevelLabel": "Livello di accesso",
     "accessLevelView": "Visualizza — lettura di contatti, sessioni ed eventi",
     "accessLevelManage": "Gestisci — accesso amministratore completo",
-    "requestAccessSubmit": "Richiedi accesso"
+    "requestAccessSubmit": "Richiedi accesso",
+    "searchPlaceholder": "Cerca per nome dello studio…",
+    "emptySearch": "Nessun risultato per «{query}»."
   },
   "OrgAffiliations": {
     "title": "Affiliazioni",
@@ -2965,7 +2979,9 @@
     "inviteRevoke": "Revoca",
     "inviteRevoked": "Invito revocato",
     "confirmRevokeTitle": "Revocare questo invito?",
-    "confirmRevokeMessage": "Il link inviato a {email} smette subito di funzionare. Puoi invitare di nuovo lo stesso indirizzo in qualsiasi momento."
+    "confirmRevokeMessage": "Il link inviato a {email} smette subito di funzionare. Puoi invitare di nuovo lo stesso indirizzo in qualsiasi momento.",
+    "searchPlaceholder": "Cerca per nome o email…",
+    "emptySearch": "Nessun risultato per «{query}»."
   },
   "OrgBilling": {
     "title": "Fatturazione",
@@ -5204,7 +5220,22 @@
     "sheetTitleUpdate": "Aggiorna check-in",
     "addCheckinBaseNote": "Vengono registrate subito. I dettagli di ciascuna persona si completano poi dall'elenco.",
     "addCheckinConfirm": "Registra",
-    "addCheckinConfirmCount": "Registra {count}"
+    "addCheckinConfirmCount": "Registra {count}",
+    "examIntro": "Registra il livello raggiunto per ogni disciplina esaminata.",
+    "examNoSystems": "Nessun sistema di graduazione configurato.",
+    "examNoSystemsTeamLink": "Configurali nelle impostazioni team",
+    "examNoSystemsOrgLink": "Configurali nelle impostazioni dell'organizzazione",
+    "examNotExamined": "Non esaminato",
+    "examSelectAtLeastOne": "Seleziona almeno un risultato di disciplina prima del check-in.",
+    "submitCheckIn": "Registra",
+    "submitUpdate": "Aggiorna",
+    "genericMarkAttendance": "Registra la presenza di <strong>{name}</strong>.",
+    "genericNoExtraData": "Per questo tipo di evento non servono altri dati.",
+    "genericSubmitUpdate": "Aggiorna check-in",
+    "customFieldsIntro": "Compila le informazioni richieste da questo tipo di evento.",
+    "customFieldsRequiredHint": "Compila tutti i campi obbligatori prima del check-in.",
+    "fieldRequired": "Obbligatorio",
+    "fieldSelectPlaceholder": "Seleziona…"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Passa al piano {label}",
@@ -5394,7 +5425,11 @@
     "deleteConfirmDescription": "{title} verrà rimosso dagli elenchi eventi di tutti i club.",
     "delete": "Elimina",
     "errorRequired": "Obbligatorio",
-    "errorEndAfterStart": "La fine deve essere successiva all'inizio"
+    "errorEndAfterStart": "La fine deve essere successiva all'inizio",
+    "searchPlaceholder": "Cerca per titolo…",
+    "filterAllTypes": "Tutti i tipi",
+    "emptySearch": "Nessun risultato per «{query}».",
+    "emptyTypeFilter": "Nessun evento di questo tipo."
   },
   "OrgEventDetail": {
     "backToEvents": "Eventi dell'organizzazione",
@@ -5441,11 +5476,23 @@
     "deleteDialogTitle": "Eliminare il sistema di graduazione?",
     "deleteDialogBody": "I contatti di tutti i club con gradi assegnati in questo sistema perderanno tali gradi.",
     "delete": "Elimina",
-    "toastSaved": "Salvato."
+    "toastSaved": "Salvato.",
+    "removeLevelTitle": "Rimuovere questo livello?",
+    "removeLevelConfirm": "Rimuovi livello",
+    "holdersChecking": "Verifica di chi è interessato negli studi membri…",
+    "holdersUnknown": "Non è stato possibile verificare chi è interessato negli studi membri. Chi ha un livello rimosso mantiene il valore salvato e verrà mostrato al livello immediatamente inferiore.",
+    "holdersNoneLevel": "Nessun contatto degli studi membri ha questo livello: rimuoverlo non riguarda nessuno.",
+    "holdersLevelCount": "Contatti a questo livello negli studi membri: {count}.",
+    "holdersLevelWarning": "Il loro grado mantiene il valore rimosso e verrà mostrato al livello immediatamente inferiore finché non viene corretto.",
+    "holdersNoneSystem": "Nessun contatto degli studi membri ha uno dei suoi livelli: eliminarlo non riguarda nessuno.",
+    "holdersSystemCount": "Contatti con uno dei suoi livelli negli studi membri: {count}.",
+    "holdersSystemWarning": "Il loro grado non corrisponderà più a nessun livello configurato."
   },
   "OrgPlaces": {
     "title": "Sedi dell'organizzazione",
-    "subtitle": "Sedi condivise con ogni studio di questa organizzazione."
+    "subtitle": "Sedi condivise con ogni studio di questa organizzazione.",
+    "searchPlaceholder": "Cerca per nome o indirizzo…",
+    "emptySearch": "Nessun risultato per «{query}»."
   },
   "EventTypesSettings": {
     "title": "Tipi di evento",

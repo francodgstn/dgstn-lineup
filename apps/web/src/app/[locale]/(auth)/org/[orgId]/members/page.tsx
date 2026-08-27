@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -11,6 +11,7 @@ import { useOrg } from '@/contexts/OrgContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -208,6 +209,21 @@ export default function OrgMembersPage() {
   const [revokeTarget, setRevokeTarget] = useState<OrgInvitationRow | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  // Client-side, over the rows already in hand. Name and email are matched
+  // separately rather than against one joined string, so a query cannot match by
+  // straddling the boundary between them.
+  const term = search.trim().toLowerCase()
+  const visible = useMemo(() => {
+    const rows = members ?? []
+    if (!term) return rows
+    return rows.filter(
+      (m) =>
+        (m.displayName ?? '').toLowerCase().includes(term) ||
+        (m.email ?? '').toLowerCase().includes(term)
+    )
+  }, [members, term])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -223,10 +239,15 @@ export default function OrgMembersPage() {
   // expireOrgMemberInvitations (a daily task) — but the deadline is also
   // compared here, so a row whose sweep has not run yet is not offered as live.
   // Nothing on this page depends on the sweep having happened.
+  //
+  // The search narrows this list too: the two lists are one roster of people as
+  // far as the person typing is concerned, and a pending invitation that stayed
+  // on screen while the members table narrowed would look like a match.
   const pendingInvitations = (invitations ?? []).filter(
     (i) =>
       i.status === 'pending' &&
-      (!i.expires_at || (i.expires_at as unknown as { seconds: number }).seconds * 1000 > Date.now())
+      (!i.expires_at || (i.expires_at as unknown as { seconds: number }).seconds * 1000 > Date.now()) &&
+      (!term || i.email.toLowerCase().includes(term))
   )
 
   async function handleRevoke() {
@@ -315,6 +336,19 @@ export default function OrgMembersPage() {
         )}
       </div>
 
+      {/* Search — mounted once there is a list to narrow. A field over a page
+          that has no members yet is a control with nothing to do. */}
+      {!isLoading && (members?.length ?? 0) > 0 && (
+        <div className="max-w-xs">
+          <SearchInput
+            className="h-9 text-sm"
+            placeholder={t('searchPlaceholder')}
+            value={search}
+            onValueChange={setSearch}
+          />
+        </div>
+      )}
+
       <div className="rounded-md border">
         {isLoading ? (
           <div className="p-4 space-y-3">
@@ -322,6 +356,13 @@ export default function OrgMembersPage() {
           </div>
         ) : !members || members.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm">{t('noMembers')}</div>
+        ) : visible.length === 0 ? (
+          // Its own copy, not `noMembers` — a search that matched nothing and an
+          // organization with no other members are different situations, and
+          // reusing the second reads as the members having disappeared.
+          <div className="p-8 text-center text-muted-foreground text-sm">
+            {t('emptySearch', { query: search.trim() })}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -333,7 +374,7 @@ export default function OrgMembersPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {members.map((m) => {
+              {visible.map((m) => {
                 const isSelf = m.userId === user?.uid
                 return (
                   <tr key={m.id} className="hover:bg-muted/20 transition-colors">

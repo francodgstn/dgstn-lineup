@@ -1943,6 +1943,18 @@
     "termsAcceptedBody": "Version {version}, acceptée le {date} par {email}.",
     "termsLink": "Conditions d'utilisation",
     "dpaLink": "Contrat de sous-traitance",
+    "rankingManagedByOrg": "Les systèmes de grades sont gérés par l'organisation.",
+    "rankingManagedByOrgLink": "Ouvrir les grades de l'organisation",
+    "removeRankLevelTitle": "Supprimer ce niveau ?",
+    "removeRankLevelConfirm": "Supprimer le niveau",
+    "rankHoldersChecking": "Vérification des personnes concernées…",
+    "rankHoldersUnknown": "Impossible de vérifier qui est concerné. Toute personne ayant un niveau supprimé conserve la valeur enregistrée et sera affichée au niveau immédiatement inférieur.",
+    "rankHoldersNoneLevel": "Aucun contact n'a ce niveau : le supprimer n'affecte personne.",
+    "rankHoldersLevelCount": "Contacts à ce niveau : {count}.",
+    "rankHoldersLevelWarning": "Leur grade conserve la valeur supprimée et s'affichera au niveau immédiatement inférieur jusqu'à correction.",
+    "rankHoldersNoneSystem": "Aucun contact n'a l'un de ses niveaux : le supprimer n'affecte personne.",
+    "rankHoldersSystemCount": "Contacts ayant l'un de ses niveaux : {count}.",
+    "rankHoldersSystemWarning": "Leur grade ne correspondra plus à aucun niveau configuré.",
     "sectionTeam": "Équipe",
     "sectionRegionFormat": "Région et format",
     "sectionOther": "Autre"
@@ -2862,7 +2874,9 @@
     "accessLevelLabel": "Niveau d'accès",
     "accessLevelView": "Consultation — lecture des contacts, séances et événements",
     "accessLevelManage": "Gestion — accès administrateur complet",
-    "requestAccessSubmit": "Demander l'accès"
+    "requestAccessSubmit": "Demander l'accès",
+    "searchPlaceholder": "Rechercher par nom de studio…",
+    "emptySearch": "Aucun résultat pour « {query} »."
   },
   "OrgAffiliations": {
     "title": "Affiliations",
@@ -2965,7 +2979,9 @@
     "inviteRevoke": "Révoquer",
     "inviteRevoked": "Invitation révoquée",
     "confirmRevokeTitle": "Révoquer cette invitation ?",
-    "confirmRevokeMessage": "Le lien envoyé à {email} cesse de fonctionner immédiatement. Tu peux réinviter la même adresse à tout moment."
+    "confirmRevokeMessage": "Le lien envoyé à {email} cesse de fonctionner immédiatement. Tu peux réinviter la même adresse à tout moment.",
+    "searchPlaceholder": "Rechercher par nom ou e-mail…",
+    "emptySearch": "Aucun résultat pour « {query} »."
   },
   "OrgBilling": {
     "title": "Facturation",
@@ -5204,7 +5220,22 @@
     "sheetTitleUpdate": "Mettre à jour le check-in",
     "addCheckinBaseNote": "Elles sont enregistrées immédiatement. Complétez ensuite les détails de chaque personne depuis la liste.",
     "addCheckinConfirm": "Enregistrer",
-    "addCheckinConfirmCount": "Enregistrer {count}"
+    "addCheckinConfirmCount": "Enregistrer {count}",
+    "examIntro": "Enregistrez le niveau atteint pour chaque discipline examinée.",
+    "examNoSystems": "Aucun système de classement configuré.",
+    "examNoSystemsTeamLink": "Les configurer dans les paramètres de l'équipe",
+    "examNoSystemsOrgLink": "Les configurer dans les paramètres de l'organisation",
+    "examNotExamined": "Non examiné",
+    "examSelectAtLeastOne": "Sélectionnez au moins un résultat de discipline avant l'enregistrement.",
+    "submitCheckIn": "Enregistrer",
+    "submitUpdate": "Mettre à jour",
+    "genericMarkAttendance": "Enregistrer la présence de <strong>{name}</strong>.",
+    "genericNoExtraData": "Aucune donnée supplémentaire n'est requise pour ce type d'événement.",
+    "genericSubmitUpdate": "Mettre à jour le check-in",
+    "customFieldsIntro": "Renseignez les informations demandées par ce type d'événement.",
+    "customFieldsRequiredHint": "Renseignez tous les champs obligatoires avant l'enregistrement.",
+    "fieldRequired": "Obligatoire",
+    "fieldSelectPlaceholder": "Sélectionner…"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Passer à l'offre {label}",
@@ -5394,7 +5425,11 @@
     "deleteConfirmDescription": "{title} sera retiré des listes d'événements de tous les clubs.",
     "delete": "Supprimer",
     "errorRequired": "Requis",
-    "errorEndAfterStart": "La fin doit être après le début"
+    "errorEndAfterStart": "La fin doit être après le début",
+    "searchPlaceholder": "Rechercher par titre…",
+    "filterAllTypes": "Tous les types",
+    "emptySearch": "Aucun résultat pour « {query} ».",
+    "emptyTypeFilter": "Aucun événement de ce type."
   },
   "OrgEventDetail": {
     "backToEvents": "Événements de l'organisation",
@@ -5441,11 +5476,23 @@
     "deleteDialogTitle": "Supprimer le système de classement ?",
     "deleteDialogBody": "Les contacts de tous les clubs ayant des grades attribués dans ce système perdront ces grades.",
     "delete": "Supprimer",
-    "toastSaved": "Enregistré."
+    "toastSaved": "Enregistré.",
+    "removeLevelTitle": "Supprimer ce niveau ?",
+    "removeLevelConfirm": "Supprimer le niveau",
+    "holdersChecking": "Vérification des personnes concernées dans les studios membres…",
+    "holdersUnknown": "Impossible de vérifier qui est concerné dans les studios membres. Toute personne ayant un niveau supprimé conserve la valeur enregistrée et sera affichée au niveau immédiatement inférieur.",
+    "holdersNoneLevel": "Aucun contact d'un studio membre n'a ce niveau : le supprimer n'affecte personne.",
+    "holdersLevelCount": "Contacts à ce niveau dans les studios membres : {count}.",
+    "holdersLevelWarning": "Leur grade conserve la valeur supprimée et s'affichera au niveau immédiatement inférieur jusqu'à correction.",
+    "holdersNoneSystem": "Aucun contact d'un studio membre n'a l'un de ses niveaux : le supprimer n'affecte personne.",
+    "holdersSystemCount": "Contacts ayant l'un de ses niveaux dans les studios membres : {count}.",
+    "holdersSystemWarning": "Leur grade ne correspondra plus à aucun niveau configuré."
   },
   "OrgPlaces": {
     "title": "Lieux de l'organisation",
-    "subtitle": "Emplacements partagés avec chaque studio de cette organisation."
+    "subtitle": "Emplacements partagés avec chaque studio de cette organisation.",
+    "searchPlaceholder": "Rechercher par nom ou adresse…",
+    "emptySearch": "Aucun résultat pour « {query} »."
   },
   "EventTypesSettings": {
     "title": "Types d'événements",
