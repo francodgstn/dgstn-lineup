@@ -47,8 +47,7 @@ import {
   activityRequiresSubscription, contactHoldsCoveringSubscription,
   bookingHoldsSeat, confirmClearedHoldFields, seatsFree,
   bookingContactId, buildParticipantDoc,
-  CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions,
-} from '@linyup/shared'
+  CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
 import type { Session, Booking, Contact, Activity, WaitlistEntry, PerformanceIndicator } from '@linyup/shared'
 import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
 import { useWaiverPolicy, useWaiverRoster } from '@/hooks/useWaiverStates'
@@ -349,7 +348,7 @@ function QuickLogSheet({
           target_date: null,
         },
       )
-      await addDoc(collection(goalRef, 'evaluations'), {
+      await addDoc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), {
         evaluated_at: serverTimestamp(),
         evaluated_by: 'coach',
         score,

@@ -23,10 +23,10 @@ import {
   CONTACT_GOALS_SUBCOLLECTION,
   type Goal,
   type GoalEvaluation,
+  CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION,
 } from '@linyup/shared'
 import { to } from '../utils/async'
 
-const EVALUATIONS_SUBCOLLECTION = 'evaluations'
 
 function timestampEquals(a: Timestamp | null | undefined, b: Timestamp | null | undefined): boolean {
   if (!a && !b) return true
@@ -35,7 +35,7 @@ function timestampEquals(a: Timestamp | null | undefined, b: Timestamp | null | 
 }
 
 export const trackGoalEvaluations = onDocumentWritten(
-  `${CONTACTS_COLLECTION}/{contactId}/${CONTACT_GOALS_SUBCOLLECTION}/{goalId}/${EVALUATIONS_SUBCOLLECTION}/{evaluationId}`,
+  `${CONTACTS_COLLECTION}/{contactId}/${CONTACT_GOALS_SUBCOLLECTION}/{goalId}/${CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION}/{evaluationId}`,
   async (event) => {
     const beforeExists = event.data?.before.exists ?? false
     const afterExists = event.data?.after.exists ?? false
@@ -50,7 +50,7 @@ export const trackGoalEvaluations = onDocumentWritten(
       .doc(goalId)
 
     const [queryErr, latestSnap] = await to(
-      goalRef.collection(EVALUATIONS_SUBCOLLECTION).orderBy('evaluated_at', 'desc').limit(1).get(),
+      goalRef.collection(CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION).orderBy('evaluated_at', 'desc').limit(1).get(),
     )
     if (queryErr) {
       console.error(`[coaching] trackGoalEvaluations: query failed for goal ${goalId}:`, queryErr) // eslint-disable-line no-console

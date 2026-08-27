@@ -150,6 +150,7 @@ export { trackContactAlerts } from './contacts/trackAlerts'
 // (see ./dailyTasks) is what wakes `trackGoals` when a goal falls overdue with
 // no write of its own.
 export { trackGoals } from './coaching/trackGoals'
+export { teardownGoal } from './coaching/teardownGoal'
 export { trackGoalEvaluations } from './coaching/trackGoalEvaluations'
 export { trackPerformanceCheckins } from './coaching/trackPerformanceCheckins'
 
