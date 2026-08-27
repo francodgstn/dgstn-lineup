@@ -559,6 +559,33 @@ were checked in a browser against computed styles.
 
 ---
 
+## Newly recorded, 2026-08-27 — left open by the org-scope build
+
+### `useAffiliationTerm` resolves the wrong organisation in org scope
+
+`hooks/useAffiliationTerm.ts` calls `useOrg()`, and the studio sidebar is a
+SIBLING of the org route's children — so `OrgProvider` does not wrap it and the
+call returns the module default (`org: null`). The hook then falls back to the
+CURRENT TEAM's `org_id`. On an `/org/{X}` route where X is not the current
+team's org, the sidebar's affiliation word is a different organisation's, with
+no error. Pre-existing; the scope build did not introduce it but does make org
+scope a place people spend time, so it is worth fixing.
+
+The fix is not to widen `OrgProvider` — the scope is already resolved from the
+URL in `ScopeContext`, so the hook should read the ROUTE's org id from there
+rather than the team's.
+
+### The sidebar quick-search does not index org destinations
+
+Named as a risk in `docs/org-navigation.md` before the build and still true
+after it. The search catalogue is built from `NAV_SECTIONS` + the settings
+items; the four org rows and seven rail items are in neither, so in org scope
+the switcher is the only way in and Ctrl+K finds nothing. The catalogue builder
+takes resolved entries, so this is a matter of feeding it the org items when the
+scope is org — not a new mechanism.
+
+---
+
 ## Newly recorded, 2026-08-27 — the public booking page
 
 Reported by Franco from STAGING: the calendar would not advance a month, and

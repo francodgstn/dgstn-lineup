@@ -1,7 +1,33 @@
 # Organisation navigation — design
 
-**Status: designed, not built.** Decisions taken 2026-08-25 (Franco). Recorded
-before implementation so the shape is agreed rather than discovered halfway.
+**Status: BUILT 2026-08-27.** Decisions taken 2026-08-25 (Franco); the chord and
+the four-rows-plus-rail split confirmed 2026-08-27. Recorded before
+implementation so the shape was agreed rather than discovered halfway — this
+document is now the reasoning behind the code rather than a proposal.
+
+**The chord is `Alt+O`.** `!e.ctrlKey` is load-bearing: AltGr reports as
+ctrlKey + altKey on the layouts this product is built for.
+
+**What the implementation added that the design did not anticipate:**
+
+- **Ten org pages had no `<h1>` of their own** — the deleted tab strip was their
+  only title. The layout supplies the destination heading; the two pages that
+  always had one say so in the catalogue (`ownsHeader`) rather than being
+  remembered.
+- **The mobile rail is a disclosure, not an index page.** The studio rail can be
+  an index because `/settings` is a real route that lists it. The organisation
+  has no equivalent — `/org/{id}` redirects straight to the studios list — and
+  inventing one would put a second "organisation home" in the reader's head for
+  a scope that already has one.
+- **`NavRail` was extracted** so both rails are one markup. It resolves nothing:
+  labels, gates, the active rule and the pin all differ between the two, and the
+  studio's pin store is keyed per studio so it has no meaning on an org row.
+
+**Still open after the build:** the sidebar quick-search does not index org
+destinations (below), and `useAffiliationTerm` resolves the CURRENT TEAM's org
+rather than the route's — so on an `/org/{X}` route where X is not the current
+team's org, the studio sidebar's affiliation word is the wrong org's. Both are
+recorded in `docs/open-defects.md`.
 
 ---
 

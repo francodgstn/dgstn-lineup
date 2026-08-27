@@ -47,11 +47,13 @@ import { useQuery } from '@tanstack/react-query'
 import { collectionGroup, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore'
 import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { AlertTriangle, Building2, Check, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, Building2, Check, Landmark, Loader2, Plus } from 'lucide-react'
 import type { Route } from 'next'
 import { TEAMS_COLLECTION, USERS_COLLECTION } from '@linyup/shared'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { useScope } from '@/contexts/ScopeContext'
 import { useRouter } from '@/i18n/navigation'
 import { routing } from '@/i18n/routing'
 import {
@@ -131,6 +133,8 @@ export function TeamSwitcher() {
   const router = useRouter()
   const { user, currentTeamId } = useAuth()
   const { data: teams = [], isError, isFetching, refetch } = useMyTeams()
+  const { data: orgs = [] } = useOrgLinks()
+  const { current: currentScope } = useScope()
   const [switchingTo, setSwitchingTo] = useState<string | null>(null)
 
   async function switchTo(teamId: string) {
@@ -205,6 +209,39 @@ export function TeamSwitcher() {
                 <span className="truncate">{team.name}</span>
                 {/* The tick carries the state visually; this is the same fact
                     for a screen reader, which cannot see which row is ticked. */}
+                {isCurrent && <span className="sr-only">{t('currentStudio')}</span>}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+      )}
+      {/* THE ORGANISATIONS THIS LOGIN CAN STAND IN.
+          A second GROUP, not a second control, because the question is the same
+          one — "which scope am I in" — and answering it in two places would put
+          the ambiguity back that the scope model exists to remove.
+
+          Entering an org is ORDINARY NAVIGATION, unlike switching studio: the
+          current team does not change, so there is no cache keyed to the wrong
+          tenant and none of the hard-reload reasoning below applies. */}
+      {orgs.length > 0 && (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {t('switchOrganisation')}
+          </DropdownMenuLabel>
+          {orgs.map((org) => {
+            const isCurrent = currentScope?.kind === 'org' && currentScope.id === org.id
+            return (
+              <DropdownMenuItem
+                key={org.id}
+                disabled={!!switchingTo}
+                onClick={() => router.push(`/org/${org.id}/teams` as Route)}
+              >
+                {isCurrent ? (
+                  <Check className="mr-2 h-4 w-4 text-primary" />
+                ) : (
+                  <Landmark className="mr-2 h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="truncate">{org.name}</span>
                 {isCurrent && <span className="sr-only">{t('currentStudio')}</span>}
               </DropdownMenuItem>
             )

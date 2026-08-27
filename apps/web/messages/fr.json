@@ -2207,7 +2207,12 @@
     "createStudio": "Créer un autre studio",
     "switchStudioFailed": "Impossible de changer de studio. Veuillez réessayer.",
     "studioListFailed": "Impossible de charger vos studios.",
-    "studioListRetry": "Réessayer"
+    "studioListRetry": "Réessayer",
+    "scopeStudio": "Studio",
+    "scopeOrganisation": "Organisation",
+    "switchOrganisation": "Organisations",
+    "flipToPrevious": "Basculer vers {name}",
+    "flipLast": "Dernier"
   },
   "BioLink": {
     "title": "Bio link",
@@ -2851,7 +2856,14 @@
     "pluginsUninstalledSuccess": "Plugin supprimé de l'organisation.",
     "pluginsErrorInstall": "Impossible d'installer le plugin. Veuillez réessayer.",
     "pluginsErrorUninstall": "Impossible de supprimer le plugin. Veuillez réessayer.",
-    "tabProgramTemplates": "Modèles de programme"
+    "tabProgramTemplates": "Modèles de programme",
+    "navStudios": "Studios",
+    "railGroupStandards": "Standards que vous définissez",
+    "railGroupShared": "Ressources partagées",
+    "railGroupAdministration": "Administration",
+    "railSearchPlaceholder": "Rechercher dans les réglages de l'organisation",
+    "railNoResults": "Aucun réglage d'organisation ne correspond à votre recherche.",
+    "manageTitle": "Réglages de l'organisation"
   },
   "OrgTeams": {
     "title": "Équipes",

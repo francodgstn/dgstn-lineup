@@ -29,7 +29,6 @@ import {
   ChevronDown,
   Lock,
   Puzzle,
-  Building2,
   GraduationCap,
   Settings,
   HelpCircle,
@@ -70,7 +69,9 @@ import { normalizeTabPath } from '@/lib/tab-routes'
 import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
-import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { ORG_NAV_ITEMS, orgHref } from '@/lib/org-nav'
+import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
+import { ScopeFlip, ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { useArchivedContacts } from '@/hooks/useArchivedContacts'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
@@ -718,38 +719,53 @@ function NavFlyout({
 
 // ─── sidebar content ──────────────────────────────────────────────────────────
 
-function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
+/**
+ * THE ORGANISATION'S OWN SIDEBAR ROWS, rendered INSTEAD of the studio's when the
+ * URL is in org scope.
+ *
+ * This replaced an "Organizations" GROUP that listed each org as one more row
+ * beside the studio's own sections. That was the ambiguity the scope model
+ * exists to remove: an org has an Events, a Places, a Website, a Plugins, a
+ * Members and a Settings, and so does a studio, so two rows carrying the same
+ * word never stop needing a second look. Standing in one scope at a time means
+ * the word is never ambiguous — you are somewhere, and the indicator says where.
+ *
+ * The catalogue is lib/org-nav.ts; the switcher is how you get here.
+ */
+function OrgNavRows({
+  orgId,
+  collapsed,
+  onLinkClick,
+}: {
+  orgId: string
+  collapsed: boolean
+  onLinkClick?: () => void
+}) {
+  const t = useTranslations('Org')
   const pathname = usePathname()
-  const { data: orgs } = useOrgLinks()
-  if (!orgs || orgs.length === 0) return null
 
   return (
-    <div className="mt-3">
-      {collapsed ? (
-        <div className="border-t mx-1 mb-1" />
-      ) : (
-        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
-          Organizations
-        </p>
-      )}
-      <div className="space-y-0.5">
-        {orgs.map((org) => {
-          const href = `/org/${org.id}/teams`
-          const isActive = pathname.includes(`/org/${org.id}`)
+    <div className="mt-3 pt-3">
+      <div className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
+        {ORG_NAV_ITEMS.map((item) => {
+          const href = orgHref(orgId, item.path)
+          const isActive = pathname === href || pathname.startsWith(href + '/')
+          const Icon = item.icon
+          const label = t(item.labelKey as Parameters<typeof t>[0])
           return (
             <Link
-              key={org.id}
+              key={item.id}
               href={href as Route}
               onClick={onLinkClick}
-              title={collapsed ? org.name : undefined}
+              title={collapsed ? label : undefined}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
                 isActive
                   ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
                   : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
               } ${collapsed ? 'justify-center px-2' : ''}`}
             >
-              <Building2 className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              {!collapsed && <span className="truncate">{org.name}</span>}
+              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+              {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           )
         })}
@@ -2319,6 +2335,11 @@ function SidebarContent({
   const tp = useTranslations('Plugins')
   const pathname = usePathname()
   const { team, currentTeamId } = useAuth()
+  // WHICH SCOPE THE URL SAYS WE ARE IN. Derived, never stored — see
+  // contexts/ScopeContext.tsx. Null means the current studio.
+  const { current: scope } = useScope()
+  const orgScopeId = scope?.kind === 'org' ? scope.id : null
+  const tTop = useTranslations('TopBar')
   const { isInstalled } = useInstalledPlugins()
   const { isAtLeast } = usePlan()
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
@@ -2681,6 +2702,29 @@ function SidebarContent({
           onScroll={(e) => setNavScrolled(e.currentTarget.scrollTop > 0)}
           className="h-full overflow-y-auto py-2 px-2"
         >
+        {/* THE SCOPE INDICATOR — the design's single biggest risk is somebody
+            not noticing which scope they are in, and the answer is not more
+            words. It is a different ACCENT and a persistent band, so the
+            difference is visible before anything is read. Only drawn in org
+            scope: the studio is the default place to stand, and a badge on the
+            common case is noise rather than information. */}
+        {orgScopeId && !collapsed && (
+          <div className="mb-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-amber-700 dark:text-amber-400">
+              {tTop('scopeOrganisation')}
+            </p>
+            <p className="truncate text-sm font-semibold">{scope?.name || ' '}</p>
+          </div>
+        )}
+        {/* ORG SCOPE REPLACES THE STUDIO'S ROWS ENTIRELY — it does not sit
+            beside them. That is the whole point of a scope: one Events, one
+            Places, one Settings on screen at a time, so the word never needs a
+            second look. Shortcuts and the plugin rows are studio-scoped too
+            (the pin store is keyed per studio), so they go with it. */}
+        {orgScopeId ? (
+          <OrgNavRows orgId={orgScopeId} collapsed={collapsed} onLinkClick={onLinkClick} />
+        ) : (
+        <>
         {/* Shortcuts — pinned + recently visited (hidden when empty). THE FIRST
             SCROLLING THING: unlike the head pair above the search, this list
             grows with use, so it is what gives way when the pane runs short. */}
@@ -2833,12 +2877,18 @@ function SidebarContent({
           onLinkClick={onLinkClick}
           onDismiss={dismissSuggestion}
         />
-        <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
+        </>
+        )}
         </nav>
       </div>
 
-      {/* User account + QR at bottom */}
+      {/* User account + QR at bottom. The flip sits WITH the scope identity
+          rather than in the utility row: it is about where you are standing,
+          which is the question the account menu below already answers. */}
       <div className="border-t py-2 px-2 shrink-0">
+        <div className={`mb-1 flex ${collapsed ? 'justify-center' : 'justify-end'}`}>
+          <ScopeFlip collapsed={collapsed} />
+        </div>
         <UserMenu collapsed={collapsed} />
       </div>
     </div>
@@ -3075,6 +3125,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
+    // OUTERMOST of the shell providers: the sidebar reads the scope to decide
+    // which row set to render at all, so it has to resolve above everything the
+    // sidebar mounts. It costs one pathname read and the already-cached
+    // `useOrgLinks` query.
+    <ScopeProvider>
+    <ScopeFlipShortcut />
     <NavPinsProvider>
       <UpgradeModalProvider>
         <RecentContactsProvider>
@@ -3173,5 +3229,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </RecentContactsProvider>
       </UpgradeModalProvider>
     </NavPinsProvider>
+    </ScopeProvider>
   )
 }

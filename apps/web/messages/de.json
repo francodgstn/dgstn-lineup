@@ -2207,7 +2207,12 @@
     "createStudio": "Weiteres Studio erstellen",
     "switchStudioFailed": "Studio konnte nicht gewechselt werden. Bitte versuche es erneut.",
     "studioListFailed": "Deine Studios konnten nicht geladen werden.",
-    "studioListRetry": "Erneut versuchen"
+    "studioListRetry": "Erneut versuchen",
+    "scopeStudio": "Studio",
+    "scopeOrganisation": "Organisation",
+    "switchOrganisation": "Organisationen",
+    "flipToPrevious": "Zu {name} wechseln",
+    "flipLast": "Zuletzt"
   },
   "BioLink": {
     "title": "Bio-Link",
@@ -2851,7 +2856,14 @@
     "pluginsUninstalledSuccess": "Plugin aus Organisation entfernt.",
     "pluginsErrorInstall": "Plugin konnte nicht installiert werden. Bitte erneut versuchen.",
     "pluginsErrorUninstall": "Plugin konnte nicht entfernt werden. Bitte erneut versuchen.",
-    "tabProgramTemplates": "Programmvorlagen"
+    "tabProgramTemplates": "Programmvorlagen",
+    "navStudios": "Studios",
+    "railGroupStandards": "Vorgaben der Organisation",
+    "railGroupShared": "Gemeinsame Ressourcen",
+    "railGroupAdministration": "Verwaltung",
+    "railSearchPlaceholder": "Organisationseinstellungen durchsuchen",
+    "railNoResults": "Keine Organisationseinstellungen entsprechen Ihrer Suche.",
+    "manageTitle": "Organisationseinstellungen"
   },
   "OrgTeams": {
     "title": "Teams",
