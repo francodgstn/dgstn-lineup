@@ -39,7 +39,7 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION } from '@linyup/shared'
+import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
 import type { Goal, GoalEvaluation, GoalStatus, GoalType } from '@linyup/shared'
 import { reportPublicActionFailure, reportPublicLoadFailure } from '@/lib/publicQueryError'
 import { useSpaceAuth } from '../SpaceAuthProvider'
@@ -185,7 +185,7 @@ export function useGoalEvaluations(goalId: string, enabled: boolean) {
       try {
         const snap = await getDocs(
           query(
-            collection(db, CONTACTS_COLLECTION, contactId!, CONTACT_GOALS_SUBCOLLECTION, goalId, 'evaluations'),
+            collection(db, CONTACTS_COLLECTION, contactId!, CONTACT_GOALS_SUBCOLLECTION, goalId, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION),
             orderBy('evaluated_at', 'desc')
           )
         )
@@ -219,7 +219,7 @@ export function useAddGoalEvaluation() {
     }) => {
       if (!contactId) throw new Error('Not signed in')
       await addDoc(
-        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goal.id, 'evaluations'),
+        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goal.id, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION),
         {
           evaluated_at: Timestamp.now(),
           evaluated_by: 'student',

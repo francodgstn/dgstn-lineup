@@ -16,7 +16,9 @@ import { QueryErrorState } from '@/components/ui/query-error'
 import { loadFailureDetail } from '@/lib/publicQueryError'
 import { useSpaceTheme } from '../useSpaceTheme'
 import { CheckinFormDialog } from './CheckinFormDialog'
+import { CreateStepFromLever } from './CreateStepFromLever'
 import type { SpaceCheckinsState } from './useSpaceCheckins'
+import type { SpaceGoalsState } from './useSpaceGoals'
 
 // Covers all seven `ProfileKey` members, including `default` — a check-in
 // against the canonical five dimensions that matched no named pattern still
@@ -42,7 +44,18 @@ const PROFILE_DESC_KEYS: Record<ProfileKey, string> = {
   default: 'profileDefaultDesc',
 }
 
-export function CheckinSection({ state, dimensions }: { state: SpaceCheckinsState; dimensions: PerformanceIndicator[] }) {
+export function CheckinSection({
+  state,
+  dimensions,
+  goalsState,
+}: {
+  state: SpaceCheckinsState
+  dimensions: PerformanceIndicator[]
+  /** The SAME `useSpaceGoals()` instance CoachingHome hands to GoalsSection —
+   *  reused here (not re-queried) so "create a step for my weakest axis" can
+   *  offer open goals as parents. */
+  goalsState: SpaceGoalsState
+}) {
   const t = useTranslations('SpaceCoaching')
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const [rating, setRating] = useState(false)
@@ -50,6 +63,13 @@ export function CheckinSection({ state, dimensions }: { state: SpaceCheckinsStat
 
   const { checkins, isLoading, isError, error, refetch, submitCheckin } = state
   const latestSelf = checkins.find((c) => c.filled_by === 'student') ?? null
+
+  // Parent options for the quick "create a step" action below — real goals
+  // only (steps don't nest, see `Goal.parent_goal_id`), still open or in
+  // progress.
+  const openGoalOptions = goalsState.goals.filter(
+    (g) => g.type === 'goal' && (g.status === 'open' || g.status === 'in_progress')
+  )
 
   return (
     <section className="rounded-2xl p-4" style={cardStyle}>
@@ -117,6 +137,15 @@ export function CheckinSection({ state, dimensions }: { state: SpaceCheckinsStat
               <p>{t('checkinFocusArea', { axis: dimensionLabel(latestSelf.primary_lever, dimensions) })}</p>
             )}
           </div>
+
+          {latestSelf.primary_lever && (
+            <CreateStepFromLever
+              dimensionKey={latestSelf.primary_lever}
+              dimensionLabel={dimensionLabel(latestSelf.primary_lever, dimensions)}
+              openGoals={openGoalOptions}
+              createGoal={goalsState.createGoal}
+            />
+          )}
         </div>
       )}
 

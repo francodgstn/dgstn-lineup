@@ -972,7 +972,12 @@
     "goalNoSteps": "Aucune étape pour l'instant",
     "goalOverdueBadge": "En retard",
     "goalStepsCompleted": "{done}/{total} étapes terminées",
-    "goalsGeneralHeading": "Général"
+    "goalsGeneralHeading": "Général",
+    "activityFilterCoaching": "Coaching",
+    "coachingCreateTaskCta": "Créer une tâche pour {dimension}",
+    "coachingCreateTaskDefaultTitle": "Travailler sur {dimension}",
+    "coachingCreateTaskSubmit": "Créer la tâche",
+    "coachingCreateTaskFailed": "Impossible de créer la tâche. Réessayez."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -7356,6 +7361,10 @@
     "profileInconsistentDesc": "La régularité de présence est le principal frein — le reste est solide une fois sur place.",
     "profileBalancedTitle": "Équilibré",
     "profileBalancedDesc": "Chaque domaine est solide. Continuez ainsi.",
-    "ratingAriaLabel": "Noter {n} sur 5"
+    "ratingAriaLabel": "Noter {n} sur 5",
+    "createStepCta": "Créer une étape pour {dimension}",
+    "createStepDefaultTitle": "Travailler sur {dimension}",
+    "createStepSubmit": "Créer l'étape",
+    "parentGoalNone": "Général"
   }
 }

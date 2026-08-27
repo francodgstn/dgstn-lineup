@@ -82,7 +82,7 @@ export default function CoachingHome() {
       </div>
 
       <GoalsSection state={goalsState} dimensions={dimensions} />
-      <CheckinSection state={checkinsState} dimensions={dimensions} />
+      <CheckinSection state={checkinsState} dimensions={dimensions} goalsState={goalsState} />
     </div>
   )
 }

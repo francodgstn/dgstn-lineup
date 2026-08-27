@@ -972,7 +972,12 @@
     "goalNoSteps": "Noch keine Schritte",
     "goalOverdueBadge": "Überfällig",
     "goalStepsCompleted": "{done}/{total} Schritte erledigt",
-    "goalsGeneralHeading": "Allgemein"
+    "goalsGeneralHeading": "Allgemein",
+    "activityFilterCoaching": "Coaching",
+    "coachingCreateTaskCta": "Aufgabe für {dimension} erstellen",
+    "coachingCreateTaskDefaultTitle": "An {dimension} arbeiten",
+    "coachingCreateTaskSubmit": "Aufgabe erstellen",
+    "coachingCreateTaskFailed": "Die Aufgabe konnte nicht erstellt werden. Bitte versuche es erneut."
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -7356,6 +7361,10 @@
     "profileInconsistentDesc": "Regelmässig dabei zu sein ist das Hauptproblem — der Rest stimmt, sobald du da bist.",
     "profileBalancedTitle": "Ausgeglichen",
     "profileBalancedDesc": "Jeder Bereich ist stark. Weiter so.",
-    "ratingAriaLabel": "Bewerte {n} von 5"
+    "ratingAriaLabel": "Bewerte {n} von 5",
+    "createStepCta": "Schritt für {dimension} erstellen",
+    "createStepDefaultTitle": "An {dimension} arbeiten",
+    "createStepSubmit": "Schritt erstellen",
+    "parentGoalNone": "Allgemein"
   }
 }

@@ -31,14 +31,24 @@ import {
 import { db } from '@/lib/firebase'
 import {
   CONTACTS_COLLECTION,
+  CONTACT_GOALS_SUBCOLLECTION,
   CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION,
   resolveCoachingDimensions,
   detectPerformanceProfile,
+  dimensionLabel,
 } from '@linyup/shared'
-import type { Contact, Team, PerformanceCheckin, ProfileKey } from '@linyup/shared'
+import type { Contact, Team, PerformanceCheckin, ProfileKey, Goal } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useUpgradeModal } from '@/contexts/UpgradeModalContext'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -104,6 +114,130 @@ function ProfileBadge({
         </span>
       </div>
       {message && <p className="text-xs text-muted-foreground">{message}</p>}
+    </div>
+  )
+}
+
+// ─── create a task for the weakest axis ────────────────────────────────────
+// The ONE connection `primary_lever` was missing — see packages/shared/src/
+// types/goal.ts ("ONE VOCABULARY"): a check-in's weakest axis and a goal's
+// `categories` are the same vocabulary, but nothing turned naming one into
+// creating the other. Deliberately NOT the full GoalFormDialog: title is
+// pre-filled (and editable) and categories is fixed to the one axis, so there
+// is nothing left to fill in except, optionally, which open goal this serves.
+// Choosing none files it under the virtual "General" group — no placeholder
+// goal is ever created for it (see `Goal.parent_goal_id`).
+
+// Sentinel for the Select's "no parent" option — Radix Select rejects an
+// empty-string item value, and `undefined`/`null` aren't valid values either.
+const NO_PARENT = '__general__'
+
+function CreateTaskFromLever({
+  contactId,
+  dimensionKey,
+  dimensionLabel: label,
+  openGoals,
+  onCreated,
+}: {
+  contactId: string
+  dimensionKey: string
+  dimensionLabel: string
+  openGoals: { id: string; title: string }[]
+  onCreated: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [parentGoalId, setParentGoalId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const startOpen = () => {
+    setTitle(t('coachingCreateTaskDefaultTitle', { dimension: label }))
+    setParentGoalId(null)
+    setFailed(false)
+    setOpen(true)
+  }
+
+  const create = async () => {
+    if (!title.trim()) return
+    setSaving(true)
+    setFailed(false)
+    try {
+      await addDoc(collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION), {
+        type: 'task',
+        title: title.trim(),
+        description: null,
+        status: 'open',
+        categories: [dimensionKey],
+        parent_goal_id: parentGoalId,
+        created_by: 'coach',
+        created_at: serverTimestamp(),
+        target_date: null,
+      })
+      onCreated()
+      setOpen(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={startOpen}
+        className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+      >
+        <Plus className="h-3 w-3" />
+        {t('coachingCreateTaskCta', { dimension: label })}
+      </button>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="h-8 text-sm"
+        autoFocus
+      />
+      {openGoals.length > 0 && (
+        <Select
+          value={parentGoalId ?? NO_PARENT}
+          onValueChange={(v) => setParentGoalId(v === NO_PARENT ? null : v)}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_PARENT}>{t('goalFormParentGoalNone')}</SelectItem>
+            {openGoals.map((g) => (
+              <SelectItem key={g.id} value={g.id}>{g.title}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {failed && <p className="text-xs text-destructive">{t('coachingCreateTaskFailed')}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={create}
+          disabled={saving || !title.trim()}
+          className="px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        >
+          {saving ? '…' : t('coachingCreateTaskSubmit')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={saving}
+          className="px-3 py-1 rounded-md border text-xs font-medium hover:bg-muted transition-colors"
+        >
+          {t('cancel')}
+        </button>
+      </div>
     </div>
   )
 }
@@ -275,9 +409,14 @@ function AddCheckinDialog({
 export function PerformanceProfilePanel({
   contact,
   team,
+  goals,
 }: {
   contact: Contact
   team: Team | null
+  /** The contact's goals — same fetch GoalsTab already made (`useGoals`), passed
+   *  down rather than re-queried, so the "create a task for the weakest axis"
+   *  action below can offer open goals as parents without a second read. */
+  goals: Goal[]
 }) {
   const t = useTranslations('Contacts')
   const [addCheckinOpen, setAddCheckinOpen] = useState(false)
@@ -289,6 +428,12 @@ export function PerformanceProfilePanel({
   const qc = useQueryClient()
 
   const dimensions = resolveCoachingDimensions(team)
+
+  // Parent options for the quick "create a task" action — real goals only
+  // (steps don't nest, see `Goal.parent_goal_id`), still open or in progress.
+  const openGoalOptions = goals
+    .filter((g) => g.type === 'goal' && (g.status === 'open' || g.status === 'in_progress'))
+    .map((g) => ({ id: g.id, title: g.title }))
 
   const latestCoach = checkins.find((c) => c.filled_by === 'coach') ?? null
   const latestStudent = checkins.find((c) => c.filled_by === 'student') ?? null
@@ -323,6 +468,12 @@ export function PerformanceProfilePanel({
   // latest SELF check-in specifically, not "whoever filled in last") — so the
   // coach sees exactly what the member saw, never a coach-filled substitute.
   const badgeProfileKey = latestStudent?.profile_key ?? null
+  // Independent of the named-profile badge above: `primary_lever` is computed
+  // for ANY dimension set (see `detectPerformanceProfile`), so a team on
+  // custom axes gets no named profile but still gets a weakest axis — and
+  // still gets the "create a task for it" action. A check-in with no scores,
+  // or one written before this field existed, has neither.
+  const badgePrimaryLever = latestStudent?.primary_lever ?? null
 
   return (
     <div className="rounded-xl border bg-card p-5 space-y-4">
@@ -383,6 +534,15 @@ export function PerformanceProfilePanel({
               primaryLever={latestStudent?.primary_lever}
               anchor={latestStudent?.anchor}
               dimensions={dimensions}
+            />
+          )}
+          {badgePrimaryLever && (
+            <CreateTaskFromLever
+              contactId={contact.id}
+              dimensionKey={badgePrimaryLever}
+              dimensionLabel={dimensionLabel(badgePrimaryLever, dimensions)}
+              openGoals={openGoalOptions}
+              onCreated={() => qc.invalidateQueries({ queryKey: ['contact-goals', contact.id] })}
             />
           )}
           <div className="h-[260px]">

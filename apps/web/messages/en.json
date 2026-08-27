@@ -972,7 +972,12 @@
     "goalNoSteps": "No steps yet",
     "goalOverdueBadge": "Overdue",
     "goalStepsCompleted": "{done}/{total} steps done",
-    "goalsGeneralHeading": "General"
+    "goalsGeneralHeading": "General",
+    "activityFilterCoaching": "Coaching",
+    "coachingCreateTaskCta": "Create a task for {dimension}",
+    "coachingCreateTaskDefaultTitle": "Work on {dimension}",
+    "coachingCreateTaskSubmit": "Create task",
+    "coachingCreateTaskFailed": "Couldn't create the task. Try again."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -7356,6 +7361,10 @@
     "profileInconsistentDesc": "Showing up is the main thing holding you back — the rest is solid once you're there.",
     "profileBalancedTitle": "Balanced",
     "profileBalancedDesc": "Every area is strong. Keep it up.",
-    "ratingAriaLabel": "Rate {n} out of 5"
+    "ratingAriaLabel": "Rate {n} out of 5",
+    "createStepCta": "Create a step for {dimension}",
+    "createStepDefaultTitle": "Work on {dimension}",
+    "createStepSubmit": "Create step",
+    "parentGoalNone": "General"
   }
 }

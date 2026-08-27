@@ -8,7 +8,7 @@ import {
   doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue } from '@linyup/shared'
+import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
 import type { Contact, Team, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,7 +83,7 @@ function useGoals(contactId: string) {
 async function fetchEvaluations(contactId: string, goalId: string): Promise<GoalEvaluation[]> {
   const snap = await getDocs(
     query(
-      collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goalId, 'evaluations'),
+      collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goalId, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION),
       orderBy('evaluated_at', 'desc'),
     ),
   )
@@ -399,7 +399,7 @@ function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, on
   }
 
   const handleAddEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
-    await addDoc(collection(goalRef, 'evaluations'), {
+    await addDoc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), {
       evaluated_at: serverTimestamp(),
       evaluated_by: 'coach',
       score,
@@ -414,7 +414,7 @@ function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, on
 
   const handleEditEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
     if (!editingEval) return
-    await updateDoc(doc(collection(goalRef, 'evaluations'), editingEval.id), {
+    await updateDoc(doc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), editingEval.id), {
       score, notes: notes || null, status_after: statusAfter, edited: true,
     })
     await updateDoc(goalRef, { status: statusAfter })
@@ -792,7 +792,7 @@ export function GoalsTab({ contact, teamId, team }: Props) {
 
       {/* The check-in radar feeds straight into the goals below it — see
           PerformanceProfilePanel's header for why it moved out of Stats. */}
-      <PerformanceProfilePanel contact={contact} team={team} />
+      <PerformanceProfilePanel contact={contact} team={team} goals={goals} />
 
       {/* One column: every goal card carries its own steps inline (with a
           completion count), and unparented steps fall into a virtual "General"

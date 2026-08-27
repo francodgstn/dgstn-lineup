@@ -972,7 +972,12 @@
     "goalNoSteps": "Nessun passaggio ancora",
     "goalOverdueBadge": "In ritardo",
     "goalStepsCompleted": "{done}/{total} passaggi completati",
-    "goalsGeneralHeading": "Generale"
+    "goalsGeneralHeading": "Generale",
+    "activityFilterCoaching": "Coaching",
+    "coachingCreateTaskCta": "Crea un'attività per {dimension}",
+    "coachingCreateTaskDefaultTitle": "Lavora su {dimension}",
+    "coachingCreateTaskSubmit": "Crea attività",
+    "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova."
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -7356,6 +7361,10 @@
     "profileInconsistentDesc": "La costanza nella presenza è il freno principale — il resto è solido una volta che ci sei.",
     "profileBalancedTitle": "Equilibrato",
     "profileBalancedDesc": "Ogni area è forte. Continua così.",
-    "ratingAriaLabel": "Valuta {n} su 5"
+    "ratingAriaLabel": "Valuta {n} su 5",
+    "createStepCta": "Crea un passaggio per {dimension}",
+    "createStepDefaultTitle": "Lavora su {dimension}",
+    "createStepSubmit": "Crea passaggio",
+    "parentGoalNone": "Generale"
   }
 }

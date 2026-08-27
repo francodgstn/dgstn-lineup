@@ -3021,9 +3021,9 @@ const ACTIVITY_PERIODS = [
 ] as const
 type ActivityPeriodKey = (typeof ACTIVITY_PERIODS)[number]['key']
 
-type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach' | 'consent'
+type ActivityCategory = 'all' | 'sessions' | 'bookings' | 'profile' | 'outreach' | 'consent' | 'coaching'
 
-const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventType[]> = {
+const CATEGORY_EVENTS = {
   sessions: ['session_participant_add', 'session_participant_delete'],
   bookings: [
     'booking_created',
@@ -3050,7 +3050,32 @@ const CATEGORY_EVENTS: Record<Exclude<ActivityCategory, 'all'>, ActivityEventTyp
   // accept this, and did anybody withdraw it" is the question a dispute starts
   // with, and it is not a profile edit.
   consent: ['waiver_accepted', 'waiver_revoked'],
-}
+  // Coaching gets its own chip rather than joining `profile`: "how is their
+  // practice going" is the question this tab opens to ask, and a goal reached,
+  // a step ticked off or a check-in filed is progress on that practice, not a
+  // change to who the contact is.
+  coaching: ['goal_achieved', 'goal_abandoned', 'goal_step_completed', 'performance_checkin'],
+} as const satisfies Record<Exclude<ActivityCategory, 'all'>, readonly ActivityEventType[]>
+
+// Compile-time guard for the gap that let the four coaching events go
+// missing from every filter chip above. `EVENT_META` below is a
+// `Record<ActivityEventType, …>`, so the compiler forces it closed — leaving
+// an event out fails the build on its own. `CATEGORY_EVENTS` is keyed by
+// CATEGORY, not event, so it has no such shape to force closed, and a
+// forgotten event type-checks fine while silently only ever showing under
+// "All". This line recovers the same guarantee without reshaping the data:
+// if any `ActivityEventType` is absent from every array above, the
+// `extends never` constraint fails and `turbo run typecheck` breaks. (No
+// test file — `apps/web` has no test runner to run one.)
+type _EventsMissingFromCategoryEvents = Exclude<
+  ActivityEventType,
+  (typeof CATEGORY_EVENTS)[keyof typeof CATEGORY_EVENTS][number]
+>
+type _AssertNever<T extends never> = T
+// Type-only; nothing references this by design — a constraint violation here
+// fails the build on its own, which is the whole point.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _AllActivityEventsAreCategorized = _AssertNever<_EventsMissingFromCategoryEvents>
 
 type EventMeta = { Icon: React.ElementType; bg: string; fg: string }
 
@@ -3249,7 +3274,9 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
   const filtered =
     category === 'all'
       ? entries
-      : entries.filter((e) => (CATEGORY_EVENTS[category] as string[]).includes(e.event))
+      : entries.filter((e) =>
+          (CATEGORY_EVENTS[category] as readonly ActivityEventType[]).includes(e.event)
+        )
 
   // Group filtered entries by calendar day
   const groups: { label: string; items: ActivityLogEntry[] }[] = []
@@ -3270,6 +3297,7 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
     { key: 'profile', label: t('activityFilterProfile') },
     { key: 'outreach', label: t('activityFilterOutreach') },
     { key: 'consent', label: t('activityFilterConsent') },
+    { key: 'coaching', label: t('activityFilterCoaching') },
   ]
 
   return (
