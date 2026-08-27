@@ -15,10 +15,14 @@
  * so in a comment ("there is no team switcher"); that decision was reversed on
  * 2026-08-24.
  *
- * ── IT HIDES ITSELF, BUT ONLY WHEN IT KNOWS ────────────────────────────────
- * The studio LIST renders for someone who is in more than one — OR for anyone
- * standing in an ORGANISATION, where even a single studio is a place to go
- * rather than the place you already are. "Create another studio" is always
+ * ── IT SHOWS EVERYWHERE YOU CAN STAND, AND TICKS WHERE YOU ARE ─────────────
+ * Every studio and every organisation this login can reach, with the current
+ * one ticked. It used to hide the studio list for anyone in a single studio;
+ * that was right while this lived in the account menu and only answered "take
+ * me to my OTHER studio", and wrong as a scope switcher, whose job is the whole
+ * picture. The trigger still refuses to become a dropdown at all when there is
+ * genuinely nowhere else to go (see ScopeSwitcher) — that is where "unchanged
+ * for the overwhelming majority" is kept now. "Create another studio" is always
  * there, because it is the only way anyone gets to two.
  *
  * A FAILED READ IS NOT THAT SILENCE. An empty list and an errored query both
@@ -209,15 +213,16 @@ export function TeamSwitcher() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
       )}
-      {/* HIDE-WHEN-THERE-IS-ONE WAS A RULE ABOUT STUDIO SCOPE, and it broke the
-          moment this list started serving organisations too.
-          "You are in one studio, so there is nothing to switch to" is true only
-          while you are STANDING in it. From an organisation your single studio
-          is somewhere you need to GO — and it was hidden, so the switcher
-          offered the org you were already in and no way back (Franco,
-          2026-08-27). Listed whenever there is more than one, OR whenever you
-          are not currently in one. */}
-      {!isError && (teams.length > 1 || currentScope?.kind === 'org') && (
+      {/* BOTH GROUPS, ALWAYS, WITH A TICK ON WHERE YOU ARE (Franco, 2026-08-27).
+          This used to hide the studio list unless you were in more than one — a
+          rule inherited from when the block lived in the account menu and only
+          ever answered "take me to my other studio". As the SCOPE switcher its
+          job is different: it is the whole picture of where this login can
+          stand, and a picture with your current place missing is a worse answer
+          than a slightly longer list. The tick is what makes the extra row
+          informative rather than noise — it says where you are, which is the
+          question the control exists to answer. */}
+      {!isError && teams.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
             {t('switchStudio')}

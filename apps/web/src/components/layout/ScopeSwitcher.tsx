@@ -124,7 +124,7 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   // 18px while its own text overflowed. `flex-1` takes what is left and
   // truncates inside it, which is what `min-w-0` is there to permit.
   const shape = `flex min-w-0 items-center rounded-lg border transition-colors ${accent} ${
-    collapsed ? 'h-8 w-8 shrink-0 justify-center' : 'flex-1 gap-2 px-2 py-1.5'
+    collapsed ? 'h-8 w-8 shrink-0 justify-center' : 'flex-1 gap-2 pl-1 pr-2 py-1.5'
   }`
 
   if (!canSwitch) {
