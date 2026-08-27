@@ -5235,7 +5235,9 @@
     "customFieldsIntro": "Fill in the details this event type collects.",
     "customFieldsRequiredHint": "Fill in every required field before checking in.",
     "fieldRequired": "Required",
-    "fieldSelectPlaceholder": "Select…"
+    "fieldSelectPlaceholder": "Select…",
+    "saveFailed": "Could not save this check-in.",
+    "addFailed": "{count} of {total} could not be added. {detail}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Upgrade to {label}",

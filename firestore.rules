@@ -1127,10 +1127,29 @@ service cloud.firestore {
     // Direct client creates are denied to prevent bypassing server-side confirmation logic.
     // The manual confirm/unconfirm toggle (is_completed) is the only direct client write allowed,
     // and only for team managers or owners.
+    //
+    // THE FIELD CONSTRAINT IS WHAT MAKES THAT COMMENT TRUE. It used to be prose
+    // only: the rule authorised the caller and then let them write ANY field of
+    // the document. `teamId` IS the tenant boundary here — every arm below
+    // dereferences it, and `tenantData.ts` matches this collection by it — so a
+    // manager could move one of their own rows into ANOTHER studio by rewriting
+    // that one field, landing a document (and, through the checkins trigger, an
+    // activity-log entry) in a tenant they have no access to. Rewriting
+    // `event.id` was the same trick against the counters: `trackEventAttendees`
+    // moves `completed_checkins_count` to whatever event the row now names and
+    // never decrements the one it left.
+    //
+    // So the allow-list is exactly what the roster's toggle writes, and nothing
+    // else. Widening it is a security decision, not a convenience: anything a
+    // client needs to change beyond this belongs in `addEventCheckin`, which
+    // runs the authorization decision in `events/checkinAuthorization.ts`. The
+    // Admin SDK ignores rules, so the callable is unaffected by this.
     match /checkins/{checkin} {
       allow create: if false; // addEventCheckin Cloud Function only
-      allow update: if hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin')
-                       || isOrgAdminOfTeam(resource.data.teamId);
+      allow update: if (hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin')
+                        || isOrgAdminOfTeam(resource.data.teamId))
+                       && request.resource.data.diff(resource.data)
+                            .affectedKeys().hasOnly(['is_completed', 'updated_at']);
       allow delete: if hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin')
                        || isOrgAdminOfTeam(resource.data.teamId);
       allow read:   if belongsToUserTeam(resource) || hasRole('admin')

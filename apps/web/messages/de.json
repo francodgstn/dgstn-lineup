@@ -5235,7 +5235,9 @@
     "customFieldsIntro": "Erfassen Sie die Angaben, die dieser Event-Typ sammelt.",
     "customFieldsRequiredHint": "Füllen Sie alle Pflichtfelder aus, bevor Sie einchecken.",
     "fieldRequired": "Pflichtfeld",
-    "fieldSelectPlaceholder": "Auswählen…"
+    "fieldSelectPlaceholder": "Auswählen…",
+    "saveFailed": "Der Check-in konnte nicht gespeichert werden.",
+    "addFailed": "{count} von {total} konnten nicht hinzugefügt werden. {detail}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Auf {label} upgraden",

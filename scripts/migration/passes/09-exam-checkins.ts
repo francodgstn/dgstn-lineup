@@ -25,9 +25,11 @@ import { BatchWriter } from '../batch-writer'
  * later backfill promoting somebody a second time; a migration that drops the
  * only copy of a field cannot give it back without a full re-run.
  *
- * Scope is exams only, deliberately. Camp (`join_as`) and fighting cup
- * (`categories`) have the same top-level → `checkin_data` drift and are not
- * this pass's business.
+ * Scope is exams only. The fighting cup has the same top-level →
+ * `checkin_data` drift and is handled by its sibling `09-cup-checkins.ts`; camp
+ * (`join_as`) is still unmapped, because nothing reads a migrated camp's role
+ * yet — participation capture is a later phase, and a pass written before its
+ * reader would be guessing at the shape.
  *
  * Note on `--dry-run`: this pass reads the check-ins in the TARGET, so a dry run
  * against a target where pass08 has never really run finds nothing to do. That

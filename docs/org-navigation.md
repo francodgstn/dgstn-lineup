@@ -107,17 +107,51 @@ is holding a modifier to rotate through a list. With three or more scopes the
 switcher menu is already the better tool, so this control always means "back to
 the previous one" and never "next in some order".
 
-**A button, not only a shortcut.** A bare chord is undiscoverable; the ⌘K note in
-`(auth)/layout.tsx` makes the same point about search losing discoverability
-behind an icon. The scope indicator carries a small toggle naming the *target*
-scope, so the affordance says what it will do before it does it, and names its
-shortcut in the tooltip.
+**A button, not only a shortcut.** A bare chord is undiscoverable; the Ctrl+K
+note in `(auth)/layout.tsx` makes the same point about search losing
+discoverability behind an icon. The scope indicator carries a small toggle
+naming the *target* scope, so the affordance says what it will do before it does
+it, and names its shortcut in the tooltip.
 
-**Suggested chord: ⌘⇧O / Ctrl+Shift+O.** Alt+Tab itself belongs to the OS. The
-tempting alternative is ⌘` — literally the macOS idiom for cycling within one
-application — but the backtick is a dead key on the Swiss, German and French
-layouts this product is built for, which makes it the wrong choice for precisely
-this audience. Letters survive every layout.
+**Write the chord as a Ctrl chord** (Franco, 2026-08-27). The design is
+Windows-first: the primary keyboards here are Swiss, German and French, and the
+reference machine is Windows. So the chord is chosen to survive *those*
+constraints, and the hint is rendered through the **existing `modKeyLabel()`
+helper** in `(auth)/layout.tsx` — the same one the search hint uses, which
+prints `Ctrl+` and adapts on its own for anyone who opens the app on a Mac. The
+handler accepts either modifier, exactly as the Ctrl+K handler already does.
+Nothing here is authored as a Mac chord. (The Windows key itself is not
+available: the OS claims it, and a web page never receives it.)
+
+**Not Ctrl+Shift+O.** An earlier draft suggested it. It is taken: Ctrl+Shift+O
+opens the bookmark manager in Chrome and Edge and the Library in Firefox, on the
+very platform this design is written for. Most of the Ctrl+Shift+letter space is
+similarly spoken for — DevTools, private window, reopen-closed-tab, hard reload —
+and a few of those the browser will not surrender to `preventDefault()` at all.
+
+**Two chords survive, and the pick is a judgement call.** Both are free in
+Chrome, Edge and Firefox on Windows, and both are letters, which matters:
+
+| Chord | For | Against |
+|---|---|---|
+| **`Alt+O`** *(recommended)* | Follows the app's own precedent — `layout.tsx:2195` already reaches for Alt in exactly this situation, with the note "Alt rather than ⌘/Ctrl: ⌘S is Save in every browser". One modifier is a faster flip, which is the whole reason this control exists. | Alt alone reveals the menu bar in Firefox, so the keypress has to be consumed cleanly. |
+| **`Ctrl+Shift+L`** | Stays the same shape as Ctrl+K, so the app's two shortcuts read as a family. | Three keys for a control whose entire justification is speed. |
+
+**Not `Alt+S`**, which would have been the obvious pick: the search panel
+already binds it (`layout.tsx:2195`, "always show this destination"). It is the
+only `altKey` binding in `apps/web` today — the other two hits guard *against*
+Alt rather than claiming it — so `Alt+O` is unclaimed.
+
+**One guard is not optional on this audience's keyboards.** On Swiss, German and
+French layouts `AltGr` produces `@`, `#`, `~` and `|`, and the browser reports
+`AltGr` as **`ctrlKey` and `altKey` together**. An `e.altKey` handler with no
+further condition therefore fires while somebody is typing an email address. The
+handler must require `e.altKey && !e.ctrlKey`.
+
+`Alt+Tab` itself belongs to the OS and was never available. The backtick idiom
+(``Ctrl+` ``) is out for a harder reason than collision: backtick is a **dead
+key** on those same three layouts, so it is precisely wrong here. Letters
+survive every layout.
 
 Three details decide whether it feels right:
 

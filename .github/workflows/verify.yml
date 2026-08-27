@@ -56,9 +56,11 @@ jobs:
       - name: Locales
         run: pnpm i18n:check
 
-      # scripts/ is not a workspace, so `turbo run typecheck` never saw the four
-      # seeders — which is a root cause of the drift docs/seed-truth-2026-08.md
-      # catalogues. This is the only place they are typechecked.
+      # scripts/ is not a workspace, so `turbo run typecheck` never sees the
+      # seeders or the HMD migration — which is a root cause of the drift
+      # docs/seed-truth-2026-08.md catalogues. This is the only place they are
+      # typechecked, so anything added under scripts/ that matters has to be
+      # named in tsconfig.seedcheck.json's `include` or it is checked by nobody.
       - name: Seed scripts
         run: pnpm typecheck:seeds
 

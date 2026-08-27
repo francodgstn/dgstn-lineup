@@ -1,5 +1,5 @@
 import type { MigrationConfig } from '../config'
-import { sourceDb, targetDb } from '../config'
+import { sourceDb, targetDb, mapSourceEventType } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { transformEvent } from '../transforms/events'
 
@@ -89,6 +89,17 @@ export async function pass08Events(cfg: MigrationConfig): Promise<void> {
         bw.skip()
         continue
       }
+
+      // The check-in carries a DENORMALISED copy of the event's type, and
+      // `transformEvent` has just remapped the event's own. Left alone the two
+      // disagree, and the copy is the one that will be read: the rank
+      // progression engine builds its participation facts from COMPLETED
+      // CHECK-INS and matches `EventParticipationSpec.eventTypes` against the
+      // type recorded on them. HMD's rule names `hmd_fighting_cup`, so a
+      // check-in still stamped `fighting_cup` is a cup that never counts toward
+      // the one-camp-one-tournament-one-exam requirement — the belt engine
+      // silently short by one, for every competitor, for every migrated year.
+      eventObj.type = mapSourceEventType(eventObj.type)
 
       if (checkinData.is_completed === true) completedCount++
       bw.set(tgtCheckinRef, checkinData)

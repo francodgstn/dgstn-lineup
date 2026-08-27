@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from 'react'
 import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, query, where, getDocs, updateDoc, doc, serverTimestamp, orderBy,
@@ -489,18 +490,19 @@ export function CheckinPanel({
       const fn = httpsCallable<unknown, { id: string; is_completed: boolean }>(
         functions, 'addEventCheckin',
       )
+      // No `contact` payload: the callable reads the stored contact itself, so
+      // the name on a check-in cannot be whatever the client felt like sending.
       await fn({
         eventId,
         contactId: sheetTarget.contact.id,
-        contact: {
-          firstname: sheetTarget.contact.firstname,
-          lastname: sheetTarget.contact.lastname,
-        },
         checkinData: data,
         checkinTeamId: sheetTarget.teamId,
       })
       await invalidate()
       setSheetTarget(null)
+    } catch (err) {
+      // A refusal used to close the sheet as though it had saved.
+      toast.error(err instanceof Error ? err.message : t('saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -515,24 +517,35 @@ export function CheckinPanel({
    * event, a dropped request) must not discard the twenty that succeeded, and
    * the roster refresh below shows exactly who got in. The callable is
    * idempotent per (event, contact), so a retry of a partial run is safe.
+   *
+   * BUT THE REJECTIONS ARE READ. They used to be discarded unexamined, so a
+   * refusal for all twenty produced an unchanged roster and no message at all —
+   * indistinguishable from a slow refresh. The first reason is shown, because
+   * twenty rejections from one batch are twenty copies of the same cause.
    */
   async function handleAddBaseCheckins(chosen: Contact[]) {
     const fn = httpsCallable<unknown, { id: string; is_completed: boolean }>(
       functions, 'addEventCheckin',
     )
     const teamIdForCheckin = selectedAddTeamId || currentTeamId || ''
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       chosen.map((c) =>
         fn({
           eventId,
           contactId: c.id,
-          contact: { firstname: c.firstname, lastname: c.lastname },
           checkinData: {},
           checkinTeamId: teamIdForCheckin,
         }),
       ),
     )
     await invalidate()
+
+    const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
+    if (failed.length > 0) {
+      const reason = failed[0].reason
+      const detail = reason instanceof Error ? reason.message : String(reason)
+      toast.error(t('addFailed', { count: failed.length, total: chosen.length, detail }))
+    }
   }
 
   async function toggleComplete(checkin: EventCheckin, e: React.MouseEvent) {

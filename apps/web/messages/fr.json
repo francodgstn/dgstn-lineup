@@ -5235,7 +5235,9 @@
     "customFieldsIntro": "Renseignez les informations demandées par ce type d'événement.",
     "customFieldsRequiredHint": "Renseignez tous les champs obligatoires avant l'enregistrement.",
     "fieldRequired": "Obligatoire",
-    "fieldSelectPlaceholder": "Sélectionner…"
+    "fieldSelectPlaceholder": "Sélectionner…",
+    "saveFailed": "Impossible d'enregistrer cet enregistrement.",
+    "addFailed": "{count} sur {total} n'ont pas pu être ajoutés. {detail}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Passer à l'offre {label}",
