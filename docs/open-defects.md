@@ -606,6 +606,39 @@ not what a visitor can reach. Switching it off does not hide anything public.
 Worth deciding deliberately: either the public routes should honour it, or it
 should be described as what it is.
 
+### The website + kiosk appointment probe had no index — FIXED 2026-08-27
+
+Found after the rest had merged, and it is the better explanation for "bookable
+hours are not displayed **on staging**" than anything in the booking flow —
+because it only ever failed on a REAL project.
+
+`components/site/sections.tsx` and `kiosk/useKioskAvailability.ts` run the
+byte-identical probe before calling `listAvailability`:
+
+    collectionGroup('public_profile')
+      .where('teamId','==',…).where('type','==','activity')
+      .where('activityType','==','appointment')
+
+Three equalities on a COLLECTION GROUP. At collection scope Firestore merges its
+automatic single-field indexes for a pure equality query; at collection-group
+scope it does not — which is exactly why `public_profile` already carries
+explicit COLLECTION_GROUP overrides for `slug`, `type` and `teamId`.
+`activityType` had none. (The two `activityType` entries in the index file are
+on `sessions`, at COLLECTION scope.)
+
+So the probe threw `FAILED_PRECONDITION`, and BOTH call sites swallow it —
+`reportPublicLoadFailure` only `console.error`s — then set an empty list.
+Classes rendered; bookable hours silently did not. **The emulator does not
+enforce indexes**, so it looked perfect locally and failed only where a customer
+would see it.
+
+Fixed by declaring the `teamId + type + activityType` COLLECTION_GROUP index,
+with a note at both call sites saying so, since JSON cannot carry one.
+
+**Deploy note: the index must exist before the code that queries it.** Both
+surfaces already fail closed, so deploying in the wrong order restores the
+previous silence rather than breaking anything new.
+
 ### Still open (unverified): activity mirrors written before `activityType` existed
 
 The field was added to the activity mirror when coaching was folded into
