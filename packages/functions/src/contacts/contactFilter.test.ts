@@ -7,6 +7,8 @@ import {
   contactNeedsAttention,
   contactMatchesGroup,
   countActiveFilters,
+  expandRankRange,
+  rankFilterIsActive,
   filterContacts,
   groupsForContact,
   matchesFilter,
@@ -159,6 +161,185 @@ describe('matchesFilter — age', () => {
     const afterBirthday = Date.UTC(2026, 9, 2) // 2026-10-02
     assert.equal(matchesFilter(twelve, f, { nowMs: beforeBirthday }), true)
     assert.equal(matchesFilter(twelve, f, { nowMs: afterBirthday }), false)
+  })
+})
+
+describe('matchesFilter — rank', () => {
+  // A level VALUE is an ordinal inside its own system and means nothing across
+  // systems. Two scales of different lengths, deliberately non-contiguous, so a
+  // band cannot be mistaken for "every integer between".
+  const HWAL = [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 5 }, { value: 9 }]
+
+  it('exact levels still match only what was ticked', () => {
+    const f = filter({ rankFilter: { hwal: [2, 5] } })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 2 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 5 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 1 } }), f, { nowMs: NOW }), false)
+  })
+
+  it('a contact with no rank in the system never matches', () => {
+    const f = filter({ rankFilter: { hwal: [2] } })
+    assert.equal(matchesFilter(contact({ ranks: { other: 2 } }), f, { nowMs: NOW }), false)
+    assert.equal(matchesFilter(contact(), f, { nowMs: NOW }), false)
+  })
+
+  it('"and above" is an open-ended band — the thing a tick-list cannot say', () => {
+    const f = filter({ rankRanges: { hwal: { min: 2, max: null } } })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 1 } }), f, { nowMs: NOW }), false)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 2 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 9 } }), f, { nowMs: NOW }), true)
+  })
+
+  it('"and below" is the other open end', () => {
+    const f = filter({ rankRanges: { hwal: { min: null, max: 2 } } })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 0 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 5 } }), f, { nowMs: NOW }), false)
+  })
+
+  it('both ends closed is an inclusive band', () => {
+    const f = filter({ rankRanges: { hwal: { min: 1, max: 5 } } })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 1 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 5 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 9 } }), f, { nowMs: NOW }), false)
+  })
+
+  it('a band with both ends open is not a filter at all', () => {
+    const f = filter({ rankRanges: { hwal: { min: null, max: null } } })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 0 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact(), f, { nowMs: NOW }), true)
+    assert.equal(countActiveFilters(f), 0)
+  })
+
+  it('THE CROSS-SYSTEM TRAP: a high rank in another system is invisible to the band', () => {
+    // The 12 is a beginner's ordinal in a long scale; the band is about `hwal`.
+    // If this ever passes, someone has hoisted the threshold out of the
+    // per-system value and rebuilt the getPrimaryRank bug in a filter.
+    const f = filter({ rankRanges: { hwal: { min: 5, max: null } } })
+    assert.equal(
+      matchesFilter(contact({ ranks: { hwal: 1, dragon: 12 } }), f, { nowMs: NOW }),
+      false,
+    )
+  })
+
+  it('systems are ORed — a match in either one is a match', () => {
+    const f = filter({ rankRanges: { hwal: { min: 5, max: null }, dragon: { min: 3, max: null } } })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 1, dragon: 4 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 1, dragon: 1 } }), f, { nowMs: NOW }), false)
+  })
+
+  it('THE BAND OVERRIDES ITS MIRROR when the two disagree', () => {
+    // This is what happens after a belt is inserted: the stored mirror is stale,
+    // the band is not. A reader that understands bands must use the band.
+    const f = filter({
+      rankFilter: { hwal: [2, 5] },              // mirror, written before level 9 existed
+      rankRanges: { hwal: { min: 2, max: null } },
+    })
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 9 } }), f, { nowMs: NOW }), true)
+  })
+
+  it('a system with only a mirror still uses the mirror', () => {
+    // Mixed filter: one system banded, one hand-ticked.
+    const f = filter({
+      rankFilter: { dragon: [3] },
+      rankRanges: { hwal: { min: 5, max: null } },
+    })
+    assert.equal(matchesFilter(contact({ ranks: { dragon: 3 } }), f, { nowMs: NOW }), true)
+    assert.equal(matchesFilter(contact({ ranks: { dragon: 4 } }), f, { nowMs: NOW }), false)
+  })
+
+  it('A CROSSED BAND MATCHES NOBODY — it must never read as "dimension off"', () => {
+    // The writer clamps so this should not be storable, and refuses to store a
+    // band whose mirror would be empty. If one arrives anyway — hand-edited, or
+    // from a future writer — the resolver must still close rather than open.
+    // Failing open here is the exact hazard the two-key design exists to avoid.
+    const f = filter({ rankRanges: { hwal: { min: 9, max: 0 } } })
+    for (const value of [0, 1, 2, 5, 9]) {
+      assert.equal(matchesFilter(contact({ ranks: { hwal: value } }), f, { nowMs: NOW }), false)
+    }
+    assert.equal(countActiveFilters(f), 1)
+  })
+
+  it('counts as one active dimension however it is expressed', () => {
+    assert.equal(countActiveFilters(filter({ rankFilter: { hwal: [2] } })), 1)
+    assert.equal(countActiveFilters(filter({ rankRanges: { hwal: { min: 2, max: null } } })), 1)
+  })
+
+  it('normalising drops an inert band but keeps a real one', () => {
+    // Via countActiveFilters, which normalises. An all-open band must not make
+    // the dimension read as active anywhere.
+    assert.equal(countActiveFilters(filter({ rankRanges: { hwal: { min: null, max: null } } })), 0)
+  })
+})
+
+describe('rankFilterIsActive — ONE answer, because there was briefly two', () => {
+  it('is on for a mirror, for a band, and for both', () => {
+    assert.equal(rankFilterIsActive(filter({ rankFilter: { hwal: [2] } })), true)
+    assert.equal(rankFilterIsActive(filter({ rankRanges: { hwal: { min: 2, max: null } } })), true)
+    assert.equal(
+      rankFilterIsActive(filter({ rankFilter: { hwal: [2] }, rankRanges: { hwal: { min: 2, max: null } } })),
+      true,
+    )
+  })
+
+  it('is off for nothing, for empty level lists, and for an all-open band', () => {
+    assert.equal(rankFilterIsActive(filter()), false)
+    assert.equal(rankFilterIsActive(filter({ rankFilter: { hwal: [] } })), false)
+    assert.equal(rankFilterIsActive(filter({ rankRanges: { hwal: { min: null, max: null } } })), false)
+    assert.equal(rankFilterIsActive(null), false)
+  })
+
+  it('AGREES WITH THE MATCHER on a band that has no mirror', () => {
+    // The disagreement this predicate exists to remove: the page counted levels
+    // only, so a band without its mirror filtered the list to nothing while the
+    // badge said no filter was on — an empty screen with nothing to clear.
+    const f = filter({ rankRanges: { hwal: { min: 5, max: null } } })
+    assert.equal(rankFilterIsActive(f), true)
+    assert.equal(countActiveFilters(f), 1)
+    assert.equal(matchesFilter(contact({ ranks: { hwal: 1 } }), f, { nowMs: NOW }), false)
+  })
+})
+
+describe('expandRankRange — the mirror an older resolver reads', () => {
+  const HWAL = [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 5 }, { value: 9 }]
+
+  it('takes the tail of a non-contiguous scale, not every integer', () => {
+    assert.deepEqual(expandRankRange(HWAL, { min: 2, max: null }), [2, 5, 9])
+  })
+
+  it('takes the head for an upper bound', () => {
+    assert.deepEqual(expandRankRange(HWAL, { min: null, max: 2 }), [0, 1, 2])
+  })
+
+  it('is inclusive at both ends', () => {
+    assert.deepEqual(expandRankRange(HWAL, { min: 1, max: 5 }), [1, 2, 5])
+  })
+
+  it('an all-open band mirrors the whole scale', () => {
+    assert.deepEqual(expandRankRange(HWAL, { min: null, max: null }), [0, 1, 2, 5, 9])
+  })
+
+  it('a band matching nothing mirrors an empty list', () => {
+    assert.deepEqual(expandRankRange(HWAL, { min: 20, max: null }), [])
+  })
+
+  it('orders by VALUE, not by position in the levels array', () => {
+    // Nothing sorts or validates `levels` on write, so a scale can be stored out
+    // of order. The mirror must still come back ascending by value.
+    const jumbled = [{ value: 9 }, { value: 0 }, { value: 5 }, { value: 2 }, { value: 1 }]
+    assert.deepEqual(expandRankRange(jumbled, { min: 1, max: null }), [1, 2, 5, 9])
+  })
+
+  it('THE MIRROR AND THE BAND AGREE while the scale is unchanged', () => {
+    // The property the whole two-key design rests on: an old resolver reading
+    // the mirror reaches the same verdict as a new one reading the band.
+    const range = { min: 2, max: null }
+    const mirror = expandRankRange(HWAL, range)
+    for (const { value } of HWAL) {
+      const c = contact({ ranks: { hwal: value } })
+      const viaMirror = matchesFilter(c, filter({ rankFilter: { hwal: mirror } }), { nowMs: NOW })
+      const viaBand = matchesFilter(c, filter({ rankRanges: { hwal: range } }), { nowMs: NOW })
+      assert.equal(viaMirror, viaBand, `disagreed at level ${value}`)
+    }
   })
 })
 

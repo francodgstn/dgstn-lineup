@@ -483,33 +483,48 @@ Seven hardcoded English strings, and its empty state says "Add ranking systems i
 Team Settings" — wrong for an org-managed tenant, whose systems live on the
 organisation and whose team tab is locked.
 
-### The rank filter cannot express "this belt and above" — DEFERRED, with reason
+### The rank filter cannot express "this belt and above" — FIXED 2026-08-27
 
 `contactFilter.ts` matches ranks by exact set membership
 (`levels.includes(rank)`) with no comparison operator. "Blue and above" — the
 normal way a coach thinks about a roster — requires ticking every level
 individually, and silently goes wrong the moment a level is inserted.
 
-**Not taken in the 2026-08-27 pass, deliberately.** A design was worked up
-(per-system `mode: 'levels' | 'range'` with nullable inclusive `min`/`max`,
-following the `AgeFilter` precedent, with the threshold kept INSIDE the
-per-system value so nothing can compare across scales). It was not shipped
-because of the deploy-skew behaviour, which points the dangerous way: the
-current matcher guards the dimension with `Object.values(f.rankFilter).some((l)
-=> l.length > 0)`, and against an object value `l.length` is `undefined`, so the
-guard is false and the ENTIRE rank block — including its `if (!matched) return
-false` — is skipped. A rule saved in the new shape and evaluated by a
-functions deploy that lags the web deploy therefore matches EVERYONE, not
-nobody. `matchesFilter` backs dynamic contact groups, which back the automation
-engine, which sends mail. That needs a migration-shaped rollout (read both
-shapes first, ship shared with functions, only then write the new one), not a
-same-day change.
+**Shipped as a SECOND KEY, not a richer value — and the reason is a deployment
+fact, not a taste one.** The web app and the Cloud Functions roll out through
+independent pipelines (functions via `firebase deploy`, the web app via App
+Hosting's own GitHub integration), so neither order is guaranteed and a skew
+window always exists.
 
-Two further sites must move with it, and neither is in the matcher:
-`contacts/page.tsx`'s `isActive` for the rank dimension, and the
-`firstActiveId` lookup that decides which system the popover opens on. Both
-test `.length` on the per-system value and both go silently false under the new
-shape.
+The obvious design — turning each `RankFilter` entry into
+`{ mode, levels, min, max }` — fails OPEN in that window, not closed. The
+dimension guard is `Object.values(f.rankFilter).some((l) => l.length > 0)`, and
+on an object `l.length` is `undefined`, so the guard is false and the entire
+rank block *including its `if (!matched) return false`* is skipped. The rank
+restriction does not fail; it VANISHES, and the filter matches everyone it
+otherwise would. `matchesFilter` backs dynamic contact groups, which back the
+automation engine, which sends mail.
+
+So `RankFilter` keeps its shape and meaning exactly, and
+`ContactFilter.rankRanges` rides alongside it. **The band is the truth; the
+level list is its mirror** — the writer expands the band through
+`expandRankRange` and stores the result in `rankFilter[systemId]`, so a resolver
+that predates bands still filters correctly (correct-as-of-write, which is
+exactly what a hand-ticked list would have given it anyway). An old resolver
+ignores a key it has never heard of. Neither reader is ever wrong in a way that
+WIDENS the audience, which is the only direction that matters here.
+
+That also dissolved the problem this entry used to warn about — readers that
+test `rankFilter[systemId].length` still work, because the value is still a map
+of number arrays. The one place that genuinely had to change is the "is this
+dimension on" question, which now has a single owner, `rankFilterIsActive`, that
+the contacts page and `activeFilterKeys` both call. Asking it any other way is
+how the two got a second opinion in the first place.
+
+**Still open, deliberately: `includeUnranked`.** A contact with no rank in the
+system cannot be represented in the mirror at all, so it would behave
+differently for old and new readers — a real divergence rather than mere
+staleness. "and below" is the case that wants it, and it needs its own decision.
 
 ### HMD migration: exam history arrives in a shape nothing reads — FIXED 2026-08-27 (#120)
 
@@ -541,6 +556,73 @@ was never run on a device (it is the code that decides whether a migrated HMD
 member sees their belt or "NO BELT"), and the `image` arm of `RankBadge` was
 never exercised with a real upload. The other three arms — split, emoji, solid —
 were checked in a browser against computed styles.
+
+---
+
+## Newly recorded, 2026-08-27 — the public booking page
+
+Reported by Franco from STAGING: the calendar would not advance a month, and
+bookable hours never appeared even with the setting on.
+
+### The month arrows did nothing once a date was selected — FIXED 2026-08-27
+
+`components/booking/MiniCalendar.tsx` — shared by the class booking form AND the
+appointment picker. The effect that follows the SELECTION into its month had
+`currentMonth` in its own dependency array, so it also ran on the visitor's own
+paging and undid it: page to September, the effect re-runs, sees the selected
+August date is not in the displayed month, snaps back. It only bit once a date
+had been selected, which is why it read as a glitch rather than a dead button.
+Now depends on `selectedDate` alone, with a functional update so dropping
+`currentMonth` from the deps costs no correctness.
+
+### An appointment-only studio never reached the picker — FIXED 2026-08-27
+
+The real cause of "bookable hours are not displayed". Not the toggle, not the
+sync: `applyEntry` in the public `BookingForm` asks `activityType ===
+'appointment'` in both deep-link branches and **in neither default**. So a studio
+whose only activity is an appointment — a coach selling 1:1s, which is the whole
+shape of the coach plan — was auto-selected into the CLASS session list. An
+appointment has no pre-scheduled sessions (nothing exists until it is booked),
+so that list is empty forever. The setting was fine; the visitor never reached
+the surface that renders those hours.
+
+Date-first had the same hole with a wider blast radius: it pins no activity and
+goes straight to the day picker, so appointment cards are never rendered at all.
+
+### Still open: a MIXED studio on the date-first flow
+
+Fixed above only where *every* activity is an appointment. A studio with both
+classes and appointments, on date-first, still has no route from `/booking` to
+its appointments — the day picker only knows class sessions. Rendering the
+appointment cards above the day picker is the likely answer, but it is a design
+call about what that page is, not a patch.
+
+### Still open: the appointments toggle is read by nothing on the public web
+
+`bookingSettings.appointmentsEnabled` and `appointmentPickerLive` have exactly
+one web reader, `usePublicSurfaces`, and that hook is imported only by `(auth)`
+routes. So the toggle governs what the STUDIO is shown about its own surfaces,
+not what a visitor can reach. Switching it off does not hide anything public.
+Worth deciding deliberately: either the public routes should honour it, or it
+should be described as what it is.
+
+### Still open (unverified): activity mirrors written before `activityType` existed
+
+The field was added to the activity mirror when coaching was folded into
+appointments, the mirror is rewritten only on an activity write, and there is no
+backfill — so an activity untouched since then may carry no `activityType`, and
+every branch above treats it as a class. Not reproduced; recorded because it
+would present exactly like the fixed defect and would survive it.
+
+### Renamed: "Show appointment booking" → "Show bookable hours"
+
+For consistency with the term the availability UI already uses everywhere
+("Add bookable hours", "Bookable hours", "Delete these bookable hours?").
+Display-only — the stored field stays `appointmentsEnabled`. The Public pages
+"on but empty" notice was brought onto the same vocabulary, and that same signal
+now also appears in Settings → Booking beside the toggle, which is where the
+studio is standing when it flips the switch. Previously it existed only on the
+Public pages screen.
 
 ---
 

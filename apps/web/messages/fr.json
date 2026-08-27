@@ -230,7 +230,7 @@
     "shopDescPriceList": "Affiche vos tarifs. Les paiements en ligne sont désactivés : les visiteurs sont invités à vous contacter.",
     "surfaceEvents": "Événements",
     "eventsDesc": "Vos événements publiés, avec leur programme jour par jour.",
-    "appointmentsEmpty": "La réservation de rendez-vous est active, mais aucun horaire n'est encore réservable."
+    "appointmentsEmpty": "Les heures réservables sont activées, mais aucun créneau n'est encore réservable."
   },
   "ShopSettings": {
     "title": "Boutique",
@@ -947,7 +947,15 @@
     "attention_cancelling": "Résilie",
     "attention_billing_unlinked": "Facturation orpheline",
     "exportCsv": "Exporter en CSV",
-    "exportFailed": "Échec de l'export. Veuillez réessayer."
+    "exportFailed": "Échec de l'export. Veuillez réessayer.",
+    "filterRankModeLevels": "Niveaux",
+    "filterRankModeRange": "Plage",
+    "filterRankFrom": "De",
+    "filterRankTo": "À",
+    "filterRankAny": "Indifférent",
+    "filterRankAtLeast": "{level} et plus",
+    "filterRankAtMost": "{level} et moins",
+    "filterRankBetween": "{from} à {to}"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -5061,8 +5069,8 @@
     "toggleShowActivityDescriptionDesc": "Afficher le texte de description de l'activité sur l'écran de sélection d'activité.",
     "toggleShowFitnessAppLabel": "Afficher le champ application fitness",
     "toggleShowFitnessAppDesc": "Demander aux nouveaux visiteurs par quelle application partenaire ils arrivent. Les options sont vos propres types d'abonnement partenaires (agrégateurs) — tant que vous n'en avez aucun, la question n'est pas posée.",
-    "toggleAppointmentsEnabledLabel": "Afficher les rendez-vous",
-    "toggleAppointmentsEnabledDesc": "Afficher la prise de rendez-vous dans le parcours de réservation public.",
+    "toggleAppointmentsEnabledLabel": "Afficher les heures réservables",
+    "toggleAppointmentsEnabledDesc": "Permet aux visiteurs de choisir un créneau parmi vos heures réservables dans le parcours de réservation public.",
     "ctaTitle": "Bouton d'appel à l'action (facultatif)",
     "ctaSubtitle": "Affiché sur l'écran de confirmation après une réservation réussie.",
     "ctaUrlLabel": "URL du bouton",
@@ -5084,7 +5092,9 @@
     "moreOptionsLabel": "Plus d'options",
     "moreOptionsHint": "Période de réservation, délai limite, champs demandés et bouton personnalisé",
     "betaBadge": "Bêta",
-    "betaBadgeHint": "Prêt à l'emploi — cette fonctionnalité peut encore évoluer."
+    "betaBadgeHint": "Prêt à l'emploi — cette fonctionnalité peut encore évoluer.",
+    "appointmentsEmptyHint": "Ceci est activé, mais rien n'est encore réservable — il vous faut des heures réservables actives liées à une activité sur rendez-vous.",
+    "appointmentsEmptyHintLink": "Configurer les heures réservables"
   },
   "SettingsPlaces": {
     "pageTitle": "Lieux",

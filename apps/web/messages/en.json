@@ -230,7 +230,7 @@
     "shopDescPriceList": "Shows your prices. Online payments are off, so visitors are asked to contact you.",
     "surfaceEvents": "Events",
     "eventsDesc": "Your published events, with their day-by-day programme.",
-    "appointmentsEmpty": "Appointment booking is on, but no times are bookable yet."
+    "appointmentsEmpty": "Bookable hours are on, but no times are bookable yet."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -947,7 +947,15 @@
     "attention_cancelling": "Cancelling",
     "attention_billing_unlinked": "Billing unlinked",
     "exportCsv": "Export CSV",
-    "exportFailed": "Export failed. Please try again."
+    "exportFailed": "Export failed. Please try again.",
+    "filterRankModeLevels": "Levels",
+    "filterRankModeRange": "Range",
+    "filterRankFrom": "From",
+    "filterRankTo": "To",
+    "filterRankAny": "Any",
+    "filterRankAtLeast": "{level} and above",
+    "filterRankAtMost": "{level} and below",
+    "filterRankBetween": "{from} to {to}"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -5061,8 +5069,8 @@
     "toggleShowActivityDescriptionDesc": "Show the activity description text on the activity selection screen.",
     "toggleShowFitnessAppLabel": "Show fitness app field",
     "toggleShowFitnessAppDesc": "Ask new guests which partner app they came through. The options are your own partner (aggregator) subscription types — while you have none, the question is not shown.",
-    "toggleAppointmentsEnabledLabel": "Show appointment booking",
-    "toggleAppointmentsEnabledDesc": "Show appointment booking in the public booking flow.",
+    "toggleAppointmentsEnabledLabel": "Show bookable hours",
+    "toggleAppointmentsEnabledDesc": "Let visitors pick a time from your bookable hours in the public booking flow.",
     "ctaTitle": "CTA button (optional)",
     "ctaSubtitle": "Shown on the confirmation screen after a successful booking.",
     "ctaUrlLabel": "Button URL",
@@ -5084,7 +5092,9 @@
     "moreOptionsLabel": "More options",
     "moreOptionsHint": "Booking window, cutoff, the fields you ask for, and a custom button",
     "betaBadge": "Beta",
-    "betaBadgeHint": "Ready to use — this feature may still change."
+    "betaBadgeHint": "Ready to use — this feature may still change.",
+    "appointmentsEmptyHint": "This is on, but nothing is bookable yet — you need active bookable hours linked to an appointment activity.",
+    "appointmentsEmptyHintLink": "Set up bookable hours"
   },
   "SettingsPlaces": {
     "pageTitle": "Places",
