@@ -96,7 +96,8 @@
       "billing": "fatturazione piano abbonamento",
       "plugin:finance:/plugins/finance": "contabilità accounting piano dei conti libro mastro report esportazione csv commercialista bilancio registrazioni",
       "promoCodes": "sconto coupon buono campagna offerta codice",
-      "dashboardPreview": "nuova dashboard anteprima alternativa home panoramica"
+      "dashboardPreview": "nuova dashboard anteprima alternativa home panoramica",
+      "teamEmailTemplates": "modelli segnaposto email formulazione testo"
     },
     "allSettings": "Tutte le impostazioni",
     "howTo": "Guide",
@@ -185,7 +186,8 @@
     "sidebarResizeHint": "Trascina per ridimensionare — oltre il bordo sinistro per comprimere, doppio clic per ripristinare",
     "legalTerms": "Termini di servizio",
     "legalDpa": "Contratto sul trattamento dei dati",
-    "legalPrivacy": "Informativa sulla privacy"
+    "legalPrivacy": "Informativa sulla privacy",
+    "teamEmailTemplates": "Modelli e-mail"
   },
   "PublicHub": {
     "title": "Pagine pubbliche",
@@ -1940,7 +1942,10 @@
     "termsAcceptedTitle": "Termini accettati",
     "termsAcceptedBody": "Versione {version}, accettata il {date} da {email}.",
     "termsLink": "Termini di servizio",
-    "dpaLink": "Contratto sul trattamento dei dati"
+    "dpaLink": "Contratto sul trattamento dei dati",
+    "sectionTeam": "Team",
+    "sectionRegionFormat": "Regione e formato",
+    "sectionOther": "Altro"
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -5968,7 +5973,10 @@
     "reminderSmsNote": "I promemoria SMS vengono inviati solo tra le 08:00 e le 21:00.",
     "resetConfirmTitle": "Reimpostare il testo predefinito?",
     "deactivateConfirmTitle": "Disattivare questo modello?",
-    "deactivateAction": "Disattiva"
+    "deactivateAction": "Disattiva",
+    "emailsSubtitle": "Gestisci l'identità del mittente, le e-mail di sistema automatiche, la nota di conferma prenotazione e il mittente SMS.",
+    "templatesSubtitle": "Modelli predefiniti e personalizzati inviati dalle tue automazioni e campagne, oltre a segnaposto riutilizzabili da inserire in uno qualsiasi di essi.",
+    "templatesLinkNote": "I modelli di outreach predefiniti e personalizzati, insieme al riferimento dei segnaposto, ora si trovano nella pagina <link>Modelli e-mail</link>."
   },
   "Finance": {
     "exportCsv": "Esporta CSV",
@@ -6767,7 +6775,8 @@
     "failedTransient": "Non siamo riusciti ad annullare questa prenotazione: è ancora attiva. Riprova."
   },
   "QuickLinks": {
-    "related": "Correlati:"
+    "related": "Correlati:",
+    "availabilityToActivities": "Gestisci le attività su appuntamento"
   },
   "Site": {
     "loading": "Caricamento…",

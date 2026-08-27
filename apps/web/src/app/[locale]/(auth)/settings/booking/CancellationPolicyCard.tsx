@@ -18,6 +18,7 @@ import { db } from '@/lib/firebase'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { ShieldCheck, Loader2} from 'lucide-react'
 
 interface TeamPolicySettings {
@@ -56,43 +57,49 @@ export function CancellationPolicyCard() {
   const dirty = value.trim() !== stored.trim()
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-4">
-      <div className="flex items-start gap-2.5">
-        <ShieldCheck className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
-        <div>
-          <h2 className="text-sm font-semibold">{t('policyTitle')}</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('policySubtitle')}</p>
-          {!canEdit && (
-            <p className="text-xs text-muted-foreground mt-0.5">{t('policyOwnerOnly')}</p>
-          )}
+    // House convention: the shared `Card` (bg-card + border + shadow-sm), like
+    // every other settings card. This used to hand-roll the same classes on a
+    // plain `div` — visually close, but not the actual component, and it was
+    // missing `shadow-sm`. `pt-6` because there is no CardHeader here.
+    <Card>
+      <CardContent className="space-y-4 pt-6">
+        <div className="flex items-start gap-2.5">
+          <ShieldCheck className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
+          <div>
+            <h2 className="text-sm font-semibold">{t('policyTitle')}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('policySubtitle')}</p>
+            {!canEdit && (
+              <p className="text-xs text-muted-foreground mt-0.5">{t('policyOwnerOnly')}</p>
+            )}
+          </div>
         </div>
-      </div>
 
-      <textarea
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value)
-          setSaved(false)
-        }}
-        disabled={!canEdit}
-        rows={5}
-        maxLength={2000}
-        placeholder={t('policyPlaceholder')}
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y disabled:opacity-60"
-      />
+        <textarea
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setSaved(false)
+          }}
+          disabled={!canEdit}
+          rows={5}
+          maxLength={2000}
+          placeholder={t('policyPlaceholder')}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y disabled:opacity-60"
+        />
 
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{t('policyHint')}</p>
-        <div className="flex items-center gap-2 shrink-0">
-          {saved && !dirty && (
-            <span className="text-xs text-muted-foreground">{t('policySaved')}</span>
-          )}
-          <Button size="sm" onClick={save} disabled={!canEdit || saving || !dirty}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? t('policySaving') : t('policySave')}
-          </Button>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">{t('policyHint')}</p>
+          <div className="flex items-center gap-2 shrink-0">
+            {saved && !dirty && (
+              <span className="text-xs text-muted-foreground">{t('policySaved')}</span>
+            )}
+            <Button size="sm" onClick={save} disabled={!canEdit || saving || !dirty}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? t('policySaving') : t('policySave')}
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

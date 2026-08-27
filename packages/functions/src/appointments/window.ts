@@ -551,7 +551,13 @@ export const bookAppointment = onCall(async (request) => {
     // definition. trackBookings reads this to drive the 'full' flip.
     max_participants: 1,
     bookings_count: 1,
-    // Location/onlineUrl come from the matched availability (the *when*).
+    // Where, from the matched availability (the *when*). The window now carries
+    // a structured PLACE the way a session does, with the free-text `location`
+    // demoted to a note beside it — so both travel, or the place a studio picked
+    // on the window would be stored and then silently dropped from every session
+    // booked against it.
+    ...(ctx.tpl.placeId ? { placeId: ctx.tpl.placeId } : {}),
+    ...(ctx.tpl.roomId ? { roomId: ctx.tpl.roomId } : {}),
     location: ctx.tpl.location ?? null,
     onlineUrl: ctx.tpl.onlineUrl ?? null,
     allowBooking: true,

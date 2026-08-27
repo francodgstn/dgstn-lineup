@@ -14,6 +14,7 @@ import { formatMinorUnits, monthKey } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { ExportFinanceCsvButton } from '@/components/payments/ExportFinanceCsvButton'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import { FinanceTrendsSection } from '@/components/finance/FinanceTrendsSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,6 +40,7 @@ function recentMonths(): string[] {
 
 export default function FinanceOverviewPage() {
   const t = useTranslations('Finance')
+  const tNav = useTranslations('Nav')
   const { currentTeamId } = useAuth()
   const teamId = currentTeamId ?? null
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
@@ -83,10 +85,20 @@ export default function FinanceOverviewPage() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Calculator className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">{t('title')}</h1>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-lg font-semibold">{t('title')}</h1>
+          </div>
+          {/* The books are POSTED FROM payments and CONFIGURED BY the payment
+              settings — the two pages that explain a figure on this one. */}
+          <QuickLinks
+            links={[
+              { href: '/payments' as Route, label: tNav('paymentsAndSubscriptions') },
+              { href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') },
+            ]}
+          />
         </div>
         <Button size="sm" variant="outline" onClick={rebuild} disabled={rebuilding}>
           {rebuilding ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}

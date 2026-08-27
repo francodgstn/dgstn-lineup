@@ -96,7 +96,8 @@
       "billing": "invoice plan upgrade subscription",
       "plugin:finance:/plugins/finance": "accounting bookkeeping ledger reports export csv accountant balance sheet profit loss entries chart of accounts",
       "promoCodes": "discount coupon voucher campaign offer code",
-      "dashboardPreview": "new dashboard preview alternative home overview"
+      "dashboardPreview": "new dashboard preview alternative home overview",
+      "teamEmailTemplates": "templates placeholders email wording copy"
     },
     "allSettings": "All settings",
     "howTo": "How-to",
@@ -185,7 +186,8 @@
     "sidebarResizeHint": "Drag to resize — drag past the left to collapse, double-click to reset",
     "legalTerms": "Terms of Service",
     "legalDpa": "Data Processing Agreement",
-    "legalPrivacy": "Privacy Policy"
+    "legalPrivacy": "Privacy Policy",
+    "teamEmailTemplates": "Email templates"
   },
   "PublicHub": {
     "title": "Public pages",
@@ -1940,7 +1942,10 @@
     "termsAcceptedTitle": "Terms accepted",
     "termsAcceptedBody": "Version {version}, accepted on {date} by {email}.",
     "termsLink": "Terms of Service",
-    "dpaLink": "Data Processing Agreement"
+    "dpaLink": "Data Processing Agreement",
+    "sectionTeam": "Team",
+    "sectionRegionFormat": "Region & format",
+    "sectionOther": "Other"
   },
   "Bookings": {
     "title": "Bookings",
@@ -5968,7 +5973,10 @@
     "reminderSmsNote": "SMS reminders are sent between 08:00 and 21:00 only.",
     "resetConfirmTitle": "Reset to the default text?",
     "deactivateConfirmTitle": "Deactivate this template?",
-    "deactivateAction": "Deactivate"
+    "deactivateAction": "Deactivate",
+    "emailsSubtitle": "Manage your sender identity, automatic system emails, booking confirmation note and SMS sender.",
+    "templatesSubtitle": "Predefined and custom templates your automations and campaigns send, plus reusable placeholders you can drop into any of them.",
+    "templatesLinkNote": "Predefined and custom outreach templates, plus the placeholder reference, now live on the <link>Email templates</link> page."
   },
   "Finance": {
     "exportCsv": "Export CSV",
@@ -6767,7 +6775,8 @@
     "failedTransient": "We couldn't cancel this booking — it is still active. Please try again."
   },
   "QuickLinks": {
-    "related": "Related:"
+    "related": "Related:",
+    "availabilityToActivities": "Manage appointment activities"
   },
   "Site": {
     "loading": "Loading…",

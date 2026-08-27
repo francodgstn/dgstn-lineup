@@ -1733,7 +1733,14 @@ export default function ActivitiesPage() {
           a plan name.) */}
       <PageHeader
         title={t('title')}
-        quickLinks={[{ href: '/schedule' as Route, label: tNav('calendar') }]}
+        quickLinks={[
+          { href: '/schedule' as Route, label: tNav('calendar') },
+          // The two pages that decide whether an activity can actually be
+          // booked and at what price: the plan that unlocks it, and the price a
+          // member ends up paying. Both were reachable only by hunting.
+          { href: '/offer/plans' as Route, label: tNav('subscriptionPlans') },
+          { href: '/offer/pricing' as Route, label: tNav('pricing') },
+        ]}
         action={
           <>
             {/* The catalogue was a quick link, which is a line of muted text

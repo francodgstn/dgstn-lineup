@@ -9,6 +9,7 @@ import {
   CalendarCheck,
   CalendarRange,
   CreditCard,
+  FileText,
   FlaskConical,
   LayoutTemplate,
   ListChecks,
@@ -93,6 +94,12 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // so a pinned `teamOutreach` id resolves to nothing and simply drops out of the
   // pin list (the catalogue is a Map lookup) rather than breaking it.
   { id: 'teamEmails', href: '/settings/emails', labelKey: 'teamEmails', icon: Mail, group: 'studio' },
+  // Split out of teamEmails (2026-08-27): the templates list + placeholder
+  // reference is AUTHORING copy, while teamEmails above is CONFIGURATION
+  // (sender identity, system-email toggles, booking instructions, SMS). The
+  // templates list was pushing the config cards below the fold, so it earned
+  // its own row rather than a tab or a disclosure on the same page.
+  { id: 'teamEmailTemplates', href: '/settings/email-templates', labelKey: 'teamEmailTemplates', icon: FileText, group: 'studio' },
   { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio', gate: 'ownerOnly' },
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },
   // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).

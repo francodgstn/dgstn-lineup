@@ -335,6 +335,11 @@ export const createAppointmentCheckout = onCall(
       duration_minutes: durationMinutes,
       max_participants: 1,
       bookings_count: 1,
+      // Structured place + its free-text note, both from the window — same as the
+      // free path in window.ts. A paid hold becomes the confirmed session, so
+      // dropping the place here would lose it for every paid appointment.
+      ...(ctx.tpl.placeId ? { placeId: ctx.tpl.placeId } : {}),
+      ...(ctx.tpl.roomId ? { roomId: ctx.tpl.roomId } : {}),
       location: ctx.tpl.location ?? null,
       onlineUrl: ctx.tpl.onlineUrl ?? null,
       allowBooking: true,

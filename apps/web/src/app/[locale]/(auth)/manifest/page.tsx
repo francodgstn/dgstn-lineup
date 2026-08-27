@@ -10,8 +10,10 @@
 // isn't to hand.
 
 import { useMemo, useState } from 'react'
+import type { Route } from 'next'
 import { useTranslations, useLocale } from 'next-intl'
 import { Printer, ChevronLeft, ChevronRight, Users } from 'lucide-react'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -91,6 +93,7 @@ function formatAnswers(answers: Record<string, unknown>): string {
 export default function ManifestPage() {
   const { currentTeamId, team } = useAuth()
   const t = useTranslations('Manifest')
+  const tNav = useTranslations('Nav')
   const locale = useLocale()
   const [dayKey, setDayKey] = useState(() => toDateKey(new Date()))
   const day = useMemo(() => fromDateKey(dayKey), [dayKey])
@@ -121,7 +124,15 @@ export default function ManifestPage() {
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">{t('pageTitle')}</h1>
-          <p className="text-sm text-muted-foreground">{t('pageSubtitle')}</p>
+          {/* The description ("Every session today, with its roster — built to
+              print") said what the page visibly is. The two pages a coach
+              actually moves to from here are worth the line instead. */}
+          <QuickLinks
+            links={[
+              { href: '/schedule' as Route, label: tNav('calendar') },
+              { href: '/bookings' as Route, label: tNav('bookings') },
+            ]}
+          />
         </div>
         <Button onClick={() => window.print()} className="gap-2">
           <Printer className="h-4 w-4" />

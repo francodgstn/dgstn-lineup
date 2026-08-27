@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
 import { resolveBookingContactFields } from '@linyup/shared'
@@ -670,14 +671,27 @@ export default function BookingSettingsPage() {
           the only header save in settings — default-size where every other one
           is small, and in a position nothing else used — so it read as a
           different kind of action from the save on the two policy cards
-          directly below it. */}
+          directly below it.
+
+          The form's content is wrapped in the shared `Card` (bg-card + border +
+          shadow-sm) — the house convention every other settings page uses
+          (Roles, Emails, the team Payments tab). This page used to be the one
+          exception: a bare `divide-y rounded-lg border` panel with no
+          background, which read as a different, flatter kind of page next to
+          its siblings. `pt-6` because there is no CardHeader here — the page's
+          own <h1> above already carries the title, matching the team Payments
+          tab's headerless cards. */}
       <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-5">
-        <BookingForm
-          control={control}
-          register={register}
-          customFieldDefinitions={customFieldDefinitions}
-          customFieldsInstalled={isInstalled('custom-fields')}
-        />
+        <Card>
+          <CardContent className="pt-6">
+            <BookingForm
+              control={control}
+              register={register}
+              customFieldDefinitions={customFieldDefinitions}
+              customFieldsInstalled={isInstalled('custom-fields')}
+            />
+          </CardContent>
+        </Card>
         <SettingsSaveBar
           onSave={handleSubmit(onSubmit)}
           saving={isSubmitting}

@@ -67,6 +67,12 @@ export interface Availability {
    *  At least one; class activities are not linkable. */
   activityIds: string[]
   location?: string
+  // Optional link to a Place + Room (team or org place) — same split as
+  // Session: `location` is kept as a free-text fallback/note (online, ad-hoc,
+  // or a detail on top of the place) and for display on legacy docs that only
+  // ever carried it.
+  placeId?: string
+  roomId?: string
   onlineUrl?: string
   recurrence: AvailabilityRecurrence
   status: 'active' | 'paused' | 'archived'

@@ -77,6 +77,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Link, useRouter } from '@/i18n/navigation'
+import { QuickLinks } from '@/components/layout/QuickLinks'
 import type { Route } from 'next'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -798,6 +799,7 @@ const EMPTY_SESSION_IDS: ReadonlySet<string> = new Set<string>()
 export default function BookingsPage() {
   const { currentTeamId } = useAuth()
   const t = useTranslations('Bookings')
+  const tNav = useTranslations('Nav')
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -987,8 +989,6 @@ export default function BookingsPage() {
     [searchFiltered, statusFilter]
   )
 
-  const trials = bookings.filter((b) => b.is_new_contact).length
-
   const TABS: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: t('tabAll') },
     { key: 'pending', label: t('statusPending') },
@@ -1002,18 +1002,23 @@ export default function BookingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        {/* The count is of the WINDOW, and says so. It used to read
-            `bookings.length` off a fixed 200-document page, so a busy studio was
-            told "200 total" for ever. */}
-        {!isLoading && !isError && !tooWide && (
+        {/* The window COUNT used to sit here. It is already visible in the rows
+            themselves, and the two surfaces a studio moves to from a booking
+            list — the grid it sits on, and the sheet it gets printed onto — had
+            no pointer at all. */}
+        <QuickLinks
+          links={[
+            { href: '/schedule' as Route, label: tNav('calendar') },
+            { href: '/manifest' as Route, label: tNav('manifest') },
+          ]}
+        />
+        {/* The truncation warning STAYS, and is not a description: without it a
+            capped list looks like a complete one. The count is what was actually
+            loaded, not the ceiling — the class axis stops on a class boundary,
+            so it can hold a few more rows than the cap. */}
+        {!isLoading && !isError && !tooWide && truncated && (
           <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitleWindow', { total: bookings.length, trials })}
-            {/* The count is what was actually loaded, not the ceiling. The class
-                axis stops on a class boundary, so it can hold a few more rows
-                than the cap and a fixed number would misreport it. */}
-            {truncated && (
-              <span className="block">{t('windowTruncated', { count: bookings.length })}</span>
-            )}
+            {t('windowTruncated', { count: bookings.length })}
           </p>
         )}
       </div>

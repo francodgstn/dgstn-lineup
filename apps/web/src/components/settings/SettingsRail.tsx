@@ -8,7 +8,7 @@
 // the detail pane; on mobile it IS the /settings index list.
 
 import { useState } from 'react'
-import { useTranslations } from 'next-intl'
+import { useMessages, useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
@@ -34,7 +34,26 @@ export function SettingsRail() {
 
   const q = query.trim().toLowerCase()
   const labelOf = (key: string) => t(key as Parameters<typeof t>[0])
-  const matches = (key: string) => !q || labelOf(key).toLowerCase().includes(q)
+
+  // THE SAME KEYWORD INDEX THE GLOBAL SEARCH USES (`Nav.searchKeywords`, keyed by
+  // the item's id — see the catalogue built in (auth)/layout.tsx).
+  //
+  // This box used to match the visible LABEL and nothing else, which made it
+  // strictly worse than the global search it sits next to: typing "stripe",
+  // "leaderboard" or "permissions" produced "No settings match your search" —
+  // a confident FALSE NEGATIVE, on a rail where every row was already on screen
+  // to be scanned. A search that answers "it isn't here" about a page that is
+  // here teaches the reader the setting does not exist, so the box was worth
+  // either fixing or removing. Read through `useMessages` rather than `t()` so
+  // an id with no keywords is simply label-only instead of a missing-key error.
+  const messages = useMessages() as unknown as {
+    Nav?: { searchKeywords?: Record<string, string> }
+  }
+  const keywordsOf = (id: string) => messages.Nav?.searchKeywords?.[id] ?? ''
+  const matches = (item: (typeof SETTINGS_ITEMS)[number]) =>
+    !q ||
+    labelOf(item.labelKey).toLowerCase().includes(q) ||
+    keywordsOf(item.id).toLowerCase().includes(q)
 
   // Hide plugin/role-gated items when their condition doesn't hold.
   const gateOk = (item: (typeof SETTINGS_ITEMS)[number]) => {
@@ -42,7 +61,7 @@ export function SettingsRail() {
     if (item.gate === 'customFields') return isInstalled('custom-fields')
     return true
   }
-  const visible = (item: (typeof SETTINGS_ITEMS)[number]) => gateOk(item) && matches(item.labelKey)
+  const visible = (item: (typeof SETTINGS_ITEMS)[number]) => gateOk(item) && matches(item)
   const anyMatch = SETTINGS_ITEMS.some(visible)
 
   // Active when the path matches and ?tab= matches — team sub-sections share the

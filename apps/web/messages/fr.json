@@ -96,7 +96,8 @@
       "billing": "facturation forfait abonnement",
       "plugin:finance:/plugins/finance": "comptabilité accounting plan comptable grand livre rapports export csv comptable bilan résultat écritures",
       "promoCodes": "remise reduction coupon bon campagne offre code",
-      "dashboardPreview": "nouveau tableau de bord aperçu alternative accueil"
+      "dashboardPreview": "nouveau tableau de bord aperçu alternative accueil",
+      "teamEmailTemplates": "modèles espaces réservés e-mail formulation texte"
     },
     "allSettings": "Tous les paramètres",
     "howTo": "Guides",
@@ -185,7 +186,8 @@
     "sidebarResizeHint": "Faites glisser pour redimensionner — au-delà de la gauche pour réduire, double-cliquez pour réinitialiser",
     "legalTerms": "Conditions d'utilisation",
     "legalDpa": "Contrat de sous-traitance",
-    "legalPrivacy": "Politique de confidentialité"
+    "legalPrivacy": "Politique de confidentialité",
+    "teamEmailTemplates": "Modèles d'e-mails"
   },
   "PublicHub": {
     "title": "Pages publiques",
@@ -1940,7 +1942,10 @@
     "termsAcceptedTitle": "Conditions acceptées",
     "termsAcceptedBody": "Version {version}, acceptée le {date} par {email}.",
     "termsLink": "Conditions d'utilisation",
-    "dpaLink": "Contrat de sous-traitance"
+    "dpaLink": "Contrat de sous-traitance",
+    "sectionTeam": "Équipe",
+    "sectionRegionFormat": "Région et format",
+    "sectionOther": "Autre"
   },
   "Bookings": {
     "title": "Réservations",
@@ -5968,7 +5973,10 @@
     "reminderSmsNote": "Les rappels SMS ne sont envoyés qu'entre 08h00 et 21h00.",
     "resetConfirmTitle": "Réinitialiser au texte par défaut ?",
     "deactivateConfirmTitle": "Désactiver ce modèle ?",
-    "deactivateAction": "Désactiver"
+    "deactivateAction": "Désactiver",
+    "emailsSubtitle": "Gérez votre identité d'expéditeur, les e-mails système automatiques, la note de confirmation de réservation et l'expéditeur SMS.",
+    "templatesSubtitle": "Modèles prédéfinis et personnalisés envoyés par vos automatisations et campagnes, ainsi que des variables réutilisables à insérer dans n'importe lequel d'entre eux.",
+    "templatesLinkNote": "Les modèles de sensibilisation prédéfinis et personnalisés, ainsi que la référence des variables, se trouvent désormais sur la page <link>Modèles d'e-mails</link>."
   },
   "Finance": {
     "exportCsv": "Exporter CSV",
@@ -6767,7 +6775,8 @@
     "failedTransient": "Impossible d'annuler cette réservation : elle est toujours active. Merci de réessayer."
   },
   "QuickLinks": {
-    "related": "Voir aussi :"
+    "related": "Voir aussi :",
+    "availabilityToActivities": "Gérer les activités sur rendez-vous"
   },
   "Site": {
     "loading": "Chargement…",
