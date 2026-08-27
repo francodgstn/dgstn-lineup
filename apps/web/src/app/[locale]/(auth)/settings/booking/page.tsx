@@ -17,6 +17,9 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
+import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
+import { Link } from '@/i18n/navigation'
+import type { Route } from 'next'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -285,6 +288,13 @@ function BookingForm({
   // Subscribed, not read once: the claim window below appears the moment the
   // queue is switched on, without a save in between.
   const waitlistEnabled = useWatch({ control, name: 'booking.waitlistEnabled' })
+  // The SAME two halves the Public pages screen reads, through the same hook, so
+  // the two screens can never say different things about whether the picker is
+  // live. `appointmentsLive` is the composed answer (`appointmentPickerLive`);
+  // `appointmentsEnabled` is the stored toggle.
+  const { flags: publicFlags } = usePublicSurfaces()
+  const appointmentsEnabled = publicFlags.appointmentsEnabled
+  const appointmentsLive = publicFlags.appointmentsLive
   return (
     <div className="space-y-6">
       {/* Flow type */}
@@ -383,7 +393,25 @@ function BookingForm({
           name="booking.appointmentsEnabled"
           label={t('toggleAppointmentsEnabledLabel')}
           desc={t('toggleAppointmentsEnabledDesc')}
-        />
+        >
+          {/* THE TOGGLE IS AN INTENTION; the picker also needs something behind
+              it (active bookable hours linked to a bookable appointment
+              activity — see `appointmentPickerLive`). That "on, but empty" state
+              had a signal only on the Public pages screen, which is not where
+              anybody is standing when they flip this switch: the studio turned
+              it on, saw nothing appear on the public page, and had no way to
+              learn why. Same fact, said where the decision is made. */}
+          {appointmentsEnabled && !appointmentsLive && (
+            <div className="px-3 pb-3 -mt-1">
+              <p className="text-xs text-amber-600">
+                {t('appointmentsEmptyHint')}{' '}
+                <Link href={'/schedule/availability' as Route} className="underline hover:no-underline">
+                  {t('appointmentsEmptyHintLink')}
+                </Link>
+              </p>
+            </div>
+          )}
+        </ToggleRow>
 
         {/* Booking window */}
         <div className="flex items-center justify-between gap-4 p-3">

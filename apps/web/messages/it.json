@@ -230,7 +230,7 @@
     "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti.",
     "surfaceEvents": "Eventi",
     "eventsDesc": "I tuoi eventi pubblicati, con il programma giorno per giorno.",
-    "appointmentsEmpty": "La prenotazione degli appuntamenti è attiva, ma non ci sono ancora orari prenotabili."
+    "appointmentsEmpty": "Gli orari prenotabili sono attivi, ma nessun orario è ancora prenotabile."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -947,7 +947,15 @@
     "attention_cancelling": "In disdetta",
     "attention_billing_unlinked": "Fatturazione orfana",
     "exportCsv": "Esporta CSV",
-    "exportFailed": "Esportazione non riuscita. Riprova."
+    "exportFailed": "Esportazione non riuscita. Riprova.",
+    "filterRankModeLevels": "Livelli",
+    "filterRankModeRange": "Intervallo",
+    "filterRankFrom": "Da",
+    "filterRankTo": "A",
+    "filterRankAny": "Qualsiasi",
+    "filterRankAtLeast": "{level} e superiori",
+    "filterRankAtMost": "{level} e inferiori",
+    "filterRankBetween": "da {from} a {to}"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -5061,8 +5069,8 @@
     "toggleShowActivityDescriptionDesc": "Mostra il testo di descrizione dell'attività nella schermata di selezione attività.",
     "toggleShowFitnessAppLabel": "Mostra campo app fitness",
     "toggleShowFitnessAppDesc": "Chiedi ai nuovi ospiti tramite quale app partner arrivano. Le opzioni sono i tuoi tipi di abbonamento partner (aggregatori) — finché non ne hai nessuno, la domanda non viene mostrata.",
-    "toggleAppointmentsEnabledLabel": "Mostra appuntamenti",
-    "toggleAppointmentsEnabledDesc": "Mostra la prenotazione di appuntamenti nel flusso di prenotazione pubblico.",
+    "toggleAppointmentsEnabledLabel": "Mostra orari prenotabili",
+    "toggleAppointmentsEnabledDesc": "Permette ai visitatori di scegliere un orario tra i tuoi orari prenotabili nel flusso di prenotazione pubblico.",
     "ctaTitle": "Pulsante CTA (facoltativo)",
     "ctaSubtitle": "Mostrato nella schermata di conferma dopo una prenotazione riuscita.",
     "ctaUrlLabel": "URL del pulsante",
@@ -5084,7 +5092,9 @@
     "moreOptionsLabel": "Altre opzioni",
     "moreOptionsHint": "Periodo di prenotazione, termine ultimo, campi richiesti e pulsante personalizzato",
     "betaBadge": "Beta",
-    "betaBadgeHint": "Pronta all'uso — questa funzione può ancora cambiare."
+    "betaBadgeHint": "Pronta all'uso — questa funzione può ancora cambiare.",
+    "appointmentsEmptyHint": "Questa opzione è attiva, ma non c'è ancora nulla di prenotabile — servono orari prenotabili attivi collegati a un'attività su appuntamento.",
+    "appointmentsEmptyHintLink": "Configura gli orari prenotabili"
   },
   "SettingsPlaces": {
     "pageTitle": "Sedi",

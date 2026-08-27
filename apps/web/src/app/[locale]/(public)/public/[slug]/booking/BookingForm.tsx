@@ -808,10 +808,38 @@ export default function BookingForm({
     // slot list shows every activity running on the chosen day. (Checked before
     // the single-activity shortcut — with one activity the two are equivalent,
     // and pinning it would hide nothing but costs the row its name label.)
-    if (isDateFirst) {
+    //
+    // BOTH DEFAULTS HAVE TO ASK THE APPOINTMENT QUESTION the two deep-link
+    // branches above already ask. An appointment has no pre-scheduled sessions
+    // — nothing exists until it is booked — so landing on the class day picker
+    // with an appointment selected shows an empty list forever. That is what a
+    // studio meant when it said "bookable hours are not displayed even though
+    // the setting is on": the setting was fine, the visitor never reached the
+    // picker that renders those hours.
+    const everyActivityIsAppointment =
+      actList.length > 0 && actList.every((a) => a.activityType === 'appointment')
+
+    if (everyActivityIsAppointment && actList.length === 1) {
+      // The single-appointment studio — a coach selling 1:1s, which is the
+      // whole shape of the coach plan. Straight to the picker.
+      goToAppointments(actList[0].id)
+      return 'navigated'
+    }
+    if (isDateFirst && !everyActivityIsAppointment) {
       setSelectedActivity(null)
       setStep('sessions')
+    } else if (everyActivityIsAppointment) {
+      // Date-first has nothing to offer when there are no classes at all, so
+      // show the cards instead of an empty day. (A MIXED studio on date-first
+      // still cannot reach its appointments from here — the day picker only
+      // knows class sessions. That needs a design call, not a patch: see
+      // docs/open-defects.md.)
+      setStep('activities')
     } else if (actList.length === 1) {
+      if (actList[0].activityType === 'appointment') {
+        goToAppointments(actList[0].id)
+        return 'navigated'
+      }
       setSelectedActivity(actList[0])
       setStep('sessions')
     } else {

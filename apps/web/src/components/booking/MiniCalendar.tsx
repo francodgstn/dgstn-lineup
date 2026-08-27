@@ -52,11 +52,23 @@ export function MiniCalendar({ availableDates, selectedDate, onSelect, maxDateKe
 
   // …and follow the selection when it jumps out of the displayed month (the
   // activity changed, or a restored step selected a different day).
+  //
+  // IT DEPENDS ON `selectedDate` ALONE, AND THAT IS THE WHOLE POINT. With
+  // `currentMonth` in the dependency array this effect also ran on the
+  // visitor's OWN paging, and then undid it: page forward to September, the
+  // effect re-runs, sees the still-selected August date is not in the displayed
+  // month, and snaps straight back. The arrow appeared to flicker and do
+  // nothing — and only once a date had been selected, which is why it read as a
+  // glitch rather than a dead button.
+  //
+  // The functional update reads the current month without closing over it, so
+  // dropping it from the deps costs no correctness; returning `cur` unchanged
+  // when the month already matches also avoids a pointless re-render.
   useEffect(() => {
     if (!selectedDate) return
-    const target = dateKeyToDate(selectedDate)
-    if (!isSameMonth(target, currentMonth)) setCurrentMonth(startOfMonth(target))
-  }, [selectedDate, currentMonth])
+    const target = startOfMonth(dateKeyToDate(selectedDate))
+    setCurrentMonth((cur) => (isSameMonth(target, cur) ? cur : target))
+  }, [selectedDate])
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)

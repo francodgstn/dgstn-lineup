@@ -47,11 +47,11 @@ import {
   EMPTY_CONTACT_FILTER, emptyContactFilter, normalizeContactFilter, countActiveFilters,
   filterContacts, flattenGroupTree, isDynamicGroup, toGroupRule, ruleWouldDropGroups,
   compareContactsByAttention, contactAttentionReasons, resolveTimestampMs,
-  GROUP_NONE, COACH_NONE,
+  GROUP_NONE, COACH_NONE, expandRankRange, rankFilterIsActive, orderedLevels,
 } from '@linyup/shared'
 import type {
   ContactAttentionReason,
-  ContactFilter, ConsentFilter, InactivityPreset, RankFilter,
+  ContactFilter, ConsentFilter, InactivityPreset, RankFilter, RankRangeFilter,
   AgeFilter, CustomFieldCondition, CustomFieldOp, WaiverAcceptanceState,
 } from '@linyup/shared'
 import { formatCurrency } from '@/lib/format'
@@ -779,23 +779,99 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
   )
 }
 
-function RankFilterContent({ rankingSystems, rankFilter, onChange }: {
+function RankFilterContent({ rankingSystems, rankFilter, rankRanges, onChange }: {
   rankingSystems: RankingSystem[]
   rankFilter: RankFilter | null
-  onChange: (rf: RankFilter | null) => void
+  rankRanges: Record<string, RankRangeFilter> | null
+  onChange: (rf: RankFilter | null, rr: Record<string, RankRangeFilter> | null) => void
 }) {
+  const t = useTranslations('Contacts')
   const firstActiveId = rankFilter ? Object.keys(rankFilter).find((id) => rankFilter[id].length > 0) : null
   const defaultId = firstActiveId ?? rankingSystems.find((s) => s.is_primary)?.id ?? rankingSystems[0]?.id ?? ''
   const [activeId, setActiveId] = useState(defaultId)
   const system = rankingSystems.find((s) => s.id === activeId) ?? rankingSystems[0]
   const selected = rankFilter?.[activeId] ?? []
+  const range = rankRanges?.[activeId] ?? null
+
+  // Ascending by VALUE — the scale's own order — through the shared helper that
+  // every progression reader already uses, rather than a second sort here.
+  // Nothing sorts `levels` on write, so the stored array can be out of order;
+  // BOTH views below render from this one, so the tick-list and the range picker
+  // cannot disagree about which belt is higher.
+  const ordered = useMemo(() => (system ? orderedLevels(system) : []), [system])
+
+  // MODE IS STATE, NOT A DERIVATION of "is a band stored". Deriving it meant the
+  // panel flipped itself back to the tick-list the moment the band went inert —
+  // so setting From to "Any" while To was still "Any" (the natural order for
+  // building "Blue and below") deleted the filter and swapped the UI underneath
+  // the user mid-edit.
+  const [mode, setMode] = useState<'levels' | 'range'>(range ? 'range' : 'levels')
+
+  // What was ticked before the user tried Range. Switching back restores it,
+  // instead of handing back the band's EXPANSION — which is every level the band
+  // covered, and would silently widen a two-belt filter to "anyone with a rank"
+  // (and any dynamic group saved from it).
+  const ticksBeforeRange = useRef<number[] | null>(null)
+
+  /**
+   * ONE writer of both keys.
+   *
+   * A band is the truth and `rankFilter[systemId]` is its mirror, written here
+   * with `expandRankRange` so a resolver that predates bands still filters
+   * correctly during a deploy skew (see RankRangeFilter in @linyup/shared).
+   * Writing the mirror anywhere else, or by hand, is how the two drift.
+   */
+  function commit(nextLevels: number[], nextRange: RankRangeFilter | null) {
+    const filters: RankFilter = { ...(rankFilter ?? {}) }
+    const ranges: Record<string, RankRangeFilter> = { ...(rankRanges ?? {}) }
+
+    const expanded =
+      nextRange && (nextRange.min != null || nextRange.max != null)
+        ? expandRankRange(system?.levels ?? [], nextRange)
+        : null
+
+    // THE INVARIANT: a band is stored only WITH a non-empty mirror. An empty
+    // mirror reads as "dimension off" to every `length > 0` guard in the app and
+    // to any resolver that predates bands, so storing a band beside one would
+    // mean "nobody" here and "everybody" there. The select clamps so this cannot
+    // normally arise; this is the guard that makes it true rather than likely.
+    if (expanded && expanded.length > 0) {
+      ranges[activeId] = nextRange!
+      filters[activeId] = expanded
+    } else {
+      delete ranges[activeId]
+      if (nextLevels.length) filters[activeId] = nextLevels
+      else delete filters[activeId]
+    }
+
+    // An entry that selects nothing is not a filter. Dropping it keeps every
+    // "is this dimension active" test in the app honest — they all count levels.
+    Object.keys(filters).forEach((k) => { if (!filters[k].length) delete filters[k] })
+
+    onChange(
+      Object.keys(filters).length ? filters : null,
+      Object.keys(ranges).length ? ranges : null,
+    )
+  }
 
   function toggle(value: number) {
     const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]
-    const newFilter: RankFilter = { ...(rankFilter ?? {}), [activeId]: next }
-    // Remove empty entries
-    Object.keys(newFilter).forEach((k) => { if (!newFilter[k].length) delete newFilter[k] })
-    onChange(Object.keys(newFilter).length ? newFilter : null)
+    commit(next, null)
+  }
+
+  function switchMode(next: 'levels' | 'range') {
+    if (next === mode) return
+    setMode(next)
+    if (next === 'range') {
+      // Remember the ticks so the trip is reversible, then seed a band that
+      // actually filters — an all-open one would store nothing and leave the
+      // panel looking broken.
+      ticksBeforeRange.current = selected
+      commit([], { min: ordered[0]?.value ?? null, max: null })
+    } else {
+      commit(ticksBeforeRange.current ?? [], null)
+      ticksBeforeRange.current = null
+    }
   }
 
   return (
@@ -819,22 +895,90 @@ function RankFilterContent({ rankingSystems, rankFilter, onChange }: {
           })}
         </div>
       )}
-      {system?.levels.map((level) => (
-        <button key={level.value} type="button" onClick={() => toggle(level.value)}
-          className="flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
-        >
-          <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-            selected.includes(level.value) ? 'bg-primary border-primary' : 'border-input'
-          }`}>
-            {selected.includes(level.value) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
-          </span>
-          {level.color && (
-            <span className="h-3 w-3 rounded-full shrink-0 border border-border/30"
-              style={{ backgroundColor: level.color }} />
-          )}
-          <span>{level.label}</span>
-        </button>
-      ))}
+      {/* Ticking every belt individually is not the same question as "Blue and
+          above": the tick-list is a snapshot that silently goes wrong the moment
+          a belt is inserted into the scale, the band keeps meaning what it said. */}
+      <div className="flex gap-0.5 p-0.5 mx-1 mb-1 rounded-md bg-muted/60">
+        {(['levels', 'range'] as const).map((m) => (
+          <button key={m} type="button" onClick={() => switchMode(m)}
+            className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+              mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}>
+            {m === 'levels' ? t('filterRankModeLevels') : t('filterRankModeRange')}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'range' ? (
+        <div className="px-1 pb-1 space-y-1.5">
+          {(['min', 'max'] as const).map((end) => (
+            <label key={end} className="flex items-center gap-2 text-xs">
+              <span className="w-9 shrink-0 text-muted-foreground">
+                {end === 'min' ? t('filterRankFrom') : t('filterRankTo')}
+              </span>
+              <Select
+                value={range?.[end] == null ? '' : String(range[end])}
+                onValueChange={(v) => {
+                  const picked = v === '' ? null : Number(v)
+                  const next: RankRangeFilter = {
+                    min: range?.min ?? null,
+                    max: range?.max ?? null,
+                    [end]: picked,
+                  }
+                  // CLAMP so the band can never be unsatisfiable. A crossed band
+                  // (From above To) expands to NO levels, and an empty mirror is
+                  // indistinguishable from "this dimension is off" — every guard
+                  // in the app, and in any resolver that predates bands, tests
+                  // `length > 0`. The band would then mean "nobody" while the
+                  // mirror meant "everybody", which is the one direction this
+                  // whole design exists to rule out. Dragging one end past the
+                  // other pushes the other end with it, as a range picker should.
+                  if (picked != null) {
+                    if (end === 'min' && next.max != null && next.max < picked) next.max = picked
+                    if (end === 'max' && next.min != null && next.min > picked) next.min = picked
+                  }
+                  commit([], next)
+                }}
+              >
+                <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
+                  <span className="flex flex-1 text-left text-xs truncate">
+                    {range?.[end] == null
+                      ? t('filterRankAny')
+                      : (ordered.find((l) => l.value === range[end])?.label ?? t('filterRankAny'))}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {/* An open end is "any", not a missing answer — so it is a real
+                      option with a label, never an empty trigger. */}
+                  <SelectItem value="" className="text-xs">{t('filterRankAny')}</SelectItem>
+                  {ordered.map((level) => (
+                    <SelectItem key={level.value} value={String(level.value)} className="text-xs">
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          ))}
+        </div>
+      ) : (
+        ordered.map((level) => (
+          <button key={level.value} type="button" onClick={() => toggle(level.value)}
+            className="flex items-center gap-2.5 w-full px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors text-left"
+          >
+            <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+              selected.includes(level.value) ? 'bg-primary border-primary' : 'border-input'
+            }`}>
+              {selected.includes(level.value) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+            </span>
+            {level.color && (
+              <span className="h-3 w-3 rounded-full shrink-0 border border-border/30"
+                style={{ backgroundColor: level.color }} />
+            )}
+            <span>{level.label}</span>
+          </button>
+        ))
+      )}
     </div>
   )
 }
@@ -1216,8 +1360,12 @@ function FilterChips({
       key: 'rankFilter',
       label: t('filterRank'),
       available: rankingSystems.length > 0,
-      isActive: (f) => !!f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0),
-      clear: (f) => ({ ...f, rankFilter: null }),
+      // The SHARED answer, not a local one. Counting levels here while
+      // `activeFilterKeys` counted band-or-mirror was a second opinion, and the
+      // two disagreed exactly when it hurt: an empty result list, a badge
+      // reading 1, and no chip on screen to clear.
+      isActive: (f) => rankFilterIsActive(f),
+      clear: (f) => ({ ...f, rankFilter: null, rankRanges: null }),
       activeLabel: (f) => {
         const rf = f.rankFilter
         if (!rf) return ''
@@ -1227,16 +1375,32 @@ function FilterChips({
         if (active.length === 1) {
           const [systemId, levels] = active[0]
           const sys = rankingSystems.find((s) => s.id === systemId)
+          const prefix = rankingSystems.length > 1 ? `${sys?.name ?? ''}: ` : ''
+          // A BAND NAMES ITS BOUNDS, never its expansion: "Blue and above" is
+          // what the studio asked for, and "6 ranks" is an implementation
+          // detail of it that also goes stale the moment a belt is added.
+          const range = f.rankRanges?.[systemId]
+          if (sys && range && (range.min != null || range.max != null)) {
+            const name = (v: number | null) =>
+              v == null ? null : sys.levels.find((l) => l.value === v)?.label ?? null
+            const lo = name(range.min)
+            const hi = name(range.max)
+            // A bound whose level was deleted has no name; fall back rather than
+            // render an empty string where a belt should be.
+            if (range.max == null && lo) return `${prefix}${t('filterRankAtLeast', { level: lo })}`
+            if (range.min == null && hi) return `${prefix}${t('filterRankAtMost', { level: hi })}`
+            if (lo && hi) return `${prefix}${t('filterRankBetween', { from: lo, to: hi })}`
+          }
           if (sys && levels.length === 1)
             return sys.levels.find((l) => l.value === levels[0])?.label ?? t('filterRanksCount', { count: 1 })
-          const prefix = rankingSystems.length > 1 ? `${sys?.name ?? ''}: ` : ''
           return `${prefix}${t('filterRanksCount', { count: levels.length })}`
         }
         return t('filterRanksCount', { count: total })
       },
       render: (f, set) => (
         <RankFilterContent rankingSystems={rankingSystems} rankFilter={f.rankFilter}
-          onChange={(rf) => set({ ...f, rankFilter: rf })} />
+          rankRanges={f.rankRanges ?? null}
+          onChange={(rf, rr) => set({ ...f, rankFilter: rf, rankRanges: rr })} />
       ),
     },
     {
