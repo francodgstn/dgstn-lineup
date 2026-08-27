@@ -617,7 +617,133 @@ function UtilityIconLink({
  * Search is deliberately NOT in here: it is a primary action with a keyboard
  * shortcut, not an occasional destination.
  */
-function UtilityFlyout({ onLinkClick }: { onLinkClick?: () => void }) {
+/**
+ * THE UTILITY TRAY — one icon at rest, the rest on demand.
+ *
+ * WHY NOT JUST THE "..." MENU. Everything used to live behind it, which solved
+ * the clutter and created the opposite problem: four destinations with no
+ * visible sign they exist. The menu is right about ATTENTION — these are
+ * reached deliberately, minutes apart, never mid-task — and wrong about
+ * DISCOVERY, because a single glyph advertises nothing (Franco, 2026-08-27).
+ *
+ * So the tray shows ONE icon at rest, which is enough to say "there are tools
+ * here", and reveals the others on hover or on a tap of the chevron. The
+ * resting icon is the QR in a studio; in an organisation, where the QR has
+ * nothing to encode, the first tool leads instead, so the tray is never a bare
+ * chevron.
+ *
+ * HOVER IS NOT THE ONLY WAY IN. Hover alone would be undiscoverable on desktop
+ * and unreachable on touch. The chevron is a real control: tapping it PINS the
+ * tray open, which is what makes this work on a phone; hovering merely previews
+ * and gives the pointer back.
+ *
+ * THE OVERFLOW IS MEASURED, NOT ASSUMED. The tray has its own row beneath the
+ * identity, so nothing competes with the scope name for width — but a row is
+ * still finite. Whatever does not fit goes behind "...", which is why that
+ * control still exists: it is the overflow now, not the front door. Add a fifth
+ * icon and the arithmetic absorbs it instead of pushing the row off the
+ * sidebar, which is exactly what happened when these controls sat here
+ * unmeasured.
+ */
+const TRAY_ICON_W = 36 // 32px target + 4px gap
+
+function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
+  const t = useTranslations('Nav')
+  const { current: scope } = useScope()
+  const orgId = scope?.kind === 'org' ? scope.id : null
+  const [pinned, setPinned] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [rowWidth, setRowWidth] = useState(0)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  // The ROW's width, not the tray's — the tray's own width is what we are
+  // deciding, so measuring that would be circular.
+  useEffect(() => {
+    const row = wrapRef.current?.parentElement
+    if (!row) return
+    const ro = new ResizeObserver(([e]) => setRowWidth(e.contentRect.width))
+    ro.observe(row)
+    return () => ro.disconnect()
+  }, [])
+
+  const expanded = pinned || hovered
+
+  // Destinations follow the scope. An organisation has its own settings and its
+  // own plugins, and sending somebody to the studio's from inside it is the
+  // silent scope exit this row already had once.
+  const tools: NavItem[] = [
+    orgId ? { ...EXPLORE_PLUGINS_ITEM, href: orgHref(orgId, 'plugins') } : EXPLORE_PLUGINS_ITEM,
+    orgId ? { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') } : ALL_SETTINGS_ITEM,
+    HOW_TO_ITEM,
+  ]
+
+  // In org scope the first tool is the RESTING icon, so it is not also in the
+  // reveal — one control never appears twice on one row.
+  const revealable = orgId ? tools.slice(1) : tools
+
+  // How many icons fit on the row.
+  //
+  // Two controls are always there besides the reveal — the resting icon and the
+  // trailing one — and the trailing one costs the same whether it is the
+  // chevron or the overflow menu, so it is reserved once and not counted again
+  // when there IS an overflow.
+  const room = rowWidth - TRAY_ICON_W * 2
+  const slots = Math.max(0, Math.floor(room / TRAY_ICON_W))
+  const overflows = revealable.length > slots
+  const shown = overflows ? revealable.slice(0, slots) : revealable
+  const hidden = revealable.slice(shown.length)
+
+  return (
+    <div
+      ref={wrapRef}
+      className="flex shrink-0 items-center gap-1"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {!orgId ? <TeamQrButton /> : <UtilityIconLink item={tools[0]} onClick={onLinkClick} />}
+
+      {/* The reveal. Animated by max-width rather than by mounting, so the icons
+          slide out from behind the chevron instead of appearing beside it. */}
+      <div
+        className={`flex items-center gap-1 overflow-hidden transition-all duration-200 ease-out ${
+          expanded ? 'max-w-[240px] opacity-100' : 'max-w-0 opacity-0'
+        }`}
+      >
+        {shown.map((item) => (
+          <UtilityIconLink key={item.id} item={item} onClick={onLinkClick} />
+        ))}
+      </div>
+
+      {expanded && overflows && hidden.length > 0 ? (
+        <UtilityFlyout onLinkClick={onLinkClick} items={hidden} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPinned((prev) => !prev)}
+          title={t('utilities')}
+          aria-label={t('utilities')}
+          aria-expanded={expanded}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function UtilityFlyout({
+  onLinkClick,
+  items,
+}: {
+  onLinkClick?: () => void
+  /** The tools this menu holds. Passed in because the menu is the tray's
+   *  OVERFLOW now rather than its whole content. Omitted, it holds everything —
+   *  which is what the collapsed rail still needs. */
+  items?: NavItem[]
+}) {
   const t = useTranslations('Nav')
   const label = t('utilities')
   // THE ROW FOLLOWS THE SCOPE. These three destinations were hardcoded studio
@@ -664,10 +790,15 @@ function UtilityFlyout({ onLinkClick }: { onLinkClick?: () => void }) {
             scope identity it competed for the top of the pane with the thing
             that says where you are. Studio-only, as ever — it encodes a
             STUDIO's public links and an organisation has no equivalent. */}
-        {!orgId && <TeamQrButton showLabel />}
-        <UtilityIconLink item={pluginsItem} onClick={onLinkClick} showLabel />
-        <UtilityIconLink item={settingsItem} onClick={onLinkClick} showLabel />
-        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} showLabel />
+        {/* WITH NO `items` this is the WHOLE set — the collapsed rail's only way
+            to these tools, since a w-14 rail has no room for a tray to expand
+            into. WITH `items` it is the tray's overflow and holds only what did
+            not fit. The QR belongs to the full set alone: expanded, the tray
+            shows it at rest, and one control must not appear twice on a row. */}
+        {!items && !orgId && <TeamQrButton showLabel />}
+        {(items ?? [pluginsItem, settingsItem, HOW_TO_ITEM]).map((item) => (
+          <UtilityIconLink key={item.id} item={item} onClick={onLinkClick} showLabel />
+        ))}
       </div>
     </NavFlyout>
   )
@@ -2624,14 +2755,22 @@ function SidebarContent({
           nothing. */}
       {scope && (
       <div
-        className={`mx-2 flex shrink-0 items-center gap-1 border-b py-1.5 ${
-          collapsed ? 'flex-col' : ''
+        className={`mx-2 flex shrink-0 flex-col gap-1 border-b py-1.5 ${
+          collapsed ? 'items-center' : ''
         }`}
       >
         <ScopeSwitcher collapsed={collapsed} />
-        {/* THE OCCASIONAL UTILITIES, beside the identity they belong to. Their
-            destinations follow the scope — see UtilityFlyout. */}
-        {!collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}
+        {/* ITS OWN ROW, BELOW THE IDENTITY (Franco, 2026-08-27). Sharing one row
+            meant the tools and the scope name competed for the same width — the
+            identity shrank to 79px the moment the tray opened, and the tray
+            could only ever reveal two of its three tools. Stacked, the switcher
+            gets the full width at all times and the tray gets the whole row to
+            expand into, so nothing has to give and the overflow only appears
+            when there is genuinely more than a row's worth.
+
+            Collapsed there is no tray: a w-14 rail has no room to expand into,
+            and the search row's menu is where these tools live at that width. */}
+        {!collapsed && <UtilityTray onLinkClick={onLinkClick} />}
       </div>
       )}
 

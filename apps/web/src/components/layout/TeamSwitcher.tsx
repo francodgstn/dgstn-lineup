@@ -254,6 +254,27 @@ export function TeamSwitcher() {
               </DropdownMenuItem>
             )
           })}
+          {/* INSIDE THE STUDIOS GROUP, because it makes a STUDIO — at the foot
+              of the whole menu it read as a general action and sat under the
+              organisations, which it has nothing to do with (Franco,
+              2026-08-27). Shown to someone with a single studio too — it is
+              the only route to a second one, so gating it on already having
+              two would make it unreachable. It rides on the group's own gate,
+              which is right: a login with no studio at all is sent to the
+              signup wizard by the app before it ever opens this menu.
+
+              IT REACHES THE EXISTING TEAM-CREATION FLOW rather than a second
+              copy of it: `provisionTeam` is generic and nothing in it assumes
+              it is the caller's first team. The wizard otherwise redirects
+              anyone who already has a `currentTeam` straight to the dashboard;
+              `?new=1` is what skips that bounce and opens it at its team step.
+              THAT BRANCH LIVES IN `app/[locale]/signup/page.tsx` — this entry
+              is the only thing that sets the flag, so the two move together or
+              the item goes nowhere. */}
+          <DropdownMenuItem onClick={() => router.push('/signup?new=1' as Route)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('createStudio')}
+          </DropdownMenuItem>
         </DropdownMenuGroup>
       )}
       {/* THE ORGANISATIONS THIS LOGIN CAN STAND IN.
@@ -289,21 +310,6 @@ export function TeamSwitcher() {
           })}
         </DropdownMenuGroup>
       )}
-      {/* Always shown, including to someone with a single studio — it is the
-          only route to a second one, so gating it on already having two would
-          make it unreachable.
-
-          IT REACHES THE EXISTING TEAM-CREATION FLOW rather than a second copy
-          of it: `provisionTeam` is generic and nothing in it assumes it is the
-          caller's first team. The wizard otherwise redirects anyone who already
-          has a `currentTeam` straight to the dashboard; `?new=1` is what skips
-          that bounce and opens it at its team step. THAT BRANCH LIVES IN
-          `app/[locale]/signup/page.tsx` — this entry is the only thing that
-          sets the flag, so the two move together or the item goes nowhere. */}
-      <DropdownMenuItem onClick={() => router.push('/signup?new=1' as Route)}>
-        <Plus className="mr-2 h-4 w-4" />
-        {t('createStudio')}
-      </DropdownMenuItem>
     </>
   )
 }

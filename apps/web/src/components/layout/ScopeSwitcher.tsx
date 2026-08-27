@@ -84,12 +84,17 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   // eye finds the same object in the same place every time and reads the colour
   // for which place it is.
   //
-  // The org keeps the loud amber; the studio gets the product's own primary at
-  // low opacity, which is present enough to draw the box and quiet enough not to
-  // compete with the nav rows below — it is the ordinary case, not an alert.
+  // SAME WEIGHTS, DIFFERENT HUE. The two use identical opacities — the org in
+  // amber, the studio in the product's own primary — so the control is one
+  // object that changes colour rather than two that look related.
+  //
+  // The studio started fainter (`/20` border on a `/5` fill) and read as a
+  // search field rather than an identity: too quiet to be a thing, present
+  // enough to be furniture (Franco, 2026-08-27). Matching the org's weights is
+  // what makes it read as the scope chip it is.
   const accent = isOrg
     ? 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15'
-    : 'border-primary/20 bg-primary/5 hover:bg-primary/10'
+    : 'border-primary/40 bg-primary/10 hover:bg-primary/15'
 
   // NO ICON WHEN THERE IS A LABEL. Expanded, the eyebrow already says which KIND
   // of place this is, in words — a glyph beside it was the same fact twice, and
@@ -103,7 +108,7 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const Icon = isOrg ? Landmark : Building2
   const identity = collapsed ? (
     <Icon
-      className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-primary/70'}`}
+      className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-primary'}`}
     />
   ) : (
     <span className="flex min-w-0 flex-1 flex-col items-start">
@@ -123,7 +128,11 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   // the rest off the end of the sidebar — the switcher itself then collapsed to
   // 18px while its own text overflowed. `flex-1` takes what is left and
   // truncates inside it, which is what `min-w-0` is there to permit.
-  const shape = `flex min-w-0 items-center rounded-lg border transition-colors ${accent} ${
+  // `text-left` is NOT decorative. A <button> is centre-aligned by default, and
+  // the name below is `w-full` — so its text centred inside a full-width box
+  // while the eyebrow, which shrinks to its content, sat flush left. The two
+  // lines disagreed and the block read as indented (Franco, 2026-08-27).
+  const shape = `flex min-w-0 items-center rounded-lg border text-left transition-colors ${accent} ${
     collapsed ? 'h-8 w-8 shrink-0 justify-center' : 'flex-1 gap-2 pl-1 pr-2 py-1.5'
   }`
 
