@@ -617,20 +617,7 @@ function UtilityIconLink({
  * Search is deliberately NOT in here: it is a primary action with a keyboard
  * shortcut, not an occasional destination.
  */
-function UtilityFlyout({
-  onLinkClick,
-  includeQr,
-}: {
-  onLinkClick?: () => void
-  /**
-   * COLLAPSED ONLY. Expanded, the QR sits on the scope row above, because it
-   * encodes THAT studio's links — listing it here as well would put one control
-   * in two places on the same screen. Collapsed that row carries only the scope
-   * glyph (there is no room for text at w-14), so the menu is where the QR
-   * lives.
-   */
-  includeQr?: boolean
-}) {
+function UtilityFlyout({ onLinkClick }: { onLinkClick?: () => void }) {
   const t = useTranslations('Nav')
   const label = t('utilities')
   // THE ROW FOLLOWS THE SCOPE. These three destinations were hardcoded studio
@@ -666,7 +653,18 @@ function UtilityFlyout({
       {/* A labelled column, not the icon strip this used to be: once the menu is
           open there is room for names, and the same shape serves both modes. */}
       <div className="flex min-w-40 flex-col gap-0.5">
-        {includeQr && !orgId && <TeamQrButton showLabel />}
+        {/* THE QR LIVES HERE IN BOTH MODES NOW (Franco, 2026-08-27). It was on
+            the header row when expanded and in this menu when collapsed, behind
+            an `includeQr` flag whose whole job was to stop one control
+            appearing twice on one screen. Putting it here always retires the
+            flag and the duplication together.
+            
+            It is the same argument this menu already exists for: the QR is
+            reached deliberately, minutes apart, never mid-task, and beside the
+            scope identity it competed for the top of the pane with the thing
+            that says where you are. Studio-only, as ever — it encodes a
+            STUDIO's public links and an organisation has no equivalent. */}
+        {!orgId && <TeamQrButton showLabel />}
         <UtilityIconLink item={pluginsItem} onClick={onLinkClick} showLabel />
         <UtilityIconLink item={settingsItem} onClick={onLinkClick} showLabel />
         <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} showLabel />
@@ -2608,11 +2606,15 @@ function SidebarContent({
           icon rail said nothing at all about which scope you were in — a gap
           rather than a decision. The trigger has a w-8 form.
 
-          THE QR IS STUDIO-ONLY and is HIDDEN in org scope rather than
-          repointed: it encodes a STUDIO's public links off its own public
-          profile, and an organisation has no equivalent document — a repointed
-          QR would silently be the current studio's, which looks plausible and
-          is wrong. */}
+          WHAT SHARES THE ROW IS DELIBERATELY SHORT: the flip, and the "⋯". The
+          QR moved into that menu (2026-08-27) — four controls on one row left
+          the identity 115px to live in, and the QR is the one nobody reaches
+          mid-task. The menu is exactly the mechanism this sidebar already uses
+          to hold occasional controls without spending permanent space on them.
+
+          The flip stays out of the menu because its entire value is being one
+          click; a flip you have to open something to reach is just the switcher
+          again. */}
       {/* GUARDED ON THE SCOPE, not on the team name as this row used to be. An
           unguarded wrapper draws an empty bordered strip for as long as auth is
           resolving — the row's rule is the only one between the logo and the
@@ -2625,7 +2627,6 @@ function SidebarContent({
         }`}
       >
         <ScopeSwitcher collapsed={collapsed} />
-        {!collapsed && !orgScopeId && <TeamQrButton />}
         {/* THE FLIP MOVED UP WITH THE IDENTITY (2026-08-27). It answers a
             different question from the switcher — "back to where I just was"
             rather than "show me everywhere" — but it is a question about the
@@ -2683,7 +2684,7 @@ function SidebarContent({
             the studio-name row above and the search field has this row to
             itself; collapsed there is no studio row to move it to (no text at
             w-14), which is the same reason `includeQr` exists. */}
-        {collapsed && <UtilityFlyout onLinkClick={onLinkClick} includeQr />}
+        {collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}
       </div>
 
       {/* THE HEAD PAIR — where things stand, and what is on today.
