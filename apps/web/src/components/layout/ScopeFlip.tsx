@@ -13,11 +13,11 @@
  * "back to the previous one" and never "next in some order".
  *
  * A BUTTON, NOT ONLY A CHORD. A bare shortcut is undiscoverable; the sidebar
- * search makes the same point about itself. So the control names its TARGET —
- * it says what it will do before it does it — and carries the chord in its
- * tooltip. NO PREVIOUS SCOPE, NO CONTROL: in a first session it is absent rather
- * than present-and-guessing, because a toggle that lands somewhere arbitrary is
- * worse than no toggle at all.
+ * search makes the same point about itself. The control names its TARGET and
+ * carries the chord — in its tooltip and accessible name rather than inline,
+ * for the measured reason given above the component. NO PREVIOUS SCOPE, NO
+ * CONTROL: in a first session it is absent rather than present-and-guessing,
+ * because a toggle that lands somewhere arbitrary is worse than no toggle.
  *
  * ── THE CHORD IS Alt+O, AND THE GUARD IS NOT OPTIONAL ───────────────────────
  *
@@ -83,8 +83,22 @@ export function ScopeFlipShortcut() {
   return null
 }
 
-/** The visible affordance. Renders nothing when there is nowhere to flip to. */
-export function ScopeFlip({ collapsed }: { collapsed: boolean }) {
+/**
+ * The visible affordance. Renders nothing when there is nowhere to flip to.
+ *
+ * A GLYPH IN BOTH MODES, and that is a concession made on measurement rather
+ * than taste. It used to render the target's name inline, which is what the
+ * design asked for — "the affordance says what it will do before it does it".
+ * On the header row it shares with the switcher, the QR and the utilities, that
+ * name was 182px on a 223px row: the switcher collapsed to 18px with its own
+ * text overflowing, and the last two controls landed outside the sidebar
+ * entirely.
+ *
+ * So the promise is kept by the TOOLTIP and the accessible name, both of which
+ * still say exactly which scope this goes to, rather than by inline text there
+ * is no room for.
+ */
+export function ScopeFlip() {
   const t = useTranslations('TopBar')
   const { previous, hrefFor } = useScope()
   const router = useRouter()
@@ -92,7 +106,7 @@ export function ScopeFlip({ collapsed }: { collapsed: boolean }) {
   if (!previous) return null
 
   // A scope whose name has not loaded yet still flips — the label falls back to
-  // the kind rather than rendering an empty button.
+  // the kind rather than naming nothing.
   const name =
     previous.name || (previous.kind === 'org' ? t('scopeOrganisation') : t('scopeStudio'))
 
@@ -102,12 +116,9 @@ export function ScopeFlip({ collapsed }: { collapsed: boolean }) {
       onClick={() => router.push(hrefFor(previous) as Route)}
       title={`${t('flipToPrevious', { name })} · Alt+O`}
       aria-label={t('flipToPrevious', { name })}
-      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
-        collapsed ? 'justify-center px-1.5' : ''
-      }`}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
     >
-      <Repeat2 className="h-3.5 w-3.5 shrink-0" />
-      {!collapsed && <span className="max-w-[9rem] truncate">{name}</span>}
+      <Repeat2 className="h-4 w-4 shrink-0" />
     </button>
   )
 }

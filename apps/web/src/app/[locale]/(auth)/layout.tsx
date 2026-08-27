@@ -2632,7 +2632,7 @@ function SidebarContent({
             same thing, and leaving it at the foot split one subject across both
             ends of the pane. It still owns Alt+O and still renders nothing when
             there is nowhere to flip to. */}
-        <ScopeFlip collapsed={collapsed} />
+        <ScopeFlip />
         {/* THE OCCASIONAL UTILITIES, beside the identity they belong to. Their
             destinations follow the scope — see UtilityFlyout. */}
         {!collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}

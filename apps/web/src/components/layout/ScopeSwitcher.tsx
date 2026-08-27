@@ -73,7 +73,6 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const isOrg = current.kind === 'org'
   const kindLabel = isOrg ? t('scopeOrganisation') : t('scopeStudio')
   const name = current.name || kindLabel
-  const Icon = isOrg ? Landmark : Building2
 
   // The accent the deleted band carried. Studio scope stays NEUTRAL, on the
   // band's own rule: a badge on the default case is noise rather than
@@ -82,31 +81,40 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
     ? 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15'
     : 'border-transparent hover:bg-accent'
 
-  const identity = (
-    <>
-      <Icon
-        className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
-      />
-      {!collapsed && (
-        <span className="flex min-w-0 flex-1 flex-col items-start">
-          {/* The eyebrow is what stops a different NAME in the same slot from
-              being the only signal — it says which KIND of place this is, in
-              words, above the name. */}
-          <span
-            className={`text-[9px] font-bold uppercase leading-tight tracking-[0.12em] ${
-              isOrg ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground/70'
-            }`}
-          >
-            {kindLabel}
-          </span>
-          <span className="w-full truncate text-xs font-semibold leading-tight">{name}</span>
-        </span>
-      )}
-    </>
+  // NO ICON WHEN THERE IS A LABEL. Expanded, the eyebrow already says which KIND
+  // of place this is, in words — a glyph beside it was the same fact twice, and
+  // on a row that also carries the QR, the flip and the utilities those pixels
+  // were the difference between fitting and not (Franco, 2026-08-27).
+  //
+  // COLLAPSED IS THE OPPOSITE CASE, by the same reasoning: there is no label at
+  // w-14, so the glyph is the only thing carrying the kind and it earns its
+  // place. A two-letter abbreviation was tried first and "OR" for Organisation
+  // reads as the conjunction.
+  const Icon = isOrg ? Landmark : Building2
+  const identity = collapsed ? (
+    <Icon
+      className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+    />
+  ) : (
+    <span className="flex min-w-0 flex-1 flex-col items-start">
+      <span
+        className={`text-[9px] font-bold uppercase leading-tight tracking-[0.12em] ${
+          isOrg ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground/70'
+        }`}
+      >
+        {kindLabel}
+      </span>
+      <span className="w-full truncate text-xs font-semibold leading-tight">{name}</span>
+    </span>
   )
 
+  // `flex-1 min-w-0`, NOT `w-full`. As a flex item on a row that also holds the
+  // QR, the flip and the utilities, `w-full` claimed 100% of the row and shoved
+  // the rest off the end of the sidebar — the switcher itself then collapsed to
+  // 18px while its own text overflowed. `flex-1` takes what is left and
+  // truncates inside it, which is what `min-w-0` is there to permit.
   const shape = `flex min-w-0 items-center rounded-lg border transition-colors ${accent} ${
-    collapsed ? 'h-8 w-8 justify-center' : 'w-full gap-2 px-2 py-1.5'
+    collapsed ? 'h-8 w-8 shrink-0 justify-center' : 'flex-1 gap-2 px-2 py-1.5'
   }`
 
   if (!canSwitch) {
