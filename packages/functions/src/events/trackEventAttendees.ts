@@ -1,6 +1,28 @@
-// Ported from hmd-lineup/functions/src/trackEventAttendees/index.js
-// Firestore trigger: increments/decrements participants_count and completed_checkins_count on the
-// parent event doc whenever an event check-in document is created, updated, or deleted.
+/**
+ * Maintains `participants_count` and `completed_checkins_count` on an event —
+ * the two counters that say who actually turned up, and how many of them still
+ * owe the desk their paperwork.
+ *
+ * It is a Firestore trigger on the top-level `checkins` collection (one doc per
+ * person admitted to an event). A create is +1 participant, a delete is -1, and
+ * `is_completed` flipping either way moves the completed counter on its own.
+ *
+ * ── IT NEVER TOUCHES `attendees_count` ───────────────────────────────────────
+ * `events/{id}/attendees` is a different thing wearing a similar word: the RSVP
+ * list, written by `handleEventInvitationResponse` when an invitee accepts and
+ * deleted when they decline. `attendees_count` counts ACCEPTANCES and is
+ * maintained there, in events/index.ts. Nothing reconciles the two — accepting
+ * an invitation and walking through the door are separate facts — so reading
+ * this trigger as "the attendees counter" gets both of them wrong.
+ *
+ * ── WHY THE NAME SURVIVES THE CORRECTION ─────────────────────────────────────
+ * The exported symbol IS the deployed Cloud Function name. Renaming it deletes
+ * this Firestore trigger and creates another, and in the window between the two
+ * every check-in write goes uncounted — the counters drift on a live event and
+ * nothing announces it. The name arrived with the code from
+ * hmd-lineup/functions/src/trackEventAttendees/index.js and the meaning drifted
+ * underneath it; correcting the header is the honest fix that costs nothing.
+ */
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
@@ -64,7 +86,7 @@ export const trackEventAttendees = onDocumentWritten(
     const [counterUpdateErr] = await to(eventRef.update(updateData))
     if (counterUpdateErr) {
       console.error(
-        `Error updating attendees counter for event ${eventId}:`,
+        `Error updating check-in counters for event ${eventId}:`,
         counterUpdateErr.message ?? counterUpdateErr
       )
       throw counterUpdateErr

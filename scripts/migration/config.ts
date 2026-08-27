@@ -52,6 +52,31 @@ export const HMD_ORG_RANKING_SYSTEMS = [
   { id: RANKING_KD,  name: 'Korean Dragon',  is_primary: false, levels: HMD_BELT_LEVELS },
 ]
 
+/**
+ * The level values a migrated rank may legitimately hold on a given ranking
+ * system — derived from HMD_ORG_RANKING_SYSTEMS so the belt scale has ONE
+ * definition here rather than a copy that can drift from what the migration
+ * actually writes to organizations/hmd.
+ *
+ * Returns null for a system this migration does not create, which is a
+ * different answer from "no such level" and is reported differently.
+ *
+ * Why it exists: a rank the scale does not contain still WRITES — the contact
+ * simply renders a floor-matched belt, or none — so the only way anybody learns
+ * about one is if the migration says so. See transforms/contacts.ts.
+ */
+const levelValueCache = new Map<string, Set<number>>()
+
+export function rankingSystemLevelValues(systemId: string): Set<number> | null {
+  const cached = levelValueCache.get(systemId)
+  if (cached) return cached
+  const system = HMD_ORG_RANKING_SYSTEMS.find((s) => s.id === systemId)
+  if (!system) return null
+  const values = new Set(system.levels.map((l) => l.value))
+  levelValueCache.set(systemId, values)
+  return values
+}
+
 export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
 export const EMULATOR_AUTH_HOST      = 'localhost:9099'
 export const EMULATOR_PROJECT_ID     = 'demo-linyup'

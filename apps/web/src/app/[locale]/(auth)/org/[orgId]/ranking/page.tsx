@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
-import { doc, updateDoc } from 'firebase/firestore'
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useOrg } from '@/contexts/OrgContext'
 import { Button } from '@/components/ui/button'
@@ -18,12 +18,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Shield } from 'lucide-react'
-import type { RankingSystem, RankLevel } from '@linyup/shared'
+import { ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION } from '@linyup/shared'
+import type { OrgTeam, RankingSystem, RankLevel } from '@linyup/shared'
 import { RANK_PRESETS } from '@/lib/rank-presets'
+import { useRankHolderCount } from '@/lib/rank-utils'
 import { RankLevelFields } from '@/components/ranking/RankLevelFields'
 import { RankBadge } from '@/components/ranking/RankBadge'
 
@@ -49,6 +61,7 @@ function RankSystemDialog({
   existingIds,
   onSave,
   storagePath,
+  holderTeamIds,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -58,11 +71,16 @@ function RankSystemDialog({
   /** Where uploaded badge artwork goes — see the Storage rule for
    *  `organizations/{orgId}/ranking`. */
   storagePath: string
+  /** The member studios whose contacts a removed level would orphan; `null`
+   *  when that list is not known, which is not the same as none. */
+  holderTeamIds: string[] | null
 }) {
   const t = useTranslations('OrgRanking')
   const [form, setForm] = useState<RankSystemFormState>(initial ?? emptyForm())
   const [saving, setSaving] = useState(false)
   const [idError, setIdError] = useState('')
+  const [pendingRemove, setPendingRemove] = useState<number | null>(null)
+  const levelHolders = useRankHolderCount()
   const isEdit = !!initial
 
   const setField = <K extends keyof RankSystemFormState>(k: K, v: RankSystemFormState[K]) =>
@@ -101,6 +119,28 @@ function RankSystemDialog({
 
   const removeLevel = (i: number) =>
     setForm((prev) => ({ ...prev, levels: prev.levels.filter((_, j) => j !== i) }))
+
+  // Removing a level is destructive to CONTACTS, not just to this form: every
+  // `Contact.ranks[systemId]` sitting on that value is orphaned and thereafter
+  // renders as the nearest level below it (see `getPrimaryRank`). So ask — but
+  // only where somebody can actually be holding it.
+  const requestRemoveLevel = (i: number) => {
+    const value = form.levels[i]?.value
+    const wasSaved = isEdit && initial?.levels.some((l) => l.value === value)
+    // A level added in this dialog has never been written, so no contact can
+    // hold it. Confirming that would be pure noise plus a wasted round trip.
+    if (value === undefined || !wasSaved) {
+      removeLevel(i)
+      return
+    }
+    setPendingRemove(i)
+    levelHolders.start(holderTeamIds, form.id, [value])
+  }
+
+  const closeRemoveConfirm = () => {
+    setPendingRemove(null)
+    levelHolders.reset()
+  }
 
   function generateId(name: string) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
@@ -175,7 +215,7 @@ function RankSystemDialog({
                 storagePath={storagePath}
                 canRemove={form.levels.length > 1}
                 onChange={(field, value) => setLevel(i, field, value)}
-                onRemove={() => removeLevel(i)}
+                onRemove={() => requestRemoveLevel(i)}
               />
             ))}
           </div>
@@ -187,6 +227,38 @@ function RankSystemDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        {/* Rendered inside the popup so base-ui treats it as a nested dialog,
+            and outside the <form> so its buttons are never a stray submit. */}
+        <AlertDialog open={pendingRemove !== null} onOpenChange={(v) => { if (!v) closeRemoveConfirm() }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('removeLevelTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {levelHolders.count === undefined
+                  ? t('holdersChecking')
+                  : levelHolders.count === null
+                    ? t('holdersUnknown')
+                    : levelHolders.count === 0
+                      ? t('holdersNoneLevel')
+                      : `${t('holdersLevelCount', { count: levelHolders.count })} ${t('holdersLevelWarning')}`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  if (pendingRemove !== null) removeLevel(pendingRemove)
+                  closeRemoveConfirm()
+                }}
+              >
+                {t('removeLevelConfirm')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )
@@ -205,8 +277,35 @@ export default function OrgRankingPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const systemHolders = useRankHolderCount()
 
   const systems: RankingSystem[] = org?.ranking_systems ?? []
+
+  // The contacts an org-level ranking edit touches belong to the member
+  // studios, never to the organisation itself, so the scope of "who is
+  // affected" is this list. `null` — still loading, or the read failed — is
+  // reported as "we do not know", not as an empty organisation.
+  const {
+    data: memberTeamIds,
+    isPending: teamsPending,
+    isError: teamsError,
+  } = useQuery<string[]>({
+    queryKey: ['org-team-ids', orgId],
+    enabled: !!orgId && isAdmin,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_TEAMS_SUBCOLLECTION),
+          // Active only: an invited studio has not linked its contacts to this
+          // organisation's systems yet, so counting it would inflate the answer.
+          where('status', '==', 'active'),
+        ),
+      )
+      return snap.docs.map((d) => (d.data() as OrgTeam).teamId).filter(Boolean)
+    },
+  })
+  const holderTeamIds: string[] | null =
+    !isAdmin || teamsError || teamsPending ? null : (memberTeamIds ?? null)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -240,7 +339,20 @@ export default function OrgRankingPage() {
 
   async function handleDelete(id: string) {
     await saveToFirestore(systems.filter((s) => s.id !== id))
+    closeDelete()
+  }
+
+  const openDelete = (s: RankingSystem) => {
+    setDeleting(s.id)
+    // Counted per level and summed. Firestore cannot ask "does this field
+    // exist", so a contact orphaned at a value this system no longer carries is
+    // outside the count — which is why the copy says "holding one of its
+    // levels" rather than "in this system".
+    systemHolders.start(holderTeamIds, s.id, s.levels.map((l) => l.value))
+  }
+  const closeDelete = () => {
     setDeleting(null)
+    systemHolders.reset()
   }
 
   const openAdd = () => { setEditing(null); setDialogOpen(true) }
@@ -306,7 +418,7 @@ export default function OrgRankingPage() {
                     <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-muted">
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
-                    <button onClick={() => setDeleting(s.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive">
+                    <button onClick={() => openDelete(s)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </>
@@ -335,16 +447,26 @@ export default function OrgRankingPage() {
         existingIds={systems.filter((s) => !editing || s.id !== editing.id).map((s) => s.id)}
         onSave={handleSave}
         storagePath={`organizations/${orgId}/ranking`}
+        holderTeamIds={holderTeamIds}
       />
 
-      <Dialog open={!!deleting} onOpenChange={() => setDeleting(null)}>
+      <Dialog open={!!deleting} onOpenChange={(v) => { if (!v) closeDelete() }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{t('deleteDialogTitle')}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-1">
             {t('deleteDialogBody')}
           </p>
+          <p className="text-sm text-muted-foreground py-1">
+            {systemHolders.count === undefined
+              ? t('holdersChecking')
+              : systemHolders.count === null
+                ? t('holdersUnknown')
+                : systemHolders.count === 0
+                  ? t('holdersNoneSystem')
+                  : `${t('holdersSystemCount', { count: systemHolders.count })} ${t('holdersSystemWarning')}`}
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>{t('cancel')}</Button>
+            <Button variant="outline" onClick={closeDelete}>{t('cancel')}</Button>
             <Button variant="destructive" disabled={saving} onClick={() => deleting && handleDelete(deleting)}>
               {t('delete')}
             </Button>

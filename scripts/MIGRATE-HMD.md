@@ -95,7 +95,7 @@ pnpm migrate:hmd \
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
 
-Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `referrals` · `team-subcollections` · `places` · `verify`
+Pass names: `setup` · `auth-users` · `users` · `teams` · `activities` · `session-series` · `contacts` · `sessions` · `events` · `exam-checkins` · `event-categories` · `referrals` · `team-subcollections` · `places` · `verify`
 
 **Run a single pass** (e.g. after a failure mid-way):
 
@@ -135,6 +135,8 @@ Checks doc counts (source vs target) for all top-level collections, plus spot-ch
 | `sessions` + participants/bookings | Copied + activity name/type enriched |
 | `events` + invitations/attendees | Copied as `scope='org', orgId='hmd', teamId=null` |
 | Global `checkins` (event check-ins) | Migrated from the top-level `checkins` collection where `event.id == eventId`; doc IDs preserved; `completed_checkins_count` set on each event doc |
+| Exam check-in results (`exam-checkins`) | hmd-lineup kept the result at the TOP LEVEL (`exams.hmd_rank` / `kd_rank`, `is_graded`); Linyup reads `checkin_data.disciplines: { [systemId]: level }`. Remapped in place, `is_completed` recomputed. **Nothing is deleted** — the legacy payload is copied to `checkin_data.legacy` and also left where it was, because `is_graded` records that the award was already applied and is what stops a later rank backfill promoting somebody twice |
+| Fighting-cup categories (`event-categories`) | hmd-lineup kept categories in a **global** `categories` collection; Linyup keeps them per-event. Only the ids a migrated check-in actually references are copied to `events/{eventId}/categories/{categoryId}`, doc id preserved so the existing arrays resolve |
 | `referrals` | Copied as-is |
 | Team subcollections | Copied from source (several with a field-rename/flatten transform — see "Team subcollections pass-through" below); **canonical subscription types are seeded** (see below); `public_profile` is deliberately **not** copied — it's fully derived, see that section |
 | `coach_availability` / `coach_slots` | **Skipped** — appointments were preview-only; configure fresh |

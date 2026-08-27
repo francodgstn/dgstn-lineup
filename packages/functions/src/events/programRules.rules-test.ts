@@ -238,6 +238,52 @@ describe('firestore.rules — event program items', function () {
       await assertFails(getDoc(doc(db, 'events', EVENT_ORG, 'categories', 'c1')))
       await assertFails(getDoc(doc(db, 'events', EVENT_ORG, 'attendees', 'a1')))
     })
+
+    // A MEMBER STUDIO, not an org admin. The parent event's read rule has always
+    // admitted `currentTeamInOrg`, but its subcollections did not — so a studio
+    // could open a federation cup and read neither its divisions nor its RSVPs.
+    // The failure was silent in both places: the check-in screen said "no
+    // categories configured" and the roster said "nobody responded", which is a
+    // permission denial dressed as an empty result. This matters most for HMD,
+    // where EVERY migrated event is org-scoped.
+    it('a member studio can READ an org event categories and roster', async () => {
+      const db = asManagerA()
+      await assertSucceeds(getDoc(doc(db, 'events', EVENT_ORG, 'categories', 'c1')))
+      await assertSucceeds(getDoc(doc(db, 'events', EVENT_ORG, 'attendees', 'a1')))
+    })
+
+    it('…but a member studio still cannot AUTHOR the divisions', async () => {
+      // Read parity, not write parity: whoever runs the event owns its divisions.
+      await assertFails(
+        updateDoc(doc(asManagerA(), 'events', EVENT_ORG, 'categories', 'c1'), { name: 'Mine' }),
+      )
+    })
+  })
+
+  // The organisation ROOT document carries `ranking_systems`, `affiliation_term`
+  // and `lock_affiliation` — settings a member studio's own screens must read to
+  // render a belt or name the affiliation. Every org SUBcollection already
+  // admits `currentTeamInOrg`; the root did not, so those reads were denied and
+  // an org-managed studio resolved to NO ranking systems at all.
+  describe('the organisation root document', () => {
+    const orgRef = (db: ReturnType<typeof asManagerA>) => doc(db, 'organizations', ORG)
+
+    it('a member studio can read the org settings its own screens depend on', async () => {
+      await assertSucceeds(getDoc(orgRef(asManagerA())))
+    })
+
+    it('an org admin can still read it', async () => {
+      await assertSucceeds(getDoc(orgRef(asOrgAdmin())))
+    })
+
+    it('a studio outside the org cannot', async () => {
+      await assertFails(getDoc(orgRef(asManagerB())))
+    })
+
+    it('a member studio cannot WRITE it — the org owns its own settings', async () => {
+      await assertFails(updateDoc(orgRef(asManagerA()), { name: 'Hijacked' }))
+      await assertFails(updateDoc(orgRef(asManagerA()), { plan_status: 'active' }))
+    })
   })
 
   describe('program templates', () => {
