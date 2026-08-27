@@ -90,7 +90,6 @@ import {
   ALERT_PRESETS_SUBCOLLECTION,
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
-  CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION,
   contactDeletionState,
 } from '@linyup/shared'
 import type {
@@ -175,6 +174,7 @@ import {
   RefreshCw,
   Ticket,
   FileSignature,
+  CheckSquare,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -192,11 +192,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
-  Legend,
 } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab, useContactNotesCount, useContactNotes, noteColorClasses, type ContactNote } from './NotesTab'
@@ -671,61 +666,6 @@ function useContactWeeklyReports(contactId: string, weeks = 16) {
   })
 }
 
-// ─── performance check-ins ───────────────────────────────────────────────────
-
-interface PerformanceCheckin {
-  id: string
-  scores: Record<string, number>
-  notes?: string
-  context?: string
-  filled_by?: 'coach' | 'student'
-  taken_at?: { toDate(): Date } | null
-  profile_key?: string
-}
-
-const DEFAULT_PERFORMANCE_INDICATORS = [
-  { key: 'consistency' },
-  { key: 'effort' },
-  { key: 'focus' },
-  { key: 'recharge' },
-  { key: 'sense_of_progress' },
-]
-
-function detectPerformanceProfile(scores: Record<string, number>) {
-  const C = scores['consistency'] ?? 3
-  const E = scores['effort'] ?? 3
-  const F = scores['focus'] ?? 3
-  const R = scores['recharge'] ?? 3
-  const P = scores['sense_of_progress'] ?? 3
-  const axes = { consistency: C, effort: E, focus: F, recharge: R, sense_of_progress: P }
-  const sorted = Object.entries(axes).sort(([, a], [, b]) => a - b)
-  let profile_key: string
-  if (C >= 3.5 && E <= 2.5 && F <= 2.5 && P <= 2.5) profile_key = 'burnout_risk'
-  else if (E >= 4 && R <= 2) profile_key = 'overreaching'
-  else if (C >= 3.5 && E >= 3.5 && P <= 2) profile_key = 'stuck'
-  else if (C >= 3.5 && E >= 3.5 && F <= 2.5) profile_key = 'coasting'
-  else if (C <= 2.5 && (E + F + P) / 3 >= 3) profile_key = 'inconsistent'
-  else if (C >= 3.5 && E >= 3.5 && F >= 3.5 && R >= 3.5 && P >= 3.5) profile_key = 'balanced'
-  else profile_key = 'default'
-  return { profile_key, primary_lever: sorted[0][0], anchor: sorted[sorted.length - 1][0] }
-}
-
-function useContactPerformanceCheckins(contactId: string) {
-  return useQuery<PerformanceCheckin[]>({
-    queryKey: ['contact-performance-checkins', contactId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION),
-          orderBy('taken_at', 'desc'),
-          limit(20)
-        )
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as PerformanceCheckin)
-    },
-  })
-}
-
 /**
  * TWO shapes exist in `contact_alerts`, and this page only ever understood one.
  *
@@ -933,143 +873,11 @@ function LineXTick({ x, y, payload }: { x?: number; y?: number; payload?: { valu
   )
 }
 
-function RadarAngleTick({
-  x,
-  y,
-  cx,
-  cy,
-  payload,
-}: {
-  x?: number
-  y?: number
-  cx?: number
-  cy?: number
-  payload?: { value: string }
-}) {
-  if (!payload?.value) return null
-  const textAnchor =
-    (x ?? 0) > (cx ?? 0) + 4 ? 'start' : (x ?? 0) < (cx ?? 0) - 4 ? 'end' : 'middle'
-  return (
-    <text
-      fill="currentColor"
-      x={x}
-      y={y}
-      textAnchor={textAnchor}
-      dy={4}
-      style={{ fontSize: 9, color: 'hsl(var(--muted-foreground))', fontFamily: 'inherit' }}
-    >
-      {payload.value}
-    </text>
-  )
-}
-
-// ─── add check-in dialog ─────────────────────────────────────────────────────
-
-function AddCheckinDialog({
-  open,
-  onOpenChange,
-  contactId,
-  onSaved,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  contactId: string
-  onSaved: () => void
-}) {
-  const t = useTranslations('Contacts')
-  const tCommon = useTranslations('Common')
-  const [scores, setScores] = useState<Record<string, number>>({
-    consistency: 3,
-    effort: 3,
-    focus: 3,
-    recharge: 3,
-    sense_of_progress: 3,
-  })
-  const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      const profile = detectPerformanceProfile(scores)
-      await addDoc(
-        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION),
-        {
-          scores,
-          notes: notes.trim() || null,
-          filled_by: 'coach',
-          taken_at: serverTimestamp(),
-          ...profile,
-        }
-      )
-      onSaved()
-      onOpenChange(false)
-      setScores({ consistency: 3, effort: 3, focus: 3, recharge: 3, sense_of_progress: 3 })
-      setNotes('')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t('performanceCheckinTitle')}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          {DEFAULT_PERFORMANCE_INDICATORS.map((ind) => (
-            <div key={ind.key} className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">
-                  {t(`performanceIndicator_${ind.key}` as Parameters<typeof t>[0])}
-                </label>
-                <span className="text-sm font-bold tabular-nums">{scores[ind.key] ?? 3}/5</span>
-              </div>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setScores((prev) => ({ ...prev, [ind.key]: v }))}
-                    className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-                      (scores[ind.key] ?? 3) === v
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <div className="space-y-1">
-            <label className="text-sm font-medium">{t('performanceCheckinNotes')}</label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-          </div>
-        </div>
-        <DialogFooter>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
-          >
-            {t('cancel')}
-          </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {saving ? tCommon('loading') : t('saveChanges')}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ─── stats tab (full-width attendance + performance) ─────────────────────────
+// ─── stats tab (attendance trend) ────────────────────────────────────────────
+// The performance profile radar used to live here too, gated on the same
+// `advanced_dashboard` feature — it moved to the Coaching tab (see
+// `PerformanceProfilePanel`), where it feeds directly into the goals below it
+// instead of sitting a tab away from them.
 
 function isoWeekLabel(isoWeek: string) {
   const [year, week] = isoWeek.split('-W').map(Number)
@@ -1089,43 +897,19 @@ const TREND_PERIODS = [
 ] as const
 type TrendPeriodKey = (typeof TREND_PERIODS)[number]['key']
 
-function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
+function StatsTab({ contact }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
-  const [addCheckinOpen, setAddCheckinOpen] = useState(false)
   const [period, setPeriod] = useState<TrendPeriodKey>('12w')
   const selectedPeriod = TREND_PERIODS.find((p) => p.key === period)!
   const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(
     contact.id,
     selectedPeriod.weeks
   )
-  const { data: checkins = [], isLoading: checkinsLoading } = useContactPerformanceCheckins(contact.id)
-  const { hasFeature } = usePlan()
-  const { openUpgradeModal } = useUpgradeModal()
-  const qc = useQueryClient()
 
   const chartData = weeklyReports.map((r) => ({
     label: isoWeekLabel(r.iso_week),
     sessions: r.sessions_count,
   }))
-
-  const latestCoach = checkins.find((c) => c.filled_by === 'coach') ?? null
-  const latestStudent = checkins.find((c) => c.filled_by === 'student') ?? null
-  const hasBoth = !!latestCoach && !!latestStudent
-
-  const radarData = DEFAULT_PERFORMANCE_INDICATORS.map((ind) =>
-    hasBoth
-      ? {
-          subject: t(`performanceIndicator_${ind.key}` as Parameters<typeof t>[0]),
-          coach: latestCoach?.scores?.[ind.key] ?? 0,
-          student: latestStudent?.scores?.[ind.key] ?? 0,
-        }
-      : {
-          subject: t(`performanceIndicator_${ind.key}` as Parameters<typeof t>[0]),
-          value: (latestCoach || latestStudent)?.scores?.[ind.key] ?? 0,
-        }
-  )
-
-  const performanceUnlocked = hasFeature('advanced_dashboard')
 
   // Tooltip style — inline style prop resolves CSS vars; SVG attrs do not
   const tooltipStyle = {
@@ -1139,170 +923,66 @@ function StatsTab({ contact, teamId }: { contact: Contact; teamId: string | null
 
   return (
     <div className="pb-16 space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ── Attendance trend ── */}
-        <div className="rounded-xl border bg-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('statsPanelAttendance')}
-            </p>
-            {/* Period selector */}
-            <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5">
-              {TREND_PERIODS.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => setPeriod(p.key)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
-                    period === p.key
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+      {/* ── Attendance trend ── */}
+      <div className="rounded-xl border bg-card p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('statsPanelAttendance')}
+          </p>
+          {/* Period selector */}
+          <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5">
+            {TREND_PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setPeriod(p.key)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+                  period === p.key
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
-
-          {reportsLoading ? (
-            <div className="h-[200px] rounded-lg bg-muted animate-pulse" />
-          ) : chartData.length === 0 ? (
-            <div className="h-[120px] flex items-center justify-center rounded-lg border border-dashed">
-              <p className="text-sm text-muted-foreground">{t('noActivity')}</p>
-            </div>
-          ) : (
-            <div className="h-[200px]">
-              <ResponsiveContainer width="99%" height="100%">
-                <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                  <XAxis
-                    dataKey="label"
-                    tick={<LineXTick />}
-                    tickLine={false}
-                    axisLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    formatter={(v) => [v, t('statTotalSessions')]}
-                    labelStyle={{ display: 'none' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="sessions"
-                    stroke="#6366f1"
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#6366f1' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
         </div>
 
-        {/* ── Performance profile ── */}
-        <div className="rounded-xl border bg-card p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('statsPanelPerformance')}
-            </p>
-            {performanceUnlocked && checkins.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setAddCheckinOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {t('addPerformanceCheckin')}
-              </button>
-            )}
+        {reportsLoading ? (
+          <div className="h-[200px] rounded-lg bg-muted animate-pulse" />
+        ) : chartData.length === 0 ? (
+          <div className="h-[120px] flex items-center justify-center rounded-lg border border-dashed">
+            <p className="text-sm text-muted-foreground">{t('noActivity')}</p>
           </div>
-
-          {!performanceUnlocked ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                <Lock className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{t('performanceProfileLockedTitle')}</p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-                  {t('performanceProfileLockedDesc')}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => openUpgradeModal({ feature: 'advanced_dashboard' })}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-              >
-                {t('upgradeToStudio')}
-              </button>
-            </div>
-          ) : checkinsLoading ? (
-            <div className="h-[260px] rounded-lg bg-muted animate-pulse" />
-          ) : checkins.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-center rounded-lg border border-dashed">
-              <p className="text-sm text-muted-foreground max-w-xs">{t('noPerformanceCheckins')}</p>
-              <button
-                type="button"
-                onClick={() => setAddCheckinOpen(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                {t('addPerformanceCheckin')}
-              </button>
-            </div>
-          ) : (
-            <div className="h-[260px]">
-              <ResponsiveContainer width="99%" height="100%">
-                <RadarChart data={radarData} margin={{ top: 16, right: 36, left: 36, bottom: 16 }}>
-                  {/* stroke as rgba so it works on both themes without CSS vars in SVG attr */}
-                  <PolarGrid stroke="rgba(128,128,128,0.25)" />
-                  <PolarAngleAxis dataKey="subject" tick={<RadarAngleTick />} />
-                  {hasBoth ? (
-                    <>
-                      <Radar
-                        name="Coach"
-                        dataKey="coach"
-                        stroke="#6366f1"
-                        fill="#6366f1"
-                        fillOpacity={0.35}
-                      />
-                      <Radar
-                        name="Student"
-                        dataKey="student"
-                        stroke="#22c55e"
-                        fill="#22c55e"
-                        fillOpacity={0.25}
-                      />
-                      <Legend
-                        iconSize={10}
-                        wrapperStyle={{
-                          fontSize: 11,
-                          paddingTop: 8,
-                          color: 'hsl(var(--foreground))',
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
-                  )}
-                  <Tooltip contentStyle={tooltipStyle} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="h-[200px]">
+            <ResponsiveContainer width="99%" height="100%">
+              <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <XAxis
+                  dataKey="label"
+                  tick={<LineXTick />}
+                  tickLine={false}
+                  axisLine={false}
+                  interval="preserveStartEnd"
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(v) => [v, t('statTotalSessions')]}
+                  labelStyle={{ display: 'none' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="sessions"
+                  stroke="#6366f1"
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#6366f1' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
-
-      <AddCheckinDialog
-        open={addCheckinOpen}
-        onOpenChange={setAddCheckinOpen}
-        contactId={contact.id}
-        onSaved={() =>
-          qc.invalidateQueries({ queryKey: ['contact-performance-checkins', contact.id] })
-        }
-      />
     </div>
   )
 }
@@ -3396,6 +3076,12 @@ const EVENT_META: Record<ActivityEventType, EventMeta> = {
   contact_anonymized: { Icon: Trash2, bg: 'bg-muted', fg: 'text-muted-foreground' },
   waiver_accepted: { Icon: ShieldCheck, bg: 'bg-emerald-500/10', fg: 'text-emerald-600' },
   waiver_revoked: { Icon: ShieldOff, bg: 'bg-red-500/10', fg: 'text-red-600' },
+  // Coaching — see the ActivityEventType header for why goals/check-ins share
+  // this feed with bookings and signatures.
+  goal_achieved: { Icon: Flag, bg: 'bg-green-500/10', fg: 'text-green-600' },
+  goal_abandoned: { Icon: Flag, bg: 'bg-muted', fg: 'text-muted-foreground' },
+  goal_step_completed: { Icon: CheckSquare, bg: 'bg-violet-500/10', fg: 'text-violet-600' },
+  performance_checkin: { Icon: BarChart2, bg: 'bg-indigo-500/10', fg: 'text-indigo-600' },
 }
 
 function formatActivityTimestamp(ts: { toDate(): Date } | null | undefined): string {
@@ -5564,7 +5250,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               />
             )}
             {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} team={team} />}
             {tab === 'gamification' && <GamificationTab contact={contact} teamId={currentTeamId} />}
           </div>
 

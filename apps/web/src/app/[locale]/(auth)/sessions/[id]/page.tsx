@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  increment, serverTimestamp, deleteField, writeBatch,
+  increment, serverTimestamp, deleteField, writeBatch, addDoc,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -23,6 +23,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { SearchInput, useListKeyboardNav } from '@/components/ui/search-input'
 import { cn } from '@/lib/utils'
@@ -31,7 +39,7 @@ import { Link, useRouter as useI18nRouter } from '@/i18n/navigation'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Pencil, Copy, Trash2, UserPlus,
   MapPin, Clock, Users, QrCode, BookOpen, CheckCircle2, UserX,
-  Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send, Loader2,
+  Share2, X, Check, Ban, AlertTriangle, ListOrdered, Send, Loader2, Gauge,
 } from 'lucide-react'
 import {
   SESSIONS_COLLECTION, ACTIVITIES_COLLECTION, CONTACTS_COLLECTION,
@@ -39,8 +47,9 @@ import {
   activityRequiresSubscription, contactHoldsCoveringSubscription,
   bookingHoldsSeat, confirmClearedHoldFields, seatsFree,
   bookingContactId, buildParticipantDoc,
+  CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions,
 } from '@linyup/shared'
-import type { Session, Booking, Contact, Activity, WaitlistEntry } from '@linyup/shared'
+import type { Session, Booking, Contact, Activity, WaitlistEntry, PerformanceIndicator } from '@linyup/shared'
 import { WaiverChip, WaiverDoorCheckChip } from '@/components/WaiverChip'
 import { useWaiverPolicy, useWaiverRoster } from '@/hooks/useWaiverStates'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
@@ -271,9 +280,158 @@ function RosterName({
   const base = `block text-sm font-medium truncate ${className}`
   if (!contactId) return <p className={base}>{children}</p>
   return (
-    <Link href={`/contacts/${contactId}` as Route} className={`${base} hover:underline`}>
+    // Deep-links into Coaching, not the bare profile — the roster is the
+    // capture moment for a goal/step score, same reasoning as Payments'
+    // `?tab=payments` deep link from the payments table.
+    <Link href={`/contacts/${contactId}?tab=goals` as Route} className={`${base} hover:underline`}>
       {children}
     </Link>
+  )
+}
+
+// ─── quick-log sheet ────────────────────────────────────────────────────────
+// The capture moment: right after class, a coach can log a dimension score for
+// someone on the roster without first creating a goal through the full
+// title/description/categories/date dialog (Contacts → Coaching). Reuses the
+// Notes-sheet pattern from `contacts/[id]/page.tsx` — a header-triggered
+// right-side sheet, the house pattern for "quick capture, always one click
+// away" — and, like every other rating widget in this coaching lane, starts
+// fully unset so a stray tap on Save can't write a dated score nobody chose.
+//
+// It still creates a real Goal (auto-titled from the dimension) plus one
+// evaluation — there is no "just a number" primitive in the coaching model,
+// only goals and their evaluations — but the coach never sees the four-field
+// form to get there.
+function QuickLogSheet({
+  open,
+  onOpenChange,
+  contactId,
+  contactName,
+  dimensions,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contactId: string
+  contactName: string
+  dimensions: PerformanceIndicator[]
+  onSaved: () => void
+}) {
+  const t = useTranslations('SessionDetail')
+  const tCommon = useTranslations('Common')
+  const [dimensionKey, setDimensionKey] = useState<string | null>(null)
+  const [score, setScore] = useState<number | null>(null)
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const reset = () => {
+    setDimensionKey(null)
+    setScore(null)
+    setNotes('')
+  }
+
+  const save = async () => {
+    if (!dimensionKey || score == null) return
+    setSaving(true)
+    try {
+      const dim = dimensions.find((d) => d.key === dimensionKey)
+      const goalRef = await addDoc(
+        collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION),
+        {
+          type: 'goal',
+          title: dim?.label ?? dimensionKey,
+          description: null,
+          status: 'in_progress',
+          categories: [dimensionKey],
+          parent_goal_id: null,
+          created_by: 'coach',
+          created_at: serverTimestamp(),
+          target_date: null,
+        },
+      )
+      await addDoc(collection(goalRef, 'evaluations'), {
+        evaluated_at: serverTimestamp(),
+        evaluated_by: 'coach',
+        score,
+        notes: notes.trim() || null,
+        status_after: 'in_progress',
+      })
+      onSaved()
+      onOpenChange(false)
+      reset()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o)
+        if (!o) reset()
+      }}
+    >
+      <SheetContent side="right" className="sm:max-w-md!">
+        <SheetHeader>
+          <SheetTitle>{t('quickLogTitle')}</SheetTitle>
+          <SheetDescription>{t('quickLogDesc', { name: contactName })}</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t('quickLogDimension')}</label>
+            <div className="flex flex-wrap gap-1.5">
+              {dimensions.map((d) => (
+                <button
+                  key={d.key}
+                  type="button"
+                  onClick={() => setDimensionKey(d.key)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    dimensionKey === d.key
+                      ? 'bg-primary text-primary-foreground border-transparent'
+                      : 'border-border text-muted-foreground hover:border-foreground'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t('quickLogScore')}</label>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setScore(v)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                    score === v
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            {score == null && <p className="text-xs text-muted-foreground">{t('quickLogScoreHint')}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t('quickLogNotes')}</label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-4 pb-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            {tCommon('cancel')}
+          </Button>
+          <Button onClick={save} disabled={saving || !dimensionKey || score == null}>
+            {saving ? tCommon('loading') : tCommon('save')}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -782,6 +940,11 @@ export default function SessionDetailPage() {
   const [waitlistBusy, setWaitlistBusy] = useState<string | null>(null)
   const [waitlistRemoving, setWaitlistRemoving] = useState<WaitlistEntry | null>(null)
   const [waitlistError, setWaitlistError] = useState<string | null>(null)
+  // The quick-log sheet target — see QuickLogSheet above.
+  const [quickLogTarget, setQuickLogTarget] = useState<{ contactId: string; name: string } | null>(null)
+  const coachingDimensions = resolveCoachingDimensions(
+    team as { performance_indicators?: PerformanceIndicator[] | null } | null,
+  )
 
   // Share the public booking link for THIS session. Native share sheet where the
   // platform has one (a coach on a phone sends it straight into WhatsApp), else
@@ -1821,6 +1984,19 @@ export default function SessionDetailPage() {
                 this reads the signer row. */}
             <WaiverChip state={waiverStateOf(p.contact)} />
             <WaiverDoorCheckChip check={waiverCheckOf(p.contact)} />
+            {/* The capture moment — log a coaching score right after class,
+                without first creating a goal through the full form. Needs a
+                real contact (a kiosk/QR check-in with no linked contact has
+                nowhere to attach a goal). */}
+            {p.contact && (
+              <button
+                onClick={() => setQuickLogTarget({ contactId: p.contact!, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })}
+                className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors"
+                title={t('quickLogButtonTitle')}
+              >
+                <Gauge className="h-4 w-4" />
+              </button>
+            )}
             {/* THE WAY OUT OF 'confirmed'. Without it, a person recorded as
                 present could only be un-recorded by deleting the row, which
                 left their booking confirmed and unreachable. */}
@@ -1836,6 +2012,17 @@ export default function SessionDetailPage() {
           )
         })}
       </div>
+
+      {quickLogTarget && (
+        <QuickLogSheet
+          open={!!quickLogTarget}
+          onOpenChange={(o) => { if (!o) setQuickLogTarget(null) }}
+          contactId={quickLogTarget.contactId}
+          contactName={quickLogTarget.name}
+          dimensions={coachingDimensions}
+          onSaved={() => qc.invalidateQueries({ queryKey: ['contact-goals', quickLogTarget.contactId] })}
+        />
+      )}
 
       {/* Mobile FAB — add participant */}
       <FloatingSlot lane="page-primary" className="sm:hidden">

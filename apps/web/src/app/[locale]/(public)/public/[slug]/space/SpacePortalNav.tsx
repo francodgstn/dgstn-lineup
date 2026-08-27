@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { Home, CalendarClock, User, Receipt } from 'lucide-react'
+import { Home, CalendarClock, Target, User, Receipt } from 'lucide-react'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpacePayments } from './useSpacePayments'
@@ -47,6 +47,9 @@ export default function SpacePortalNav() {
   const items = [
     { href: base, label: t('navHome'), icon: Home, exact: true },
     { href: `${base}/bookings`, label: t('navBookings'), icon: CalendarClock },
+    // Base capability on every plan (`goals` is in PLAN_FEATURES for free
+    // through organization), same as Bookings/Account — no conditional gate.
+    { href: `${base}/coaching`, label: t('navCoaching'), icon: Target },
     ...(hasPayments ? [{ href: `${base}/payments`, label: t('navPayments'), icon: Receipt }] : []),
     { href: `${base}/account`, label: t('navAccount'), icon: User },
   ]
