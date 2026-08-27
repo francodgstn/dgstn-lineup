@@ -623,10 +623,11 @@ function UtilityFlyout({
 }: {
   onLinkClick?: () => void
   /**
-   * COLLAPSED ONLY. Expanded, the QR sits on the studio-name row above, because
-   * it encodes THAT studio's links — listing it here as well would put one
-   * control in two places on the same screen. Collapsed there is no studio row
-   * (no text at w-14), so the menu is where it lives.
+   * COLLAPSED ONLY. Expanded, the QR sits on the scope row above, because it
+   * encodes THAT studio's links — listing it here as well would put one control
+   * in two places on the same screen. Collapsed that row carries only the scope
+   * glyph (there is no room for text at w-14), so the menu is where the QR
+   * lives.
    */
   includeQr?: boolean
 }) {
@@ -2612,6 +2613,12 @@ function SidebarContent({
           profile, and an organisation has no equivalent document — a repointed
           QR would silently be the current studio's, which looks plausible and
           is wrong. */}
+      {/* GUARDED ON THE SCOPE, not on the team name as this row used to be. An
+          unguarded wrapper draws an empty bordered strip for as long as auth is
+          resolving — the row's rule is the only one between the logo and the
+          scroll area, so an empty one reads as a broken header rather than as
+          nothing. */}
+      {scope && (
       <div
         className={`mx-2 flex shrink-0 items-center gap-1 border-b py-1.5 ${
           collapsed ? 'flex-col' : ''
@@ -2625,11 +2632,12 @@ function SidebarContent({
             same thing, and leaving it at the foot split one subject across both
             ends of the pane. It still owns Alt+O and still renders nothing when
             there is nowhere to flip to. */}
-        {!collapsed && <ScopeFlip collapsed={false} />}
+        <ScopeFlip collapsed={collapsed} />
         {/* THE OCCASIONAL UTILITIES, beside the identity they belong to. Their
             destinations follow the scope — see UtilityFlyout. */}
         {!collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}
       </div>
+      )}
 
       {/* Search row. First of the two pinned rows; the head pair sits under it,
           and the scroll area starts below them both. Expanded, search has this

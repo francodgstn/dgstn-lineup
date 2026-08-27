@@ -36,10 +36,21 @@
  * because a team-scoped detail URL (`/contacts/{id}`) does not exist in the
  * studio being switched to.
  *
- * ── THIS IS NOT AN ORG HIERARCHY ────────────────────────────────────────────
- * A flat list of the studios this login is a member of. Organizations are a
- * separate concept with their own sidebar section (`OrgLinks`); nothing here
- * nests, groups or rolls up.
+ * ── IT LISTS ORGANISATIONS TOO NOW, AND STILL DOES NOT NEST ────────────────
+ * This used to say organisations were a separate concept with their own sidebar
+ * section (`OrgLinks`). That section was deleted when an organisation became a
+ * SCOPE rather than a row (docs/org-navigation.md), and its entries moved here —
+ * because "which place am I standing in" is one question and answering it in two
+ * controls is the ambiguity the scope model removes.
+ *
+ * They are still two FLAT groups. Nothing nests, groups or rolls up: an
+ * organisation is not a parent of the studios listed above it, it is a different
+ * place to stand.
+ *
+ * ── AND IT NO LONGER LIVES IN THE ACCOUNT MENU ─────────────────────────────
+ * It is the content of the scope switcher in the sidebar's header row
+ * (components/layout/ScopeSwitcher.tsx). The notes below about "the account
+ * menu" describe where it came from, not where it is.
  */
 
 import { useState } from 'react'
@@ -136,8 +147,23 @@ export function TeamSwitcher() {
   const { current: currentScope } = useScope()
   const [switchingTo, setSwitchingTo] = useState<string | null>(null)
 
+  /** Am I standing in this studio RIGHT NOW? Being the current team is not
+   *  enough — in org scope the current team is still set, but you are somewhere
+   *  else. Without this, the studio you belong to renders as ticked-and-inert
+   *  inside an organisation, so the switcher's most obvious way back to your own
+   *  studio does nothing at all. */
+  const standingIn = (teamId: string) =>
+    currentScope?.kind === 'team' && currentScope.id === teamId
+
   async function switchTo(teamId: string) {
-    if (!user || teamId === currentTeamId || switchingTo) return
+    if (!user || switchingTo) return
+    // Already the current team, but standing in an ORG: this is navigation, not
+    // a team switch. Nothing is cached against the wrong tenant, so none of the
+    // hard-reload reasoning below applies.
+    if (teamId === currentTeamId) {
+      if (!standingIn(teamId)) router.push('/dashboard' as Route)
+      return
+    }
     setSwitchingTo(teamId)
     try {
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { currentTeam: teamId })
@@ -186,7 +212,7 @@ export function TeamSwitcher() {
             {t('switchStudio')}
           </DropdownMenuLabel>
           {teams.map((team) => {
-            const isCurrent = team.id === currentTeamId
+            const isCurrent = standingIn(team.id)
             return (
               <DropdownMenuItem
                 key={team.id}

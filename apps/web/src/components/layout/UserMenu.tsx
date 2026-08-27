@@ -49,7 +49,7 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations('TopBar')
   const tNav = useTranslations('Nav')
   const tOnb = useTranslations('Onboarding')
-  const { user, team } = useAuth()
+  const { user } = useAuth()
   const { theme, setTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
@@ -97,9 +97,8 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           >
             <UserAvatar email={user?.email ?? null} />
             {!collapsed && (
-              // Email only: the studio name is in the sidebar header now, and
-              // repeating it here just made two lines say one thing. It stays in
-              // the dropdown below, which is the identity summary.
+              // Email only: the PLACE is named in the sidebar header, and
+              // repeating it here just made two lines say one thing.
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user?.email}</p>
               </div>
@@ -107,13 +106,13 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align={collapsed ? 'start' : 'end'} side="top" className="w-56">
             <DropdownMenuGroup>
+              {/* THE PERSON, NOT THE PLACE. This used to add the studio name
+                  under the email — which named the STUDIO even while you stood
+                  in an ORGANISATION, the same wrong-scope label the header row
+                  was rebuilt to remove. The place is said once, at the top of
+                  the sidebar, by the control that also changes it. */}
               <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium truncate">{user?.email}</span>
-                  {team?.name && (
-                    <span className="text-xs text-muted-foreground truncate">{team.name}</span>
-                  )}
-                </div>
+                <span className="truncate text-xs font-medium">{user?.email}</span>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

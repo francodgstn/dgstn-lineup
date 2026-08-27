@@ -40,16 +40,35 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useScope } from '@/contexts/ScopeContext'
-import { TeamSwitcher } from '@/components/layout/TeamSwitcher'
+import { TeamSwitcher, useMyTeams } from '@/components/layout/TeamSwitcher'
 
 export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations('TopBar')
-  const { current } = useScope()
+  const { current, available } = useScope()
+  // THIS MOVES THE STUDIOS QUERY FROM MENU-OPEN TO SIDEBAR-MOUNT, and that is a
+  // real trade rather than a free one. It was deliberately lazy before: a
+  // collection-group query plus a document read per studio, paid only by someone
+  // who actually opened the account menu.
+  //
+  // It is paid up front now because the control cannot be drawn correctly
+  // without the answer — whether there is anywhere to go decides whether this is
+  // a button or a label, and a chevron that opens nothing is worse than the
+  // query. `staleTime: 5 * 60_000` makes it roughly once a session rather than
+  // once a page, and the menu now opens already populated instead of spinning.
+  const { data: teams = [] } = useMyTeams()
 
   // GUARDED ON THE SCOPE, NOT ON THE TEAM NAME. The old row was hidden until
   // `team.name` loaded, so the one control that says where you are vanished for
   // exactly as long as that was uncertain. The kind word is always known.
   if (!current) return null
+
+  // MOST PEOPLE HAVE NOWHERE TO SWITCH TO, and for them this is a label rather
+  // than a control. TeamSwitcher's own rule was that "the account menu is
+  // unchanged for the overwhelming majority" — a chevron and a dropdown whose
+  // only row is "Create another studio" would break that promise for every
+  // single-studio login, which is nearly all of them. They get the identity,
+  // plainly, and reach studio creation where it already lives.
+  const canSwitch = teams.length > 1 || available.some((s) => s.kind === 'org')
 
   const isOrg = current.kind === 'org'
   const kindLabel = isOrg ? t('scopeOrganisation') : t('scopeStudio')
@@ -63,41 +82,57 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
     ? 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15'
     : 'border-transparent hover:bg-accent'
 
+  const identity = (
+    <>
+      <Icon
+        className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+      />
+      {!collapsed && (
+        <span className="flex min-w-0 flex-1 flex-col items-start">
+          {/* The eyebrow is what stops a different NAME in the same slot from
+              being the only signal — it says which KIND of place this is, in
+              words, above the name. */}
+          <span
+            className={`text-[9px] font-bold uppercase leading-tight tracking-[0.12em] ${
+              isOrg ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground/70'
+            }`}
+          >
+            {kindLabel}
+          </span>
+          <span className="w-full truncate text-xs font-semibold leading-tight">{name}</span>
+        </span>
+      )}
+    </>
+  )
+
+  const shape = `flex min-w-0 items-center rounded-lg border transition-colors ${accent} ${
+    collapsed ? 'h-8 w-8 justify-center' : 'w-full gap-2 px-2 py-1.5'
+  }`
+
+  if (!canSwitch) {
+    return (
+      <div
+        title={collapsed ? `${kindLabel} · ${name}` : undefined}
+        aria-label={`${kindLabel} · ${name}`}
+        className={shape}
+      >
+        {identity}
+      </div>
+    )
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         title={collapsed ? `${kindLabel} · ${name}` : undefined}
         aria-label={`${kindLabel} · ${name}`}
-        className={`flex min-w-0 items-center rounded-lg border transition-colors ${accent} ${
-          collapsed ? 'h-8 w-8 justify-center' : 'w-full gap-2 px-2 py-1.5'
-        }`}
+        className={shape}
       >
-        <Icon
-          className={`h-4 w-4 shrink-0 ${isOrg ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
-        />
-        {!collapsed && (
-          <>
-            <span className="flex min-w-0 flex-1 flex-col items-start">
-              {/* The eyebrow is what stops a different NAME in the same slot
-                  from being the only signal — it says which KIND of place this
-                  is, in words, above the name. */}
-              <span
-                className={`text-[9px] font-bold uppercase leading-tight tracking-[0.12em] ${
-                  isOrg ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground/70'
-                }`}
-              >
-                {kindLabel}
-              </span>
-              <span className="w-full truncate text-xs font-semibold leading-tight">{name}</span>
-            </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          </>
-        )}
+        {identity}
+        {!collapsed && <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
       </DropdownMenuTrigger>
       {/* `side="bottom"` because this sits at the TOP of the sidebar — the
-          account menu it came from opened upward from the foot. The studios
-          query inside only mounts when the menu opens, which is why the list
-          lives in the portalled content rather than in the trigger. */}
+          account menu it came from opened upward from the foot. */}
       <DropdownMenuContent align="start" side="bottom" className="w-60">
         <TeamSwitcher />
       </DropdownMenuContent>
