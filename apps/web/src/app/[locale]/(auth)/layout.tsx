@@ -2339,6 +2339,7 @@ function SidebarContent({
   // contexts/ScopeContext.tsx. Null means the current studio.
   const { current: scope } = useScope()
   const orgScopeId = scope?.kind === 'org' ? scope.id : null
+  const tTop = useTranslations('TopBar')
   const { isInstalled } = useInstalledPlugins()
   const { isAtLeast } = usePlan()
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
@@ -2701,6 +2702,20 @@ function SidebarContent({
           onScroll={(e) => setNavScrolled(e.currentTarget.scrollTop > 0)}
           className="h-full overflow-y-auto py-2 px-2"
         >
+        {/* THE SCOPE INDICATOR — the design's single biggest risk is somebody
+            not noticing which scope they are in, and the answer is not more
+            words. It is a different ACCENT and a persistent band, so the
+            difference is visible before anything is read. Only drawn in org
+            scope: the studio is the default place to stand, and a badge on the
+            common case is noise rather than information. */}
+        {orgScopeId && !collapsed && (
+          <div className="mb-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-amber-700 dark:text-amber-400">
+              {tTop('scopeOrganisation')}
+            </p>
+            <p className="truncate text-sm font-semibold">{scope?.name || ' '}</p>
+          </div>
+        )}
         {/* ORG SCOPE REPLACES THE STUDIO'S ROWS ENTIRELY — it does not sit
             beside them. That is the whole point of a scope: one Events, one
             Places, one Settings on screen at a time, so the word never needs a

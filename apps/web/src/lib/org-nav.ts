@@ -48,6 +48,15 @@ export interface OrgNavItem {
   /** Which rail group it belongs to. Absent for the four sidebar rows. */
   group?: OrgRailGroupKey
   /**
+   * The PAGE renders its own title, so the layout must not add a second one.
+   *
+   * Every org page used to be titled by the tab strip's header and almost none
+   * carried an `<h1>` of its own; deleting the strip would have left them
+   * untitled. The layout supplies the heading instead — except for the two that
+   * always had one, which say so here rather than being remembered.
+   */
+  ownsHeader?: boolean
+  /**
    * Rendered with the tenant's own word for it rather than the static label —
    * an organisation renames "Affiliations" (`Organization.affiliation_term`),
    * and the rail reads it off `useOrg`. The static key stays as the fallback
@@ -74,7 +83,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { id: 'org-teams', path: 'teams', labelKey: 'navStudios', icon: Building2 },
   { id: 'org-events', path: 'events', labelKey: 'tabEvents', icon: CalendarRange },
   { id: 'org-program-templates', path: 'program-templates', labelKey: 'tabProgramTemplates', icon: ListTodo },
-  { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe },
+  { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe, ownsHeader: true },
 ]
 
 /**
@@ -96,7 +105,7 @@ export const ORG_RAIL_ITEMS: (OrgNavItem & { group: OrgRailGroupKey })[] = [
     group: 'standards',
     dynamicLabel: 'affiliationTerm',
   },
-  { id: 'org-places', path: 'places', labelKey: 'tabPlaces', icon: MapPin, group: 'shared' },
+  { id: 'org-places', path: 'places', labelKey: 'tabPlaces', icon: MapPin, group: 'shared', ownsHeader: true },
   { id: 'org-members', path: 'members', labelKey: 'tabMembers', icon: Users, group: 'administration', adminOnly: true },
   { id: 'org-plugins', path: 'plugins', labelKey: 'tabPlugins', icon: Blocks, group: 'administration', adminOnly: true },
   { id: 'org-billing', path: 'billing', labelKey: 'tabBilling', icon: CreditCard, group: 'administration', adminOnly: true },
@@ -129,4 +138,15 @@ export function orgRailSegment(pathname: string): string | null {
   const segment = m?.[1]
   if (!segment) return null
   return ORG_RAIL_ITEMS.some((i) => i.path === segment) ? segment : null
+}
+
+/** The catalogue entry for a pathname, wherever it lives. */
+export function orgItemForPath(pathname: string): OrgNavItem | null {
+  const segment = pathname.match(/^\/org\/[^/]+\/([^/?#]+)/)?.[1]
+  if (!segment) return null
+  return (
+    ORG_NAV_ITEMS.find((i) => i.path === segment) ??
+    ORG_RAIL_ITEMS.find((i) => i.path === segment) ??
+    null
+  )
 }

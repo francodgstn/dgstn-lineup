@@ -22,9 +22,31 @@
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { usePathname } from '@/i18n/navigation'
-import { OrgProvider } from '@/contexts/OrgContext'
+import { OrgProvider, useOrg } from '@/contexts/OrgContext'
 import { OrgRail } from '@/components/org/OrgRail'
-import { orgRailSegment } from '@/lib/org-nav'
+import { orgItemForPath, orgRailSegment } from '@/lib/org-nav'
+
+/**
+ * The destination's own title.
+ *
+ * The deleted tab strip carried a header, and almost no org page has an `<h1>`
+ * of its own — so removing the strip without this would have left ten pages
+ * untitled. It names the DESTINATION, not the organisation: which org you are
+ * in is a property of the scope, said once and persistently by the sidebar's
+ * indicator, and repeating it on every page is the noise the scope model exists
+ * to remove.
+ */
+function OrgPageHeading({ pathname }: { pathname: string }) {
+  const t = useTranslations('Org')
+  const { affiliationTerm } = useOrg()
+  const item = orgItemForPath(pathname)
+  if (!item || item.ownsHeader) return null
+  const label =
+    item.dynamicLabel === 'affiliationTerm'
+      ? affiliationTerm
+      : t(item.labelKey as Parameters<typeof t>[0])
+  return <h1 className="mb-4 text-2xl font-semibold">{label}</h1>
+}
 
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
   const t = useTranslations('Org')
@@ -33,7 +55,14 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
 
   // A sidebar row renders full-width, exactly as a studio's own pages do. Only
   // the rail destinations get the master-detail shell.
-  if (!onRailRoute) return <>{children}</>
+  if (!onRailRoute) {
+    return (
+      <>
+        <OrgPageHeading pathname={pathname} />
+        {children}
+      </>
+    )
+  }
 
   return (
     <div className="md:flex md:gap-8">
@@ -55,7 +84,10 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        <OrgPageHeading pathname={pathname} />
+        {children}
+      </div>
     </div>
   )
 }
