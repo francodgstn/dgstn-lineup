@@ -71,7 +71,7 @@ import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { ORG_NAV_ITEMS, ORG_RAIL_ITEMS, orgHref } from '@/lib/org-nav'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
-import { ScopeFlip, ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
+import { ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
 import { ScopeSwitcher } from '@/components/layout/ScopeSwitcher'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { useArchivedContacts } from '@/hooks/useArchivedContacts'
@@ -2606,15 +2606,17 @@ function SidebarContent({
           icon rail said nothing at all about which scope you were in — a gap
           rather than a decision. The trigger has a w-8 form.
 
-          WHAT SHARES THE ROW IS DELIBERATELY SHORT: the flip, and the "⋯". The
-          QR moved into that menu (2026-08-27) — four controls on one row left
-          the identity 115px to live in, and the QR is the one nobody reaches
-          mid-task. The menu is exactly the mechanism this sidebar already uses
-          to hold occasional controls without spending permanent space on them.
+          THE ROW IS THE IDENTITY AND THE "⋯", AND NOTHING ELSE. It briefly
+          carried the QR and a quick-switch button as well; four controls left
+          the identity 115px to live in, and every one of them competed with the
+          thing this row exists to say. The QR moved into the menu, which is
+          where this sidebar already puts controls reached deliberately rather
+          than mid-task; the quick-switch button was removed outright (Franco,
+          2026-08-27) — the switcher one click away already reaches every scope.
 
-          The flip stays out of the menu because its entire value is being one
-          click; a flip you have to open something to reach is just the switcher
-          again. */}
+          Alt+O survives as a chord with no visible affordance, which is a real
+          discoverability cost until the planned shortcuts list advertises it.
+          Said out loud in ScopeFlip.tsx rather than left to be discovered. */}
       {/* GUARDED ON THE SCOPE, not on the team name as this row used to be. An
           unguarded wrapper draws an empty bordered strip for as long as auth is
           resolving — the row's rule is the only one between the logo and the
@@ -2627,13 +2629,6 @@ function SidebarContent({
         }`}
       >
         <ScopeSwitcher collapsed={collapsed} />
-        {/* THE FLIP MOVED UP WITH THE IDENTITY (2026-08-27). It answers a
-            different question from the switcher — "back to where I just was"
-            rather than "show me everywhere" — but it is a question about the
-            same thing, and leaving it at the foot split one subject across both
-            ends of the pane. It still owns Alt+O and still renders nothing when
-            there is nowhere to flip to. */}
-        <ScopeFlip />
         {/* THE OCCASIONAL UTILITIES, beside the identity they belong to. Their
             destinations follow the scope — see UtilityFlyout. */}
         {!collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}

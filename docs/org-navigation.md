@@ -154,11 +154,19 @@ is holding a modifier to rotate through a list. With three or more scopes the
 switcher menu is already the better tool, so this control always means "back to
 the previous one" and never "next in some order".
 
-**A button, not only a shortcut.** A bare chord is undiscoverable; the Ctrl+K
-note in `(auth)/layout.tsx` makes the same point about search losing
-discoverability behind an icon. The scope indicator carries a small toggle
-naming the *target* scope, so the affordance says what it will do before it does
-it, and names its shortcut in the tooltip.
+**~~A button, not only a shortcut.~~ REVERSED 2026-08-27.** The original
+argument stands on its own terms — a bare chord is undiscoverable, and the
+Ctrl+K note in `(auth)/layout.tsx` makes the same point about search losing
+discoverability behind an icon — but it lost to the row it had to live on. The
+scope identity is what that row exists to say, and a button naming the *other*
+scope competed with it for the same few pixels; the switcher, one click away,
+already reaches every scope including the previous one.
+
+So **Alt+O is a chord with no visible affordance**. That is a real cost, not a
+free simplification: until the planned shortcuts list advertises it, nobody will
+find it who was not told. Accepted knowingly (Franco), and stated in
+`ScopeFlip.tsx` so the next reader inherits the trade rather than the
+conclusion.
 
 **Write the chord as a Ctrl chord** (Franco, 2026-08-27). The design is
 Windows-first: the primary keyboards here are Swiss, German and French, and the
