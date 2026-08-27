@@ -2863,7 +2863,8 @@
     "railGroupAdministration": "Verwaltung",
     "railSearchPlaceholder": "Organisationseinstellungen durchsuchen",
     "railNoResults": "Keine Organisationseinstellungen entsprechen Ihrer Suche.",
-    "manageTitle": "Organisationseinstellungen"
+    "manageTitle": "Organisationseinstellungen",
+    "manageSubtitle": "Die Vorgaben dieser Organisation, was sie mit ihren Studios teilt, und ihre eigene Verwaltung."
   },
   "OrgTeams": {
     "title": "Teams",

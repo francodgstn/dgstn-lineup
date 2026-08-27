@@ -16,9 +16,10 @@
  * 2026-08-24.
  *
  * ── IT HIDES ITSELF, BUT ONLY WHEN IT KNOWS ────────────────────────────────
- * The studio LIST renders only for someone who is in more than one, so the
- * account menu is unchanged for the overwhelming majority. "Create another
- * studio" is always there, because it is the only way anyone gets to two.
+ * The studio LIST renders for someone who is in more than one — OR for anyone
+ * standing in an ORGANISATION, where even a single studio is a place to go
+ * rather than the place you already are. "Create another studio" is always
+ * there, because it is the only way anyone gets to two.
  *
  * A FAILED READ IS NOT THAT SILENCE. An empty list and an errored query both
  * leave nothing to render, and they mean opposite things: the first is "you are
@@ -206,7 +207,15 @@ export function TeamSwitcher() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
       )}
-      {!isError && teams.length > 1 && (
+      {/* HIDE-WHEN-THERE-IS-ONE WAS A RULE ABOUT STUDIO SCOPE, and it broke the
+          moment this list started serving organisations too.
+          "You are in one studio, so there is nothing to switch to" is true only
+          while you are STANDING in it. From an organisation your single studio
+          is somewhere you need to GO — and it was hidden, so the switcher
+          offered the org you were already in and no way back (Franco,
+          2026-08-27). Listed whenever there is more than one, OR whenever you
+          are not currently in one. */}
+      {!isError && (teams.length > 1 || currentScope?.kind === 'org') && (
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
             {t('switchStudio')}

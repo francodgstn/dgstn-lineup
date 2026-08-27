@@ -2863,7 +2863,8 @@
     "railGroupAdministration": "Administration",
     "railSearchPlaceholder": "Search organisation settings",
     "railNoResults": "No organisation settings match your search.",
-    "manageTitle": "Organisation settings"
+    "manageTitle": "Organisation settings",
+    "manageSubtitle": "The standards this organisation sets, what it shares with its studios, and its own administration."
   },
   "OrgTeams": {
     "title": "Teams",

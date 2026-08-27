@@ -21,10 +21,12 @@
 
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { usePathname } from '@/i18n/navigation'
+import { Link, usePathname } from '@/i18n/navigation'
 import { OrgProvider, useOrg } from '@/contexts/OrgContext'
 import { OrgRail } from '@/components/org/OrgRail'
-import { orgItemForPath, orgRailSegment } from '@/lib/org-nav'
+import { ChevronLeft } from 'lucide-react'
+import type { Route } from 'next'
+import { ORG_MANAGE_PATH, isOrgManageRoot, orgHref, orgItemForPath, orgRailSegment } from '@/lib/org-nav'
 
 /**
  * The destination's own title.
@@ -64,27 +66,33 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
     )
   }
 
+  // `/manage` is the rail's own index, exactly as `/settings` is the studio's:
+  // on a phone the rail IS that page and the detail is hidden; on a section the
+  // detail is the page and the rail is hidden. Desktop always shows both.
+  //
+  // This replaced a mobile DISCLOSURE that existed only because the org had no
+  // index route to be the index of. It does now, so the org rail behaves like
+  // the studio one instead of like a special case.
+  const isRailRoot = isOrgManageRoot(pathname)
+
   return (
     <div className="md:flex md:gap-8">
-      {/* MOBILE: the rail is a DISCLOSURE above the detail, not a separate index
-          page. The studio rail can be an index because /settings is a real route
-          that lists it; the organisation has no equivalent — /org/{id} redirects
-          straight to the studios list — and inventing one would put a second
-          "organisation home" in the reader's head for a scope that already has
-          one. Closed by default so the detail is still the page you landed on. */}
-      <aside className="md:w-60 md:shrink-0">
-        <details className="mb-4 rounded-lg border p-3 md:hidden">
-          <summary className="cursor-pointer text-sm font-medium">{t('manageTitle')}</summary>
-          <div className="pt-3">
-            <OrgRail orgId={orgId} />
-          </div>
-        </details>
-        <div className="hidden md:sticky md:top-6 md:block">
+      <aside className={`md:w-60 md:shrink-0 ${isRailRoot ? 'block' : 'hidden md:block'}`}>
+        <div className="md:sticky md:top-6">
           <OrgRail orgId={orgId} />
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className={`min-w-0 flex-1 ${isRailRoot ? 'hidden md:block' : 'block'}`}>
+        {!isRailRoot && (
+          <Link
+            href={orgHref(orgId, ORG_MANAGE_PATH) as Route}
+            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {t('manageTitle')}
+          </Link>
+        )}
         <OrgPageHeading pathname={pathname} />
         {children}
       </div>

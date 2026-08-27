@@ -2863,7 +2863,8 @@
     "railGroupAdministration": "Amministrazione",
     "railSearchPlaceholder": "Cerca nelle impostazioni dell'organizzazione",
     "railNoResults": "Nessuna impostazione dell'organizzazione corrisponde alla ricerca.",
-    "manageTitle": "Impostazioni organizzazione"
+    "manageTitle": "Impostazioni organizzazione",
+    "manageSubtitle": "Gli standard definiti da questa organizzazione, ciò che condivide con i suoi studi e la sua amministrazione."
   },
   "OrgTeams": {
     "title": "Team",

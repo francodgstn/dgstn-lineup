@@ -14,7 +14,17 @@ ctrlKey + altKey on the layouts this product is built for.
   only title. The layout supplies the destination heading; the two pages that
   always had one say so in the catalogue (`ownsHeader`) rather than being
   remembered.
-- **The mobile rail is a disclosure, not an index page.** The studio rail can be
+- **The rail needed a front door, and `/org/{id}/manage` is it.** The rail
+  rendered only on rail ROUTES, so from Studios or Events there was no rail and
+  no link to the seven destinations behind it — eleven tabs became four rows and
+  seven things that had apparently vanished ("where did all the tabs go?",
+  Franco, 2026-08-27). A studio never had this problem because `/settings` is a
+  real place you can go to and the rail comes with it. `manage` is a fifth
+  sidebar row, and it is also what makes the rail work on a phone, where a rail
+  is an INDEX and an index needs a route to be the index of.
+- ~~**The mobile rail is a disclosure, not an index page.**~~ Superseded by the
+  above; the disclosure existed only because that route did not exist yet.
+- **(original note) The mobile rail is a disclosure, not an index page.** The studio rail can be
   an index because `/settings` is a real route that lists it. The organisation
   has no equivalent — `/org/{id}` redirects straight to the studios list — and
   inventing one would put a second "organisation home" in the reader's head for

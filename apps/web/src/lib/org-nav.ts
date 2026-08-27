@@ -29,6 +29,7 @@ import {
   ListTodo,
   MapPin,
   Settings,
+  Settings2,
   Shield,
   Users,
 } from 'lucide-react'
@@ -84,6 +85,19 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { id: 'org-events', path: 'events', labelKey: 'tabEvents', icon: CalendarRange },
   { id: 'org-program-templates', path: 'program-templates', labelKey: 'tabProgramTemplates', icon: ListTodo },
   { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe, ownsHeader: true },
+  // THE WAY IN TO THE RAIL, and the reason it is a row rather than a menu item.
+  //
+  // The rail rendered only on rail ROUTES, which is a chicken and egg: from
+  // Studios or Events there was no rail and no link to any of the seven
+  // destinations behind it. A studio does not have this problem because
+  // `/settings` is a real place you can go to; the organisation had no
+  // equivalent, so eleven tabs became four rows and seven things that had
+  // apparently vanished (Franco, 2026-08-27: "where did all the tabs go?").
+  //
+  // `/manage` is that place. It is also what makes the rail work on a phone,
+  // where a rail is an INDEX rather than a column beside a detail pane — the
+  // same shape `/settings` has.
+  { id: 'org-manage', path: 'manage', labelKey: 'manageTitle', icon: Settings2, ownsHeader: true },
 ]
 
 /**
@@ -133,11 +147,19 @@ export function orgHref(orgId: string, path: string): string {
  * (`/org/{id}/places/{placeId}`) inside its own rail, which is what the studio
  * settings do too.
  */
+export const ORG_MANAGE_PATH = 'manage'
+
 export function orgRailSegment(pathname: string): string | null {
   const m = pathname.match(/^\/org\/[^/]+\/([^/?#]+)/)
   const segment = m?.[1]
   if (!segment) return null
+  if (segment === ORG_MANAGE_PATH) return segment
   return ORG_RAIL_ITEMS.some((i) => i.path === segment) ? segment : null
+}
+
+/** Is this the rail's own index — the org's answer to `/settings`? */
+export function isOrgManageRoot(pathname: string): boolean {
+  return orgRailSegment(pathname) === ORG_MANAGE_PATH
 }
 
 /** The catalogue entry for a pathname, wherever it lives. */
