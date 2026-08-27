@@ -305,6 +305,9 @@ export interface ContactFilterSubject {
   lead_acknowledged?: boolean
   total_sessions?: number
   last_session_at?: TimestampLike
+  /** Denormalized coaching counters — see the attention reasons below. */
+  coaching_overdue_count?: number
+  last_checkin_at?: TimestampLike
   created_at?: TimestampLike
   birthdate?: TimestampLike
   ranks?: Record<string, number>
@@ -337,6 +340,9 @@ export interface ContactFilterContext {
   consent?: Record<string, ConsentLedger>
   /** Injectable clock — pass in tests; defaults to Date.now(). */
   nowMs?: number
+  /** How long without a performance check-in counts as lapsed. Defaults to
+   *  `DEFAULT_CHECKIN_LAPSE_DAYS`. */
+  checkinLapseDays?: number
 }
 
 /** One document's signature ledger, as the filter reads it. */
@@ -565,6 +571,43 @@ export type ContactAttentionReason =
    * `subscription_type_id` (the plan the studio has actually assigned).
    */
   | 'billing_unlinked'
+  /**
+   * A coaching goal or step is past its target date and still open.
+   *
+   * Reads `coaching_overdue_count`, maintained by the `onGoalWrite` trigger.
+   * It needs a denormalized counter for the reason stated in this block's
+   * header — the alternative is a subcollection query per row of the list —
+   * and it needs the daily job's `overdue_at` stamp because a goal falling
+   * overdue involves NO write of its own: the date stays put and the clock
+   * moves. That is the same reason dynamic contact groups exist.
+   */
+  | 'goal_overdue'
+  /**
+   * Someone who was checking in and has stopped.
+   *
+   * Fires ONLY for a contact who has checked in at least once. A contact who
+   * never has is not lapsed, they are unstarted — and flagging every contact on
+   * the day the feature ships is exactly how a badge stops being trusted. Same
+   * shape as `gone_quiet`, which requires `total_sessions > 0` for the same
+   * reason.
+   */
+  | 'checkin_lapsed'
+
+/**
+ * How long a contact who HAS checked in can go without checking in again before
+ * the studio should hear about it.
+ *
+ * Fourteen days rather than seven: a check-in is a reflection, not a habit
+ * tracker, and a fortnight is the first point at which silence says something a
+ * coach could not have guessed. Overridable per call so a studio that runs a
+ * different rhythm is not arguing with a constant.
+ */
+export const DEFAULT_CHECKIN_LAPSE_DAYS = 14
+
+function checkinLapseMs(ctx: ContactFilterContext): number {
+  const days = ctx.checkinLapseDays ?? DEFAULT_CHECKIN_LAPSE_DAYS
+  return days * 24 * 60 * 60 * 1000
+}
 
 /** Descending urgency — the sort order and nothing else. Kept beside the union
  *  so a new reason cannot be added without placing it. */
@@ -581,6 +624,12 @@ const ATTENTION_WEIGHT: Record<ContactAttentionReason, number> = {
   billing_unlinked: 2,
   trial_pending: 3,
   new_lead: 2,
+  // Coaching sits with the other "this relationship is drifting" reasons: above
+  // a quiet member (there is a commitment on the record that has been missed,
+  // which is more specific than absence) and below anything with money or a
+  // deadline attached.
+  goal_overdue: 2,
+  checkin_lapsed: 1,
   gone_quiet: 1,
 }
 
@@ -619,6 +668,11 @@ export function contactAttentionReasons(
   if ((subject.active_subscriptions ?? []).some((s) => s.cancelling === true))
     reasons.push('cancelling')
   if (contactBillingIsUnlinked(subject)) reasons.push('billing_unlinked')
+  if ((subject.coaching_overdue_count ?? 0) > 0) reasons.push('goal_overdue')
+  const lastCheckinMs = resolveTimestampMs(subject.last_checkin_at)
+  if (lastCheckinMs !== null && nowMs - lastCheckinMs > checkinLapseMs(ctx)) {
+    reasons.push('checkin_lapsed')
+  }
   if ((subject.total_sessions ?? 0) > 0) {
     const refMs =
       resolveTimestampMs(subject.last_session_at) ?? resolveTimestampMs(subject.created_at)
