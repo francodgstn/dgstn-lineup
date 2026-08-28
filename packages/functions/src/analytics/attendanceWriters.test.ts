@@ -48,8 +48,11 @@ function code(src: string): string {
 const PARTICIPANT_WRITERS: Array<{ base: string; rel: string; what: string }> = [
   {
     base: WEB,
-    rel: 'app/[locale]/(auth)/bookings/page.tsx',
-    what: 'the bookings list confirm',
+    // Was `bookings/page.tsx`; the confirm/cancel/no-show actions were extracted
+    // into this hook so the bookings LIST and the contact detail's Bookings tab
+    // share one implementation. The writer moved — it did not multiply.
+    rel: 'hooks/useBookingActions.ts',
+    what: 'the shared booking actions (bookings list + contact bookings tab)',
   },
   {
     base: WEB,
@@ -148,6 +151,7 @@ describe('participants_count — ONE writer', () => {
     const suspects = [
       { base: WEB, rel: 'app/[locale]/(auth)/sessions/[id]/page.tsx' },
       { base: WEB, rel: 'app/[locale]/(auth)/bookings/page.tsx' },
+      { base: WEB, rel: 'hooks/useBookingActions.ts' },
       { base: FN, rel: 'sessions/index.ts' },
       { base: FN, rel: 'contacts/index.ts' },
       { base: FN, rel: 'analytics/index.ts' },
@@ -192,7 +196,9 @@ describe('CONFIRMING A BOOKING — the same fields, whichever page you are on', 
   // The four confirm surfaces. Two are callables, two are client writes; that
   // split is fine, writing different documents is not.
   const CONFIRM_SURFACES: Array<{ base: string; rel: string; what: string }> = [
-    { base: WEB, rel: 'app/[locale]/(auth)/bookings/page.tsx', what: 'the bookings list' },
+    // The bookings list and the contact detail's Bookings tab both confirm
+    // through this ONE hook — that is why there is no third entry for the tab.
+    { base: WEB, rel: 'hooks/useBookingActions.ts', what: 'the shared booking actions' },
     { base: WEB, rel: 'app/[locale]/(auth)/sessions/[id]/page.tsx', what: 'session detail' },
     { base: FN, rel: 'sessions/index.ts', what: 'selfCheckIn' },
     { base: FN, rel: 'contacts/index.ts', what: 'checkInContact' },

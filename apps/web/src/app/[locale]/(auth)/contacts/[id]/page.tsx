@@ -1,7 +1,7 @@
 'use client'
 
 import { useConfirm } from '@/components/ui/confirm-dialog'
-import { useState, use, useMemo, useEffect } from 'react'
+import { useState, use, useMemo, useEffect, useCallback } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useRecentContacts } from '@/contexts/RecentContactsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -114,6 +114,7 @@ import type {
   OrgAffiliationStatusDef,
   EngagementBand,
   EngagementThresholds,
+  Booking,
 } from '@linyup/shared'
 import {
   ACQUISITION_STAGES,
@@ -180,6 +181,7 @@ import {
   Ticket,
   FileSignature,
   CheckSquare,
+  Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -210,6 +212,22 @@ import { RenewConfirmDialog } from '@/components/affiliations/RenewUI'
 import { renewAffiliationCall, previewRenewedUntil } from '@/components/affiliations/renew'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
+import {
+  BookingRow,
+  buildBookingStatusLabels,
+  type BookingStatus,
+} from '@/components/bookings/BookingRow'
+import {
+  RebookDialog,
+  useFutureSessions,
+  EMPTY_SESSION_IDS,
+} from '@/components/bookings/RebookDialog'
+import {
+  useBookingAction,
+  useRebookAction,
+  type BookingAction,
+} from '@/hooks/useBookingActions'
+import { useContactBookedSessions, type SessionInfo } from '@/hooks/useBookingsWindow'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -476,19 +494,22 @@ function useTeamRankingSystems(teamId: string | null, orgId?: string | null) {
 // ledger needs the same query and the same cache entry, and a second copy would
 // have doubled the reads while inviting the two to drift.
 
-interface BookingSummary {
-  id: string
-  sessionId: string
-  sessionLabel: string
-  sessionStart: { toDate(): Date } | null
-  joinedAt: { toDate(): Date } | null
-  status: string | null
-}
-
 /** How many of a contact's bookings this tab loads. Newest first, so the cap
  *  trims the oldest history rather than the part anybody is looking at, and it
  *  bounds the session hydration below to at most one batch per 30 rows. */
 const CONTACT_BOOKINGS_LIMIT = 60
+
+export interface ContactBookings {
+  bookings: Booking[]
+  /** Session info for the loaded bookings, keyed by session id — same shape
+   *  the bookings list uses, so `BookingRow` renders identically here. */
+  sessions: Record<string, SessionInfo>
+  /** The cap was hit: `bookings` is the newest 60, not the whole history. A
+   *  contact sitting on EXACTLY 60 rows reads as truncated too — the same
+   *  imprecision `useBookingsWindow`'s booking axis accepts for not having to
+   *  fetch one extra row just to know. */
+  truncated: boolean
+}
 
 /**
  * A contact's bookings.
@@ -507,12 +528,26 @@ const CONTACT_BOOKINGS_LIMIT = 60
  * `contact.total_sessions`, written only by the `sessions/{id}/participants`
  * trigger, i.e. by ATTENDANCE. Zero attended after a booking is correct; the
  * number that was missing is this one.
+ *
+ * Returns the SAME shape `useBookingsWindow` does (`Booking[]` +
+ * `Record<sessionId, SessionInfo>`) rather than a bespoke summary, because the
+ * row is now `BookingRow` — the general bookings list's row — and it wants a
+ * real `Booking`. The old shape kept `id: d.ref.path`, which every action
+ * (`doc(db,'sessions', b.session, 'bookings', b.id)`) would have turned into a
+ * broken ref built from a full Firestore path instead of a bare doc id.
+ *
+ * No server-side status filter: that would need a new composite index, and
+ * the bookings page already filters status client-side over an already-loaded
+ * page, which this hook feeds identically.
  */
 function useContactBookings(contactId: string, teamId: string | null) {
-  return useQuery<BookingSummary[]>({
-    queryKey: ['contact-bookings', contactId],
+  return useQuery<ContactBookings>({
+    // `teamId` in the key: two different tenants must never share a cache
+    // entry keyed only by `contactId` (which is not itself tenant-scoped).
+    queryKey: ['contact-bookings', teamId, contactId],
     enabled: !!teamId,
     queryFn: async () => {
+      if (!teamId) return { bookings: [], sessions: {}, truncated: false }
       const snap = await getDocs(
         query(
           collectionGroup(db, 'bookings'),
@@ -522,45 +557,29 @@ function useContactBookings(contactId: string, teamId: string | null) {
           limit(CONTACT_BOOKINGS_LIMIT)
         )
       )
-      const rows = snap.docs.map((d) => {
-        const data = d.data()
-        return {
-          id: d.ref.path,
-          sessionId: d.ref.parent.parent?.id ?? '',
-          joinedAt: (data.joinedAt as BookingSummary['joinedAt']) ?? null,
-          status: (data.status as string | undefined) ?? 'pending',
-        }
-      })
+      const bookings = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
 
-      // WHAT and WHEN come from the SESSION, not the booking: a booking document
-      // carries neither an activity name nor a start time (the old code read
-      // `sessionLabel` / `sessionStart`, which no writer has ever set, so every
-      // row would have rendered "Session" and the join date). Batched by
+      // WHAT and WHEN come from the SESSION, not the booking. Batched by
       // documentId, 30 at a time — Firestore's `in` limit.
-      const ids = [...new Set(rows.map((r) => r.sessionId).filter(Boolean))]
-      const sessions = new Map<string, { label: string; start: BookingSummary['sessionStart'] }>()
-      for (let i = 0; i < ids.length; i += 30) {
-        const batch = ids.slice(i, i + 30)
+      const sessionIds = [...new Set(bookings.map((b) => b.session).filter((s): s is string => !!s))]
+      const sessions: Record<string, SessionInfo> = {}
+      for (let i = 0; i < sessionIds.length; i += 30) {
+        const batch = sessionIds.slice(i, i + 30)
         const sSnap = await getDocs(
           query(collection(db, 'sessions'), where(documentId(), 'in', batch))
         )
         sSnap.docs.forEach((sd) => {
           const s = sd.data()
-          sessions.set(sd.id, {
-            label: (s.activityName as string | undefined) || (s.name as string | undefined) || '',
-            start: (s.start as BookingSummary['sessionStart']) ?? null,
-          })
+          sessions[sd.id] = {
+            activityName: s.activityName as string | undefined,
+            start: tsToDate(s.start)?.toISOString(),
+            end: tsToDate(s.end)?.toISOString(),
+            allowBooking: s.allowBooking as boolean | undefined,
+          }
         })
       }
 
-      return rows.map((r) => {
-        const s = sessions.get(r.sessionId)
-        return {
-          ...r,
-          sessionLabel: s?.label || 'Session',
-          sessionStart: s?.start ?? null,
-        }
-      })
+      return { bookings, sessions, truncated: bookings.length === CONTACT_BOOKINGS_LIMIT }
     },
   })
 }
@@ -1972,22 +1991,106 @@ function ProfileTab({
 // ─── notes tab ────────────────────────────────────────────────────────────────
 
 // ─── bookings tab ─────────────────────────────────────────────────────────────
+// Reuses the general bookings list's row and its action menu (`BookingRow`,
+// `@/hooks/useBookingActions`) — a card list with no filters and no actions
+// used to sit here, a second, poorer implementation of the same list. The
+// status vocabulary is `BookingRow`'s shared `STATUS_VARIANT` now, not a local
+// `BOOKING_STATUS_KEY` (deleted): both already styled `no_show` `destructive`
+// here, but the BOOKINGS PAGE used to style it `secondary` — sharing a row
+// settles that in favour of red on both surfaces (a no-show is a seat held
+// and wasted), so /bookings' no-show colour changes, not this tab's
+// (Franco, 2026-08-29).
+//
+// Status tabs + text search are ported from the bookings page — purely
+// presentational filters over rows already loaded by `useContactBookings`.
+// Deliberately NOT ported: the bookings page's date-AXIS toggle and date
+// window. Those aren't a filter, they ARE the query (`useBookingsWindow`), and
+// there is no contact-scoped equivalent to build — the class date lives on the
+// SESSION doc, not the booking, so a "bookings for this contact within this
+// class-date range" query isn't a filter over what's already loaded, it would
+// need its own fan-out. Don't add one here; if a manager needs that, it
+// belongs on /bookings with a contact filter, not here.
 
-// Booking status → the label the bookings LIST already uses. Reusing that
-// namespace keeps one wording for one fact; a second set of strings here would
-// drift the moment either side was edited.
-const BOOKING_STATUS_KEY: Record<string, string> = {
-  pending: 'statusPending',
-  confirmed: 'statusConfirmed',
-  cancelled: 'statusCancelled',
-  no_show: 'statusNoShow',
-  rebooked: 'statusRebooked',
-}
+type ContactBookingStatusFilter = BookingStatus | 'all'
 
 function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const tBookings = useTranslations('Bookings')
-  const { data: bookings = [], isLoading } = useContactBookings(contact.id, teamId)
+  const { data, isLoading } = useContactBookings(contact.id, teamId)
+  // Memoized (matching the bookings page's `windowData?.bookings ?? []`
+  // pattern) so `searchFiltered` below doesn't see a fresh array identity on
+  // every render while `data` is genuinely unchanged.
+  const bookings = useMemo(() => data?.bookings ?? [], [data])
+  const sessions = useMemo(() => data?.sessions ?? {}, [data])
+  const truncated = data?.truncated ?? false
+
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<ContactBookingStatusFilter>('all')
+  const [rebookTarget, setRebookTarget] = useState<Booking | null>(null)
+
+  const { mutate: doAction } = useBookingAction(teamId)
+  const { mutate: doRebook, isPending: rebooking } = useRebookAction(teamId)
+  const { data: futureSessions = [], isLoading: futureLoading } = useFutureSessions(
+    teamId,
+    !!rebookTarget
+  )
+  const { data: bookedSessionIds, isLoading: bookedLoading } = useContactBookedSessions(
+    teamId,
+    rebookTarget?.contact ?? null
+  )
+
+  const statusLabel = buildBookingStatusLabels(tBookings)
+
+  const handleAction = useCallback(
+    (booking: Booking, action: BookingAction) => doAction({ booking, action }),
+    [doAction]
+  )
+  const handleRebookConfirm = useCallback(
+    (newSessionId: string) => {
+      if (!rebookTarget?.booking_token) return
+      doRebook(
+        { token: rebookTarget.booking_token, newSessionId },
+        { onSuccess: () => setRebookTarget(null) }
+      )
+    },
+    [rebookTarget, doRebook]
+  )
+
+  // Search on the CLASS name — not the contact's own name, which would just be
+  // redundant with being on their page already.
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return bookings
+    return bookings.filter((b) => {
+      const activityName = (b.session ? sessions[b.session]?.activityName : undefined) ?? ''
+      return activityName.toLowerCase().includes(q)
+    })
+  }, [bookings, sessions, search])
+
+  const counts: Record<ContactBookingStatusFilter, number> = {
+    all: searchFiltered.length,
+    pending: searchFiltered.filter((b) => (b.status ?? 'pending') === 'pending').length,
+    confirmed: searchFiltered.filter((b) => b.status === 'confirmed').length,
+    cancelled: searchFiltered.filter((b) => b.status === 'cancelled').length,
+    no_show: searchFiltered.filter((b) => b.status === 'no_show').length,
+    rebooked: searchFiltered.filter((b) => b.status === 'rebooked').length,
+  }
+
+  const filtered = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? searchFiltered
+        : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter),
+    [searchFiltered, statusFilter]
+  )
+
+  const TABS: { key: ContactBookingStatusFilter; label: string }[] = [
+    { key: 'all', label: tBookings('tabAll') },
+    { key: 'pending', label: tBookings('statusPending') },
+    { key: 'confirmed', label: tBookings('statusConfirmed') },
+    { key: 'no_show', label: tBookings('statusNoShow') },
+    { key: 'cancelled', label: tBookings('statusCancelled') },
+  ]
 
   if (isLoading)
     return (
@@ -1999,39 +2102,84 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
     )
   if (bookings.length === 0)
     return <div className="py-12 text-center text-muted-foreground text-sm">{t('noBookings')}</div>
+
   return (
-    <div className="space-y-2">
-      {bookings.map((b) => (
-        <div key={b.id} className="flex items-center gap-3 p-3 rounded-lg border">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <CalendarDays className="h-4 w-4 text-primary" />
+    <div className="space-y-3">
+      {/* A capped list must not look like a complete one. */}
+      {truncated && (
+        <p className="text-xs text-muted-foreground">
+          {t('bookingsTruncated', { count: bookings.length })}
+        </p>
+      )}
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder={t('bookingsSearchPlaceholder')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      <div className="flex gap-1 border-b overflow-x-auto">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+              statusFilter === key
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+            {counts[key] > 0 && (
+              <span
+                className={`text-xs rounded-full px-1.5 py-0.5 leading-none ${
+                  statusFilter === key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {counts[key]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-xl border overflow-hidden bg-card">
+        {filtered.length === 0 ? (
+          <div className="px-4 py-12 text-center text-muted-foreground text-sm">
+            {search ? tBookings('emptySearch') : t('noBookingsFilter')}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{b.sessionLabel}</p>
-            <p className="text-xs text-muted-foreground">
-              {b.sessionStart
-                ? formatDate(b.sessionStart)
-                : b.joinedAt
-                  ? formatDate(b.joinedAt)
-                  : '—'}
-            </p>
-          </div>
-          {b.status && BOOKING_STATUS_KEY[b.status] && (
-            <Badge
-              variant={
-                b.status === 'confirmed'
-                  ? 'default'
-                  : b.status === 'cancelled' || b.status === 'no_show'
-                    ? 'destructive'
-                    : 'secondary'
-              }
-              className="shrink-0"
-            >
-              {tBookings(BOOKING_STATUS_KEY[b.status] as Parameters<typeof tBookings>[0])}
-            </Badge>
-          )}
-        </div>
-      ))}
+        ) : (
+          filtered.map((b) => (
+            <BookingRow
+              key={b.session ? `${b.session}_${b.id}` : b.id}
+              booking={b}
+              sessionInfo={b.session ? sessions[b.session] : undefined}
+              statusLabel={statusLabel}
+              showContact={false}
+              onAction={handleAction}
+              onRebook={setRebookTarget}
+            />
+          ))
+        )}
+      </div>
+
+      {rebookTarget && (
+        <RebookDialog
+          booking={rebookTarget}
+          futureSessions={futureSessions}
+          bookedSessionIds={bookedSessionIds ?? EMPTY_SESSION_IDS}
+          loadingOptions={futureLoading || bookedLoading}
+          onConfirm={handleRebookConfirm}
+          onClose={() => setRebookTarget(null)}
+          loading={rebooking}
+        />
+      )}
     </div>
   )
 }
