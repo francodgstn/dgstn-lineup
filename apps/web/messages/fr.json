@@ -3105,7 +3105,8 @@
     "terminologyPresetCustom": "Personnalisé…",
     "terminologyDefaultLabel": "Terme",
     "terminologyDefaultHint": "Saisissez-en au moins un — il devient la valeur par défaut pour toutes les langues.",
-    "terminologyAddTranslations": "Ajouter des traductions (facultatif)"
+    "terminologyAddTranslations": "Ajouter des traductions (facultatif)",
+    "generalTitle": "Général"
   },
   "OrgInvite": {
     "title": "Invitation d'organisation",
@@ -6243,7 +6244,8 @@
     "yearClosed": "Exercice clôturé.",
     "downloadCsv": "Télécharger le CSV",
     "actionFailed": "Échec de l'action — veuillez réessayer.",
-    "backToOverview": "Finances"
+    "backToOverview": "Finances",
+    "betaHint": "Bêta — le module Finances n'a pas été vérifié par un comptable. Vérifiez les chiffres avant toute déclaration."
   },
   "HowTo": {
     "title": "Guide",
@@ -7129,7 +7131,9 @@
     "reason_cancelling": "Abonnement bientôt résilié",
     "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus",
     "seatsAttended": "présents",
-    "metaAttended": "{count} présents"
+    "metaAttended": "{count} présents",
+    "startsInHours": "Dans {hours} h",
+    "startsInHoursMinutes": "Dans {hours} h {minutes} min"
   },
   "BookingContactFields": {
     "title": "Coordonnées à collecter",

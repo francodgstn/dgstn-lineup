@@ -28,6 +28,7 @@ import {
   useFinanceMonthlyReport,
   useInvalidateAccounting,
 } from '@/plugins/finance/hooks'
+import { FinanceBetaChip } from '@/components/finance/FinanceBetaChip'
 
 function recentMonths(): string[] {
   const months: string[] = []
@@ -56,7 +57,10 @@ export default function FinanceOverviewPage() {
   if (!teamId || !isInstalled('finance')) {
     return (
       <div className="p-6 space-y-2">
-        <h1 className="text-lg font-semibold">{t('title')}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">{t('title')}</h1>
+          <FinanceBetaChip />
+        </div>
         <p className="text-sm text-muted-foreground">{t('notInstalled')}</p>
         <p className="text-sm text-muted-foreground">{t('installHint')}</p>
       </div>
@@ -90,6 +94,7 @@ export default function FinanceOverviewPage() {
           <div className="flex items-center gap-2">
             <Calculator className="h-5 w-5 text-muted-foreground" />
             <h1 className="text-lg font-semibold">{t('title')}</h1>
+            <FinanceBetaChip />
           </div>
           {/* The books are POSTED FROM payments and CONFIGURED BY the payment
               settings — the two pages that explain a figure on this one. */}

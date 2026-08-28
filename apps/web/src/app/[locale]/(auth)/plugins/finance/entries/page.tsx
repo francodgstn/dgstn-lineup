@@ -40,6 +40,7 @@ import {
   useEntries,
   useInvalidateAccounting,
 } from '@/plugins/finance/hooks'
+import { FinanceBetaChip } from '@/components/finance/FinanceBetaChip'
 
 function recentMonths(): string[] {
   const months: string[] = []
@@ -203,6 +204,7 @@ export default function AccountingEntriesPage() {
         <div className="flex items-center gap-2">
           <ListOrdered className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t('entries')}</h1>
+          <FinanceBetaChip />
         </div>
         <div className="flex items-center gap-2">
           <Select value={month} onValueChange={(v) => v && setMonth(v)}>

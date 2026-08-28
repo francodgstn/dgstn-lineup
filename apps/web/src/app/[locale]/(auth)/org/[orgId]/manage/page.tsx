@@ -18,12 +18,35 @@
  * The page itself is deliberately thin: on mobile the rail IS the page (rendered
  * by the layout), and on desktop the rail sits beside this, which says what the
  * section is for rather than duplicating the list next to it.
+ *
+ * IT IS FOR THE PEOPLE WHO RUN THE ORGANISATION. A member studio has no rail
+ * (see the layout) and no row that leads here, so for them this was a hub with
+ * nothing in it that stayed open to a typed URL and to the rail's own mobile
+ * back-link. It sends them to the summary instead — navigation, not
+ * enforcement: the page holds no data, and every destination behind it is
+ * guarded by `firestore.rules` regardless.
  */
 
+import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import { useParams } from 'next/navigation'
+import type { Route } from 'next'
+import { useRouter } from '@/i18n/navigation'
+import { useOrgRole } from '@/hooks/useOrgRole'
+import { orgHref } from '@/lib/org-nav'
 
 export default function OrgManagePage() {
   const t = useTranslations('Org')
+  const { orgId } = useParams<{ orgId: string }>()
+  const router = useRouter()
+  const { role, loading } = useOrgRole(orgId)
+
+  useEffect(() => {
+    if (loading || role != null) return
+    router.replace(orgHref(orgId, 'overview') as Route)
+  }, [orgId, role, loading, router])
+
+  if (loading || role == null) return null
 
   return (
     <div className="max-w-2xl">

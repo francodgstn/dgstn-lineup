@@ -40,7 +40,7 @@ import { toast } from 'sonner'
 // Plugin icons resolve through @/plugins/icons; only this page's own chrome
 // icons are imported here.
 import {
-  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, FlaskConical, Star,
+  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, Star,
   ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -155,15 +155,30 @@ function PluginBadgeIcons({
   }
   if (manifest.status === 'coming_soon') {
     items.push({ key: 'coming_soon', icon: Clock, label: t('statusComingSoon'), hoverClassName: 'hover:text-foreground' })
-  } else if (manifest.status === 'beta') {
-    items.push({ key: 'beta', icon: FlaskConical, label: t('statusBeta'), hoverClassName: 'hover:text-blue-600' })
   }
 
-  if (items.length === 0) return null
+  // BETA IS NOT A HOVER STATE. Every other badge on this card answers "can I
+  // have it and what does it cost", which a reader looks up when they are
+  // deciding; beta answers "should you trust the output", which they need
+  // whether or not they thought to ask. It was one of these hover-only glyphs
+  // and it was the wrong shape for what it says (Franco, 2026-08-28), so it
+  // renders as a word, beside them, and stays visible once installed — the
+  // caveat outlives the decision to install.
+  const isBeta = manifest.status === 'beta'
+
+  if (items.length === 0 && !isBeta) return null
 
   return (
     <TooltipProvider delay={200}>
       <div className="flex items-center gap-2.5">
+        {isBeta && (
+          <Badge
+            variant="secondary"
+            className="border-blue-200 bg-blue-50 text-[11px] font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"
+          >
+            {t('statusBeta')}
+          </Badge>
+        )}
         {items.map(({ key, icon: Icon, label, tooltip, hoverClassName }) => (
           <UITooltip key={key}>
             <TooltipTrigger

@@ -83,6 +83,35 @@ function SeatMeter({ session, state }: { session: Session; state: 'past' | 'next
   )
 }
 
+/**
+ * "In 962 min" was the FIRST THING a studio owner read every morning, and it is
+ * not how anybody says half past four (Franco, 2026-08-28).
+ *
+ * Minutes are right up to an hour and useless past it: the number stops being a
+ * duration you can feel and becomes arithmetic homework. Above an hour the
+ * coarse unit leads and the fine one only appears when it says something — "In
+ * 16h" reads better than "In 16h 0min", and nobody needs "In 16h 02min" to the
+ * minute at that distance.
+ *
+ * IT NEVER NEEDS DAYS. The countdown is only ever rendered for the session
+ * marked `next`, which exists only when the panel is showing TODAY (`offset ===
+ * 0`, see `nextIndex`), so the largest possible value is one minute short of a
+ * day. If that ever changes this needs a days branch — it will not silently do
+ * the right thing.
+ */
+function countdownLabel(
+  minutesUntil: number,
+  t: ReturnType<typeof useTranslations<'NewDashboard'>>
+): string {
+  if (minutesUntil < 1) return t('startingNow')
+  if (minutesUntil < 60) return t('startsIn', { minutes: minutesUntil })
+  const hours = Math.floor(minutesUntil / 60)
+  const minutes = minutesUntil % 60
+  return minutes === 0
+    ? t('startsInHours', { hours })
+    : t('startsInHoursMinutes', { hours, minutes })
+}
+
 function SessionRow({
   session,
   state,
@@ -127,7 +156,7 @@ function SessionRow({
         <p className="truncate text-xs leading-tight text-muted-foreground">
           {state === 'next' && minutesUntil !== null && minutesUntil >= 0 ? (
             <span className="font-medium text-primary">
-              {minutesUntil < 1 ? t('startingNow') : t('startsIn', { minutes: minutesUntil })}
+              {countdownLabel(minutesUntil, t)}
               {meta ? ' · ' : ''}
             </span>
           ) : null}

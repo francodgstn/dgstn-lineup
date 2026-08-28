@@ -3105,7 +3105,8 @@
     "terminologyPresetCustom": "Benutzerdefiniert…",
     "terminologyDefaultLabel": "Begriff",
     "terminologyDefaultHint": "Gib mindestens einen ein — er wird zum Standard für alle Sprachen.",
-    "terminologyAddTranslations": "Übersetzungen hinzufügen (optional)"
+    "terminologyAddTranslations": "Übersetzungen hinzufügen (optional)",
+    "generalTitle": "Allgemein"
   },
   "OrgInvite": {
     "title": "Organisationseinladung",
@@ -6243,7 +6244,8 @@
     "yearClosed": "Geschäftsjahr abgeschlossen.",
     "downloadCsv": "CSV herunterladen",
     "actionFailed": "Aktion fehlgeschlagen — bitte erneut versuchen.",
-    "backToOverview": "Finanzen"
+    "backToOverview": "Finanzen",
+    "betaHint": "Beta — das Finanzmodul wurde nicht von einer Buchhaltung geprüft. Prüfen Sie die Zahlen vor der Einreichung."
   },
   "HowTo": {
     "title": "How-to",
@@ -7129,7 +7131,9 @@
     "reason_cancelling": "Abo läuft aus",
     "reason_billing_unlinked": "Wird für ein Abo belastet, das sie nicht mehr haben",
     "seatsAttended": "anwesend",
-    "metaAttended": "{count} anwesend"
+    "metaAttended": "{count} anwesend",
+    "startsInHours": "In {hours} h",
+    "startsInHoursMinutes": "In {hours} h {minutes} min"
   },
   "BookingContactFields": {
     "title": "Zu erfassende Kontaktdaten",

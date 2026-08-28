@@ -158,7 +158,13 @@ export function ScopeProvider({ children }: { children: React.ReactNode }) {
     return available.find((s) => scopeKey(s) === scopeKey(storedPrevious)) ?? null
   }, [storedPrevious, current, available])
 
-  const hrefFor = useCallback((s: Scope) => (s.kind === 'org' ? `/org/${s.id}/teams` : '/dashboard'), [])
+  // THE SCOPE ROOT, not a page inside it. Where an organisation opens depends on
+  // whether you run it or merely belong to one of its studios, and `/org/{id}`
+  // is the one place that decides (see that route). Naming `/teams` here dropped
+  // a member studio on the roster their own membership cannot list — the exact
+  // "No teams have joined this organization yet" failure the overview exists to
+  // prevent. `TeamSwitcher` already links to the root; Alt+O did not.
+  const hrefFor = useCallback((s: Scope) => (s.kind === 'org' ? `/org/${s.id}` : '/dashboard'), [])
 
   const value = useMemo<ScopeContextValue>(
     () => ({ current, previous, available, hrefFor }),

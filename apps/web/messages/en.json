@@ -3105,7 +3105,8 @@
     "terminologyPresetCustom": "Custom…",
     "terminologyDefaultLabel": "Term",
     "terminologyDefaultHint": "Enter at least one — it becomes the default for every language.",
-    "terminologyAddTranslations": "Add translations (optional)"
+    "terminologyAddTranslations": "Add translations (optional)",
+    "generalTitle": "General"
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -6243,7 +6244,8 @@
     "yearClosed": "Fiscal year closed.",
     "downloadCsv": "Download CSV",
     "actionFailed": "Action failed — please try again.",
-    "backToOverview": "Finance"
+    "backToOverview": "Finance",
+    "betaHint": "Beta — the finance module has not been reviewed by an accountant. Check the figures before filing."
   },
   "HowTo": {
     "title": "How-to",
@@ -7129,7 +7131,9 @@
     "reason_cancelling": "Subscription set to end",
     "reason_billing_unlinked": "Billed for a plan they no longer hold",
     "seatsAttended": "attended",
-    "metaAttended": "{count} attended"
+    "metaAttended": "{count} attended",
+    "startsInHours": "In {hours}h",
+    "startsInHoursMinutes": "In {hours}h {minutes}min"
   },
   "BookingContactFields": {
     "title": "Contact details to collect",

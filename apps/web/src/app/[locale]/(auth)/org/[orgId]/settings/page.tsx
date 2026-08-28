@@ -1302,13 +1302,21 @@ export default function OrgSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">{t('title')}</h2>
-
+      {/* NO HEADING HERE. The org layout titles every rail destination through
+          `OrgPageHeading`, and this page printed the same words again directly
+          beneath it — then a third time, as the first card's own title (Franco,
+          2026-08-28). The layout's is the one that belongs to the destination;
+          the card below keeps its title because it labels that card, not the
+          page. */}
       <Card>
         <CardHeader>
+          {/* "General", not "Settings": this card holds the organisation's name
+              and description, and its siblings are Terminology, Lock
+              affiliation and the rest. Titling it after the whole page said
+              nothing about which card it is. */}
           <CardTitle className="flex items-center gap-2 text-base">
             <Settings className="h-4 w-4" />
-            {t('title')}
+            {t('generalTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent>
