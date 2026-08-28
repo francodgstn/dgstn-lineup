@@ -781,7 +781,7 @@ its appointments — the day picker only knows class sessions. Rendering the
 appointment cards above the day picker is the likely answer, but it is a design
 call about what that page is, not a patch.
 
-### Still open: the appointments toggle is read by nothing on the public web
+### The appointments toggle is read by nothing on the public web — FIXED 2026-08-28
 
 `bookingSettings.appointmentsEnabled` and `appointmentPickerLive` have exactly
 one web reader, `usePublicSurfaces`, and that hook is imported only by `(auth)`
@@ -789,6 +789,19 @@ routes. So the toggle governs what the STUDIO is shown about its own surfaces,
 not what a visitor can reach. Switching it off does not hide anything public.
 Worth deciding deliberately: either the public routes should honour it, or it
 should be described as what it is.
+
+**Franco chose: honour it publicly** (2026-08-28).
+
+Enforced in `listAvailability`, not on the page. That callable is the one door
+every client goes through, so the web picker, the mobile app and anything added
+later are covered by construction — where a page-level gate would leave the
+callable answering a direct call anyway. Off ⇒ no coaches, and the picker's
+existing empty state does the rest. Absent still means ON, matching
+`appointmentPickerLive`.
+
+`appointmentPickerLive` stays exactly as it was: it answers the STUDIO-facing
+question ("should I tell them this surface is live"), which is a different
+question from whether a visitor may reach it.
 
 ### The website + kiosk appointment probe had no index — FIXED 2026-08-27
 
