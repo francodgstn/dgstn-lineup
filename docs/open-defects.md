@@ -322,7 +322,7 @@ shape indefinitely.
 Run: `pnpm backfill:gateway-data --project <id>` (dry-run), then `--apply`.
 Verified end-to-end against the emulator; never run against staging or prod.
 
-### The pinned document-version read path is only half-verified
+### The pinned document-version read path is only half-verified — VERIFIED 2026-08-28
 
 `getPublicDocumentVersion` is wired: the public document page reads `?v=`, calls
 it with the right arguments, reports a failure rather than swallowing it, and
@@ -337,6 +337,25 @@ only been read, not run.
 
 Verify by restarting the emulator with a fresh functions build (export the data
 first if you want to keep it) and following a pinned link to an older version.
+
+**Done, and it passes.** A worktree emulator running a fresh functions build has
+`getPublicDocumentVersion` initialized, which is the condition that was missing.
+The seed contains no documents, so four fixtures were written through the
+emulator's REST API (owner token — the REST path enforces rules) and removed
+afterwards. All six checks pass:
+
+1. a published, public, non-waiver document returns the **frozen v1 text**, and
+   the live `bodyHtml` on the parent — deliberately seeded with different
+   content — does **not** appear in the response
+2. a `kind: 'waiver'` document is refused
+3. an unpublished document is refused, and so is a published-but-not-`isPublic`
+   one
+4. a version number that has no document is refused
+5. `version: 0` is rejected as invalid argument
+
+Every refusal returns the same `not-found` / "Document not available", so the
+answer carries no signal about which documents exist — which is what the
+callable's own comment promises.
 
 ### Stripe webhook handler params are typed `any` — FIXED 2026-08-28
 
@@ -378,7 +397,7 @@ casts at the router and a cast is an assertion exactly like the `any`, only
 louder. The value lives in the handler BODIES, which is where all three
 motivating defects were. It carries an eslint-disable and that reasoning.
 
-### A new owner cannot upload an activity cover image, and the activity is created anyway
+### A new owner cannot upload an activity cover image, and the activity is created anyway — MECHANISM FALSIFIED 2026-08-28
 
 Found by manual exploration on **2026-08-17**, on a freshly created account.
 Creating an activity **with a cover image** fails the Storage upload with
@@ -408,6 +427,34 @@ not confined to activities.
 distinguishes "activity saved, image failed" from "nothing saved", so a retry
 cannot mint a duplicate. Fixing the rule does **not** close UX-24: any other
 upload failure (offline, size, content-type) reaches the same silent path.
+
+---
+
+**Re-read 2026-08-28: the stated mechanism no longer exists, and the rule must
+not be touched on the strength of it.**
+
+This entry rests on "that document is written by the client during signup
+self-provisioning … so the upload is denied whenever it runs before that write
+has landed". That was true when it was observed on 2026-08-17. It stopped being
+true nine days later: the **#106 team-takeover fix moved provisioning
+server-side**, and `firestore.rules` now says in as many words that there is
+"deliberately NO client self-provision branch anymore". `createStudioTeam` writes
+the team, the owner membership and the user profile in ONE atomic batch, and
+`provisionTeam` awaits that callable before the browser goes anywhere — so by the
+time an owner can open the activities dialog, `teams/{id}/team_members/{uid}`
+exists.
+
+There is therefore no known race left to fix, and the warning in part 1 stands
+with more force than before: **do not loosen
+`match /teams/{teamId}/{allPaths=**}`** to chase a mechanism that has already
+been removed. If the denial recurs, it has a different cause and needs a fresh
+reproduction naming it.
+
+**Part 2 is closed.** UX-24's fix was rebuilt after exactly this reproduction —
+the create path's `addDoc`-then-upload ordering means a denied upload leaves a
+real imageless activity, so the branches are now distinct and a generic toast
+can no longer send a manager into a duplicate-creating retry (the edit path
+uploads first and was always all-or-nothing).
 
 ---
 
