@@ -15,6 +15,7 @@ import {
   ORGANIZATIONS_COLLECTION,
   ORG_INSTALLED_PLUGINS_SUBCOLLECTION,
 } from '@linyup/shared'
+import { deleteSiteI18nSidecars } from '../translate/translateSite'
 
 /**
  * Nudges the team document so `syncTeamPublicProfile` re-runs and recomputes
@@ -171,6 +172,7 @@ export async function assertPluginInstalled(teamId: string, pluginId: string): P
 export async function unpublishSiteForTeam(teamId: string): Promise<void> {
   const db = admin.firestore()
   await db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).delete()
+  await deleteSiteI18nSidecars(db, SITE_PUBLISHED_COLLECTION, teamId)
   await db.doc(`${SITE_DRAFTS_COLLECTION}/${teamId}`).set(
     { enabled: false, updated_at: FieldValue.serverTimestamp() },
     { merge: true }
@@ -195,6 +197,7 @@ export async function unpublishSiteForTeam(teamId: string): Promise<void> {
 export async function unpublishSiteForOrg(orgId: string): Promise<void> {
   const db = admin.firestore()
   await db.doc(`${ORG_SITE_PUBLISHED_COLLECTION}/${orgId}`).delete()
+  await deleteSiteI18nSidecars(db, ORG_SITE_PUBLISHED_COLLECTION, orgId)
   await db.doc(`${ORG_SITE_DRAFTS_COLLECTION}/${orgId}`).set(
     { enabled: false, updated_at: FieldValue.serverTimestamp() },
     { merge: true }

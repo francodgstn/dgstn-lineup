@@ -4,6 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { hasTeamRole } from '../utils/teams'
 import { unpublishSiteForTeam, touchTeamForSurfaceRecompute, pluginIsActive } from '../utils/plugins'
 import { sanitizeRichHtml } from '../utils/sanitizeHtml'
+import { translatePublishedSite } from '../translate/translateSite'
 import {
   SITE_PUBLISHED_COLLECTION,
   SITE_DRAFTS_COLLECTION,
@@ -13,6 +14,7 @@ import {
   ORG_PLACES_SUBCOLLECTION,
   isPublicSurface,
   SITE_MENU_MAX_DEPTH,
+  resolveSiteSourceLocale,
 } from '@linyup/shared'
 import type {
   PublishedSite,
@@ -430,7 +432,7 @@ export function sanitizeMeta(raw: unknown, fallbackTitle: string): SiteMeta {
 // Reads the team's private draft, sanitizes it to a public-safe payload, and
 // writes site_published/{teamId} (world-readable). Also flags the draft enabled.
 
-export const publishWebsite = onCall(async (request) => {
+export const publishWebsite = onCall({ timeoutSeconds: 300 }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
   const uid = request.auth.uid
   const teamId = (request.data?.teamId ?? '') as string
@@ -484,6 +486,22 @@ export const publishWebsite = onCall(async (request) => {
     .filter((x): x is { platform: string; url: string } => x !== null)
 
   const plan = optStr(team.plan, 32) ?? 'free'
+  const menu = sanitizeMenu(draft.menu)
+  const meta = sanitizeMeta(draft.meta, name)
+
+  // Machine-translate the SANITIZED published shape (never the raw draft) into
+  // the tenant's other supported locales. Throw-free: a translation failure
+  // degrades to fewer/no locales, never to a failed publish. See
+  // translate/translateSite.ts.
+  const srcLang = resolveSiteSourceLocale(team as { language?: string | null })
+  const i18n = await translatePublishedSite({
+    db: fs,
+    collection: SITE_PUBLISHED_COLLECTION,
+    id: teamId,
+    owner: { teamId },
+    published: { meta, menu, sections },
+    srcLang,
+  })
 
   // Shaped to match PublishedSite; typed as Dict for the Firestore write since
   // values are re-derived from sanitizers (platform strings, server timestamps).
@@ -491,13 +509,14 @@ export const publishWebsite = onCall(async (request) => {
     teamId,
     slug,
     name,
-    meta: sanitizeMeta(draft.meta, name),
+    meta,
     sections,
     // Absent ⇒ the renderer derives the old two-run header, so a site that has
     // never opened the menu editor publishes exactly what it published before.
-    menu: sanitizeMenu(draft.menu),
+    menu,
     socialLinks: socialLinks.length ? socialLinks : undefined,
     showBranding: plan === 'free' ? true : undefined,
+    i18n,
     published_at: FieldValue.serverTimestamp() as unknown as PublishedSite['published_at'],
     updated_at: FieldValue.serverTimestamp() as unknown as PublishedSite['updated_at'],
   })

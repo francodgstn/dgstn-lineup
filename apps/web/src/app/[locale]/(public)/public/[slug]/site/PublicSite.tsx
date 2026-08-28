@@ -1,19 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { collection, query, where, limit, getDocs } from 'firebase/firestore'
+import { collection, doc, getDoc, query, where, limit, getDocs } from 'firebase/firestore'
 import { useLocale, useTranslations } from 'next-intl'
 import { db } from '@/lib/firebase'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
   SITE_PUBLISHED_COLLECTION,
+  applySiteTranslations,
+  siteI18nDocId,
   parseDocId,
   parseDateKey,
   parseSlug,
   resolveSiteSurfaceLinks,
   routableSurfaces,
 } from '@linyup/shared'
-import type { PublishedSite, PublicSurface } from '@linyup/shared'
+import type { PublishedSite, PublicSurface, SiteTranslationDoc, SiteTranslationUnits } from '@linyup/shared'
 import { useRouter } from '@/i18n/navigation'
 import { publicHref, publicHrefLocalized } from '@/lib/publicRoutes'
 import { usePublicTeam } from '../PublicTeamProvider'
@@ -39,7 +41,9 @@ export default function PublicSite({ slug }: { slug: string }) {
   // fused with a preposition ("zum Shop") for the "To {name}" back links.
   const tSurfaces = useTranslations('PublicSurfaceNav')
   const tSpace = useTranslations('Space')
+  const tSite = useTranslations('Site')
   const [site, setSite] = useState<PublishedSite | null>(null)
+  const [i18nUnits, setI18nUnits] = useState<SiteTranslationUnits | null>(null)
   const [loading, setLoading] = useState(true)
   const [bookIntent, setBookIntent] = useState<BookIntent | null>(null)
   // The session a real, verified payment confirmed — NOT a boolean: pinning it to
@@ -50,16 +54,50 @@ export default function PublicSite({ slug }: { slug: string }) {
   const [paidSessionId, setPaidSessionId] = useState<string | null>(null)
 
   useEffect(() => {
-    const q = query(collection(db, SITE_PUBLISHED_COLLECTION), where('slug', '==', slug), limit(1))
-    getDocs(q)
-      .then((snap) => {
-        if (!snap.empty) setSite(snap.docs[0].data() as PublishedSite)
-      })
-      .catch((err: unknown) => {
+    let cancelled = false
+    async function run() {
+      let base: PublishedSite | null = null
+      try {
+        const snap = await getDocs(
+          query(collection(db, SITE_PUBLISHED_COLLECTION), where('slug', '==', slug), limit(1))
+        )
+        if (!snap.empty) base = snap.docs[0].data() as PublishedSite
+      } catch (err: unknown) {
         reportPublicLoadFailure('site/published', err) // terminal not-found, but never silent
-      })
-      .finally(() => setLoading(false))
-  }, [slug])
+      }
+      if (cancelled) return
+      // Fetch the sidecar (if any) BEFORE first paint, in the same loading
+      // state as the base fetch — a base-then-translated flash reads as a
+      // flicker, not localization. Units are resolved locally and committed in
+      // ONE batch with the site: a per-run reset, so a locale switch (this
+      // component is NOT remounted when only the [locale] param changes) can
+      // never leave the PREVIOUS locale's units applied — srcLang or a locale
+      // with no sidecar degrades to base text, not to the last language viewed.
+      let units: SiteTranslationUnits | null = null
+      const manifest = base?.i18n
+      if (base && manifest && locale !== manifest.srcLang && manifest.locales.includes(locale as (typeof manifest.locales)[number])) {
+        try {
+          const sidecarSnap = await getDoc(doc(db, SITE_PUBLISHED_COLLECTION, siteI18nDocId(base.teamId, locale)))
+          if (sidecarSnap.exists()) {
+            units = (sidecarSnap.data() as SiteTranslationDoc).units
+          }
+        } catch (err: unknown) {
+          reportPublicLoadFailure('site/i18n-sidecar', err) // falls back to base-language text
+        }
+      }
+      if (cancelled) return
+      setSite(base)
+      setI18nUnits(units)
+      setLoading(false)
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [slug, locale])
+
+  // The ONE resolver (packages/shared) — never re-derive translated fields here.
+  const translatedSite = useMemo(() => (site ? applySiteTranslations(site, i18nUnits) : null), [site, i18nUnits])
 
   // Reopen the overlay from the URL, so a refresh or a shared link lands the
   // visitor back where they were instead of on a bare website. Same param names
@@ -170,7 +208,7 @@ export default function PublicSite({ slug }: { slug: string }) {
     const candidates: PublicSurface[] = ['shop', 'space', 'documents']
     const liveSurfaces = candidates.filter((s) => live?.[s as keyof typeof live])
     // Studio overrides (hide / relabel / reorder) applied over what's live.
-    return resolveSiteSurfaceLinks(site?.meta.header, liveSurfaces, (s) => tSurfaces(s)).map(
+    return resolveSiteSurfaceLinks(translatedSite?.meta.header, liveSurfaces, (s) => tSurfaces(s)).map(
       ({ surface, label }) => ({
         // `surface` is carried so a stored menu item can resolve its own href —
         // the renderer looks links up by it rather than re-deriving URLs.
@@ -179,17 +217,17 @@ export default function PublicSite({ slug }: { slug: string }) {
         label,
       })
     )
-  }, [team.active_public_surfaces, site?.meta.header, locale, slug, tSurfaces])
+  }, [team.active_public_surfaces, translatedSite?.meta.header, locale, slug, tSurfaces])
 
   const memberControl = useMemo(
     () =>
       // Absent ⇒ shown; only an explicit `false` hides it.
-      site?.meta.header.showSignIn === false
+      translatedSite?.meta.header.showSignIn === false
         ? undefined
         : isAuthenticated && contact
           ? { label: tSpace('openSpace'), onClick: () => router.push(publicHref(slug, 'space')) }
           : { label: tSpace('signIn'), onClick: () => openSignIn() },
-    [site?.meta.header.showSignIn, isAuthenticated, contact, tSpace, router, slug, openSignIn]
+    [translatedSite?.meta.header.showSignIn, isAuthenticated, contact, tSpace, router, slug, openSignIn]
   )
 
   if (loading) {
@@ -200,11 +238,11 @@ export default function PublicSite({ slug }: { slug: string }) {
     )
   }
 
-  if (!site) {
+  if (!translatedSite) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-4 text-center">
-        <p className="text-lg font-semibold">Site not found</p>
-        <p className="text-sm text-muted-foreground">No published website exists at this URL.</p>
+        <p className="text-lg font-semibold">{tSite('notFoundTitle')}</p>
+        <p className="text-sm text-muted-foreground">{tSite('notFoundBody')}</p>
       </div>
     )
   }
@@ -212,7 +250,7 @@ export default function PublicSite({ slug }: { slug: string }) {
   return (
     <>
       <WebsiteRenderer
-        site={site}
+        site={translatedSite}
         onBook={openBooking}
         surfaceLinks={surfaceLinks}
         memberControl={memberControl}

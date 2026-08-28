@@ -347,6 +347,13 @@ survives the decision.
 ever. Machine translation into the PUBLIC MIRRORS, for findability. Shaped below;
 not yet scheduled.**
 
+> **Status 2026-08-28: the shaped machine-translation path SHIPPED for the
+> website + embed surfaces** — author-once in the tenant's language, translate
+> at publish into hash-guarded per-locale stores, `hreflang`, and the binding
+> text rule below obeyed. Full architecture: `docs/site-translations.md`. The
+> `public_profile` **booking/shop mirrors remain unscheduled** — the
+> `sync*PublicProfile` translation step shaped below is still open.
+
 > **Revised later the same day, and the revision is the important part.** The
 > first answer below was "don't build it", resting on two claims. One of them was
 > wrong.

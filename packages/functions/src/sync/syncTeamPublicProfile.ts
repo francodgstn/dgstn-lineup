@@ -23,6 +23,7 @@ import {
   normalizeKioskConfig,
   resolveAppointmentDurations,
   resolveDurationSale,
+  PUBLIC_LOCALES,
   type CustomFieldDefinition,
 } from '@linyup/shared'
 import type {
@@ -35,6 +36,7 @@ import type {
   PublicRequiredWaiver,
   RequiredWaiverEntry,
   SaasPlan,
+  UiLanguage,
 } from '@linyup/shared'
 import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
 import { resolveActivePluginInstalls } from '../utils/plugins'
@@ -298,6 +300,13 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // the parent org's published events alongside the studio's own — an org
     // event has no teamId, so it cannot be found by a teamId query.
     org_id: data.org_id || null,
+    // The studio's AUTHORING language — an honest mirror, not a resolved one:
+    // null when `teams/{id}.language` is unset or not a supported locale.
+    // Public surfaces default the absence themselves, through
+    // `resolveSiteSourceLocale` (utils/siteTranslation.ts) — never here.
+    language: ((PUBLIC_LOCALES as readonly string[]).includes(data.language as string)
+      ? (data.language as UiLanguage)
+      : null),
     sport_type: data.sport_type || null,
     profileImage: data.profileImage || null,
     heroImage: data.heroImage || null,

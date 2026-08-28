@@ -1,5 +1,6 @@
 import type { Timestamp } from './common'
 import type { PublicSurface, SocialLink } from './team'
+import type { UiLanguage } from '../utils/regional'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Website plugin — studio site builder.
@@ -394,6 +395,60 @@ export interface SiteMeta {
   footer: SiteFooter
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Site translations (public-site localization)
+//
+// Tenant-authored site content is machine-translated at publish/save time into
+// the other locales of en/de/fr/it and stored as flat unit maps keyed by
+// stable section-id-based keys. The key grammar, the extractor and the ONE
+// resolver live in utils/siteTranslation.ts — these are only the stored shapes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One translated string. `srcHash` is `translationSourceHash(...)` of the
+ *  SOURCE text the translation was made from — the resolver substitutes the
+ *  unit ONLY while the base text still hashes to it, so a stale translation
+ *  degrades to the base language, never to wrong text. */
+export interface TranslatedUnit {
+  text: string
+  /** translationSourceHash(source text at write time). */
+  srcHash: string
+  /** Future manual override (Option C). Written only by a future callable; MT
+   *  writers keep it while srcHash matches and clear it when the source changes.
+   *  The resolver never reads it. */
+  pinned?: boolean
+}
+
+/** Flat unit map, keyed by the grammar in utils/siteTranslation.ts. */
+export type SiteTranslationUnits = Record<string, TranslatedUnit>
+
+/** Publisher-written summary on PublishedSite / OrgPublishedSite /
+ *  EmbedWidgetSet.i18n: which locale the tenant authored in, and which target
+ *  locales have a sidecar / inline unit map. */
+export interface SiteI18nManifest {
+  srcLang: UiLanguage
+  locales: UiLanguage[]
+}
+
+/**
+ * Per-locale translation sidecar — a doc in the SAME collection as the site it
+ * translates: site_published/{teamId}__i18n_{locale} and
+ * org_site_published/{orgId}__i18n_{locale} (doc id via `siteI18nDocId`,
+ * paths.ts). Function-write only, like every other doc in those collections.
+ *
+ * NEVER carries a `slug` field: the public slug queries on these collections
+ * must never be able to return a sidecar instead of the site itself.
+ */
+export interface SiteTranslationDoc {
+  kind: 'site_i18n'
+  teamId?: string
+  orgId?: string
+  /** Target locale — never equals `srcLang`. */
+  locale: UiLanguage
+  srcLang: UiLanguage
+  units: SiteTranslationUnits
+  updated_at?: Timestamp
+}
+
 /** PRIVATE working copy — site_drafts/{teamId}. Manager+ read/write. */
 export interface SiteDraft {
   teamId: string
@@ -423,6 +478,8 @@ export interface PublishedSite {
   socialLinks?: SocialLink[]
   /** Denormalised from the plan — true on the free plan ("Powered by Linyup"). */
   showBranding?: boolean
+  /** Which translation sidecars exist for this site (written by the publisher). */
+  i18n?: SiteI18nManifest
   published_at?: Timestamp
   updated_at?: Timestamp
 }
@@ -445,6 +502,10 @@ export interface WidgetTheme {
   font?: SiteFont
   /** 'transparent' lets the host page's background show through (blends in). */
   background: 'solid' | 'transparent'
+  /** Which language the embedded widget renders in. 'auto' (or absent — today's
+   *  behaviour) follows the visitor's Accept-Language; a pinned locale bakes the
+   *  language into the embed snippet URL. */
+  locale?: 'auto' | UiLanguage
 }
 
 /** One standalone, embeddable widget: a section plus a studio-facing label and look. */
@@ -462,6 +523,15 @@ export interface EmbedWidgetSet {
   widgets: EmbedWidget[]
   /** Denormalised from the team so contact widgets can render social icons. */
   socialLinks?: SocialLink[]
+  /**
+   * Inline widget translations (no sidecar doc — widgets have no draft/publish
+   * split, so the translations ride on the one public doc). Written WHOLE by the
+   * onEmbedWidgetsWritten trigger; saveEmbedWidgets carries it forward on client
+   * saves. A wiped field self-heals at the next trigger run. Keys inside each
+   * locale's unit map use the same `s.{sectionId}.*` grammar as the site
+   * sidecars (utils/siteTranslation.ts).
+   */
+  i18n?: { srcLang: UiLanguage; locales: Partial<Record<UiLanguage, SiteTranslationUnits>> }
   updated_at?: Timestamp
   updatedBy?: string
 }

@@ -7,6 +7,7 @@ import type {
   GallerySection,
   ContactSection,
   SiteMenuItem,
+  SiteI18nManifest,
 } from './website'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,6 +120,9 @@ export interface OrgPublishedSite {
   socialLinks?: SocialLink[]
   /** Denormalised from the plan — true on the free plan ("Powered by Linyup"). */
   showBranding?: boolean
+  /** Which translation sidecars exist for this site (written by the publisher).
+   *  Sidecars live beside this doc: org_site_published/{orgId}__i18n_{locale}. */
+  i18n?: SiteI18nManifest
   published_at?: Timestamp
   updated_at?: Timestamp
 }

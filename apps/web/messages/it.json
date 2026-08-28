@@ -2302,7 +2302,9 @@
     "sharePreviewNoDescription": "Nessuna descrizione — questa riga resta vuota nelle chat.",
     "sharePreviewEditDescription": "Aggiungine una",
     "sharePreviewHint": "Ecco come appare il tuo link quando viene incollato in WhatsApp, Instagram o LinkedIn. Usa la tua immagine di copertina, il nome dello studio e la descrizione.",
-    "eventsLink": "Eventi"
+    "eventsLink": "Eventi",
+    "notFoundTitle": "Team non trovato",
+    "notFoundBody": "Nessun team esiste a questo URL."
   },
   "Appointments": {
     "title": "Appuntamenti",
@@ -3114,7 +3116,9 @@
     "terminologyAddTranslations": "Aggiungi traduzioni (facoltativo)",
     "generalTitle": "Generale",
     "socialTitle": "Link social",
-    "socialDescription": "Mostrati come icone nella sezione contatti del tuo sito, se impostata per visualizzarli."
+    "socialDescription": "Mostrati come icone nella sezione contatti del tuo sito, se impostata per visualizzarli.",
+    "language": "Lingua",
+    "languageHint": "La lingua in cui sono scritti i contenuti e le comunicazioni di questa organizzazione — inviti, avvisi e contenuti condivisi. La lingua della tua dashboard viene scelta separatamente."
   },
   "OrgInvite": {
     "title": "Invito organizzazione",
@@ -7008,7 +7012,11 @@
     "tableDiscount": "{percent}% di sconto",
     "tableAnyPlanNote": "Con qualsiasi abbonamento — la registrazione è gratuita",
     "tableOpenNote": "Aperto a tutti",
-    "tableFreeNote": "Prenotazione gratuita"
+    "tableFreeNote": "Prenotazione gratuita",
+    "notFoundTitle": "Sito non trovato",
+    "notFoundBody": "Nessun sito pubblicato esiste a questo URL.",
+    "embedUnavailable": "Questa sezione non è disponibile.",
+    "menuAria": "Menu"
   },
   "OrgMemberInvite": {
     "title": "Invito all'organizzazione",

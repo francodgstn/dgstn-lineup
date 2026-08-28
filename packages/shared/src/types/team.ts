@@ -16,7 +16,7 @@ import type { Capability, DataScope } from './capabilities'
 // Type-only — kiosk.ts imports nothing from here; no cycle.
 import type { KioskPublicConfig } from './kiosk'
 // Type-only — utils/regional.ts imports nothing from here; no cycle.
-import type { RegionalSettings } from '../utils/regional'
+import type { RegionalSettings, UiLanguage } from '../utils/regional'
 
 // Team roles. owner/manager/viewer are the fixed SYSTEM roles (capability sets in
 // code, never customizable). 'coach' is a predefined-but-team-customizable role
@@ -879,6 +879,12 @@ export interface TeamPublicProfile {
   // the parent org's published events alongside the studio's own — an org event
   // has no teamId, so a teamId query can never find it. Null when independent.
   org_id?: string | null
+  // The studio's AUTHORING language (mirrors teams/{id}.language, written by
+  // syncTeamPublicProfile). Public surfaces read it as the base language of the
+  // tenant's site content — the language translations degrade to when stale.
+  // Absent/null until the next sync; readers fall back through
+  // resolveSiteSourceLocale (shared/utils/siteTranslation.ts), never inline.
+  language?: UiLanguage | null
   links?: TeamLink[]
   sport_type?: string
   profileImage?: string

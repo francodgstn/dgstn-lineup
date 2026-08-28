@@ -22,7 +22,9 @@ import {
   TENANT_DATA_COLLECTIONS,
   TENANT_TEAM_DOC_COLLECTION,
   tenantStoragePrefix,
+  SITE_PUBLISHED_COLLECTION,
 } from '@linyup/shared'
+import { deleteSiteI18nSidecars } from '../translate/translateSite'
 
 /**
  * Hard-delete every team-scoped record (Firestore + Storage). Keeps Auth users.
@@ -66,6 +68,14 @@ export async function purgeTeam(teamId: string, dryRun: boolean): Promise<void> 
         )
       } else {
         await db.recursiveDelete(ref)
+        // site_published carries per-locale sidecar docs (a SEPARATE doc id,
+        // `{teamId}__i18n_{locale}` — see translate/translateSite.ts) that a
+        // recursiveDelete of the exact-id doc never reaches. embed_widgets
+        // has no sidecars (its translations ride inline on the doc this
+        // branch already deleted), so it needs nothing extra.
+        if (entry.collection === SITE_PUBLISHED_COLLECTION) {
+          await deleteSiteI18nSidecars(db, SITE_PUBLISHED_COLLECTION, teamId)
+        }
       }
     }
     if (entry.externalTeardown === 'stripe_connect') {

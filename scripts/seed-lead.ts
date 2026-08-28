@@ -59,6 +59,9 @@ import {
   AVAILABILITY_EXCEPTIONS_COLLECTION,
   GIFT_CARDS_SUBCOLLECTION,
   TENANT_DATA_COLLECTIONS,
+  SITE_PUBLISHED_COLLECTION,
+  PUBLIC_LOCALES,
+  siteI18nDocId,
   normalizeActivityTags,
 } from '@linyup/shared'
 import {
@@ -571,6 +574,14 @@ async function resetLeadTenant(teamId: string) {
   }
   for (const collection of TENANT_DOCID_COLLECTIONS) {
     await db.recursiveDelete(db.collection(collection).doc(teamId))
+  }
+  // site_published carries per-locale i18n sidecar docs under their OWN ids
+  // (`{teamId}__i18n_{locale}`, siteI18nDocId — see
+  // packages/functions/src/translate/translateSite.ts), which the exact-id
+  // delete above never reaches. Same extra sweep purgeTeam does; deleting a
+  // doc that does not exist is a no-op.
+  for (const locale of PUBLIC_LOCALES) {
+    await db.doc(`${SITE_PUBLISHED_COLLECTION}/${siteI18nDocId(teamId, locale)}`).delete()
   }
 
   // Storage prefix (tenantStoragePrefix)

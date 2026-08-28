@@ -70,19 +70,27 @@ export async function saveSiteDraft(teamId: string, userId: string, draft: SiteD
 }
 
 /** Persist the team's standalone embed widgets (full overwrite — there's no
- *  draft/publish split; the doc IS the public config, so "save = live"). */
+ *  draft/publish split; the doc IS the public config, so "save = live").
+ *  `i18n` is carried forward from the currently-loaded doc by the caller —
+ *  a full overwrite with no `i18n` would wipe the onEmbedWidgetsWritten
+ *  trigger's machine translations (and its hash cache) on every save. Not a
+ *  correctness bug (the trigger self-heals, translations are just recomputed
+ *  at provider cost on the next write), but the carry-forward is the polite
+ *  path. */
 export async function saveEmbedWidgets(
   teamId: string,
   userId: string,
   slug: string,
   widgets: EmbedWidget[],
-  socialLinks?: SocialLink[]
+  socialLinks?: SocialLink[],
+  i18n?: EmbedWidgetSet['i18n']
 ): Promise<void> {
   const payload = stripUndefinedDeep({
     teamId,
     slug,
     widgets,
     socialLinks: socialLinks ?? [],
+    i18n,
   })
   await setDoc(doc(db, EMBED_WIDGETS_COLLECTION, teamId), {
     ...payload,

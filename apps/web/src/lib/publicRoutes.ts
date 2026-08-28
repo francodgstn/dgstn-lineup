@@ -58,10 +58,16 @@ export function publicSubHref<R extends PublicRoutable>(
  * Hand-concatenating `/${locale}` produces `/en/public/…`, which then costs a
  * 302 on every click.
  *
- * Without this, an un-prefixed href from a `/fr/…` page falls back to next-intl's
- * cookie/Accept-Language detection — and public surfaces never call
- * `persistLocale`, so a visitor who arrived from an emailed `/fr/public/…` link
- * with an English browser silently flips to English.
+ * A public surface now persists an EXPLICIT choice: `LocaleSwitcher` writes
+ * the `NEXT_LOCALE` cookie via `persistLocale` before navigating, so once a
+ * visitor picks a language on a public page it sticks across the site the same
+ * way it does in the app. First-visit auto-detection (cookie/Accept-Language)
+ * is unchanged for everyone who hasn't chosen yet. That still doesn't help a
+ * raw `<a href>`, though — an unprefixed one falls back to whatever
+ * cookie/Accept-Language resolves to at THAT click, so the prefixed-href
+ * regime below is still required for iframes (the embed) and the website
+ * builder (no router context): the rationale stands independent of the
+ * cookie.
  */
 export function publicHrefLocalized<R extends PublicRoutable>(
   locale: string,

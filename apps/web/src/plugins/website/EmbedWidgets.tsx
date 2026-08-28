@@ -13,6 +13,7 @@ import type {
   SocialLink,
   SiteFont,
   SiteTheme,
+  UiLanguage,
 } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,6 +61,13 @@ const FONT_OPTS: { value: SiteFont; label: string }[] = [
   { value: 'sans', label: 'Sans' },
   { value: 'serif', label: 'Serif' },
   { value: 'rounded', label: 'Rounded' },
+]
+const LANGUAGE_OPTS: { value: 'auto' | UiLanguage; label: string }[] = [
+  { value: 'auto', label: "Auto (visitor's language)" },
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
 ]
 
 function defaultTheme(accent?: string): WidgetTheme {
@@ -125,7 +133,7 @@ export function EmbedWidgets({
     if (!user || !slug || !widgets) return
     setSaving(true)
     try {
-      await saveEmbedWidgets(teamId, user.uid, slug, widgets, socialLinks)
+      await saveEmbedWidgets(teamId, user.uid, slug, widgets, socialLinks, saved?.i18n)
       setDirty(false)
       await qc.invalidateQueries({ queryKey: ['embed-widgets', teamId] })
       toast.success(t('embedSaved'))
@@ -136,11 +144,26 @@ export function EmbedWidgets({
     }
   }
 
-  const snippetFor = (id: string) =>
-    `<iframe src="${origin}/embed/${slug}/${id}" data-linyup-embed style="width:100%;border:0" loading="lazy"></iframe>\n<script src="${origin}/embed.js" async></script>`
-  async function copy(id: string) {
+  // 'auto'/absent — the widget follows the visitor's Accept-Language, same URL
+  // as before this feature existed. 'de'/'fr'/'it' bake the locale into the
+  // path (as-needed prefix). 'en' is the UNPREFIXED default locale under
+  // localePrefix 'as-needed', so pinning it needs the `?hl=en` escape hatch —
+  // proxy.ts rewrites that marker to the English page before next-intl would
+  // otherwise Accept-Language-redirect an unprefixed request elsewhere.
+  const embedPathFor = (id: string, locale?: 'auto' | UiLanguage) => {
+    if (locale === 'de' || locale === 'fr' || locale === 'it') {
+      return `${origin}/${locale}/embed/${slug}/${id}`
+    }
+    if (locale === 'en') {
+      return `${origin}/embed/${slug}/${id}?hl=en`
+    }
+    return `${origin}/embed/${slug}/${id}`
+  }
+  const snippetFor = (id: string, locale?: 'auto' | UiLanguage) =>
+    `<iframe src="${embedPathFor(id, locale)}" data-linyup-embed style="width:100%;border:0" loading="lazy"></iframe>\n<script src="${origin}/embed.js" async></script>`
+  async function copy(id: string, locale?: 'auto' | UiLanguage) {
     try {
-      await navigator.clipboard.writeText(snippetFor(id))
+      await navigator.clipboard.writeText(snippetFor(id, locale))
       toast.success(t('embedCopied'))
     } catch {
       toast.error(t('embedCopyError'))
@@ -189,7 +212,12 @@ export function EmbedWidgets({
                       {wdg.theme?.background === 'transparent' ? ' · transparent' : ''}
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" disabled={!slug} onClick={() => copy(wdg.id)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!slug}
+                    onClick={() => copy(wdg.id, wdg.theme?.locale)}
+                  >
                     <Copy className="mr-1 h-3.5 w-3.5" />
                     {t('embedCopy')}
                   </Button>
@@ -267,6 +295,26 @@ export function EmbedWidgets({
                           </Select>
                         </div>
                         <div className="space-y-1.5">
+                          <Label className="text-xs">Language</Label>
+                          <Select
+                            value={wdg.theme?.locale ?? 'auto'}
+                            onValueChange={(v) =>
+                              patchTheme(wdg.id, { locale: v as 'auto' | UiLanguage })
+                            }
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {LANGUAGE_OPTS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                  {o.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
                           <Label className="text-xs">Accent color</Label>
                           <ColorPicker
                             value={wdg.theme?.accentColor ?? brandAccent ?? DEFAULT_ACCENT}
@@ -288,7 +336,7 @@ export function EmbedWidgets({
                     </div>
 
                     <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                      <code>{snippetFor(wdg.id)}</code>
+                      <code>{snippetFor(wdg.id, wdg.theme?.locale)}</code>
                     </pre>
                   </div>
                 )}

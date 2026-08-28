@@ -270,6 +270,12 @@ export { registerSenderDomain, checkSenderDomain, useManagedSender } from './mai
 export { sendTestEmail } from './mail/sendTestEmail'
 export { handleBrevoWebhook } from './mail/handleBrevoWebhook'
 
+// Public-site localization — machine-translates tenant-authored site content
+// (team/org published sites go through publishWebsite/publishOrgWebsite
+// directly; embed widgets have no publish step, so they get their own
+// trigger). See ./translate/translateSite.ts.
+export { onEmbedWidgetsWritten } from './translate/onEmbedWidgetsWritten'
+
 // Custom PUBLIC domains (Cloudflare for SaaS) — the domain a studio's pages are
 // SERVED from, as opposed to the one it SENDS from above. See docs/custom-domains.md.
 export {
