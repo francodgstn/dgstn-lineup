@@ -79,6 +79,7 @@ variable "secret_ids" {
     "deepl-api-key",        # DeepL machine translation (public site/embed localization)
     "posthog-api-key",
     "ai-assistant-unlock-key", # strong key to unlock the locked AI assistant plugin
+    "deepl-api-key",           # DeepL machine translation for public sites (docs/site-translations.md)
     # Cloudflare for SaaS — custom domains. PROD ONLY, deliberately: the
     # feature is gated to linyup-prod (docs/custom-domains.md → "Environments"),
     # and a token that exists off-prod is a token that can register a hostname
@@ -107,6 +108,9 @@ variable "admin_writable_secret_ids" {
     # Settings → Domains. Without this the save fails with
     # "PERMISSION_DENIED: secretmanager.versions.add".
     "cloudflare-api-token",
+    # Settings → Translation: the DeepL key. Same failure mode as above when
+    # missing.
+    "deepl-api-key",
   ]
 }
 

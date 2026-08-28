@@ -79,6 +79,7 @@ variable "secret_ids" {
     "deepl-api-key",        # DeepL machine translation (public site/embed localization)
     "posthog-api-key",
     "ai-assistant-unlock-key", # strong key to unlock the locked AI assistant plugin
+    "deepl-api-key",           # DeepL machine translation for public sites (docs/site-translations.md)
   ]
 }
 
@@ -99,6 +100,9 @@ variable "admin_writable_secret_ids" {
     "stripe-secret-key",
     "stripe-webhook-secret",
     "stripe-connect-webhook-secret",
+    # Settings → Translation: the DeepL key. Without this the save fails with
+    # "PERMISSION_DENIED: secretmanager.versions.add".
+    "deepl-api-key",
   ]
 }
 
