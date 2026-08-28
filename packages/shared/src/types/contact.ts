@@ -323,6 +323,16 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
+  // Coaching (denormalized by the onGoalWrite / check-in triggers).
+  //
+  // These exist so `contactAttentionReasons` can name a coaching reason without
+  // breaking its own rule: every reason reads a fact ALREADY on the contact
+  // document, no extra read and no fan-out. Without them, "has an overdue goal"
+  // would be one subcollection query per row of the contacts list.
+  coaching_open_count?: number
+  coaching_overdue_count?: number
+  last_checkin_at?: Timestamp
+
   // Marketing opt-out. Honoured by the automation engine and by outreach sends;
   // DISTINCT from the ESP suppression list (mail_suppressions), which records
   // bounces/blocks/spam reports and is applied inside the mail service.

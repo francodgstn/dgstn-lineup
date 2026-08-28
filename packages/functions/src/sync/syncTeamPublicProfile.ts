@@ -331,6 +331,13 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
         type: f.type,
         ...(f.options?.length ? { options: f.options } : {}),
       })),
+    // The team's coaching dimensions — the ONE list behind both goal categories
+    // and check-in axes. Mirrored because the Space runs on a contact session,
+    // which cannot read `teams/{id}` at all; without this a studio that
+    // customises its axes never reaches the member filling in the form, who
+    // silently gets the defaults instead. Absent when never configured, which
+    // `resolveCoachingDimensions` already reads as "use the defaults".
+    performance_indicators: data.performance_indicators ?? null,
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!data.settings?.referral?.enabled,

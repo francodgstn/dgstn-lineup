@@ -17,6 +17,7 @@ import { materializeRecurringEntries } from './materializeRecurringEntries'
 import { refreshCustomDomains } from './refreshCustomDomains'
 import { assertZoneRecordsUnproxied } from './assertZoneRecordsUnproxied'
 import { rollSessionSeries } from './rollSessionSeries'
+import { stampOverdueGoals } from './stampOverdueGoals'
 import { sweepWaitlistOffers } from '../booking/waitlist/sweep'
 import { publishMessagingEnv } from '../mail/messagingEnvStatus'
 
@@ -110,6 +111,10 @@ export const dailyTasks = onSchedule(
       // still flattens CNAMEs, which is what silently broke DKIM and cert
       // renewal on 2026-08-21.
       { name: 'assertZoneRecordsUnproxied', handler: assertZoneRecordsUnproxied },
+      // Stamps `overdue_at` on goals/tasks whose target_date has just passed —
+      // wakes `trackGoals`' counter recompute. Clearing the stamp back off
+      // lives in `trackGoals` itself, not here — see stampOverdueGoals.ts.
+      { name: 'stampOverdueGoals', handler: stampOverdueGoals },
     ]
 
     const results: TaskResult[] = []

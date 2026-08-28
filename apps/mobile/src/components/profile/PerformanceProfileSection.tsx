@@ -16,7 +16,6 @@ import {
 import Svg, { Circle, Line, Polygon, Polyline, Text as SvgText } from 'react-native-svg';
 import { FirestoreService } from '../../services/firestore';
 import { PerformanceIndicator, PerformanceCheckin, ProfileKey } from '../../types';
-import { detectPerformanceProfile } from '../../utils/performanceProfile';
 import { Timestamp } from 'firebase/firestore';
 
 interface Props {
@@ -339,6 +338,8 @@ interface CheckinModalProps {
 
 const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicators, onDismiss, onSubmit }) => {
   const theme = useTheme();
+  // Unset until the member actually taps a value for every axis — defaulting
+  // every axis to 3 let a check-in save with zero interaction.
   const [scores, setScores] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState('');
   const [context, setContext] = useState<PerformanceContextValue>('self');
@@ -346,15 +347,16 @@ const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicat
 
   useEffect(() => {
     if (visible) {
-      const initial: Record<string, number> = {};
-      indicators.forEach(ind => (initial[ind.key] = 3));
-      setScores(initial);
+      setScores({});
       setNotes('');
       setContext('self');
     }
   }, [visible, indicators]);
 
+  const allRated = indicators.length > 0 && indicators.every(ind => typeof scores[ind.key] === 'number');
+
   const handleSubmit = async () => {
+    if (!allRated) return;
     setSubmitting(true);
     try {
       await onSubmit(scores, notes.trim(), context);
@@ -385,7 +387,7 @@ const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicat
             <ScoreRow
               key={ind.key}
               indicator={ind}
-              value={scores[ind.key] ?? 3}
+              value={scores[ind.key] ?? 0}
               onChange={v => setScores(prev => ({ ...prev, [ind.key]: v }))}
             />
           ))}
@@ -416,7 +418,7 @@ const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicat
 
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
-            <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting}>
+            <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting || !allRated}>
               Save
             </Button>
           </View>
@@ -546,7 +548,7 @@ export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }
     try {
       const [data, inds] = await Promise.all([
         FirestoreService.getPerformanceCheckins(contactId, 10),
-        teamId ? FirestoreService.getTeamPerformanceIndicators(teamId) : Promise.resolve([]),
+        teamId ? FirestoreService.getCoachingDimensions(teamId) : Promise.resolve([]),
       ]);
       setCheckins(data);
       setIndicators(inds);
@@ -657,7 +659,7 @@ export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }
                     </Text>
                   </View>
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {profileDisplay.message(latestStudentCheckin?.primary_lever, latestStudentCheckin?.anchor)}
+                    {profileDisplay.message(latestStudentCheckin?.primary_lever ?? undefined, latestStudentCheckin?.anchor ?? undefined)}
                   </Text>
                 </View>
               )}

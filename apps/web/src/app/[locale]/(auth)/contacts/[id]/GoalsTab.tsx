@@ -5,16 +5,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
   collection, query, orderBy, getDocs, addDoc, updateDoc, deleteDoc,
-  doc, serverTimestamp, Timestamp,
+  doc, serverTimestamp, Timestamp, writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION } from '@linyup/shared'
-import type { Contact, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
+import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
+import type { Contact, Team, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -22,19 +22,16 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   Flag, CheckSquare, Circle, ChevronDown, ChevronUp, Plus, Trash2,
-  Star, Info, CheckCircle2,
+  Star, Info, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { CoachAssignment } from './CoachAssignment'
+import { PerformanceProfilePanel } from './PerformanceProfilePanel'
 
 // ─── constants ────────────────────────────────────────────────────────────────
-
-const DEFAULT_CATEGORIES: PerformanceIndicator[] = [
-  { key: 'technique', label: 'Technique' },
-  { key: 'attitude', label: 'Attitude' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'physical', label: 'Physical' },
-  { key: 'mental', label: 'Mental' },
-]
+// Categories used to be a fixed technique/attitude/attendance/physical/mental
+// list, separate from the check-in axes. They are the SAME team-configurable
+// list now (`resolveCoachingDimensions`, `@linyup/shared`) — see the header of
+// `packages/shared/src/types/goal.ts` ("ONE VOCABULARY").
 
 const ALL_STATUSES: GoalStatus[] = ['open', 'in_progress', 'achieved', 'abandoned']
 
@@ -44,6 +41,11 @@ const STATUS_STYLES: Record<GoalStatus, string> = {
   achieved: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
   abandoned: 'bg-muted text-muted-foreground',
 }
+
+// Sentinel for the Select's "no parent" option — Radix Select rejects an
+// empty-string item value, and `undefined`/`null` aren't valid values either.
+const NO_PARENT = '__general__'
+
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,7 +83,7 @@ function useGoals(contactId: string) {
 async function fetchEvaluations(contactId: string, goalId: string): Promise<GoalEvaluation[]> {
   const snap = await getDocs(
     query(
-      collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goalId, 'evaluations'),
+      collection(db, CONTACTS_COLLECTION, contactId, CONTACT_GOALS_SUBCOLLECTION, goalId, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION),
       orderBy('evaluated_at', 'desc'),
     ),
   )
@@ -103,13 +105,15 @@ function StarDisplay({ score }: { score: number }) {
   )
 }
 
-function StarInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+// `value` starts (and can stay) unset — see EvalDialog: a rating that was never
+// touched must not be indistinguishable from a deliberate "3".
+function StarInput({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
     <span className="flex gap-1.5">
       {[1, 2, 3, 4, 5].map((i) => (
         <button key={i} type="button" onClick={() => onChange(i)}>
           <Star
-            className={`h-7 w-7 transition-colors ${i <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground hover:text-amber-300'}`}
+            className={`h-7 w-7 transition-colors ${value !== null && i <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground hover:text-amber-300'}`}
           />
         </button>
       ))}
@@ -127,22 +131,25 @@ interface EvalDialogProps {
   onSubmit: (score: number, notes: string, statusAfter: GoalStatus) => Promise<void>
 }
 
+// Score starts UNSET (never a default 3) — a stray double-click on Save used to
+// write a permanent, dated rating indistinguishable from a deliberate neutral.
 function EvalDialog({ open, goalStatus, initial, onClose, onSubmit }: EvalDialogProps) {
   const t = useTranslations('Contacts')
-  const [score, setScore] = useState(initial?.score ?? 3)
+  const [score, setScore] = useState<number | null>(initial?.score ?? null)
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [statusAfter, setStatusAfter] = useState<GoalStatus>(initial?.status_after ?? goalStatus)
   const [saving, setSaving] = useState(false)
 
   const handleOpen = (o: boolean) => {
     if (o) {
-      setScore(initial?.score ?? 3)
+      setScore(initial?.score ?? null)
       setNotes(initial?.notes ?? '')
       setStatusAfter(initial?.status_after ?? goalStatus)
     }
   }
 
   const save = async () => {
+    if (score == null) return
     setSaving(true)
     try { await onSubmit(score, notes.trim(), statusAfter) } finally { setSaving(false) }
   }
@@ -157,6 +164,7 @@ function EvalDialog({ open, goalStatus, initial, onClose, onSubmit }: EvalDialog
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('goalScore')}</p>
             <StarInput value={score} onChange={setScore} />
+            {score == null && <p className="text-xs text-muted-foreground">{t('goalScoreHint')}</p>}
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('goalNotes')}</label>
@@ -184,7 +192,7 @@ function EvalDialog({ open, goalStatus, initial, onClose, onSubmit }: EvalDialog
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>{t('cancel')}</Button>
-          <Button onClick={save} disabled={saving}>{saving ? '…' : t('save')}</Button>
+          <Button onClick={save} disabled={saving || score == null}>{saving ? '…' : t('save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -198,17 +206,26 @@ interface GoalFormDialogProps {
   type: GoalType
   categories: PerformanceIndicator[]
   initial?: Goal
+  /** Steps only: the goals a step can attach to. Absent/empty hides the picker
+   *  (there is nothing to parent to yet). */
+  parentOptions?: { id: string; title: string }[]
+  /** Steps only, new step: pre-filled when opened from a goal card's own "add
+   *  step" button; unset (General) when opened from the General section. */
+  defaultParentGoalId?: string | null
   onClose: () => void
-  onSubmit: (data: { title: string; description: string; categories: string[]; targetDate: Date | null }) => Promise<void>
+  onSubmit: (data: { title: string; description: string; categories: string[]; targetDate: Date | null; parentGoalId: string | null }) => Promise<void>
 }
 
-function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: GoalFormDialogProps) {
+function GoalFormDialog({ open, type, categories, initial, parentOptions, defaultParentGoalId, onClose, onSubmit }: GoalFormDialogProps) {
   const t = useTranslations('Contacts')
   const [title, setTitle] = useState(initial?.title ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [selectedCats, setSelectedCats] = useState<string[]>(initial?.categories ?? [])
   const [targetDate, setTargetDate] = useState<Date | null>(
     tsToDate(initial?.target_date) ?? null,
+  )
+  const [parentGoalId, setParentGoalId] = useState<string | null>(
+    initial ? (initial.parent_goal_id ?? null) : (defaultParentGoalId ?? null),
   )
   const [saving, setSaving] = useState(false)
 
@@ -218,6 +235,7 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
       setDescription(initial?.description ?? '')
       setSelectedCats(initial?.categories ?? [])
       setTargetDate(tsToDate(initial?.target_date) ?? null)
+      setParentGoalId(initial ? (initial.parent_goal_id ?? null) : (defaultParentGoalId ?? null))
     }
   }
 
@@ -233,6 +251,7 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
         description: description.trim(),
         categories: selectedCats,
         targetDate: targetDate,
+        parentGoalId,
       })
     } finally { setSaving(false) }
   }
@@ -279,6 +298,23 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
               </div>
             </div>
           )}
+          {!isGoal && parentOptions && parentOptions.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">{t('goalFormParentGoal')}</label>
+              <Select
+                value={parentGoalId ?? NO_PARENT}
+                onValueChange={(v) => setParentGoalId(v === NO_PARENT ? null : v)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PARENT}>{t('goalFormParentGoalNone')}</SelectItem>
+                  {parentOptions.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('goalFormTargetDate')}</label>
             <DatePicker
@@ -299,16 +335,46 @@ function GoalFormDialog({ open, type, categories, initial, onClose, onSubmit }: 
   )
 }
 
+// ─── shared collapsed-state chips (score, last evaluated, overdue) ────────────
+
+function GoalStateChips({ goal, t }: { goal: Goal; t: ReturnType<typeof useTranslations> }) {
+  const overdue = goalIsOverdue(goal)
+  if (goal.latest_score == null && !goal.last_evaluated_at && !overdue) return null
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {goal.latest_score != null && (
+        <span className="inline-flex items-center gap-1">
+          <StarDisplay score={goal.latest_score} />
+        </span>
+      )}
+      {goal.last_evaluated_at && (
+        <span className="text-xs text-muted-foreground">
+          {t('goalLastEvaluatedOn', { date: formatDate(goal.last_evaluated_at) })}
+        </span>
+      )}
+      {overdue && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
+          <AlertTriangle className="h-3 w-3" />
+          {t('goalOverdueBadge')}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ─── GoalCard ─────────────────────────────────────────────────────────────────
 
 interface GoalCardProps {
   goal: Goal
   contactId: string
   categories: PerformanceIndicator[]
+  steps: Goal[]
   onChanged: () => void
+  onAddStep: (goalId: string) => void
+  onEditStep: (step: Goal) => void
 }
 
-function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
+function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, onEditStep }: GoalCardProps) {
   const t = useTranslations('Contacts')
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState(false)
@@ -332,15 +398,20 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
     setExpanded((e) => !e)
   }
 
+  // ONE BATCH, not two awaits. An evaluation and the status it moves the goal to
+  // are a single fact: if the second write never lands, the goal keeps a status
+  // its own newest evaluation contradicts, and nothing later reconciles them.
   const handleAddEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
-    await addDoc(collection(goalRef, 'evaluations'), {
+    const batch = writeBatch(db)
+    batch.set(doc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION)), {
       evaluated_at: serverTimestamp(),
       evaluated_by: 'coach',
       score,
       notes: notes || null,
       status_after: statusAfter,
     })
-    await updateDoc(goalRef, { status: statusAfter })
+    batch.update(goalRef, { status: statusAfter })
+    await batch.commit()
     setShowEvalDialog(false)
     await loadEvals()
     qc.invalidateQueries({ queryKey: ['contact-goals', contactId] })
@@ -348,10 +419,12 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
 
   const handleEditEval = async (score: number, notes: string, statusAfter: GoalStatus) => {
     if (!editingEval) return
-    await updateDoc(doc(collection(goalRef, 'evaluations'), editingEval.id), {
+    const batch = writeBatch(db)
+    batch.update(doc(collection(goalRef, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION), editingEval.id), {
       score, notes: notes || null, status_after: statusAfter, edited: true,
     })
-    await updateDoc(goalRef, { status: statusAfter })
+    batch.update(goalRef, { status: statusAfter })
+    await batch.commit()
     setEditingEval(null)
     await loadEvals()
     qc.invalidateQueries({ queryKey: ['contact-goals', contactId] })
@@ -375,6 +448,7 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
 
   const canEval = goal.status === 'open' || goal.status === 'in_progress'
   const targetDateStr = formatDate(goal.target_date)
+  const doneSteps = steps.filter((s) => s.status === 'achieved').length
 
   return (
     <>
@@ -390,8 +464,14 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
             </div>
             <div className="flex items-center gap-1 shrink-0">
               {goal.created_by !== 'coach' ? (
-                <span title={t('goalCoachInfo')}>
-                  <Info className="h-4 w-4 text-blue-400" />
+                // Visible chip, not a hover-only cue — front-desk iPads have no
+                // hover state, so a tooltip here explained nothing to anyone.
+                <span
+                  title={t('goalCoachInfo')}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                >
+                  <Info className="h-3 w-3" />
+                  {t('goalMemberAddedBadge')}
                 </span>
               ) : (
                 <>
@@ -411,14 +491,11 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[goal.status]}`}>
               {t(`goalStatus_${goal.status}`)}
             </span>
-            {goal.categories.map((key) => {
-              const cat = categories.find((c) => c.key === key)
-              return (
-                <span key={key} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
-                  {cat?.label ?? key}
-                </span>
-              )
-            })}
+            {goal.categories.map((key) => (
+              <span key={key} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
+                {dimensionLabel(key, categories)}
+              </span>
+            ))}
             {targetDateStr && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
                 {t('goalTargetDate')}: {targetDateStr}
@@ -427,6 +504,32 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
             <span className={`ml-auto text-xs ${goal.created_by === 'coach' ? 'text-violet-500' : 'text-muted-foreground'}`}>
               {t(`goalBy_${goal.created_by}`)}
             </span>
+          </div>
+
+          {/* Latest score / last evaluated / overdue — so the one stale goal in
+              a list is visible WITHOUT expanding every card. */}
+          <GoalStateChips goal={goal} t={t} />
+
+          {/* Steps nested under their goal — see groupGoalsWithSteps. */}
+          <div className="rounded-lg border bg-muted/20 divide-y">
+            <div className="flex items-center justify-between px-3 py-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                {steps.length > 0
+                  ? t('goalStepsCompleted', { done: doneSteps, total: steps.length })
+                  : t('goalNoSteps')}
+              </p>
+              <button
+                type="button"
+                onClick={() => onAddStep(goal.id)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                {t('goalsAddTask')}
+              </button>
+            </div>
+            {steps.map((s) => (
+              <TaskCard key={s.id} goal={s} contactId={contactId} nested onChanged={onChanged} onEdit={() => onEditStep(s)} />
+            ))}
           </div>
 
           {/* Expand toggle */}
@@ -525,17 +628,22 @@ function GoalCard({ goal, contactId, categories, onChanged }: GoalCardProps) {
   )
 }
 
-// ─── TaskCard ─────────────────────────────────────────────────────────────────
+// ─── TaskCard (a "step" — the word "Task" is kept deliberately) ───────────────
 
 interface TaskCardProps {
   goal: Goal
   contactId: string
   onChanged: () => void
+  /** Nested inside a GoalCard: tighter, borderless row. Top-level (General):
+   *  the fuller standalone card. */
+  nested?: boolean
+  /** Opens the shared edit dialog (with the parent picker) from the parent —
+   *  General-section steps render this inline instead (see GoalsTab). */
+  onEdit?: () => void
 }
 
-function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
+function TaskCard({ goal, contactId, onChanged, nested, onEdit }: TaskCardProps) {
   const t = useTranslations('Contacts')
-  const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [acting, setActing] = useState(false)
   const isDone = goal.status === 'achieved'
@@ -551,16 +659,6 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
     } finally { setActing(false) }
   }
 
-  const handleEdit = async (data: { title: string; description: string; categories: string[]; targetDate: Date | null }) => {
-    await updateDoc(goalRef, {
-      title: data.title,
-      description: data.description || null,
-      target_date: data.targetDate ? Timestamp.fromDate(data.targetDate) : null,
-    })
-    setEditOpen(false)
-    onChanged()
-  }
-
   const handleDelete = async () => {
     await deleteDoc(goalRef)
     onChanged()
@@ -569,7 +667,7 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
 
   return (
     <>
-      <div className={`rounded-xl border bg-card px-4 py-3 flex items-start gap-3 ${isDone ? 'opacity-60' : ''}`}>
+      <div className={`flex items-start gap-3 ${nested ? 'px-3 py-2' : 'rounded-xl border bg-card px-4 py-3'} ${isDone ? 'opacity-60' : ''}`}>
         <button onClick={toggleDone} disabled={acting} className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors">
           {isDone
             ? <CheckCircle2 className="h-5 w-5 text-green-500" />
@@ -589,7 +687,7 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setEditOpen(true)} className="p-1 rounded hover:bg-muted transition-colors">
+          <button onClick={onEdit} className="p-1 rounded hover:bg-muted transition-colors">
             <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
           <button onClick={() => setConfirmDelete(true)} className="p-1 rounded hover:bg-muted transition-colors">
@@ -612,14 +710,6 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <GoalFormDialog
-        open={editOpen}
-        type="task"
-        categories={[]}
-        initial={goal}
-        onClose={() => setEditOpen(false)}
-        onSubmit={handleEdit}
-      />
     </>
   )
 }
@@ -629,20 +719,25 @@ function TaskCard({ goal, contactId, onChanged }: TaskCardProps) {
 interface Props {
   contact: Contact
   teamId: string | null
+  team: Team | null
 }
 
-export function GoalsTab({ contact, teamId }: Props) {
+export function GoalsTab({ contact, teamId, team }: Props) {
   const t = useTranslations('Contacts')
   const qc = useQueryClient()
   const { data: goals = [], isLoading } = useGoals(contact.id)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
-  const [addTaskOpen, setAddTaskOpen] = useState(false)
+  // ONE shared "add/edit step" dialog for every entry point: a goal card's own
+  // "add step" button (parentGoalId pre-filled), the General section's add
+  // button (parentGoalId unset) and editing an existing step from either place.
+  const [stepDialog, setStepDialog] = useState<{ open: boolean; editing: Goal | null; defaultParentGoalId: string | null }>(
+    { open: false, editing: null, defaultParentGoalId: null },
+  )
 
-  // Use default categories for now; team-configured categories could be fetched here
-  const categories = DEFAULT_CATEGORIES
+  const categories = resolveCoachingDimensions(team)
 
-  const goalList = goals.filter((g) => g.type === 'goal' || !g.type)
-  const taskList = goals.filter((g) => g.type === 'task')
+  const { goals: goalsWithSteps, generalSteps } = groupGoalsWithSteps(goals)
+  const goalOptions = goalsWithSteps.map(({ goal }) => ({ id: goal.id, title: goal.title }))
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-goals', contact.id] })
 
@@ -653,6 +748,7 @@ export function GoalsTab({ contact, teamId }: Props) {
       description: data.description || null,
       status: 'open',
       categories: data.categories,
+      parent_goal_id: null,
       created_by: 'coach',
       created_at: serverTimestamp(),
       target_date: data.targetDate ? Timestamp.fromDate(data.targetDate) : null,
@@ -661,18 +757,35 @@ export function GoalsTab({ contact, teamId }: Props) {
     invalidate()
   }
 
-  const handleAddTask = async (data: { title: string; description: string; categories: string[]; targetDate: Date | null }) => {
-    await addDoc(collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_GOALS_SUBCOLLECTION), {
-      type: 'task',
+  const openAddStep = (goalId: string | null) =>
+    setStepDialog({ open: true, editing: null, defaultParentGoalId: goalId })
+  const openEditStep = (step: Goal) =>
+    setStepDialog({ open: true, editing: step, defaultParentGoalId: step.parent_goal_id ?? null })
+  const closeStepDialog = () => setStepDialog({ open: false, editing: null, defaultParentGoalId: null })
+
+  const handleSubmitStep = async (data: { title: string; description: string; targetDate: Date | null; parentGoalId: string | null }) => {
+    const payload = {
       title: data.title,
       description: data.description || null,
-      status: 'open',
-      categories: [],
-      created_by: 'coach',
-      created_at: serverTimestamp(),
       target_date: data.targetDate ? Timestamp.fromDate(data.targetDate) : null,
-    })
-    setAddTaskOpen(false)
+      parent_goal_id: data.parentGoalId,
+    }
+    if (stepDialog.editing) {
+      await updateDoc(
+        doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_GOALS_SUBCOLLECTION, stepDialog.editing.id),
+        payload,
+      )
+    } else {
+      await addDoc(collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_GOALS_SUBCOLLECTION), {
+        ...payload,
+        type: 'task',
+        status: 'open',
+        categories: [],
+        created_by: 'coach',
+        created_at: serverTimestamp(),
+      })
+    }
+    closeStepDialog()
     invalidate()
   }
 
@@ -683,52 +796,67 @@ export function GoalsTab({ contact, teamId }: Props) {
   return (
     <div className="space-y-6 pb-24">
       <CoachAssignment contact={contact} teamId={teamId} />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Goals column */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Flag className="h-4 w-4 text-violet-500" />
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('goalsTitle')}</h3>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setAddGoalOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddGoal')}
-            </Button>
-          </div>
 
-          {goalList.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              {t('goalsEmpty')}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {goalList.map((g) => (
-                <GoalCard key={g.id} goal={g} contactId={contact.id} categories={categories} onChanged={invalidate} />
-              ))}
-            </div>
-          )}
+      {/* The check-in radar feeds straight into the goals below it — see
+          PerformanceProfilePanel's header for why it moved out of Stats. */}
+      <PerformanceProfilePanel contact={contact} team={team} goals={goals} />
+
+      {/* One column: every goal card carries its own steps inline (with a
+          completion count), and unparented steps fall into a virtual "General"
+          heading at the bottom — no document backs it. */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Flag className="h-4 w-4 text-violet-500" />
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('goalsTitle')}</h3>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setAddGoalOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddGoal')}
+          </Button>
         </div>
 
-        {/* Tasks column */}
-        <div className="space-y-3">
+        {goalsWithSteps.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            {t('goalsEmpty')}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {goalsWithSteps.map(({ goal, steps }) => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                contactId={contact.id}
+                categories={categories}
+                steps={steps}
+                onChanged={invalidate}
+                onAddStep={openAddStep}
+                onEditStep={openEditStep}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* General — steps with no parent goal. Virtual: nothing to create,
+            migrate, or clean up when the last one leaves it. */}
+        <div className="space-y-2 pt-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckSquare className="h-4 w-4 text-orange-500" />
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('tasksTitle')}</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('goalsGeneralHeading')}</h3>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setAddTaskOpen(true)}>
+            <Button variant="outline" size="sm" onClick={() => openAddStep(null)}>
               <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddTask')}
             </Button>
           </div>
 
-          {taskList.length === 0 ? (
+          {generalSteps.length === 0 ? (
             <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
               {t('tasksEmpty')}
             </div>
           ) : (
             <div className="space-y-2">
-              {taskList.map((g) => (
-                <TaskCard key={g.id} goal={g} contactId={contact.id} onChanged={invalidate} />
+              {generalSteps.map((s) => (
+                <TaskCard key={s.id} goal={s} contactId={contact.id} onChanged={invalidate} onEdit={() => openEditStep(s)} />
               ))}
             </div>
           )}
@@ -743,11 +871,15 @@ export function GoalsTab({ contact, teamId }: Props) {
         onSubmit={handleAddGoal}
       />
       <GoalFormDialog
-        open={addTaskOpen}
+        key={stepDialog.editing?.id ?? stepDialog.defaultParentGoalId ?? 'new'}
+        open={stepDialog.open}
         type="task"
         categories={[]}
-        onClose={() => setAddTaskOpen(false)}
-        onSubmit={handleAddTask}
+        initial={stepDialog.editing ?? undefined}
+        parentOptions={goalOptions}
+        defaultParentGoalId={stepDialog.defaultParentGoalId}
+        onClose={closeStepDialog}
+        onSubmit={handleSubmitStep}
       />
     </div>
   )

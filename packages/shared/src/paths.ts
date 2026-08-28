@@ -131,6 +131,10 @@ export const CONTACT_ALERTS_SUBCOLLECTION = 'contact_alerts'
 export const CONTACT_WEEKLY_REPORTS_SUBCOLLECTION = 'contact_weekly_reports'
 export const CONTACT_NOTES_SUBCOLLECTION = 'contact_notes'
 export const CONTACT_GOALS_SUBCOLLECTION = 'goals'
+/** Evaluations of one goal: contacts/{c}/goals/{g}/evaluations/{e}. Was a bare
+ *  string literal in the web tab, the Space, the mobile app and the trigger —
+ *  four places to keep in step by hand. */
+export const CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION = 'evaluations'
 export const CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION = 'performance_checkins'
 export const CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION = 'subscription_history'
 // Lesson-credit grants (pack purchases) — functions-only writes; see CreditGrant.

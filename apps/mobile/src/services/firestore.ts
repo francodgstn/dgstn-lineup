@@ -1,16 +1,8 @@
 import { db, getFunctions } from '../config/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit } from 'firebase/firestore';
-import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalEvaluation, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
-import { detectPerformanceProfile } from '../utils/performanceProfile';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
+import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalCreatedBy, GoalEvaluation, GoalType, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
+import { detectPerformanceProfile, resolveCoachingDimensions } from '../utils/goalContract';
 import { httpsCallable } from 'firebase/functions';
-
-const DEFAULT_PERFORMANCE_INDICATORS: PerformanceIndicator[] = [
-  { key: 'consistency', label: 'Consistency' },
-  { key: 'effort', label: 'Effort' },
-  { key: 'focus', label: 'Focus' },
-  { key: 'recharge', label: 'Recharge' },
-  { key: 'sense_of_progress', label: 'Sense of progress' },
-];
 
 export const FirestoreService = {
   /**
@@ -906,10 +898,17 @@ export const FirestoreService = {
       const goalsRef = collection(db, 'contacts', contactId, 'goals');
       const q = query(goalsRef, orderBy('created_at', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      } as Goal));
+      return snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          // Docs written before `type` existed predate the goal/task split —
+          // default to 'goal', mirroring the web admin's `g.type === 'goal'
+          // || !g.type` fallback so they don't fall through the cracks.
+          type: (data.type as GoalType | undefined) ?? 'goal',
+        } as Goal;
+      });
     } catch (error) {
       console.error('Error fetching goals:', error);
       return [];
@@ -962,26 +961,54 @@ export const FirestoreService = {
     }
   },
 
-  async addGoalEvaluation(contactId: string, goalId: string, data: Omit<GoalEvaluation, 'id'>): Promise<void> {
+  /**
+   * `goalCreatedBy` decides whether the status cascade below is even
+   * attempted. firestore.rules lets a member (self-contact) update a goal
+   * doc only when `resource.data.created_by == 'student'` — a coach-created
+   * goal's status is the coach's to move. The evaluation write itself never
+   * needs that: a member can always record a score + note against ANY of
+   * their own goals (`evaluated_by == 'student'` is the only rules check),
+   * so skipping the cascade here lets that half of the write still land
+   * instead of the whole call throwing on a denied goal update.
+   */
+  async addGoalEvaluation(
+    contactId: string,
+    goalId: string,
+    data: Omit<GoalEvaluation, 'id'>,
+    goalCreatedBy: GoalCreatedBy,
+  ): Promise<void> {
     try {
       const evalsRef = collection(db, 'contacts', contactId, 'goals', goalId, 'evaluations');
-      await addDoc(evalsRef, data);
-      const goalRef = doc(db, 'contacts', contactId, 'goals', goalId);
-      await updateDoc(goalRef, { status: data.status_after });
+      // ONE BATCH: the evaluation and the status it moves the goal to are a
+      // single fact. Landing one without the other leaves a goal whose status
+      // its own newest evaluation contradicts, and nothing reconciles them.
+      const batch = writeBatch(db);
+      batch.set(doc(evalsRef), data);
+      if (goalCreatedBy === 'student') {
+        batch.update(doc(db, 'contacts', contactId, 'goals', goalId), { status: data.status_after });
+      }
+      await batch.commit();
     } catch (error) {
       console.error('Error adding goal evaluation:', error);
       throw error;
     }
   },
 
-  async updateGoalEvaluation(contactId: string, goalId: string, evalId: string, data: Partial<Omit<GoalEvaluation, 'id'>>): Promise<void> {
+  async updateGoalEvaluation(
+    contactId: string,
+    goalId: string,
+    evalId: string,
+    data: Partial<Omit<GoalEvaluation, 'id'>>,
+    goalCreatedBy: GoalCreatedBy,
+  ): Promise<void> {
     try {
       const evalRef = doc(db, 'contacts', contactId, 'goals', goalId, 'evaluations', evalId);
-      await updateDoc(evalRef, { ...data, edited: true });
-      if (data.status_after) {
-        const goalRef = doc(db, 'contacts', contactId, 'goals', goalId);
-        await updateDoc(goalRef, { status: data.status_after });
+      const batch = writeBatch(db);
+      batch.update(evalRef, { ...data, edited: true });
+      if (data.status_after && goalCreatedBy === 'student') {
+        batch.update(doc(db, 'contacts', contactId, 'goals', goalId), { status: data.status_after });
       }
+      await batch.commit();
     } catch (error) {
       console.error('Error updating goal evaluation:', error);
       throw error;
@@ -1040,35 +1067,24 @@ export const FirestoreService = {
     }
   },
 
-  async getTeamPerformanceIndicators(teamId: string): Promise<PerformanceIndicator[]> {
+  /**
+   * The team's coaching dimensions — ONE list, used both as goal categories
+   * and as performance check-in axes (see `resolveCoachingDimensions`). This
+   * replaces the old, separate `getTeamPerformanceIndicators` / (goal-category-
+   * reading) pair: `performance_indicators` and `goal_categories` were two
+   * vocabularies for the same concept, which is drift, not design.
+   */
+  async getCoachingDimensions(teamId: string): Promise<PerformanceIndicator[]> {
     try {
       const teamRef = doc(db, 'teams', teamId);
       const teamSnap = await getDoc(teamRef);
-      if (!teamSnap.exists()) return DEFAULT_PERFORMANCE_INDICATORS;
-      const indicators = teamSnap.data()?.performance_indicators;
-      if (Array.isArray(indicators) && indicators.length > 0) {
-        return indicators as PerformanceIndicator[];
-      }
-      return DEFAULT_PERFORMANCE_INDICATORS;
+      if (!teamSnap.exists()) return resolveCoachingDimensions(null);
+      return resolveCoachingDimensions(
+        teamSnap.data() as { performance_indicators?: PerformanceIndicator[] | null },
+      );
     } catch (error) {
-      console.error('Error fetching team performance indicators:', error);
-      return DEFAULT_PERFORMANCE_INDICATORS;
-    }
-  },
-
-  async getTeamGoalCategories(teamId: string): Promise<PerformanceIndicator[] | null> {
-    try {
-      const teamRef = doc(db, 'teams', teamId);
-      const teamSnap = await getDoc(teamRef);
-      if (!teamSnap.exists()) return null;
-      const categories = teamSnap.data()?.goal_categories;
-      if (Array.isArray(categories) && categories.length > 0) {
-        return categories as PerformanceIndicator[];
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching team goal categories:', error);
-      return null;
+      console.error('Error fetching coaching dimensions:', error);
+      return resolveCoachingDimensions(null);
     }
   },
 

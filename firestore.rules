@@ -1003,10 +1003,17 @@ service cloud.firestore {
       // Belonging now lives in the affiliations subcollection (governed by the
       // catch-all below + the upsertAffiliation callable's org-lock guard), so the
       // old org_membership_* field gate is gone.
-      allow update: if canWriteContact(resource)
+      //
+      // `coaching_open_count` / `coaching_overdue_count` / `last_checkin_at`
+      // (trackGoals / trackPerformanceCheckins, coaching/) and `alerts_count`
+      // (trackContactAlerts, contacts/) are denormalized by Cloud Functions
+      // ONLY — no branch above may forge them, same guard shape as `tags` on
+      // a session below.
+      allow update: if (canWriteContact(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
-                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at']));
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
+                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count']);
       allow delete: if (canAccessContact(resource)
                           && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
                        || hasRole('admin');
@@ -1022,17 +1029,62 @@ service cloud.firestore {
 
       // Goals subcollection
       // Coaches (team members) have full CRUD.
-      // Students can create goals (created_by must be 'student') and update the status field only.
+      // Students can create their OWN goals (created_by must be 'student'), and
+      // for a goal they created, update or delete the WHOLE document — not
+      // merely the status field, despite what an earlier version of this
+      // comment claimed.
+      //
+      // A member ALSO gets one narrow arm over a COACH-assigned TASK (not a
+      // goal): the core coaching loop is "coach assigns homework, member ticks
+      // it off, coach sees completion rate" (docs/product-strategy.md), and
+      // every task a member receives today is coach-created — neither mobile
+      // nor Space offer task authoring. That arm may change ONLY `status` +
+      // `completed_at`, and only between 'open' and 'achieved' on BOTH ends —
+      // a task is boolean homework (see `Goal.type` in
+      // packages/shared/src/types/goal.ts) — so a member can tick a coach's
+      // task done or undo that, but can never set 'abandoned' on it, nor touch
+      // its title/description/categories/target_date/parent_goal_id. A GOAL
+      // (`type == 'goal'`, or the field absent on a legacy doc) is NOT covered
+      // by this arm: a member evaluating a coach's goal records a score and a
+      // note through an evaluation (see the evaluations match below) but never
+      // drives the goal's own status directly, even as its evaluator — both
+      // the mobile and Space clients are built to that rule, so no UI ever
+      // attempts the write this denies.
+      //
+      // `created_by` is IMMUTABLE for everyone, staff included — it records who
+      // authored the goal, which is a historical fact rather than a setting. It
+      // is also load-bearing twice over in the arms above: the member's own-goal
+      // arm keys on it, and so does the coach-task arm. A member could otherwise
+      // flip their own goal to `created_by: 'coach'` and have the UI render a
+      // "set by your coach" chip on something they wrote themselves. (Only a
+      // CHANGED value counts — `affectedKeys()` is a diff, so a client echoing
+      // the field back unchanged is unaffected.)
+      //
+      // `latest_score` / `last_evaluated_at` / `overdue_at` are denormalized by
+      // Cloud Functions ONLY (trackGoalEvaluations, trackGoals, and the daily
+      // stampOverdueGoals job all write via the Admin SDK, which bypasses these
+      // rules entirely) — no branch above, including the task arm, may change
+      // them; `affectedKeys().hasOnly(['status', 'completed_at'])` already
+      // excludes them from that arm, and the trailing guard below closes it
+      // for every other branch too, same shape as `tags` on a session below.
       match /goals/{goalId} {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin')
                       || isSelfContact(contactId);
-        allow create: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+        allow create: if (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
-                         || (isSelfContact(contactId) && request.resource.data.created_by == 'student');
-        allow update: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                         || (isSelfContact(contactId) && request.resource.data.created_by == 'student'))
+                       && !request.resource.data.keys().hasAny(['latest_score', 'last_evaluated_at', 'overdue_at']);
+        allow update: if (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
-                         || (isSelfContact(contactId) && resource.data.created_by == 'student');
+                         || (isSelfContact(contactId) && resource.data.created_by == 'student')
+                         || (isSelfContact(contactId)
+                             && resource.data.get('type', 'goal') == 'task'
+                             && resource.data.created_by == 'coach'
+                             && resource.data.status in ['open', 'achieved']
+                             && request.resource.data.status in ['open', 'achieved']
+                             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completed_at'])))
+                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['latest_score', 'last_evaluated_at', 'overdue_at', 'created_by']);
         allow delete: if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                          || hasRole('admin')
                          || (isSelfContact(contactId) && resource.data.created_by == 'student');
@@ -1116,8 +1168,18 @@ service cloud.firestore {
                       || (subcollection != 'contact_notes'
                           && (isSelfContact(contactId)
                               || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)))));
+        // `goals` is ALSO excluded — not because it is function-only like the two
+        // below, but because rules are additive: this catch-all's blanket grant
+        // (no field restriction at all) would otherwise override the field-lock
+        // the explicit `/goals/{goalId}` match above places on `latest_score` /
+        // `last_evaluated_at` / `overdue_at` for a canWriteContact staff member —
+        // a more specific match does NOT take precedence in Firestore rules, so
+        // the exclusion has to live here, same reasoning as `contact_notes` above.
+        // Every other permission goals grants (full staff CRUD, admin) is already
+        // duplicated on that explicit match; nothing is lost by removing it here.
         allow write: if subcollection != 'credit_grants'
                       && subcollection != 'usage_windows'
+                      && subcollection != 'goals'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }
 

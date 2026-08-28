@@ -33,6 +33,17 @@ export type ActivityEventType =
   // feed is; the evidence itself stays in the ledger.
   | 'waiver_accepted'
   | 'waiver_revoked'
+  // Coaching. A goal reached or given up on, and a step ticked off, are facts
+  // about a person's practice and belong in the same feed as their bookings and
+  // signatures — the evaluations themselves stay under the goal. Written by
+  // `trackGoals`, the ONE trigger that also maintains the contact's coaching
+  // counters, so a row and a counter can never disagree about what happened.
+  | 'goal_achieved'
+  | 'goal_abandoned'
+  | 'goal_step_completed'
+  // A check-in is the member's own report, and the only coaching event they
+  // originate. Written by `trackPerformanceCheckins`.
+  | 'performance_checkin'
 
 export interface ActivityLogEntry {
   id: string

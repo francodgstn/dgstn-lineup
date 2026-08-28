@@ -138,6 +138,21 @@ export { grantCredits } from './contacts/grantCredits'
 export { manageContactUpdateRequest } from './contacts/manageContactUpdateRequest'
 export { switchActiveContact } from './contacts/switchActiveContact'
 export { listMyContactPayments, createContactBillingPortalSession } from './contacts/contactPayments'
+// Contact alerts — the ONE writer of alerts_count (previously dead; see the
+// module header for the two sites that create alerts without it).
+export { trackContactAlerts } from './contacts/trackAlerts'
+
+// Coaching (goals, steps, evaluations, performance check-ins). `trackGoals` is
+// the ONE writer of the contact's coaching counters and the three coaching
+// activity-log events; `trackGoalEvaluations` denormalizes the newest
+// evaluation onto its goal; `trackPerformanceCheckins` maintains
+// `last_checkin_at` and logs a submission. The daily `stampOverdueGoals` task
+// (see ./dailyTasks) is what wakes `trackGoals` when a goal falls overdue with
+// no write of its own.
+export { trackGoals } from './coaching/trackGoals'
+export { teardownGoal } from './coaching/teardownGoal'
+export { trackGoalEvaluations } from './coaching/trackGoalEvaluations'
+export { trackPerformanceCheckins } from './coaching/trackPerformanceCheckins'
 
 // Events
 export {

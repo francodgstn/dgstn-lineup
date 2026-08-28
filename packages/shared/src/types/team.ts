@@ -1,3 +1,4 @@
+import type { PerformanceIndicator } from './goal'
 import type { Timestamp } from './common'
 import type { TermsAcceptance } from '../legal'
 // Type-only import — no runtime cycle. document.ts imports only types
@@ -654,6 +655,20 @@ export interface Team {
   bioLinkTheme?: BioLinkTheme
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
+  /**
+   * The team's coaching dimensions — the ONE list naming both goal categories
+   * and performance-check-in axes. Read through `resolveCoachingDimensions`,
+   * which falls back to `DEFAULT_COACHING_DIMENSIONS` when absent, and mirrored
+   * onto `TeamPublicProfile` so the member surfaces (which cannot read this
+   * document) see the same vocabulary.
+   *
+   * Replacing the canonical five disables the NAMED performance profiles:
+   * `detectPerformanceProfile` returns a null `profile_key` unless all five are
+   * present, because its rules are statements about those axes specifically.
+   * Weakest/strongest axis keeps working for any vocabulary.
+   */
+  performance_indicators?: PerformanceIndicator[]
+
   // Outreach / email template custom variables
   outreach_placeholders?: Record<string, string>
   // Onboarding: team-level dismissal of the setup checklist (data-driven; the
@@ -876,6 +891,19 @@ export interface TeamPublicProfile {
   /** Opt-in custom field definitions the public book form may render — only
    *  those flagged `publicOnBookingForm`. See CustomFieldDefinition. */
   publicCustomFields?: PublicCustomFieldDefinition[]
+  /**
+   * The team's coaching dimensions — the ONE list that names both goal
+   * categories and performance-check-in axes (see `resolveCoachingDimensions`).
+   *
+   * Mirrored because the member surfaces need it and cannot reach the source:
+   * `teams/{id}` is members-only, and the Space runs on a contact session. Read
+   * from `public_profile`, a member's check-in form asks about the axes their
+   * studio actually chose; without it the form falls back to the defaults and a
+   * studio's customisation silently never reaches the people filling it in.
+   *
+   * Nothing private: a label the member is about to be asked to rate.
+   */
+  performance_indicators?: PerformanceIndicator[]
   // Team-wide cancellation policy shown on public booking pages and appended to
   // confirmation emails when the activity has no `cancellationPolicy` of its
   // own. Denormalized by syncTeamPublicProfile from

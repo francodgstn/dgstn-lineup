@@ -19,6 +19,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingBag,
+  Target,
   UserCog,
   Wallet,
 } from 'lucide-react'
@@ -104,6 +105,7 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },
   // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
   { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
+  { id: 'teamCoaching', href: '/settings/coaching', labelKey: 'teamCoaching', icon: Target, group: 'studio' },
   // The public-surface overview hub — the map of everything the world can see
   // (public URL, default landing, per-surface live status). Individual surfaces
   // are reachable from their own sections (Space → Grow, Shop → just below); this is
