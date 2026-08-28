@@ -2619,12 +2619,9 @@
     "rowGiftCards": "Carte regalo",
     "rowPromoCodes": "Codici promozionali",
     "perStudioMonth": "per studio / mese",
-    "orgStudiosLabel": "studi",
-    "orgStudiosPlus": "{count}+",
-    "orgFewerStudios": "Meno studi",
-    "orgMoreStudios": "Più studi",
-    "orgTotalLine": "CHF {total} / mese",
-    "orgQuoteNote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra."
+    "orgQuoteNote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra.",
+    "orgMoreThan": "Più di {count}?",
+    "orgMinStudios": "Minimo {count} studi"
   },
   "Plugins": {
     "title": "Plugin",

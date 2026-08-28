@@ -416,18 +416,13 @@
         "Central multi-team admin",
         "Cross-team events & messaging",
         "API & advanced roles"
-      ],
-      "rate": "25"
+      ]
     },
     "cmpDocumentsNote": "Signable waivers need Studio.",
     "perStudioMonth": "/studio/mo",
-    "orgStudios": "studios",
-    "orgStudiosPlus": "{count}+",
-    "orgFewer": "Fewer studios",
-    "orgMore": "More studios",
-    "orgTotal": "CHF {total}/mo",
     "orgQuote": "Same rate — tell us how many and we'll send the number.",
-    "orgMinStudios": "2"
+    "orgMoreThan": "More than {count}?",
+    "orgMinimum": "Minimum {count} studios"
   },
   "payments": {
     "eyebrow": "Get paid",

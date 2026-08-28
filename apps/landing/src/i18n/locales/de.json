@@ -416,18 +416,13 @@
         "Zentrale Mehrteam-Verwaltung",
         "Teamübergreifende Events & Nachrichten",
         "API & erweiterte Rollen"
-      ],
-      "rate": "25"
+      ]
     },
     "cmpDocumentsNote": "Unterschreibbare Verzichtserklärungen erfordern Studio.",
     "perStudioMonth": "/Studio/Mt.",
-    "orgStudios": "Studios",
-    "orgStudiosPlus": "{count}+",
-    "orgFewer": "Weniger Studios",
-    "orgMore": "Mehr Studios",
-    "orgTotal": "CHF {total}/Mt.",
     "orgQuote": "Gleicher Tarif — sagen Sie uns wie viele, und Sie erhalten die Zahl.",
-    "orgMinStudios": "2"
+    "orgMoreThan": "Mehr als {count}?",
+    "orgMinimum": "Mindestens {count} Studios"
   },
   "payments": {
     "eyebrow": "Bezahlt werden",

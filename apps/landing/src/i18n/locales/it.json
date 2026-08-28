@@ -416,18 +416,13 @@
         "Amministrazione centrale multi-team",
         "Eventi e messaggi tra team",
         "API e ruoli avanzati"
-      ],
-      "rate": "25"
+      ]
     },
     "cmpDocumentsNote": "Le liberatorie firmabili richiedono Studio.",
     "perStudioMonth": "/studio/mese",
-    "orgStudios": "studi",
-    "orgStudiosPlus": "{count}+",
-    "orgFewer": "Meno studi",
-    "orgMore": "Più studi",
-    "orgTotal": "CHF {total}/mese",
     "orgQuote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra.",
-    "orgMinStudios": "2"
+    "orgMoreThan": "Più di {count}?",
+    "orgMinimum": "Minimo {count} studi"
   },
   "payments": {
     "eyebrow": "Fatti pagare",

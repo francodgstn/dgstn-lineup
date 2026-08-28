@@ -2619,12 +2619,9 @@
     "rowGiftCards": "Gift cards",
     "rowPromoCodes": "Promo codes",
     "perStudioMonth": "per studio / month",
-    "orgStudiosLabel": "studios",
-    "orgStudiosPlus": "{count}+",
-    "orgFewerStudios": "Fewer studios",
-    "orgMoreStudios": "More studios",
-    "orgTotalLine": "CHF {total} / month",
-    "orgQuoteNote": "Same rate — tell us how many and we'll send the number."
+    "orgQuoteNote": "Same rate — tell us how many and we'll send the number.",
+    "orgMoreThan": "More than {count}?",
+    "orgMinStudios": "Minimum {count} studios"
   },
   "Plugins": {
     "title": "Plugins",

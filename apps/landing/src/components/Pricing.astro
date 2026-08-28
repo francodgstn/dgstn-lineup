@@ -142,7 +142,7 @@ const cmpText = (v: CmpVal): string | null => {
           // number from `plans.org.rate` and supplies its own unit instead.
           const priceSource = 'promoPrice';
           const [currency, ...amountParts] = isOrg
-            ? ['CHF', t('plans.org.rate')]
+            ? ['CHF', String(ORG_RATE_MONTHLY)]
             : t(`plans.${key}.${priceSource}`).split(' ');
           const amount = amountParts.join(' ');
           return (
@@ -174,40 +174,40 @@ const cmpText = (v: CmpVal): string | null => {
             </div>
             {hasPromo && (
               <p class="price-note">
-                * {t(`plans.${key}.price`)}{t('plans.perMonth')} {t('plans.afterPromo')}
+                {/* The PRICE carries the weight, not the sentence around it —
+                    what a reader is checking on this line is what they pay once
+                    the launch offer ends, and it was set in the same muted grey
+                    as "after 6 months". */}
+                * <strong>{t(`plans.${key}.price`)}{t('plans.perMonth')}</strong>{' '}
+                {t('plans.afterPromo')}
               </p>
             )}
 
-            {/* THE INTERACTIVE MOMENT OF THE PAGE. Every other tier answers
-                "what does it cost" with its headline; this one answers it with a
-                rate, so the number a visitor actually wants is one they compose.
-                Step the count, read the total.
+            {/* ABOVE TEN, one line and a question.
 
-                Past ten the total becomes a quote — and that is a fourth state
-                of THIS card, not a hidden premium plan. The rate stays on
-                screen, the ask is a number back rather than a meeting, and
-                nothing moves behind a form. The section's own subtitle promises
-                exactly that: no "request a demo to see pricing". */}
+                This card carried a studio-count stepper with a live total. It
+                worked and it was clutter: the total is one multiplication a
+                reader does faster than they operate a stepper, so the control
+                spent the card's quietest space saying what the rate already said
+                (Franco, 2026-08-28).
+
+                What survives is the part the rate CANNOT say — that past ten the
+                number is quoted — phrased as a QUESTION rather than a plan name.
+                An "Enterprise" button here would read as the separate hidden
+                tier this deliberately is not, which the section's own subtitle
+                rules out: no "request a demo to see pricing". */}
             {isOrg && (
-              <div
-                class="org-calc"
-                data-org-calc
-                data-min={ORG_MIN_STUDIOS}
-                data-max={ORG_MAX_LISTED_STUDIOS}
-                data-rate={ORG_RATE_MONTHLY}
-              >
-                <div class="org-stepper">
-                  <button type="button" data-step="-1" aria-label={t('plans.orgFewer')}>&minus;</button>
-                  <span data-org-count aria-live="polite">{t('plans.orgMinStudios')}</span>
-                  <button type="button" data-step="1" aria-label={t('plans.orgMore')}>+</button>
-                </div>
-                <span class="org-calc-unit">{t('plans.orgStudios')}</span>
-                <p class="org-total" data-org-total></p>
-                <template data-org-copy
-                  data-total={t('plans.orgTotal')}
-                  data-quote={t('plans.orgQuote')}
-                  data-plus={t('plans.orgStudiosPlus')}
-                ></template>
+              <div class="org-calc" data-org-calc>
+                {/* THE FLOOR. The tier does not exist below two studios, and the
+                    rate alone does not say so — somebody with one studio would
+                    price themselves at CHF 25 and be on the wrong tier. */}
+                <p class="org-min">
+                  {t('plans.orgMinimum').replace('{count}', String(ORG_MIN_STUDIOS))}
+                </p>
+                <button type="button" class="org-jump" data-org-jump aria-expanded="false">
+                  {t('plans.orgMoreThan').replace('{count}', String(ORG_MAX_LISTED_STUDIOS))}
+                </button>
+                <p class="org-quote" data-org-quote hidden>{t('plans.orgQuote')}</p>
               </div>
             )}
 
@@ -329,57 +329,21 @@ const cmpText = (v: CmpVal): string | null => {
       (window as unknown as { posthog?: { capture: Capture } }).posthog,
     );
 
-  // ── The per-studio calculator ──────────────────────────────────────────────
+  // ── Above ten: reveal the answer ──────────────────────────────────────────
   //
-  // The rate is FLAT — total = studios x rate — so there is no pricing logic
-  // here beyond a multiplication, and deliberately so: a tiered table would have
-  // to be kept in step with @linyup/shared by hand.
-  //
-  // The numbers come from data attributes rather than being written twice: the
-  // template carries the four localised strings, and min/max/rate ride on the
-  // container, so this script has no copy and no prices in it.
+  // No arithmetic here any more. The card used to compute studios x rate; the
+  // rate says that on its own, so all that is left is the one fact it cannot —
+  // that past ten the number is quoted, at the same rate.
   const calc = document.querySelector<HTMLElement>('[data-org-calc]');
   if (calc) {
-    const copy = calc.querySelector<HTMLTemplateElement>('[data-org-copy]')!;
-    const out = calc.querySelector<HTMLElement>('[data-org-total]')!;
-    const label = calc.querySelector<HTMLElement>('[data-org-count]')!;
-    const minus = calc.querySelector<HTMLButtonElement>('[data-step="-1"]')!;
-    const plus = calc.querySelector<HTMLButtonElement>('[data-step="1"]')!;
-
-    const MIN = Number(calc.dataset.min);
-    const MAX = Number(calc.dataset.max);
-    const RATE = Number(calc.dataset.rate);
-    // One past the listed maximum — the value that means "more than MAX".
-    const QUOTE = MAX + 1;
-
-    let studios = MIN;
-
-    const render = () => {
-      const quoting = studios >= QUOTE;
-      label.textContent = quoting
-        ? copy.dataset.plus!.replace('{count}', String(MAX))
-        : String(studios);
-      out.textContent = quoting
-        ? copy.dataset.quote!
-        : copy.dataset.total!.replace('{total}', String(studios * RATE));
-      out.classList.toggle('is-quote', quoting);
-      minus.disabled = studios <= MIN;
-      plus.disabled = quoting;
-    };
-
-    for (const btn of [minus, plus]) {
-      btn.addEventListener('click', () => {
-        studios = Math.min(QUOTE, Math.max(MIN, studios + Number(btn.dataset.step)));
-        render();
-        // Which sizes people actually price up is the only thing this control
-        // can tell us that the page could not before.
-        ph()?.('pricing_org_studios_changed', {
-          studios: studios >= QUOTE ? 'over_max' : studios,
-        });
-      });
-    }
-
-    render();
+    const jump = calc.querySelector<HTMLButtonElement>('[data-org-jump]')!;
+    const quote = calc.querySelector<HTMLElement>('[data-org-quote]')!;
+    jump.addEventListener('click', () => {
+      const open = quote.hidden;
+      quote.hidden = !open;
+      jump.setAttribute('aria-expanded', String(open));
+      if (open) ph()?.('pricing_org_over_max_opened');
+    });
   }
 
   const cmp = document.querySelector('.compare');
@@ -438,23 +402,18 @@ const cmpText = (v: CmpVal): string | null => {
   .price-star { color: var(--primary); font-weight: 700; font-size: 0.5em; }
   .period { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
 
-  /* Per-studio calculator (org card only) */
-  .org-calc { margin-top: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-  .org-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  .org-stepper button {
-    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-    background: none; border: 0; cursor: pointer; font-size: 16px; line-height: 1;
-    color: var(--muted-foreground); transition: background 0.15s, color 0.15s;
+  /* Above-ten disclosure (org card only). Reserved height so revealing the
+     answer cannot resize the card and move the CTA under the cursor. */
+  .org-calc { margin-top: 8px; min-height: 60px; }
+  .org-min { margin: 0 0 6px; font-size: 13px; color: var(--muted-foreground); }
+  .org-jump {
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font-size: 13px; color: var(--primary);
+    text-decoration: underline; text-underline-offset: 2px;
   }
-  .org-stepper button:hover:not(:disabled) { background: var(--muted); color: var(--heading); }
-  .org-stepper button:disabled { opacity: 0.35; cursor: default; }
-  /* tabular-nums and a fixed width so the row does not jump between 9 and 10. */
-  .org-stepper span { min-width: 44px; text-align: center; font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
-  .org-calc-unit { font-size: 13px; color: var(--muted-foreground); }
-  /* Full-width so the total sits on its own line, and a reserved height so
-     stepping into the quote state cannot resize the card. */
-  .org-total { flex-basis: 100%; margin: 2px 0 0; font-size: 14px; min-height: 20px; color: var(--heading); font-weight: 600; }
-  .org-total.is-quote { font-weight: 400; color: var(--muted-foreground); }
+  .org-jump:hover { opacity: 0.8; }
+  .org-quote { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
+  .org-quote[hidden] { display: none; }
 
   /* "Offer" chip next to the discounted price */
   .price-tag {
@@ -478,6 +437,7 @@ const cmpText = (v: CmpVal): string | null => {
 
   /* Regular price after the promo period (paid cards) */
   .price-note { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
+  .price-note strong { font-weight: 600; color: var(--heading); }
 
   .feat-list { list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-direction: column; gap: 10px; }
   .feat-list li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }

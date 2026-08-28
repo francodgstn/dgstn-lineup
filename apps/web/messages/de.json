@@ -2619,12 +2619,9 @@
     "rowGiftCards": "Geschenkkarten",
     "rowPromoCodes": "Aktionscodes",
     "perStudioMonth": "pro Studio / Monat",
-    "orgStudiosLabel": "Studios",
-    "orgStudiosPlus": "{count}+",
-    "orgFewerStudios": "Weniger Studios",
-    "orgMoreStudios": "Mehr Studios",
-    "orgTotalLine": "CHF {total} / Monat",
-    "orgQuoteNote": "Gleicher Tarif — sagen Sie uns wie viele, und Sie erhalten die Zahl."
+    "orgQuoteNote": "Gleicher Tarif — sagen Sie uns wie viele, und Sie erhalten die Zahl.",
+    "orgMoreThan": "Mehr als {count}?",
+    "orgMinStudios": "Mindestens {count} Studios"
   },
   "Plugins": {
     "title": "Plugins",

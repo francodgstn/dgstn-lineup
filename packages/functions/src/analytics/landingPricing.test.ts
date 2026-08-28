@@ -18,7 +18,7 @@
 import { strict as assert } from 'assert'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { ORG_MIN_STUDIOS, ORG_MAX_LISTED_STUDIOS, ORG_PER_STUDIO } from '@linyup/shared'
+import { ORG_MAX_LISTED_STUDIOS, ORG_MIN_STUDIOS, ORG_PER_STUDIO } from '@linyup/shared'
 
 const ROOT = join(__dirname, '..', '..', '..', '..')
 const PRICING = join(ROOT, 'apps', 'landing', 'src', 'components', 'Pricing.astro')
@@ -41,7 +41,11 @@ describe('the landing page mirrors the organisation pricing exactly', () => {
   })
 
   it('the minimum matches', () => {
-    assert.equal(constant(src, 'ORG_MIN_STUDIOS'), ORG_MIN_STUDIOS)
+    assert.equal(
+      constant(src, 'ORG_MIN_STUDIOS'),
+      ORG_MIN_STUDIOS,
+      'the card would state a floor the tier does not have'
+    )
   })
 
   it('the listed maximum matches', () => {
@@ -69,8 +73,9 @@ describe('the landing page mirrors the organisation pricing exactly', () => {
   it('the org card never goes through the currency/amount split', () => {
     // The other cards store "CHF 18" and split on the first space. "CHF 25 per
     // studio" splits into currency "CHF" and amount "25 per studio", rendered at
-    // 34px — no error, just a broken card.
-    const guarded = /isOrg\s*\n?\s*\?\s*\['CHF',\s*t\('plans\.org\.rate'\)\]/.test(src)
-    assert.ok(guarded, 'the org branch must bypass the split and read a bare rate')
+    // 34px — no error, just a broken card. The org branch renders the mirrored
+    // NUMBER instead, which also keeps the rate out of four locale files.
+    const guarded = /isOrg\s*\n?\s*\?\s*\['CHF',\s*String\(ORG_RATE_MONTHLY\)\]/.test(src)
+    assert.ok(guarded, 'the org branch must bypass the split and render the mirrored rate')
   })
 })

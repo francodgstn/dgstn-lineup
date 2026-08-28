@@ -416,18 +416,13 @@
         "Administration centrale multi-équipes",
         "Événements & messages inter-équipes",
         "API & rôles avancés"
-      ],
-      "rate": "25"
+      ]
     },
     "cmpDocumentsNote": "Les décharges signables nécessitent Studio.",
     "perStudioMonth": "/studio/mois",
-    "orgStudios": "studios",
-    "orgStudiosPlus": "{count}+",
-    "orgFewer": "Moins de studios",
-    "orgMore": "Plus de studios",
-    "orgTotal": "CHF {total}/mois",
     "orgQuote": "Même tarif — dites-nous combien et nous vous envoyons le montant.",
-    "orgMinStudios": "2"
+    "orgMoreThan": "Plus de {count} ?",
+    "orgMinimum": "Minimum {count} studios"
   },
   "payments": {
     "eyebrow": "Soyez payé",
