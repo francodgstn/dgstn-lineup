@@ -2941,7 +2941,7 @@ export default function ContactsPage() {
           <QuickLinks
             links={[
               { href: '/bookings' as Route, label: tNav('bookings') },
-              { href: '/payments' as Route, label: tNav('paymentsAndSubscriptions') },
+              { href: '/payments' as Route, label: tNav('payments') },
             ]}
           />
           {!loadingActive && !usage.isUnlimited && (

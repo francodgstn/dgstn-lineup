@@ -48,6 +48,7 @@ const CONTACTS_COLLECTION = 'contacts'
 const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
 const FINANCE_TRANSACTIONS_SUBCOLLECTION = 'finance_transactions'
 const MEMBER_SUBSCRIPTIONS_SUBCOLLECTION = 'member_subscriptions'
+const SUBSCRIPTION_TYPES_SUBCOLLECTION = 'subscription_types'
 const SESSIONS_COLLECTION = 'sessions'
 const COURSES_COLLECTION = 'courses'
 const COURSE_PURCHASES_SUBCOLLECTION = 'purchases'
@@ -429,9 +430,26 @@ export async function seedTeamMoney(opts: {
   currency?: string
   /** Cap on how many contacts get a subscription. Default 8. */
   limit?: number
+  /**
+   * Give the FIRST eligible contact a SECOND concurrent membership on a
+   * DIFFERENT active subscription type, reusing `seedMemberSubscription` (which
+   * already derives a per-(contact,type) doc id, so it can't collide with the
+   * first). Default true; skipped when the team has fewer than two active
+   * types — there is no "different" one to give.
+   *
+   * Every seeded contact used to hold AT MOST one plan, so no seeded tenant
+   * ever exercised "several plans held at once" — the exact case
+   * `onContactSubscriptionChange`'s reconciler (`resolveHeldPlans` +
+   * `planSubscriptionHistory`, `@linyup/shared/utils/subscriptionHistory`)
+   * exists to get right, and the one the contacts list' multi-plan chips render.
+   * `scripts/lib/fixtures/subscriptionHistory.ts` reads this back to seed a
+   * REAL two-track history instead of one.
+   */
+  concurrentPlans?: boolean
 }): Promise<{ subscriptions: number; contactsRolledUp: number }> {
   const db = admin.firestore()
   const { teamId } = opts
+  const concurrentPlans = opts.concurrentPlans ?? true
   const contacts = await db
     .collection(CONTACTS_COLLECTION)
     .where('teamId', '==', teamId)
@@ -471,6 +489,43 @@ export async function seedTeamMoney(opts: {
       startedDaysAgo: 120 + i * 15,
     })
     subscriptions += 1
+  }
+
+  if (concurrentPlans && withType.length > 0) {
+    const typesSnap = await db
+      .collection(TEAMS_COLLECTION)
+      .doc(teamId)
+      .collection(SUBSCRIPTION_TYPES_SUBCOLLECTION)
+      .get()
+    // `active` is default-true, same convention `seed-emulator.ts` uses when it
+    // writes these docs (`public: st.active !== false`) — only an EXPLICIT
+    // `false` marks a type retired.
+    const activeTypes = typesSnap.docs
+      .map((t) => ({
+        id: t.id,
+        data: t.data() as { name?: string; active?: boolean; prices?: Array<{ amount?: number; recurrence?: string }> },
+      }))
+      .filter((t) => t.data.active !== false)
+
+    const firstContact = withType[0]
+    const firstTypeId = (firstContact.data() as { subscription_type_id: string }).subscription_type_id
+    const secondType = activeTypes.find((t) => t.id !== firstTypeId)
+    if (secondType) {
+      const price = secondType.data.prices?.[0]
+      await seedMemberSubscription(teamId, {
+        contactId: firstContact.id,
+        subscriptionTypeId: secondType.id,
+        subscriptionTypeName: secondType.data.name ?? secondType.id,
+        recurrence: price?.recurrence ?? 'monthly',
+        amount: price?.amount ?? 49,
+        currency: opts.currency,
+        state: 'active',
+        // Started well after the first plan, so a "held two at once, one
+        // newer" read is plausible rather than two identical join dates.
+        startedDaysAgo: 60,
+      })
+      subscriptions += 1
+    }
   }
 
   const contactsRolledUp = await applySubscriptionRollups(teamId)

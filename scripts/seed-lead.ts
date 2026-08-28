@@ -99,6 +99,7 @@ import {
 } from './lib/fixtures/engagement'
 import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -1827,38 +1828,11 @@ async function seedLeadTenant(profile: LeadProfile) {
     }
 
     if (sub) {
+      // `subscription_history` is seeded later, by `seedTeamSubscriptionHistory`
+      // (AFTER `seedTeamMoney`, which is what its multi-plan source —
+      // `active_subscriptions` — is read back from). `startedAt` stays: the
+      // credit-grant fixture below still anchors its `created_at` to it.
       const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
-      if (i % 4 === 0) {
-        const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db
-          .collection('contacts')
-          .doc(id)
-          .collection('subscription_history')
-          .doc(`${id}-sub-prev`)
-          .set({
-            subscription_type_id: sub.id,
-            subscription_type_name: sub.name,
-            recurrence: sub.recurrence,
-            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-            start_date: ts(prevStartedAt),
-            end_date: ts(new Date(startedAt.getTime() - 1)),
-            created_at: ts(prevStartedAt),
-          })
-      }
-      await db
-        .collection('contacts')
-        .doc(id)
-        .collection('subscription_history')
-        .doc(`${id}-sub-current`)
-        .set({
-          subscription_type_id: sub.id,
-          subscription_type_name: sub.name,
-          recurrence: sub.recurrence,
-          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-          start_date: ts(startedAt),
-          end_date: null,
-          created_at: ts(startedAt),
-        })
 
       // Lesson-credit grant — when the held subscription type carries credit-pack
       // prices, seed one partially-consumed grant (first credit price) + the
@@ -2990,6 +2964,11 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   // After contacts, whose subscription assignment it reads back. See
   // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
   await seedTeamMoney({ teamId, currency: profile.currency })
+  // `subscription_history` — the ONLY store of a contact's plan PERIODS — is
+  // seeded AFTER the money ledger, because it reads `active_subscriptions` back
+  // (the concurrent-plans membership seeded above lands there via
+  // `applySubscriptionRollups`). See scripts/lib/fixtures/subscriptionHistory.ts.
+  await seedTeamSubscriptionHistory({ teamId })
 
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
   // into the journal through the SAME builders the Connect webhook uses.

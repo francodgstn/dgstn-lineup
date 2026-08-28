@@ -269,10 +269,16 @@ const NAV_SECTIONS: NavSection[] = [
       // because "who is paying me" and "who holds a plan" are the same question
       // asked twice and a studio should not have to guess which screen answers
       // it (Franco, 2026-08-23). `/subscriptions` redirects in.
+      //
+      // The ROW SAYS "Payments", not "Payments & Subscriptions" — the destination
+      // did not change, only the label. Naming both halves was explaining the
+      // merge in the nav; the gateways a studio already uses (Payrexx among them)
+      // file subscriptions under payments and nobody looks for them elsewhere. A
+      // shorter row also stops this one wrapping in the sidebar.
       {
         id: 'payments',
         href: '/payments',
-        labelKey: 'paymentsAndSubscriptions',
+        labelKey: 'payments',
         icon: Wallet,
       },
       // Automations is operational (workflows acting on contacts/bookings), so it

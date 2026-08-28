@@ -39,6 +39,9 @@ import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Segmented } from '@/components/ui/segmented'
+import { useSubscriptionHistory } from '@/hooks/useSubscriptionHistory'
+import { LedgerSegment } from './LedgerSegment'
 import {
   Dialog,
   DialogContent,
@@ -121,6 +124,8 @@ import {
   DEFAULT_ORG_AFFILIATION_STATUSES,
   computeEngagementBand,
   MAX_CONTACT_LOGIN_EMAILS,
+  SUBSCRIPTION_ROLLUP_STATUSES,
+  type SubscriptionRollupStatus,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -158,6 +163,7 @@ import {
   CalendarCheck,
   CalendarX,
   CreditCard,
+  Wallet,
   BarChart2,
   Lock,
   Flag,
@@ -186,7 +192,12 @@ import {
 import { XAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab, useContactNotesCount, useContactNotes, noteColorClasses, type ContactNote } from './NotesTab'
-import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
+import { PaymentsTab } from './PaymentsTab'
+import {
+  MemberSubscriptionsSection,
+  RollupBadge,
+  useContactMemberSubscriptions,
+} from '@/components/contacts/MemberSubscriptionsSection'
 import { isoWeekLabel, useContactWeeklyReports } from './AttendanceTrendCard'
 import { PlanGate } from '@/components/plan/PlanGate'
 import {
@@ -461,25 +472,9 @@ function useTeamRankingSystems(teamId: string | null, orgId?: string | null) {
   })
 }
 
-function useSubscriptionHistory(contactId: string) {
-  return useQuery<SubscriptionHistoryEntry[]>({
-    queryKey: ['subscription-history', contactId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(
-            db,
-            CONTACTS_COLLECTION,
-            contactId,
-            CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION
-          ),
-          orderBy('start_date', 'desc')
-        )
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionHistoryEntry)
-    },
-  })
-}
+// `useSubscriptionHistory` moved to @/hooks/useSubscriptionHistory — the Overview
+// ledger needs the same query and the same cache entry, and a second copy would
+// have doubled the reads while inviting the two to drift.
 
 interface BookingSummary {
   id: string
@@ -2041,31 +2036,41 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
   )
 }
 
-// ─── membership tab (subscription + affiliation) ──────────────────────────────
-// Both axes describe the contact's ongoing standing with the studio, so they
-// share one tab with a segmented toggle. The subscription side is plan-gated
-// (PlanGate shows the upgrade prompt when locked); affiliation is always shown.
-// `seg` is owned by the page so the header summary chips can deep-link a segment.
+// ─── "Plans & Payments" tab ───────────────────────────────────────────────────
+// THE QUESTION THIS TAB EXISTS TO ANSWER: "in period X, what did this contact pay
+// for, and what plan or allowance did they hold?" It used to require switching
+// between a Plans tab and a Payments tab and searching by hand — the two overlap
+// in a coach's mental model, and often a payment IS a plan's payment.
+//
+// Three segments:
+//   overview — a period-scoped LEDGER: plan starts/ends, payments, credit grants
+//              and expiries in one dated stream. Read-only; it answers.
+//   plans    — the assigned plan, lesson credits, recurring billing, plan history.
+//   payments — the full payment list, all time, with its dialogs. They act.
+//
+// Affiliation is NOT here: belonging to a club or federation is a different
+// concept whose fee is paid to the issuer and never processed by Linyup. It has
+// its own tab now, and only ever shared this one by accident of history.
+//
+// `seg` is owned by the page (in `?seg=`) so the header summary chip can
+// deep-link a segment and the choice survives a refresh.
 
 function MembershipTab({
   contact,
   teamId,
-  orgId,
-  membershipFieldLocked,
   seg,
   onSegChange,
 }: {
   contact: Contact
   teamId: string | null
-  orgId?: string | null
-  membershipFieldLocked: boolean
-  seg: 'subscription' | 'affiliation'
-  onSegChange: (s: 'subscription' | 'affiliation') => void
+  seg: MembershipSeg
+  onSegChange: (s: MembershipSeg) => void
 }) {
   const t = useTranslations('Contacts')
   const SEGMENTS = [
-    { id: 'subscription', label: t('tabSubscriptions') },
-    { id: 'affiliation', label: t('tabAffiliations') },
+    { id: 'overview', label: t('segOverview') },
+    { id: 'plans', label: t('segPlans') },
+    { id: 'payments', label: t('segPayments') },
   ] as const
 
   // Relationship timeline data — subscription + affiliation periods as spans, and
@@ -2102,35 +2107,22 @@ function MembershipTab({
         affiliations={affiliationSpans}
       />
 
-      <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
-        {SEGMENTS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => onSegChange(s.id)}
-            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              seg === s.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        options={SEGMENTS.map((s) => ({ value: s.id, label: s.label }))}
+        value={seg}
+        onChange={onSegChange}
+      />
 
-      {seg === 'subscription' ? (
+      {/* Each segment body mounts only while it is showing, the same way the tabs
+          themselves do — so standing on Overview never pays for the payment
+          dialogs' journal read, and standing on Plans never loads payments. */}
+      {seg === 'overview' && <LedgerSegment contact={contact} teamId={teamId} />}
+      {seg === 'plans' && (
         <PlanGate feature="subscriptions">
           <SubscriptionsTab contact={contact} teamId={teamId} />
         </PlanGate>
-      ) : (
-        <AffiliationsTab
-          contact={contact}
-          teamId={teamId}
-          orgId={orgId}
-          membershipFieldLocked={membershipFieldLocked}
-        />
       )}
+      {seg === 'payments' && <PaymentsTab contact={contact} teamId={teamId} />}
     </div>
   )
 }
@@ -2150,6 +2142,10 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
   const [grantOpen, setGrantOpen] = useState(false)
   const { team } = useAuth()
   const currency = (team?.default_currency ?? 'CHF').toUpperCase()
+  // The one-word summary of what Stripe is doing, denormalised onto the contact
+  // by the rollup trigger. It came with the billing section from the Payments
+  // tab — the copy that used to live there was the only one that showed it.
+  const rollupStatus = contact.subscription_status as SubscriptionRollupStatus | undefined
 
   const invalidateContact = () => {
     qc.invalidateQueries({ queryKey: ['contact', contact.id] })
@@ -2249,17 +2245,24 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
         )}
       </div>
 
-      {/* ── Stripe billing (freeze / resume) ── */}
+      {/* ── Stripe billing (freeze / resume / cancel) ──
+          The ONLY copy of this section. It was rendered here and on the Payments
+          tab at the same time; the badge below came only from that other copy,
+          so a plain deletion would have lost it. */}
       {teamId && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {tPayments('stripeSubscriptionsTitle')}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {tPayments('stripeSubscriptionsTitle')}
+            </p>
+            {rollupStatus && SUBSCRIPTION_ROLLUP_STATUSES.includes(rollupStatus) && (
+              <RollupBadge status={rollupStatus} />
+            )}
+          </div>
           <MemberSubscriptionsSection
             teamId={teamId}
             contactId={contact.id}
             assignedTypeId={contact.subscription_type_id ?? null}
-            t={tPayments}
           />
         </div>
       )}
@@ -3304,22 +3307,12 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
           ))}
         </div>
         {/* Period selector */}
-        <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5 shrink-0">
-          {ACTIVITY_PERIODS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setPeriod(p.key)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
-                period === p.key
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          size="sm"
+          options={ACTIVITY_PERIODS.map((p) => ({ value: p.key, label: p.label }))}
+          value={period}
+          onChange={setPeriod}
+        />
       </div>
 
       {/* Content */}
@@ -4771,6 +4764,19 @@ function UpsertAffiliationDialog({
 // tab that exists to be empty is worse than one destination fewer. A bookmarked
 // `?tab=stats` is safe: `useTabParam` falls back rather than opening an empty
 // pane on an id it does not recognise.
+// BOTH `payments` and `affiliation` SURVIVE AS IDS, and each keeps the meaning it
+// already had — which is what makes the 2026-08 restructure free:
+//   `payments`    is now "Plans & Payments" (plans, credits, billing AND payments,
+//                 one tab with three segments). `?tab=payments` still means "this
+//                 person's money", so the live link from the payments table and
+//                 every stored open-tab keeps working.
+//   `affiliation` is now "Affiliations" alone — belonging to a club or federation,
+//                 whose fee is paid to the issuer and never processed by Linyup.
+//                 It was only ever sharing a tab with plans.
+// An id must not track its label — same rule as `followups` below, and the reason
+// is the same: a saved `linyup_contact_tab_order` array names ids. Minting a NEW
+// id for the merged tab would rank it +Infinity in `applyTabOrder` for everyone
+// who has ever reordered their strip, silently moving it to the end.
 const TAB_IDS = [
   'profile',
   'activity',
@@ -4783,6 +4789,12 @@ const TAB_IDS = [
   'gamification',
 ] as const
 type TabId = (typeof TAB_IDS)[number]
+
+// The segments of the "Plans & Payments" tab, carried in `?seg=` so a refresh, a
+// shared link and a reopened tab all land where the reader was — the same UX-22
+// argument `useTabParam` was written for, one level down.
+const MEMBERSHIP_SEGMENTS = ['overview', 'plans', 'payments'] as const
+type MembershipSeg = (typeof MEMBERSHIP_SEGMENTS)[number]
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -4806,8 +4818,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   // User-reorderable tab strip (opt-in edit mode; order persisted per-browser).
   const [tabOrder, setTabOrder] = useContactTabOrder()
   const [editingTabs, setEditingTabs] = useState(false)
-  // Which segment the merged Membership tab shows (deep-linked from header chips)
-  const [membershipSeg, setMembershipSeg] = useState<'subscription' | 'affiliation'>('subscription')
+  // Which segment of "Plans & Payments" is showing. In the URL (`?seg=`) rather
+  // than component state: the header chip below deep-links a segment, and that
+  // choice used to die on refresh — a live instance of the bug useTabParam
+  // exists to remove. `enabled` keeps `?seg=` off the URL of every other tab.
+  const [membershipSeg, setMembershipSeg] = useTabParam(
+    MEMBERSHIP_SEGMENTS,
+    'overview',
+    'seg',
+    { enabled: tab === 'payments' }
+  )
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const { goBack, isHistoryBack } = useBack('/contacts' as Route)
@@ -4827,7 +4847,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   // Register this contact as an open tab (label upgraded once the contact loads).
   // The stored href carries the active sub-tab so reopening lands where you left.
   useRegisterTab({
-    href: `/contacts/${id}?tab=${tab}`,
+    href:
+      tab === 'payments'
+        ? `/contacts/${id}?tab=${tab}&seg=${membershipSeg}`
+        : `/contacts/${id}?tab=${tab}`,
     label: contact ? `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() : '',
     entityKind: 'contact',
     enabled: !!contact,
@@ -4892,8 +4915,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'profile', label: t('tabProfile'), icon: User },
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
     { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
-    { id: 'affiliation', label: t('tabAffiliation'), icon: IdCard },
-    { id: 'payments', label: t('tabPayments'), icon: CreditCard },
+    // Plans, credits, recurring billing AND payments — one tab, three segments,
+    // because a coach asking "what did they pay for in March, and what did they
+    // hold then" was being made to switch tabs and search by hand. `Wallet`
+    // rather than `CreditCard`: the tab is not only about card charges.
+    { id: 'payments', label: t('tabPlansPayments'), icon: Wallet },
+    // Affiliations kept the `affiliation` id and lost the plans: belonging to a
+    // club or federation is a different concept, and its fee is paid to the
+    // issuer, never processed by Linyup. It was only sharing a tab with plans.
+    { id: 'affiliation', label: t('tabAffiliations'), icon: IdCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
     // The ID STAYS `followups` — a `?tab=followups` deep link and every saved
     // `linyup_contact_tab_order` array in a browser somewhere still name it.
@@ -5051,8 +5081,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       <button
                         type="button"
                         onClick={() => {
-                          setMembershipSeg('subscription')
-                          setTab('affiliation')
+                          setMembershipSeg('plans')
+                          setTab('payments')
                         }}
                         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
@@ -5072,10 +5102,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     {contact.affiliation_summary?.has_active && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setMembershipSeg('affiliation')
-                          setTab('affiliation')
-                        }}
+                        // Affiliations is its own tab now — no segment to pick.
+                        onClick={() => setTab('affiliation')}
                         className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
                       >
                         <CheckCircle className="h-3 w-3 shrink-0" />
@@ -5250,17 +5278,22 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
             {tab === 'followups' && <FollowUpsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'affiliation' && (
+            {tab === 'payments' && (
               <MembershipTab
                 contact={contact}
                 teamId={currentTeamId}
-                orgId={team?.org_id}
-                membershipFieldLocked={membershipFieldLocked}
                 seg={membershipSeg}
                 onSegChange={setMembershipSeg}
               />
             )}
-            {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'affiliation' && (
+              <AffiliationsTab
+                contact={contact}
+                teamId={currentTeamId}
+                orgId={team?.org_id}
+                membershipFieldLocked={membershipFieldLocked}
+              />
+            )}
             {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} team={team} />}
             {tab === 'gamification' && <GamificationTab contact={contact} teamId={currentTeamId} />}
           </div>

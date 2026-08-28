@@ -201,8 +201,12 @@ describe('EVERY SURFACE THAT SHOWS A SUBSCRIPTION ASKS THE PREDICATE', () => {
     'apps/web/src/app/[locale]/(auth)/settings/billing/page.tsx',
     // An org owner's.
     'apps/web/src/app/[locale]/(auth)/org/[orgId]/billing/page.tsx',
-    // A studio reading a MEMBER's membership.
-    'apps/web/src/app/[locale]/(auth)/contacts/[id]/PaymentsTab.tsx',
+    // A studio reading a MEMBER's membership. It lived in the contact's
+    // PaymentsTab until 2026-08, when the section stopped being rendered twice
+    // (once there, once on the Plans side of the same contact) and moved to the
+    // one component both had been calling. The surface is the same surface — only
+    // its address changed — so the entry follows it rather than being dropped.
+    'apps/web/src/components/contacts/MemberSubscriptionsSection.tsx',
     // The operator console's account detail.
     'apps/admin/src/lib/queries/account.ts',
     // The member-facing mirror: Space reads `Contact.active_subscriptions`, so

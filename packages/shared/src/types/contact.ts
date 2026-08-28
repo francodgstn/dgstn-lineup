@@ -625,7 +625,17 @@ export function compareSubscriptionTypes(a: SubscriptionType, b: SubscriptionTyp
 }
 
 // ─── subscription history (contacts/{id}/subscription_history) ────────────────
-
+//
+// The ONLY store of a contact's plan PERIODS (`[start_date, end_date)`),
+// maintained SOLELY by `onContactSubscriptionChange`
+// (`packages/functions/src/sync/`) — Firestore rules deny client `create`/
+// `update` (a team member may still `delete` a row; see `firestore.rules`).
+//
+// ABSENT `end_date` MEANS OPEN, same as `null` — the reconciler
+// (`resolveHeldPlans` + `planSubscriptionHistory`,
+// `@linyup/shared/utils/subscriptionHistory`) treats the two identically, and a
+// row is only ever OPEN when it also carries a `start_date` (the mitigation for
+// a malformed/legacy row being read as an open track forever).
 export interface SubscriptionHistoryEntry {
   id: string
   subscription_type_id?: string
@@ -636,8 +646,12 @@ export interface SubscriptionHistoryEntry {
   start_date?: Timestamp
   end_date?: Timestamp | null
   termination_reason?: string
+  /** Never written by the reconciler on close — see its module header. Present
+   *  only where something else (a future manual editor) sets it. */
+  notes?: string | null
   created_at?: Timestamp
   created_by?: string
+  updated_at?: Timestamp
 }
 
 // ─── contact alert (contacts/{id}/contact_alerts) ─────────────────────────────
