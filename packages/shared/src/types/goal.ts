@@ -8,12 +8,29 @@
 // group that no document backs, so there is nothing to create, migrate, or
 // clean up when the last unparented task is filed.
 //
-// ONE VOCABULARY. Goal categories and performance-check-in axes used to be two
-// unrelated lists, which meant a check-in's weakest axis could never point at a
-// goal category — the single connection that turns a self-rating widget into
-// the front of a coaching loop. They are now the same team-configurable list;
-// see `resolveCoachingDimensions`. Note the `Goal.categories` comment always
-// said "team-configured indicator keys": the divergence was drift, not design.
+// TWO VOCABULARIES, BECAUSE THEY ANSWER DIFFERENT QUESTIONS.
+//
+// A DIMENSION — Consistency, Effort, Focus, Recharge, Sense of progress —
+// describes HOW SOMEONE IS DOING. It is self-rated, it is an axis of the
+// check-in radar, and its value is a number between 1 and 5.
+// A GOAL CATEGORY — Technique, Attitude, Attendance, Physical, Mental —
+// describes WHAT A GOAL IS ABOUT. It is a label on a piece of work, and it has
+// no scale at all.
+//
+// They were merged into one team-configurable list on 2026-08-28 ("Coaching
+// becomes a loop", PR #128), on the argument that a check-in's weakest axis
+// could then point straight at a goal category — the connection that turns a
+// self-rating widget into the front of a coaching loop. That connection was
+// worth having. The classification was not, and did not survive first contact
+// with the product: "Learn a spinning kick" is Technique, and filing it under
+// "Sense of progress" is a category error — the link between a skill and a
+// mood is far too indirect to be a filing system.
+//
+// So the lists are split again — `resolveCoachingDimensions` for the radar,
+// `resolveGoalCategories` for goals — and the loop is KEPT, in the one place it
+// belongs: `Goal.from_dimension` records the axis a goal was created FROM.
+// That is PROVENANCE (why this goal exists), never classification (what it is
+// about), which is why it is a separate field and not a value in `categories`.
 
 import type { Timestamp } from './common'
 
@@ -21,12 +38,18 @@ export type GoalType = 'goal' | 'task'
 export type GoalStatus = 'open' | 'in_progress' | 'achieved' | 'abandoned'
 export type GoalCreatedBy = 'coach' | 'student'
 
-// ─── the shared vocabulary ───────────────────────────────────────────────────
+// ─── the two vocabularies ────────────────────────────────────────────────────
 
 /**
- * One dimension of a contact's practice — used BOTH as a goal category and as a
- * performance check-in axis. Stored on the team at
- * `teams|organizations/{id}.performance_indicators`.
+ * One entry of a team-configurable vocabulary: a stable `key` plus the label a
+ * studio shows for it.
+ *
+ * ONE SHAPE, TWO LISTS — deliberately, so both read the same way at every call
+ * site: the check-in axes at `teams|organizations/{id}.performance_indicators`
+ * (see `resolveCoachingDimensions`) and the goal categories at
+ * `teams|organizations/{id}.goal_categories` (see `resolveGoalCategories`).
+ * Sharing the shape is not sharing the list — see the header for why they are
+ * two.
  */
 export interface PerformanceIndicator {
   key: string
@@ -65,8 +88,8 @@ export const CANONICAL_DIMENSION_KEYS = [
  * ONE resolver, run identically by the admin tab, the member surfaces and the
  * functions — the same shape `resolveBookingContactFields` follows. An empty or
  * absent list means "never configured", which falls back to the defaults; a
- * team that genuinely wants none is not a case worth modelling, since a goal
- * with no dimension is simply a goal with no chips.
+ * team that genuinely wants none is not a case worth modelling, since a
+ * check-in with no axes is a form with nothing to rate.
  */
 export function resolveCoachingDimensions(
   source: { performance_indicators?: PerformanceIndicator[] | null } | null | undefined,
@@ -76,11 +99,52 @@ export function resolveCoachingDimensions(
   return configured.filter((d) => typeof d?.key === 'string' && d.key.length > 0)
 }
 
-/** Display label for a dimension key, falling back to the raw key so a legacy
- *  value (`technique`, `attitude`, …) still renders as itself rather than
- *  vanishing from a goal that was tagged before the vocabularies merged. */
+/** Display label for a dimension key, falling back to the raw key so a value
+ *  the team has since renamed or dropped still renders as itself rather than
+ *  vanishing from the check-in that recorded it. */
 export function dimensionLabel(key: string, dimensions: PerformanceIndicator[]): string {
   return dimensions.find((d) => d.key === key)?.label ?? key
+}
+
+/**
+ * The five default goal categories — what a goal is ABOUT.
+ *
+ * These are the pre-#128 list, restored: they were the categories the coaching
+ * tab shipped with before goal categories and check-in axes were briefly
+ * merged (see the header). Unlike the dimensions, no heuristic reasons about
+ * these keys — a category is a label, so a team replacing the whole list loses
+ * nothing.
+ */
+export const DEFAULT_GOAL_CATEGORIES: readonly PerformanceIndicator[] = [
+  { key: 'technique', label: 'Technique' },
+  { key: 'attitude', label: 'Attitude' },
+  { key: 'attendance', label: 'Attendance' },
+  { key: 'physical', label: 'Physical' },
+  { key: 'mental', label: 'Mental' },
+]
+
+/**
+ * The goal categories this tenant actually uses.
+ *
+ * Same fallback semantics as `resolveCoachingDimensions` above, deliberately —
+ * the two resolvers are read side by side and any difference between them
+ * would be read as meaning something. An empty or absent list means "never
+ * configured", which falls back to the defaults.
+ */
+export function resolveGoalCategories(
+  source: { goal_categories?: PerformanceIndicator[] | null } | null | undefined,
+): PerformanceIndicator[] {
+  const configured = source?.goal_categories
+  if (!configured || configured.length === 0) return [...DEFAULT_GOAL_CATEGORIES]
+  return configured.filter((c) => typeof c?.key === 'string' && c.key.length > 0)
+}
+
+/** Display label for a goal-category key, falling back to the raw key — mirrors
+ *  `dimensionLabel`, for the same reason: a category the team has since renamed
+ *  or dropped still renders as itself rather than vanishing from the goal that
+ *  carries it. */
+export function goalCategoryLabel(key: string, categories: PerformanceIndicator[]): string {
+  return categories.find((c) => c.key === key)?.label ?? key
 }
 
 // ─── goals and steps ─────────────────────────────────────────────────────────
@@ -91,11 +155,25 @@ export interface Goal {
   title: string
   description?: string | null
   status: GoalStatus
-  categories: string[]     // dimension keys — see resolveCoachingDimensions
+  categories: string[]     // goal-category keys — see resolveGoalCategories
   created_by: GoalCreatedBy
   created_at: Timestamp
   target_date?: Timestamp | null
   completed_at?: Timestamp | null  // set when task is marked done (status → 'achieved')
+
+  /**
+   * The check-in axis this goal was created FROM, when it was created from a
+   * weak axis (a check-in's `primary_lever` — see PerformanceCheckin below).
+   *
+   * PROVENANCE, not classification: it records WHY the goal exists, and is
+   * deliberately NOT `categories`, which says what the goal is ABOUT. A step
+   * created from a low Focus rating is provenance-Focus and category-whatever
+   * the work actually is; writing 'focus' into `categories` was the category
+   * error that split the two vocabularies apart again (see the header).
+   *
+   * Absent on every goal nobody created from an axis, which is most of them.
+   */
+  from_dimension?: string | null
 
   /**
    * The goal this step serves, for `type: 'task'`.

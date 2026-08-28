@@ -16,7 +16,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FirestoreService } from '../../services/firestore';
 import { Goal, GoalEvaluation, GoalStatus, PerformanceIndicator } from '../../types';
-import { groupGoalsWithSteps } from '../../utils/goalContract';
+import { dimensionLabel, goalCategoryLabel, groupGoalsWithSteps } from '../../utils/goalContract';
 import { Timestamp } from 'firebase/firestore';
 
 interface Props {
@@ -42,10 +42,12 @@ const STATUS_COLORS: Record<GoalStatus, string> = {
 
 const ALL_STATUSES: GoalStatus[] = ['open', 'in_progress', 'achieved', 'abandoned'];
 
-// Categories are the team's resolved coaching dimensions — the same list the
-// performance check-in rates against (see FirestoreService.getCoachingDimensions
-// and packages/shared/src/types/goal.ts's "ONE VOCABULARY"). There used to be a
-// second, hardcoded DEFAULT_CATEGORIES list here; that was drift, not design.
+// Categories are the team's resolved GOAL CATEGORIES — what a goal is about
+// (FirestoreService.getGoalCategories). They are NOT the check-in axes, which
+// say how someone is doing; the two lists were briefly merged and are separate
+// again — see the header of packages/shared/src/types/goal.ts. The axes are
+// still loaded here, for one job only: labelling a goal's `from_dimension`
+// provenance chip, which records the axis a goal was created FROM.
 
 function formatGoalDate(value: any): string {
   const d = value?.toDate ? value.toDate() : typeof value === 'string' ? new Date(value) : null;
@@ -531,12 +533,14 @@ interface GoalCardProps {
   steps: Goal[];
   contactId: string;
   categoryOptions: PerformanceIndicator[];
+  /** Check-in axes — used ONLY to label the `from_dimension` provenance chip. */
+  dimensionOptions: PerformanceIndicator[];
   onEvaluationAdded: () => void;
   onEditGoal?: () => void;
   onDeleteGoal?: () => void;
 }
 
-const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOptions, onEvaluationAdded, onEditGoal, onDeleteGoal }) => {
+const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOptions, dimensionOptions, onEvaluationAdded, onEditGoal, onDeleteGoal }) => {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   const [evaluations, setEvaluations] = useState<GoalEvaluation[]>([]);
@@ -668,19 +672,28 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
             >
               {STATUS_LABELS[goal.status]}
             </Chip>
-            {(goal.categories ?? []).map(cat => {
-              const found = categoryOptions.find(c => c.key === cat);
-              return (
-                <Chip
-                  key={cat}
-                  compact
-                  style={{ backgroundColor: theme.colors.surfaceVariant, height: 24 }}
-                  textStyle={{ fontSize: 11, marginVertical: 0 }}
-                >
-                  {found ? found.label : cat}
-                </Chip>
-              );
-            })}
+            {(goal.categories ?? []).map(cat => (
+              <Chip
+                key={cat}
+                compact
+                style={{ backgroundColor: theme.colors.surfaceVariant, height: 24 }}
+                textStyle={{ fontSize: 11, marginVertical: 0 }}
+              >
+                {goalCategoryLabel(cat, categoryOptions)}
+              </Chip>
+            ))}
+            {/* Provenance, not a category — drawn as an outline so the two
+                never read as one list. */}
+            {goal.from_dimension ? (
+              <Chip
+                compact
+                mode="outlined"
+                style={{ backgroundColor: 'transparent', height: 24 }}
+                textStyle={{ fontSize: 11, marginVertical: 0, color: theme.colors.onSurfaceVariant }}
+              >
+                {`From: ${dimensionLabel(goal.from_dimension, dimensionOptions)}`}
+              </Chip>
+            ) : null}
             {goal.target_date ? (
               <Chip
                 compact
@@ -786,6 +799,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
   const theme = useTheme();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<PerformanceIndicator[]>([]);
+  const [dimensionOptions, setDimensionOptions] = useState<PerformanceIndicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -793,12 +807,14 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
   const loadGoals = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, dims] = await Promise.all([
+      const [data, cats, dims] = await Promise.all([
         FirestoreService.getGoals(contactId),
+        teamId ? FirestoreService.getGoalCategories(teamId) : Promise.resolve([]),
         teamId ? FirestoreService.getCoachingDimensions(teamId) : Promise.resolve([]),
       ]);
       setGoals(data);
-      setCategoryOptions(dims);
+      setCategoryOptions(cats);
+      setDimensionOptions(dims);
     } finally {
       setLoading(false);
     }
@@ -897,6 +913,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
               steps={steps}
               contactId={contactId}
               categoryOptions={categoryOptions}
+              dimensionOptions={dimensionOptions}
               onEvaluationAdded={loadGoals}
               onEditGoal={goal.created_by === 'student' ? () => setEditingGoal(goal) : undefined}
               onDeleteGoal={goal.created_by === 'student' ? () => handleDeleteGoal(goal) : undefined}

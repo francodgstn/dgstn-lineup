@@ -318,11 +318,18 @@ export interface Goal {
   title: string;
   description?: string | null;
   status: GoalStatus;
-  categories: string[]; // dimension keys — see FirestoreService.getCoachingDimensions
+  categories: string[]; // goal-category keys — see FirestoreService.getGoalCategories
   created_by: GoalCreatedBy;
   created_at: any;
   target_date?: any; // Firestore Timestamp or null
   completed_at?: any | null; // set when a task is marked done (status → 'achieved')
+
+  /**
+   * The check-in axis this goal was created FROM, when it came from a weak
+   * axis. PROVENANCE, not classification: it records why the goal exists, and
+   * is deliberately NOT `categories`, which says what the goal is about.
+   */
+  from_dimension?: string | null;
 
   /**
    * The goal this step serves, for `type: 'task'`. Null/absent = unparented,

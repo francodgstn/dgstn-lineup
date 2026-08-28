@@ -301,6 +301,11 @@ function RosterName({
 // evaluation — there is no "just a number" primitive in the coaching model,
 // only goals and their evaluations — but the coach never sees the four-field
 // form to get there.
+//
+// The goal it writes carries `from_dimension` (the axis it was logged against)
+// and NO categories: the axis is where this goal CAME FROM, not what it is
+// about, and those are two different questions — see the header of
+// packages/shared/src/types/goal.ts.
 function QuickLogSheet({
   open,
   onOpenChange,
@@ -341,7 +346,8 @@ function QuickLogSheet({
           title: dim?.label ?? dimensionKey,
           description: null,
           status: 'in_progress',
-          categories: [dimensionKey],
+          categories: [],
+          from_dimension: dimensionKey,
           parent_goal_id: null,
           created_by: 'coach',
           created_at: serverTimestamp(),

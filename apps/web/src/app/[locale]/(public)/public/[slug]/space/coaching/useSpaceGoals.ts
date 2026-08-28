@@ -56,11 +56,15 @@ export interface NewGoalInput {
   type: GoalType
   title: string
   description?: string | null
+  /** What this goal is ABOUT — goal-category keys, see `resolveGoalCategories`. */
   categories?: string[]
   targetDate?: Date | null
   /** Which goal this step serves (`type: 'task'` only). Null/absent = the
    *  virtual "General" bucket — see `groupGoalsWithSteps`. */
   parentGoalId?: string | null
+  /** The check-in axis this was created FROM — provenance, never a category
+   *  (see `Goal.from_dimension`). Set only by CreateStepFromLever. */
+  fromDimension?: string | null
 }
 
 export function useSpaceGoals() {
@@ -93,6 +97,7 @@ export function useSpaceGoals() {
         description: input.description || null,
         status: 'open' as GoalStatus,
         categories: input.categories ?? [],
+        from_dimension: input.fromDimension ?? null,
         created_by: 'student',
         created_at: Timestamp.now(),
         target_date: input.targetDate ? Timestamp.fromDate(input.targetDate) : null,

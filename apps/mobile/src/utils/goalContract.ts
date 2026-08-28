@@ -23,10 +23,13 @@ export const CANONICAL_DIMENSION_KEYS = [
 ] as const;
 
 /**
- * The five default coaching dimensions.
+ * The five default check-in axes — HOW SOMEONE IS DOING.
  *
- * Used BOTH as goal categories and as performance check-in axes — they are
- * ONE team-configurable list, not two (see `resolveCoachingDimensions`).
+ * NOT goal categories: those are `DEFAULT_GOAL_CATEGORIES` below, a separate
+ * list answering a separate question (they were briefly merged in 2026-08 and
+ * split again — the reasoning lives in the header of
+ * packages/shared/src/types/goal.ts).
+ *
  * These are also the only axes the profile heuristic below can name a
  * profile for; a team that replaces them still gets a weakest/strongest axis
  * (generic) but no named profile.
@@ -49,6 +52,45 @@ export function resolveCoachingDimensions(
   const configured = source?.performance_indicators;
   if (!configured || configured.length === 0) return [...DEFAULT_COACHING_DIMENSIONS];
   return configured.filter((d) => typeof d?.key === 'string' && d.key.length > 0);
+}
+
+/**
+ * The five default goal categories — WHAT A GOAL IS ABOUT.
+ *
+ * A category is a label on a piece of work: no scale, and no heuristic reads
+ * these keys, so a team may replace the list freely.
+ */
+export const DEFAULT_GOAL_CATEGORIES: readonly PerformanceIndicator[] = [
+  { key: 'technique', label: 'Technique' },
+  { key: 'attitude', label: 'Attitude' },
+  { key: 'attendance', label: 'Attendance' },
+  { key: 'physical', label: 'Physical' },
+  { key: 'mental', label: 'Mental' },
+];
+
+/**
+ * The goal categories this tenant actually uses. Same fallback semantics as
+ * `resolveCoachingDimensions` above: an empty or absent configured list means
+ * "never configured", which falls back to the defaults.
+ */
+export function resolveGoalCategories(
+  source: { goal_categories?: PerformanceIndicator[] | null } | null | undefined,
+): PerformanceIndicator[] {
+  const configured = source?.goal_categories;
+  if (!configured || configured.length === 0) return [...DEFAULT_GOAL_CATEGORIES];
+  return configured.filter((c) => typeof c?.key === 'string' && c.key.length > 0);
+}
+
+/** Display label for a dimension key, falling back to the raw key so a value
+ *  the team has since renamed or dropped still renders as itself. */
+export function dimensionLabel(key: string, dimensions: PerformanceIndicator[]): string {
+  return dimensions.find((d) => d.key === key)?.label ?? key;
+}
+
+/** Display label for a goal-category key — mirrors `dimensionLabel`, same
+ *  raw-key fallback, for the same reason. */
+export function goalCategoryLabel(key: string, categories: PerformanceIndicator[]): string {
+  return categories.find((c) => c.key === key)?.label ?? key;
 }
 
 export interface ProfileResult {

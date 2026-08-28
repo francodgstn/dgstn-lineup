@@ -1,7 +1,7 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
 import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalCreatedBy, GoalEvaluation, GoalType, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
-import { detectPerformanceProfile, resolveCoachingDimensions } from '../utils/goalContract';
+import { detectPerformanceProfile, resolveCoachingDimensions, resolveGoalCategories } from '../utils/goalContract';
 import { httpsCallable } from 'firebase/functions';
 
 export const FirestoreService = {
@@ -1068,11 +1068,14 @@ export const FirestoreService = {
   },
 
   /**
-   * The team's coaching dimensions — ONE list, used both as goal categories
-   * and as performance check-in axes (see `resolveCoachingDimensions`). This
-   * replaces the old, separate `getTeamPerformanceIndicators` / (goal-category-
-   * reading) pair: `performance_indicators` and `goal_categories` were two
-   * vocabularies for the same concept, which is drift, not design.
+   * The team's performance check-in axes — HOW SOMEONE IS DOING, the radar's
+   * dimensions (see `resolveCoachingDimensions`).
+   *
+   * NOT the goal categories: that is `getGoalCategories` below. The two were
+   * briefly one list and are two again — a goal's category says what the work
+   * is about, an axis says how the person is doing, and filing "learn a
+   * spinning kick" under "Sense of progress" is a category error. See the
+   * header of packages/shared/src/types/goal.ts.
    */
   async getCoachingDimensions(teamId: string): Promise<PerformanceIndicator[]> {
     try {
@@ -1085,6 +1088,26 @@ export const FirestoreService = {
     } catch (error) {
       console.error('Error fetching coaching dimensions:', error);
       return resolveCoachingDimensions(null);
+    }
+  },
+
+  /**
+   * The team's goal categories — WHAT A GOAL IS ABOUT (see
+   * `resolveGoalCategories`). Falls back to the defaults (technique /
+   * attitude / attendance / physical / mental) for a team that never
+   * configured its own, which today is every team.
+   */
+  async getGoalCategories(teamId: string): Promise<PerformanceIndicator[]> {
+    try {
+      const teamRef = doc(db, 'teams', teamId);
+      const teamSnap = await getDoc(teamRef);
+      if (!teamSnap.exists()) return resolveGoalCategories(null);
+      return resolveGoalCategories(
+        teamSnap.data() as { goal_categories?: PerformanceIndicator[] | null },
+      );
+    } catch (error) {
+      console.error('Error fetching goal categories:', error);
+      return resolveGoalCategories(null);
     }
   },
 

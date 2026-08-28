@@ -1964,6 +1964,10 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // ── goals & tasks (adult students only) ────────────────────────────────────
+  // `profile.goals[].categories` are GOAL CATEGORIES (technique / attitude /
+  // attendance / physical / mental — see DEFAULT_GOAL_CATEGORIES), never
+  // check-in axis keys. A goal created FROM a weak axis carries
+  // `from_dimension` instead; none is seeded, because no check-ins are seeded.
   let goalRound = 0
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]

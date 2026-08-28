@@ -1600,6 +1600,11 @@ async function seedTeam(opts: {
   await seedContactAlerts({ teamId, vocabulary: 'martial_arts' })
 
   // ── goals & tasks (appointment data) ────────────────────────────────────────────
+  // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
+  // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys:
+  // what a goal is about and how someone is doing are two vocabularies. A goal
+  // created FROM a weak axis carries `from_dimension` instead; nothing seeded
+  // here comes from one, because no check-ins are seeded.
   const goalDefs = [
     {
       title: 'Improve guard passing',

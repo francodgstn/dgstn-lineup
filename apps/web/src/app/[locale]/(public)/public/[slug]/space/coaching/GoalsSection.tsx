@@ -22,7 +22,18 @@ import { StepRow } from './StepRow'
 import { GoalFormDialog } from './GoalFormDialog'
 import type { SpaceGoalsState } from './useSpaceGoals'
 
-export function GoalsSection({ state, dimensions }: { state: SpaceGoalsState; dimensions: PerformanceIndicator[] }) {
+export function GoalsSection({
+  state,
+  categories,
+  dimensions,
+}: {
+  state: SpaceGoalsState
+  /** What a goal is ABOUT — the picker's options and the chips. */
+  categories: PerformanceIndicator[]
+  /** Check-in axes, needed only to label a goal's `from_dimension` provenance
+   *  chip. Never offered as a category. */
+  dimensions: PerformanceIndicator[]
+}) {
   const t = useTranslations('SpaceCoaching')
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const { confirm, confirmDialog } = useConfirm()
@@ -74,6 +85,7 @@ export function GoalsSection({ state, dimensions }: { state: SpaceGoalsState; di
               key={goal.id}
               goal={goal}
               steps={steps}
+              categories={categories}
               dimensions={dimensions}
               createGoal={createGoal}
               updateGoal={updateGoal}
@@ -111,7 +123,7 @@ export function GoalsSection({ state, dimensions }: { state: SpaceGoalsState; di
         open={addingGoal}
         onOpenChange={setAddingGoal}
         kind="goal"
-        dimensions={dimensions}
+        categories={categories}
         onSubmit={async (values) => {
           await createGoal.mutateAsync({ type: 'goal', ...values })
           setAddingGoal(false)
@@ -121,7 +133,7 @@ export function GoalsSection({ state, dimensions }: { state: SpaceGoalsState; di
         open={addingGeneralStep}
         onOpenChange={setAddingGeneralStep}
         kind="task"
-        dimensions={dimensions}
+        categories={categories}
         onSubmit={async (values) => {
           await createGoal.mutateAsync({ type: 'task', parentGoalId: null, ...values })
           setAddingGeneralStep(false)

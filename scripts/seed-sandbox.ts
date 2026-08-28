@@ -579,6 +579,8 @@ interface SectorProfile {
     location: string
     description: string
   }[]
+  /** `categories` = GOAL CATEGORY keys (what the goal is about), never
+   *  check-in axis keys — see packages/shared/src/types/goal.ts. */
   goals: { title: string; description: string; categories: string[] }[]
   tasks: string[]
 }
@@ -2237,6 +2239,10 @@ async function seedDemoTeam(profile: SectorProfile) {
   await seedContactAlerts({ teamId, vocabulary: 'generic' })
 
   // ── goals & tasks ──────────────────────────────────────────────────────────
+  // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
+  // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys.
+  // A goal created FROM a weak axis carries `from_dimension` instead; none is
+  // seeded, because no check-ins are seeded.
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]
     if (c.type !== 'student' || c.totalSessions < 5) continue
