@@ -182,6 +182,35 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
     )
   })
 
+  it('the toggle reaches VISITORS, not just the settings screen', () => {
+    // `bookingSettings.appointmentsEnabled` had exactly one web reader, imported
+    // only by `(auth)` routes, so switching it off hid nothing public. It is
+    // enforced at the callable rather than on the page because that is the one
+    // door every client goes through — web, mobile, and anything added later.
+    const window = read('appointments/window.ts')
+    assert.ok(
+      window.includes('if (!appointmentsEnabled) return { coaches: [], settleAtStudio }'),
+      'listAvailability must refuse to list when the studio turned bookable hours off'
+    )
+    assert.ok(
+      window.includes("?.appointmentsEnabled !== false"),
+      'absent must mean ON, matching appointmentPickerLive — a studio that never ' +
+        'touched the switch still has bookable hours'
+    )
+  })
+
+  it('the content probe does not re-apply the filter listAvailability dropped', () => {
+    // The probe mirrored "priced durations drop out without Connect". Now that
+    // those are settled at the studio instead, keeping the filter here would
+    // mark the surface dead over a picker that works.
+    const sync = read('sync/syncTeamPublicProfile.ts')
+    assert.ok(
+      !sync.includes("resolveDurationSale(d).mode !== 'priced'"),
+      'the appointment content probe filters priced durations again — a studio ' +
+        'whose only lengths are priced would be reported as having no picker'
+    )
+  })
+
   it('ONE predicate answers "can this studio take money"', () => {
     // The listing decides what to offer and the booking decides which door the
     // offer opens; if they compute it separately they will eventually disagree,

@@ -224,6 +224,35 @@ export const listAvailability = onCall(async (request) => {
     teamSnap.data()?.payments as EnabledTeam['payments']
   )
 
+  // ── THE STUDIO'S OWN TOGGLE, HONOURED WHERE IT ACTUALLY MATTERS ───────────
+  // `bookingSettings.appointmentsEnabled` ("Show bookable hours") had exactly
+  // one web reader, `usePublicSurfaces`, imported only by `(auth)` routes — so
+  // it governed what the STUDIO was told about its own surfaces and nothing a
+  // visitor could reach. Switching it off hid nothing public (Franco,
+  // 2026-08-28: honour it on public routes).
+  //
+  // It is enforced HERE, at the callable, rather than on the page: this is the
+  // one door every client goes through, so the web picker, the mobile app and
+  // anything added later are covered by construction — and a page-level gate
+  // would leave the callable answering to a direct call anyway.
+  //
+  // The toggle lives on the public_profile document (Settings → Booking writes
+  // it straight there, never touching the team doc), which is why it is a
+  // second read rather than a field on `teamSnap`.
+  //
+  // ABSENT MEANS ON, matching `appointmentPickerLive`: a studio that never
+  // touched the switch has bookable hours if it published any.
+  const profileSnap = await db
+    .collection(TEAMS_COLLECTION)
+    .doc(data.teamId)
+    .collection('public_profile')
+    .doc(data.teamId)
+    .get()
+  const appointmentsEnabled =
+    (profileSnap.data()?.bookingSettings as { appointmentsEnabled?: boolean } | undefined)
+      ?.appointmentsEnabled !== false
+  if (!appointmentsEnabled) return { coaches: [], settleAtStudio }
+
   // Batch-load the union of referenced activities; keep only bookable appointment offerings.
   const activityIds = new Set<string>()
   for (const t of templates) for (const id of t.activityIds ?? []) activityIds.add(id)

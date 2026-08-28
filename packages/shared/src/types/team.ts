@@ -113,11 +113,13 @@ export interface ActivePublicSurfaces {
   // THIS FLAG IS THE CONTENT HALF: is there anything bookable behind the picker?
   // It mirrors what `listAvailability` would return — ≥1 `status: 'active'`
   // availability window whose `activityIds` resolve to ≥1 `type: 'appointment'`
-  // activity of this team with a bookable duration menu (priced-only durations
-  // drop out when the studio has no chargeable Connect account, exactly as they
-  // do there). Hours with no appointment activity yield zero slots, and an
-  // activity nobody published hours for is equally unbookable, so neither on its
-  // own is a live surface.
+  // activity of this team with a bookable duration menu. Hours with no
+  // appointment activity yield zero slots, and an activity nobody published
+  // hours for is equally unbookable, so neither on its own is a live surface.
+  //
+  // A priced duration no longer drops out when the studio has no chargeable
+  // Connect account: since 2026-08-28 those are booked and SETTLED AT THE
+  // STUDIO, so they are bookable content like any other.
   //
   // THE OTHER HALF IS `bookingSettings.appointmentsEnabled`, the studio's own
   // toggle, and it is deliberately NOT folded in here: it is written straight to
@@ -128,7 +130,11 @@ export interface ActivePublicSurfaces {
   // from the same document instead, in the same read, at no cost.
   //
   // COMPOSE THE TWO THROUGH `appointmentPickerLive` (publicRoutes.ts) and
-  // nowhere else. Absent ⇒ not computed ⇒ treated as not live, which is the
+  // nowhere else — for the STUDIO-FACING question. The VISITOR-facing one is
+  // enforced server-side in `listAvailability`, which returns no coaches when
+  // the toggle is off; until 2026-08-28 the toggle governed only what the
+  // studio was shown about its own surfaces, and switching it off hid nothing
+  // public. Absent ⇒ not computed ⇒ treated as not live, which is the
   // safe direction: an absent row beats a row with a guessed live state.
   //
   // Not a `PublicSurface` member: the picker has a landing URL, but making it
