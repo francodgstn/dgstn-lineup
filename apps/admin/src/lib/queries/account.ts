@@ -13,6 +13,7 @@ import type {
 import {
   contactUsageForPlan,
   PLAN_PRICING,
+  ORG_PER_STUDIO,
   readGatewayData,
   subscriptionCancellation,
   subscriptionIsCancelling,
@@ -82,6 +83,10 @@ export interface SubscriptionView {
   subscriptionId: string | null
   lastPaymentStatus: string | null
   baseMonthly: number
+  /** ORGS ONLY — the per-studio rate. The organisation tier has no base fee, so
+   *  `baseMonthly` is 0 for it and reading that as "the price" shows an operator
+   *  CHF 0.00 for a paying federation. */
+  perStudioMonthly: number | null
 }
 
 export interface ActivityRow {
@@ -224,6 +229,7 @@ function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
     subscriptionId: gateway.subscription_id ?? null,
     lastPaymentStatus: gateway.last_payment_status ?? null,
     baseMonthly: PLAN_PRICING[sub.plan].baseMonthly,
+    perStudioMonthly: sub.plan === 'organization' ? ORG_PER_STUDIO.monthly : null,
   }
 }
 

@@ -2617,7 +2617,14 @@
     "documentsNote": "Publiez et partagez des documents. Les décharges signables nécessitent Studio.",
     "rowCustomDomain": "Domaine personnalisé",
     "rowGiftCards": "Cartes cadeaux",
-    "rowPromoCodes": "Codes promo"
+    "rowPromoCodes": "Codes promo",
+    "perStudioMonth": "par studio / mois",
+    "orgStudiosLabel": "studios",
+    "orgStudiosPlus": "{count}+",
+    "orgFewerStudios": "Moins de studios",
+    "orgMoreStudios": "Plus de studios",
+    "orgTotalLine": "CHF {total} / mois",
+    "orgQuoteNote": "Même tarif — dites-nous combien et nous vous envoyons le montant."
   },
   "Plugins": {
     "title": "Plugins",

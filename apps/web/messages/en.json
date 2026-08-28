@@ -2617,7 +2617,14 @@
     "documentsNote": "Publish and share documents. Signable waivers need Studio.",
     "rowCustomDomain": "Custom domain",
     "rowGiftCards": "Gift cards",
-    "rowPromoCodes": "Promo codes"
+    "rowPromoCodes": "Promo codes",
+    "perStudioMonth": "per studio / month",
+    "orgStudiosLabel": "studios",
+    "orgStudiosPlus": "{count}+",
+    "orgFewerStudios": "Fewer studios",
+    "orgMoreStudios": "More studios",
+    "orgTotalLine": "CHF {total} / month",
+    "orgQuoteNote": "Same rate — tell us how many and we'll send the number."
   },
   "Plugins": {
     "title": "Plugins",

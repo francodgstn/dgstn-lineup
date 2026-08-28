@@ -43,6 +43,12 @@ export interface AccountRow {
    *  LISTED here (an operator has to be able to manage it) but excluded from the
    *  overview metrics, which is what the daily snapshot does too. */
   internal: boolean
+  /** ORGS ONLY — active member studios, which is what the organisation pays for
+   *  (the tier is priced per studio). Null for a team. */
+  studioCount: number | null
+  /** TEAMS ONLY — belongs to an organisation, which is the paying entity, so
+   *  this row contributes nothing to MRR. See `monthlyChfFor` in @linyup/shared. */
+  billedByOrg: boolean
 }
 
 /** Derive the compact Connect status from the team's payments mirror. */
@@ -107,6 +113,16 @@ async function loadAccounts(): Promise<LoadResult> {
   const contactCount = new Map<string, number>()
   teamIds.forEach((id, i) => contactCount.set(id, counts[i]!))
 
+  // Studios per organisation — the organisation tier is priced per studio, so
+  // this is its subscription amount rather than a statistic. Counted from the
+  // teams already loaded: `Team.org_id` is written in the same batch as the
+  // membership row, so no extra read is needed.
+  const studiosPerOrg = new Map<string, number>()
+  for (const doc of teamsSnap.docs) {
+    const orgId = (doc.data() as Team).org_id
+    if (orgId) studiosPerOrg.set(orgId, (studiosPerOrg.get(orgId) ?? 0) + 1)
+  }
+
   const rows: AccountRow[] = []
 
   for (const doc of teamsSnap.docs) {
@@ -129,6 +145,8 @@ async function loadAccounts(): Promise<LoadResult> {
       paymentsStatus: teamPaymentsStatus(team),
       comped: team.flags?.comped === true,
       internal: tenantHiddenFromPlatformMetrics(team.flags),
+      studioCount: null,
+      billedByOrg: typeof team.org_id === 'string' && team.org_id.length > 0,
     })
   }
 
@@ -151,6 +169,8 @@ async function loadAccounts(): Promise<LoadResult> {
       paymentsStatus: null,
       comped: org.flags?.comped === true,
       internal: tenantHiddenFromPlatformMetrics(org.flags),
+      studioCount: studiosPerOrg.get(doc.id) ?? 0,
+      billedByOrg: false,
     })
   }
 
@@ -188,6 +208,8 @@ function toMetricInput(r: AccountRow): AccountMetricInput {
     trialEndsAtMs: r.trialEndsAtMs,
     contactCount: r.contactCount,
     comped: r.comped,
+    studioCount: r.studioCount,
+    billedByOrg: r.billedByOrg,
   }
 }
 

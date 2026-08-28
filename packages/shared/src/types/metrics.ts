@@ -1,5 +1,5 @@
 import type { SaasPlan, SaasStatus } from './team'
-import { PLAN_PRICING } from './plan'
+import { ORG_MIN_STUDIOS, PLAN_PRICING, orgMonthlyForStudios } from './plan'
 
 // ─── Platform-wide operator metrics ─────────────────────────────────────────
 // A single source of truth for the operator console. The same pure reducer
@@ -29,6 +29,20 @@ export interface AccountMetricInput {
    * invent money that no invoice exists for.
    */
   comped?: boolean
+  /**
+   * ORGS ONLY — active member studios, which is what the organisation is billed
+   * for (`orgMonthlyForStudios`). Absent falls back to the tier's minimum, which
+   * under-states rather than invents.
+   */
+  studioCount?: number | null
+  /**
+   * TEAMS ONLY — this studio belongs to an organisation, so the ORGANISATION is
+   * the paying entity and this row contributes nothing to MRR.
+   *
+   * Without it every member studio was counted at the organisation tier's own
+   * price: a five-studio federation reported six subscriptions rather than one.
+   */
+  billedByOrg?: boolean
 }
 
 export interface PlatformMetrics {
@@ -48,6 +62,27 @@ export interface PlatformMetrics {
   contacts: { totalActive: number }
   trials: { active: number; expiring7d: number }
   signups: { last7d: number; last30d: number; cumulative: number }
+}
+
+/**
+ * What ONE account contributes to MRR each month.
+ *
+ * ── THE PAYING ENTITY IS THE ORGANISATION, NOT ITS STUDIOS ──────────────────
+ * Joining an organisation sets a studio's `plan` to 'organization', and this
+ * reducer receives every studio AND the org as separate rows — so charging each
+ * row the tier's price counted a five-studio federation as six subscriptions.
+ * At the old CHF 79 base that reported 474 against a true 139 (Franco,
+ * 2026-08-28: attribute the payment to the org, not the single teams).
+ *
+ * ── AND THE ORGANISATION'S PRICE IS NOT A SCALAR ────────────────────────────
+ * It is CHF 25 per studio, so it cannot be read off `PLAN_PRICING.baseMonthly`
+ * like the other three — that field is 0 for this tier, deliberately, and a
+ * reducer that trusted it would report every federation as free.
+ */
+function monthlyChfFor(a: AccountMetricInput): number {
+  if (a.type === 'team' && a.billedByOrg) return 0
+  if (a.type === 'org') return orgMonthlyForStudios(a.studioCount ?? ORG_MIN_STUDIOS)
+  return PLAN_PRICING[a.plan!].baseMonthly
 }
 
 const emptyStatus = (): Record<SaasStatus, number> => ({
@@ -96,11 +131,11 @@ export function computePlatformMetrics(
       }
     }
 
-    // MRR: only paying (active) subscriptions count. Flat per-plan base — there
-    // is no per-contact overage (caps are enforced by upgrade/blocks, not metering).
+    // MRR: only paying (active) subscriptions count. No per-contact overage
+    // (caps are enforced by upgrade/blocks, not metering).
     // A COMPED account is 'active' and has a plan, and pays nothing for it.
     if (a.status === 'active' && a.plan && !a.comped) {
-      const amount = PLAN_PRICING[a.plan].baseMonthly
+      const amount = monthlyChfFor(a)
       estimatedChf += amount
       mrrByPlan[a.plan] += amount
     }

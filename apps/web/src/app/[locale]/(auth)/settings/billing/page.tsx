@@ -36,7 +36,6 @@ import {
   TEAMS_COLLECTION,
   PLAN_ORDER,
   PLAN_PRICING,
-  orgPriceFrom,
   subscriptionEndsAt,
   subscriptionIsCancelling,
 } from '@linyup/shared'
@@ -51,6 +50,7 @@ import {
 } from 'lucide-react'
 import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 import { ORG_ENQUIRY_MAILTO } from '@/lib/salesContact'
+import { OrgStudioPricer } from '@/components/plan/OrgStudioPricer'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -514,24 +514,29 @@ function SubscriptionCard({
                     )}
                   </div>
 
-                  {/* Price — from PLAN_PRICING (billing source of truth). Org is
-                      base + per-studio (sales-led), shown as "From CHF {entry}". */}
-                  <div className="mt-3 flex items-baseline gap-1">
-                    {price.baseMonthly === 0 ? (
-                      <span className="text-2xl font-bold">{tp('priceFree')}</span>
-                    ) : plan === 'organization' ? (
-                      <>
-                        <span className="text-xs text-muted-foreground">{tp('priceFrom')}</span>
-                        <span className="text-2xl font-bold">CHF {orgPriceFrom()}</span>
-                        <span className="text-xs text-muted-foreground">{tp('perMonth')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-2xl font-bold">CHF {fmtPrice(price.baseMonthly)}</span>
-                        <span className="text-xs text-muted-foreground">{tp('perMonth')}</span>
-                      </>
-                    )}
-                  </div>
+                  {/* Price. Three tiers are a scalar from PLAN_PRICING; the
+                      organisation is a RATE plus a calculator, so it gets its own
+                      branch — see OrgStudioPricer.
+
+                      THE ORG BRANCH COMES FIRST, and that ordering is
+                      load-bearing: `baseMonthly === 0` means "free", and the
+                      organisation's base fee is now zero because the tier is
+                      priced entirely per studio. Tested second, it rendered the
+                      Organisation card as Free. */}
+                  {plan === 'organization' ? (
+                    <OrgStudioPricer className="mt-3" />
+                  ) : (
+                    <div className="mt-3 flex items-baseline gap-1">
+                      {price.baseMonthly === 0 ? (
+                        <span className="text-2xl font-bold">{tp('priceFree')}</span>
+                      ) : (
+                        <>
+                          <span className="text-2xl font-bold">CHF {fmtPrice(price.baseMonthly)}</span>
+                          <span className="text-xs text-muted-foreground">{tp('perMonth')}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
                     {included == null
                       ? tp('unlimitedContacts')

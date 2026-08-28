@@ -2617,7 +2617,14 @@
     "documentsNote": "Pubblica e condividi documenti. Le liberatorie firmabili richiedono Studio.",
     "rowCustomDomain": "Dominio personalizzato",
     "rowGiftCards": "Carte regalo",
-    "rowPromoCodes": "Codici promozionali"
+    "rowPromoCodes": "Codici promozionali",
+    "perStudioMonth": "per studio / mese",
+    "orgStudiosLabel": "studi",
+    "orgStudiosPlus": "{count}+",
+    "orgFewerStudios": "Meno studi",
+    "orgMoreStudios": "Più studi",
+    "orgTotalLine": "CHF {total} / mese",
+    "orgQuoteNote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra."
   },
   "Plugins": {
     "title": "Plugin",

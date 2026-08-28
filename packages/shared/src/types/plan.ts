@@ -58,12 +58,17 @@ export const PLAN_PRICING: Record<SaasPlan, PlanPrice> = {
     stripeLookupKey: 'linyup_studio_monthly',
     includedContacts: 250,
   },
-  // Organisation is NOT flat-published: the `baseMonthly` here is the org BASE
-  // fee only. The real price is base + per-studio (see ORG_PER_STUDIO /
-  // orgMonthlyForStudios) and is quoted on a call ("From CHF 103 · Talk to us").
+  // Organisation has NO fixed price and NO base fee — it is priced PER STUDIO
+  // (ORG_PER_STUDIO). `baseMonthly: 0` is the honest value rather than a
+  // placeholder, and `stripeLookupKey: null` follows from it: a base fee of zero
+  // has no price to bill, so the catalogue creates none and the org's whole
+  // subscription is the per-studio line at quantity = studios.
+  //
+  // Anything reading `baseMonthly` to render "the price of this tier" is WRONG
+  // for this one. Use `orgMonthlyForStudios`.
   organization: {
-    baseMonthly: 79,
-    stripeLookupKey: 'linyup_organization_monthly',
+    baseMonthly: 0,
+    stripeLookupKey: null,
     includedContacts: null,
   },
 }
@@ -131,32 +136,55 @@ export const STUDIO_CONTACT_BLOCK: ContactBlock = {
   stripeLookupKey: 'linyup_studio_contact_block_monthly',
 }
 
-// ─── Organisation pricing (base + per-studio, sales-led) ────────────────────────
-// Organisation is NOT flat-published and NOT self-serve checkout: it's quoted on
-// a call ("From CHF 103 · Talk to us"). The total is a base fee
-// (PLAN_PRICING.organization.baseMonthly) plus a per-studio fee, with a
-// 2-studio minimum. The base fee is deliberate — it makes the org wrapper cost
-// something, so unrelated studios can't group up purely to undercut individual
-// Studio plans. Stripe models this as two recurring items: the org base price
-// (PLAN_PRICING.organization.stripeLookupKey) at quantity 1, plus ORG_PER_STUDIO
-// at quantity = number of studios. Eligibility (common ownership / a single
-// federating body) and the exact quote are handled by sales, not in code.
+// ─── Organisation pricing: A FLAT RATE PER STUDIO ───────────────────────────────
+//
+// CHF 25 per studio per month, from 2 studios to 10. Above ten the number is
+// quoted rather than listed, and that is a FOURTH STATE OF THE SAME TIER, not a
+// hidden premium plan: the rate is still per studio and the answer is still a
+// quick quote (Franco, 2026-08-28).
+//
+// ── "FROM CHF 25" IS WRONG AND IS THE MISTAKE THIS REPLACED ─────────────────
+// The rate is FLAT — not tiered, not volume-discounted, no base fee — so "from"
+// would describe a price that climbs with size, which is the opposite of what
+// this is. The tier used to carry a CHF 79 base plus CHF 12 per studio and was
+// published as "From CHF 103"; both the base fee and that framing are gone.
+// `orgPriceFrom()` was deleted rather than renamed, so nothing can keep the old
+// reading by accident.
+//
+// The base fee existed to stop unrelated studios grouping up to undercut the
+// Studio tier. Nothing in code replaces it: eligibility (common ownership, or a
+// single federating body) was always a sales judgement and still is.
+//
+// Stripe bills ONE recurring item — ORG_PER_STUDIO at quantity = studios. There
+// is no base price any more, which is why PLAN_PRICING.organization carries a
+// null lookup key.
 export const ORG_MIN_STUDIOS = 2
 
+/** Above this, the price is quoted rather than listed — see `orgNeedsQuote`. */
+export const ORG_MAX_LISTED_STUDIOS = 10
+
 export const ORG_PER_STUDIO: { monthly: number; stripeLookupKey: string } = {
-  monthly: 12,
+  monthly: 25,
   stripeLookupKey: 'linyup_organization_studio_monthly',
 }
 
-/** Monthly total for an organisation with `studios` studios (min enforced). */
+/**
+ * Monthly total for an organisation with `studios` studios.
+ *
+ * The minimum is enforced because the tier does not exist below it; the MAXIMUM
+ * deliberately is not, so a caller that asks about 14 studios gets the honest
+ * arithmetic rather than the 10-studio price. Whether to SHOW a number is
+ * `orgNeedsQuote`'s decision, and keeping the two apart is what lets the quote
+ * state still say "still CHF 25 per studio" truthfully.
+ */
 export function orgMonthlyForStudios(studios: number): number {
   const n = Math.max(ORG_MIN_STUDIOS, Math.floor(studios) || 0)
-  return PLAN_PRICING.organization.baseMonthly + n * ORG_PER_STUDIO.monthly
+  return n * ORG_PER_STUDIO.monthly
 }
 
-/** The public "From CHF X" entry price (the 2-studio minimum) — e.g. 103. */
-export function orgPriceFrom(): number {
-  return orgMonthlyForStudios(ORG_MIN_STUDIOS)
+/** Is this size past the listed range — i.e. quoted rather than published? */
+export function orgNeedsQuote(studios: number): boolean {
+  return studios > ORG_MAX_LISTED_STUDIOS
 }
 
 export type ContactOverage =

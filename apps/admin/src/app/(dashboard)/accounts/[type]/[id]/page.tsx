@@ -88,7 +88,17 @@ export default async function AccountDetailPage({
               <>
                 <Field label="Plan" value={<span className="capitalize">{sub.plan}</span>} />
                 <Field label="Status" value={<StatusBadge status={sub.status} />} />
-                <Field label="Base price" value={`${formatChf(sub.baseMonthly)}/mo`} />
+                {/* The organisation tier has no base fee — it is a RATE per
+                    studio, so `baseMonthly` is 0 for it and printing that showed
+                    an operator CHF 0.00 for a paying federation. */}
+                <Field
+                  label={sub.perStudioMonthly == null ? 'Base price' : 'Rate'}
+                  value={
+                    sub.perStudioMonthly == null
+                      ? `${formatChf(sub.baseMonthly)}/mo`
+                      : `${formatChf(sub.perStudioMonthly)}/studio/mo`
+                  }
+                />
                 <Field label="Gateway" value={sub.gatewayType ?? 'manual'} />
                 <Field label="Current period" value={`${formatDate(sub.currentPeriodStartMs)} → ${formatDate(sub.currentPeriodEndMs)}`} />
                 <Field label="Trial ends" value={formatDate(sub.trialEndsAtMs)} />

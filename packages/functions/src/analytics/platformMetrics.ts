@@ -66,6 +66,17 @@ export const capturePlatformMetrics = onSchedule(
       subs.set(sub.entity_id ?? doc.id, sub)
     }
 
+    // HOW MANY STUDIOS EACH ORGANISATION IS BILLED FOR — the organisation tier is
+    // priced per studio, so this is its subscription amount, not a statistic.
+    // Counted from the teams already loaded rather than by reading every org's
+    // `org_teams` subcollection: `Team.org_id` is set in the SAME batch as the
+    // membership row, and this loop has all the teams in hand.
+    const studiosPerOrg = new Map<string, number>()
+    for (const doc of teamsSnap.docs) {
+      const orgId = doc.data().org_id as string | undefined
+      if (orgId) studiosPerOrg.set(orgId, (studiosPerOrg.get(orgId) ?? 0) + 1)
+    }
+
     const inputs: AccountMetricInput[] = []
 
     // Active-contact counts per team, in parallel.
@@ -91,6 +102,8 @@ export const capturePlatformMetrics = onSchedule(
         trialEndsAtMs: sub?.trial_ends_at?.toMillis?.() ?? team.trial_ends_at?.toMillis?.() ?? null,
         contactCount: contactCount.get(doc.id) ?? 0,
         comped: team.flags?.comped === true,
+        // Its organisation pays for it — see `monthlyChfFor`.
+        billedByOrg: typeof team.org_id === 'string' && team.org_id.length > 0,
       })
     }
 
@@ -109,6 +122,7 @@ export const capturePlatformMetrics = onSchedule(
         trialEndsAtMs: sub?.trial_ends_at?.toMillis?.() ?? null,
         contactCount: null,
         comped: org.flags?.comped === true,
+        studioCount: studiosPerOrg.get(doc.id) ?? 0,
       })
     }
 

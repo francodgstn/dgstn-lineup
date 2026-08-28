@@ -27,7 +27,7 @@
 
 import { useTranslations } from 'next-intl'
 import { Landmark, Check } from 'lucide-react'
-import { orgPriceFrom } from '@linyup/shared'
+import { ORG_PER_STUDIO } from '@linyup/shared'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { Button } from '@/components/ui/button'
@@ -71,15 +71,15 @@ export function OrgUpsellDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* The tier's own name and price, from the same sources the billing
-            page reads — `usePlanName` because plan IDs are stable machine
-            identifiers and the marketing name lives in one namespace. */}
+        {/* The tier's own name and RATE — not a total, and not "from". This
+            tier is priced per studio at a flat rate, so the number that is true
+            of every organisation is the rate; the total is composed on the
+            pricing page, where there is room for the calculator. */}
         <p className="text-center text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">{planName('organization')}</span>
           {' · '}
-          {tPricing('priceFrom')}{' '}
-          <span className="font-semibold text-foreground">CHF {orgPriceFrom()}</span>{' '}
-          {tPricing('perMonth')}
+          <span className="font-semibold text-foreground">CHF {ORG_PER_STUDIO.monthly}</span>{' '}
+          {tPricing('perStudioMonth')}
         </p>
 
         <ul className="space-y-2">

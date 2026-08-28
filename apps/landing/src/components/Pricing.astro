@@ -1,6 +1,20 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations, useTranslationList } from '~/i18n';
+// THE ORGANISATION'S PRICING NUMBERS, mirrored from the billing source of truth
+// (`packages/shared/src/types/plan.ts` — ORG_MIN_STUDIOS, ORG_MAX_LISTED_STUDIOS,
+// ORG_PER_STUDIO.monthly).
+//
+// MIRRORED, NOT IMPORTED, and that is a build constraint rather than a
+// preference: `@linyup/shared` compiles to CommonJS and Astro's Rollup build
+// cannot bundle it — adding the workspace dependency fails `astro build`
+// outright. Every other price on this page is hand-copied the same way, into
+// four locale files; this one at least sits in ONE place and is pinned by
+// `packages/functions/src/analytics/landingPricing.test.ts`, which reads this
+// file and fails the build if the numbers drift from plan.ts.
+const ORG_MIN_STUDIOS = 2;
+const ORG_MAX_LISTED_STUDIOS = 10;
+const ORG_RATE_MONTHLY = 25;
 
 interface Props {
   lang: Language;
@@ -117,14 +131,19 @@ const cmpText = (v: CmpVal): string | null => {
         plans.map(({ key, featured }) => {
           const isFree = key === 'free';
           const isOrg = key === 'org';
-          // Coach & Studio carry the 50% launch promo; Org is sales-led
-          // ("From CHF X · Talk to us"), no published discount; Free is free.
+          // Coach & Studio carry the 50% launch promo; Org is priced per studio,
+          // no published discount; Free is free.
           const hasPromo = !isFree && !isOrg;
-          // Promo cards split the discounted promoPrice; the org card splits its
-          // (undiscounted) "From CHF X" price so the currency can sit on its own
-          // small line above (keeps the number + /mo on one line).
-          const priceSource = isOrg ? 'price' : 'promoPrice';
-          const [currency, ...amountParts] = t(`plans.${key}.${priceSource}`).split(' ');
+          // THE ORG CARD NEVER GOES THROUGH THIS SPLIT. The other cards store one
+          // string ("CHF 18") and split it on the first space so the currency can
+          // sit on its own small line. Org's price is a RATE, and "CHF 25 per
+          // studio" would split into currency "CHF" and amount "25 per studio" —
+          // rendered at 34px, no error, just a broken card. It reads a bare
+          // number from `plans.org.rate` and supplies its own unit instead.
+          const priceSource = 'promoPrice';
+          const [currency, ...amountParts] = isOrg
+            ? ['CHF', t('plans.org.rate')]
+            : t(`plans.${key}.${priceSource}`).split(' ');
           const amount = amountParts.join(' ');
           return (
           <div class:list={['plan', { featured }]}>
@@ -140,9 +159,11 @@ const cmpText = (v: CmpVal): string | null => {
                   <span class="currency">{currency}</span>
                   <div class="amount-line">
                     <span class="amount-row">
-                      {isOrg && <span class="from-label">{t('plans.orgFrom')}</span>}
+                      {/* No "From" on the org card. The rate is FLAT — the tenth
+                          studio costs what the second did — and "From" describes
+                          a price that climbs. */}
                       <span class="amount">{amount}{hasPromo && <sup class="price-star">*</sup>}</span>
-                      <span class="period">{t('plans.perMonth')}</span>
+                      <span class="period">{isOrg ? t('plans.perStudioMonth') : t('plans.perMonth')}</span>
                     </span>
                     {hasPromo && (
                       <span class="price-tag"><i data-lucide="sparkles"></i> {t('plans.promoBadge')}</span>
@@ -155,6 +176,39 @@ const cmpText = (v: CmpVal): string | null => {
               <p class="price-note">
                 * {t(`plans.${key}.price`)}{t('plans.perMonth')} {t('plans.afterPromo')}
               </p>
+            )}
+
+            {/* THE INTERACTIVE MOMENT OF THE PAGE. Every other tier answers
+                "what does it cost" with its headline; this one answers it with a
+                rate, so the number a visitor actually wants is one they compose.
+                Step the count, read the total.
+
+                Past ten the total becomes a quote — and that is a fourth state
+                of THIS card, not a hidden premium plan. The rate stays on
+                screen, the ask is a number back rather than a meeting, and
+                nothing moves behind a form. The section's own subtitle promises
+                exactly that: no "request a demo to see pricing". */}
+            {isOrg && (
+              <div
+                class="org-calc"
+                data-org-calc
+                data-min={ORG_MIN_STUDIOS}
+                data-max={ORG_MAX_LISTED_STUDIOS}
+                data-rate={ORG_RATE_MONTHLY}
+              >
+                <div class="org-stepper">
+                  <button type="button" data-step="-1" aria-label={t('plans.orgFewer')}>&minus;</button>
+                  <span data-org-count aria-live="polite">{t('plans.orgMinStudios')}</span>
+                  <button type="button" data-step="1" aria-label={t('plans.orgMore')}>+</button>
+                </div>
+                <span class="org-calc-unit">{t('plans.orgStudios')}</span>
+                <p class="org-total" data-org-total></p>
+                <template data-org-copy
+                  data-total={t('plans.orgTotal')}
+                  data-quote={t('plans.orgQuote')}
+                  data-plus={t('plans.orgStudiosPlus')}
+                ></template>
+              </div>
             )}
 
             <ul class="feat-list">
@@ -275,6 +329,59 @@ const cmpText = (v: CmpVal): string | null => {
       (window as unknown as { posthog?: { capture: Capture } }).posthog,
     );
 
+  // ── The per-studio calculator ──────────────────────────────────────────────
+  //
+  // The rate is FLAT — total = studios x rate — so there is no pricing logic
+  // here beyond a multiplication, and deliberately so: a tiered table would have
+  // to be kept in step with @linyup/shared by hand.
+  //
+  // The numbers come from data attributes rather than being written twice: the
+  // template carries the four localised strings, and min/max/rate ride on the
+  // container, so this script has no copy and no prices in it.
+  const calc = document.querySelector<HTMLElement>('[data-org-calc]');
+  if (calc) {
+    const copy = calc.querySelector<HTMLTemplateElement>('[data-org-copy]')!;
+    const out = calc.querySelector<HTMLElement>('[data-org-total]')!;
+    const label = calc.querySelector<HTMLElement>('[data-org-count]')!;
+    const minus = calc.querySelector<HTMLButtonElement>('[data-step="-1"]')!;
+    const plus = calc.querySelector<HTMLButtonElement>('[data-step="1"]')!;
+
+    const MIN = Number(calc.dataset.min);
+    const MAX = Number(calc.dataset.max);
+    const RATE = Number(calc.dataset.rate);
+    // One past the listed maximum — the value that means "more than MAX".
+    const QUOTE = MAX + 1;
+
+    let studios = MIN;
+
+    const render = () => {
+      const quoting = studios >= QUOTE;
+      label.textContent = quoting
+        ? copy.dataset.plus!.replace('{count}', String(MAX))
+        : String(studios);
+      out.textContent = quoting
+        ? copy.dataset.quote!
+        : copy.dataset.total!.replace('{total}', String(studios * RATE));
+      out.classList.toggle('is-quote', quoting);
+      minus.disabled = studios <= MIN;
+      plus.disabled = quoting;
+    };
+
+    for (const btn of [minus, plus]) {
+      btn.addEventListener('click', () => {
+        studios = Math.min(QUOTE, Math.max(MIN, studios + Number(btn.dataset.step)));
+        render();
+        // Which sizes people actually price up is the only thing this control
+        // can tell us that the page could not before.
+        ph()?.('pricing_org_studios_changed', {
+          studios: studios >= QUOTE ? 'over_max' : studios,
+        });
+      });
+    }
+
+    render();
+  }
+
   const cmp = document.querySelector('.compare');
   const btn = document.querySelector('.compare-toggle');
   btn?.addEventListener('click', () => {
@@ -330,6 +437,24 @@ const cmpText = (v: CmpVal): string | null => {
   .from-label { align-self: center; font-size: 14px; font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
   .price-star { color: var(--primary); font-weight: 700; font-size: 0.5em; }
   .period { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+
+  /* Per-studio calculator (org card only) */
+  .org-calc { margin-top: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .org-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .org-stepper button {
+    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: 0; cursor: pointer; font-size: 16px; line-height: 1;
+    color: var(--muted-foreground); transition: background 0.15s, color 0.15s;
+  }
+  .org-stepper button:hover:not(:disabled) { background: var(--muted); color: var(--heading); }
+  .org-stepper button:disabled { opacity: 0.35; cursor: default; }
+  /* tabular-nums and a fixed width so the row does not jump between 9 and 10. */
+  .org-stepper span { min-width: 44px; text-align: center; font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .org-calc-unit { font-size: 13px; color: var(--muted-foreground); }
+  /* Full-width so the total sits on its own line, and a reserved height so
+     stepping into the quote state cannot resize the card. */
+  .org-total { flex-basis: 100%; margin: 2px 0 0; font-size: 14px; min-height: 20px; color: var(--heading); font-weight: 600; }
+  .org-total.is-quote { font-weight: 400; color: var(--muted-foreground); }
 
   /* "Offer" chip next to the discounted price */
   .price-tag {

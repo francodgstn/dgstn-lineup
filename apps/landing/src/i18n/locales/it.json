@@ -340,7 +340,6 @@
     "promoBadge": "Offerta lancio",
     "earlyAccessCta": "Accesso anticipato",
     "talkToUs": "Contattaci",
-    "orgFrom": "Da",
     "mostPopular": "Il più popolare",
     "cmpToggle": "Confronta tutte le funzionalità",
     "challengeTitle": "Manca una funzione?",
@@ -410,16 +409,25 @@
     },
     "org": {
       "name": "Organizzazione",
-      "price": "CHF 103",
+      "price": "CHF 25",
       "audience": "Per organizzazioni multi-studio, federazioni e franchising.",
       "features": [
         "Tutto di Studio",
         "Amministrazione centrale multi-team",
         "Eventi e messaggi tra team",
         "API e ruoli avanzati"
-      ]
+      ],
+      "rate": "25"
     },
-    "cmpDocumentsNote": "Le liberatorie firmabili richiedono Studio."
+    "cmpDocumentsNote": "Le liberatorie firmabili richiedono Studio.",
+    "perStudioMonth": "/studio/mese",
+    "orgStudios": "studi",
+    "orgStudiosPlus": "{count}+",
+    "orgFewer": "Meno studi",
+    "orgMore": "Più studi",
+    "orgTotal": "CHF {total}/mese",
+    "orgQuote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra.",
+    "orgMinStudios": "2"
   },
   "payments": {
     "eyebrow": "Fatti pagare",
