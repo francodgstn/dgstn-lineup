@@ -248,7 +248,11 @@ same regime as the Brevo keys, see `packages/functions/src/mail/README.md`):
 
 The key can be set from the operator console (Settings → Translation) —
 write-only, like the Brevo and Stripe secrets there — or with `gcloud secrets
-versions add deepl-api-key --data-file=-`.
+versions add deepl-api-key --data-file=-`. Either way the secret CONTAINER and
+its IAM come from Terraform first: `deepl-api-key` must be in the environment's
+`secret_ids` **and** `admin_writable_secret_ids`
+(`infra/environments/*/variables.tf`) and the environment applied, or the
+console save fails with `PERMISSION_DENIED: secretmanager.versions.add`.
 
 The API Free tier (≈500k chars/month, keys end `:fx`) is routed to
 `api-free.deepl.com` automatically; it is signed up for at deepl.com/pro-api
