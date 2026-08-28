@@ -466,13 +466,35 @@ subcollection itself, which is a data migration.
 ungated. So a team manager invites people and then cannot see the responses —
 `reports.view` is an odd capability to govern "who is coming to my event".
 
-### One plugin's check-in payload lives in core
+### One plugin's check-in payload lives in core — FIXED 2026-08-28
 
 `isCheckinCompleted` (`packages/shared/src/utils/checkins.ts`) is a switch on
 event type with no plugin hook, and its `default` branch reads
 `Array.isArray(checkinData.categories)` — the fighting-cup shape. Core therefore
 knows one tenant-specific plugin's payload, and a second plugin needing custom
 completion logic has nowhere to put it but that same branch.
+
+**Fixed with a keyed registry**, `PLUGIN_CHECKIN_COMPLETION` in
+`packages/shared/src/types/plugin-checkins.ts`. It sits in `shared` rather than
+the plugin folder for the reason `PLUGIN_BUNDLES` and `PLUGIN_ADDONS` do: the
+predicate runs on the client AND in `addEventCheckin`, and the plugin registry
+lives in `apps/web`. A rule is a PURE predicate over the payload — it is asked
+on every roster row, on both sides of the wire.
+
+Two things worth knowing:
+
+- **The semantics are byte-identical**, including the odd one. A cup check-in
+  with NO `categories` key auto-confirms, and only an EMPTY array means "nobody
+  assigned"; `checkinCompletion.test.ts` pins that with a comment saying it is
+  there "so the exam fix cannot be read as licence to change it". The first
+  version of this change did read it as licence and broke that test — the
+  registry now reproduces the old expression exactly.
+- **One deliberate narrowing.** The old branch applied the cup's rule to ANY
+  event type carrying a `categories` array; keyed lookup reaches only the types
+  that registered. Nothing outside the cup's own form writes that key, so it is
+  unreachable in practice — pinned by a new case so it is a decision rather than
+  something that quietly stopped happening. A second new test reads
+  `checkins.ts` and fails if `categories` ever reappears in it.
 
 ### `EventTypeConfig.contact_requirements` is declared and read by nothing — DELETED 2026-08-27
 
