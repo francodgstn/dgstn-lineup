@@ -80,27 +80,40 @@ import { ClubsBlock, LocationsBlock, CoachesBlock } from './orgSections'
 import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar'
 
 /**
- * THE CHROME IS TRANSLATED; THE STUDIO'S CONTENT NEVER IS.
+ * THE CHROME FOLLOWS THE VISITOR; THE STUDIO'S CONTENT IS RESOLVED BEFORE IT
+ * GETS HERE.
  *
  * This renderer draws two kinds of text and they are governed differently:
  *
- *   1. The studio's own words — headings, subheadings, body copy, activity
- *      names and descriptions, plan names, place names. These are read from
- *      Firestore verbatim and rendered verbatim, in whatever language the
- *      studio wrote them. Machine-translating them is NOT a feature: tenant
- *      content translation is a findability concern, there is no per-locale
- *      authoring UI, and a mistranslated class description is the studio's
- *      words put in their mouth.
- *   2. Linyup's chrome — "Book", "Loading…", "Free trial", "/mo", the empty
+ *   1. Linyup's chrome — "Book", "Loading…", "Free trial", "/mo", the empty
  *      states, the heading FALLBACKS used when a studio left one blank. None
- *      of it is the studio's words, and every bit of it used to arrive in
- *      English on a German site. It lives in the `Site` message namespace and
- *      follows the visitor's locale like the rest of the app.
+ *      of it is the studio's words. It lives in the `Site` message namespace
+ *      and follows the visitor's locale via next-intl, exactly like the rest
+ *      of the app — unchanged by public-site localization.
+ *   2. The studio's own words — headings, subheadings, body copy, activity
+ *      names and descriptions, plan names, place names. Authored ONCE, in
+ *      `Team.language` / `Organization.language`, and machine-translated at
+ *      publish/save time into stored per-locale unit maps (`site_published` /
+ *      `org_site_published` sidecars, `embed_widgets.i18n` inline — see
+ *      `utils/siteTranslation.ts` in packages/shared, the ONE extractor and
+ *      resolver). This module NEVER looks up a locale or reads a sidecar: the
+ *      data boundary (PublicSite, PublicOrgSite, EmbedSection) resolves the
+ *      site with `applySiteTranslations`/`applySectionTranslations` BEFORE
+ *      handing it to `SectionBlock`, so every block here renders whatever
+ *      string is already sitting on the section — base language or
+ *      translated, it can't tell the difference and doesn't need to.
  *
- * The precedent for the split is IntroOfferLine: this block's chrome was not
- * translated, but the intro-offer sentence was, "because it is a price promise
- * and a mistranslated one is a lie". Every money term here is a price promise,
- * so they all moved.
+ * Two things stay in the studio's authoring language on purpose, never routed
+ * through the translation pipeline (`utils/siteTranslation.ts`'s scope
+ * boundaries):
+ *   - LIVE-MIRROR data read at render time from public_profile mirrors
+ *     (activity / plan / session names) — a site translation translates what
+ *     the tenant wrote INTO the site, not what the site pulls in live. These
+ *     stay chrome-adjacent instead: exact prices/terms are assembled from data
+ *     through next-intl (IntroOfferLine's precedent — "the sentence is a price
+ *     promise and a mistranslated one is a lie"), never machine-translated.
+ *   - BINDING text (waivers, policies, legal documents) — never
+ *     machine-translated, full stop; see docs/fareharbor-analysis.md §6.1.
  */
 export type SiteT = ReturnType<typeof useTranslations>
 

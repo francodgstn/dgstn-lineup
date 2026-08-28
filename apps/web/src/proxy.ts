@@ -20,14 +20,32 @@ const APP_FRAME_CSP =
 const EMBED_PATH = /^\/(?:(?:de|fr|it)\/)?embed\//
 
 export default function proxy(request: NextRequest) {
+  // Embed snippet language pinning (WidgetTheme.locale): 'de'/'fr'/'it' bake
+  // straight into the path prefix, but English is the UNPREFIXED locale under
+  // localePrefix 'as-needed', so it has no prefix to bake into. A cross-origin
+  // iframe embed can't carry the NEXT_LOCALE cookie either, so an unprefixed
+  // request is auto-detected from Accept-Language — there is no way to pin
+  // English on an unprefixed URL without an explicit marker. `?hl=en` is that
+  // marker: bypass next-intl's own middleware and rewrite straight to the
+  // English page, mirroring what it does internally for the default locale,
+  // BEFORE it would otherwise Accept-Language-redirect this request elsewhere.
+  // Scoped strictly to unprefixed /embed/* paths carrying `hl=en`.
+  const isPinnedEnglishEmbed =
+    EMBED_PATH.test(request.nextUrl.pathname) &&
+    !/^\/(de|fr|it)\//.test(request.nextUrl.pathname) &&
+    request.nextUrl.searchParams.get('hl') === 'en'
+
   // The app has no marketing root (the landing site is separate) — send a bare
   // root to the login entry. This is done HERE, not in next.config `redirects`,
   // because config redirects run outside middleware, so their Location keeps the
   // leaked Cloud Run :8080 port (see below) and can't be corrected — that's why a
   // bare `demo.linyup.com/` broke while deep links worked. Doing it in middleware
   // routes the Location through the port-fix.
-  const response =
-    request.nextUrl.pathname === '/'
+  const response = isPinnedEnglishEmbed
+    ? NextResponse.rewrite(
+        new URL('/en' + request.nextUrl.pathname + request.nextUrl.search, request.url)
+      )
+    : request.nextUrl.pathname === '/'
       ? NextResponse.redirect(new URL('/login', request.url))
       : handleI18n(request)
 

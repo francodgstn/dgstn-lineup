@@ -1,11 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useLocale } from 'next-intl'
-import { collection, query, where, limit, getDocs } from 'firebase/firestore'
+import { useLocale, useTranslations } from 'next-intl'
+import { collection, doc, getDoc, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
-import { EMBED_WIDGETS_COLLECTION, SITE_PUBLISHED_COLLECTION } from '@linyup/shared'
+import {
+  EMBED_WIDGETS_COLLECTION,
+  SITE_PUBLISHED_COLLECTION,
+  applySectionTranslations,
+  siteI18nDocId,
+} from '@linyup/shared'
 import type {
   EmbedWidgetSet,
   PublishedSite,
@@ -13,6 +18,7 @@ import type {
   SiteMeta,
   SiteFont,
   SocialLink,
+  SiteTranslationDoc,
 } from '@linyup/shared'
 import { SectionBlock, type RenderCtx } from '@/components/site/sections'
 import { buildPalette, FONT_STACK } from '@/components/site/theme'
@@ -42,6 +48,7 @@ interface Resolved {
  */
 export default function EmbedSection({ slug, sectionId }: { slug: string; sectionId: string }) {
   const locale = useLocale()
+  const t = useTranslations('Site')
   const [resolved, setResolved] = useState<Resolved | null>(null)
   const [loading, setLoading] = useState(true)
   const [systemDark, setSystemDark] = useState(false)
@@ -60,9 +67,16 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
           const set = wsnap.docs[0].data() as EmbedWidgetSet
           const w = set.widgets?.find((x) => x.id === sectionId && !x.hidden)
           if (w) {
+            // Inline translations — widgets have no draft/publish split, so
+            // there is no sidecar doc to fetch, only the unit map riding on
+            // the same public doc.
+            const translated =
+              set.i18n && locale !== set.i18n.srcLang
+                ? applySectionTranslations(w, set.i18n.locales[locale as keyof typeof set.i18n.locales])
+                : w
             if (!cancelled) {
               setResolved({
-                section: w,
+                section: translated,
                 themeMeta: { theme: w.theme?.theme ?? 'light', accentColor: w.theme?.accentColor },
                 font: w.theme?.font ?? 'sans',
                 transparent: w.theme?.background === 'transparent',
@@ -88,15 +102,36 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
           const site = ssnap.docs[0].data() as PublishedSite
           const sec = site.sections.find((s) => s.id === sectionId && !s.hidden)
           if (sec && !cancelled) {
-            setResolved({
-              section: sec,
-              themeMeta: { theme: site.meta.theme, accentColor: site.meta.accentColor },
-              font: site.meta.font,
-              transparent: false,
-              slug: site.slug,
-              teamId: site.teamId,
-              socialLinks: site.socialLinks,
-            })
+            // Manifest-gated sidecar — same doc the full site page reads.
+            let translated = sec
+            const manifest = site.i18n
+            if (
+              manifest &&
+              locale !== manifest.srcLang &&
+              manifest.locales.includes(locale as (typeof manifest.locales)[number])
+            ) {
+              try {
+                const sidecarSnap = await getDoc(
+                  doc(db, SITE_PUBLISHED_COLLECTION, siteI18nDocId(site.teamId, locale))
+                )
+                if (sidecarSnap.exists()) {
+                  translated = applySectionTranslations(sec, (sidecarSnap.data() as SiteTranslationDoc).units)
+                }
+              } catch (err: unknown) {
+                reportPublicLoadFailure('embed/site-section-i18n', err) // falls back to base-language text
+              }
+            }
+            if (!cancelled) {
+              setResolved({
+                section: translated,
+                themeMeta: { theme: site.meta.theme, accentColor: site.meta.accentColor },
+                font: site.meta.font,
+                transparent: false,
+                slug: site.slug,
+                teamId: site.teamId,
+                socialLinks: site.socialLinks,
+              })
+            }
           }
         }
       } catch (err: unknown) {
@@ -109,7 +144,7 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
     return () => {
       cancelled = true
     }
-  }, [slug, sectionId])
+  }, [slug, sectionId, locale])
 
   // Resolve the 'auto' theme against the viewer's system preference.
   useEffect(() => {
@@ -143,7 +178,7 @@ export default function EmbedSection({ slug, sectionId }: { slug: string; sectio
         ref={rootRef}
         style={{ padding: '16px', fontFamily: 'system-ui, sans-serif', fontSize: 14, color: '#64748b' }}
       >
-        This section is unavailable.
+        {t('embedUnavailable')}
       </div>
     )
   }

@@ -16,6 +16,7 @@ import { deriveSiteMenu } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, bookProps, SOCIAL_ICONS, type RenderCtx } from './sections'
 import type { BookIntent } from '@/components/booking/BookingOverlay'
+import { LocaleSwitcher } from '@/components/LocaleSwitcher'
 
 /** Structural subset satisfied by SiteDraft/PublishedSite (team sites, builder
  *  preview) AND OrgSiteDraft/OrgPublishedSite (org sites). `teamId` is only
@@ -344,6 +345,11 @@ export default function WebsiteRenderer({
                 {memberControl.label}
               </button>
             )}
+            {/* Hidden in the builder preview — a visitor-only control the
+                studio never needs while editing its own site. */}
+            {!preview && (
+              <LocaleSwitcher triggerStyle={{ borderColor: palette.border, color: palette.muted }} />
+            )}
           </nav>
 
           {/* Mobile hamburger */}
@@ -351,7 +357,7 @@ export default function WebsiteRenderer({
             <button
               type="button"
               onClick={() => setMobileOpen((o) => !o)}
-              aria-label="Menu"
+              aria-label={t('menuAria')}
               aria-expanded={mobileOpen}
               className="flex h-9 w-9 items-center justify-center rounded-md transition-opacity hover:opacity-70 @3xl:hidden"
               style={{ color: palette.text }}
@@ -403,6 +409,11 @@ export default function WebsiteRenderer({
                 >
                   {memberControl.label}
                 </button>
+              )}
+              {!preview && (
+                <div className="pt-2">
+                  <LocaleSwitcher triggerStyle={{ borderColor: palette.border, color: palette.muted }} />
+                </div>
               )}
             </nav>
           </div>

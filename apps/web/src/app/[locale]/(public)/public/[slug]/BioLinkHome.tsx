@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore'
+import { useLocale, useTranslations } from 'next-intl'
 import { db } from '@/lib/firebase'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
@@ -19,9 +20,10 @@ import {
 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
+import { LocaleSwitcher } from '@/components/LocaleSwitcher'
 import { resolveBackground, getTextColor } from '@/lib/bioLink'
 import { SYSTEM_LINK_META, SYSTEM_LINK_ROUTE, systemLinkIsLive } from '@linyup/shared'
-import { publicHref } from '@/lib/publicRoutes'
+import { publicHrefLocalized } from '@/lib/publicRoutes'
 import type {
   TeamLink,
   SocialLink,
@@ -81,6 +83,9 @@ interface Props {
 }
 
 export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props) {
+  const locale = useLocale()
+  const t = useTranslations('BioLink')
+  const tSite = useTranslations('Site')
   const [team, setTeam] = useState<BioLinkTeamData | null>(teamProp ?? null)
   const [loading, setLoading] = useState(!teamProp)
   const [systemDark, setSystemDark] = useState(false)
@@ -131,8 +136,8 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
   if (!team) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
-        <p className="text-lg font-semibold">Team not found</p>
-        <p className="text-sm text-muted-foreground">No team exists at this URL.</p>
+        <p className="text-lg font-semibold">{t('notFoundTitle')}</p>
+        <p className="text-sm text-muted-foreground">{t('notFoundBody')}</p>
       </div>
     )
   }
@@ -259,7 +264,7 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
               // bio-link IS this team's root, so that is also the default, but
               // being explicit survives the studio changing its default surface.
               const href = target
-                ? publicHref(slug, SYSTEM_LINK_ROUTE[target].route, {
+                ? publicHrefLocalized(locale, slug, SYSTEM_LINK_ROUTE[target].route, {
                     ...SYSTEM_LINK_ROUTE[target].params,
                     from: 'bio-link',
                   })
@@ -364,7 +369,7 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
                       className="mt-1 inline-block text-xs font-medium hover:underline"
                       style={{ color: accent }}
                     >
-                      Open in maps →
+                      {tSite('openInMaps')} →
                     </a>
                   )}
                 </div>
@@ -373,11 +378,21 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
           </div>
         )}
 
+        {/* Language choice — hidden in the admin bio-link editor preview
+            (detected the same way the link clicks are: `onLinkClick` is only
+            passed there). A visitor-only control the studio never needs while
+            editing its own page. */}
+        {!onLinkClick && (
+          <div className="mt-8 flex justify-center">
+            <LocaleSwitcher triggerStyle={{ background: cardBg, borderColor: cardBorder, color: textMain }} />
+          </div>
+        )}
+
         {/* Footer — Free-plan badge (denormalized flag; removing it is a paid
             perk). undefined = hidden: existing docs get the flag via backfill. */}
         {team.showBranding === true && (
           <p className="mt-12 text-center text-[11px]" style={{ color: textMuted }}>
-            Powered by{' '}
+            {tSite('poweredBy')}{' '}
             <Link href="/" className="hover:underline font-medium" style={{ color: textMuted }}>
               Linyup
             </Link>

@@ -587,6 +587,38 @@ make notify a migration rather than an addition.
 Full docs: `docs/waivers.md`, including **"What the gate does NOT cover"** and
 the sixteen recorded decisions.
 
+### Site translations — author once, machine-translate at publish
+
+The studio authors its public site in ONE language (`Team.language` /
+`Organization.language`, fallback `'en'` via `resolveSiteSourceLocale`);
+`publishWebsite` / `publishOrgWebsite` machine-translate the site text into the
+other locales of en/de/fr/it synchronously at publish (DeepL behind
+`packages/functions/src/translate/`; no key ⇒ warn once, publish succeeds
+untranslated — **translation can never fail a publish**). **ONE extractor + ONE
+resolver**: `extractSiteUnits` / `applySiteTranslations` /
+`applySectionTranslations` in `packages/shared/src/utils/siteTranslation.ts`
+own the key grammar (its module header is the authoritative table) — never add
+a parallel implementation. Storage: per-locale **sidecar docs in the SAME
+collections**, id `{id}__i18n_{locale}` (`siteI18nDocId`, paths.ts) — never
+carrying a `slug` field (invisible to the public slug queries),
+function-write-only via the existing wildcard rules, with a manifest
+`i18n: {srcLang, locales}` on the base doc; embed widgets carry translations
+inline (`EmbedWidgetSet.i18n`), written whole by the `onEmbedWidgetsWritten`
+trigger (loop guard = fixed-point check). **The hash guard**: every unit is
+`{text, srcHash, pinned?}`; the resolver substitutes only when `srcHash`
+(`translationSourceHash`, FNV-1a, non-cryptographic) matches the CURRENT base
+text — staleness degrades to the authoring language, never to wrong text, and
+unchanged text re-publishes with zero provider calls. `pinned` is a
+**reservation** for a future manual-override callable: MT writers preserve it
+while the hash matches, clear it when the source changes, and the resolver
+never reads it. **Never translated**: brand names (`meta.title`, team/org
+name), data fields (address/phone/email/mapQuery, place names), live-mirror
+content (activity/plan/session names — authoring-language this phase), and
+binding text (waivers, cancellation policies — never machine-translated, by
+recorded decision). Full docs: `docs/site-translations.md` (incl. the embed
+`?hl=en` pinning, the switcher/cookie change, and
+`pnpm backfill:site-translations`).
+
 ### Comments must not assert a COUNT of code sites
 
 A comment saying "the two X", "all three Y", "six copies" or "the only Z" is a

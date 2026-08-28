@@ -6,6 +6,7 @@ import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { assertOrgAdmin, assertOrgSubscriptionLive } from '../orgs'
+import { translatePublishedSite, deleteSiteI18nSidecars } from '../translate/translateSite'
 import {
   asDict,
   clean,
@@ -27,6 +28,7 @@ import {
   ORGANIZATIONS_COLLECTION,
   ORG_TEAMS_SUBCOLLECTION,
   TEAMS_COLLECTION,
+  resolveSiteSourceLocale,
 } from '@linyup/shared'
 import type { OrgPublishedSite, OrgSiteSection, OrgSiteTeamRef } from '@linyup/shared'
 
@@ -122,7 +124,7 @@ function sanitizeOrgSection(raw: unknown): OrgSiteSection | null {
 // snapshot of the org's active member teams, and writes org_site_published/{orgId}
 // (world-readable). Also flags the draft enabled.
 
-export const publishOrgWebsite = onCall(async (request) => {
+export const publishOrgWebsite = onCall({ timeoutSeconds: 300 }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
   const uid = request.auth.uid
   const orgId = (request.data?.orgId ?? '') as string
@@ -196,24 +198,40 @@ export const publishOrgWebsite = onCall(async (request) => {
     })
     .filter((x): x is { platform: string; url: string } => x !== null)
 
+  const meta = sanitizeMeta(draft.meta, name)
+  // The header menu, through the SAME sanitiser the team site uses — depth,
+  // breadth and target shape are tenant-agnostic. Undefined when the org has
+  // never edited its header, and `clean` drops it, so the renderer keeps
+  // deriving the old layout.
+  const menu = sanitizeMenu(draft.menu)
+
+  // Machine-translate the sanitized published shape — same pipeline as the
+  // team site, keyed by orgId. Throw-free: never fails the publish.
+  const srcLang = resolveSiteSourceLocale(org as { language?: string | null })
+  const i18n = await translatePublishedSite({
+    db: fs,
+    collection: ORG_SITE_PUBLISHED_COLLECTION,
+    id: orgId,
+    owner: { orgId },
+    published: { meta, menu, sections },
+    srcLang,
+  })
+
   // Shaped to match OrgPublishedSite; typed as Dict for the Firestore write since
   // values are re-derived from sanitizers (platform strings, server timestamps).
   const published: Dict = clean({
     orgId,
     slug,
     name,
-    meta: sanitizeMeta(draft.meta, name),
-    // The header menu, through the SAME sanitiser the team site uses — depth,
-    // breadth and target shape are tenant-agnostic. Undefined when the org has
-    // never edited its header, and `clean` drops it, so the renderer keeps
-    // deriving the old layout.
-    menu: sanitizeMenu(draft.menu),
+    meta,
+    menu,
     sections,
     teams,
     socialLinks: socialLinks.length ? socialLinks : undefined,
     // The organization plan never shows the "Powered by Linyup" badge (that's a
     // free-team-plan affordance only) — kept explicit (not omitted) for clarity.
     showBranding: false,
+    i18n,
     published_at: FieldValue.serverTimestamp() as unknown as OrgPublishedSite['published_at'],
     updated_at: FieldValue.serverTimestamp() as unknown as OrgPublishedSite['updated_at'],
   })
@@ -241,6 +259,7 @@ export const unpublishOrgWebsite = onCall(async (request) => {
 
   const fs = admin.firestore()
   await fs.doc(`${ORG_SITE_PUBLISHED_COLLECTION}/${orgId}`).delete()
+  await deleteSiteI18nSidecars(fs, ORG_SITE_PUBLISHED_COLLECTION, orgId)
   await fs.doc(`${ORG_SITE_DRAFTS_COLLECTION}/${orgId}`).set(
     { enabled: false, updated_at: FieldValue.serverTimestamp(), updatedBy: uid },
     { merge: true },

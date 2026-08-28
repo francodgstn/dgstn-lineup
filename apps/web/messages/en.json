@@ -2302,7 +2302,9 @@
     "sharePreviewNoDescription": "No description yet — this line stays empty in chats.",
     "sharePreviewEditDescription": "Add one",
     "sharePreviewHint": "How your link looks when it is pasted into WhatsApp, Instagram or LinkedIn. It uses your cover image, your studio name and your description.",
-    "eventsLink": "Events"
+    "eventsLink": "Events",
+    "notFoundTitle": "Team not found",
+    "notFoundBody": "No team exists at this URL."
   },
   "Appointments": {
     "title": "Appointments",
@@ -3114,7 +3116,9 @@
     "terminologyAddTranslations": "Add translations (optional)",
     "generalTitle": "General",
     "socialTitle": "Social links",
-    "socialDescription": "Shown as icons on your website's contact section, when that section is set to show them."
+    "socialDescription": "Shown as icons on your website's contact section, when that section is set to show them.",
+    "language": "Language",
+    "languageHint": "The language this organisation's content and communications are written in — invitations, notices and shared content. Your own dashboard language is chosen separately."
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -7008,7 +7012,11 @@
     "tableDiscount": "{percent}% off",
     "tableAnyPlanNote": "With any membership — signing up is free",
     "tableOpenNote": "Open to everyone",
-    "tableFreeNote": "Free to book"
+    "tableFreeNote": "Free to book",
+    "notFoundTitle": "Site not found",
+    "notFoundBody": "No published website exists at this URL.",
+    "embedUnavailable": "This section is unavailable.",
+    "menuAria": "Menu"
   },
   "OrgMemberInvite": {
     "title": "Organisation invitation",

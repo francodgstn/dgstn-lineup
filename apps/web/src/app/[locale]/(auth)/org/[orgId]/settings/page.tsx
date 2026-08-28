@@ -38,6 +38,17 @@ import type { OrgAffiliationStatusDef, AffiliationStatusColor, Organization, Aff
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { SOCIAL_PLATFORMS, SOCIAL_LABELS } from '@/lib/bioLink'
 
+// The four languages the product speaks — same set as the i18n routing. Mirrors
+// TEAM_LANGUAGES in settings/team/page.tsx (same semantics: Organization.language
+// is the language the org authors content in, not the reader's dashboard
+// language — see the field's doc comment in packages/shared/src/types/org.ts).
+const ORG_LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
+] as const
+
 // ─── colour config ────────────────────────────────────────────────────────────
 
 const COLORS: { id: AffiliationStatusColor; bg: string; label: string }[] = [
@@ -1373,11 +1384,19 @@ export default function OrgSettingsPage() {
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [language, setLanguage] = useState<'en' | 'de' | 'fr' | 'it'>('en')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
-    if (org) { setName(org.name); setDescription(org.description ?? '') }
+    if (org) {
+      setName(org.name)
+      setDescription(org.description ?? '')
+      // 'en' is what the field's readers already fall back to for an org with
+      // no value (resolveSiteSourceLocale), so the control shows the truth
+      // rather than an empty box that implies nothing has been decided.
+      setLanguage(org.language ?? 'en')
+    }
   }, [org])
 
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
@@ -1390,7 +1409,7 @@ export default function OrgSettingsPage() {
     setSaving(true)
     try {
       await updateDoc(doc(db, 'organizations', orgId), {
-        name: name.trim(), description: description.trim(),
+        name: name.trim(), description: description.trim(), language,
       })
       qc.invalidateQueries({ queryKey: ['org', orgId] })
       showToast(t('saveSuccess'))
@@ -1444,6 +1463,24 @@ export default function OrgSettingsPage() {
                   placeholder={t('descriptionPlaceholder')}
                   disabled={!isAdmin}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="org-language">{t('language')}</Label>
+                <Select
+                  value={language}
+                  onValueChange={(v) => setLanguage(v as 'en' | 'de' | 'fr' | 'it')}
+                  disabled={!isAdmin}
+                >
+                  <SelectTrigger id="org-language" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORG_LANGUAGES.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{t('languageHint')}</p>
               </div>
               {isAdmin && (
                 <Button type="submit" disabled={saving || !name.trim()}>

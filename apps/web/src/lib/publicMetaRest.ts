@@ -18,18 +18,24 @@ export interface RestValue {
   stringValue?: string
   booleanValue?: boolean
   mapValue?: { fields?: Record<string, RestValue> }
+  arrayValue?: { values?: RestValue[] }
 }
 export const restString = (v?: RestValue) => v?.stringValue
+export const restMap = (v?: RestValue) => v?.mapValue?.fields ?? {}
+export const restArray = (v?: RestValue) => v?.arrayValue?.values ?? []
 
-/** One `documents:runQuery` against the public Firestore REST endpoint. */
-async function runQuery(structuredQuery: unknown): Promise<Record<string, RestValue> | null> {
+function restEndpointBase(): { base: string; key?: string } {
   const base = USE_EMULATORS
     ? `http://${process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080'}/v1`
     : 'https://firestore.googleapis.com/v1'
-  const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+  return { base, key: USE_EMULATORS ? undefined : process.env.NEXT_PUBLIC_FIREBASE_API_KEY }
+}
+
+/** One `documents:runQuery` against the public Firestore REST endpoint. */
+async function runQuery(structuredQuery: unknown): Promise<Record<string, RestValue> | null> {
+  const { base, key } = restEndpointBase()
   const url =
-    `${base}/projects/${PROJECT_ID}/databases/(default)/documents:runQuery` +
-    (!USE_EMULATORS && key ? `?key=${key}` : '')
+    `${base}/projects/${PROJECT_ID}/databases/(default)/documents:runQuery` + (key ? `?key=${key}` : '')
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,6 +45,29 @@ async function runQuery(structuredQuery: unknown): Promise<Record<string, RestVa
   if (!res.ok) throw new Error(`runQuery HTTP ${res.status}`)
   const rows = (await res.json()) as { document?: { fields?: Record<string, RestValue> } }[]
   return rows.find((r) => r.document)?.document?.fields ?? null
+}
+
+/**
+ * One document GET by path relative to the database root, e.g.
+ * `site_published/{teamId}__i18n_{locale}` — the i18n sidecar doc id
+ * (`siteI18nDocId`, @linyup/shared). Returns `null` when the document does not
+ * exist (a sidecar that was never generated, or a stale locale) rather than
+ * throwing, so a caller degrades to the base language exactly like a
+ * stale/absent translation unit would.
+ */
+export async function fetchDocumentFields(path: string): Promise<Record<string, RestValue> | null> {
+  try {
+    const { base, key } = restEndpointBase()
+    const url = `${base}/projects/${PROJECT_ID}/databases/(default)/documents/${path}` + (key ? `?key=${key}` : '')
+    const res = await fetch(url, { cache: 'no-store' })
+    if (res.status === 404) return null
+    if (!res.ok) throw new Error(`document GET HTTP ${res.status}`)
+    const body = (await res.json()) as { fields?: Record<string, RestValue> }
+    return body.fields ?? null
+  } catch (e) {
+    console.error('[public-meta] document fetch failed:', e)
+    return null
+  }
 }
 
 export interface TeamPublicMeta {
