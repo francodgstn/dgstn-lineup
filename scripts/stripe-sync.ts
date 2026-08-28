@@ -21,6 +21,8 @@
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync                     # dry-run
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply             # create missing
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync --apply --reprice   # also reprice drift
+ *   ... --apply --reprice --only linyup_coach_monthly   # reprice ONE entry; the
+ *       rest still REPORT their drift rather than being silently skipped.
  *
  * WEBHOOK ENDPOINTS (separate mode — pass --project):
  *   pnpm stripe:sync --project linyup-sandbox                       # dry-run
@@ -41,6 +43,22 @@ import { PLAN_PRICING, PLUGIN_ADDONS, STUDIO_CONTACT_BLOCK, ORG_PER_STUDIO } fro
 const CURRENCY = 'chf'
 const APPLY = process.argv.includes('--apply')
 const REPRICE = process.argv.includes('--reprice')
+
+// ── --only <lookup_key> ───────────────────────────────────────────────────────
+//
+// `--reprice` is GLOBAL, and a catalogue accumulates drift: the day the
+// organisation's per-studio rate changed, the live account also had Coach at
+// 7.99 against the repo's 9 and Studio at 29.99 against 35 — two prices nobody
+// had asked to move. Repricing them as a side effect of an unrelated change is
+// how a live catalogue gets edited by accident.
+//
+// So a reprice can be scoped. It is a FILTER, not a mode: everything else still
+// reports, so the drift you are not fixing stays visible instead of being
+// hidden by the flag that spared it.
+const ONLY = (() => {
+  const i = process.argv.indexOf('--only')
+  return i === -1 ? null : (process.argv[i + 1] ?? null)
+})()
 
 /** The one project that must be driven by a LIVE key. Everything else is test. */
 const PROD_PROJECT = 'linyup-prod'
@@ -246,6 +264,13 @@ async function syncEntry(entry: CatalogEntry) {
   if (!REPRICE) {
     console.log(
       `! drift    ${entry.lookupKey}  live=${current.unit_amount} repo=${unitAmount}  (kept — pass --reprice to change)`
+    )
+    return
+  }
+
+  if (ONLY && entry.lookupKey !== ONLY) {
+    console.log(
+      `! drift    ${entry.lookupKey}  live=${current.unit_amount} repo=${unitAmount}  (kept — outside --only ${ONLY})`
     )
     return
   }

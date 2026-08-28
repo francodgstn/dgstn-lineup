@@ -7,8 +7,13 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { getTeam } from '../utils/teams'
 import { getPlatformStripeAdapter } from '../saas-billing/actions'
-import type { OrgRole } from '@linyup/shared'
-import { NOTIFICATIONS_SUBCOLLECTION, ORG_TRIAL_DAYS, TRIAL_DAYS } from '@linyup/shared'
+import type { OrgRole, TenantFlags } from '@linyup/shared'
+import {
+  NOTIFICATIONS_SUBCOLLECTION,
+  ORGANIZATIONS_COLLECTION,
+  ORG_TRIAL_DAYS,
+  TRIAL_DAYS,
+} from '@linyup/shared'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +47,18 @@ export async function assertOrgAdmin(uid: string, orgId: string): Promise<void> 
  * lapse takes down and a click would otherwise put straight back up).
  */
 export async function assertOrgSubscriptionLive(orgId: string): Promise<void> {
+  // A COMPED ORGANISATION HAS NO SUBSCRIPTION AND NEVER WILL — that is the whole
+  // arrangement, not a fault to gate on. An absent document already reads as
+  // 'trial' and passes, so a freshly comped org is fine by accident; a comped
+  // org that USED to pay is not, because cancelling its subscription leaves the
+  // document on 'cancelled' and this gate then freezes it permanently:
+  // `publishOrgWebsite` refuses, and `acceptOrgInvitation` refuses too, so no
+  // new studio can ever join. Comping a customer must not cost it its own
+  // organisation.
+  const orgSnap = await admin.firestore().collection(ORGANIZATIONS_COLLECTION).doc(orgId).get()
+  const orgFlags = orgSnap.data()?.flags as TenantFlags | undefined
+  if (orgFlags?.comped === true) return
+
   const sub = await admin.firestore().collection('saas_subscriptions').doc(orgId).get()
   const status = sub.exists ? ((sub.data()?.status as string | undefined) ?? 'trial') : 'trial'
   if (status !== 'trial' && status !== 'active') {
@@ -424,6 +441,22 @@ export const createOrgCheckoutSession = onCall(async (request) => {
   if (!data?.orgId) throw new HttpsError('invalid-argument', 'orgId is required')
 
   await assertOrgAdmin(request.auth.uid, data.orgId)
+
+  // A comped organisation is not billed, and its billing page still renders a
+  // Subscribe button — see `assertNotComped` in saas-billing/index.ts for why
+  // the refusal lives at the callable rather than only in the UI.
+  const compedSnap = await admin
+    .firestore()
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(data.orgId)
+    .get()
+  if ((compedSnap.data()?.flags as TenantFlags | undefined)?.comped === true) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This organisation is on a comped plan and is not billed. Contact Linyup to change that.',
+      { reason: 'tenant_comped' }
+    )
+  }
 
   const { orgId, locale = 'en' } = data
 

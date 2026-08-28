@@ -2619,7 +2619,11 @@
     "documentsNote": "Dokumente veröffentlichen und teilen. Unterschreibbare Verzichtserklärungen erfordern Studio.",
     "rowCustomDomain": "Eigene Domain",
     "rowGiftCards": "Geschenkkarten",
-    "rowPromoCodes": "Aktionscodes"
+    "rowPromoCodes": "Aktionscodes",
+    "perStudioMonth": "pro Studio / Monat",
+    "orgQuoteNote": "Gleicher Tarif — sagen Sie uns wie viele, und Sie erhalten die Zahl.",
+    "orgMoreThan": "Mehr als {count}?",
+    "orgMinStudios": "Mindestens {count} Studios"
   },
   "Plugins": {
     "title": "Plugins",
@@ -3969,7 +3973,8 @@
     "benefitRenewals": "Abos verlängern sich, wiederholen Zahlungen und enden automatisch.",
     "feeStripeNote": "Dazu kommt Stripes eigene Bearbeitungsgebühr. Siehe <link>Stripe-Preise</link>.",
     "feeRefundNote": "Bei einer Erstattung trägst du die Stripe-Gebühr.",
-    "feesTitle": "Das zahlst du"
+    "feesTitle": "Das zahlst du",
+    "feeNoneNote": "Linyup erhebt keine Gebühr auf deine Zahlungen."
   },
   "PaymentsDashboard": {
     "title": "Zahlungen",

@@ -48,6 +48,7 @@
 
 import Stripe from 'stripe'
 import {
+  chargeHasApplicationFee,
   resolveStripeCurrency,
   type ConnectAccountStatus,
   type ConnectOnboardingModel,
@@ -568,8 +569,29 @@ export async function createSubscriptionCheckoutSession(params: {
 
 /**
  * Refund a direct charge, reversing the platform application fee in proportion to
- * the refunded amount (`refund_application_fee: true`). Omit `amount` for a full
- * refund. Runs on the connected account (stripeAccount).
+ * the refunded amount. Omit `amount` for a full refund. Runs on the connected
+ * account (stripeAccount).
+ *
+ * ── `refund_application_fee` IS CONDITIONAL, AND HAS TO BE ──────────────────
+ * Stripe REFUSES the flag on a charge that carries no application fee:
+ *
+ *   "Attempting to refund_application_fee on ch_..., but it has no application fee"
+ *
+ * (verified against a live test-mode connected account, 2026-08-28: a charge
+ * created with `application_fee_amount: 0` is accepted and produces no fee
+ * object, and the refund above is then rejected while the same refund without
+ * the flag succeeds.)
+ *
+ * A zero fee is not exotic. `computePlatformFee` floors, so at 70 bps any charge
+ * under CHF 1.43 has always produced one — this refusal was reachable long
+ * before anything was comped, on any refund of a very small charge. A comped
+ * tenant simply makes it EVERY refund rather than a rare one.
+ *
+ * Resolving it here rather than taking it as a parameter is deliberate: a
+ * caller that has to remember is a caller that eventually does not, and the
+ * failure is an opaque refusal on a refund — the one operation a member is
+ * already unhappy about. The cost is one `retrieve` on a path that is rare and
+ * not latency-sensitive.
  */
 export async function refundDirectCharge(params: {
   accountId: string
@@ -579,12 +601,30 @@ export async function refundDirectCharge(params: {
   idempotencyKey: string
 }) {
   const stripe = await getConnectStripe()
+
+  // Fail towards SENDING the flag: if the lookup fails we cannot prove there is
+  // no fee, and omitting it on a charge that has one would leave Linyup's cut
+  // sitting on a refunded payment — money kept from a member who was refunded.
+  let hasFee = true
+  try {
+    const pi = await stripe.paymentIntents.retrieve(
+      params.paymentIntentId,
+      undefined,
+      { stripeAccount: params.accountId }
+    )
+    hasFee = chargeHasApplicationFee(
+      (pi as { application_fee_amount?: number | null }).application_fee_amount
+    )
+  } catch (err) {
+    console.error(`[connect] refund fee-shape lookup failed for ${params.paymentIntentId}:`, err)
+  }
+
   return stripe.refunds.create(
     {
       payment_intent: params.paymentIntentId,
       ...(params.amount !== undefined ? { amount: params.amount } : {}),
       ...(params.reason ? { reason: params.reason } : {}),
-      refund_application_fee: true,
+      ...(hasFee ? { refund_application_fee: true } : {}),
     },
     { stripeAccount: params.accountId, idempotencyKey: params.idempotencyKey }
   )

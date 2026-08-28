@@ -2619,7 +2619,11 @@
     "documentsNote": "Publish and share documents. Signable waivers need Studio.",
     "rowCustomDomain": "Custom domain",
     "rowGiftCards": "Gift cards",
-    "rowPromoCodes": "Promo codes"
+    "rowPromoCodes": "Promo codes",
+    "perStudioMonth": "per studio / month",
+    "orgQuoteNote": "Same rate — tell us how many and we'll send the number.",
+    "orgMoreThan": "More than {count}?",
+    "orgMinStudios": "Minimum {count} studios"
   },
   "Plugins": {
     "title": "Plugins",
@@ -3969,7 +3973,8 @@
     "benefitRenewals": "Subscriptions renew, retry, and cancel automatically.",
     "feeStripeNote": "Stripe's own processing fee applies. See <link>Stripe's pricing</link>.",
     "feeRefundNote": "If a payment is refunded, you pay the Stripe fee.",
-    "feesTitle": "What you pay"
+    "feesTitle": "What you pay",
+    "feeNoneNote": "Linyup takes no fee on your payments."
   },
   "PaymentsDashboard": {
     "title": "Payments",

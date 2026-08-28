@@ -1,6 +1,20 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations, useTranslationList } from '~/i18n';
+// THE ORGANISATION'S PRICING NUMBERS, mirrored from the billing source of truth
+// (`packages/shared/src/types/plan.ts` — ORG_MIN_STUDIOS, ORG_MAX_LISTED_STUDIOS,
+// ORG_PER_STUDIO.monthly).
+//
+// MIRRORED, NOT IMPORTED, and that is a build constraint rather than a
+// preference: `@linyup/shared` compiles to CommonJS and Astro's Rollup build
+// cannot bundle it — adding the workspace dependency fails `astro build`
+// outright. Every other price on this page is hand-copied the same way, into
+// four locale files; this one at least sits in ONE place and is pinned by
+// `packages/functions/src/analytics/landingPricing.test.ts`, which reads this
+// file and fails the build if the numbers drift from plan.ts.
+const ORG_MIN_STUDIOS = 2;
+const ORG_MAX_LISTED_STUDIOS = 10;
+const ORG_RATE_MONTHLY = 25;
 
 interface Props {
   lang: Language;
@@ -117,14 +131,19 @@ const cmpText = (v: CmpVal): string | null => {
         plans.map(({ key, featured }) => {
           const isFree = key === 'free';
           const isOrg = key === 'org';
-          // Coach & Studio carry the 50% launch promo; Org is sales-led
-          // ("From CHF X · Talk to us"), no published discount; Free is free.
+          // Coach & Studio carry the 50% launch promo; Org is priced per studio,
+          // no published discount; Free is free.
           const hasPromo = !isFree && !isOrg;
-          // Promo cards split the discounted promoPrice; the org card splits its
-          // (undiscounted) "From CHF X" price so the currency can sit on its own
-          // small line above (keeps the number + /mo on one line).
-          const priceSource = isOrg ? 'price' : 'promoPrice';
-          const [currency, ...amountParts] = t(`plans.${key}.${priceSource}`).split(' ');
+          // THE ORG CARD NEVER GOES THROUGH THIS SPLIT. The other cards store one
+          // string ("CHF 18") and split it on the first space so the currency can
+          // sit on its own small line. Org's price is a RATE, and "CHF 25 per
+          // studio" would split into currency "CHF" and amount "25 per studio" —
+          // rendered at 34px, no error, just a broken card. It reads a bare
+          // number from `plans.org.rate` and supplies its own unit instead.
+          const priceSource = 'promoPrice';
+          const [currency, ...amountParts] = isOrg
+            ? ['CHF', String(ORG_RATE_MONTHLY)]
+            : t(`plans.${key}.${priceSource}`).split(' ');
           const amount = amountParts.join(' ');
           return (
           <div class:list={['plan', { featured }]}>
@@ -140,9 +159,11 @@ const cmpText = (v: CmpVal): string | null => {
                   <span class="currency">{currency}</span>
                   <div class="amount-line">
                     <span class="amount-row">
-                      {isOrg && <span class="from-label">{t('plans.orgFrom')}</span>}
+                      {/* No "From" on the org card. The rate is FLAT — the tenth
+                          studio costs what the second did — and "From" describes
+                          a price that climbs. */}
                       <span class="amount">{amount}{hasPromo && <sup class="price-star">*</sup>}</span>
-                      <span class="period">{t('plans.perMonth')}</span>
+                      <span class="period">{isOrg ? t('plans.perStudioMonth') : t('plans.perMonth')}</span>
                     </span>
                     {hasPromo && (
                       <span class="price-tag"><i data-lucide="sparkles"></i> {t('plans.promoBadge')}</span>
@@ -153,8 +174,41 @@ const cmpText = (v: CmpVal): string | null => {
             </div>
             {hasPromo && (
               <p class="price-note">
-                * {t(`plans.${key}.price`)}{t('plans.perMonth')} {t('plans.afterPromo')}
+                {/* The PRICE carries the weight, not the sentence around it —
+                    what a reader is checking on this line is what they pay once
+                    the launch offer ends, and it was set in the same muted grey
+                    as "after 6 months". */}
+                * <strong>{t(`plans.${key}.price`)}{t('plans.perMonth')}</strong>{' '}
+                {t('plans.afterPromo')}
               </p>
+            )}
+
+            {/* ABOVE TEN, one line and a question.
+
+                This card carried a studio-count stepper with a live total. It
+                worked and it was clutter: the total is one multiplication a
+                reader does faster than they operate a stepper, so the control
+                spent the card's quietest space saying what the rate already said
+                (Franco, 2026-08-28).
+
+                What survives is the part the rate CANNOT say — that past ten the
+                number is quoted — phrased as a QUESTION rather than a plan name.
+                An "Enterprise" button here would read as the separate hidden
+                tier this deliberately is not, which the section's own subtitle
+                rules out: no "request a demo to see pricing". */}
+            {isOrg && (
+              <div class="org-calc" data-org-calc>
+                {/* THE FLOOR. The tier does not exist below two studios, and the
+                    rate alone does not say so — somebody with one studio would
+                    price themselves at CHF 25 and be on the wrong tier. */}
+                <p class="org-min">
+                  {t('plans.orgMinimum').replace('{count}', String(ORG_MIN_STUDIOS))}
+                </p>
+                <button type="button" class="org-jump" data-org-jump aria-expanded="false">
+                  {t('plans.orgMoreThan').replace('{count}', String(ORG_MAX_LISTED_STUDIOS))}
+                </button>
+                <p class="org-quote" data-org-quote hidden>{t('plans.orgQuote')}</p>
+              </div>
             )}
 
             <ul class="feat-list">
@@ -275,6 +329,23 @@ const cmpText = (v: CmpVal): string | null => {
       (window as unknown as { posthog?: { capture: Capture } }).posthog,
     );
 
+  // ── Above ten: reveal the answer ──────────────────────────────────────────
+  //
+  // No arithmetic here any more. The card used to compute studios x rate; the
+  // rate says that on its own, so all that is left is the one fact it cannot —
+  // that past ten the number is quoted, at the same rate.
+  const calc = document.querySelector<HTMLElement>('[data-org-calc]');
+  if (calc) {
+    const jump = calc.querySelector<HTMLButtonElement>('[data-org-jump]')!;
+    const quote = calc.querySelector<HTMLElement>('[data-org-quote]')!;
+    jump.addEventListener('click', () => {
+      const open = quote.hidden;
+      quote.hidden = !open;
+      jump.setAttribute('aria-expanded', String(open));
+      if (open) ph()?.('pricing_org_over_max_opened');
+    });
+  }
+
   const cmp = document.querySelector('.compare');
   const btn = document.querySelector('.compare-toggle');
   btn?.addEventListener('click', () => {
@@ -331,6 +402,19 @@ const cmpText = (v: CmpVal): string | null => {
   .price-star { color: var(--primary); font-weight: 700; font-size: 0.5em; }
   .period { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
 
+  /* Above-ten disclosure (org card only). Reserved height so revealing the
+     answer cannot resize the card and move the CTA under the cursor. */
+  .org-calc { margin-top: 8px; min-height: 60px; }
+  .org-min { margin: 0 0 6px; font-size: 13px; color: var(--muted-foreground); }
+  .org-jump {
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font-size: 13px; color: var(--primary);
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .org-jump:hover { opacity: 0.8; }
+  .org-quote { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
+  .org-quote[hidden] { display: none; }
+
   /* "Offer" chip next to the discounted price */
   .price-tag {
     align-self: center;
@@ -353,6 +437,7 @@ const cmpText = (v: CmpVal): string | null => {
 
   /* Regular price after the promo period (paid cards) */
   .price-note { margin: 6px 0 0; font-size: 13px; color: var(--muted-foreground); }
+  .price-note strong { font-weight: 600; color: var(--heading); }
 
   .feat-list { list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-direction: column; gap: 10px; }
   .feat-list li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; }

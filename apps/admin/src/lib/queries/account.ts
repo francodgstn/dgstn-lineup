@@ -13,6 +13,7 @@ import type {
 import {
   contactUsageForPlan,
   PLAN_PRICING,
+  ORG_PER_STUDIO,
   readGatewayData,
   subscriptionCancellation,
   subscriptionIsCancelling,
@@ -82,6 +83,10 @@ export interface SubscriptionView {
   subscriptionId: string | null
   lastPaymentStatus: string | null
   baseMonthly: number
+  /** ORGS ONLY — the per-studio rate. The organisation tier has no base fee, so
+   *  `baseMonthly` is 0 for it and reading that as "the price" shows an operator
+   *  CHF 0.00 for a paying federation. */
+  perStudioMonthly: number | null
 }
 
 export interface ActivityRow {
@@ -123,6 +128,16 @@ export interface AccountDetail {
   members: MemberRow[]
   activity: ActivityRow[]
   payments: PaymentsView | null
+  /**
+   * The comp, which the ACCOUNTS LIST already carried and this detail view did
+   * not. The one screen an operator uses to answer "why is this tenant not
+   * paying?" showed a paid-tier plan badge with no subscription and left them to
+   * guess — which is the exact "reported as broken rather than as a decision
+   * somebody made" failure `comped_reason` exists to prevent.
+   */
+  comped: boolean
+  compedReason: string | null
+  compedSinceMs: number | null
 }
 
 /** Connect account state + aggregated member→studio payment totals for a team. */
@@ -224,6 +239,7 @@ function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
     subscriptionId: gateway.subscription_id ?? null,
     lastPaymentStatus: gateway.last_payment_status ?? null,
     baseMonthly: PLAN_PRICING[sub.plan].baseMonthly,
+    perStudioMonthly: sub.plan === 'organization' ? ORG_PER_STUDIO.monthly : null,
   }
 }
 
@@ -292,6 +308,9 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
     members,
     activity,
     payments,
+    comped: team.flags?.comped === true,
+    compedReason: team.flags?.comped_reason ?? null,
+    compedSinceMs: team.flags?.comped_since?.toMillis?.() ?? null,
   }
 }
 
@@ -331,6 +350,9 @@ async function getOrgDetail(id: string): Promise<AccountDetail | null> {
     members,
     activity: [],
     payments: null,
+    comped: org.flags?.comped === true,
+    compedReason: org.flags?.comped_reason ?? null,
+    compedSinceMs: org.flags?.comped_since?.toMillis?.() ?? null,
   }
 }
 

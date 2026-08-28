@@ -340,7 +340,6 @@
     "promoBadge": "Offre de lancement",
     "earlyAccessCta": "Accès anticipé",
     "talkToUs": "Contactez-nous",
-    "orgFrom": "Dès",
     "mostPopular": "Le plus populaire",
     "cmpToggle": "Comparer toutes les fonctionnalités",
     "challengeTitle": "Une fonctionnalité vous manque ?",
@@ -410,7 +409,7 @@
     },
     "org": {
       "name": "Organisation",
-      "price": "CHF 103",
+      "price": "CHF 25",
       "audience": "Pour les organisations multi-studios, fédérations et franchises.",
       "features": [
         "Tout de Studio",
@@ -419,7 +418,11 @@
         "API & rôles avancés"
       ]
     },
-    "cmpDocumentsNote": "Les décharges signables nécessitent Studio."
+    "cmpDocumentsNote": "Les décharges signables nécessitent Studio.",
+    "perStudioMonth": "/studio/mois",
+    "orgQuote": "Même tarif — dites-nous combien et nous vous envoyons le montant.",
+    "orgMoreThan": "Plus de {count} ?",
+    "orgMinimum": "Minimum {count} studios"
   },
   "payments": {
     "eyebrow": "Soyez payé",

@@ -340,7 +340,6 @@
     "promoBadge": "Launch-Angebot",
     "earlyAccessCta": "Frühen Zugang sichern",
     "talkToUs": "Sprich mit uns",
-    "orgFrom": "Ab",
     "mostPopular": "Am beliebtesten",
     "cmpToggle": "Alle Funktionen vergleichen",
     "challengeTitle": "Fehlt eine Funktion?",
@@ -410,7 +409,7 @@
     },
     "org": {
       "name": "Organisation",
-      "price": "CHF 103",
+      "price": "CHF 25",
       "audience": "Für Multi-Studio-Organisationen, Verbände und Franchises.",
       "features": [
         "Alles aus Studio",
@@ -419,7 +418,11 @@
         "API & erweiterte Rollen"
       ]
     },
-    "cmpDocumentsNote": "Unterschreibbare Verzichtserklärungen erfordern Studio."
+    "cmpDocumentsNote": "Unterschreibbare Verzichtserklärungen erfordern Studio.",
+    "perStudioMonth": "/Studio/Mt.",
+    "orgQuote": "Gleicher Tarif — sagen Sie uns wie viele, und Sie erhalten die Zahl.",
+    "orgMoreThan": "Mehr als {count}?",
+    "orgMinimum": "Mindestens {count} Studios"
   },
   "payments": {
     "eyebrow": "Bezahlt werden",

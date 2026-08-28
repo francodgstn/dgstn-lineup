@@ -45,6 +45,8 @@ export interface ConnectStatusResult {
   details_submitted?: boolean
   capabilities?: Record<string, string>
   requirements_currently_due?: string[]
+  /** Linyup takes no platform fee from this studio — resolved server-side. */
+  feeWaived?: boolean
 }
 
 /** Live account status (refreshes from Stripe). Only call when the feature flag is on. */

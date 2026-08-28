@@ -78,6 +78,36 @@ async function activeAddonLookupKeys(teamId: string): Promise<string[]> {
 // createCheckoutSession — redirects team owner to hosted payment page
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * A COMPED TENANT MUST NOT BE ABLE TO BUY A SUBSCRIPTION.
+ *
+ * The comp is a decision the platform made, recorded on the tenant. Nothing
+ * removes the Subscribe / Upgrade buttons from that tenant's own billing page
+ * (they are rendered from plan state, which for a comped tenant reads exactly
+ * like an ordinary un-subscribed one), so without this the studio owner or org
+ * admin can put a real card on a real recurring charge with one click — for a
+ * tenant the platform has promised to bill nothing.
+ *
+ * Refusing at the callable rather than only hiding the button is the point:
+ * the UI is a courtesy, this is the guarantee. The hidden button follows in the
+ * web app, but a stale tab, a deep link or a direct call cannot get past here.
+ */
+async function assertNotComped(
+  collection: string,
+  entityId: string,
+  label: string
+): Promise<void> {
+  const snap = await admin.firestore().collection(collection).doc(entityId).get()
+  const flags = snap.data()?.flags as TenantFlags | undefined
+  if (flags?.comped === true) {
+    throw new HttpsError(
+      'failed-precondition',
+      `This ${label} is on a comped plan and is not billed. Contact Linyup to change that.`,
+      { reason: 'tenant_comped' }
+    )
+  }
+}
+
 export const createCheckoutSession = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
 
@@ -92,6 +122,24 @@ export const createCheckoutSession = onCall(async (request) => {
   const { teamId, plan, locale = 'en' } = data as { teamId: string; plan: SaasPlan; locale: string }
 
   await assertOwner(request.auth.uid, teamId)
+  await assertNotComped(TEAMS_COLLECTION, teamId, 'team')
+
+  // A STUDIO INSIDE AN ORGANISATION DOES NOT OWN ITS OWN BILLING (UX-35), and
+  // this callable never asked. `acceptOrgInvitation` puts the studio on the
+  // organisation's plan and the ORG's subscription is what pays for it, so a
+  // second subscription bought here is a second charge for one seat — and on
+  // payment the webhook's team branch overwrites `plan`/`plan_status` on the
+  // team document, knocking the studio off the organisation tier it is
+  // legitimately on. Both halves are silent.
+  const teamSnap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
+  const teamOrgId = teamSnap.data()?.org_id as string | undefined
+  if (teamOrgId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This studio is billed by its organisation. Ask an organisation admin about the plan.',
+      { reason: 'billed_by_org' }
+    )
+  }
 
   // Rate limit: max 3 checkout session requests per team per hour
   const oneHourAgo = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000)
@@ -366,8 +414,26 @@ export const handleStripeWebhook = onRequest(
       // does exactly the same, propagating the status to its studios and nothing
       // more. If that answer is wrong it is wrong for both tiers — change it in
       // one place, not here alone.
+      //
+      // A COMPED TENANT IS EXEMPT FROM THE TEARDOWN ON BOTH TIERS. The org side
+      // already refuses inside `lapseOrganization`; the team side did not, and
+      // the asymmetry bites at exactly the wrong moment. Comping an existing
+      // customer means cancelling the subscription it currently pays — which
+      // fires this event — so without the check the act of comping a studio is
+      // also the act of stripping it to Free: plugins off, site down, course
+      // mirrors deleted one-way. The flag is the record that nothing upstream
+      // can legitimately conclude this tenant stopped paying.
       if (entityType === 'team' && update.status === 'cancelled') {
-        await downgradeTeamToFree(entityId, { fromTrial: false, courseMirrors: 'tear_down' })
+        const teamFlags = (
+          await admin.firestore().collection(TEAMS_COLLECTION).doc(entityId).get()
+        ).data()?.flags as TenantFlags | undefined
+        if (tenantExemptFromTrialSweep(teamFlags)) {
+          console.log(
+            `[billing] kept ${trialSweepExemption(teamFlags)} team ${entityId} on its plan after cancellation`
+          )
+        } else {
+          await downgradeTeamToFree(entityId, { fromTrial: false, courseMirrors: 'tear_down' })
+        }
       } else if (entityType === 'org') {
         await admin.firestore().collection('organizations').doc(entityId).update(entityUpdate)
         if (update.status === 'cancelled') {
@@ -811,6 +877,23 @@ export const handleTrialLifecycle = onSchedule(
       .limit(200)
       .get()
     for (const doc of legacy.docs) {
+      // THE SAME TWO SKIPS AS PHASE 1 ABOVE. This block queries a different
+      // status and was written without them, so an exempt or org-affiliated
+      // team that reached 'expired' by any route — legacy data, a hand-edit, a
+      // half-run repair — was torn down anyway: plugins deactivated, site
+      // unpublished, course mirrors deleted, none of it reversible by
+      // re-installing. A tenant the platform bills nothing is exactly the one
+      // that must never be swept, and 'expired' is a state it can be left in by
+      // a cancellation that arrives before the comp does.
+      const expiredFlags = doc.data().flags as TenantFlags | undefined
+      if (tenantExemptFromTrialSweep(expiredFlags)) {
+        console.log(`[trial] skipped ${trialSweepExemption(expiredFlags)} expired team ${doc.id}`)
+        continue
+      }
+      if (doc.data().org_id) {
+        console.log(`[trial] skipped org-affiliated expired team ${doc.id}`)
+        continue
+      }
       try {
         await downgradeTeamToFree(doc.id, { fromTrial: true, courseMirrors: 'tear_down' })
         console.log(`[trial] converted legacy expired team ${doc.id} to free`)

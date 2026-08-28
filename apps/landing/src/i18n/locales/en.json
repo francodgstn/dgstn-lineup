@@ -340,7 +340,6 @@
     "promoBadge": "Launch offer",
     "earlyAccessCta": "Get early access",
     "talkToUs": "Talk to us",
-    "orgFrom": "From",
     "mostPopular": "Most popular",
     "cmpToggle": "Compare all features",
     "challengeTitle": "Missing a feature?",
@@ -410,7 +409,7 @@
     },
     "org": {
       "name": "Organisation",
-      "price": "CHF 103",
+      "price": "CHF 25",
       "audience": "For multi-studio organisations, federations, and franchises.",
       "features": [
         "Everything in Studio",
@@ -419,7 +418,11 @@
         "API & advanced roles"
       ]
     },
-    "cmpDocumentsNote": "Signable waivers need Studio."
+    "cmpDocumentsNote": "Signable waivers need Studio.",
+    "perStudioMonth": "/studio/mo",
+    "orgQuote": "Same rate — tell us how many and we'll send the number.",
+    "orgMoreThan": "More than {count}?",
+    "orgMinimum": "Minimum {count} studios"
   },
   "payments": {
     "eyebrow": "Get paid",

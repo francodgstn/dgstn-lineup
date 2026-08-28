@@ -2619,7 +2619,11 @@
     "documentsNote": "Pubblica e condividi documenti. Le liberatorie firmabili richiedono Studio.",
     "rowCustomDomain": "Dominio personalizzato",
     "rowGiftCards": "Carte regalo",
-    "rowPromoCodes": "Codici promozionali"
+    "rowPromoCodes": "Codici promozionali",
+    "perStudioMonth": "per studio / mese",
+    "orgQuoteNote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra.",
+    "orgMoreThan": "Più di {count}?",
+    "orgMinStudios": "Minimo {count} studi"
   },
   "Plugins": {
     "title": "Plugin",
@@ -3969,7 +3973,8 @@
     "benefitRenewals": "Gli abbonamenti si rinnovano, riprovano e si annullano automaticamente.",
     "feeStripeNote": "Si applica la commissione di Stripe. Vedi <link>i prezzi di Stripe</link>.",
     "feeRefundNote": "In caso di rimborso, la commissione Stripe è a tuo carico.",
-    "feesTitle": "Cosa paghi"
+    "feesTitle": "Cosa paghi",
+    "feeNoneNote": "Linyup non applica alcuna commissione sui tuoi pagamenti."
   },
   "PaymentsDashboard": {
     "title": "Pagamenti",

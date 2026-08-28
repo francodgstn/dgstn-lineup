@@ -153,7 +153,15 @@ export const getConnectStatus = onCall(async (request) => {
 
   const accountId = team.payments?.connectAccountId
   const model: ConnectOnboardingModel = team.payments?.connectModel ?? 'managed'
-  if (!accountId) return { connected: false as const }
+
+  // THE STUDIO IS TOLD WHAT IT ACTUALLY PAYS. Settings → Payments renders the
+  // take-rate from the CLIENT's plan, which for a comped studio names a fee the
+  // platform does not charge — the studio then reconciles its Stripe payouts
+  // against a rate that was never taken. The waiver is server state (it can come
+  // from the studio's organisation), so the answer travels with the status
+  // rather than being recomputed in the browser: one resolver, not two.
+  const feeWaived = team.feeWaived
+  if (!accountId) return { connected: false as const, feeWaived }
 
   let status: NormalizedAccountStatus
   try {
@@ -167,6 +175,7 @@ export const getConnectStatus = onCall(async (request) => {
 
   return {
     connected: true as const,
+    feeWaived,
     accountId,
     model,
     status: status.status,

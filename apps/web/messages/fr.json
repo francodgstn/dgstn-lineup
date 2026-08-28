@@ -2619,7 +2619,11 @@
     "documentsNote": "Publiez et partagez des documents. Les décharges signables nécessitent Studio.",
     "rowCustomDomain": "Domaine personnalisé",
     "rowGiftCards": "Cartes cadeaux",
-    "rowPromoCodes": "Codes promo"
+    "rowPromoCodes": "Codes promo",
+    "perStudioMonth": "par studio / mois",
+    "orgQuoteNote": "Même tarif — dites-nous combien et nous vous envoyons le montant.",
+    "orgMoreThan": "Plus de {count} ?",
+    "orgMinStudios": "Minimum {count} studios"
   },
   "Plugins": {
     "title": "Plugins",
@@ -3969,7 +3973,8 @@
     "benefitRenewals": "Les abonnements se renouvellent, relancent et s'annulent automatiquement.",
     "feeStripeNote": "Les frais de traitement de Stripe s'appliquent en plus. Voir <link>les tarifs Stripe</link>.",
     "feeRefundNote": "En cas de remboursement, les frais Stripe sont à votre charge.",
-    "feesTitle": "Ce que vous payez"
+    "feesTitle": "Ce que vous payez",
+    "feeNoneNote": "Linyup ne prélève aucune commission sur vos paiements."
   },
   "PaymentsDashboard": {
     "title": "Paiements",
