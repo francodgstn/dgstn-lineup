@@ -4343,6 +4343,10 @@ function AffiliationsTab({
   const { confirm, confirmDialog } = useConfirm()
   const tCommonAff = useTranslations('Common')
   const t = useTranslations('Affiliations')
+  // The removal confirmation's copy lives in `Contacts` — it is written about
+  // this PERSON ("remove {name}'s affiliation"), not about affiliations in
+  // general. Called through `t` it rendered its own key id into the dialog.
+  const tContacts = useTranslations('Contacts')
   const qc = useQueryClient()
 
   const { data: affiliations = [], isLoading } = useContactAffiliations(contact.id)
@@ -4365,8 +4369,8 @@ function AffiliationsTab({
     // takes away access, member pricing and any renewal that was due, so the
     // body names those rather than the row.
     const ok = await confirm({
-      title: t('affiliationRemoveTitle'),
-      description: t('affiliationRemoveBody', {
+      title: tContacts('affiliationRemoveTitle'),
+      description: tContacts('affiliationRemoveBody', {
         name: `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim(),
       }),
       confirmLabel: tCommonAff('remove'),

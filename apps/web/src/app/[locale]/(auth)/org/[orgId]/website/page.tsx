@@ -237,6 +237,11 @@ export default function OrgWebsiteBuilderPage() {
   const [dirty, setDirty] = useState(false)
   const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
   const tSite = useTranslations('Site')
+  // The `Website` namespace, for the copy this page shares with the studio's
+  // builder. `MenuPanel` reads all of its own strings from there, so its heading
+  // must come from the same place — pulled through `OrgWebsite` it rendered the
+  // raw key id, which is what an untyped miss does (Franco, 2026-08-28).
+  const tWeb = useTranslations('Website')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -601,7 +606,7 @@ export default function OrgWebsiteBuilderPage() {
           <div className="space-y-2 lg:w-[420px] lg:flex-shrink-0 lg:self-start">
             <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <ListTree className="h-3.5 w-3.5" />
-              {t('tabMenu')}
+              {tWeb('tabMenu')}
             </div>
             <MenuPanel
               menu={menu}

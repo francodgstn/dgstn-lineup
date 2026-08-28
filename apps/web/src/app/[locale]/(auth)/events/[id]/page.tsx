@@ -165,6 +165,10 @@ function EditEventDialog({
   onSaved: () => void
 }) {
   const t = useTranslations('Events')
+  // Place and room are SESSION vocabulary — the keys live in that namespace and
+  // an event form reuses them rather than owning a second copy of the same four
+  // words. Called through `t` they rendered their own ids.
+  const tSessions = useTranslations('Sessions')
   const { currentTeamId, team } = useAuth()
   const { types } = useEventTypes(currentTeamId)
   const { data: places = [] } = usePlaces(currentTeamId, team?.org_id ?? null)
@@ -281,15 +285,15 @@ function EditEventDialog({
           {places.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>{t('fieldPlace')}</Label>
+                <Label>{tSessions('fieldPlace')}</Label>
                 <Controller name="placeId" control={control} render={({ field }) => (
                   <Select
                     value={field.value || '__none'}
                     onValueChange={(v) => { field.onChange(v === '__none' ? '' : v); setValue('roomId', '') }}
                   >
-                    <SelectTrigger><SelectValue placeholder={t('placeNone')} /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={tSessions('placeNone')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none">{t('placeNone')}</SelectItem>
+                      <SelectItem value="__none">{tSessions('placeNone')}</SelectItem>
                       {places.map((p) => (
                         <SelectItem
                           key={p.id}
@@ -305,12 +309,12 @@ function EditEventDialog({
               </div>
               {placeRooms.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label>{t('fieldRoom')}</Label>
+                  <Label>{tSessions('fieldRoom')}</Label>
                   <Controller name="roomId" control={control} render={({ field }) => (
                     <Select value={field.value || '__none'} onValueChange={(v) => field.onChange(v === '__none' ? '' : v)}>
-                      <SelectTrigger><SelectValue placeholder={t('roomNone')} /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={tSessions('roomNone')} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">{t('roomNone')}</SelectItem>
+                        <SelectItem value="__none">{tSessions('roomNone')}</SelectItem>
                         {placeRooms.map((r) => (
                           <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                         ))}
