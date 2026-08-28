@@ -3969,7 +3969,8 @@
     "benefitRenewals": "Abos verlängern sich, wiederholen Zahlungen und enden automatisch.",
     "feeStripeNote": "Dazu kommt Stripes eigene Bearbeitungsgebühr. Siehe <link>Stripe-Preise</link>.",
     "feeRefundNote": "Bei einer Erstattung trägst du die Stripe-Gebühr.",
-    "feesTitle": "Das zahlst du"
+    "feesTitle": "Das zahlst du",
+    "feeNoneNote": "Linyup erhebt keine Gebühr auf deine Zahlungen."
   },
   "PaymentsDashboard": {
     "title": "Zahlungen",

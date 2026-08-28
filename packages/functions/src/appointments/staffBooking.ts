@@ -457,7 +457,12 @@ export const createStaffAppointment = onCall(async (request) => {
   if (plan_.paymentIntentMode === 'link') {
     const enabledTeam = await loadEnabledTeam(teamId)
     const { accountId, model } = requireChargeableAccount(enabledTeam)
-    const applicationFeeAmount = computePlatformFee({ tier: enabledTeam.plan, amount: amountMinor, model })
+    const applicationFeeAmount = computePlatformFee({
+      tier: enabledTeam.plan,
+      amount: amountMinor,
+      model,
+      waived: enabledTeam.feeWaived,
+    })
     const locale = data.locale ?? 'en'
     const base = `${resolveBaseUrl(data.origin)}/${locale}/pay/result`
     const slugQuery = teamSlug ? `&slug=${encodeURIComponent(teamSlug)}&seg=appointments` : ''

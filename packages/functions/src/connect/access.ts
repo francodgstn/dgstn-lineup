@@ -7,9 +7,11 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { HttpsError } from 'firebase-functions/v2/https'
 import {
   CONNECT_ACCOUNTS_COLLECTION,
+  ORGANIZATIONS_COLLECTION,
   TEAMS_COLLECTION,
   type ConnectOnboardingModel,
   type SaasPlan,
+  type TenantFlags,
 } from '@linyup/shared'
 import { hasTeamRole } from '../utils/teams'
 import { resolveBaseUrl } from '../utils/env'
@@ -31,6 +33,16 @@ export async function assertManager(uid: string, teamId: string): Promise<void> 
 export interface EnabledTeam {
   id: string
   plan: SaasPlan
+  /**
+   * Linyup takes NO platform fee from this studio's member payments.
+   *
+   * Resolved once, here, by `loadEnabledTeam` — see `resolveFeeWaiver` for where
+   * it comes from and why it is read through rather than copied. Every rail that
+   * can charge a member reaches Stripe holding one of these objects, so carrying
+   * the answer on it is what makes the waiver reach a rail written next year
+   * that nobody remembered to tell about comping.
+   */
+  feeWaived: boolean
   name?: string
   /** ISO 4217, as the studio set it (uppercase). The currency prices are
    *  authored in — asked at signup, editable in Settings → Payments. */
@@ -63,7 +75,62 @@ export async function loadEnabledTeam(teamId: string): Promise<EnabledTeam> {
     name: data.name as string | undefined,
     default_currency: data.default_currency as string | undefined,
     payments: data.payments,
+    feeWaived: await resolveFeeWaiver(data),
     data,
+  }
+}
+
+/**
+ * Is Linyup's platform fee waived for this studio?
+ *
+ * ── WHY IT IS READ THROUGH TO THE ORGANISATION, NOT COPIED ONTO THE TEAM ─────
+ * A comp is normally decided for an ORGANISATION — Linyup's first migrated one
+ * is comped in full, org and studios alike — while the fee is charged by each
+ * STUDIO, on its own connected account. So the decision and the enforcement sit
+ * on different documents and something has to bridge them.
+ *
+ * Copying the flag onto each team at join time is the cheaper bridge and the
+ * wrong one. `acceptOrgInvitation` already copies the org's `plan_status` that
+ * way, and a copy is a snapshot: it goes stale the day the comp changes, in
+ * whichever direction happens to be wrong, with nothing to notice. It would also
+ * need a third and fourth writer (`removeTeamFromOrg` and `lapseOrganization`
+ * both have to clear it) and a backfill for the studios that already exist —
+ * and a studio that kept a stale `true` after leaving the organisation would be
+ * charged nothing, forever, silently.
+ *
+ * Reading through costs ONE extra document get, only for a team that is actually
+ * in an organisation, on a path that is already several reads plus a round-trip
+ * to Stripe. It cannot go stale, needs no propagation, no backfill and no second
+ * writer, and a studio that joins the organisation next year inherits the comp
+ * by construction rather than by somebody remembering.
+ *
+ * A team's OWN `flags.comped` is honoured too, so a standalone comped studio
+ * works without inventing an organisation for it.
+ *
+ * Both flags are unwritable by any client: `tenantGovernanceUnchanged()` pins
+ * `flags` on the team document and (since 2026-08-28) on the organisation
+ * document, and `users/{uid}.roles` — which backs the `hasRole('admin')` bypass
+ * on the team rule — is pinned in the same change. Without those three the
+ * waiver would be self-serve for every studio owner on the platform.
+ */
+async function resolveFeeWaiver(data: FirebaseFirestore.DocumentData): Promise<boolean> {
+  const teamFlags = data.flags as TenantFlags | undefined
+  if (teamFlags?.comped === true) return true
+
+  const orgId = data.org_id as string | undefined
+  if (!orgId) return false
+
+  try {
+    const org = await admin.firestore().collection(ORGANIZATIONS_COLLECTION).doc(orgId).get()
+    const orgFlags = org.data()?.flags as TenantFlags | undefined
+    return orgFlags?.comped === true
+  } catch (err) {
+    // FAIL TOWARDS CHARGING. A read that failed is not evidence of a comp, and
+    // the alternative — treating an unavailable organisation document as "bills
+    // nothing" — turns a transient Firestore error into free transactions for
+    // every studio in every organisation until it clears.
+    console.error(`[connect] fee-waiver lookup failed for org ${orgId}:`, err)
+    return false
   }
 }
 

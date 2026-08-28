@@ -730,7 +730,12 @@ export async function startOneOffCheckout(params: {
     label: params.label,
   })
   const { accountId, model } = requireChargeableAccount(team)
-  const applicationFeeAmount = computePlatformFee({ tier: team.plan, amount: amountMinor, model })
+  const applicationFeeAmount = computePlatformFee({
+    tier: team.plan,
+    amount: amountMinor,
+    model,
+    waived: team.feeWaived,
+  })
   try {
     const session = await createOneOffCheckoutSession({
       accountId,
@@ -779,7 +784,7 @@ export async function startSubscriptionCheckout(params: {
 }): Promise<{ url: string; sessionId: string; applicationFeePercent: number }> {
   const { team } = params
   const { accountId } = requireChargeableAccount(team)
-  const applicationFeePercent = takeRatePercent(team.plan)
+  const applicationFeePercent = takeRatePercent(team.plan, team.feeWaived)
   try {
     const discountCouponId = params.introCoupon
       ? await ensureIntroCoupon({ accountId, spec: params.introCoupon })

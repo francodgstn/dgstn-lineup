@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { FieldValue } from 'firebase-admin/firestore'
 import {
+  ORGANIZATIONS_COLLECTION,
   TEAMS_COLLECTION,
   MEMBER_SUBSCRIPTIONS_SUBCOLLECTION,
   MESSAGING_POLICIES_COLLECTION,
@@ -33,6 +34,71 @@ export async function setConnectEnabled(teamId: string, enabled: boolean): Promi
       updated_at: FieldValue.serverTimestamp(),
     })
   revalidatePath(`/accounts/team/${teamId}`)
+  return { ok: true }
+}
+
+/**
+ * COMP a tenant — the platform bills it nothing, indefinitely.
+ *
+ * `TenantFlags.comped` has existed since the tier work, is read by the trial
+ * sweep, by `lapseOrganization`, by the MRR reducer and (since 2026-08-28) by
+ * the Connect fee waiver — and until now NOTHING IN THE REPOSITORY WROTE IT.
+ * The only way to comp a customer was a hand-edit in the Firestore console,
+ * which leaves no reason, no date and no operator behind it.
+ *
+ * ── IT WORKS ON BOTH TENANT KINDS, AND THAT IS THE POINT ────────────────────
+ * Every other action in this file takes a `teamId` and writes `teams/`. A comp
+ * is normally decided for an ORGANISATION — Linyup's first migrated one is
+ * comped whole — and the fee waiver reads the org's flag for every studio in it,
+ * so comping the org is what actually stops the charging. An action that could
+ * only reach teams would force the operator back to the console for the one case
+ * this exists for.
+ *
+ * ── WHY THE REASON IS REQUIRED ──────────────────────────────────────────────
+ * `comped_reason` and `comped_since` are declared beside the flag and were never
+ * written by anything. Without them the first billing reconciliation reports the
+ * tenant as broken rather than as a decision somebody made — which is precisely
+ * the failure the flag exists to prevent. So the reason is not optional here.
+ *
+ * Clearing sets `comped: false` and KEEPS the reason and date: the record of a
+ * comp that ended is worth more than a tidy document, and the readers all test
+ * `=== true`.
+ */
+export async function setTenantComped(
+  kind: 'team' | 'org',
+  entityId: string,
+  comped: boolean,
+  reason?: string
+): Promise<ActionResult> {
+  await requireOperator()
+
+  const trimmed = (reason ?? '').trim()
+  if (comped && !trimmed) {
+    return { ok: false, error: 'A reason is required — it is what makes the comp auditable.' }
+  }
+
+  const collection = kind === 'org' ? ORGANIZATIONS_COLLECTION : TEAMS_COLLECTION
+  const ref = adminDb.collection(collection).doc(entityId)
+  if (!(await ref.get()).exists) {
+    return { ok: false, error: `No such ${kind}: ${entityId}` }
+  }
+
+  // Nested field paths, so the rest of `flags` (internal, pilot) is untouched —
+  // the three are independent and overwriting the map would silently clear the
+  // others. `update` reads a dotted key as a path, which is what we want here.
+  const patch: Record<string, unknown> = {
+    'flags.comped': comped,
+    updated_at: FieldValue.serverTimestamp(),
+  }
+  if (comped) {
+    patch['flags.comped_reason'] = trimmed
+    patch['flags.comped_since'] = FieldValue.serverTimestamp()
+  } else if (trimmed) {
+    patch['flags.comped_reason'] = trimmed
+  }
+
+  await ref.update(patch)
+  revalidatePath(`/accounts/${kind}/${entityId}`)
   return { ok: true }
 }
 

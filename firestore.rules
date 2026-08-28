@@ -441,7 +441,30 @@ service cloud.firestore {
     match /users/{userId} {
       // Users can only read their own profile; admins can read any. Restricts PII (email) exposure.
       allow read: if (isAuthed() && request.auth.uid == userId) || hasRole('admin');
-      allow write: if request.auth.uid == userId;
+
+      // `roles` LIVES ON THIS DOCUMENT AND IS THE PLATFORM-ADMIN GRANT ITSELF.
+      //
+      // `hasRole()` resolves entirely from `users/{request.auth.uid}.roles`, and
+      // `superadmin` satisfies every role by construction. So while this rule was
+      // a bare `allow write: if request.auth.uid == userId`, ANY authenticated
+      // user could grant themselves `roles.admin` in one write and then use the
+      // `|| hasRole('admin')` bypass on the team rule to rewrite their own `plan`,
+      // `plan_status` and `flags` — the very fields `tenantGovernanceUnchanged()`
+      // exists to protect. `flags.comped` is among them, and it waives Linyup's
+      // platform fee on every payment the studio takes.
+      //
+      // The escalation defeated the guard rather than going around it, which is
+      // why closing it belongs HERE and not in another value-pin on `teams`.
+      //
+      // Nothing on any client writes `roles` — the entire client write surface of
+      // this document is `locale`, `firstname`, `lastname` and the feedback
+      // counters — so pinning it costs nothing. Cloud Functions use the Admin SDK
+      // and bypass rules entirely.
+      allow create: if request.auth.uid == userId
+                    && !('roles' in request.resource.data);
+      allow update: if request.auth.uid == userId
+                    && request.resource.data.get('roles', {}) == resource.data.get('roles', {});
+      allow delete: if request.auth.uid == userId;
 
       // Activity log sub-collection
       match /activity_log/{activityLogId} {
@@ -2031,8 +2054,26 @@ service cloud.firestore {
       // READ only. Writing stays `hasOrgRole(orgId, 'org_admin')` below: a studio
       // reads the organisation's standards, it does not set them.
       allow read: if isOrgMember(orgId) || currentTeamInOrg(orgId);
-      allow create: if isAuthed() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if hasOrgRole(orgId, 'org_admin');
+
+      // GOVERNANCE IS NOT THE ORG ADMIN'S TO WRITE, exactly as it is not the team
+      // owner's — and this rule was a bare `hasOrgRole(orgId, 'org_admin')` while
+      // the team rule beside it carried `tenantGovernanceUnchanged()`.
+      //
+      // Becoming an org_admin is self-service: `createOrganization` checks only
+      // that the caller is signed in, then writes them an `org_members` row with
+      // that role. So any user could create an organisation and then set
+      // `flags.comped`, `plan`, `plan_status` and `trial_ends_at` on it freely —
+      // a permanent top tier that no sweep can lapse (`tenantExemptFromTrialSweep`
+      // reads exactly that flag), and, once the platform-fee waiver reads it, no
+      // Linyup fee on any member payment at any of the organisation's studios.
+      //
+      // The guard is the SAME function the team rule uses, deliberately: a team
+      // and an organisation must never answer "may I write my own governance?"
+      // differently. `create` pins `flags` too — an unguarded create is the same
+      // grant one document earlier.
+      allow create: if isAuthed() && request.resource.data.createdBy == request.auth.uid
+                    && !('flags' in request.resource.data);
+      allow update: if hasOrgRole(orgId, 'org_admin') && tenantGovernanceUnchanged();
       allow delete: if false; // Cloud Functions only
 
       match /org_members/{memberId} {

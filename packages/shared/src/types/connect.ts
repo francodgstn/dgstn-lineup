@@ -77,6 +77,19 @@ export interface PlatformFeeInput {
   /** Gross charge amount in Rappen (integer minor units). */
   amount: number
   /**
+   * The tenant is COMPED — Linyup takes nothing from this payment.
+   *
+   * An EXPLICIT boolean, and deliberately not a fifth `CONNECT_TAKE_RATE` row or
+   * a nullable tier. The fallback below answers an unknown tier with the HIGHEST
+   * rate specifically so a misconfiguration cannot ship a free transaction; a
+   * zero rate reachable by omitting or mistyping something would undo that in
+   * the one direction that costs money silently. Absent still means CHARGE.
+   *
+   * Resolved server-side by `loadEnabledTeam` from `flags.comped` on the team,
+   * or on its organisation — never read off a client payload.
+   */
+  waived?: boolean
+  /**
    * Onboarding model. Reserved: both models currently use the same take-rate and
    * fee-payer (account), but the fee function takes the model so per-model
    * adjustments can be added without touching call sites. See the brief §6.
@@ -120,7 +133,8 @@ export function applyTakeRate(amount: number, rate: ConnectTakeRate): number {
  * highest (free) rate, never zero — so a misconfiguration never silently ships a
  * free transaction.
  */
-export function computePlatformFee({ tier, amount }: PlatformFeeInput): number {
+export function computePlatformFee({ tier, amount, waived }: PlatformFeeInput): number {
+  if (waived === true) return 0
   const rate = CONNECT_TAKE_RATE[tier] ?? CONNECT_TAKE_RATE.free
   return applyTakeRate(amount, rate)
 }
@@ -131,8 +145,28 @@ export function computePlatformFee({ tier, amount }: PlatformFeeInput): number {
  * fixed Rappen amount). 200 bps → 2. Min-fee does not apply to the percent path.
  * Same central config as computePlatformFee — never hardcode a percentage.
  */
-export function takeRatePercent(tier: SaasPlan): number {
+export function takeRatePercent(tier: SaasPlan, waived?: boolean): number {
+  if (waived === true) return 0
   return (CONNECT_TAKE_RATE[tier] ?? CONNECT_TAKE_RATE.free).bps / 100
+}
+
+/**
+ * Does a zero fee mean "no application fee object" to Stripe?
+ *
+ * YES, and it matters at exactly one place. `application_fee_amount: 0` is
+ * ACCEPTED on a direct charge (verified against a live test-mode connected
+ * account, 2026-08-28) — but the charge it produces has NO application fee, so a
+ * later refund carrying `refund_application_fee: true` is REFUSED outright:
+ *
+ *   "Attempting to refund_application_fee on ch_..., but it has no application fee"
+ *
+ * So the refund flag must be conditional on the charge actually having one.
+ * This is not new with comping: at 70 bps any charge under CHF 1.43 already
+ * floors to a zero fee, so the same refusal has always been reachable — comping
+ * only makes it every refund at the tenant rather than a rare small one.
+ */
+export function chargeHasApplicationFee(applicationFeeAmount: number | null | undefined): boolean {
+  return typeof applicationFeeAmount === 'number' && applicationFeeAmount > 0
 }
 
 // ─── Connected-account state ────────────────────────────────────────────────────

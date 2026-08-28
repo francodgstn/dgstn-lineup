@@ -3969,7 +3969,8 @@
     "benefitRenewals": "Gli abbonamenti si rinnovano, riprovano e si annullano automaticamente.",
     "feeStripeNote": "Si applica la commissione di Stripe. Vedi <link>i prezzi di Stripe</link>.",
     "feeRefundNote": "In caso di rimborso, la commissione Stripe è a tuo carico.",
-    "feesTitle": "Cosa paghi"
+    "feesTitle": "Cosa paghi",
+    "feeNoneNote": "Linyup non applica alcuna commissione sui tuoi pagamenti."
   },
   "PaymentsDashboard": {
     "title": "Pagamenti",

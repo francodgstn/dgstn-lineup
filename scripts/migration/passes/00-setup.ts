@@ -44,13 +44,44 @@ export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
     return
   }
 
+  // HMD IS COMPED, AND THE MIGRATION IS WHERE THAT BECOMES TRUE.
+  //
+  // `Organization.plan` and `plan_status` are declared NON-optional on the type,
+  // and this pass wrote neither — so `organizations/hmd` did not satisfy its own
+  // interface, and every reader that asks "what is this org paying?" got
+  // `undefined`. It happened to be harmless only because the trial sweep selects
+  // `plan_status == 'trial'` and a missing field is excluded by Firestore. That
+  // is luck, not a design, and the first writer to set a status would end it.
+  //
+  // `flags.comped` is the RECORD of why there is no subscription, and it is what
+  // three separate mechanisms read: the trial sweep and `lapseOrganization` both
+  // refuse an exempt tenant, the MRR reducer leaves it out of revenue while
+  // keeping it in usage, and the Connect fee waiver reads it — for the ORG — to
+  // decide that no platform fee is taken on any payment at any HMD studio. That
+  // last one is why it belongs here rather than on the 16 team documents: the
+  // waiver reads through to the organisation, so a 17th studio opened next year
+  // inherits the comp by construction instead of by somebody remembering.
+  //
+  // Written on re-run too. The comp is not a one-time seed but a standing fact,
+  // and a re-run that silently dropped it would restore the platform fee on
+  // every HMD payment with nothing to notice.
+  const COMP = {
+    plan:        'organization' as const,
+    plan_status: 'active' as const,
+    flags: {
+      comped:        true,
+      comped_reason: 'Founding organisation — migrated from hmd-lineup, billed nothing indefinitely',
+      comped_since:  FieldValue.serverTimestamp(),
+    },
+  }
+
   // Create/update the org document with ranking systems (always merge so re-runs are safe)
   const orgRef = tgt.collection('organizations').doc(ORG_ID)
   const orgSnap = await orgRef.get()
   if (orgSnap.exists) {
     // Always update ranking_systems even if org already existed
-    await orgRef.set({ ranking_systems: HMD_ORG_RANKING_SYSTEMS }, { merge: true })
-    console.log(`  organizations/${ORG_ID} updated — ranking systems applied`)
+    await orgRef.set({ ranking_systems: HMD_ORG_RANKING_SYSTEMS, ...COMP }, { merge: true })
+    console.log(`  organizations/${ORG_ID} updated — ranking systems + comp applied`)
   } else {
     await orgRef.set({
       name:             ORG_NAME,
@@ -58,8 +89,9 @@ export async function pass00Setup(cfg: MigrationConfig): Promise<void> {
       createdBy:        adminUid,
       created:          FieldValue.serverTimestamp(),
       ranking_systems:  HMD_ORG_RANKING_SYSTEMS,
+      ...COMP,
     })
-    console.log(`  created organizations/${ORG_ID} with ${HMD_ORG_RANKING_SYSTEMS.length} ranking systems`)
+    console.log(`  created organizations/${ORG_ID} with ${HMD_ORG_RANKING_SYSTEMS.length} ranking systems (comped)`)
   }
 
   // Seed the org membership statuses (reused as affiliation statuses) + the

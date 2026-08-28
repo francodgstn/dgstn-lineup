@@ -55,7 +55,12 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
 
   if (!notDisabled) return null
 
-  const feePct = plan ? takeRatePercent(plan) : null
+  // A COMPED STUDIO IS TOLD THE TRUTH, which is not "0%" — a zero percentage
+  // still reads as a rate that could change. The waiver comes from the server
+  // (it may be inherited from the studio's organisation) rather than being
+  // re-derived here, so this surface cannot disagree with what is charged.
+  const feeWaived = status?.feeWaived === true
+  const feePct = plan && !feeWaived ? takeRatePercent(plan) : null
 
   async function beginOnboarding() {
     const res = await start.mutateAsync({ teamId, locale })
@@ -137,7 +142,11 @@ export function ConnectPaymentsCard({ teamId }: { teamId: string }) {
         {/* Bulleted like the list above it, but with a NEUTRAL marker — a green
             tick on "you pay the Stripe fee on a refund" would read as a perk. */}
         <ul className="space-y-1">
-          {feePct != null && <FeeLine>{t('feeNote', { pct: feePct })}</FeeLine>}
+          {feeWaived ? (
+            <FeeLine>{t('feeNoneNote')}</FeeLine>
+          ) : (
+            feePct != null && <FeeLine>{t('feeNote', { pct: feePct })}</FeeLine>
+          )}
           <FeeLine>
             {t.rich('feeStripeNote', {
               link: (chunks) => (
