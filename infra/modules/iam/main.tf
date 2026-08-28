@@ -22,6 +22,16 @@ resource "google_project_iam_member" "functions_runtime_vertex" {
   member  = "serviceAccount:${google_service_account.functions_runtime.email}"
 }
 
+# Cloud Translation (public site/embed localization, Google provider): same
+# ADC-no-key pattern as Vertex above — the functions runtime SA calls
+# translate.googleapis.com directly. DeepL, the other provider, needs no IAM
+# (it is keyed via the deepl-api-key secret). See docs/site-translations.md.
+resource "google_project_iam_member" "functions_runtime_translate" {
+  project = var.project_id
+  role    = "roles/cloudtranslate.user"
+  member  = "serviceAccount:${google_service_account.functions_runtime.email}"
+}
+
 # ── Deploy SA: project-level roles for firebase deploy ────────────────────────
 resource "google_project_iam_member" "deploy_roles" {
   for_each = toset(var.deploy_sa_roles)

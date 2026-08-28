@@ -76,6 +76,7 @@ variable "secret_ids" {
     "smtp-encryption-key",
     "brevo-api-key",        # Brevo transactional API (all outbound mail)
     "brevo-webhook-secret", # authenticates Brevo's bounce/spam event callbacks
+    "deepl-api-key",        # DeepL machine translation (public site/embed localization)
     "posthog-api-key",
     "ai-assistant-unlock-key", # strong key to unlock the locked AI assistant plugin
     # Cloudflare for SaaS — custom domains. PROD ONLY, deliberately: the
@@ -96,6 +97,7 @@ variable "admin_writable_secret_ids" {
   default = [
     "brevo-api-key",
     "brevo-webhook-secret",
+    "deepl-api-key", # Translation (Settings → Translation)
     # Payments (Settings → Payments): the key plus BOTH webhook signing secrets.
     # stripe-connect-webhook-secret is the one that was empty in every
     # environment, so member→studio payments never confirmed.
