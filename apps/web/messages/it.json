@@ -231,7 +231,7 @@
     "shopDescPriceList": "Mostra i tuoi prezzi. I pagamenti online sono disattivati, quindi ai visitatori viene chiesto di contattarti.",
     "surfaceEvents": "Eventi",
     "eventsDesc": "I tuoi eventi pubblicati, con il programma giorno per giorno.",
-    "appointmentsEmpty": "La prenotazione degli appuntamenti è attiva, ma non ci sono ancora orari prenotabili."
+    "appointmentsEmpty": "Gli orari prenotabili sono attivi, ma nessun orario è ancora prenotabile."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -949,6 +949,14 @@
     "attention_billing_unlinked": "Fatturazione orfana",
     "exportCsv": "Esporta CSV",
     "exportFailed": "Esportazione non riuscita. Riprova.",
+    "filterRankModeLevels": "Livelli",
+    "filterRankModeRange": "Intervallo",
+    "filterRankFrom": "Da",
+    "filterRankTo": "A",
+    "filterRankAny": "Qualsiasi",
+    "filterRankAtLeast": "{level} e superiori",
+    "filterRankAtMost": "{level} e inferiori",
+    "filterRankBetween": "da {from} a {to}",
     "goalScoreUnset": "Non impostato",
     "profileBadgeLabel_burnout_risk": "Rischio di burnout",
     "profileBadgeLabel_overreaching": "Sovraccarico",
@@ -2229,7 +2237,12 @@
     "createStudio": "Crea un altro studio",
     "switchStudioFailed": "Impossibile cambiare studio. Riprova.",
     "studioListFailed": "Impossibile caricare i tuoi studi.",
-    "studioListRetry": "Riprova"
+    "studioListRetry": "Riprova",
+    "scopeStudio": "Studio",
+    "scopeOrganisation": "Organizzazione",
+    "switchOrganisation": "Organizzazioni",
+    "flipToPrevious": "Passa a {name}",
+    "flipLast": "Ultimo"
   },
   "BioLink": {
     "title": "Bio link",
@@ -2873,7 +2886,30 @@
     "pluginsUninstalledSuccess": "Plugin rimosso dall'organizzazione.",
     "pluginsErrorInstall": "Impossibile installare il plugin. Riprova.",
     "pluginsErrorUninstall": "Impossibile rimuovere il plugin. Riprova.",
-    "tabProgramTemplates": "Modelli di programma"
+    "tabProgramTemplates": "Modelli di programma",
+    "navStudios": "Studi",
+    "railGroupStandards": "Standard che definisci",
+    "railGroupShared": "Risorse condivise",
+    "railGroupAdministration": "Amministrazione",
+    "railSearchPlaceholder": "Cerca nelle impostazioni dell'organizzazione",
+    "railNoResults": "Nessuna impostazione dell'organizzazione corrisponde alla ricerca.",
+    "manageTitle": "Impostazioni organizzazione",
+    "manageSubtitle": "Gli standard definiti da questa organizzazione, ciò che condivide con i suoi studi e la sua amministrazione.",
+    "navOverview": "Panoramica",
+    "overviewStandingTitle": "Il tuo studio qui",
+    "overviewStandingActive": "Membro attivo",
+    "overviewStandingInactive": "Inattivo",
+    "overviewStandingJoined": "iscritto il {date}",
+    "overviewStandingNone": "Il tuo studio attuale non appartiene a questa organizzazione.",
+    "overviewSharedTitle": "Cosa questa organizzazione condivide con il tuo studio",
+    "overviewSharedRanking": "Sistemi di gradi",
+    "overviewSharedPlaces": "Luoghi condivisi",
+    "overviewSharedTemplates": "Modelli di programma",
+    "overviewSharedHint": "Sono definiti dall'organizzazione e si applicano automaticamente al tuo studio.",
+    "overviewEventsTitle": "Prossimi eventi dell'organizzazione",
+    "overviewEventsAll": "Tutti gli eventi",
+    "overviewEventsNone": "Nessun evento in programma.",
+    "overviewSharedAffiliationTypes": "Tipi di {term}"
   },
   "OrgTeams": {
     "title": "Team",
@@ -5093,8 +5129,8 @@
     "toggleShowActivityDescriptionDesc": "Mostra il testo di descrizione dell'attività nella schermata di selezione attività.",
     "toggleShowFitnessAppLabel": "Mostra campo app fitness",
     "toggleShowFitnessAppDesc": "Chiedi ai nuovi ospiti tramite quale app partner arrivano. Le opzioni sono i tuoi tipi di abbonamento partner (aggregatori) — finché non ne hai nessuno, la domanda non viene mostrata.",
-    "toggleAppointmentsEnabledLabel": "Mostra appuntamenti",
-    "toggleAppointmentsEnabledDesc": "Mostra la prenotazione di appuntamenti nel flusso di prenotazione pubblico.",
+    "toggleAppointmentsEnabledLabel": "Mostra orari prenotabili",
+    "toggleAppointmentsEnabledDesc": "Permette ai visitatori di scegliere un orario tra i tuoi orari prenotabili nel flusso di prenotazione pubblico.",
     "ctaTitle": "Pulsante CTA (facoltativo)",
     "ctaSubtitle": "Mostrato nella schermata di conferma dopo una prenotazione riuscita.",
     "ctaUrlLabel": "URL del pulsante",
@@ -5116,7 +5152,9 @@
     "moreOptionsLabel": "Altre opzioni",
     "moreOptionsHint": "Periodo di prenotazione, termine ultimo, campi richiesti e pulsante personalizzato",
     "betaBadge": "Beta",
-    "betaBadgeHint": "Pronta all'uso — questa funzione può ancora cambiare."
+    "betaBadgeHint": "Pronta all'uso — questa funzione può ancora cambiare.",
+    "appointmentsEmptyHint": "Questa opzione è attiva, ma non c'è ancora nulla di prenotabile — servono orari prenotabili attivi collegati a un'attività su appuntamento.",
+    "appointmentsEmptyHintLink": "Configura gli orari prenotabili"
   },
   "SettingsPlaces": {
     "pageTitle": "Sedi",
@@ -5267,7 +5305,9 @@
     "customFieldsIntro": "Compila le informazioni richieste da questo tipo di evento.",
     "customFieldsRequiredHint": "Compila tutti i campi obbligatori prima del check-in.",
     "fieldRequired": "Obbligatorio",
-    "fieldSelectPlaceholder": "Seleziona…"
+    "fieldSelectPlaceholder": "Seleziona…",
+    "saveFailed": "Impossibile salvare questo check-in.",
+    "addFailed": "{count} su {total} non è stato possibile aggiungerli. {detail}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Passa al piano {label}",

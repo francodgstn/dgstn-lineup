@@ -1,72 +1,101 @@
 'use client'
 
+/**
+ * THE ORGANISATION IS A SCOPE, NOT A SECTION — so this layout is thin.
+ *
+ * It used to render eleven destinations in one horizontal tab strip with no
+ * wrap and no scroll: about 1100–1400px of tabs in the ~1000px a 1280 viewport
+ * leaves beside the sidebar, and unusable on a phone. The overflow was the
+ * visible failure; the structural one was that eleven flat tabs are an entire
+ * application's navigation, not a feature area's.
+ *
+ * Both halves of that now live where a studio's equivalents live: the four
+ * working destinations are SIDEBAR ROWS (the shell renders them when the URL is
+ * in org scope), and everything configurational is behind the RAIL below. The
+ * strip and the "← Back to dashboard" link are gone — the second because it
+ * framed the organisation as a modal detour rather than a place you work, which
+ * is exactly the framing this design rejects.
+ *
+ * Full reasoning: docs/org-navigation.md. The catalogue: lib/org-nav.ts.
+ */
+
+import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
-import { useParams } from 'next/navigation'
 import { OrgProvider, useOrg } from '@/contexts/OrgContext'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Building2, Users, CreditCard, Settings, ChevronLeft, CalendarRange, Shield, IdCard, MapPin, Blocks, Globe, ListTodo } from 'lucide-react'
+import { OrgRail } from '@/components/org/OrgRail'
+import { ChevronLeft } from 'lucide-react'
 import type { Route } from 'next'
+import { ORG_MANAGE_PATH, isOrgManageRoot, orgHref, orgItemForPath, orgRailSegment } from '@/lib/org-nav'
+
+/**
+ * The destination's own title.
+ *
+ * The deleted tab strip carried a header, and almost no org page has an `<h1>`
+ * of its own — so removing the strip without this would have left ten pages
+ * untitled. It names the DESTINATION, not the organisation: which org you are
+ * in is a property of the scope, said once and persistently by the sidebar's
+ * indicator, and repeating it on every page is the noise the scope model exists
+ * to remove.
+ */
+function OrgPageHeading({ pathname }: { pathname: string }) {
+  const t = useTranslations('Org')
+  const { affiliationTerm } = useOrg()
+  const item = orgItemForPath(pathname)
+  if (!item || item.ownsHeader) return null
+  const label =
+    item.dynamicLabel === 'affiliationTerm'
+      ? affiliationTerm
+      : t(item.labelKey as Parameters<typeof t>[0])
+  return <h1 className="mb-4 text-2xl font-semibold">{label}</h1>
+}
 
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
   const t = useTranslations('Org')
-  const { org, loading, affiliationTerm } = useOrg()
   const pathname = usePathname()
+  const onRailRoute = orgRailSegment(pathname) !== null
 
-  const tabs = [
-    { href: `/org/${orgId}/teams`,       label: t('tabTeams'),       icon: Building2 },
-    { href: `/org/${orgId}/events`,      label: t('tabEvents'),      icon: CalendarRange },
-    { href: `/org/${orgId}/program-templates`, label: t('tabProgramTemplates'), icon: ListTodo },
-    { href: `/org/${orgId}/affiliations`, label: affiliationTerm,      icon: IdCard },
-    { href: `/org/${orgId}/ranking`,     label: t('tabRanking'),     icon: Shield },
-    { href: `/org/${orgId}/places`,      label: t('tabPlaces'),      icon: MapPin },
-    { href: `/org/${orgId}/website`,     label: t('tabWebsite'),     icon: Globe },
-    { href: `/org/${orgId}/plugins`,     label: t('tabPlugins'),     icon: Blocks },
-    { href: `/org/${orgId}/members`,     label: t('tabMembers'),     icon: Users },
-    { href: `/org/${orgId}/billing`,     label: t('tabBilling'),     icon: CreditCard },
-    { href: `/org/${orgId}/settings`,    label: t('tabSettings'),    icon: Settings },
-  ]
+  // A sidebar row renders full-width, exactly as a studio's own pages do. Only
+  // the rail destinations get the master-detail shell.
+  if (!onRailRoute) {
+    return (
+      <>
+        <OrgPageHeading pathname={pathname} />
+        {children}
+      </>
+    )
+  }
+
+  // `/manage` is the rail's own index, exactly as `/settings` is the studio's:
+  // on a phone the rail IS that page and the detail is hidden; on a section the
+  // detail is the page and the rail is hidden. Desktop always shows both.
+  //
+  // This replaced a mobile DISCLOSURE that existed only because the org had no
+  // index route to be the index of. It does now, so the org rail behaves like
+  // the studio one instead of like a special case.
+  const isRailRoot = isOrgManageRoot(pathname)
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <Link
-          href={'/dashboard' as Route}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          {t('backToDashboard')}
-        </Link>
-        {loading ? (
-          <Skeleton className="h-7 w-48" />
-        ) : (
-          <h1 className="text-2xl font-bold">{org?.name ?? t('title')}</h1>
+    <div className="md:flex md:gap-8">
+      <aside className={`md:w-60 md:shrink-0 ${isRailRoot ? 'block' : 'hidden md:block'}`}>
+        <div className="md:sticky md:top-6">
+          <OrgRail orgId={orgId} />
+        </div>
+      </aside>
+
+      <div className={`min-w-0 flex-1 ${isRailRoot ? 'hidden md:block' : 'block'}`}>
+        {!isRailRoot && (
+          <Link
+            href={orgHref(orgId, ORG_MANAGE_PATH) as Route}
+            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {t('manageTitle')}
+          </Link>
         )}
+        <OrgPageHeading pathname={pathname} />
+        {children}
       </div>
-
-      {/* Tab nav */}
-      <nav className="flex gap-0.5 border-b">
-        {tabs.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname.includes(href)
-          return (
-            <Link
-              key={href}
-              href={href as Route}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                isActive
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </Link>
-          )
-        })}
-      </nav>
-
-      {children}
     </div>
   )
 }

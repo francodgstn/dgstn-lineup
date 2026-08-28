@@ -47,6 +47,47 @@ const HMD_BELT_LEVELS = [
  */
 export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup'] as const
 
+/**
+ * hmd-lineup event type → Linyup event type.
+ *
+ * WHY THIS EXISTS AT ALL. `transformEvent` used to pass the source `type`
+ * straight through, and hmd-lineup stores `'fighting_cup'`
+ * (`src/utils/hmdLineUp.js`, its `eventTypes` list) while the Linyup plugin
+ * declares `eventType.id = 'hmd_fighting_cup'`. Plugin resolution is an exact
+ * match on that id, so every migrated cup resolved to NO plugin: no Categories
+ * tab, no cup check-in form, no CSV export. It degraded quietly, because the
+ * generic form renders and the completion predicate happens to sniff for a
+ * `categories` key regardless of type — so the screen looked plausible and was
+ * missing its whole reason for existing. It also stranded pass 9's
+ * reconstructed categories in a tab that never renders.
+ *
+ * A REMAP, NOT A RUNTIME ALIAS. The alternative was to teach the app that the
+ * two slugs mean one thing, which buys a permanent second spelling to keep in
+ * step across every reader. Migrated data becomes ordinary Linyup data instead,
+ * and the alias lives only here, only during the migration.
+ *
+ * NOT MAPPED, deliberately: `traditional_cup`. Linyup has no equivalent — it is
+ * neither a built-in nor a plugin type — and collapsing it into `competition`
+ * would silently merge two things HMD tells apart. It migrates unchanged and
+ * renders as a plain custom type, which is honest and reversible; giving it a
+ * home is a product decision, not a migration one.
+ */
+export const SOURCE_EVENT_TYPE_MAP: Record<string, string> = {
+  fighting_cup: 'hmd_fighting_cup',
+}
+
+/**
+ * The source's own "no type chosen" entry is the EMPTY STRING (its `eventTypes`
+ * list ends `{ type: '', label: 'Event' }`), which `?? 'competition'` does not
+ * catch — `'' ?? x` is `''`. An event typed `''` matches no built-in, no custom
+ * type and no plugin, so it renders as a type-less row forever.
+ */
+export function mapSourceEventType(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (!value) return 'competition'
+  return SOURCE_EVENT_TYPE_MAP[value] ?? value
+}
+
 export const HMD_ORG_RANKING_SYSTEMS = [
   { id: RANKING_HMD, name: 'Hwal Moo Do',    is_primary: true,  levels: HMD_BELT_LEVELS },
   { id: RANKING_KD,  name: 'Korean Dragon',  is_primary: false, levels: HMD_BELT_LEVELS },

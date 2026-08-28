@@ -264,7 +264,6 @@ export interface EventTypeConfig {
   source: 'team' | 'org' | 'plugin'
   plugin_id?: string           // set when source === 'plugin'
   checkin_fields?: EventTypeField[]
-  contact_requirements?: string[]  // e.g. ['weight', 'birthdate'] — contact fields that must be set
   created_at?: Timestamp
   created_by?: string
 }

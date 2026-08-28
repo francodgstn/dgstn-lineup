@@ -4,7 +4,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOrgRole } from '@/hooks/useOrgRole'
 import { useLocale } from 'next-intl'
 import type { Organization, SaasSubscription, OrgRole } from '@linyup/shared'
 
@@ -38,7 +38,6 @@ const OrgContext = createContext<OrgContextValue>({
 })
 
 export function OrgProvider({ orgId, children }: { orgId: string; children: ReactNode }) {
-  const { user } = useAuth()
   const locale = useLocale()
 
   const { data: org, isLoading: orgLoading } = useQuery<Organization | null>({
@@ -57,15 +56,11 @@ export function OrgProvider({ orgId, children }: { orgId: string; children: Reac
     },
   })
 
-  const { data: userRole, isLoading: roleLoading } = useQuery<OrgRole | null>({
-    queryKey: ['org-role', orgId, user?.uid],
-    enabled: !!user,
-    queryFn: async () => {
-      if (!user) return null
-      const snap = await getDoc(doc(db, 'organizations', orgId, 'org_members', user.uid))
-      return snap.exists() ? (snap.data().role as OrgRole) : null
-    },
-  })
+  // THE ROLE READ LIVES IN `useOrgRole`, not here. The app shell needs the same
+  // answer to choose the org's sidebar rows and it renders OUTSIDE this
+  // provider, so the two share a query key rather than a context — see the
+  // hook's header.
+  const { role: userRole, loading: roleLoading } = useOrgRole(orgId)
 
   const loading = orgLoading || subLoading || roleLoading
   const affiliationTerm = resolveAffiliationTerm(org?.affiliation_term, locale)

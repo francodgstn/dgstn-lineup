@@ -47,6 +47,17 @@ export function useKioskAvailability(teamId: string, enabled: boolean, days = 7)
     let alive = true
 
     async function load() {
+      // THIS QUERY NEEDS A DECLARED INDEX and fails SILENTLY without one.
+      // Three equalities on a COLLECTION GROUP: unlike collection scope, where
+      // Firestore's automatic single-field indexes are merged for a pure
+      // equality query, collection-group scope needs its own — which is why
+      // `public_profile` carries explicit COLLECTION_GROUP overrides for slug,
+      // type and teamId. `activityType` had none, so this threw
+      // FAILED_PRECONDITION on every real project and was swallowed by the
+      // catch below: classes rendered, bookable hours silently did not. The
+      // emulator does not enforce indexes, so it looked correct locally.
+      // Covered by the teamId+type+activityType COLLECTION_GROUP index in
+      // firestore.index.json — deleting it puts the silence back.
       const offerings = await getDocs(
         query(
           collectionGroup(db, 'public_profile'),

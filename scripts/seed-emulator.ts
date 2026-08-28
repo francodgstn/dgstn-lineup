@@ -2680,6 +2680,39 @@ async function seedOrg() {
     })
   }
 
+  // ── THE ORG ADMIN RUNS TWO OF ITS STUDIOS ─────────────────────────────────
+  //
+  // Without this NOBODY in the seed belongs to more than one studio, and the
+  // scope switcher can only be half tested: `TeamSwitcher` renders its studios
+  // list only for a login that is in more than one (its own rule — "it hides
+  // itself, but only when it knows"), so the control showed an Organisations
+  // group and nothing to switch BETWEEN. Franco hit exactly that trying to
+  // verify it (2026-08-27).
+  //
+  // Rafael already owns Titan Combat Sports and administers the organisation;
+  // making him a MANAGER of Iron Circle Gym as well is the persona the whole
+  // scope model was designed around — the org admin who also runs a studio and
+  // moves between the two all day (docs/org-navigation.md). It also exercises
+  // the case that matters: switching to a studio where he is NOT the owner, so
+  // the capability differences are real rather than theoretical.
+  //
+  // Manager, not owner: Anna owns Iron Circle Gym, and two owners would make the
+  // seed say something about ownership it does not mean to say.
+  await db
+    .collection('teams')
+    .doc(CLUB_A)
+    .collection('team_members')
+    .doc(ORG_ADMIN)
+    .set({
+      teamId: CLUB_A,
+      userId: ORG_ADMIN,
+      role: 'manager',
+      email: 'org@linyup.com',
+      ...memberCapsFor('manager'),
+      joined: ts(daysFromNow(-60)),
+      addedBy: 'seed-studio-uid',
+    })
+
   // ── SaaS subscription for the org ────────────────────────────────────────
   await db
     .collection('saas_subscriptions')
@@ -3227,6 +3260,8 @@ async function main() {
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
+  console.log('   org@linyup.com is ALSO a manager of Iron Circle Gym — the two-studio')
+  console.log('   login the scope switcher needs to be testable at all.')
   console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports')
   console.log('   Studio staff: manager@linyup.com (manager) + coach2@linyup.com (coach)\n')
   console.log(

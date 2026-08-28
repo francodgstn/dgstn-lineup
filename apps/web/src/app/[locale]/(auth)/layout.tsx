@@ -29,7 +29,6 @@ import {
   ChevronDown,
   Lock,
   Puzzle,
-  Building2,
   GraduationCap,
   Settings,
   HelpCircle,
@@ -70,7 +69,11 @@ import { normalizeTabPath } from '@/lib/tab-routes'
 import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentContactsContext'
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
-import { useOrgLinks } from '@/hooks/useOrgLinks'
+import { ORG_RAIL_ITEMS, orgHref, orgNavItemsForRole } from '@/lib/org-nav'
+import { useOrgRole } from '@/hooks/useOrgRole'
+import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
+import { ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
+import { ScopeSwitcher } from '@/components/layout/ScopeSwitcher'
 import { useActiveContacts } from '@/hooks/useActiveContacts'
 import { useArchivedContacts } from '@/hooks/useArchivedContacts'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
@@ -615,21 +618,151 @@ function UtilityIconLink({
  * Search is deliberately NOT in here: it is a primary action with a keyboard
  * shortcut, not an occasional destination.
  */
+/**
+ * THE UTILITY TRAY — one icon at rest, the rest on demand.
+ *
+ * WHY NOT JUST THE "..." MENU. Everything used to live behind it, which solved
+ * the clutter and created the opposite problem: four destinations with no
+ * visible sign they exist. The menu is right about ATTENTION — these are
+ * reached deliberately, minutes apart, never mid-task — and wrong about
+ * DISCOVERY, because a single glyph advertises nothing (Franco, 2026-08-27).
+ *
+ * So the tray shows ONE icon at rest, which is enough to say "there are tools
+ * here", and reveals the others on hover or on a tap of the chevron. The
+ * resting icon is the QR in a studio; in an organisation, where the QR has
+ * nothing to encode, the first tool leads instead, so the tray is never a bare
+ * chevron.
+ *
+ * HOVER IS NOT THE ONLY WAY IN. Hover alone would be undiscoverable on desktop
+ * and unreachable on touch. The chevron is a real control: tapping it PINS the
+ * tray open, which is what makes this work on a phone; hovering merely previews
+ * and gives the pointer back.
+ *
+ * THE OVERFLOW IS MEASURED, NOT ASSUMED. The tray has its own row beneath the
+ * identity, so nothing competes with the scope name for width — but a row is
+ * still finite. Whatever does not fit goes behind "...", which is why that
+ * control still exists: it is the overflow now, not the front door. Add a fifth
+ * icon and the arithmetic absorbs it instead of pushing the row off the
+ * sidebar, which is exactly what happened when these controls sat here
+ * unmeasured.
+ */
+const TRAY_ICON_W = 36 // 32px target + 4px gap
+
+function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
+  const t = useTranslations('Nav')
+  const { current: scope } = useScope()
+  const orgId = scope?.kind === 'org' ? scope.id : null
+  const [pinned, setPinned] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [rowWidth, setRowWidth] = useState(0)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  // The ROW's width, not the tray's — the tray's own width is what we are
+  // deciding, so measuring that would be circular.
+  useEffect(() => {
+    const row = wrapRef.current?.parentElement
+    if (!row) return
+    const ro = new ResizeObserver(([e]) => setRowWidth(e.contentRect.width))
+    ro.observe(row)
+    return () => ro.disconnect()
+  }, [])
+
+  const expanded = pinned || hovered
+
+  // Destinations follow the scope. An organisation has its own settings and its
+  // own plugins, and sending somebody to the studio's from inside it is the
+  // silent scope exit this row already had once.
+  const tools: NavItem[] = [
+    orgId ? { ...EXPLORE_PLUGINS_ITEM, href: orgHref(orgId, 'plugins') } : EXPLORE_PLUGINS_ITEM,
+    orgId ? { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') } : ALL_SETTINGS_ITEM,
+    HOW_TO_ITEM,
+  ]
+
+  // In org scope the first tool is the RESTING icon, so it is not also in the
+  // reveal — one control never appears twice on one row.
+  const revealable = orgId ? tools.slice(1) : tools
+
+  // How many icons fit on the row.
+  //
+  // Two controls are always there besides the reveal — the resting icon and the
+  // trailing one — and the trailing one costs the same whether it is the
+  // chevron or the overflow menu, so it is reserved once and not counted again
+  // when there IS an overflow.
+  const room = rowWidth - TRAY_ICON_W * 2
+  const slots = Math.max(0, Math.floor(room / TRAY_ICON_W))
+  const overflows = revealable.length > slots
+  const shown = overflows ? revealable.slice(0, slots) : revealable
+  const hidden = revealable.slice(shown.length)
+
+  return (
+    <div
+      ref={wrapRef}
+      className="flex shrink-0 items-center gap-1"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {!orgId ? <TeamQrButton /> : <UtilityIconLink item={tools[0]} onClick={onLinkClick} />}
+
+      {/* The reveal. Animated by max-width rather than by mounting, so the icons
+          slide out from behind the chevron instead of appearing beside it. */}
+      <div
+        className={`flex items-center gap-1 overflow-hidden transition-all duration-200 ease-out ${
+          expanded ? 'max-w-[240px] opacity-100' : 'max-w-0 opacity-0'
+        }`}
+      >
+        {shown.map((item) => (
+          <UtilityIconLink key={item.id} item={item} onClick={onLinkClick} />
+        ))}
+      </div>
+
+      {expanded && overflows && hidden.length > 0 ? (
+        <UtilityFlyout onLinkClick={onLinkClick} items={hidden} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPinned((prev) => !prev)}
+          title={t('utilities')}
+          aria-label={t('utilities')}
+          aria-expanded={expanded}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          />
+        </button>
+      )}
+    </div>
+  )
+}
+
 function UtilityFlyout({
   onLinkClick,
-  includeQr,
+  items,
 }: {
   onLinkClick?: () => void
-  /**
-   * COLLAPSED ONLY. Expanded, the QR sits on the studio-name row above, because
-   * it encodes THAT studio's links — listing it here as well would put one
-   * control in two places on the same screen. Collapsed there is no studio row
-   * (no text at w-14), so the menu is where it lives.
-   */
-  includeQr?: boolean
+  /** The tools this menu holds. Passed in because the menu is the tray's
+   *  OVERFLOW now rather than its whole content. Omitted, it holds everything —
+   *  which is what the collapsed rail still needs. */
+  items?: NavItem[]
 }) {
   const t = useTranslations('Nav')
   const label = t('utilities')
+  // THE ROW FOLLOWS THE SCOPE. These three destinations were hardcoded studio
+  // paths, so in org scope "All settings" and "Explore plugins" walked the
+  // reader straight out of the organisation and into the studio's settings —
+  // silently, because both screens look plausible on arrival. An organisation
+  // has its own of each; How-to is the product's help and belongs to neither.
+  //
+  // The QR is studio-only for the same reason and is not swapped: it encodes a
+  // STUDIO's public links, and there is no org equivalent to put in its place.
+  const { current: scope } = useScope()
+  const orgId = scope?.kind === 'org' ? scope.id : null
+  const settingsItem: NavItem = orgId
+    ? { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') }
+    : ALL_SETTINGS_ITEM
+  const pluginsItem: NavItem = orgId
+    ? { ...EXPLORE_PLUGINS_ITEM, href: orgHref(orgId, 'plugins') }
+    : EXPLORE_PLUGINS_ITEM
   return (
     <NavFlyout
       label={label}
@@ -647,10 +780,26 @@ function UtilityFlyout({
       {/* A labelled column, not the icon strip this used to be: once the menu is
           open there is room for names, and the same shape serves both modes. */}
       <div className="flex min-w-40 flex-col gap-0.5">
-        {includeQr && <TeamQrButton showLabel />}
-        <UtilityIconLink item={EXPLORE_PLUGINS_ITEM} onClick={onLinkClick} showLabel />
-        <UtilityIconLink item={ALL_SETTINGS_ITEM} onClick={onLinkClick} showLabel />
-        <UtilityIconLink item={HOW_TO_ITEM} onClick={onLinkClick} showLabel />
+        {/* THE QR LIVES HERE IN BOTH MODES NOW (Franco, 2026-08-27). It was on
+            the header row when expanded and in this menu when collapsed, behind
+            an `includeQr` flag whose whole job was to stop one control
+            appearing twice on one screen. Putting it here always retires the
+            flag and the duplication together.
+            
+            It is the same argument this menu already exists for: the QR is
+            reached deliberately, minutes apart, never mid-task, and beside the
+            scope identity it competed for the top of the pane with the thing
+            that says where you are. Studio-only, as ever — it encodes a
+            STUDIO's public links and an organisation has no equivalent. */}
+        {/* WITH NO `items` this is the WHOLE set — the collapsed rail's only way
+            to these tools, since a w-14 rail has no room for a tray to expand
+            into. WITH `items` it is the tray's overflow and holds only what did
+            not fit. The QR belongs to the full set alone: expanded, the tray
+            shows it at rest, and one control must not appear twice on a row. */}
+        {!items && !orgId && <TeamQrButton showLabel />}
+        {(items ?? [pluginsItem, settingsItem, HOW_TO_ITEM]).map((item) => (
+          <UtilityIconLink key={item.id} item={item} onClick={onLinkClick} showLabel />
+        ))}
       </div>
     </NavFlyout>
   )
@@ -718,38 +867,66 @@ function NavFlyout({
 
 // ─── sidebar content ──────────────────────────────────────────────────────────
 
-function OrgLinks({ collapsed, onLinkClick }: { collapsed: boolean; onLinkClick?: () => void }) {
+/**
+ * THE ORGANISATION'S OWN SIDEBAR ROWS, rendered INSTEAD of the studio's when the
+ * URL is in org scope.
+ *
+ * This replaced an "Organizations" GROUP that listed each org as one more row
+ * beside the studio's own sections. That was the ambiguity the scope model
+ * exists to remove: an org has an Events, a Places, a Website, a Plugins, a
+ * Members and a Settings, and so does a studio, so two rows carrying the same
+ * word never stop needing a second look. Standing in one scope at a time means
+ * the word is never ambiguous — you are somewhere, and the indicator says where.
+ *
+ * The catalogue is lib/org-nav.ts; the switcher is how you get here.
+ */
+function OrgNavRows({
+  orgId,
+  collapsed,
+  onLinkClick,
+}: {
+  orgId: string
+  collapsed: boolean
+  onLinkClick?: () => void
+}) {
+  const t = useTranslations('Org')
   const pathname = usePathname()
-  const { data: orgs } = useOrgLinks()
-  if (!orgs || orgs.length === 0) return null
+
+  // WHICH ROWS depends on whether this person RUNS the organisation or merely
+  // belongs to one of its studios — two audiences, two catalogues, see
+  // `orgNavItemsForRole`. The read is shared with `OrgProvider` through one
+  // react-query key, so asking here costs nothing.
+  const { role, loading } = useOrgRole(orgId)
+
+  // RENDER NOTHING RATHER THAN THE WRONG THING. Defaulting to either list while
+  // the role is unresolved shows one set of destinations and then replaces it a
+  // moment later, which reads as the app changing its mind about who you are.
+  // The rows are the only thing held back; the scope identity above them has
+  // already said where you are.
+  if (loading) return <div className="mt-3 pt-3" />
 
   return (
-    <div className="mt-3">
-      {collapsed ? (
-        <div className="border-t mx-1 mb-1" />
-      ) : (
-        <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pb-1">
-          Organizations
-        </p>
-      )}
-      <div className="space-y-0.5">
-        {orgs.map((org) => {
-          const href = `/org/${org.id}/teams`
-          const isActive = pathname.includes(`/org/${org.id}`)
+    <div className="mt-3 pt-3">
+      <div className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
+        {orgNavItemsForRole(role).map((item) => {
+          const href = orgHref(orgId, item.path)
+          const isActive = pathname === href || pathname.startsWith(href + '/')
+          const Icon = item.icon
+          const label = t(item.labelKey as Parameters<typeof t>[0])
           return (
             <Link
-              key={org.id}
+              key={item.id}
               href={href as Route}
               onClick={onLinkClick}
-              title={collapsed ? org.name : undefined}
+              title={collapsed ? label : undefined}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
                 isActive
                   ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
                   : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
               } ${collapsed ? 'justify-center px-2' : ''}`}
             >
-              <Building2 className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              {!collapsed && <span className="truncate">{org.name}</span>}
+              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+              {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           )
         })}
@@ -2317,8 +2494,13 @@ function SidebarContent({
 }) {
   const t = useTranslations('Nav')
   const tp = useTranslations('Plugins')
+  const tOrg = useTranslations('Org')
   const pathname = usePathname()
   const { team, currentTeamId } = useAuth()
+  // WHICH SCOPE THE URL SAYS WE ARE IN. Derived, never stored — see
+  // contexts/ScopeContext.tsx. Null means the current studio.
+  const { current: scope } = useScope()
+  const orgScopeId = scope?.kind === 'org' ? scope.id : null
   const { isInstalled } = useInstalledPlugins()
   const { isAtLeast } = usePlan()
   // The owner-only settings destinations (see SettingsGate in lib/settings-nav).
@@ -2328,6 +2510,9 @@ function SidebarContent({
   // the row and the search catalogue below read the same string — a per-row hook
   // would also mean ~20 subscriptions to one cached query.
   const affiliationTerm = useAffiliationTerm()
+  // Shares one react-query key with `OrgNavRows` and `OrgProvider` — see
+  // `useOrgRole`. Null outside org scope, where none of it is read.
+  const { role: orgRole, isOrgAdmin: orgIsAdmin } = useOrgRole(orgScopeId)
   const navLabel = (item: NavItem) =>
     item.dynamicLabel === 'affiliationTerm'
       ? affiliationTerm
@@ -2448,7 +2633,58 @@ function SidebarContent({
   // through the ordinary path with everything else. Dashboard stays here because
   // it is the one destination that is not a section row and never was.
   const settingsIds = new Set(SETTINGS_ITEMS.map((i) => i.id))
-  const searchEntries: SearchEntry[] = [
+
+  // IN ORG SCOPE THE SEARCH INDEXES THE ORGANISATION, not the studio.
+  //
+  // It used to index the studio's destinations in both scopes, which was worse
+  // than finding nothing: standing in an organisation, every result led OUT of
+  // it, to pages whose rows were not even on screen. The rest of the sidebar
+  // already swaps; this is the last piece that did not.
+  //
+  // The org catalogue is small and flat — the rows plus the rail — so it is
+  // built here rather than through the shortcut-able `catalogue`, which carries
+  // pinning and gating that only mean something for a studio.
+  //
+  // IT INDEXES WHAT THIS PERSON CAN REACH, which is not the same set for
+  // everyone: a member studio has three destinations and no rail, and an
+  // `org_viewer` has the rail without its admin-only entries. A search result
+  // that lands on a permission denial is worse than no result, because the
+  // person now believes the page exists for them and something is broken.
+  const orgSearchEntries: SearchEntry[] = orgScopeId
+    ? [
+        ...orgNavItemsForRole(orgRole),
+        // The rail belongs to the organisation's own people. `OrgRail` filters
+        // it exactly this way; search agreeing with it is the point.
+        ...(orgRole == null ? [] : ORG_RAIL_ITEMS.filter((i) => !i.adminOnly || orgIsAdmin)),
+      ].map((item) => ({
+        id: item.id,
+        href: orgHref(orgScopeId, item.path),
+        label:
+          item.dynamicLabel === 'affiliationTerm'
+            ? affiliationTerm
+            : tOrg(item.labelKey as Parameters<typeof tOrg>[0]),
+        icon: item.icon,
+        keywords: '',
+        canShortcut: false,
+        kind: (item.group ? 'settings' : 'page') as SearchKind,
+      }))
+    : []
+
+  const searchEntries: SearchEntry[] = orgScopeId ? [
+    // How-to is the product's own help and belongs to neither scope, so it is
+    // the one studio-side entry that survives the swap.
+    ...[HOW_TO_ITEM].map((item) => ({
+      id: item.id,
+      href: item.href,
+      label: t(item.labelKey as Parameters<typeof t>[0]),
+      icon: item.icon,
+      exact: item.exact,
+      keywords: kwOf(item.id),
+      canShortcut: false,
+      kind: 'page' as SearchKind,
+    })),
+    ...orgSearchEntries,
+  ] : [
     ...[DASHBOARD_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM].map((item) => ({
       id: item.id,
       href: item.href,
@@ -2510,39 +2746,60 @@ function SidebarContent({
         )}
       </div>
 
-      {/* WHICH STUDIO — its own row, with the QR beside it. The QR belongs here
-          rather than with the utility icons: it encodes THIS studio's public
-          links, so it is a property of the name it sits next to, not another
-          place to navigate to. (It used to live beside the user avatar, inside
-          the account cluster, which was the wrong grouping in a third way.)
+      {/* WHERE YOU ARE STANDING — and the control that changes it. One object.
 
-          ORIENTATION, NOT A CONTROL — and that is now a placement decision
-          rather than a product one. This row used to say there was no team
-          switcher at all; there is one as of 2026-08-24, in the account
-          dropdown at the foot of the sidebar (components/layout/TeamSwitcher),
-          because people already reach a second studio through an ordinary team
-          invitation and had no way to open it. It lives beside the identity it
-          changes rather than here, where the name is what tells you where you
-          are. Hidden when collapsed, like every other piece of text in the
-          sidebar. */}
-      {!collapsed && team?.name && (
-        <div className="mx-2 flex shrink-0 items-center gap-1 border-b py-1.5">
-          <Link
-            href={'/dashboard' as Route}
-            onClick={onLinkClick}
-            className="min-w-0 flex-1 truncate rounded px-1 text-xs font-medium transition-colors hover:text-primary"
-          >
-            {team.name}
-          </Link>
-          <TeamQrButton />
-          {/* THE OCCASIONAL UTILITIES MOVED UP HERE (2026-08-23), beside the QR,
-              so the search field below can take the whole row. Both controls on
-              this row are about the STUDIO rather than about a destination —
-              the QR encodes its links, the menu opens its settings, its plugins
-              and its how-to — which is why they sit together, and why the row
-              below is now one thing: search. */}
-          <UtilityFlyout onLinkClick={onLinkClick} />
-        </div>
+          THIS ROW USED TO BE ORIENTATION ONLY, and that was argued: the name
+          told you where you were, and the switcher lived in the account menu at
+          the foot because reaching a SECOND STUDIO was a rare thing somebody did
+          after an invitation (2026-08-24).
+
+          The scope model invalidated the premise rather than the reasoning.
+          "Which place am I standing in" stopped being a rare question — an
+          organisation and a studio each have an Events, a Places, a Website, a
+          Plugins, a Members and a Settings — and moving between them is
+          something an org admin who also runs a studio does all day. A question
+          asked constantly should not be answered at one end of the sidebar and
+          changed at the other (Franco, 2026-08-27).
+
+          THE ROW SURVIVES COLLAPSE NOW. It used to be `!collapsed` only, so the
+          icon rail said nothing at all about which scope you were in — a gap
+          rather than a decision. The trigger has a w-8 form.
+
+          THE ROW IS THE IDENTITY AND THE "⋯", AND NOTHING ELSE. It briefly
+          carried the QR and a quick-switch button as well; four controls left
+          the identity 115px to live in, and every one of them competed with the
+          thing this row exists to say. The QR moved into the menu, which is
+          where this sidebar already puts controls reached deliberately rather
+          than mid-task; the quick-switch button was removed outright (Franco,
+          2026-08-27) — the switcher one click away already reaches every scope.
+
+          Alt+O survives as a chord with no visible affordance, which is a real
+          discoverability cost until the planned shortcuts list advertises it.
+          Said out loud in ScopeFlip.tsx rather than left to be discovered. */}
+      {/* GUARDED ON THE SCOPE, not on the team name as this row used to be. An
+          unguarded wrapper draws an empty bordered strip for as long as auth is
+          resolving — the row's rule is the only one between the logo and the
+          scroll area, so an empty one reads as a broken header rather than as
+          nothing. */}
+      {scope && (
+      <div
+        className={`mx-2 flex shrink-0 flex-col gap-1 border-b py-1.5 ${
+          collapsed ? 'items-center' : ''
+        }`}
+      >
+        <ScopeSwitcher collapsed={collapsed} />
+        {/* ITS OWN ROW, BELOW THE IDENTITY (Franco, 2026-08-27). Sharing one row
+            meant the tools and the scope name competed for the same width — the
+            identity shrank to 79px the moment the tray opened, and the tray
+            could only ever reveal two of its three tools. Stacked, the switcher
+            gets the full width at all times and the tray gets the whole row to
+            expand into, so nothing has to give and the overflow only appears
+            when there is genuinely more than a row's worth.
+
+            Collapsed there is no tray: a w-14 rail has no room to expand into,
+            and the search row's menu is where these tools live at that width. */}
+        {!collapsed && <UtilityTray onLinkClick={onLinkClick} />}
+      </div>
       )}
 
       {/* Search row. First of the two pinned rows; the head pair sits under it,
@@ -2589,7 +2846,7 @@ function SidebarContent({
             the studio-name row above and the search field has this row to
             itself; collapsed there is no studio row to move it to (no text at
             w-14), which is the same reason `includeQr` exists. */}
-        {collapsed && <UtilityFlyout onLinkClick={onLinkClick} includeQr />}
+        {collapsed && <UtilityFlyout onLinkClick={onLinkClick} />}
       </div>
 
       {/* THE HEAD PAIR — where things stand, and what is on today.
@@ -2619,6 +2876,18 @@ function SidebarContent({
           live?" region. They are no longer in the same box — one is pinned, the
           other scrolls — and a highlight cannot span a scroll boundary, so the
           anchor keeps the half that is a fixed, always-visible target. */}
+      {/* NOT IN ORG SCOPE. The pair is Dashboard plus the studio's own most-used
+          surface, pinned because they are "the things reached from anywhere" —
+          but that is a claim about a STUDIO. An organisation has neither: no
+          dashboard, no schedule, and its home is the studios list which is
+          already the first row below. Leaving them here put two studio
+          destinations above the org's own navigation, which is the hierarchy
+          inversion the pinning exists to prevent, pointed the other way.
+
+          The same reasoning already removed Shortcuts and the plugin rows in org
+          scope (they are pinned PER STUDIO). This was missed because it sits
+          above the scroll area rather than inside it (Franco, 2026-08-27). */}
+      {!orgScopeId && (
       <div
         // The seam between what is pinned and what scrolls. It carries NO rule:
         // the header block already has the studio row's line, and a second one
@@ -2652,6 +2921,7 @@ function SidebarContent({
           />
         )}
       </div>
+      )}
 
       {/* Nav — the scrolling half of the pane.
           `min-h-0` on the wrapper because a flex child will not shrink below its
@@ -2681,6 +2951,15 @@ function SidebarContent({
           onScroll={(e) => setNavScrolled(e.currentTarget.scrollTop > 0)}
           className="h-full overflow-y-auto py-2 px-2"
         >
+        {/* ORG SCOPE REPLACES THE STUDIO'S ROWS ENTIRELY — it does not sit
+            beside them. That is the whole point of a scope: one Events, one
+            Places, one Settings on screen at a time, so the word never needs a
+            second look. Shortcuts and the plugin rows are studio-scoped too
+            (the pin store is keyed per studio), so they go with it. */}
+        {orgScopeId ? (
+          <OrgNavRows orgId={orgScopeId} collapsed={collapsed} onLinkClick={onLinkClick} />
+        ) : (
+        <>
         {/* Shortcuts — pinned + recently visited (hidden when empty). THE FIRST
             SCROLLING THING: unlike the head pair above the search, this list
             grows with use, so it is what gives way when the pane runs short. */}
@@ -2833,11 +3112,14 @@ function SidebarContent({
           onLinkClick={onLinkClick}
           onDismiss={dismissSuggestion}
         />
-        <OrgLinks collapsed={collapsed} onLinkClick={onLinkClick} />
+        </>
+        )}
         </nav>
       </div>
 
-      {/* User account + QR at bottom */}
+      {/* User account at the bottom. The scope identity, its switcher and the
+          flip all moved to the header row (2026-08-27) — what is left here is
+          the person, not the place. */}
       <div className="border-t py-2 px-2 shrink-0">
         <UserMenu collapsed={collapsed} />
       </div>
@@ -3075,6 +3357,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
+    // OUTERMOST of the shell providers: the sidebar reads the scope to decide
+    // which row set to render at all, so it has to resolve above everything the
+    // sidebar mounts. It costs one pathname read and the already-cached
+    // `useOrgLinks` query.
+    <ScopeProvider>
+    <ScopeFlipShortcut />
     <NavPinsProvider>
       <UpgradeModalProvider>
         <RecentContactsProvider>
@@ -3173,5 +3461,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </RecentContactsProvider>
       </UpgradeModalProvider>
     </NavPinsProvider>
+    </ScopeProvider>
   )
 }

@@ -1189,10 +1189,29 @@ service cloud.firestore {
     // Direct client creates are denied to prevent bypassing server-side confirmation logic.
     // The manual confirm/unconfirm toggle (is_completed) is the only direct client write allowed,
     // and only for team managers or owners.
+    //
+    // THE FIELD CONSTRAINT IS WHAT MAKES THAT COMMENT TRUE. It used to be prose
+    // only: the rule authorised the caller and then let them write ANY field of
+    // the document. `teamId` IS the tenant boundary here — every arm below
+    // dereferences it, and `tenantData.ts` matches this collection by it — so a
+    // manager could move one of their own rows into ANOTHER studio by rewriting
+    // that one field, landing a document (and, through the checkins trigger, an
+    // activity-log entry) in a tenant they have no access to. Rewriting
+    // `event.id` was the same trick against the counters: `trackEventAttendees`
+    // moves `completed_checkins_count` to whatever event the row now names and
+    // never decrements the one it left.
+    //
+    // So the allow-list is exactly what the roster's toggle writes, and nothing
+    // else. Widening it is a security decision, not a convenience: anything a
+    // client needs to change beyond this belongs in `addEventCheckin`, which
+    // runs the authorization decision in `events/checkinAuthorization.ts`. The
+    // Admin SDK ignores rules, so the callable is unaffected by this.
     match /checkins/{checkin} {
       allow create: if false; // addEventCheckin Cloud Function only
-      allow update: if hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin')
-                       || isOrgAdminOfTeam(resource.data.teamId);
+      allow update: if (hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin')
+                        || isOrgAdminOfTeam(resource.data.teamId))
+                       && request.resource.data.diff(resource.data)
+                            .affectedKeys().hasOnly(['is_completed', 'updated_at']);
       allow delete: if hasTeamRole(resource.data.teamId, 'manager') || hasRole('admin')
                        || isOrgAdminOfTeam(resource.data.teamId);
       allow read:   if belongsToUserTeam(resource) || hasRole('admin')
@@ -1540,11 +1559,39 @@ service cloud.firestore {
       allow write: if false;  // Only cloud functions can write
     }
 
-    // team_members (collection group for user membership queries)
+    // team_members (collection group) — "WHICH STUDIOS AM I IN?", and ONLY that.
+    //
+    // THIS RULE NEVER WORKED, and the feature it gates never ran. `useMyTeams`
+    // (the studio switcher's only query) failed with permission-denied for
+    // every user, always. Nobody noticed because the switcher hides its list
+    // for anyone in a single studio and no seeded account was in two — so an
+    // empty result and a correct result looked identical (found 2026-08-27,
+    // when a two-studio login finally existed).
+    //
+    // It failed twice, for two different reasons, and both are worth keeping:
+    //
+    //   1. It read `resource.data.teamId != null`. Dot access on an unbound
+    //      field THROWS rather than evaluating to null, and an evaluation error
+    //      denies the WHOLE list — so the `!= null` guard could never run.
+    //      `Property teamId is undefined on object. for 'list'`.
+    //   2. With that fixed it still returned false, because it then called
+    //      `isTeamMember(...)` — an `exists()` against a path built out of
+    //      `resource.data`. A cross-document lookup keyed on the candidate
+    //      document is not something a LIST rule can satisfy.
+    //
+    // The gate below needs neither. A membership document already NAMES its
+    // owner, so "may I read this?" is answerable from the document alone, and
+    // it is the same fact the query filters on (`where('userId','==',uid)`).
+    //
+    // It is also STRICTLY TIGHTER than what was intended: the old rule would
+    // have let any member of a team enumerate that team's other membership
+    // documents through the collection group. This lets a caller see only their
+    // own. Reading the OTHER members of a team you belong to still works, at
+    // the nested `teams/{teamId}/team_members` path, which is where that
+    // question belongs.
     match /{path=**}/team_members/{memberId} {
-      allow read: if request.auth != null && (
-        resource.data.teamId != null && isTeamMember(resource.data.teamId)
-      );
+      allow read: if request.auth != null
+                  && resource.data.get('userId', null) == request.auth.uid;
       allow write: if false;  // Must go through specific team path
     }
 

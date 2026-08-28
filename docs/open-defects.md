@@ -401,7 +401,7 @@ and the meaning drifted underneath it.
 Renaming the function is free. Renaming the subcollection is a data migration, so
 the cheap honest fix is the UI label plus the function name.
 
-### A manager can send event invitations but cannot see who accepted
+### A manager can send event invitations but cannot see who accepted — FIXED 2026-08-27 (#120)
 
 `events/[id]/page.tsx` gates the Attendees tab on
 `isOrgAdmin || can('reports.view')`, while the Invitations tab beside it is
@@ -416,14 +416,28 @@ event type with no plugin hook, and its `default` branch reads
 knows one tenant-specific plugin's payload, and a second plugin needing custom
 completion logic has nowhere to put it but that same branch.
 
-### `EventTypeConfig.contact_requirements` is declared and read by nothing
+### `EventTypeConfig.contact_requirements` is declared and read by nothing — DELETED 2026-08-27
 
 `packages/shared/src/types/event.ts` documents it as "contact fields that must be
 set" (e.g. `['weight','birthdate']`). Repo-wide there are no readers outside the
 type declaration and its build output. Either wire it into the check-in flow as a
 prompt, or delete it — a declared-but-unenforced gate reads as a guarantee.
 
-### A team's custom check-in fields are authored and never rendered
+**Resolved by deleting it.** Nothing read it, nothing wrote it, and no seeder or
+migration ever created an `event_types` document carrying it. The concept
+already has an owner — `resolveBookingContactFields` — and this was a strictly
+weaker second spelling of it: a bare `string[]` cannot name a `custom:` field and
+cannot express optional-vs-required. The one use case the comment named,
+`weight`, was solved better in the same commit that introduced it: a weigh-in is
+a fact about that competition, so it lives on `checkin_data`, not on the person.
+
+If per-person prerequisites are ever wanted, the shape is
+`EventTypeConfig.contactFields?: BookingContactField[]` resolved through the
+existing booking-contact-fields resolver and surfaced as a non-blocking banner —
+which will also need the full contact read that `CheckinPanel` does not do today
+(it holds only `{id, firstname, lastname}`).
+
+### A team's custom check-in fields are authored and never rendered — FIXED 2026-08-27 (#120)
 
 `EventTypeConfig.checkin_fields` has a full field builder in
 `settings/event-types`, which saves and counts them. But `resolveFormType` in
@@ -431,7 +445,7 @@ prompt, or delete it — a declared-but-unenforced gate reads as a guarantee.
 or plugin manifest only. A studio can build a custom check-in form and never see
 it at check-in.
 
-### Level `value: 0` cannot complete an exam
+### Level `value: 0` cannot complete an exam — FIXED 2026-08-27 (#120)
 
 `isCheckinCompleted`'s exam branch is
 `Object.values(disciplines).some((v) => (v ?? 0) > 0)`, and `ExamCheckinForm`
@@ -440,7 +454,7 @@ FIRST level uses `value: 0` — BJJ White, Swiss "Krebs", HMD "No belt" — so
 awarding the entry grade is unrecordable. The sentinel for "not examined" should
 be absence of the key, not the value zero.
 
-### Deleting a ranking level or system silently orphans every contact holding it
+### Deleting a ranking level or system silently orphans every contact holding it — FIXED 2026-08-27 (#120)
 
 Neither ranking editor queries, counts or warns. `handleDelete` is a plain
 `filter` + `updateDoc`, and the confirm copy is a static string with no contact
@@ -448,14 +462,14 @@ count. After a delete, `getPrimaryRank`'s `levels.find(l => l.value === value)`
 misses and falls back to a floor-match, so a contact silently displays a
 *different* belt.
 
-### `getPrimaryRank` compares rank numbers across different systems
+### `getPrimaryRank` compares rank numbers across different systems — FIXED 2026-08-27 (#120)
 
 When no system is `is_primary`, it picks one with
 `Object.entries(ranks).sort(([, a], [, b]) => b - a)[0]` — a raw numeric compare
 between unrelated scales, so a Korean Dragon 7 outranks a Hwal Moo Do 3 and
 decides which belt the contact appears to hold.
 
-### The org-managed ranking banner links to a page with no ranking UI
+### The org-managed ranking banner links to a page with no ranking UI — FIXED 2026-08-27 (#120)
 
 `settings/team/page.tsx` renders "Ranking systems are managed by your
 organization — Edit in organization settings" linking to `/org/{orgId}/settings`.
@@ -463,20 +477,56 @@ The editor is at `/org/{orgId}/ranking`; the settings page contains no ranking
 UI. The banner text and link label are also hardcoded English while the rest of
 the tab is translated.
 
-### `ExamCheckinForm` is untranslated and points org tenants at the wrong place
+### `ExamCheckinForm` is untranslated and points org tenants at the wrong place — FIXED 2026-08-27 (#120)
 
 Seven hardcoded English strings, and its empty state says "Add ranking systems in
 Team Settings" — wrong for an org-managed tenant, whose systems live on the
 organisation and whose team tab is locked.
 
-### The rank filter cannot express "this belt and above"
+### The rank filter cannot express "this belt and above" — FIXED 2026-08-27
 
 `contactFilter.ts` matches ranks by exact set membership
 (`levels.includes(rank)`) with no comparison operator. "Blue and above" — the
 normal way a coach thinks about a roster — requires ticking every level
 individually, and silently goes wrong the moment a level is inserted.
 
-### HMD migration: exam history arrives in a shape nothing reads
+**Shipped as a SECOND KEY, not a richer value — and the reason is a deployment
+fact, not a taste one.** The web app and the Cloud Functions roll out through
+independent pipelines (functions via `firebase deploy`, the web app via App
+Hosting's own GitHub integration), so neither order is guaranteed and a skew
+window always exists.
+
+The obvious design — turning each `RankFilter` entry into
+`{ mode, levels, min, max }` — fails OPEN in that window, not closed. The
+dimension guard is `Object.values(f.rankFilter).some((l) => l.length > 0)`, and
+on an object `l.length` is `undefined`, so the guard is false and the entire
+rank block *including its `if (!matched) return false`* is skipped. The rank
+restriction does not fail; it VANISHES, and the filter matches everyone it
+otherwise would. `matchesFilter` backs dynamic contact groups, which back the
+automation engine, which sends mail.
+
+So `RankFilter` keeps its shape and meaning exactly, and
+`ContactFilter.rankRanges` rides alongside it. **The band is the truth; the
+level list is its mirror** — the writer expands the band through
+`expandRankRange` and stores the result in `rankFilter[systemId]`, so a resolver
+that predates bands still filters correctly (correct-as-of-write, which is
+exactly what a hand-ticked list would have given it anyway). An old resolver
+ignores a key it has never heard of. Neither reader is ever wrong in a way that
+WIDENS the audience, which is the only direction that matters here.
+
+That also dissolved the problem this entry used to warn about — readers that
+test `rankFilter[systemId].length` still work, because the value is still a map
+of number arrays. The one place that genuinely had to change is the "is this
+dimension on" question, which now has a single owner, `rankFilterIsActive`, that
+the contacts page and `activeFilterKeys` both call. Asking it any other way is
+how the two got a second opinion in the first place.
+
+**Still open, deliberately: `includeUnranked`.** A contact with no rank in the
+system cannot be represented in the mirror at all, so it would behave
+differently for old and new readers — a real divergence rather than mere
+staleness. "and below" is the case that wants it, and it needs its own decision.
+
+### HMD migration: exam history arrives in a shape nothing reads — FIXED 2026-08-27 (#120)
 
 `passes/08-events.ts` copies the source `checkins` verbatim, so a legacy exam
 check-in keeps hmd-lineup's payload (`exams.hmd_rank`, `is_hmd_exam`,
@@ -485,7 +535,7 @@ The history is therefore present on disk and invisible to every reader — and i
 is exactly the input the rank-progression engine's backfill needs. A remap pass
 is a prerequisite for the belt work, not a tidy-up.
 
-### HMD migration: fighting-cup categories are dropped
+### HMD migration: fighting-cup categories are dropped — FIXED 2026-08-27 (#120)
 
 hmd-lineup kept categories in a **global** `categories` collection; Linyup keeps
 them per-event at `events/{id}/categories`. No migration pass references the
@@ -493,7 +543,7 @@ source collection, so migrated cup check-ins carry `categories: [id]` arrays
 pointing at ids that exist nowhere in the target. Historic cup line-ups are not
 reconstructable without a new pass.
 
-### HMD migration: rank values are carried over unvalidated
+### HMD migration: rank values are carried over unvalidated — FIXED 2026-08-27 (#120)
 
 `transforms/contacts.ts` writes `ranks[systemId] = Number(hmdRank)` with no check
 that the number exists in `HMD_BELT_LEVELS`. A bad source value becomes a rank
@@ -506,6 +556,253 @@ was never run on a device (it is the code that decides whether a migrated HMD
 member sees their belt or "NO BELT"), and the `image` arm of `RankBadge` was
 never exercised with a real upload. The other three arms — split, emoji, solid —
 were checked in a browser against computed styles.
+
+---
+
+## Newly recorded, 2026-08-27 — left open by the org-scope build
+
+### `useAffiliationTerm` resolves the wrong organisation in org scope
+
+`hooks/useAffiliationTerm.ts` calls `useOrg()`, and the studio sidebar is a
+SIBLING of the org route's children — so `OrgProvider` does not wrap it and the
+call returns the module default (`org: null`). The hook then falls back to the
+CURRENT TEAM's `org_id`. On an `/org/{X}` route where X is not the current
+team's org, the sidebar's affiliation word is a different organisation's, with
+no error. Pre-existing; the scope build did not introduce it but does make org
+scope a place people spend time, so it is worth fixing.
+
+The fix is not to widen `OrgProvider` — the scope is already resolved from the
+URL in `ScopeContext`, so the hook should read the ROUTE's org id from there
+rather than the team's.
+
+### The sidebar quick-search does not index org destinations — FIXED 2026-08-27
+
+Named as a risk in `docs/org-navigation.md` before the build and still true
+after it. The search catalogue is built from `NAV_SECTIONS` + the settings
+items; the four org rows and seven rail items are in neither, so in org scope
+the switcher is the only way in and Ctrl+K finds nothing. The catalogue builder
+takes resolved entries, so this is a matter of feeding it the org items when the
+scope is org — not a new mechanism.
+
+---
+
+## Newly recorded, 2026-08-27 — the public booking page
+
+Reported by Franco from STAGING: the calendar would not advance a month, and
+bookable hours never appeared even with the setting on.
+
+### The month arrows did nothing once a date was selected — FIXED 2026-08-27
+
+`components/booking/MiniCalendar.tsx` — shared by the class booking form AND the
+appointment picker. The effect that follows the SELECTION into its month had
+`currentMonth` in its own dependency array, so it also ran on the visitor's own
+paging and undid it: page to September, the effect re-runs, sees the selected
+August date is not in the displayed month, snaps back. It only bit once a date
+had been selected, which is why it read as a glitch rather than a dead button.
+Now depends on `selectedDate` alone, with a functional update so dropping
+`currentMonth` from the deps costs no correctness.
+
+### An appointment-only studio never reached the picker — FIXED 2026-08-27
+
+The real cause of "bookable hours are not displayed". Not the toggle, not the
+sync: `applyEntry` in the public `BookingForm` asks `activityType ===
+'appointment'` in both deep-link branches and **in neither default**. So a studio
+whose only activity is an appointment — a coach selling 1:1s, which is the whole
+shape of the coach plan — was auto-selected into the CLASS session list. An
+appointment has no pre-scheduled sessions (nothing exists until it is booked),
+so that list is empty forever. The setting was fine; the visitor never reached
+the surface that renders those hours.
+
+Date-first had the same hole with a wider blast radius: it pins no activity and
+goes straight to the day picker, so appointment cards are never rendered at all.
+
+### Still open: a MIXED studio on the date-first flow
+
+Fixed above only where *every* activity is an appointment. A studio with both
+classes and appointments, on date-first, still has no route from `/booking` to
+its appointments — the day picker only knows class sessions. Rendering the
+appointment cards above the day picker is the likely answer, but it is a design
+call about what that page is, not a patch.
+
+### Still open: the appointments toggle is read by nothing on the public web
+
+`bookingSettings.appointmentsEnabled` and `appointmentPickerLive` have exactly
+one web reader, `usePublicSurfaces`, and that hook is imported only by `(auth)`
+routes. So the toggle governs what the STUDIO is shown about its own surfaces,
+not what a visitor can reach. Switching it off does not hide anything public.
+Worth deciding deliberately: either the public routes should honour it, or it
+should be described as what it is.
+
+### The website + kiosk appointment probe had no index — FIXED 2026-08-27
+
+Found after the rest had merged, and it is the better explanation for "bookable
+hours are not displayed **on staging**" than anything in the booking flow —
+because it only ever failed on a REAL project.
+
+`components/site/sections.tsx` and `kiosk/useKioskAvailability.ts` run the
+byte-identical probe before calling `listAvailability`:
+
+    collectionGroup('public_profile')
+      .where('teamId','==',…).where('type','==','activity')
+      .where('activityType','==','appointment')
+
+Three equalities on a COLLECTION GROUP. At collection scope Firestore merges its
+automatic single-field indexes for a pure equality query; at collection-group
+scope it does not — which is exactly why `public_profile` already carries
+explicit COLLECTION_GROUP overrides for `slug`, `type` and `teamId`.
+`activityType` had none. (The two `activityType` entries in the index file are
+on `sessions`, at COLLECTION scope.)
+
+So the probe threw `FAILED_PRECONDITION`, and BOTH call sites swallow it —
+`reportPublicLoadFailure` only `console.error`s — then set an empty list.
+Classes rendered; bookable hours silently did not. **The emulator does not
+enforce indexes**, so it looked perfect locally and failed only where a customer
+would see it.
+
+Fixed by declaring the `teamId + type + activityType` COLLECTION_GROUP index,
+with a note at both call sites saying so, since JSON cannot carry one.
+
+**Deploy note: the index must exist before the code that queries it.** Both
+surfaces already fail closed, so deploying in the wrong order restores the
+previous silence rather than breaking anything new.
+
+### Still open (unverified): activity mirrors written before `activityType` existed
+
+The field was added to the activity mirror when coaching was folded into
+appointments, the mirror is rewritten only on an activity write, and there is no
+backfill — so an activity untouched since then may carry no `activityType`, and
+every branch above treats it as a class. Not reproduced; recorded because it
+would present exactly like the fixed defect and would survive it.
+
+### Renamed: "Show appointment booking" → "Show bookable hours"
+
+For consistency with the term the availability UI already uses everywhere
+("Add bookable hours", "Bookable hours", "Delete these bookable hours?").
+Display-only — the stored field stays `appointmentsEnabled`. The Public pages
+"on but empty" notice was brought onto the same vocabulary, and that same signal
+now also appears in Settings → Booking beside the toggle, which is where the
+studio is standing when it flips the switch. Previously it existed only on the
+Public pages screen.
+
+---
+
+## Newly recorded, 2026-08-27 — the check-in tenant boundary
+
+### `addEventCheckin` let any signed-up outsider write into any tenant — FIXED 2026-08-27
+
+Not the LOW "trusts a client `checkinTeamId`" that was filed here earlier. The
+gate in front of it was self-service, which turns a trusted-input smell into a
+cross-tenant write by a stranger:
+
+1. Sign up. 2. Call `createOrganization` — its own comment says "any
+authenticated user can create an org", and it writes the creator an `org_admin`
+row. 3. Create an org-scoped event in it (the rules allow exactly this).
+4. Call `addEventCheckin` with `checkinTeamId` set to ANY team id in the system.
+
+The callable's only org-event check was "are you an org admin of this event's
+org" — true, of the attacker's own org — and it then stamped the requested
+teamId verbatim. `checkins.teamId` IS the tenant boundary (`tenantData.ts`
+matches the collection by it; every rule arm dereferences it), so the row landed
+in the victim's tenant carrying attacker-chosen contact names and an arbitrary
+payload. `trackEventAttendees` then wrote an activity-log entry into the
+victim's own subtree quoting that text.
+
+Fixed by `events/checkinAuthorization.ts` — a pure decision, fixtures beside it,
+the split this codebase already uses for `decideWaiverGate`. The target team must
+be an ACTIVE `org_teams` member of the event's org; authority is checked against
+the RESOLVED team; the contact must belong to it; an update may not move a row
+between tenants; and a null or empty stamp is refused rather than written (an
+org event stores `teamId: null`, so the old fallback produced rows no rule could
+match and no teardown could reach).
+
+The same change WIDENS who may check in: a member studio's owner or manager can
+now do it at an org event, for their own team. That closes a contradiction — the
+rules already let that person UPDATE and DELETE such a row, and the roster UI
+does exactly that, so only CREATE was blocked.
+
+### The client could rewrite a check-in's tenant stamp directly — FIXED 2026-08-27
+
+The client-side twin, and the rule's own comment already claimed it was closed:
+"the manual confirm/unconfirm toggle (`is_completed`) is the only direct client
+write allowed". The rule authorised the caller and then constrained no fields at
+all, so a manager could `updateDoc` their own row's `teamId` and move it into
+another studio, or rewrite `event.id` and drift `completed_checkins_count` on
+two events at once. Now allow-listed to what the toggle actually writes.
+
+### Migrated HMD cups resolved to no plugin at all — FIXED 2026-08-27
+
+hmd-lineup stores `type: 'fighting_cup'`; the Linyup plugin declares
+`hmd_fighting_cup`; the migration passed the source value through verbatim.
+Plugin resolution is an exact match, so every migrated cup lost its Categories
+tab, its check-in form and its export — and #120's category reconstruction wrote
+data into a tab that never rendered. It degraded silently because the generic
+form still renders and the completion predicate sniffs for a `categories` key
+regardless of type.
+
+It would also have broken the belt work this branch exists for:
+`EventParticipationSpec.eventTypes` matches participation on these ids, so a cup
+stamped `fighting_cup` never counts toward HMD's one-camp-one-tournament-one-exam
+requirement. Remapped in the migration (`SOURCE_EVENT_TYPE_MAP`), including the
+denormalised copy on each check-in. `traditional_cup` is deliberately left
+unmapped — Linyup has no equivalent and collapsing it into `competition` would
+merge two things HMD tells apart.
+
+### A migrated cup check-in opened empty — FIXED 2026-08-27
+
+The same top-level → `checkin_data` drift the exam pass fixed, for
+`categories` / `weight`. New pass `09-cup-checkins`, run before the category
+reconstruction so the ids are in their final home first.
+
+### Still open here: `scripts/` is typechecked in exactly one place
+
+`turbo run typecheck` does not see `scripts/`; only
+`tsconfig.seedcheck.json` does, and only what its `include` names. Anything
+added there and not listed is checked by nobody. `scripts/migrate-hmd.ts` — the
+entry point registering every migration pass — was in that blind spot until
+2026-08-27. Worth a lint rule or a glob rather than a list.
+
+---
+
+## Found and fixed in one pass, 2026-08-27 (#120) — two rules holes
+
+Recorded because **how** they were found generalises, and because neither was
+ever in this list: they were invisible until somebody read the events area as a
+**migrated HMD studio** rather than as a seeded one. The emulator seed contains
+no org-scoped event, so nothing had ever exercised these paths.
+
+Both presented as an **empty result rather than an error**, which is the reason
+no test and no manual click caught them. A permission denial that renders as
+"no categories configured" is indistinguishable from a correct empty state.
+
+### An org event's subcollections were unreadable by the studios attending it
+
+An org-scoped event carries `teamId: null` (`transforms/events.ts`), and
+`belongsToUserTeam` opens with `teamId != null`. The parent event's read rule
+already admitted `currentTeamInOrg`; its `categories` and `attendees` did not. A
+studio could open a federation camp and read neither — the check-in screen
+reported "no categories configured" and the roster reported that nobody had
+responded. The migration passes shipped in the same PR write exactly that data.
+
+Fixed by `currentTeamInOrgOfEvent(eventId)` in `firestore.rules`, granting
+**read only**; authoring an org event's divisions stays with the org admin.
+
+### The organisation root document was `isOrgMember` only
+
+Every subcollection below it — `org_places`, `affiliation_types`,
+`org_program_templates`, `installed_plugins` — already carried
+`|| currentTeamInOrg(orgId)`. But the settings a studio most needs live on the
+**root**: `ranking_systems`, `affiliation_term`, `lock_affiliation`.
+`useRankingSystems` resolves an org-managed studio's belts from precisely that
+document, so the read was denied and the studio fell back to its own empty list:
+no belts on the contact page, none in the exam form, none in the filter. Every
+migrated HMD studio would have been in that state.
+
+Fixed by admitting `currentTeamInOrg(orgId)` on `read`; `update` stays
+`org_admin`.
+
+Both are pinned by assertions in `programRules.rules-test.ts` that were verified
+to FAIL against the pre-fix rules — 2 failing / 51 passing on `HEAD`, 53 passing
+with the fix.
 
 ---
 
@@ -546,7 +843,7 @@ components. The first removes the drift; the second only slows it.
 
 ---
 
-## Queued, not a defect — org lists have no search, and the org event list has no filters
+## Queued, not a defect — org lists have no search, and the org event list has no filters — FIXED 2026-08-27 (#120)
 
 **Requested 2026-08-25 (Franco).** Recorded with the org-navigation rework
 (`docs/org-navigation.md`), because it is the same surface and should land with

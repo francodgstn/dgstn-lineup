@@ -7,7 +7,9 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import {
+  collectionGroup, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where,
+} from 'firebase/firestore'
 
 // Security-rules tests for the event program. This is a MULTI-TENANT boundary:
 // program items carry denormalised teamId/orgId/scope precisely so the rules can
@@ -105,6 +107,29 @@ async function seed() {
 
     await setDoc(doc(db, 'events', EVENT_ORG, 'categories', 'c1'), { name: 'U18' })
     await setDoc(doc(db, 'events', EVENT_ORG, 'attendees', 'a1'), { contactId: 'c1' })
+
+    // managerA is in BOTH studios — the two-studio login the switcher needs.
+    await setDoc(doc(db, 'teams', TEAM_B, 'team_members', 'managerA'), {
+      role: 'manager', capabilities: ['events.manage'], teamId: TEAM_B, userId: 'managerA',
+    })
+    // The two existing memberships predate `userId`/`teamId` being stamped in
+    // this fixture; the collection-group rule reads them off the document.
+    await setDoc(doc(db, 'teams', TEAM_A, 'team_members', 'managerA'), {
+      role: 'manager', capabilities: ['events.manage'], teamId: TEAM_A, userId: 'managerA',
+    })
+    await setDoc(doc(db, 'teams', TEAM_B, 'team_members', 'managerB'), {
+      role: 'manager', capabilities: ['events.manage'], teamId: TEAM_B, userId: 'managerB',
+    })
+
+    // A check-in belonging to TEAM_A. `teamId` IS the tenant boundary for this
+    // collection, which is what the update tests below are about.
+    await setDoc(doc(db, 'checkins', 'chk1'), {
+      event: { id: EVENT_ORG, title: 'Federation cup', type: 'competition' },
+      contact: { id: 'ct1', firstname: 'Ada', lastname: 'Lovelace' },
+      teamId: TEAM_A,
+      is_completed: false,
+      checkin_data: {},
+    })
   })
 }
 
@@ -318,5 +343,98 @@ describe('firestore.rules — event program items', function () {
       }),
     )
     assert.ok(true)
+  })
+  // ── the check-in row's tenant stamp ───────────────────────────────────────
+  // `checkins/{id}.teamId` decides who can read, update and delete the row, and
+  // `tenantData.ts` matches the whole collection by it. The update rule used to
+  // authorise the caller and then let them write ANY field, so a manager could
+  // move one of their own rows into another studio by rewriting that one field —
+  // and the checkins trigger would follow it there, writing an activity-log
+  // entry into a tenant they have no access to. Rewriting `event.id` was the
+  // same trick against the counters.
+  describe('checkins — a client may toggle, never retarget', () => {
+    const chk = (db: ReturnType<typeof asManagerA>) => doc(db, 'checkins', 'chk1')
+
+    it('the roster toggle still works — is_completed and updated_at', async () => {
+      await assertSucceeds(
+        updateDoc(chk(asManagerA()), { is_completed: true, updated_at: new Date() }),
+      )
+    })
+
+    it('is_completed alone works too (updated_at is not required)', async () => {
+      await assertSucceeds(updateDoc(chk(asManagerA()), { is_completed: true }))
+    })
+
+    it('CANNOT move the row to another studio by rewriting teamId', async () => {
+      await assertFails(updateDoc(chk(asManagerA()), { teamId: TEAM_B }))
+    })
+
+    it('CANNOT smuggle teamId alongside a legitimate toggle', async () => {
+      await assertFails(
+        updateDoc(chk(asManagerA()), { is_completed: true, teamId: TEAM_B }),
+      )
+    })
+
+    it('CANNOT retarget the row at another event, which would drift the counters', async () => {
+      await assertFails(updateDoc(chk(asManagerA()), { 'event.id': EVENT_TEAM }))
+    })
+
+    it('CANNOT rewrite the contact it names', async () => {
+      await assertFails(
+        updateDoc(chk(asManagerA()), { contact: { id: 'ct1', firstname: 'Not', lastname: 'Ada' } }),
+      )
+    })
+
+    it('CANNOT rewrite the stored payload', async () => {
+      await assertFails(updateDoc(chk(asManagerA()), { checkin_data: { categories: ['x'] } }))
+    })
+
+    it('a manager of ANOTHER studio cannot touch it at all', async () => {
+      await assertFails(updateDoc(chk(asManagerB()), { is_completed: true }))
+    })
+
+    it('a viewer of the owning studio cannot toggle it', async () => {
+      await assertFails(updateDoc(chk(asViewerA()), { is_completed: true }))
+    })
+
+    it('creates are denied outright — addEventCheckin is the only writer', async () => {
+      await assertFails(
+        setDoc(doc(asManagerA(), 'checkins', 'chk2'), {
+          event: { id: EVENT_ORG }, contact: { id: 'ct2' }, teamId: TEAM_A, is_completed: false,
+        }),
+      )
+    })
+  })
+  // ── "which studios am I in?" ──────────────────────────────────────────────
+  // The collection-group query behind the studio switcher. It was denied for
+  // EVERY user until 2026-08-27 — twice over, for two different reasons — and
+  // nobody noticed because the switcher hides its list for anyone in a single
+  // studio, so an empty result and a correct result looked identical. These
+  // assertions are what make the empty case mean something.
+  describe('team_members collection group — my own memberships', () => {
+    const myMemberships = (db: ReturnType<typeof asManagerA>, uid: string) =>
+      getDocs(query(collectionGroup(db, 'team_members'), where('userId', '==', uid)))
+
+    it('returns every studio the caller belongs to, across teams', async () => {
+      const snap = await assertSucceeds(myMemberships(asManagerA(), 'managerA'))
+      assert.deepEqual(
+        snap.docs.map((d) => d.data().teamId).sort(),
+        [TEAM_A, TEAM_B],
+      )
+    })
+
+    it('CANNOT read another person’s memberships', async () => {
+      // The query is the only thing that scopes this — so the rule has to
+      // refuse rather than trust it.
+      await assertFails(myMemberships(asManagerA(), 'managerB'))
+    })
+
+    it('an unfiltered collection-group sweep is refused', async () => {
+      await assertFails(getDocs(collectionGroup(asManagerA(), 'team_members')))
+    })
+
+    it('an anonymous caller gets nothing', async () => {
+      await assertFails(myMemberships(asAnon(), 'managerA'))
+    })
   })
 })

@@ -32,6 +32,7 @@ import { pass05Contacts }           from './migration/passes/05-contacts'
 import { pass06Sessions }           from './migration/passes/06-sessions'
 import { pass08Events }             from './migration/passes/08-events'
 import { pass09ExamCheckins }       from './migration/passes/09-exam-checkins'
+import { pass09CupCheckins }        from './migration/passes/09-cup-checkins'
 import { pass09EventCategories }    from './migration/passes/09-event-categories'
 import { pass10Referrals }          from './migration/passes/10-referrals'
 import { pass11TeamSubcollections } from './migration/passes/11-team-subcollections'
@@ -144,6 +145,7 @@ async function run() {
   if (!only || only === 'events')              await pass08Events(cfg)
   // Both read the check-ins pass08 has just written, so they follow it.
   if (!only || only === 'exam-checkins')       await pass09ExamCheckins(cfg)
+  if (!only || only === 'cup-checkins')        await pass09CupCheckins(cfg)
   if (!only || only === 'event-categories')    await pass09EventCategories(cfg)
   if (!only || only === 'referrals')           await pass10Referrals(cfg)
   if (!only || only === 'team-subcollections') await pass11TeamSubcollections(cfg, teamIds)

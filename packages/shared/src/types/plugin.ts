@@ -15,6 +15,25 @@ export type PluginStatus = 'available' | 'coming_soon' | 'beta'
 export type PluginActionId = `plugin:${string}:${string}`
 export type PluginTriggerId = `plugin:${string}:${string}`
 
+/**
+ * The plugin id inside a namespaced `plugin:{pluginId}:{name}` id — null when
+ * the string is not one.
+ *
+ * THE OWNER OF THIS PARSE, and it lives beside the two id types above so a
+ * third namespace (a plugin-contributed rank requirement already uses the same
+ * shape) extends it rather than copying it. Every caller that wants to know
+ * "which plugin does this belong to" — the automation engine's install gate,
+ * the rank requirement resolver — asks here.
+ *
+ * Strict about the arity: exactly three colon-separated parts. A two-part or
+ * four-part string is not a namespaced id, and returning a plausible-looking
+ * middle segment for one would hand a caller a plugin id nothing installed.
+ */
+export function pluginIdOfNamespacedId(id: string): string | null {
+  const parts = id.split(':')
+  return parts.length === 3 && parts[0] === 'plugin' && parts[1] ? parts[1] : null
+}
+
 export interface PluginAutomationTrigger {
   id: PluginTriggerId
   labelKey: string

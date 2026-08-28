@@ -1,7 +1,64 @@
 # Organisation navigation — design
 
-**Status: designed, not built.** Decisions taken 2026-08-25 (Franco). Recorded
-before implementation so the shape is agreed rather than discovered halfway.
+**Status: BUILT 2026-08-27.** Decisions taken 2026-08-25 (Franco); the chord and
+the four-rows-plus-rail split confirmed 2026-08-27. Recorded before
+implementation so the shape was agreed rather than discovered halfway — this
+document is now the reasoning behind the code rather than a proposal.
+
+**The chord is `Alt+O`.** `!e.ctrlKey` is load-bearing: AltGr reports as
+ctrlKey + altKey on the layouts this product is built for.
+
+**What the implementation added that the design did not anticipate:**
+
+- **Ten org pages had no `<h1>` of their own** — the deleted tab strip was their
+  only title. The layout supplies the destination heading; the two pages that
+  always had one say so in the catalogue (`ownsHeader`) rather than being
+  remembered.
+- **The rail needed a front door, and `/org/{id}/manage` is it.** The rail
+  rendered only on rail ROUTES, so from Studios or Events there was no rail and
+  no link to the seven destinations behind it — eleven tabs became four rows and
+  seven things that had apparently vanished ("where did all the tabs go?",
+  Franco, 2026-08-27). A studio never had this problem because `/settings` is a
+  real place you can go to and the rail comes with it. `manage` is a fifth
+  sidebar row, and it is also what makes the rail work on a phone, where a rail
+  is an INDEX and an index needs a route to be the index of.
+- ~~**The mobile rail is a disclosure, not an index page.**~~ Superseded by the
+  above; the disclosure existed only because that route did not exist yet.
+- **(original note) The mobile rail is a disclosure, not an index page.** The studio rail can be
+  an index because `/settings` is a real route that lists it. The organisation
+  has no equivalent — `/org/{id}` redirects straight to the studios list — and
+  inventing one would put a second "organisation home" in the reader's head for
+  a scope that already has one.
+- **`NavRail` was extracted** so both rails are one markup. It resolves nothing:
+  labels, gates, the active rule and the pin all differ between the two, and the
+  studio's pin store is keyed per studio so it has no meaning on an org row.
+
+**Revised 2026-08-27, after Franco used it:**
+
+- **The switcher moved to the sidebar HEADER**, replacing the studio name, and
+  the separate amber indicator band is gone — its accent moved onto the trigger.
+  This reverses the 2026-08-24 decision that the header row was "orientation,
+  not a control". That reasoning was about reaching a second STUDIO, a rare
+  account action; the scope model made "which place am I standing in" a constant
+  question, and answering it at one end of the sidebar while changing it at the
+  other was the split. The trigger opens a menu and does NOT navigate — as a
+  link it was the topmost control in an org sidebar quietly leaving the org.
+- **The header row now survives collapse.** It was `!collapsed`-only, so the
+  icon rail said nothing about scope at all. That was a gap, not a decision.
+- **The whole sidebar follows the scope, not just the middle.** Three things sat
+  outside the gated block and stayed studio-scoped: the "⋯" menu's destinations
+  (`/settings` and `/settings/plugins` — so from an org, both landed in the
+  studio's), the pinned head-pair tiles (two studio destinations ABOVE the org's
+  own rows), and the quick-search catalogue, which indexed destinations whose
+  rows were not even on screen.
+- **The QR is hidden in org scope, not repointed** — it reads a studio's public
+  profile and an org has no equivalent document, so a repointed QR would be some
+  arbitrary studio's.
+
+**Still open after the build:** `useAffiliationTerm` resolves the CURRENT TEAM's
+org rather than the route's — so on an `/org/{X}` route where X is not the current
+team's org, the studio sidebar's affiliation word is the wrong org's. Both are
+recorded in `docs/open-defects.md`.
 
 ---
 
@@ -107,17 +164,59 @@ is holding a modifier to rotate through a list. With three or more scopes the
 switcher menu is already the better tool, so this control always means "back to
 the previous one" and never "next in some order".
 
-**A button, not only a shortcut.** A bare chord is undiscoverable; the ⌘K note in
-`(auth)/layout.tsx` makes the same point about search losing discoverability
-behind an icon. The scope indicator carries a small toggle naming the *target*
-scope, so the affordance says what it will do before it does it, and names its
-shortcut in the tooltip.
+**~~A button, not only a shortcut.~~ REVERSED 2026-08-27.** The original
+argument stands on its own terms — a bare chord is undiscoverable, and the
+Ctrl+K note in `(auth)/layout.tsx` makes the same point about search losing
+discoverability behind an icon — but it lost to the row it had to live on. The
+scope identity is what that row exists to say, and a button naming the *other*
+scope competed with it for the same few pixels; the switcher, one click away,
+already reaches every scope including the previous one.
 
-**Suggested chord: ⌘⇧O / Ctrl+Shift+O.** Alt+Tab itself belongs to the OS. The
-tempting alternative is ⌘` — literally the macOS idiom for cycling within one
-application — but the backtick is a dead key on the Swiss, German and French
-layouts this product is built for, which makes it the wrong choice for precisely
-this audience. Letters survive every layout.
+So **Alt+O is a chord with no visible affordance**. That is a real cost, not a
+free simplification: until the planned shortcuts list advertises it, nobody will
+find it who was not told. Accepted knowingly (Franco), and stated in
+`ScopeFlip.tsx` so the next reader inherits the trade rather than the
+conclusion.
+
+**Write the chord as a Ctrl chord** (Franco, 2026-08-27). The design is
+Windows-first: the primary keyboards here are Swiss, German and French, and the
+reference machine is Windows. So the chord is chosen to survive *those*
+constraints, and the hint is rendered through the **existing `modKeyLabel()`
+helper** in `(auth)/layout.tsx` — the same one the search hint uses, which
+prints `Ctrl+` and adapts on its own for anyone who opens the app on a Mac. The
+handler accepts either modifier, exactly as the Ctrl+K handler already does.
+Nothing here is authored as a Mac chord. (The Windows key itself is not
+available: the OS claims it, and a web page never receives it.)
+
+**Not Ctrl+Shift+O.** An earlier draft suggested it. It is taken: Ctrl+Shift+O
+opens the bookmark manager in Chrome and Edge and the Library in Firefox, on the
+very platform this design is written for. Most of the Ctrl+Shift+letter space is
+similarly spoken for — DevTools, private window, reopen-closed-tab, hard reload —
+and a few of those the browser will not surrender to `preventDefault()` at all.
+
+**Two chords survive, and the pick is a judgement call.** Both are free in
+Chrome, Edge and Firefox on Windows, and both are letters, which matters:
+
+| Chord | For | Against |
+|---|---|---|
+| **`Alt+O`** *(recommended)* | Follows the app's own precedent — `layout.tsx:2195` already reaches for Alt in exactly this situation, with the note "Alt rather than ⌘/Ctrl: ⌘S is Save in every browser". One modifier is a faster flip, which is the whole reason this control exists. | Alt alone reveals the menu bar in Firefox, so the keypress has to be consumed cleanly. |
+| **`Ctrl+Shift+L`** | Stays the same shape as Ctrl+K, so the app's two shortcuts read as a family. | Three keys for a control whose entire justification is speed. |
+
+**Not `Alt+S`**, which would have been the obvious pick: the search panel
+already binds it (`layout.tsx:2195`, "always show this destination"). It is the
+only `altKey` binding in `apps/web` today — the other two hits guard *against*
+Alt rather than claiming it — so `Alt+O` is unclaimed.
+
+**One guard is not optional on this audience's keyboards.** On Swiss, German and
+French layouts `AltGr` produces `@`, `#`, `~` and `|`, and the browser reports
+`AltGr` as **`ctrlKey` and `altKey` together**. An `e.altKey` handler with no
+further condition therefore fires while somebody is typing an email address. The
+handler must require `e.altKey && !e.ctrlKey`.
+
+`Alt+Tab` itself belongs to the OS and was never available. The backtick idiom
+(``Ctrl+` ``) is out for a harder reason than collision: backtick is a **dead
+key** on those same three layouts, so it is precisely wrong here. Letters
+survive every layout.
 
 Three details decide whether it feels right:
 

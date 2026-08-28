@@ -25,7 +25,8 @@ import {
 } from '@linyup/shared'
 import { loadConsentLedgers } from '../waivers/consentLedger'
 import { resolveRankingSystems } from './ranking'
-import { isKnownRankingSystem } from '@linyup/shared'
+import { isKnownRankingSystem, pluginIdOfNamespacedId } from '@linyup/shared'
+import { pluginIsActive } from './plugins'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -644,6 +645,17 @@ export interface ResolvedActions {
   template: Record<string, unknown> | null
   alertPreset: Record<string, unknown> | null
   language: string
+  /**
+   * Which of the rule's PLUGIN actions may run — the plugin ids among them that
+   * are installed and active for this team (its own install, or its
+   * organisation's).
+   *
+   * IT IS RESOLVED ONCE PER RULE, HERE, and not per contact. A rule sweeps
+   * every contact in the team, so an install check inside that loop would be
+   * one Firestore read per contact per action for a fact that cannot change
+   * mid-sweep.
+   */
+  activePlugins: Set<string>
 }
 
 async function resolveActionResources(
@@ -657,6 +669,41 @@ async function resolveActionResources(
   let template: Record<string, unknown> | null = null
   let alertPreset: Record<string, unknown> | null = null
   let language = (teamData.language as string) || 'en'
+  const activePlugins = new Set<string>()
+
+  // ── THE PLUGIN INSTALL GATE ────────────────────────────────────────────────
+  //
+  // A plugin action is a capability the studio bought, and an automation rule
+  // OUTLIVES the install that justified it: compose a rule while WhatsApp is
+  // installed, remove the plugin, and the rule kept sending — the dispatch
+  // below trusted the stored action id and asked nothing. This is the sixth
+  // install gate, and the one nobody had counted (docs/plugins.md).
+  //
+  // `pluginIsActive` is the same org-aware resolver every other server gate
+  // uses, so an org-level install counts exactly as it does everywhere else.
+  //
+  // Distinct plugin ids only: a rule with three WhatsApp actions asks once.
+  const pluginIds = new Set(
+    actions
+      .map((a) => pluginIdOfNamespacedId(a.type as string))
+      .filter((id): id is string => id !== null)
+  )
+  for (const pluginId of pluginIds) {
+    // A read failure is NOT an install. `to()` keeps a transient Firestore error
+    // from aborting the whole rule, and the action is skipped for this run —
+    // the safe direction for something that sends a message on the studio's
+    // behalf.
+    const [err, active] = await to(pluginIsActive(teamId, pluginId))
+    if (err) {
+      console.log(
+        `[automationEngine] plugin '${pluginId}': install check failed, treating as not installed —`,
+        err
+      )
+      continue
+    }
+    if (active) activePlugins.add(pluginId)
+    else console.log(`[automationEngine] plugin '${pluginId}' is not installed for team ${teamId}`)
+  }
 
   for (const action of actions) {
     if (action.type === 'send_email' && !template) {
@@ -688,7 +735,7 @@ async function resolveActionResources(
     }
   }
 
-  return { template, alertPreset, language }
+  return { template, alertPreset, language, activePlugins }
 }
 
 async function createContactAlertDoc(
@@ -752,6 +799,16 @@ export function hasResolvableActions(actions: AutomationAction[], resolved: Reso
     if (a.type === 'add_to_group') return true
     if (a.type === 'remove_from_group') return true
     if (a.type === 'webhook') return true
+    // A PLUGIN ACTION IS RESOLVABLE WHEN ITS PLUGIN IS INSTALLED — and until
+    // this arm existed it was resolvable never, which is a second defect the
+    // install gate uncovered: a rule whose ONLY action is a plugin action was
+    // skipped wholesale, with the misleading "no executable action resources
+    // found" error. A WhatsApp-only automation had simply never run.
+    //
+    // With the plugin removed the rule is now skipped ONCE per run, by this
+    // guard, instead of being walked across every contact to dispatch nothing.
+    const pluginId = pluginIdOfNamespacedId(a.type as string)
+    if (pluginId && resolved.activePlugins.has(pluginId)) return true
   }
   return false
 }
@@ -1208,9 +1265,15 @@ async function executeActionsForContact(
         }
       }
 
-      // plugin action — dispatch to the plugin's registered handler
+      // plugin action — dispatch to the plugin's registered handler, IF the
+      // studio still has the plugin. The install was resolved once for the whole
+      // rule (see `ResolvedActions.activePlugins`); this is a set lookup, not a
+      // read, so it costs nothing per contact.
       if ((action.type as string).startsWith('plugin:')) {
-        const handler = pluginActionHandlers[action.type as PluginActionId]
+        const pluginId = pluginIdOfNamespacedId(action.type as string)
+        const handler = pluginId && resolved.activePlugins.has(pluginId)
+          ? pluginActionHandlers[action.type as PluginActionId]
+          : undefined
         if (handler) {
           await handler({
             action: action as { type: PluginActionId; config?: Record<string, unknown> },
@@ -1222,8 +1285,14 @@ async function executeActionsForContact(
           })
           executed++
         } else {
+          // Two ways to land here and they are worth telling apart: the plugin
+          // is gone (ordinary, already logged once per rule) or the id names a
+          // handler that was never registered (a bug, or a rule written against
+          // a build that no longer exists).
           console.log(
-            `[automationEngine] No handler registered for plugin action '${action.type}', skipping`
+            pluginId && !resolved.activePlugins.has(pluginId)
+              ? `[automationEngine] plugin '${pluginId}' not installed — skipping action '${action.type}'`
+              : `[automationEngine] No handler registered for plugin action '${action.type}', skipping`
           )
         }
       }

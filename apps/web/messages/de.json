@@ -231,7 +231,7 @@
     "shopDescPriceList": "Zeigt deine Preise. Online-Zahlungen sind aus, daher werden Besucher gebeten, dich zu kontaktieren.",
     "surfaceEvents": "Events",
     "eventsDesc": "Deine veröffentlichten Events, mit ihrem Tagesprogramm.",
-    "appointmentsEmpty": "Terminbuchung ist aktiv, aber es sind noch keine Zeiten buchbar."
+    "appointmentsEmpty": "Buchbare Zeiten sind aktiviert, aber es sind noch keine Zeiten buchbar."
   },
   "ShopSettings": {
     "title": "Shop",
@@ -949,6 +949,14 @@
     "attention_billing_unlinked": "Abrechnung ohne Abo",
     "exportCsv": "CSV exportieren",
     "exportFailed": "Export fehlgeschlagen. Bitte versuche es erneut.",
+    "filterRankModeLevels": "Stufen",
+    "filterRankModeRange": "Bereich",
+    "filterRankFrom": "Von",
+    "filterRankTo": "Bis",
+    "filterRankAny": "Beliebig",
+    "filterRankAtLeast": "{level} und höher",
+    "filterRankAtMost": "{level} und tiefer",
+    "filterRankBetween": "{from} bis {to}",
     "goalScoreUnset": "Nicht festgelegt",
     "profileBadgeLabel_burnout_risk": "Burnout-Risiko",
     "profileBadgeLabel_overreaching": "Übertraining",
@@ -2229,7 +2237,12 @@
     "createStudio": "Weiteres Studio erstellen",
     "switchStudioFailed": "Studio konnte nicht gewechselt werden. Bitte versuche es erneut.",
     "studioListFailed": "Deine Studios konnten nicht geladen werden.",
-    "studioListRetry": "Erneut versuchen"
+    "studioListRetry": "Erneut versuchen",
+    "scopeStudio": "Studio",
+    "scopeOrganisation": "Organisation",
+    "switchOrganisation": "Organisationen",
+    "flipToPrevious": "Zu {name} wechseln",
+    "flipLast": "Zuletzt"
   },
   "BioLink": {
     "title": "Bio-Link",
@@ -2873,7 +2886,30 @@
     "pluginsUninstalledSuccess": "Plugin aus Organisation entfernt.",
     "pluginsErrorInstall": "Plugin konnte nicht installiert werden. Bitte erneut versuchen.",
     "pluginsErrorUninstall": "Plugin konnte nicht entfernt werden. Bitte erneut versuchen.",
-    "tabProgramTemplates": "Programmvorlagen"
+    "tabProgramTemplates": "Programmvorlagen",
+    "navStudios": "Studios",
+    "railGroupStandards": "Vorgaben der Organisation",
+    "railGroupShared": "Gemeinsame Ressourcen",
+    "railGroupAdministration": "Verwaltung",
+    "railSearchPlaceholder": "Organisationseinstellungen durchsuchen",
+    "railNoResults": "Keine Organisationseinstellungen entsprechen Ihrer Suche.",
+    "manageTitle": "Organisationseinstellungen",
+    "manageSubtitle": "Die Vorgaben dieser Organisation, was sie mit ihren Studios teilt, und ihre eigene Verwaltung.",
+    "navOverview": "Übersicht",
+    "overviewStandingTitle": "Ihr Studio hier",
+    "overviewStandingActive": "Aktives Mitglied",
+    "overviewStandingInactive": "Inaktiv",
+    "overviewStandingJoined": "beigetreten am {date}",
+    "overviewStandingNone": "Ihr aktuelles Studio gehört nicht zu dieser Organisation.",
+    "overviewSharedTitle": "Was diese Organisation mit Ihrem Studio teilt",
+    "overviewSharedRanking": "Rangsysteme",
+    "overviewSharedPlaces": "Gemeinsame Orte",
+    "overviewSharedTemplates": "Programmvorlagen",
+    "overviewSharedHint": "Diese werden von der Organisation festgelegt und gelten automatisch für Ihr Studio.",
+    "overviewEventsTitle": "Kommende Organisationsanlässe",
+    "overviewEventsAll": "Alle Anlässe",
+    "overviewEventsNone": "Keine Anlässe geplant.",
+    "overviewSharedAffiliationTypes": "{term}-Typen"
   },
   "OrgTeams": {
     "title": "Teams",
@@ -5093,8 +5129,8 @@
     "toggleShowActivityDescriptionDesc": "Den Beschreibungstext der Aktivität auf dem Auswahlbildschirm anzeigen.",
     "toggleShowFitnessAppLabel": "Fitness-App-Feld anzeigen",
     "toggleShowFitnessAppDesc": "Neue Gäste fragen, über welche Partner-App sie kommen. Zur Auswahl stehen Ihre eigenen Partner-Abotypen (Aggregator) — solange Sie keine haben, wird die Frage nicht gestellt.",
-    "toggleAppointmentsEnabledLabel": "Terminbuchung anzeigen",
-    "toggleAppointmentsEnabledDesc": "Terminbuchung im öffentlichen Buchungsablauf anzeigen.",
+    "toggleAppointmentsEnabledLabel": "Buchbare Zeiten anzeigen",
+    "toggleAppointmentsEnabledDesc": "Besucher können im öffentlichen Buchungsablauf eine Zeit aus Ihren buchbaren Zeiten wählen.",
     "ctaTitle": "CTA-Button (optional)",
     "ctaSubtitle": "Wird auf dem Bestätigungsbildschirm nach einer erfolgreichen Buchung angezeigt.",
     "ctaUrlLabel": "Button-URL",
@@ -5116,7 +5152,9 @@
     "moreOptionsLabel": "Weitere Optionen",
     "moreOptionsHint": "Buchungszeitraum, Buchungsschluss, abgefragte Felder und ein eigener Button",
     "betaBadge": "Beta",
-    "betaBadgeHint": "Einsatzbereit — diese Funktion kann sich noch ändern."
+    "betaBadgeHint": "Einsatzbereit — diese Funktion kann sich noch ändern.",
+    "appointmentsEmptyHint": "Dies ist aktiviert, aber es ist noch nichts buchbar — Sie brauchen aktive buchbare Zeiten, die mit einer Termin-Aktivität verknüpft sind.",
+    "appointmentsEmptyHintLink": "Buchbare Zeiten einrichten"
   },
   "SettingsPlaces": {
     "pageTitle": "Standorte",
@@ -5267,7 +5305,9 @@
     "customFieldsIntro": "Erfassen Sie die Angaben, die dieser Event-Typ sammelt.",
     "customFieldsRequiredHint": "Füllen Sie alle Pflichtfelder aus, bevor Sie einchecken.",
     "fieldRequired": "Pflichtfeld",
-    "fieldSelectPlaceholder": "Auswählen…"
+    "fieldSelectPlaceholder": "Auswählen…",
+    "saveFailed": "Der Check-in konnte nicht gespeichert werden.",
+    "addFailed": "{count} von {total} konnten nicht hinzugefügt werden. {detail}"
   },
   "UpgradeModal": {
     "titleUpgradeTo": "Auf {label} upgraden",

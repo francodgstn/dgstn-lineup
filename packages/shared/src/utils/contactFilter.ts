@@ -34,6 +34,131 @@ export type InactivityPreset = 'never' | '30d' | '60d' | '90d'
 export type RankFilter = Record<string, number[]>
 
 /**
+ * systemId → an inclusive band on that system's level VALUES. `null` on either
+ * end is open: `{ min: blue, max: null }` is "Blue and above", which is how a
+ * coach actually thinks about a roster and what a tick-list cannot say without
+ * going wrong the moment a belt is inserted into the scale.
+ *
+ * ─── WHY THIS IS A SECOND KEY AND NOT A RICHER `RankFilter` VALUE ────────────
+ *
+ * The obvious design turns each `RankFilter` entry into
+ * `{ mode, levels, min, max }`. It is unshippable here, and the reason is a
+ * deployment fact rather than a taste one.
+ *
+ * ON STAGING the web app and the Cloud Functions roll out through INDEPENDENT
+ * pipelines — functions from `deploy.yml`, the web app from App Hosting's own
+ * GitHub integration — so neither order is guaranteed and a skew window exists
+ * on every push. (`deploy-prod.yml` and the sandbox workflow are deliberately
+ * different: auto-rollout is disabled on those backends and the frontend is
+ * rolled out AFTER the backend, in lockstep. So the hazard is not universal —
+ * it is real exactly where a studio first meets a change.)
+ *
+ * During that window an OLD resolver reads a NEW-shape value, and the failure
+ * is silent and OPEN, not closed: the dimension guard is
+ * `Object.values(f.rankFilter).some((l) => l.length > 0)`, and on an object
+ * `l.length` is `undefined`, so the guard is false and the ENTIRE rank block —
+ * including its `if (!matched) return false` — is skipped. The rank restriction
+ * does not fail; it VANISHES, and the filter matches everyone it otherwise
+ * would. `matchesFilter` backs dynamic contact groups, which back the
+ * automation engine, which sends mail.
+ *
+ * THE REVERSE SKEW is survivable and worth knowing: an OLD web bundle
+ * normalising a filter it loaded will drop `rankRanges` on re-save, degrading a
+ * live "Blue and above" into the frozen snapshot its mirror already holds. That
+ * loses the dynamic property, never widens the audience, and is the direction
+ * this design deliberately trades toward.
+ *
+ * So `RankFilter` keeps its shape and its meaning exactly, and the band rides
+ * alongside it. An old resolver ignores a key it has never heard of.
+ *
+ * ─── THE BAND IS THE TRUTH; THE LEVEL LIST IS ITS MIRROR ─────────────────────
+ *
+ * When a band is set for a system, the writer ALSO writes the levels that band
+ * currently covers into `rankFilter[systemId]` — the same denormalised-mirror
+ * pattern this codebase uses everywhere else. A reader that understands bands
+ * uses the band and gets the dynamic answer; one that does not falls back to
+ * the mirror and gets the correct-as-of-write answer, which is exactly what a
+ * hand-ticked list would have given it anyway. Neither reader is ever wrong in
+ * a way that widens the audience.
+ *
+ * `expandRankRange` is the ONLY way that mirror is produced, so the two cannot
+ * be computed differently in two places.
+ *
+ * A CONSEQUENCE WORTH KNOWING: `rankFilter` is still a map of number arrays, so
+ * a reader that only counts levels keeps working against a banded filter. That
+ * is a property of the SHAPE, not a promise about the call sites — ask
+ * `rankFilterIsActive` rather than counting levels yourself, and never write a
+ * comment claiming every site does the right thing.
+ *
+ * NOT INCLUDED, deliberately: an `includeUnranked` arm. A contact with no rank
+ * in the system cannot be represented in the mirror at all, so it would behave
+ * differently for old and new readers — a real divergence rather than mere
+ * staleness. It needs its own decision; see docs/open-defects.md.
+ */
+export interface RankRangeFilter {
+  min: number | null
+  max: number | null
+}
+
+/**
+ * The levels of `system` that fall inside the band, as stored values.
+ *
+ * ORDER IS BY `value`, NOT BY POSITION in the levels array. `value` is the
+ * scale's order — `orderedLevels` sorts by it before any progression reader
+ * touches the array, and `nextLevel` finds `l.value > current` with the note
+ * that a scale's values need not be contiguous. Nothing sorts or validates
+ * `levels` on write, so array position is not authoritative and a band computed
+ * from it would quietly disagree with the belt engine.
+ *
+ * It takes the levels rather than a `RankingSystem` so that a caller holding a
+ * mirror, a seed fixture or a test double can use it too; it sorts internally
+ * for the same reason, since it cannot assume the caller came through
+ * `orderedLevels`. Callers that DO hold a system should still order their own
+ * UI with `orderedLevels` rather than re-sorting.
+ *
+ * THE PAIRING IS A WRITER'S OBLIGATION, and this module cannot check it: the
+ * mirror can only be produced from the tenant's ranking systems, which a filter
+ * does not carry. A band stored WITHOUT its mirror is still safe here — the
+ * matcher below uses the band, and `rankFilterIsActive` sees it — so the failure
+ * is confined to a resolver that predates bands, which is the transient case the
+ * mirror exists for.
+ */
+export function expandRankRange(
+  levels: ReadonlyArray<{ value: number }>,
+  range: RankRangeFilter,
+): number[] {
+  return levels
+    .map((l) => l.value)
+    .filter((v) => (range.min == null || v >= range.min) && (range.max == null || v <= range.max))
+    .sort((a, b) => a - b)
+}
+
+/** A band that constrains nothing is not a filter — both ends open means "any". */
+export function rankRangeIsActive(range: RankRangeFilter | undefined | null): boolean {
+  return !!range && (range.min != null || range.max != null)
+}
+
+/**
+ * "Is the rank dimension doing anything?" — THE one answer, because there is
+ * more than one way to express a rank constraint now and a second opinion is a
+ * bug rather than a nuance.
+ *
+ * It had one, briefly: the shared `activeFilterKeys` counted a band OR a mirror
+ * while the contacts page counted the mirror alone, so a band that somehow
+ * reached storage without its mirror produced an empty result list, a filter
+ * badge reading 1, and no chip on screen to clear it. Both now call this.
+ */
+export function rankFilterIsActive(
+  f: { rankFilter?: RankFilter | null; rankRanges?: Record<string, RankRangeFilter> | null } | null | undefined,
+): boolean {
+  if (!f) return false
+  return (
+    Object.values(f.rankFilter ?? {}).some((l) => l.length > 0) ||
+    Object.values(f.rankRanges ?? {}).some(rankRangeIsActive)
+  )
+}
+
+/**
  * Age / birth-year window.
  *
  * Two modes, because they are genuinely different questions and sports use both:
@@ -124,6 +249,10 @@ export interface ContactFilter {
   sessionsMax: number | null
   inactivity: InactivityPreset | null
   rankFilter: RankFilter | null
+  /** systemId → an inclusive band. When set for a system it OVERRIDES that
+   *  system's entry in `rankFilter`, which is the band's mirror. Optional so
+   *  every stored filter written before bands existed is already valid. */
+  rankRanges?: Record<string, RankRangeFilter> | null
   age: AgeFilter | null
   customFields: CustomFieldCondition[]
   consent: ConsentFilter | null
@@ -174,6 +303,18 @@ export function normalizeContactFilter(filter: Partial<ContactFilter> | null | u
     sessionsMax: f.sessionsMax ?? null,
     inactivity: f.inactivity ?? null,
     rankFilter: f.rankFilter ? { ...f.rankFilter } : null,
+    // Cloned PER ENTRY, not just at the top: the shallow spread above would
+    // hand every caller the same band objects, and one in-place edit on the
+    // contacts page would reach into saved presets held in the same tree.
+    // An inert band (both ends open) is dropped so it cannot make the
+    // dimension read as active.
+    rankRanges: f.rankRanges
+      ? Object.fromEntries(
+          Object.entries(f.rankRanges)
+            .filter(([, r]) => rankRangeIsActive(r))
+            .map(([k, r]) => [k, { min: r.min ?? null, max: r.max ?? null }]),
+        )
+      : null,
     age: f.age ? { ...f.age } : null,
     customFields: (f.customFields ?? []).map((c) => ({ ...c })),
     consent: f.consent ? { ...f.consent, states: [...(f.consent.states ?? [])] } : null,
@@ -203,7 +344,7 @@ export function activeFilterKeys(filter: Partial<ContactFilter> | null | undefin
   if (f.needsAttention) keys.push('needsAttention')
   if (f.sessionsMin != null || f.sessionsMax != null) keys.push('sessionsMin')
   if (f.inactivity) keys.push('inactivity')
-  if (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0)) keys.push('rankFilter')
+  if (rankFilterIsActive(f)) keys.push('rankFilter')
   if (f.age && (f.age.min != null || f.age.max != null)) keys.push('age')
   if (f.customFields.length) keys.push('customFields')
   if (f.consent?.documentId && f.consent.states.length) keys.push('consent')
@@ -810,11 +951,33 @@ export function matchesFilter(
     }
   }
 
-  if (f.rankFilter && Object.values(f.rankFilter).some((l) => l.length > 0)) {
-    const matched = Object.entries(f.rankFilter).some(([systemId, levels]) => {
-      if (!levels.length) return false
+  // Systems are ORed: holding a matching rank in any one of them is a match.
+  //
+  // A BAND OVERRIDES ITS MIRROR. `rankFilter[systemId]` is written from the band
+  // by `expandRankRange` so that resolvers which predate bands still filter
+  // correctly (see RankRangeFilter for why that mirror exists at all). Here, in
+  // a resolver that DOES understand bands, the band is the authority — it is the
+  // one that survives a level being inserted into the scale.
+  //
+  // Every comparison happens under the SAME `systemId` the threshold was keyed
+  // by, which is what makes it meaningful: a level value is an ordinal inside
+  // its own system and means nothing across systems.
+  const rankSystemIds = new Set([
+    ...Object.keys(f.rankFilter ?? {}),
+    ...Object.keys(f.rankRanges ?? {}),
+  ])
+  if (rankFilterIsActive(f)) {
+    const matched = [...rankSystemIds].some((systemId) => {
+      const range = f.rankRanges?.[systemId]
       const rank = subject.ranks?.[systemId]
-      return rank != null && levels.includes(rank)
+      if (rank == null) return false
+      if (rankRangeIsActive(range)) {
+        if (range!.min != null && rank < range!.min) return false
+        if (range!.max != null && rank > range!.max) return false
+        return true
+      }
+      const levels = f.rankFilter?.[systemId]
+      return !!levels?.length && levels.includes(rank)
     })
     if (!matched) return false
   }
