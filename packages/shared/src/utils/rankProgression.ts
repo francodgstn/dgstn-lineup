@@ -28,6 +28,7 @@ import type {
 } from '../types/rankProgression'
 import { DEFAULT_PARTICIPATION_ROLE, nextLevel, orderedLevels, ruleForLevel } from '../types/rankProgression'
 import type { RankingSystem } from '../types/team'
+import { pluginIdOfNamespacedId } from '../types/plugin'
 
 // ─── Plugin requirement registry ──────────────────────────────────────────────
 
@@ -64,11 +65,10 @@ export function registerRankRequirementResolver(
   rankRequirementResolvers[id] = resolver
 }
 
-/** The plugin id inside `plugin:{pluginId}:{name}`. */
-export function pluginIdOfRequirement(kind: string): string | null {
-  const parts = kind.split(':')
-  return parts.length === 3 && parts[0] === 'plugin' ? parts[1] : null
-}
+/** The plugin id inside `plugin:{pluginId}:{name}`. Requirement ids share their
+ *  shape with automation action ids, so the parse has ONE owner —
+ *  `pluginIdOfNamespacedId` in types/plugin.ts. This is its domain-specific name. */
+export const pluginIdOfRequirement = pluginIdOfNamespacedId
 
 // ─── Time ─────────────────────────────────────────────────────────────────────
 

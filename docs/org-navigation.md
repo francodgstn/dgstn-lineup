@@ -14,7 +14,17 @@ ctrlKey + altKey on the layouts this product is built for.
   only title. The layout supplies the destination heading; the two pages that
   always had one say so in the catalogue (`ownsHeader`) rather than being
   remembered.
-- **The mobile rail is a disclosure, not an index page.** The studio rail can be
+- **The rail needed a front door, and `/org/{id}/manage` is it.** The rail
+  rendered only on rail ROUTES, so from Studios or Events there was no rail and
+  no link to the seven destinations behind it — eleven tabs became four rows and
+  seven things that had apparently vanished ("where did all the tabs go?",
+  Franco, 2026-08-27). A studio never had this problem because `/settings` is a
+  real place you can go to and the rail comes with it. `manage` is a fifth
+  sidebar row, and it is also what makes the rail work on a phone, where a rail
+  is an INDEX and an index needs a route to be the index of.
+- ~~**The mobile rail is a disclosure, not an index page.**~~ Superseded by the
+  above; the disclosure existed only because that route did not exist yet.
+- **(original note) The mobile rail is a disclosure, not an index page.** The studio rail can be
   an index because `/settings` is a real route that lists it. The organisation
   has no equivalent — `/org/{id}` redirects straight to the studios list — and
   inventing one would put a second "organisation home" in the reader's head for
@@ -23,9 +33,30 @@ ctrlKey + altKey on the layouts this product is built for.
   labels, gates, the active rule and the pin all differ between the two, and the
   studio's pin store is keyed per studio so it has no meaning on an org row.
 
-**Still open after the build:** the sidebar quick-search does not index org
-destinations (below), and `useAffiliationTerm` resolves the CURRENT TEAM's org
-rather than the route's — so on an `/org/{X}` route where X is not the current
+**Revised 2026-08-27, after Franco used it:**
+
+- **The switcher moved to the sidebar HEADER**, replacing the studio name, and
+  the separate amber indicator band is gone — its accent moved onto the trigger.
+  This reverses the 2026-08-24 decision that the header row was "orientation,
+  not a control". That reasoning was about reaching a second STUDIO, a rare
+  account action; the scope model made "which place am I standing in" a constant
+  question, and answering it at one end of the sidebar while changing it at the
+  other was the split. The trigger opens a menu and does NOT navigate — as a
+  link it was the topmost control in an org sidebar quietly leaving the org.
+- **The header row now survives collapse.** It was `!collapsed`-only, so the
+  icon rail said nothing about scope at all. That was a gap, not a decision.
+- **The whole sidebar follows the scope, not just the middle.** Three things sat
+  outside the gated block and stayed studio-scoped: the "⋯" menu's destinations
+  (`/settings` and `/settings/plugins` — so from an org, both landed in the
+  studio's), the pinned head-pair tiles (two studio destinations ABOVE the org's
+  own rows), and the quick-search catalogue, which indexed destinations whose
+  rows were not even on screen.
+- **The QR is hidden in org scope, not repointed** — it reads a studio's public
+  profile and an org has no equivalent document, so a repointed QR would be some
+  arbitrary studio's.
+
+**Still open after the build:** `useAffiliationTerm` resolves the CURRENT TEAM's
+org rather than the route's — so on an `/org/{X}` route where X is not the current
 team's org, the studio sidebar's affiliation word is the wrong org's. Both are
 recorded in `docs/open-defects.md`.
 
@@ -133,11 +164,19 @@ is holding a modifier to rotate through a list. With three or more scopes the
 switcher menu is already the better tool, so this control always means "back to
 the previous one" and never "next in some order".
 
-**A button, not only a shortcut.** A bare chord is undiscoverable; the Ctrl+K
-note in `(auth)/layout.tsx` makes the same point about search losing
-discoverability behind an icon. The scope indicator carries a small toggle
-naming the *target* scope, so the affordance says what it will do before it does
-it, and names its shortcut in the tooltip.
+**~~A button, not only a shortcut.~~ REVERSED 2026-08-27.** The original
+argument stands on its own terms — a bare chord is undiscoverable, and the
+Ctrl+K note in `(auth)/layout.tsx` makes the same point about search losing
+discoverability behind an icon — but it lost to the row it had to live on. The
+scope identity is what that row exists to say, and a button naming the *other*
+scope competed with it for the same few pixels; the switcher, one click away,
+already reaches every scope including the previous one.
+
+So **Alt+O is a chord with no visible affordance**. That is a real cost, not a
+free simplification: until the planned shortcuts list advertises it, nobody will
+find it who was not told. Accepted knowingly (Franco), and stated in
+`ScopeFlip.tsx` so the next reader inherits the trade rather than the
+conclusion.
 
 **Write the chord as a Ctrl chord** (Franco, 2026-08-27). The design is
 Windows-first: the primary keyboards here are Swiss, German and French, and the

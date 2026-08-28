@@ -37,6 +37,7 @@ import type {
   SaasPlan,
 } from '@linyup/shared'
 import { rebuildTeamPublicCoaches } from './syncTeamCoachesPublicProfile'
+import { resolveActivePluginInstalls } from '../utils/plugins'
 
 export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (event) => {
   const { teamId } = event.params
@@ -53,22 +54,44 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // ── active_public_surfaces computation ──────────────────────────────────────
   // Each check uses limit(1) to avoid full scans.
 
+  // ── THE PLUGIN PROBES ARE ORG-AWARE ─────────────────────────────────────────
+  //
+  // All three read the TEAM path only, which made an org-level install invisible
+  // to the one computation that decides what the PUBLIC sees. A federation that
+  // installed `website` for its studios had already granted them the feature —
+  // `publishWebsite`, the kiosk callable and every other server gate honour that
+  // through `pluginIsActive` — but this flag alone disagreed, so a member studio
+  // could publish a site that its own public profile then advertised as absent.
+  //
+  // WHY THIS IS SAFE TO FLIP. Two of the three surfaces are ALSO gated on
+  // published content — `site` on a published site document, `forms` on a
+  // published form — so no studio can begin advertising something it never
+  // created. `kiosk` has no such second condition, and correctly so: an org
+  // install IS the grant, and the kiosk callable already resolves it that way.
+  //
+  // EVENTUALLY CONSISTENT, deliberately. Nothing fans an org install out to its
+  // member teams; each studio's surfaces recompute on its own next team write.
+  // The alternative — a trigger on org installs touching every member team — is
+  // a write amplification this flag does not justify, and the previous behaviour
+  // was not "later" but "never".
+  //
+  // Batched with the team's `org_id`, which this trigger is standing on: two
+  // round trips for three plugins rather than nine reads. See
+  // `resolveActivePluginInstalls`.
+  const [pluginInstalls, sitePublishedSnap] = await Promise.all([
+    resolveActivePluginInstalls(teamId, (data.org_id as string | undefined) ?? null, [
+      'website',
+      'kiosk',
+      'custom-forms',
+      'gift-cards',
+    ]),
+    db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
+  ])
+
   // site: website plugin active AND a published site exists
   // kiosk: entrance-tablet surface — live whenever the plugin install is active.
-  const [websitePluginSnap, sitePublishedSnap, kioskPluginSnap] = await Promise.all([
-    db
-      .doc(
-        `${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/website`
-      )
-      .get(),
-    db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
-    db.doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/kiosk`).get(),
-  ])
-  const siteActive =
-    websitePluginSnap.exists &&
-    websitePluginSnap.data()?.status === 'active' &&
-    sitePublishedSnap.exists
-  const kioskActive = kioskPluginSnap.exists && kioskPluginSnap.data()?.status === 'active'
+  const siteActive = pluginInstalls.get('website') !== null && sitePublishedSnap.exists
+  const kioskActive = pluginInstalls.get('kiosk') !== null
 
   // Portal (stored under the stable `space` key): the contact's PERSONAL member
   // portal — membership, bookings, profile, and the courses they can open. Decoupled
@@ -77,11 +100,8 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   const spaceActive = true
 
   // forms: custom-forms plugin active AND ≥1 published, non-archived form
-  const formsPluginSnap = await db
-    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/custom-forms`)
-    .get()
   let formsActive = false
-  if (formsPluginSnap.exists && formsPluginSnap.data()?.status === 'active') {
+  if (pluginInstalls.get('custom-forms') !== null) {
     const publishedFormSnap = await db
       .collection(FORMS_COLLECTION)
       .where('teamId', '==', teamId)
@@ -199,11 +219,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // Default to true — booking works on every plan, plugin-free.
   const bookingActive = true
 
-  const giftCardsPluginSnap = await db
-    .doc(`${TEAMS_COLLECTION}/${teamId}/${INSTALLED_PLUGINS_SUBCOLLECTION}/gift-cards`)
-    .get()
-  const giftCardsPluginActive =
-    giftCardsPluginSnap.exists && giftCardsPluginSnap.data()?.status === 'active'
+  const giftCardsPluginActive = pluginInstalls.get('gift-cards') !== null
   // CAN THIS STUDIO BE PAID? Both halves of the server-side answer, read from
   // the same two fields `loadEnabledTeam` + `requireChargeableAccount` enforce
   // (connect/access.ts): the operator kill-switch must not be down, and the
@@ -410,7 +426,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // field from the defaults so toKioskPublicConfig never dereferences a missing
     // one (which previously threw and aborted the ENTIRE public-profile sync for
     // the team, leaving kiosk — and every other surface — stale).
-    const kioskCfg = kioskPluginSnap.data()?.config as Partial<KioskConfig> | undefined
+    // The RESOLVED install's config — so a studio whose kiosk came from its
+    // organisation gets the organisation's settings rather than none. Precedence
+    // between two active installs still favours the team's own.
+    const kioskCfg = pluginInstalls.get('kiosk')?.config as Partial<KioskConfig> | undefined
     publicProfile.kiosk = toKioskPublicConfig(normalizeKioskConfig(kioskCfg))
   } else {
     publicProfile.kiosk = FieldValue.delete()

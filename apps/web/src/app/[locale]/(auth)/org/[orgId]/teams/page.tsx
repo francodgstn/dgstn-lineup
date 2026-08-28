@@ -79,7 +79,27 @@ function useOrgTeams(orgId: string) {
 
       await Promise.all(
         rows.map(async (row) => {
-          const [teamDoc, ownerSnap] = await Promise.all([
+          // EVERY ENRICHMENT HERE IS OPTIONAL, AND ONE OF THEM USED TO COST THE
+          // WHOLE PAGE.
+          //
+          // An org admin is NOT automatically a member of the studios in the
+          // organisation, and each of these reads is gated on membership rather
+          // than on org role: `teams/{id}` is member-or-creator (rules ~L462),
+          // `team_members` is member-only, and `users/{id}` is own-profile-only
+          // ("Restricts PII (email) exposure"). For a real federation — studios
+          // owned by other people — all three are denied.
+          //
+          // They were unguarded inside a `Promise.all`, so ONE denial rejected
+          // the whole query function and the page rendered "No teams have joined
+          // this organization yet." to an organisation that had two. It reads as
+          // an empty org rather than as a failed read, which is why it was
+          // reported as the org account having no team (Franco, 2026-08-27).
+          //
+          // The contacts count below already had this guard; now they all do. A
+          // row that cannot be enriched loses its detail, not its existence —
+          // the id is from `org_teams`, which the org admin CAN read, so the row
+          // is always real even when nothing decorates it.
+          const [teamDoc, ownerSnap] = await Promise.allSettled([
             getDoc(doc(db, TEAMS_COLLECTION, row.teamId)),
             getDocs(
               query(
@@ -90,14 +110,21 @@ function useOrgTeams(orgId: string) {
             ),
           ])
 
-          if (teamDoc.exists()) row.teamName = teamDoc.data().name
+          if (teamDoc.status === 'fulfilled' && teamDoc.value.exists()) {
+            row.teamName = teamDoc.value.data().name
+          }
 
-          if (!ownerSnap.empty) {
-            const ownerId = ownerSnap.docs[0].data().userId as string
-            const userDoc = await getDoc(doc(db, USERS_COLLECTION, ownerId))
-            if (userDoc.exists()) {
-              const u = userDoc.data()
-              row.ownerName = u.displayName || u.email || ownerId
+          const owners = ownerSnap.status === 'fulfilled' ? ownerSnap.value : null
+          if (owners && !owners.empty) {
+            const ownerId = owners.docs[0].data().userId as string
+            try {
+              const userDoc = await getDoc(doc(db, USERS_COLLECTION, ownerId))
+              if (userDoc.exists()) {
+                const u = userDoc.data()
+                row.ownerName = u.displayName || u.email || ownerId
+              }
+            } catch {
+              row.ownerName = undefined
             }
           }
 

@@ -276,8 +276,12 @@ describe('pluginIsActive sees an org-level install', () => {
 
   it('an inactive TEAM doc does not veto an active ORG doc', () => {
     const body = code(plugins)
+    // MATCHED BY SHAPE, NOT BY VARIABLE NAME. This assertion used to name
+    // `installSnap`, and it broke the day the resolver was batched — the RULE
+    // was intact and the test failed anyway, which is the failure mode that
+    // teaches people to delete source assertions.
     assert.ok(
-      /installSnap\.exists\s*&&\s*installSnap\.data\(\)\?\.status === 'active'/.test(body),
+      /exists\s*&&\s*\w+\.data\(\)\?\.status === 'active'/.test(body),
       'the team branch must be gated on an active status before it wins. useInstalledPlugins ' +
         'filters to active FIRST and only then lets a team entry take precedence, so a server ' +
         'where the team doc wins merely by existing refuses what the studio can see.',

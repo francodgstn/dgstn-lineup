@@ -575,7 +575,7 @@ The fix is not to widen `OrgProvider` — the scope is already resolved from the
 URL in `ScopeContext`, so the hook should read the ROUTE's org id from there
 rather than the team's.
 
-### The sidebar quick-search does not index org destinations
+### The sidebar quick-search does not index org destinations — FIXED 2026-08-27
 
 Named as a risk in `docs/org-navigation.md` before the build and still true
 after it. The search catalogue is built from `NAV_SECTIONS` + the settings

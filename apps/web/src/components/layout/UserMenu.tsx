@@ -21,7 +21,6 @@ import {
 } from 'lucide-react'
 import { posthog } from '@/lib/posthog'
 import { OPEN_SETUP_GUIDE_EVENT } from '@/components/onboarding/SetupGuide'
-import { TeamSwitcher } from '@/components/layout/TeamSwitcher'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +49,7 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations('TopBar')
   const tNav = useTranslations('Nav')
   const tOnb = useTranslations('Onboarding')
-  const { user, team } = useAuth()
+  const { user } = useAuth()
   const { theme, setTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
@@ -98,9 +97,8 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           >
             <UserAvatar email={user?.email ?? null} />
             {!collapsed && (
-              // Email only: the studio name is in the sidebar header now, and
-              // repeating it here just made two lines say one thing. It stays in
-              // the dropdown below, which is the identity summary.
+              // Email only: the PLACE is named in the sidebar header, and
+              // repeating it here just made two lines say one thing.
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user?.email}</p>
               </div>
@@ -108,22 +106,27 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align={collapsed ? 'start' : 'end'} side="top" className="w-56">
             <DropdownMenuGroup>
+              {/* THE PERSON, NOT THE PLACE. This used to add the studio name
+                  under the email — which named the STUDIO even while you stood
+                  in an ORGANISATION, the same wrong-scope label the header row
+                  was rebuilt to remove. The place is said once, at the top of
+                  the sidebar, by the control that also changes it. */}
               <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium truncate">{user?.email}</span>
-                  {team?.name && (
-                    <span className="text-xs text-muted-foreground truncate">{team.name}</span>
-                  )}
-                </div>
+                <span className="truncate text-xs font-medium">{user?.email}</span>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
 
-            {/* WHICH STUDIO, directly under the line that names it. Self-gating:
-                the studio list appears only for a login that is in more than
-                one, so for most people this adds a single "create another"
-                row. Emits its own trailing separator. */}
-            <TeamSwitcher />
+            {/* THE STUDIO/ORGANISATION SWITCHER IS NOT HERE ANY MORE
+                (2026-08-27). It moved to the sidebar's header row, where the
+                scope is NAMED — the indicator and the control are one object
+                now, because "which place am I standing in" is a question the
+                scope model made constant, and answering it at one end of the
+                sidebar while changing it at the other was the split this
+                removes. See components/layout/ScopeSwitcher.tsx.
+
+                What is left in this menu is the PERSON: their email, the theme,
+                the language, sign-out. */}
 
             {/* Theme toggle — Light / Dark / System (follow OS) */}
             <div className="px-2 py-1.5">

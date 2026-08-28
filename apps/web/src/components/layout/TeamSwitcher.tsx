@@ -15,10 +15,15 @@
  * so in a comment ("there is no team switcher"); that decision was reversed on
  * 2026-08-24.
  *
- * ── IT HIDES ITSELF, BUT ONLY WHEN IT KNOWS ────────────────────────────────
- * The studio LIST renders only for someone who is in more than one, so the
- * account menu is unchanged for the overwhelming majority. "Create another
- * studio" is always there, because it is the only way anyone gets to two.
+ * ── IT SHOWS EVERYWHERE YOU CAN STAND, AND TICKS WHERE YOU ARE ─────────────
+ * Every studio and every organisation this login can reach, with the current
+ * one ticked. It used to hide the studio list for anyone in a single studio;
+ * that was right while this lived in the account menu and only answered "take
+ * me to my OTHER studio", and wrong as a scope switcher, whose job is the whole
+ * picture. The trigger still refuses to become a dropdown at all when there is
+ * genuinely nowhere else to go (see ScopeSwitcher) — that is where "unchanged
+ * for the overwhelming majority" is kept now. "Create another studio" is always
+ * there, because it is the only way anyone gets to two.
  *
  * A FAILED READ IS NOT THAT SILENCE. An empty list and an errored query both
  * leave nothing to render, and they mean opposite things: the first is "you are
@@ -36,10 +41,21 @@
  * because a team-scoped detail URL (`/contacts/{id}`) does not exist in the
  * studio being switched to.
  *
- * ── THIS IS NOT AN ORG HIERARCHY ────────────────────────────────────────────
- * A flat list of the studios this login is a member of. Organizations are a
- * separate concept with their own sidebar section (`OrgLinks`); nothing here
- * nests, groups or rolls up.
+ * ── IT LISTS ORGANISATIONS TOO NOW, AND STILL DOES NOT NEST ────────────────
+ * This used to say organisations were a separate concept with their own sidebar
+ * section (`OrgLinks`). That section was deleted when an organisation became a
+ * SCOPE rather than a row (docs/org-navigation.md), and its entries moved here —
+ * because "which place am I standing in" is one question and answering it in two
+ * controls is the ambiguity the scope model removes.
+ *
+ * They are still two FLAT groups. Nothing nests, groups or rolls up: an
+ * organisation is not a parent of the studios listed above it, it is a different
+ * place to stand.
+ *
+ * ── AND IT NO LONGER LIVES IN THE ACCOUNT MENU ─────────────────────────────
+ * It is the content of the scope switcher in the sidebar's header row
+ * (components/layout/ScopeSwitcher.tsx). The notes below about "the account
+ * menu" describe where it came from, not where it is.
  */
 
 import { useState } from 'react'
@@ -60,7 +76,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 
 export type MyTeam = { id: string; name: string }
@@ -101,12 +116,14 @@ export function useMyTeams() {
         new Set(
           snap.docs
             // The denormalised stamp is READ, not reconstructed from the parent
-            // path: the collection-group rule on `{path=**}/team_members/{id}`
-            // gates on `resource.data.teamId != null && isTeamMember(...)`, so a
-            // membership document lacking the stamp is DENIED rather than
-            // returned — a `?? d.ref.parent.parent?.id` fallback here would be a
-            // branch nothing can enter, telling the next reader that unstamped
-            // legacy documents still arrive when the rules already refuse them.
+            // path. The collection-group rule gates on the document's own
+            // `userId`, and a document with no `teamId` is one this map simply
+            // drops — a `?? d.ref.parent.parent?.id` fallback would invent a
+            // team id for a membership that never claimed one.
+            //
+            // (This comment used to describe the rule as gating on
+            // `isTeamMember(resource.data.teamId)`. It did, and that rule denied
+            // every query it was supposed to allow — see firestore.rules.)
             .map((d) => d.get('teamId') as string | undefined)
             .filter((id): id is string => !!id)
         )
@@ -137,8 +154,23 @@ export function TeamSwitcher() {
   const { current: currentScope } = useScope()
   const [switchingTo, setSwitchingTo] = useState<string | null>(null)
 
+  /** Am I standing in this studio RIGHT NOW? Being the current team is not
+   *  enough — in org scope the current team is still set, but you are somewhere
+   *  else. Without this, the studio you belong to renders as ticked-and-inert
+   *  inside an organisation, so the switcher's most obvious way back to your own
+   *  studio does nothing at all. */
+  const standingIn = (teamId: string) =>
+    currentScope?.kind === 'team' && currentScope.id === teamId
+
   async function switchTo(teamId: string) {
-    if (!user || teamId === currentTeamId || switchingTo) return
+    if (!user || switchingTo) return
+    // Already the current team, but standing in an ORG: this is navigation, not
+    // a team switch. Nothing is cached against the wrong tenant, so none of the
+    // hard-reload reasoning below applies.
+    if (teamId === currentTeamId) {
+      if (!standingIn(teamId)) router.push('/dashboard' as Route)
+      return
+    }
     setSwitchingTo(teamId)
     try {
       await updateDoc(doc(db, USERS_COLLECTION, user.uid), { currentTeam: teamId })
@@ -181,13 +213,22 @@ export function TeamSwitcher() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
       )}
-      {!isError && teams.length > 1 && (
+      {/* BOTH GROUPS, ALWAYS, WITH A TICK ON WHERE YOU ARE (Franco, 2026-08-27).
+          This used to hide the studio list unless you were in more than one — a
+          rule inherited from when the block lived in the account menu and only
+          ever answered "take me to my other studio". As the SCOPE switcher its
+          job is different: it is the whole picture of where this login can
+          stand, and a picture with your current place missing is a worse answer
+          than a slightly longer list. The tick is what makes the extra row
+          informative rather than noise — it says where you are, which is the
+          question the control exists to answer. */}
+      {!isError && teams.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
             {t('switchStudio')}
           </DropdownMenuLabel>
           {teams.map((team) => {
-            const isCurrent = team.id === currentTeamId
+            const isCurrent = standingIn(team.id)
             return (
               <DropdownMenuItem
                 key={team.id}
@@ -213,6 +254,27 @@ export function TeamSwitcher() {
               </DropdownMenuItem>
             )
           })}
+          {/* INSIDE THE STUDIOS GROUP, because it makes a STUDIO — at the foot
+              of the whole menu it read as a general action and sat under the
+              organisations, which it has nothing to do with (Franco,
+              2026-08-27). Shown to someone with a single studio too — it is
+              the only route to a second one, so gating it on already having
+              two would make it unreachable. It rides on the group's own gate,
+              which is right: a login with no studio at all is sent to the
+              signup wizard by the app before it ever opens this menu.
+
+              IT REACHES THE EXISTING TEAM-CREATION FLOW rather than a second
+              copy of it: `provisionTeam` is generic and nothing in it assumes
+              it is the caller's first team. The wizard otherwise redirects
+              anyone who already has a `currentTeam` straight to the dashboard;
+              `?new=1` is what skips that bounce and opens it at its team step.
+              THAT BRANCH LIVES IN `app/[locale]/signup/page.tsx` — this entry
+              is the only thing that sets the flag, so the two move together or
+              the item goes nowhere. */}
+          <DropdownMenuItem onClick={() => router.push('/signup?new=1' as Route)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('createStudio')}
+          </DropdownMenuItem>
         </DropdownMenuGroup>
       )}
       {/* THE ORGANISATIONS THIS LOGIN CAN STAND IN.
@@ -222,7 +284,13 @@ export function TeamSwitcher() {
 
           Entering an org is ORDINARY NAVIGATION, unlike switching studio: the
           current team does not change, so there is no cache keyed to the wrong
-          tenant and none of the hard-reload reasoning below applies. */}
+          tenant and none of the hard-reload reasoning below applies.
+
+          IT LINKS TO THE SCOPE ROOT, not to a page. Where an organisation opens
+          depends on whether you run it or merely belong to one of its studios,
+          and `/org/{id}` is the one place that decides — see that route. Naming
+          a page here would mean resolving a role for every organisation in the
+          list before this menu could render a single row. */}
       {orgs.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
@@ -234,7 +302,7 @@ export function TeamSwitcher() {
               <DropdownMenuItem
                 key={org.id}
                 disabled={!!switchingTo}
-                onClick={() => router.push(`/org/${org.id}/teams` as Route)}
+                onClick={() => router.push(`/org/${org.id}` as Route)}
               >
                 {isCurrent ? (
                   <Check className="mr-2 h-4 w-4 text-primary" />
@@ -248,22 +316,6 @@ export function TeamSwitcher() {
           })}
         </DropdownMenuGroup>
       )}
-      {/* Always shown, including to someone with a single studio — it is the
-          only route to a second one, so gating it on already having two would
-          make it unreachable.
-
-          IT REACHES THE EXISTING TEAM-CREATION FLOW rather than a second copy
-          of it: `provisionTeam` is generic and nothing in it assumes it is the
-          caller's first team. The wizard otherwise redirects anyone who already
-          has a `currentTeam` straight to the dashboard; `?new=1` is what skips
-          that bounce and opens it at its team step. THAT BRANCH LIVES IN
-          `app/[locale]/signup/page.tsx` — this entry is the only thing that
-          sets the flag, so the two move together or the item goes nowhere. */}
-      <DropdownMenuItem onClick={() => router.push('/signup?new=1' as Route)}>
-        <Plus className="mr-2 h-4 w-4" />
-        {t('createStudio')}
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
     </>
   )
 }

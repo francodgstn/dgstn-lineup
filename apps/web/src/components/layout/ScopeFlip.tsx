@@ -1,7 +1,10 @@
 'use client'
 
 /**
- * FLIP BACK TO THE SCOPE YOU WERE JUST IN — the alt-tab affordance.
+ * FLIP BACK TO THE SCOPE YOU WERE JUST IN — the alt-tab chord.
+ *
+ * This module is the KEY HANDLER ONLY. It kept its name when the visible button
+ * was removed (see below) so the import in the shell did not churn.
  *
  * The one real cost of making an organisation a scope is the click to get back,
  * and an org admin who also runs a studio pays it all day.
@@ -12,12 +15,21 @@
  * scopes the switcher menu is already the better tool, so this always means
  * "back to the previous one" and never "next in some order".
  *
- * A BUTTON, NOT ONLY A CHORD. A bare shortcut is undiscoverable; the sidebar
- * search makes the same point about itself. So the control names its TARGET —
- * it says what it will do before it does it — and carries the chord in its
- * tooltip. NO PREVIOUS SCOPE, NO CONTROL: in a first session it is absent rather
- * than present-and-guessing, because a toggle that lands somewhere arbitrary is
- * worse than no toggle at all.
+ * ── A CHORD ONLY, AS OF 2026-08-27 (a reversal, recorded) ──────────────────
+ *
+ * This shipped with a visible button too, on the argument that a bare shortcut
+ * is undiscoverable — the same point the sidebar search makes about itself.
+ * Franco removed it: on the header row it competed for the space that says
+ * WHERE YOU ARE, which is the row's whole job, and the switcher one click away
+ * already reaches every scope.
+ *
+ * DISCOVERABILITY IS DEFERRED, NOT ABANDONED. The chord is meant to appear in a
+ * shortcuts list opened from elsewhere in the app. Until that exists, Alt+O is
+ * genuinely undiscoverable — which is a real cost, accepted knowingly rather
+ * than overlooked, and the reason this note says so out loud.
+ *
+ * The guard below still refuses when there is no previous scope, so the chord
+ * can never land somewhere arbitrary.
  *
  * ── THE CHORD IS Alt+O, AND THE GUARD IS NOT OPTIONAL ───────────────────────
  *
@@ -35,10 +47,8 @@
  */
 
 import { useEffect } from 'react'
-import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { Repeat2 } from 'lucide-react'
 import { useScope } from '@/contexts/ScopeContext'
 
 /** Is the keystroke going into something the person is typing in? */
@@ -81,33 +91,4 @@ export function useScopeFlipShortcut() {
 export function ScopeFlipShortcut() {
   useScopeFlipShortcut()
   return null
-}
-
-/** The visible affordance. Renders nothing when there is nowhere to flip to. */
-export function ScopeFlip({ collapsed }: { collapsed: boolean }) {
-  const t = useTranslations('TopBar')
-  const { previous, hrefFor } = useScope()
-  const router = useRouter()
-
-  if (!previous) return null
-
-  // A scope whose name has not loaded yet still flips — the label falls back to
-  // the kind rather than rendering an empty button.
-  const name =
-    previous.name || (previous.kind === 'org' ? t('scopeOrganisation') : t('scopeStudio'))
-
-  return (
-    <button
-      type="button"
-      onClick={() => router.push(hrefFor(previous) as Route)}
-      title={`${t('flipToPrevious', { name })} · Alt+O`}
-      aria-label={t('flipToPrevious', { name })}
-      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
-        collapsed ? 'justify-center px-1.5' : ''
-      }`}
-    >
-      <Repeat2 className="h-3.5 w-3.5 shrink-0" />
-      {!collapsed && <span className="max-w-[9rem] truncate">{name}</span>}
-    </button>
-  )
 }
