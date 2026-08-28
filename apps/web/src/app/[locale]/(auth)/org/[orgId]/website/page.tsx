@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { toast } from 'sonner'
-import { Globe, Plus, GripVertical, Pencil, Trash2, Eye, EyeOff, ExternalLink, Check } from 'lucide-react'
+import { Globe, Plus, GripVertical, Pencil, Trash2, Eye, EyeOff, ExternalLink, Check, ListTree } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { arrayMove } from '@dnd-kit/sortable'
 import { useAuth } from '@/contexts/AuthContext'
@@ -38,9 +38,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { ColorPicker } from '@/components/ui/color-picker'
-import { ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION, TEAMS_COLLECTION } from '@linyup/shared'
-import type { OrgSiteDraft, OrgSiteSection, OrgSiteSectionType, OrgSiteTeamRef, SiteMeta } from '@linyup/shared'
-import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
+import { ORGANIZATIONS_COLLECTION, ORG_TEAMS_SUBCOLLECTION, TEAMS_COLLECTION, deriveSiteMenu } from '@linyup/shared'
+import type { OrgSiteDraft, OrgSiteSection, OrgSiteSectionType, OrgSiteTeamRef, SiteMeta, SiteMenuItem } from '@linyup/shared'
+import { MenuPanel } from '@/plugins/website/MenuPanel'
+import { PreviewOverlay } from '@/plugins/website/PreviewOverlay'
+import { sectionNavLabel } from '@/components/site/sections'
+import { type RenderableSite } from '@/components/site/WebsiteRenderer'
 import { OrgSectionEditor } from './OrgSectionEditor'
 import { useOrgSiteDraft, saveOrgSiteDraft, publishOrgSite, unpublishOrgSite } from './hooks'
 import { ORG_SECTION_LIBRARY, newOrgSection, emptyOrgDraft } from './defaults'
@@ -88,19 +91,21 @@ function AppearancePanel({
   meta: SiteMeta
   onChange: (patch: Partial<SiteMeta>) => void
 }) {
+  const t = useTranslations('Website')
+
   const setHeader = (p: Partial<SiteMeta['header']>) => onChange({ header: { ...meta.header, ...p } })
   const setSeo = (p: Partial<NonNullable<SiteMeta['seo']>>) => onChange({ seo: { ...meta.seo, ...p } })
 
   return (
     <div className="space-y-5">
       <div className="space-y-1.5">
-        <Label className="text-xs">Site title</Label>
+        <Label className="text-xs">{t('apSiteTitle')}</Label>
         <Input value={meta.title} onChange={(e) => onChange({ title: e.target.value })} className="h-9" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">Theme</Label>
+          <Label className="text-xs">{t('apTheme')}</Label>
           <Select value={meta.theme} onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}>
             <SelectTrigger className="h-9">
               <SelectValue />
@@ -113,7 +118,7 @@ function AppearancePanel({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Font</Label>
+          <Label className="text-xs">{t('apFont')}</Label>
           <Select value={meta.font} onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}>
             <SelectTrigger className="h-9">
               <SelectValue />
@@ -128,32 +133,32 @@ function AppearancePanel({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs">Accent color</Label>
+        <Label className="text-xs">{t('apAccentColor')}</Label>
         <ColorPicker
           value={meta.accentColor}
           onChange={(hex) => onChange({ accentColor: hex })}
-          aria-label="Accent color"
+          aria-label={t('apAccentColor')}
         />
       </div>
 
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">Header</p>
         <label className="flex items-center justify-between">
-          <span className="text-sm">Show navigation bar</span>
+          <span className="text-sm">{t('apShowNav')}</span>
           <Switch checked={meta.header.showNav} onCheckedChange={(v) => setHeader({ showNav: v })} />
         </label>
         <div className="space-y-1.5">
-          <Label className="text-xs">Header button label</Label>
+          <Label className="text-xs">{t('apHeaderCtaLabel')}</Label>
           <Input
             value={meta.header.ctaLabel ?? ''}
             onChange={(e) => setHeader({ ctaLabel: e.target.value })}
-            placeholder="Find a club"
+            placeholder={t('apHeaderCtaPlaceholderOrg')}
             className="h-9"
           />
         </div>
         {meta.header.ctaLabel && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Header button URL</Label>
+            <Label className="text-xs">{t('apHeaderCtaUrl')}</Label>
             <Input
               value={meta.header.ctaUrl ?? ''}
               onChange={(e) => setHeader({ ctaAction: 'url', ctaUrl: e.target.value })}
@@ -165,7 +170,7 @@ function AppearancePanel({
       </div>
 
       <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">Show social links in footer</span>
+        <span className="text-sm">{t('apShowSocialFooter')}</span>
         <Switch
           checked={meta.footer.showSocial}
           onCheckedChange={(v) => onChange({ footer: { showSocial: v } })}
@@ -175,11 +180,11 @@ function AppearancePanel({
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">SEO (optional)</p>
         <div className="space-y-1.5">
-          <Label className="text-xs">Page title</Label>
+          <Label className="text-xs">{t('apPageTitle')}</Label>
           <Input value={meta.seo?.title ?? ''} onChange={(e) => setSeo({ title: e.target.value })} className="h-9" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Meta description</Label>
+          <Label className="text-xs">{t('apMetaDescription')}</Label>
           <Input
             value={meta.seo?.description ?? ''}
             onChange={(e) => setSeo({ description: e.target.value })}
@@ -231,6 +236,8 @@ export default function OrgWebsiteBuilderPage() {
   const [draft, setDraft] = useState<OrgSiteDraft | null>(null)
   const [dirty, setDirty] = useState(false)
   const [tab, setTab] = useTabParam(SITE_TABS, 'sections')
+  const tSite = useTranslations('Site')
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -353,11 +360,32 @@ export default function OrgWebsiteBuilderPage() {
       ? `${window.location.origin}/public/org/${slug}`
       : `/public/org/${slug}`
   const status = dirty ? t('statusUnsaved') : draft.enabled ? t('statusPublished') : t('statusDraft')
+  // THE HEADER MENU — the same stored tree a studio edits, through the same
+  // panel and the same sanitiser. Absent until the org first touches it, and
+  // `deriveSiteMenu` then produces exactly the header it had before, which is
+  // what makes this additive rather than a migration.
+  //
+  // `surfaceLinks: []` because an organisation has no cross-surface links to
+  // offer: Shop, My space and Documents are studio surfaces. The panel simply
+  // shows no surface rows.
+  const menu: SiteMenuItem[] =
+    draft.menu ?? deriveSiteMenu({ sections: draft.sections, surfaceLinks: [] })
+
+  function setMenu(next: SiteMenuItem[]) {
+    setDraft((d) => (d ? { ...d, menu: next } : d))
+    setDirty(true)
+  }
+
   const previewSite: RenderableSite = {
     name: draft.name,
     slug: draft.slug,
     meta: draft.meta,
     sections: draft.sections,
+    menu,
+    // From the ORG document, exactly as `publishOrgWebsite` reads it — so the
+    // preview shows the social icons the published page will, rather than the
+    // author discovering them only after publishing.
+    socialLinks: org?.socialLinks,
   }
 
   return (
@@ -398,6 +426,12 @@ export default function OrgWebsiteBuilderPage() {
               {t('unpublish')}
             </Button>
           )}
+          {/* The preview moved out of the sidebar column and into an overlay,
+              so it needs a way in — same button, same place, as the studio's. */}
+          <Button variant="ghost" size="sm" onClick={() => setPreviewOpen(true)}>
+            <Eye className="mr-1 h-4 w-4" />
+            {t('preview')}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleSave} disabled={!dirty || saving}>
             {saving ? t('saving') : t('saveDraft')}
           </Button>
@@ -555,17 +589,42 @@ export default function OrgWebsiteBuilderPage() {
           )}
         </div>
 
-        {/* Right: sticky preview */}
-        <div className="space-y-2 lg:sticky lg:top-6 lg:w-[420px] lg:flex-shrink-0 lg:self-start">
-          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <Eye className="h-3.5 w-3.5" />
-            {t('preview')}
+        {/* Right: the MENU EDITOR, where the sticky preview column used to be.
+            That column showed a permanently-narrow rendering of a site whose
+            header collapses below the width it was pinned at — see
+            PreviewOverlay's header for the full argument. The preview opens over
+            the page now, and the width it freed is what the menu tree needs.
+
+            Beside the Sections tab only: a header menu is a list of sections, so
+            next to Appearance it would answer a question nobody asked. */}
+        {tab === 'sections' && (
+          <div className="space-y-2 lg:w-[420px] lg:flex-shrink-0 lg:self-start">
+            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <ListTree className="h-3.5 w-3.5" />
+              {t('tabMenu')}
+            </div>
+            <MenuPanel
+              menu={menu}
+              sections={draft.sections}
+              surfaces={[]}
+              surfaceLabel={() => ''}
+              sectionLabel={(sec) => sectionNavLabel(sec, tSite)}
+              onChange={setMenu}
+            />
           </div>
-          <div className="max-h-[calc(100vh-9rem)] overflow-y-auto rounded-xl border shadow-sm">
-            <WebsiteRenderer site={previewSite} orgId={orgId} orgTeams={previewTeams} preview />
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* `orgId` + `orgTeams` are what the clubs, locations and coaches blocks
+          aggregate over — without them the preview would silently drop three of
+          the seven section types. */}
+      <PreviewOverlay
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        site={previewSite}
+        orgId={orgId}
+        orgTeams={previewTeams}
+      />
 
       {/* Unpublish confirmation. States the consequence in the visitor's terms
           — the site goes offline now — and then states, equally plainly, that

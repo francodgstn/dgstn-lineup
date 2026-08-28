@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import WebsiteRenderer, { type RenderableSite } from '@/components/site/WebsiteRenderer'
-import type { PublicSurface } from '@linyup/shared'
+import type { PublicSurface, OrgSiteTeamRef } from '@linyup/shared'
 
 /** Phone width the mobile view renders at — the narrow end of what visitors use,
  *  so a layout that survives here survives the rest. */
@@ -48,6 +48,8 @@ export function PreviewOverlay({
   onOpenChange,
   site,
   surfaceLinks,
+  orgId,
+  orgTeams,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -56,6 +58,12 @@ export function PreviewOverlay({
    *  it — so a studio who just added Shop to the menu would watch it vanish
    *  from the preview and reasonably conclude the feature is broken. */
   surfaceLinks?: { surface?: PublicSurface; href: string; label: string }[]
+  /** ORG SITES ONLY. The clubs, locations and coaches blocks are aggregates over
+   *  an organisation's member studios; without these they render empty, and a
+   *  preview that silently drops three of the seven section types is worse than
+   *  no preview. A team site passes neither. */
+  orgId?: string
+  orgTeams?: OrgSiteTeamRef[]
 }) {
   const t = useTranslations('Website')
   const [width, setWidth] = useState<'desktop' | 'mobile'>('desktop')
@@ -110,7 +118,13 @@ export function PreviewOverlay({
             style={{ maxWidth: width === 'mobile' ? MOBILE_WIDTH : '100%' }}
           >
             <div className="h-full overflow-y-auto">
-              <WebsiteRenderer site={site} preview surfaceLinks={surfaceLinks} />
+              <WebsiteRenderer
+                site={site}
+                preview
+                surfaceLinks={surfaceLinks}
+                orgId={orgId}
+                orgTeams={orgTeams}
+              />
             </div>
           </div>
         </DialogBody>

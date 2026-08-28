@@ -392,14 +392,15 @@ function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p: Patch
           placeholder={t('editorMapPlaceholder')}
         />
       </Field>
-      {/* NO "show social links" SWITCH HERE, and its absence is deliberate.
-          `ContactBlock` renders social icons from `ctx.socialLinks`, which the
-          TEAM renderer fills from the studio's profile and the ORG renderer
-          never fills — `Organization` carries no social links at all. The
-          switch was present and could not, in any state, change what a visitor
-          saw. An org social-links field plus somewhere to edit it is a feature,
-          not an alignment; until it exists a control that does nothing is worse
-          than no control. */}
+      {/* The switch is real again. It was removed on 2026-08-28 because
+          `Organization` had no social links and nothing could set any, so it
+          could not change what a visitor saw; `publishOrgWebsite` had in fact
+          been reading `org.socialLinks` defensively all along, waiting for the
+          field. It exists now, with an editor in Organisation settings. */}
+      <label className="flex items-center justify-between rounded-lg border p-3">
+        <span className="text-sm">{t('editorShowSocial')}</span>
+        <Switch checked={s.showSocial ?? false} onCheckedChange={(v) => onChange({ showSocial: v })} />
+      </label>
     </div>
   )
 }

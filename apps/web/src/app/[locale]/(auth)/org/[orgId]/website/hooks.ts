@@ -53,6 +53,9 @@ export async function saveOrgSiteDraft(
     enabled: draft.enabled,
     meta: draft.meta,
     sections: draft.sections,
+    // Absent until the org first edits its header — `stripUndefinedDeep` drops
+    // it, and an absent menu still derives, so no existing org site changes.
+    menu: draft.menu,
   })
   await setDoc(doc(db, ORG_SITE_DRAFTS_COLLECTION, orgId), {
     ...payload,

@@ -14,6 +14,7 @@ import {
   optStr,
   safeUrl,
   sanitizeMeta,
+  sanitizeMenu,
   sanitizeHeroSection,
   sanitizeContentSection,
   sanitizeGallerySection,
@@ -180,9 +181,11 @@ export const publishOrgWebsite = onCall(async (request) => {
     }
   }
 
-  // Denormalise org social links (if the org has any — not a formally typed field
-  // yet, so read defensively) so the published doc is self-contained for
-  // footer/contact icons, same as the team site.
+  // Denormalise org social links so the published doc is self-contained for
+  // footer/contact icons, same as the team site. `Organization.socialLinks` is a
+  // typed field now (it was not when this was written, which is why the read
+  // stayed defensive — and why the website editor's "show social links" switch
+  // had nothing to show for a while).
   const socialLinksRaw = Array.isArray(org.socialLinks) ? (org.socialLinks as unknown[]) : []
   const socialLinks = socialLinksRaw
     .map((s) => {
@@ -200,6 +203,11 @@ export const publishOrgWebsite = onCall(async (request) => {
     slug,
     name,
     meta: sanitizeMeta(draft.meta, name),
+    // The header menu, through the SAME sanitiser the team site uses — depth,
+    // breadth and target shape are tenant-agnostic. Undefined when the org has
+    // never edited its header, and `clean` drops it, so the renderer keeps
+    // deriving the old layout.
+    menu: sanitizeMenu(draft.menu),
     sections,
     teams,
     socialLinks: socialLinks.length ? socialLinks : undefined,

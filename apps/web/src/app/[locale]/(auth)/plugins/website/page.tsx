@@ -87,6 +87,8 @@ function AppearancePanel({
   meta: SiteMeta
   onChange: (patch: Partial<SiteMeta>) => void
 }) {
+  const t = useTranslations('Website')
+
   const setHeader = (p: Partial<SiteMeta['header']>) =>
     onChange({ header: { ...meta.header, ...p } })
   const setSeo = (p: Partial<NonNullable<SiteMeta['seo']>>) =>
@@ -95,7 +97,7 @@ function AppearancePanel({
   return (
     <div className="space-y-5">
       <div className="space-y-1.5">
-        <Label className="text-xs">Site title</Label>
+        <Label className="text-xs">{t('apSiteTitle')}</Label>
         <Input
           value={meta.title}
           onChange={(e) => onChange({ title: e.target.value })}
@@ -105,7 +107,7 @@ function AppearancePanel({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">Theme</Label>
+          <Label className="text-xs">{t('apTheme')}</Label>
           <Select
             value={meta.theme}
             onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}
@@ -121,7 +123,7 @@ function AppearancePanel({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Font</Label>
+          <Label className="text-xs">{t('apFont')}</Label>
           <Select
             value={meta.font}
             onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}
@@ -139,34 +141,34 @@ function AppearancePanel({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs">Accent color</Label>
+        <Label className="text-xs">{t('apAccentColor')}</Label>
         <ColorPicker
           value={meta.accentColor}
           onChange={(hex) => onChange({ accentColor: hex })}
-          aria-label="Accent color"
+          aria-label={t('apAccentColor')}
         />
       </div>
 
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">Header</p>
         <label className="flex items-center justify-between">
-          <span className="text-sm">Show navigation bar</span>
+          <span className="text-sm">{t('apShowNav')}</span>
           <Switch
             checked={meta.header.showNav}
             onCheckedChange={(v) => setHeader({ showNav: v })}
           />
         </label>
         <div className="space-y-1.5">
-          <Label className="text-xs">Header button label</Label>
+          <Label className="text-xs">{t('apHeaderCtaLabel')}</Label>
           <Input
             value={meta.header.ctaLabel ?? ''}
             onChange={(e) => setHeader({ ctaLabel: e.target.value })}
-            placeholder="Book now"
+            placeholder={t('apHeaderCtaPlaceholderTeam')}
             className="h-9"
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Header button action</Label>
+          <Label className="text-xs">{t('apHeaderCtaAction')}</Label>
           <Select
             value={meta.header.ctaAction ?? 'booking'}
             onValueChange={(v) => setHeader({ ctaAction: v as SiteMeta['header']['ctaAction'] })}
@@ -183,7 +185,7 @@ function AppearancePanel({
         </div>
         {meta.header.ctaAction === 'url' && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Header button URL</Label>
+            <Label className="text-xs">{t('apHeaderCtaUrl')}</Label>
             <Input
               value={meta.header.ctaUrl ?? ''}
               onChange={(e) => setHeader({ ctaUrl: e.target.value })}
@@ -218,7 +220,7 @@ function AppearancePanel({
       </div>
 
       <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">Show social links in footer</span>
+        <span className="text-sm">{t('apShowSocialFooter')}</span>
         <Switch
           checked={meta.footer.showSocial}
           onCheckedChange={(v) => onChange({ footer: { showSocial: v } })}
@@ -228,7 +230,7 @@ function AppearancePanel({
       <div className="space-y-3 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">SEO (optional)</p>
         <div className="space-y-1.5">
-          <Label className="text-xs">Page title</Label>
+          <Label className="text-xs">{t('apPageTitle')}</Label>
           <Input
             value={meta.seo?.title ?? ''}
             onChange={(e) => setSeo({ title: e.target.value })}
@@ -236,7 +238,7 @@ function AppearancePanel({
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Meta description</Label>
+          <Label className="text-xs">{t('apMetaDescription')}</Label>
           <Input
             value={meta.seo?.description ?? ''}
             onChange={(e) => setSeo({ description: e.target.value })}
@@ -470,7 +472,7 @@ export default function WebsiteBuilderPage() {
   // already has and can start rearranging it rather than rebuilding it. The
   // first save stores a tree and that wins from then on.
   // The linkable surfaces that are actually live — booking is excluded because it
-  // has its own header CTA. Same list and same source as SurfaceLinksEditor.
+  // has its own header CTA. Same list and same source the menu editor reads.
   const liveSurfaces: PublicSurface[] = (['shop', 'space', 'documents'] as const).filter(
     (sf) =>
       sf === 'shop'

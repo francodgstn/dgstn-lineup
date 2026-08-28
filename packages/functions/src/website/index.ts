@@ -166,7 +166,10 @@ export function sanitizeContactSection(d: Dict, id: string): ContactSection {
  */
 const MENU_MAX_PER_LEVEL = 24
 
-function sanitizeMenu(raw: unknown, depth = 1): SiteMenuItem[] | undefined {
+/** Exported for `../orgWebsite`, which publishes the same menu tree. The rules
+ *  above are tenant-agnostic: they bound depth and breadth and validate a
+ *  target's shape, none of which differs between a studio and an organisation. */
+export function sanitizeMenu(raw: unknown, depth = 1): SiteMenuItem[] | undefined {
   if (!Array.isArray(raw) || depth > SITE_MENU_MAX_DEPTH) return undefined
   const items = raw
     .slice(0, MENU_MAX_PER_LEVEL)

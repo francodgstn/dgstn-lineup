@@ -6,6 +6,7 @@ import type {
   ContentSection,
   GallerySection,
   ContactSection,
+  SiteMenuItem,
 } from './website'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +94,10 @@ export interface OrgSiteDraft {
   enabled: boolean
   meta: SiteMeta
   sections: OrgSiteSection[]
+  /** The header menu. Absent ⇒ derived from sections, exactly as a team's is —
+   *  which is what makes this ADDITIVE: every org site published before the
+   *  field existed keeps the header it already had. */
+  menu?: SiteMenuItem[]
   updated_at?: Timestamp
   updatedBy?: string
 }
@@ -105,6 +110,8 @@ export interface OrgPublishedSite {
   name: string
   meta: SiteMeta
   sections: OrgSiteSection[]
+  /** The header menu. Absent ⇒ derived from sections. */
+  menu?: SiteMenuItem[]
   /** Snapshot of member teams (from org_teams at publish). Live blocks read each
    *  team's public_profile by teamId for fresh branding / location / coaches. */
   teams: OrgSiteTeamRef[]

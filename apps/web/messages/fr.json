@@ -3112,7 +3112,9 @@
     "terminologyDefaultLabel": "Terme",
     "terminologyDefaultHint": "Saisissez-en au moins un — il devient la valeur par défaut pour toutes les langues.",
     "terminologyAddTranslations": "Ajouter des traductions (facultatif)",
-    "generalTitle": "Général"
+    "generalTitle": "Général",
+    "socialTitle": "Liens sociaux",
+    "socialDescription": "Affichés sous forme d'icônes dans la section contact de votre site, si celle-ci est configurée pour les montrer."
   },
   "OrgInvite": {
     "title": "Invitation d'organisation",
@@ -3330,7 +3332,20 @@
     "editorOrgCtaPlaceholder": "p. ex. Trouver un club près de chez vous",
     "editorOrgClubsNote": "Une carte par club membre, tirée en direct des studios de votre organisation et du profil public de chaque studio (logo, nom, adresse).",
     "editorOrgCoachesNote": "La liste est tirée en direct de chaque club membre ayant choisi d'afficher publiquement ses entraîneurs.",
-    "editorOrgLocationsNote": "L'adresse principale de chaque studio est listée automatiquement. Ajoutez ci-dessous d'autres lieux — une salle d'événement, un second site — qui ne sont pas l'un de vos studios."
+    "editorOrgLocationsNote": "L'adresse principale de chaque studio est listée automatiquement. Ajoutez ci-dessous d'autres lieux — une salle d'événement, un second site — qui ne sont pas l'un de vos studios.",
+    "apSiteTitle": "Titre du site",
+    "apTheme": "Thème",
+    "apFont": "Police",
+    "apAccentColor": "Couleur d'accent",
+    "apShowNav": "Afficher la barre de navigation",
+    "apHeaderCtaLabel": "Libellé du bouton d'en-tête",
+    "apHeaderCtaAction": "Action du bouton d'en-tête",
+    "apHeaderCtaUrl": "URL du bouton d'en-tête",
+    "apHeaderCtaPlaceholderTeam": "Réserver",
+    "apHeaderCtaPlaceholderOrg": "Trouver un club",
+    "apShowSocialFooter": "Afficher les liens sociaux dans le pied de page",
+    "apPageTitle": "Titre de la page",
+    "apMetaDescription": "Méta-description"
   },
   "Kiosk": {
     "title": "Kiosque",
