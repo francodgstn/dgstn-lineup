@@ -985,7 +985,8 @@
     "coachingCreateTaskCta": "Crea un'attività per {dimension}",
     "coachingCreateTaskDefaultTitle": "Lavora su {dimension}",
     "coachingCreateTaskSubmit": "Crea attività",
-    "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova."
+    "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova.",
+    "filterNotesLabel": "Ha note"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",

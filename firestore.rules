@@ -1062,7 +1062,7 @@ service cloud.firestore {
                        || hasRole('admin')
                        || (isSelfContact(contactId)
                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
-                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count']);
+                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count', 'notes_count']);
       allow delete: if (canAccessContact(resource)
                           && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
                        || hasRole('admin');

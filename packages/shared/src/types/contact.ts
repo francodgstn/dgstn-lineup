@@ -323,6 +323,13 @@ export interface Contact {
   // Alerts (denormalized count)
   alerts_count?: number
 
+  // Notes (denormalized count), written ONLY by the `trackContactNotes` trigger.
+  //
+  // Notes live in a SUBCOLLECTION, and `matchesFilter` is a pure predicate over
+  // this document — so "has notes" is answerable only if the answer is already
+  // here. Same shape and same reasoning as `alerts_count` one field up.
+  notes_count?: number
+
   // Coaching (denormalized by the onGoalWrite / check-in triggers).
   //
   // These exist so `contactAttentionReasons` can name a coaching reason without

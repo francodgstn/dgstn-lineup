@@ -73,7 +73,7 @@ import { setGroupRule } from '@/plugins/contact-groups/hooks'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck } from 'lucide-react'
+import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck, StickyNote } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
@@ -1634,6 +1634,17 @@ function FilterChips({
       isActive: (f) => f.hasAlerts,
       clear: (f) => ({ ...f, hasAlerts: false }),
       toggle: (f) => ({ ...f, hasAlerts: !f.hasAlerts }),
+    },
+    {
+      // Reads `notes_count`, maintained by the trackContactNotes trigger — the
+      // predicate never leaves the contact document it was handed.
+      key: 'hasNotes',
+      label: t('filterNotesLabel'),
+      available: true,
+      icon: StickyNote,
+      isActive: (f) => f.hasNotes,
+      clear: (f) => ({ ...f, hasNotes: false }),
+      toggle: (f) => ({ ...f, hasNotes: !f.hasNotes }),
     },
     {
       key: 'pendingSignup',

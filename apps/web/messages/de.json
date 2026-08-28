@@ -985,7 +985,8 @@
     "coachingCreateTaskCta": "Aufgabe für {dimension} erstellen",
     "coachingCreateTaskDefaultTitle": "An {dimension} arbeiten",
     "coachingCreateTaskSubmit": "Aufgabe erstellen",
-    "coachingCreateTaskFailed": "Die Aufgabe konnte nicht erstellt werden. Bitte versuche es erneut."
+    "coachingCreateTaskFailed": "Die Aufgabe konnte nicht erstellt werden. Bitte versuche es erneut.",
+    "filterNotesLabel": "Hat Notizen"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
