@@ -3354,7 +3354,9 @@
     "apHeaderCtaPlaceholderOrg": "Find a club",
     "apShowSocialFooter": "Show social links in footer",
     "apPageTitle": "Page title",
-    "apMetaDescription": "Meta description"
+    "apMetaDescription": "Meta description",
+    "editorOrgShowAddressOnCards": "Show address on each card",
+    "editorOrgExtraVenues": "Extra venues"
   },
   "Kiosk": {
     "title": "Kiosk",

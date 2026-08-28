@@ -1066,12 +1066,45 @@ table above implies because the pieces were already tenant-agnostic:
   they were "aligned" — at English. Twelve shared keys, one placeholder each.
 - `SurfaceLinksEditor.tsx` deleted (exported, imported by nothing).
 
-STILL OPEN, and now the whole of what is left: the duplicated
-`SectionEditor`/`defaults`/`hooks` pairs and the one-model-or-two decision — the
-authoring SHELL, which is pure React and the only part that was never converged.
-The render layer, the type layer and the sanitiser layer were shared already.
-Embed widgets for orgs stay descoped: they need a new public collection and an
-`/embed/org/...` route, which is a feature rather than a convergence.
+**CONVERGED 2026-08-28** — Franco chose one model with a tenant discriminator,
+the same shape that fixed the divergence between the two ranking editors.
+
+`components/website/SiteSectionFields.tsx` now owns the four section types both
+builders share (hero, content, gallery, contact) plus `Field` and `ImageField`.
+`SiteEditorTenant` carries `kind` and `id` — and, crucially, the tenant's own
+`uploadImage`, because WHERE AN IMAGE GOES is the only thing that actually
+differed. Carrying the behaviour rather than switching on the enum also keeps a
+shared component from importing out of an app route.
+
+What stays per-tenant is what the tenants genuinely CAN do differently: the
+studio keeps Activities/Pricing/Schedule/Places and a CTA that can point at its
+booking page or signup form; the org keeps Clubs/Locations/Coaches and a
+URL-only CTA, because it has neither of those surfaces. The hero's CTA is a
+SLOT for exactly that reason.
+
+Three pieces of drift died with the copy, none of which was visible until the
+two files were read side by side:
+
+- `Center`, `Left`, `Right`, `Overlay (40%)` and "Call-to-action button" were
+  hardcoded English in the org editor — a file whose every other label went
+  through `useTranslations`. Verified live: the German org editor now reads
+  Ausrichtung / Zentriert / Abdunklung (40 %) / Call-to-Action-Button.
+- Its image-size limit was a bare `const MAX_IMAGE_SIZE_MB = 5` where the team's
+  goes through `getWebsiteLimits()`, the seam that exists so an operator can
+  raise it. Same number, one of them unreachable.
+- `ContactFields` was identical in behaviour and different only in whitespace —
+  the state a copy reaches just before somebody edits one of them.
+
+Two more untranslated strings in the org-only sections ("Show address on each
+card", "Extra venues") were found in the same pass and translated.
+
+Both editors were exercised in a browser afterwards, in German, including that
+the team's richer CTA (action selector, "Buchung öffnen") still renders and the
+org's does not offer it.
+
+Embed widgets for orgs stay descoped.
+(Embed widgets for orgs need a new public collection and an `/embed/org/...`
+route, which is a feature rather than a convergence.)
 
 ---
 
