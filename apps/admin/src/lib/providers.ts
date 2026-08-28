@@ -11,7 +11,7 @@ export type ProviderCategory =
   | 'Payments'
   | 'Email'
   | 'Analytics'
-  | 'Domains & DNS'
+  | 'Content'
   | 'Other'
 
 export interface Provider {
@@ -35,7 +35,7 @@ export const CATEGORY_ORDER: ProviderCategory[] = [
   'Payments',
   'Email',
   'Analytics',
-  'Domains & DNS',
+  'Content',
   'Other',
 ]
 
@@ -53,10 +53,20 @@ export const PROVIDERS: Provider[] = [
     id: 'google-cloud',
     name: 'Google Cloud',
     category: 'Infrastructure',
-    description: 'Secret Manager, Cloud Scheduler, Tasks & billing for the project.',
+    description: 'Secret Manager, Cloud Scheduler, Tasks, Cloud Translation & billing for the project.',
     panelUrl: 'https://console.cloud.google.com/home/dashboard?project=linyup-prod',
     docsUrl: 'https://cloud.google.com/docs',
     statusUrl: 'https://status.cloud.google.com/',
+  },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    category: 'Infrastructure',
+    description:
+      'Authoritative DNS for linyup.com, plus Cloudflare for SaaS — the studios’ custom domains and the tenant-router Worker.',
+    panelUrl: 'https://dash.cloudflare.com/',
+    docsUrl: 'https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/',
+    statusUrl: 'https://www.cloudflarestatus.com/',
   },
   {
     id: 'stripe',
@@ -86,13 +96,13 @@ export const PROVIDERS: Provider[] = [
     statusUrl: 'https://status.posthog.com/',
   },
   {
-    id: 'cloudflare',
-    name: 'Cloudflare',
-    category: 'Domains & DNS',
+    id: 'deepl',
+    name: 'DeepL',
+    category: 'Content',
     description:
-      'Authoritative DNS for linyup.com, plus Cloudflare for SaaS — the studios’ custom domains and the tenant-router Worker.',
-    panelUrl: 'https://dash.cloudflare.com/',
-    docsUrl: 'https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/',
-    statusUrl: 'https://www.cloudflarestatus.com/',
+      'Machine translation for studio websites & embed widgets at publish (docs/site-translations.md).',
+    panelUrl: 'https://www.deepl.com/your-account/summary',
+    docsUrl: 'https://developers.deepl.com/docs',
+    statusUrl: 'https://status.deepl.com/',
   },
 ]
