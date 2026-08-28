@@ -841,6 +841,31 @@ direction — it is how `RankLevelFields` fixed the same shape of divergence
 between the two ranking editors), or stay separate models sharing only leaf
 components. The first removes the drift; the second only slows it.
 
+### Partly done, 2026-08-28 — the drift that had already caused damage
+
+Three consequences of the divergence were fixed without taking the structural
+decision above, because each was a live defect rather than a design question:
+
+- **The org editor had NO i18n at all.** Not a missing key — no `next-intl`
+  import: every label, placeholder, toast and explanatory note was a hardcoded
+  English literal, so a German or French org admin authored their site in
+  English. It now reads the SAME `Website` namespace keys the team editor uses
+  for the four shared section types; only the three org-only sections
+  (clubs/locations/coaches) needed new copy.
+- **The image box was the shape the team's `BOX` constant replaced** — a fixed
+  `h-28` letterbox when filled and `h-20` when empty, so uploading an image
+  shifted every field below it down by 32px.
+- **The contact section's "show social links" switch could never do anything.**
+  `ContactBlock` renders socials from `ctx.socialLinks`; the org renderer never
+  fills it and `Organization` carries no social links. Removed rather than
+  faked — a control that cannot change what a visitor sees is worse than none.
+
+STILL OPEN, and still the substance of this entry: the menu tree, the preview
+overlay, the duplicated `SectionEditor`/`defaults`/`hooks` pairs, and the
+one-model-or-two decision. `sanitizeMenu` in `functions/src/website/index.ts`
+is one `export` keyword away from being reusable, and `utils/siteMenu.ts` is
+already tenant-agnostic, so the menu tree is the cheapest next slice.
+
 ---
 
 ## Queued, not a defect — org lists have no search, and the org event list has no filters — FIXED 2026-08-27 (#120)

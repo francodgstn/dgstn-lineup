@@ -3321,7 +3321,16 @@
     "addToMenu": "Diesen Abschnitt zum Menü hinzufügen",
     "previewDesktop": "Desktop",
     "previewMobile": "Mobil",
-    "menuReorder": "Zum Umsortieren ziehen"
+    "menuReorder": "Zum Umsortieren ziehen",
+    "editorOrgClubsHeadingPlaceholder": "Unsere Clubs",
+    "editorOrgCoachesHeadingPlaceholder": "Unsere Trainer",
+    "editorOrgVenueName": "Name des Standorts",
+    "editorOrgMapsLink": "Karten-Link (optional)",
+    "editorOrgAddVenue": "Standort hinzufügen",
+    "editorOrgCtaPlaceholder": "z. B. Club in Ihrer Nähe finden",
+    "editorOrgClubsNote": "Eine Karte pro Mitgliedsclub, live aus den Studios Ihrer Organisation und dem öffentlichen Profil jedes Studios (Logo, Name, Adresse).",
+    "editorOrgCoachesNote": "Die Liste wird live von jedem Mitgliedsclub übernommen, der seine Trainer öffentlich anzeigen lässt.",
+    "editorOrgLocationsNote": "Die Hauptadresse jedes Studios wird automatisch aufgeführt. Fügen Sie unten weitere Standorte hinzu — eine Veranstaltungshalle, ein zweiter Standort —, die keines Ihrer Studios sind."
   },
   "Kiosk": {
     "title": "Kiosk",

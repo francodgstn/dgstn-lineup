@@ -3321,7 +3321,16 @@
     "addToMenu": "Aggiungi questa sezione al menu",
     "previewDesktop": "Desktop",
     "previewMobile": "Mobile",
-    "menuReorder": "Trascina per riordinare"
+    "menuReorder": "Trascina per riordinare",
+    "editorOrgClubsHeadingPlaceholder": "I nostri club",
+    "editorOrgCoachesHeadingPlaceholder": "I nostri allenatori",
+    "editorOrgVenueName": "Nome della sede",
+    "editorOrgMapsLink": "Link alla mappa (facoltativo)",
+    "editorOrgAddVenue": "Aggiungi sede",
+    "editorOrgCtaPlaceholder": "es. Trova un club vicino a te",
+    "editorOrgClubsNote": "Una scheda per ogni club membro, presa in tempo reale dagli studi della tua organizzazione e dal profilo pubblico di ciascuno (logo, nome, indirizzo).",
+    "editorOrgCoachesNote": "L'elenco viene preso in tempo reale da ogni club membro che ha scelto di mostrare pubblicamente i propri allenatori.",
+    "editorOrgLocationsNote": "L'indirizzo principale di ogni studio è elencato automaticamente. Aggiungi qui sotto altre sedi — una sala eventi, una seconda sede — che non sono uno dei tuoi studi."
   },
   "Kiosk": {
     "title": "Kiosk",

@@ -3321,7 +3321,16 @@
     "addToMenu": "Add this section to the menu",
     "previewDesktop": "Desktop",
     "previewMobile": "Mobile",
-    "menuReorder": "Drag to reorder"
+    "menuReorder": "Drag to reorder",
+    "editorOrgClubsHeadingPlaceholder": "Our clubs",
+    "editorOrgCoachesHeadingPlaceholder": "Our coaches",
+    "editorOrgVenueName": "Venue name",
+    "editorOrgMapsLink": "Maps link (optional)",
+    "editorOrgAddVenue": "Add venue",
+    "editorOrgCtaPlaceholder": "e.g. Find a club near you",
+    "editorOrgClubsNote": "A card per member club, pulled live from your organisation's studios and each studio's own public profile (logo, name, address).",
+    "editorOrgCoachesNote": "The roster is pulled live from every member club that opted in to list its coaches publicly.",
+    "editorOrgLocationsNote": "Every studio's primary address is listed automatically. Add extra venues below — an event hall, a second site — that are not one of your studios."
   },
   "Kiosk": {
     "title": "Kiosk",

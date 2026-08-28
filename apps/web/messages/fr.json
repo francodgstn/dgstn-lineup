@@ -3321,7 +3321,16 @@
     "addToMenu": "Ajouter cette section au menu",
     "previewDesktop": "Ordinateur",
     "previewMobile": "Mobile",
-    "menuReorder": "Glisser pour réordonner"
+    "menuReorder": "Glisser pour réordonner",
+    "editorOrgClubsHeadingPlaceholder": "Nos clubs",
+    "editorOrgCoachesHeadingPlaceholder": "Nos entraîneurs",
+    "editorOrgVenueName": "Nom du lieu",
+    "editorOrgMapsLink": "Lien vers la carte (facultatif)",
+    "editorOrgAddVenue": "Ajouter un lieu",
+    "editorOrgCtaPlaceholder": "p. ex. Trouver un club près de chez vous",
+    "editorOrgClubsNote": "Une carte par club membre, tirée en direct des studios de votre organisation et du profil public de chaque studio (logo, nom, adresse).",
+    "editorOrgCoachesNote": "La liste est tirée en direct de chaque club membre ayant choisi d'afficher publiquement ses entraîneurs.",
+    "editorOrgLocationsNote": "L'adresse principale de chaque studio est listée automatiquement. Ajoutez ci-dessous d'autres lieux — une salle d'événement, un second site — qui ne sont pas l'un de vos studios."
   },
   "Kiosk": {
     "title": "Kiosque",

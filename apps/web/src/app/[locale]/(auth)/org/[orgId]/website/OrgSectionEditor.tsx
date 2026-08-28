@@ -6,6 +6,7 @@
 // the org-only aggregate sections (clubs/locations/coaches).
 
 import { useCallback, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { ImageIcon, X, Plus, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -27,6 +28,20 @@ import type {
 import { RichTextEditor } from '@/components/RichTextEditor'
 import { uploadOrgSiteImage } from './hooks'
 import { newSectionId } from '@/plugins/website/defaults'
+
+/**
+ * The image box, filled or empty — ONE definition, copied from the team editor
+ * (plugins/website/SectionEditor.tsx) where the reasoning lives.
+ *
+ * The org editor still had the shape that fix replaced: a fixed `h-28 w-full`
+ * letterbox for the filled state and `h-20` for the empty one, so uploading an
+ * image shifted every field below it down by 32px, and the wide band showed
+ * almost nothing of an actual photograph.
+ */
+const BOX = {
+  wide: 'aspect-video w-full max-w-xs',
+  square: 'aspect-square w-20',
+} as const
 
 const MAX_GALLERY_IMAGES = 24
 const MAX_IMAGE_SIZE_MB = 5
@@ -59,6 +74,7 @@ function ImageField({
   onChange: (url: string | undefined) => void
   aspect?: 'wide' | 'square'
 }) {
+  const t = useTranslations('Website')
   const ref = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -66,7 +82,7 @@ function ImageField({
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
-      toast.error(`Image must be under ${MAX_IMAGE_SIZE_MB} MB`)
+      toast.error(t('editorImageTooLarge', { mb: MAX_IMAGE_SIZE_MB }))
       return
     }
     setUploading(true)
@@ -74,7 +90,7 @@ function ImageField({
       const u = await uploadOrgSiteImage(orgId, sectionId, file)
       onChange(u)
     } catch {
-      toast.error('Upload failed')
+      toast.error(t('editorUploadFailed'))
     } finally {
       setUploading(false)
       if (ref.current) ref.current.value = ''
@@ -85,7 +101,7 @@ function ImageField({
     <Field label={label}>
       {url ? (
         <div
-          className={`relative overflow-hidden rounded-lg border bg-muted ${aspect === 'wide' ? 'h-28 w-full' : 'h-20 w-20'}`}
+          className={`relative overflow-hidden rounded-lg border bg-muted ${BOX[aspect]}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt="" className="h-full w-full object-cover" />
@@ -102,10 +118,10 @@ function ImageField({
           type="button"
           onClick={() => ref.current?.click()}
           disabled={uploading}
-          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground disabled:opacity-50 ${aspect === 'wide' ? 'h-20 w-full' : 'h-20 w-20'}`}
+          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground disabled:opacity-50 ${BOX[aspect]}`}
         >
           <ImageIcon className="h-4 w-4" />
-          {uploading ? 'Uploading…' : 'Upload'}
+          {uploading ? t('editorUploading') : t('editorUpload')}
         </button>
       )}
       <input ref={ref} type="file" accept="image/*" onChange={handle} className="hidden" />
@@ -126,12 +142,13 @@ function HeroFields({
   orgId: string
   onChange: (p: Patch) => void
 }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
-      <Field label="Headline">
+      <Field label={t('editorHeadline')}>
         <Input value={s.headline} onChange={(e) => onChange({ headline: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Subheadline">
+      <Field label={t('editorSubheadline')}>
         <Textarea
           value={s.subheadline ?? ''}
           onChange={(e) => onChange({ subheadline: e.target.value })}
@@ -139,14 +156,14 @@ function HeroFields({
         />
       </Field>
       <ImageField
-        label="Background image"
+        label={t('editorBackgroundImage')}
         url={s.bgImageUrl}
         orgId={orgId}
         sectionId={s.id}
         onChange={(u) => onChange({ bgImageUrl: u })}
       />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Alignment">
+        <Field label={t('editorAlignment')}>
           <Select value={s.align} onValueChange={(v) => onChange({ align: v })}>
             <SelectTrigger className="h-9">
               <SelectValue />
@@ -170,18 +187,18 @@ function HeroFields({
       </div>
       <div className="space-y-2 rounded-lg border p-3">
         <p className="text-xs font-medium text-muted-foreground">Call-to-action button</p>
-        <Field label="Button label">
+        <Field label={t('editorCtaLabel')}>
           <Input
             value={s.cta?.label ?? ''}
             onChange={(e) =>
               onChange({ cta: e.target.value ? { label: e.target.value, action: 'url', url: s.cta?.url } : undefined })
             }
-            placeholder="e.g. Find a club near you"
+            placeholder={t('editorOrgCtaPlaceholder')}
             className="h-9"
           />
         </Field>
         {s.cta?.label && (
-          <Field label="URL">
+          <Field label={t('editorCtaUrl')}>
             <Input
               value={s.cta?.url ?? ''}
               onChange={(e) => onChange({ cta: { label: s.cta?.label, action: 'url', url: e.target.value } })}
@@ -204,6 +221,7 @@ function ContentFields({
   orgId: string
   onChange: (p: Patch) => void
 }) {
+  const t = useTranslations('Website')
   // RichTextEditor is uncontrolled after mount and memoized: pass STABLE
   // callbacks (latest onChange via a ref) so typing never re-mounts it, and key
   // it by section id so switching sections loads the right body.
@@ -214,28 +232,28 @@ function ContentFields({
 
   return (
     <div className="space-y-3">
-      <Field label="Title (optional)">
+      <Field label={t('editorTitleOptional')}>
         <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Content">
+      <Field label={t('editorContent')}>
         <RichTextEditor
           key={s.id}
           value={s.body}
           onChange={handleBody}
           onUploadImage={handleUpload}
           minHeight={240}
-          placeholder="Write your content, or press “/” for formatting…"
+          placeholder={t('editorContentPlaceholder')}
         />
       </Field>
       <ImageField
-        label="Image (optional)"
+        label={t('editorImageOptional')}
         url={s.imageUrl}
         orgId={orgId}
         sectionId={s.id}
         onChange={(u) => onChange({ imageUrl: u })}
       />
       {s.imageUrl && (
-        <Field label="Image side">
+        <Field label={t('editorImageSide')}>
           <Select value={s.imageSide} onValueChange={(v) => onChange({ imageSide: v })}>
             <SelectTrigger className="h-9">
               <SelectValue />
@@ -260,6 +278,7 @@ function GalleryFields({
   orgId: string
   onChange: (p: Patch) => void
 }) {
+  const t = useTranslations('Website')
   const addRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -267,11 +286,11 @@ function GalleryFields({
     const file = e.target.files?.[0]
     if (!file) return
     if (s.images.length >= MAX_GALLERY_IMAGES) {
-      toast.error(`Up to ${MAX_GALLERY_IMAGES} photos`)
+      toast.error(t('editorGalleryLimit', { count: MAX_GALLERY_IMAGES }))
       return
     }
     if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
-      toast.error(`Image must be under ${MAX_IMAGE_SIZE_MB} MB`)
+      toast.error(t('editorImageTooLarge', { mb: MAX_IMAGE_SIZE_MB }))
       return
     }
     setUploading(true)
@@ -279,7 +298,7 @@ function GalleryFields({
       const url = await uploadOrgSiteImage(orgId, s.id, file)
       onChange({ images: [...s.images, { url }] })
     } catch {
-      toast.error('Upload failed')
+      toast.error(t('editorUploadFailed'))
     } finally {
       setUploading(false)
       if (addRef.current) addRef.current.value = ''
@@ -288,10 +307,10 @@ function GalleryFields({
 
   return (
     <div className="space-y-3">
-      <Field label="Heading (optional)">
+      <Field label={t('editorHeadingOptional')}>
         <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
       </Field>
-      <Field label="Columns">
+      <Field label={t('editorColumns')}>
         <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
           <SelectTrigger className="h-9">
             <SelectValue />
@@ -335,47 +354,52 @@ function GalleryFields({
 }
 
 function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
-      <Field label="Heading">
+      <Field label={t('editorHeading')}>
         <Input
           value={s.heading ?? ''}
           onChange={(e) => onChange({ heading: e.target.value })}
-          placeholder="Get in touch"
+          placeholder={t('editorContactHeadingPlaceholder')}
           className="h-9"
         />
       </Field>
-      <Field label="Address">
+      <Field label={t('editorAddress')}>
         <Textarea value={s.address ?? ''} onChange={(e) => onChange({ address: e.target.value })} rows={2} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Phone">
+        <Field label={t('editorPhone')}>
           <Input value={s.phone ?? ''} onChange={(e) => onChange({ phone: e.target.value })} className="h-9" />
         </Field>
-        <Field label="Email">
+        <Field label={t('editorEmail')}>
           <Input value={s.email ?? ''} onChange={(e) => onChange({ email: e.target.value })} className="h-9" />
         </Field>
       </div>
-      <Field label="Opening hours">
+      <Field label={t('editorHours')}>
         <Textarea
           value={s.hours ?? ''}
           onChange={(e) => onChange({ hours: e.target.value })}
           rows={2}
-          placeholder="Mon–Fri 9–18"
+          placeholder={t('editorHoursPlaceholder')}
         />
       </Field>
-      <Field label="Map location (address or place)">
+      <Field label={t('editorMapLocation')}>
         <Input
           value={s.mapQuery ?? ''}
           onChange={(e) => onChange({ mapQuery: e.target.value })}
           className="h-9"
-          placeholder="Bahnhofstrasse 1, Zürich"
+          placeholder={t('editorMapPlaceholder')}
         />
       </Field>
-      <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">Show social links</span>
-        <Switch checked={s.showSocial ?? false} onCheckedChange={(v) => onChange({ showSocial: v })} />
-      </label>
+      {/* NO "show social links" SWITCH HERE, and its absence is deliberate.
+          `ContactBlock` renders social icons from `ctx.socialLinks`, which the
+          TEAM renderer fills from the studio's profile and the ORG renderer
+          never fills — `Organization` carries no social links at all. The
+          switch was present and could not, in any state, change what a visitor
+          saw. An org social-links field plus somewhere to edit it is a feature,
+          not an alignment; until it exists a control that does nothing is worse
+          than no control. */}
     </div>
   )
 }
@@ -389,8 +413,9 @@ function ColumnsField({
   columns: 2 | 3 | 4
   onChange: (v: number) => void
 }) {
+  const t = useTranslations('Website')
   return (
-    <Field label="Columns">
+    <Field label={t('editorColumns')}>
       <Select value={String(columns)} onValueChange={(v) => onChange(Number(v))}>
         <SelectTrigger className="h-9 w-32">
           <SelectValue />
@@ -406,21 +431,21 @@ function ColumnsField({
 }
 
 function ClubsFields({ s, onChange }: { s: ClubsSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-        A card per member club, pulled live from your organization&apos;s teams and each club&apos;s own
-        public profile (logo, name, address).
+        {t('editorOrgClubsNote')}
       </p>
-      <Field label="Heading">
+      <Field label={t('editorHeading')}>
         <Input
           value={s.heading ?? ''}
           onChange={(e) => onChange({ heading: e.target.value })}
-          placeholder="Our clubs"
+          placeholder={t('editorOrgClubsHeadingPlaceholder')}
           className="h-9"
         />
       </Field>
-      <Field label="Subheading">
+      <Field label={t('editorSubheading')}>
         <Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" />
       </Field>
       <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
@@ -433,6 +458,7 @@ function ClubsFields({ s, onChange }: { s: ClubsSection; onChange: (p: Patch) =>
 }
 
 function LocationsFields({ s, onChange }: { s: LocationsSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   const extra = s.extra ?? []
 
   function addExtra() {
@@ -448,18 +474,17 @@ function LocationsFields({ s, onChange }: { s: LocationsSection; onChange: (p: P
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-        Every club&apos;s primary address is listed automatically. Add extra venues below (e.g. an
-        event hall or a second site) that aren&apos;t one of your clubs.
+        {t('editorOrgLocationsNote')}
       </p>
-      <Field label="Heading">
+      <Field label={t('editorHeading')}>
         <Input
           value={s.heading ?? ''}
           onChange={(e) => onChange({ heading: e.target.value })}
-          placeholder="Find us"
+          placeholder={t('editorPlacesHeadingPlaceholder')}
           className="h-9"
         />
       </Field>
-      <Field label="Subheading">
+      <Field label={t('editorSubheading')}>
         <Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" />
       </Field>
       <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
@@ -473,19 +498,19 @@ function LocationsFields({ s, onChange }: { s: LocationsSection; onChange: (p: P
                 <Input
                   value={e.name}
                   onChange={(ev) => updateExtra(e.id, { name: ev.target.value })}
-                  placeholder="Venue name"
+                  placeholder={t('editorOrgVenueName')}
                   className="h-9"
                 />
                 <Textarea
                   value={e.address ?? ''}
                   onChange={(ev) => updateExtra(e.id, { address: ev.target.value })}
-                  placeholder="Address"
+                  placeholder={t('editorAddress')}
                   rows={2}
                 />
                 <Input
                   value={e.mapsLink ?? ''}
                   onChange={(ev) => updateExtra(e.id, { mapsLink: ev.target.value })}
-                  placeholder="Maps link (optional)"
+                  placeholder={t('editorOrgMapsLink')}
                   className="h-9 font-mono text-xs"
                 />
               </div>
@@ -507,7 +532,7 @@ function LocationsFields({ s, onChange }: { s: LocationsSection; onChange: (p: P
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-input py-2.5 text-sm font-medium text-muted-foreground hover:border-primary/50 hover:text-foreground"
         >
           <Plus className="h-4 w-4" />
-          Add venue
+          {t('editorOrgAddVenue')}
         </button>
       </div>
     </div>
@@ -515,21 +540,21 @@ function LocationsFields({ s, onChange }: { s: LocationsSection; onChange: (p: P
 }
 
 function CoachesFields({ s, onChange }: { s: CoachesSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
   return (
     <div className="space-y-3">
       <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-        Roster is pulled live from every member club that opted in to list its coaches
-        publicly (Coaches page → &ldquo;List coaches on the organization website&rdquo;).
+        {t('editorOrgCoachesNote')}
       </p>
-      <Field label="Heading">
+      <Field label={t('editorHeading')}>
         <Input
           value={s.heading ?? ''}
           onChange={(e) => onChange({ heading: e.target.value })}
-          placeholder="Our coaches"
+          placeholder={t('editorOrgCoachesHeadingPlaceholder')}
           className="h-9"
         />
       </Field>
-      <Field label="Subheading">
+      <Field label={t('editorSubheading')}>
         <Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" />
       </Field>
       <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
