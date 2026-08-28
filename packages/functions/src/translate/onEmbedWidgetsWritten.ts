@@ -25,7 +25,7 @@ import {
   type SiteTranslationUnits,
   type UiLanguage,
 } from '@linyup/shared'
-import { getTranslationProvider } from './deeplProvider'
+import { getTranslationProvider } from './provider'
 import { buildSiteTranslations } from './translateSite'
 import type { TranslationProvider } from './types'
 

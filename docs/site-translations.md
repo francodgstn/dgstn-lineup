@@ -223,22 +223,42 @@ path.
 
 ---
 
-## Provider setup — DeepL
+## Provider setup — DeepL or Google Cloud Translation
 
 Translation goes through a provider-agnostic service in
 `packages/functions/src/translate/` — call sites depend on the service
-interface, never on DeepL types, so swapping providers (or adding an LLM pass
-for short marketing copy) is a service-internal change.
+interface, never on vendor types. Two providers exist; **`provider.ts` is the
+one place a vendor is chosen**, driven by the `TRANSLATION_PROVIDER` env
+(deployed functions env / emulator `.env.local`):
 
-**Secrets** (Secret Manager in prod; `packages/functions/.env.local` for the
-emulator — same regime as the Brevo keys, see
-`packages/functions/src/mail/README.md`):
+| Value | Meaning |
+|---|---|
+| `deepl` | DeepL, via the `deepl-api-key` secret |
+| `google` | Cloud Translation v3, via the runtime service account (no key) |
+| `none` | machine translation explicitly off |
+| unset / `auto` | DeepL when its key resolves; otherwise Google in deployed functions; off in the emulator (no surprise ADC attempts on dev machines) |
+
+**DeepL** — best de/fr/it/en quality, first-class HTML handling. Secrets
+(Secret Manager in prod; `packages/functions/.env.local` for the emulator —
+same regime as the Brevo keys, see `packages/functions/src/mail/README.md`):
 
 | Name | Secret Manager | Emulator env |
 |---|---|---|
 | DeepL API key | `deepl-api-key` | `DEEPL_API_KEY` |
 
-**No key ⇒ one warning, publish succeeds untranslated.** A fresh clone, CI,
+The API Free tier (≈500k chars/month, keys end `:fx`) is routed to
+`api-free.deepl.com` automatically; it is signed up for at deepl.com/pro-api
+and is easy to miss next to the Pro subscriptions.
+
+**Google Cloud Translation** — no vendor account and no secret: calls
+authenticate as the functions runtime service account via ADC and bill to the
+project (its own free allowance is also ≈500k chars/month). Setup is
+project-side only: enable the `translate.googleapis.com` API and grant the
+runtime service account `roles/cloudtranslate.user`. Credential or API-enable
+problems surface as ordinary per-call errors and degrade like any provider
+failure.
+
+**No provider ⇒ one warning, publish succeeds untranslated.** A fresh clone, CI,
 and any environment without the secret keep working; sites simply publish with
 no sidecars (and the manifest says so). Never turn the missing-key path into an
 error — that would violate "translation can never fail a publish".
@@ -330,9 +350,12 @@ provider pass, and running it against an already-backfilled environment costs
 nothing. `--dry-run` first when pointing at a real project: the counts are the
 cost estimate.
 
-Needs the DeepL key in the target environment (emulator: `DEEPL_API_KEY` in
-`packages/functions/.env.local`); without it the run degrades the same way a
-publish does — warns, writes nothing.
+Needs a provider in the target environment: the DeepL key (env or
+`packages/functions/.env.local` — emulator regime, `DEEPL_API_KEY`), or
+`TRANSLATION_PROVIDER=google` to use Cloud Translation over the same ADC the
+script's admin SDK is already running on, billed to `--project`. Without
+either, the run degrades the same way a publish does — warns, writes nothing
+new, reconciles manifests from cached units only.
 
 ---
 

@@ -117,21 +117,25 @@ export async function translateBatchWithKey(
 }
 
 /**
- * The provider factory. Returns `null` (with exactly one `console.warn`) when
- * `deepl-api-key` is missing or unreadable — translations are then skipped
- * entirely by the caller, but a publish or the widgets trigger must still
- * succeed (see `translateSite.ts`).
+ * The DeepL factory. Returns `null` (with exactly one `console.warn`, unless
+ * `silent` — provider.ts's auto mode probes with silent and emits its own
+ * summary line) when `deepl-api-key` is missing or unreadable. Vendor choice
+ * lives in provider.ts, never here.
  */
-export async function getTranslationProvider(): Promise<TranslationProvider | null> {
+export async function getDeeplTranslationProvider(
+  opts?: { silent?: boolean }
+): Promise<TranslationProvider | null> {
   let apiKey: string
   try {
     apiKey = await getSecret('deepl-api-key')
   } catch (err) {
-    console.warn('[translate] deepl-api-key unavailable — translations skipped:', (err as Error).message)
+    if (!opts?.silent) {
+      console.warn('[translate] deepl-api-key unavailable — translations skipped:', (err as Error).message)
+    }
     return null
   }
   if (!apiKey) {
-    console.warn('[translate] deepl-api-key is empty — translations skipped')
+    if (!opts?.silent) console.warn('[translate] deepl-api-key is empty — translations skipped')
     return null
   }
   return {

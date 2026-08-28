@@ -67,6 +67,7 @@ import {
 // it that could silently drift.
 import { translatePublishedSite, buildSiteTranslations } from '../packages/functions/src/translate/translateSite'
 import { translateBatchWithKey } from '../packages/functions/src/translate/deeplProvider'
+import { googleProviderFor } from '../packages/functions/src/translate/googleProvider'
 import type { TranslationProvider } from '../packages/functions/src/translate/types'
 
 const { values } = parseArgs({
@@ -115,9 +116,14 @@ function deeplApiKey(): string | null {
 }
 
 function buildProviderFromEnv(): TranslationProvider | null {
+  // TRANSLATION_PROVIDER=google uses Cloud Translation over the same ADC the
+  // admin SDK is already running on, billed to --project. Default is DeepL.
+  if ((process.env.TRANSLATION_PROVIDER ?? '').trim().toLowerCase() === 'google') {
+    return googleProviderFor(values.project as string)
+  }
   const key = deeplApiKey()
   if (!key) {
-    console.warn('⚠️  DEEPL_API_KEY not set (env or packages/functions/.env.local) — manifests will be reconciled from cached units only (no new provider calls).\n')
+    console.warn('⚠️  DEEPL_API_KEY not set (env or packages/functions/.env.local) — manifests will be reconciled from cached units only (no new provider calls). Alternatively set TRANSLATION_PROVIDER=google to translate via Cloud Translation on ADC.\n')
     return null
   }
   return { translateBatch: (req) => translateBatchWithKey(key, req) }

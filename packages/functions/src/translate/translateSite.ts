@@ -32,7 +32,7 @@ import {
   type OrgSiteSection,
 } from '@linyup/shared'
 import { sanitizeRichHtml } from '../utils/sanitizeHtml'
-import { getTranslationProvider } from './deeplProvider'
+import { getTranslationProvider } from './provider'
 import type { TranslationProvider } from './types'
 
 // Defensive abuse bounds on a PROVIDER's output — generous, not display caps.

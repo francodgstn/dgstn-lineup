@@ -592,9 +592,10 @@ the sixteen recorded decisions.
 The studio authors its public site in ONE language (`Team.language` /
 `Organization.language`, fallback `'en'` via `resolveSiteSourceLocale`);
 `publishWebsite` / `publishOrgWebsite` machine-translate the site text into the
-other locales of en/de/fr/it synchronously at publish (DeepL behind
-`packages/functions/src/translate/`; no key ⇒ warn once, publish succeeds
-untranslated — **translation can never fail a publish**). **ONE extractor + ONE
+other locales of en/de/fr/it synchronously at publish (DeepL or Google Cloud
+Translation behind `packages/functions/src/translate/` — vendor chosen ONLY in
+its `provider.ts`, `TRANSLATION_PROVIDER` env; no provider ⇒ warn once, publish
+succeeds untranslated — **translation can never fail a publish**). **ONE extractor + ONE
 resolver**: `extractSiteUnits` / `applySiteTranslations` /
 `applySectionTranslations` in `packages/shared/src/utils/siteTranslation.ts`
 own the key grammar (its module header is the authoritative table) — never add
