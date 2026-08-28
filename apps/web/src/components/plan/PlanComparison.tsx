@@ -67,7 +67,7 @@ const GROUPS: { heading: string; rows: CmpRow[] }[] = [
       { label: 'rowGamification', values: [false, 'addon', true, true] },
       { label: 'rowReferrals', values: [false, 'addon', true, true] },
       { label: 'rowCourses', values: [false, 'addon', true, true] },
-      { label: 'rowWebsite', values: [false, 'addon', true, true] },
+      { label: 'rowWebsite', note: 'websiteNote', values: [false, 'addon', true, true] },
       { label: 'rowCustomDomain', values: [false, true, true, true] },
       { label: 'rowProducts', values: [false, 'addon', true, true] },
       { label: 'rowGiftCards', values: [false, 'addon', true, true] },
