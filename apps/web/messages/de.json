@@ -7419,5 +7419,10 @@
     "createStepDefaultTitle": "An {dimension} arbeiten",
     "createStepSubmit": "Schritt erstellen",
     "parentGoalNone": "Allgemein"
+  },
+  "OrgUpsell": {
+    "title": "Betreiben Sie mehr als ein Studio?",
+    "continueAnyway": "Trotzdem ein separates Studio erstellen",
+    "continueHint": "Es wird ein eigenes Konto — eigenes Team, eigene Kontakte und eigene Abrechnung, ohne gemeinsame Auswertungen."
   }
 }

@@ -7419,5 +7419,10 @@
     "createStepDefaultTitle": "Lavora su {dimension}",
     "createStepSubmit": "Crea passaggio",
     "parentGoalNone": "Generale"
+  },
+  "OrgUpsell": {
+    "title": "Gestisci più di uno studio?",
+    "continueAnyway": "Crea comunque uno studio separato",
+    "continueHint": "Sarà un account a sé — team, contatti e fatturazione separati, senza report condivisi."
   }
 }

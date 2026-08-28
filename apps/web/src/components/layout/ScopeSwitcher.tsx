@@ -41,6 +41,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useScope } from '@/contexts/ScopeContext'
 import { TeamSwitcher, useMyTeams } from '@/components/layout/TeamSwitcher'
+import { OrgUpsellDialog } from '@/components/plan/OrgUpsellDialog'
+import { useRouter } from '@/i18n/navigation'
+import type { Route } from 'next'
+import { useState } from 'react'
 
 export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations('TopBar')
@@ -56,6 +60,10 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   // query. `staleTime: 5 * 60_000` makes it roughly once a session rather than
   // once a page, and the menu now opens already populated instead of spinning.
   const { data: teams = [] } = useMyTeams()
+  const router = useRouter()
+  // ABOVE the early return below — hooks must run in the same order on every
+  // render, and `if (!current) return null` is that early return.
+  const [upsellOpen, setUpsellOpen] = useState(false)
 
   // GUARDED ON THE SCOPE, NOT ON THE TEAM NAME. The old row was hidden until
   // `team.name` loaded, so the one control that says where you are vanished for
@@ -149,6 +157,7 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         title={collapsed ? `${kindLabel} · ${name}` : undefined}
@@ -161,8 +170,22 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
       {/* `side="bottom"` because this sits at the TOP of the sidebar — the
           account menu it came from opened upward from the foot. */}
       <DropdownMenuContent align="start" side="bottom" className="w-60">
-        <TeamSwitcher />
+        <TeamSwitcher onCreateStudio={() => setUpsellOpen(true)} />
       </DropdownMenuContent>
     </DropdownMenu>
+
+    {/* OUTSIDE THE MENU, deliberately. The dropdown's content lives behind
+        base-ui's `Menu.Portal`, which unmounts its children the moment the menu
+        closes — a dialog rendered as a sibling of the item that opened it would
+        vanish with the click that opened it. */}
+    <OrgUpsellDialog
+      open={upsellOpen}
+      onClose={() => setUpsellOpen(false)}
+      onContinue={() => {
+        setUpsellOpen(false)
+        router.push('/signup?new=1' as Route)
+      }}
+    />
+    </>
   )
 }

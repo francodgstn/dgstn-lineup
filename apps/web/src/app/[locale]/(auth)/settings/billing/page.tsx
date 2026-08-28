@@ -50,6 +50,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
+import { ORG_ENQUIRY_MAILTO } from '@/lib/salesContact'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -546,8 +547,7 @@ function SubscriptionCard({
                         variant="outline"
                         className="w-full"
                         onClick={() => {
-                          window.location.href =
-                            'mailto:hello@linyup.com?subject=Organisation%20plan%20enquiry'
+                          window.location.href = ORG_ENQUIRY_MAILTO
                         }}
                       >
                         {t('talkToUs')}

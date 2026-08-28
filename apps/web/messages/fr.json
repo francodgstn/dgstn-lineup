@@ -7419,5 +7419,10 @@
     "createStepDefaultTitle": "Travailler sur {dimension}",
     "createStepSubmit": "Créer l'étape",
     "parentGoalNone": "Général"
+  },
+  "OrgUpsell": {
+    "title": "Vous gérez plusieurs studios ?",
+    "continueAnyway": "Créer quand même un studio distinct",
+    "continueHint": "Ce sera un compte distinct — équipe, contacts et facturation séparés, sans rapports communs."
   }
 }
