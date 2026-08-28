@@ -73,6 +73,40 @@ export type StripePaymentIntentObject = Awaited<
 >
 export type StripeChargeObject = Awaited<ReturnType<StripeInstance['charges']['retrieve']>>
 export type StripeCouponObject = Awaited<ReturnType<StripeInstance['coupons']['retrieve']>>
+// The remaining webhook payload shapes, derived the same way so the Connect
+// handlers can stop taking `any`. Three shipped defects came from a field
+// Stripe moved being read off an `any` and returning `undefined` in silence;
+// these are what let `turbo run typecheck` see the next one.
+export type StripeCheckoutSessionObject = Awaited<
+  ReturnType<StripeInstance['checkout']['sessions']['retrieve']>
+>
+export type StripeDisputeObject = Awaited<ReturnType<StripeInstance['disputes']['retrieve']>>
+export type StripePayoutObject = Awaited<ReturnType<StripeInstance['payouts']['retrieve']>>
+export type StripeRefundObject = Awaited<ReturnType<StripeInstance['refunds']['retrieve']>>
+export type StripeBalanceTransactionObject = Awaited<
+  ReturnType<StripeInstance['balanceTransactions']['retrieve']>
+>
+// The LIST responses, which are not `{ data: Object[] }`: a listed item carries
+// no `lastResponse`, and the envelope carries `has_more`. Derived rather than
+// hand-written for the same reason as everything else here — a shape written
+// out twice is a shape that can disagree with itself.
+/**
+ * The same object as it arrives in a WEBHOOK, which is not quite the object as
+ * it arrives from the API.
+ *
+ * Every alias above is derived from a `retrieve()`, so each carries
+ * `lastResponse` — the HTTP envelope the SDK staples onto an API response.
+ * `event.data.object` has no such thing. Typing a handler parameter with the
+ * bare alias therefore demands a field that is never present, and the first
+ * thing to touch it would be reading `undefined` with the compiler's blessing —
+ * exactly the failure mode this module exists to stop.
+ */
+export type StripeWebhookPayload<T> = Omit<T, 'lastResponse'>
+
+export type StripeRefundListResponse = Awaited<ReturnType<StripeInstance['refunds']['list']>>
+export type StripeBalanceTransactionListResponse = Awaited<
+  ReturnType<StripeInstance['balanceTransactions']['list']>
+>
 /** The CREATE params, not the object — the intro-offer coupon is minted with a
  *  DETERMINISTIC `id`, so `id` disappearing is a silent behaviour change (Stripe
  *  would generate a random code and every retry would mint a new coupon). */

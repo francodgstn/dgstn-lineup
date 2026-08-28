@@ -13,6 +13,9 @@ import {
   readSubscriptionCancellation,
   readSubscriptionPeriod,
   reportStripeShape,
+  type StripeInvoiceObject,
+  type StripeSubscriptionObject,
+  type StripeWebhookPayload,
 } from '../stripe/objectShape'
 
 // InstanceType extracts the instance type from the callable constructor
@@ -177,8 +180,10 @@ export class StripeAdapter implements GatewayAdapter {
    *
    * Lookup key convention: linyup_{plan}_monthly  →  plan = 'coach' | 'studio' | 'organization'
    */
-  private extractPlanFromSubscription(sub: any): string | undefined {
-    const items: any[] = sub.items?.data ?? []
+  private extractPlanFromSubscription(
+    sub: StripeWebhookPayload<StripeSubscriptionObject>
+  ): string | undefined {
+    const items = sub.items?.data ?? []
     if (items.length > 0) {
       const lookupKey = items[0]?.price?.lookup_key as string | undefined
       if (lookupKey) {
@@ -190,8 +195,10 @@ export class StripeAdapter implements GatewayAdapter {
     return sub.metadata?.plan as string | undefined
   }
 
-  private extractItems(sub: any): Array<{ itemId: string; lookupKey?: string }> {
-    const items: any[] = sub.items?.data ?? []
+  private extractItems(
+    sub: StripeWebhookPayload<StripeSubscriptionObject>
+  ): Array<{ itemId: string; lookupKey?: string }> {
+    const items = sub.items?.data ?? []
     return items.map((it) => ({
       itemId: it.id as string,
       lookupKey: (it.price?.lookup_key as string | undefined) ?? undefined,
@@ -202,7 +209,10 @@ export class StripeAdapter implements GatewayAdapter {
    * The subscription lifecycle fields, from wherever the current API version
    * keeps them. Shared by created/updated so the two can never disagree.
    */
-  private subscriptionLifecycle(obj: any, eventId: string) {
+  private subscriptionLifecycle(
+    obj: StripeWebhookPayload<StripeSubscriptionObject>,
+    eventId: string
+  ) {
     const period = readSubscriptionPeriod(obj)
     // An ENDED subscription has no current period — that absence is the truth,
     // not a shape surprise.
@@ -226,7 +236,7 @@ export class StripeAdapter implements GatewayAdapter {
    * included: null is what CLEARS a stored record on reactivation, and an
    * omitted key would leave the old one standing.
    */
-  private cancellation(obj: any) {
+  private cancellation(obj: StripeWebhookPayload<StripeSubscriptionObject>) {
     const c = readSubscriptionCancellation(obj)
     return {
       cancelAtPeriodEnd: c.cancelsAtPeriodEnd,
@@ -241,7 +251,10 @@ export class StripeAdapter implements GatewayAdapter {
    * link hangs off `parent` now. A one-off invoice has none by design and is not
    * reported as a surprise.
    */
-  private invoiceSubscriptionId(obj: any, eventId: string): string | undefined {
+  private invoiceSubscriptionId(
+    obj: StripeWebhookPayload<StripeInvoiceObject>,
+    eventId: string
+  ): string | undefined {
     const read = readInvoiceSubscriptionId(obj)
     if (invoiceBillsSubscription(obj)) {
       readOrReport(read, 'invoice.subscription', obj.id, `event ${eventId}`)

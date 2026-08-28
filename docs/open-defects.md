@@ -338,7 +338,7 @@ only been read, not run.
 Verify by restarting the emulator with a fresh functions build (export the data
 first if you want to keep it) and following a pinned link to an older version.
 
-### Stripe webhook handler params are typed `any`
+### Stripe webhook handler params are typed `any` — FIXED 2026-08-28
 
 Carried over rather than newly found — recorded here because it is the root cause
 of a class, not one bug. Three shipped defects came from Stripe moving fields
@@ -348,6 +348,35 @@ now contains the reads that are known to have moved, with compile-time assertion
 but the handler signatures themselves are still `any`, so the next moved field
 fails the same silent way. Retyping them is the durable fix; the blast radius is
 why it has not been done.
+
+**Done 2026-08-28, and the blast radius was two errors.** Every handler in
+`connect/webhook.ts` (fifteen parameters) and every subscription/invoice reader
+in `utils/gateway/stripe.ts` now takes a derived SDK type. Both errors it
+surfaced were real:
+
+- `handleAppointmentCheckout` passed `paymentIntentId: piId` into
+  `refundDirectCharge` where `piId` is `string | undefined` —
+  `session.payment_intent` is null whenever Stripe created no PaymentIntent. The
+  duplicate-charge branch could have called the refund with `undefined` and an
+  idempotency key of `apt-dup:undefined`. It now skips, and LOGS, because a
+  duplicate detected and not refunded must not pass in silence.
+- `scripts/connect-test-account.ts`'s Stripe client type (see the `scripts/`
+  entry above) — found in the same pass.
+
+Two shapes had to be modelled properly to get there. `StripeWebhookPayload<T>` is
+`Omit<T, 'lastResponse'>`: every alias is derived from a `retrieve()`, so each
+carries the HTTP envelope the SDK staples onto an API response, and
+`event.data.object` has none — typing a handler with the bare alias demands a
+field that is never there. And the LIST responses are not `{ data: T[] }`; a
+listed item has no `lastResponse` and the envelope has `has_more`, so those are
+derived from `list()` rather than hand-written.
+
+**One `any` is left, deliberately**: the `event` in the dispatch. `event.data.object`
+is a union of eighty-odd resources that TS cannot narrow from `event.type`,
+because the verifier returns the general `Event`; typing it buys eighty `as`
+casts at the router and a cast is an assertion exactly like the `any`, only
+louder. The value lives in the handler BODIES, which is where all three
+motivating defects were. It carries an eslint-disable and that reasoning.
 
 ### A new owner cannot upload an activity cover image, and the activity is created anyway
 

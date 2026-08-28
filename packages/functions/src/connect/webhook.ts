@@ -108,6 +108,16 @@ import {
   readSubscriptionCancellation,
   readSubscriptionPeriod,
   reportStripeShape,
+  type StripeBalanceTransactionListResponse,
+  type StripeChargeObject,
+  type StripeCheckoutSessionObject,
+  type StripeDisputeObject,
+  type StripeInvoiceObject,
+  type StripePayoutObject,
+  type StripePaymentIntentObject,
+  type StripeRefundListResponse,
+  type StripeSubscriptionObject,
+  type StripeWebhookPayload,
 } from '../utils/stripe/objectShape'
 
 // Account/capability events → re-fetch the account (source of truth) and persist.
@@ -581,7 +591,7 @@ function financeDescription(md: Record<string, string>): string | null {
 
 async function handlePaymentIntent(
   team: TeamRef,
-  pi: any,
+  pi: StripeWebhookPayload<StripePaymentIntentObject>,
   status: 'succeeded' | 'failed',
   eventId: string,
   accountId?: string
@@ -743,7 +753,7 @@ async function handlePaymentIntent(
 
 async function handleChargeRefunded(
   team: TeamRef,
-  charge: any,
+  charge: StripeWebhookPayload<StripeChargeObject>,
   eventId: string,
   accountId?: string
 ): Promise<void> {
@@ -762,7 +772,7 @@ async function handleChargeRefunded(
   if (refundObjects.length === 0 && amountRefunded > 0 && accountId) {
     try {
       const stripe = await getConnectStripe()
-      const list: any = await stripe.refunds.list(
+      const list: StripeRefundListResponse = await stripe.refunds.list(
         { payment_intent: piId, limit: 100 },
         { stripeAccount: accountId }
       )
@@ -829,7 +839,7 @@ async function handleChargeRefunded(
 
 async function handleDispute(
   team: TeamRef,
-  dispute: any,
+  dispute: StripeWebhookPayload<StripeDisputeObject>,
   phase: 'created' | 'closed',
   eventId: string
 ): Promise<void> {
@@ -918,7 +928,11 @@ async function handleDispute(
  * NOTE (ops): the Connect webhook endpoint must be subscribed to charge.updated
  * — see docs/finance-reports.md.
  */
-async function handleChargeUpdated(team: TeamRef, charge: any, accountId?: string): Promise<void> {
+async function handleChargeUpdated(
+  team: TeamRef,
+  charge: StripeWebhookPayload<StripeChargeObject>,
+  accountId?: string
+): Promise<void> {
   const piId =
     typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id
   if (!piId || !accountId || !charge.balance_transaction) return
@@ -947,7 +961,7 @@ async function handleChargeUpdated(team: TeamRef, charge: any, accountId?: strin
  */
 async function handlePayout(
   team: TeamRef,
-  payout: any,
+  payout: StripeWebhookPayload<StripePayoutObject>,
   kind: 'paid' | 'failed',
   accountId: string,
   eventId: string
@@ -971,7 +985,7 @@ async function handlePayout(
     const stripe = await getConnectStripe()
     let startingAfter: string | undefined
     for (let page = 0; page < 20; page += 1) {
-      const list: any = await stripe.balanceTransactions.list(
+      const list: StripeBalanceTransactionListResponse = await stripe.balanceTransactions.list(
         {
           payout: payout.id as string,
           limit: 100,
@@ -991,7 +1005,11 @@ async function handlePayout(
   }
 }
 
-async function handleSubscription(team: TeamRef, sub: any, eventId: string): Promise<void> {
+async function handleSubscription(
+  team: TeamRef,
+  sub: StripeWebhookPayload<StripeSubscriptionObject>,
+  eventId: string
+): Promise<void> {
   const md = (sub.metadata ?? {}) as Record<string, string>
   const item = sub.items?.data?.[0]
   const now = FieldValue.serverTimestamp()
@@ -1079,7 +1097,7 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
  */
 async function handleInvoice(
   team: TeamRef,
-  invoice: any,
+  invoice: StripeWebhookPayload<StripeInvoiceObject>,
   status: 'paid' | 'failed',
   eventId: string,
   accountId?: string
@@ -1138,7 +1156,7 @@ async function handleInvoice(
   if (!piId && status === 'paid' && accountId && typeof invoice.id === 'string') {
     try {
       const stripe = await getConnectStripe()
-      const full: any = await stripe.invoices.retrieve(
+      const full: StripeInvoiceObject = await stripe.invoices.retrieve(
         invoice.id,
         { expand: [INVOICE_PAYMENTS_EXPAND] },
         { stripeAccount: accountId }
@@ -1216,7 +1234,7 @@ async function handleInvoice(
  */
 async function handleCheckoutCompleted(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   accountId: string | undefined,
   _eventId: string
 ): Promise<void> {
@@ -1380,7 +1398,7 @@ async function handleCheckoutCompleted(
         // Stripe SILENTLY IGNORES an unknown expand rather than erroring — so the
         // old call succeeded and handed back two undefineds. The invoice's
         // payments list is the modern route to the first charge.
-        const sub: any = await stripe.subscriptions.retrieve(
+        const sub: StripeSubscriptionObject = await stripe.subscriptions.retrieve(
           subId,
           { expand: [SUBSCRIPTION_LATEST_INVOICE_PAYMENTS_EXPAND] },
           { stripeAccount: accountId }
@@ -1397,7 +1415,7 @@ async function handleCheckoutCompleted(
           const invoiceId =
             typeof session.invoice === 'string' ? session.invoice : (session.invoice?.id ?? null)
           if (invoiceId) {
-            const full: any = await stripe.invoices.retrieve(
+            const full: StripeInvoiceObject = await stripe.invoices.retrieve(
               invoiceId,
               { expand: [INVOICE_PAYMENTS_EXPAND] },
               { stripeAccount: accountId }
@@ -1633,7 +1651,7 @@ function introReceiptTerms(
  */
 async function handleProductCheckout(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   md: Record<string, string>
 ): Promise<void> {
   // The promo commit sits at the TOP of this handler rather than after the
@@ -1730,7 +1748,7 @@ async function handleProductCheckout(
  */
 async function handleCourseCheckout(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   md: Record<string, string>
 ): Promise<void> {
   if (!md.courseId) return
@@ -1849,7 +1867,7 @@ async function handleCourseCheckout(
  */
 async function handleGiftCardCheckout(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   md: Record<string, string>
 ): Promise<void> {
   const piId =
@@ -1924,7 +1942,7 @@ async function handleGiftCardCheckout(
  */
 async function handlePolicyFeeCheckout(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   md: Record<string, string>
 ): Promise<void> {
   if (!md.feeId) return
@@ -1946,7 +1964,7 @@ async function handlePolicyFeeCheckout(
  */
 async function handleDropInCheckout(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   accountId: string | undefined,
   md: Record<string, string>
 ): Promise<void> {
@@ -2291,7 +2309,7 @@ async function handleDropInCheckout(
  */
 async function handleAppointmentCheckout(
   team: TeamRef,
-  session: any,
+  session: StripeWebhookPayload<StripeCheckoutSessionObject>,
   accountId: string | undefined,
   md: Record<string, string>
 ): Promise<void> {
@@ -2342,7 +2360,19 @@ async function handleAppointmentCheckout(
       settled_offline: settledOffline,
       incomingPaymentIntentId: piId ?? null,
     })
-    if (isDuplicateCharge && accountId) {
+    // `piId` IS OPTIONAL, which the `any` hid. `session.payment_intent` is null
+    // whenever Stripe created no PaymentIntent for the session, so this branch
+    // used to be able to call the refund with `paymentIntentId: undefined` and
+    // an idempotency key of `apt-dup:undefined`. There is no charge to reverse
+    // in that case — but a duplicate detected and NOT refunded is exactly the
+    // thing that must never pass in silence, so it says so.
+    if (isDuplicateCharge && accountId && !piId) {
+      console.error(
+        `[connect] appointment duplicate charge for session ${sessionId} carries no ` +
+          `payment_intent — nothing to refund, and the seat was already confirmed`
+      )
+    }
+    if (isDuplicateCharge && accountId && piId) {
       try {
         await refundDirectCharge({
           accountId,
@@ -2653,7 +2683,7 @@ async function handleAppointmentCheckout(
  * rollbacks; its module header carries the census of every release site and the
  * proof each one rests on, and is the only place that list is written down.
  */
-async function handleCheckoutExpired(session: any): Promise<void> {
+async function handleCheckoutExpired(session: StripeWebhookPayload<StripeCheckoutSessionObject>): Promise<void> {
   const md = (session.metadata ?? {}) as Record<string, string>
 
   if (md.giftCardCode && md.giftCardHold && md.teamId) {
@@ -2734,6 +2764,22 @@ export const handleConnectWebhook = onRequest(
       return
     }
 
+    // THE ONE DELIBERATE `any` LEFT IN THIS FILE, and the reason is worth
+    // stating because the rest of it was just retyped.
+    //
+    // `event.data.object` is a union of eighty-odd Stripe resources that TS
+    // cannot narrow from `event.type`, because the verifier returns the general
+    // `Event` rather than the discriminated one. Typing it therefore does not
+    // buy a check — it buys eighty `as` casts at the dispatch below, and a cast
+    // is an assertion exactly like this one, only louder.
+    //
+    // The value of typing lives in the HANDLER BODIES, where the field reads
+    // are: all three of the defects that motivated this work were a moved field
+    // read off an `any` inside a handler and returning `undefined` in silence.
+    // Those parameters are now typed, so `turbo run typecheck` sees the next
+    // one. The router is a `switch` on a string and reads nothing but `.type`,
+    // `.id`, `.account` and `.data.object`.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let event: any
     try {
       event = await constructConnectWebhookEvent({
