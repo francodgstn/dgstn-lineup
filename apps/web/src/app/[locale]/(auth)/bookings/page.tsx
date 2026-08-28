@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { Fragment, useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -42,7 +42,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -79,6 +82,7 @@ import {
 import { Link, useRouter } from '@/i18n/navigation'
 import { QuickLinks } from '@/components/layout/QuickLinks'
 import type { Route } from 'next'
+import { PublicSurfaceLink } from '@/components/layout/PublicSurfaceLink'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -166,18 +170,19 @@ type QuickRange =
   | 'thisMonth'
   | 'custom'
 
-const QUICK_RANGES: Exclude<QuickRange, 'custom'>[] = [
-  'thisWeek',
-  'today',
-  'tomorrow',
-  'next7',
-  'next30',
-  'nextMonth',
-  'yesterday',
-  'last7',
-  'last30',
-  'thisMonth',
-]
+// THE DROPDOWN IS SCANNED, NOT READ, so the presets are sectioned by the one
+// axis a studio actually filters on: direction in time. The flat list this
+// replaced ran present -> future -> past -> present, which stranded "This month"
+// eight rows below "This week" and gave the eye nothing to anchor on (Franco,
+// 2026-08-28). Order within a section is nearest-first.
+const RANGE_GROUPS = [
+  { key: 'current', ranges: ['today', 'thisWeek', 'thisMonth'] },
+  { key: 'upcoming', ranges: ['tomorrow', 'next7', 'next30', 'nextMonth'] },
+  { key: 'past', ranges: ['yesterday', 'last7', 'last30'] },
+] as const satisfies ReadonlyArray<{
+  key: string
+  ranges: ReadonlyArray<Exclude<QuickRange, 'custom'>>
+}>
 
 // Presets whose label promises the future — tomorrow, next 7 days, next 30 days,
 // next month. They belong to the CLASS axis alone: `joinedAt` is stamped when a
@@ -192,8 +197,19 @@ const FORWARD_RANGES: ReadonlySet<QuickRange> = new Set<QuickRange>([
   'nextMonth',
 ])
 
-function rangesForAxis(axis: BookingDateAxis): Exclude<QuickRange, 'custom'>[] {
-  return axis === 'class' ? QUICK_RANGES : QUICK_RANGES.filter((r) => !FORWARD_RANGES.has(r))
+// Sections for the current axis, with EMPTIED ONES DROPPED. The booking axis
+// removes every forward preset (see FORWARD_RANGES), which empties 'upcoming'
+// entirely — and a group with a label and no items renders a heading floating
+// over nothing.
+function rangeGroupsForAxis(
+  axis: BookingDateAxis
+): { key: string; ranges: Exclude<QuickRange, 'custom'>[] }[] {
+  return RANGE_GROUPS.map((g) => ({
+    key: g.key,
+    ranges: (axis === 'class'
+      ? [...g.ranges]
+      : g.ranges.filter((r) => !FORWARD_RANGES.has(r))) as Exclude<QuickRange, 'custom'>[],
+  })).filter((g) => g.ranges.length > 0)
 }
 
 const DEFAULT_RANGE: Exclude<QuickRange, 'custom'> = 'thisWeek'
@@ -924,7 +940,7 @@ export default function BookingsPage() {
     [applyQuickRange]
   )
 
-  const visibleRanges = useMemo(() => rangesForAxis(dateAxis), [dateAxis])
+  const visibleGroups = useMemo(() => rangeGroupsForAxis(dateAxis), [dateAxis])
 
   // Measured midnight-to-midnight, not against `windowTo` (end of day).
   const spanAtCap = useMemo(() => {
@@ -1001,7 +1017,14 @@ export default function BookingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          {/* WHERE THESE BOOKINGS COME FROM. Every row in this list arrived
+              through the public booking page, and there was no way to open it
+              from here — the studio had to know the URL, or go looking for it in
+              Settings (Franco, 2026-08-28). */}
+          <PublicSurfaceLink subPath="booking" label={tNav('bookingPage')} />
+        </div>
         {/* The window COUNT used to sit here. It is already visible in the rows
             themselves, and the two surfaces a studio moves to from a booking
             list — the grid it sits on, and the sheet it gets printed onto — had
@@ -1010,6 +1033,7 @@ export default function BookingsPage() {
           links={[
             { href: '/schedule' as Route, label: tNav('calendar') },
             { href: '/manifest' as Route, label: tNav('manifest') },
+            { href: '/settings/booking' as Route, label: tNav('bookingPage') },
           ]}
         />
         {/* The truncation warning STAYS, and is not a description: without it a
@@ -1065,12 +1089,29 @@ export default function BookingsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {visibleRanges.map((r) => (
-              <SelectItem key={r} value={r}>
-                {t(`range_${r}` as Parameters<typeof t>[0])}
-              </SelectItem>
+            {visibleGroups.map((g, gi) => (
+              <Fragment key={g.key}>
+                {gi > 0 && <SelectSeparator />}
+                <SelectGroup>
+                  <SelectLabel>{t(`rangeGroup_${g.key}` as Parameters<typeof t>[0])}</SelectLabel>
+                  {g.ranges.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {t(`range_${r}` as Parameters<typeof t>[0])}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </Fragment>
             ))}
-            {quickRange === 'custom' && <SelectItem value="custom">{t('range_custom')}</SelectItem>}
+            {/* Only while it IS the value — a custom range is something the date
+                pickers produced, never something you pick from this list. */}
+            {quickRange === 'custom' && (
+              <Fragment key="custom">
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectItem value="custom">{t('range_custom')}</SelectItem>
+                </SelectGroup>
+              </Fragment>
+            )}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-1.5">

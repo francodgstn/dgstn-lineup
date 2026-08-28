@@ -2060,7 +2060,10 @@
     "referenceSearching": "Recherche de la référence…",
     "referenceNotFound": "Aucune réservation trouvée avec la référence {code}.",
     "referenceMultipleMatches": "{count} réservations partagent cette référence — vérifiez le nom et le cours.",
-    "emptyWindow": "Aucune réservation sur cette période."
+    "emptyWindow": "Aucune réservation sur cette période.",
+    "rangeGroup_current": "En cours",
+    "rangeGroup_upcoming": "À venir",
+    "rangeGroup_past": "Passé"
   },
   "ManageBooking": {
     "title": "Gérer la réservation",
@@ -5572,7 +5575,10 @@
     "title": "Lieux de l'organisation",
     "subtitle": "Emplacements partagés avec chaque studio de cette organisation.",
     "searchPlaceholder": "Rechercher par nom ou adresse…",
-    "emptySearch": "Aucun résultat pour « {query} »."
+    "emptySearch": "Aucun résultat pour « {query} ».",
+    "filterAll": "Tous les lieux",
+    "studioPlacesTitle": "Lieux des studios",
+    "studioPlacesHint": "Définis par chaque studio. En lecture seule ici — chaque studio gère ses propres lieux."
   },
   "EventTypesSettings": {
     "title": "Types d'événements",

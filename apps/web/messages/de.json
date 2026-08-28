@@ -2060,7 +2060,10 @@
     "referenceSearching": "Referenz wird gesucht…",
     "referenceNotFound": "Keine Buchung mit der Referenz {code} gefunden.",
     "referenceMultipleMatches": "{count} Buchungen haben dieselbe Referenz — prüfe Name und Kurs.",
-    "emptyWindow": "Keine Buchungen in diesem Zeitraum."
+    "emptyWindow": "Keine Buchungen in diesem Zeitraum.",
+    "rangeGroup_current": "Aktuell",
+    "rangeGroup_upcoming": "Bevorstehend",
+    "rangeGroup_past": "Vergangen"
   },
   "ManageBooking": {
     "title": "Buchung verwalten",
@@ -5572,7 +5575,10 @@
     "title": "Standorte der Organisation",
     "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden.",
     "searchPlaceholder": "Nach Name oder Adresse suchen…",
-    "emptySearch": "Keine Ergebnisse für „{query}“."
+    "emptySearch": "Keine Ergebnisse für „{query}“.",
+    "filterAll": "Alle Orte",
+    "studioPlacesTitle": "Standorte der Studios",
+    "studioPlacesHint": "Von den einzelnen Studios festgelegt. Hier nur lesbar — jedes Studio verwaltet seine eigenen Standorte."
   },
   "EventTypesSettings": {
     "title": "Ereignistypen",

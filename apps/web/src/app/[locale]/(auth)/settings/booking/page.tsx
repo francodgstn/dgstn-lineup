@@ -45,6 +45,7 @@ import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { NoShowPolicyCard } from './NoShowPolicyCard'
 import { CancellationPolicyCard } from './CancellationPolicyCard'
 import { SettingsSaveBar } from '@/components/settings/SettingsSaveBar'
+import { PublicSurfaceLink } from '@/components/layout/PublicSurfaceLink'
 
 // ─── schema ──────────────────────────────────────────────────────────────────
 
@@ -609,6 +610,7 @@ export default function BookingSettingsPage() {
   const isLoading = teamLoading || settingsLoading
   const qc = useQueryClient()
   const t = useTranslations('SettingsBooking')
+  const tNav = useTranslations('Nav')
   const schema = useMemo(() => createSchema(t), [t])
 
   const {
@@ -693,6 +695,10 @@ export default function BookingSettingsPage() {
           <h1 className="text-2xl font-semibold">{t('pageTitle')}</h1>
           <p className="text-sm text-muted-foreground">{t('pageSubtitle')}</p>
         </div>
+        {/* THE PAGE THIS ONE CONFIGURES. Every control below changes what a
+            visitor sees, and the right-hand side of this header was empty — so
+            checking the result meant knowing the public URL by heart. */}
+        <PublicSurfaceLink subPath="booking" label={tNav('bookingPage')} className="shrink-0" />
       </div>
 
       {/* The save sits at the END of the form, not in the page header. It was

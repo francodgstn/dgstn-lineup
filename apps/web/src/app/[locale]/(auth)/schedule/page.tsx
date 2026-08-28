@@ -101,6 +101,8 @@ import { BookableHoursSheet } from '@/components/schedule/BookableHoursSheet'
 import { PlacesSheet } from '@/components/schedule/PlacesSheet'
 import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 import { useConfirm } from '@/components/ui/confirm-dialog'
+import { QuickLinks } from '@/components/layout/QuickLinks'
+import { PublicSurfaceLink } from '@/components/layout/PublicSurfaceLink'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -920,6 +922,7 @@ export default function CalendarPage() {
   const { currentTeamId, user, team, isOrgAdmin } = useAuth()
   const qc = useQueryClient()
   const t = useTranslations('Calendar')
+  const tNav = useTranslations('Nav')
   const tCommon = useTranslations('Common')
   const orgId = team?.org_id ?? null
   const fmt = useTeamFormat()
@@ -1160,6 +1163,21 @@ export default function CalendarPage() {
               </Link>
             </p>
           )}
+          {/* WHAT FILLS THIS CALENDAR, AND WHAT COMES OUT OF IT. A session is an
+              instance of an ACTIVITY and produces BOOKINGS, and the calendar
+              pointed at neither — the two pages a studio moves between all day
+              (Franco, 2026-08-28). The public booking page is beside them
+              because it is where the bookings actually come from; it opens in a
+              new tab rather than joining the QuickLinks line, which types its
+              hrefs as in-app Routes. */}
+          <QuickLinks
+            links={[
+              { href: '/offer/activities' as Route, label: tNav('activities') },
+              { href: '/bookings' as Route, label: tNav('bookings') },
+              { href: '/settings/booking' as Route, label: tNav('bookingPage') },
+            ]}
+          />
+          <PublicSurfaceLink subPath="booking" label={tNav('bookingPage')} className="mt-1.5" />
         </div>
         {/* ONE height across this row. The three controls were hand-sized
             independently — a p-1 segmented group, a `size="sm"` link and a

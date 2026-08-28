@@ -2060,7 +2060,10 @@
     "referenceSearching": "Ricerca del riferimento…",
     "referenceNotFound": "Nessuna prenotazione trovata con il riferimento {code}.",
     "referenceMultipleMatches": "{count} prenotazioni hanno lo stesso riferimento — controlla il nome e il corso.",
-    "emptyWindow": "Nessuna prenotazione in questo periodo."
+    "emptyWindow": "Nessuna prenotazione in questo periodo.",
+    "rangeGroup_current": "Attuale",
+    "rangeGroup_upcoming": "In arrivo",
+    "rangeGroup_past": "Passato"
   },
   "ManageBooking": {
     "title": "Gestisci prenotazione",
@@ -5572,7 +5575,10 @@
     "title": "Sedi dell'organizzazione",
     "subtitle": "Sedi condivise con ogni studio di questa organizzazione.",
     "searchPlaceholder": "Cerca per nome o indirizzo…",
-    "emptySearch": "Nessun risultato per «{query}»."
+    "emptySearch": "Nessun risultato per «{query}».",
+    "filterAll": "Tutti i luoghi",
+    "studioPlacesTitle": "Sedi degli studi",
+    "studioPlacesHint": "Definite da ciascuno studio. Qui in sola lettura — ogni studio gestisce le proprie sedi."
   },
   "EventTypesSettings": {
     "title": "Tipi di evento",

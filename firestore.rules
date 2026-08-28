@@ -566,8 +566,14 @@ service cloud.firestore {
       }
 
       // Team places subcollection. Team members read; managers manage (CRUD).
+      //
+      // AN ORG ADMIN ALSO READS, so Org > Places can list every member studio's
+      // locations beside the organisation's own — the same shape
+      // `program_templates` and `contacts` already use. READ ONLY, deliberately:
+      // a studio's locations stay the studio's to edit, so `write` is untouched,
+      // and an org_viewer is not admitted at all.
       match /team_places/{placeId} {
-        allow read:  if isTeamMember(teamId);
+        allow read:  if isTeamMember(teamId) || isOrgAdminOfTeam(teamId);
         allow write: if hasTeamRole(teamId, 'manager');
       }
 

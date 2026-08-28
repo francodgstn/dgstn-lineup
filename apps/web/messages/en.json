@@ -2060,7 +2060,10 @@
     "referenceSearching": "Looking up the reference…",
     "referenceNotFound": "No booking found with reference {code}.",
     "referenceMultipleMatches": "{count} bookings share this reference — check the name and the class.",
-    "emptyWindow": "No bookings in this range."
+    "emptyWindow": "No bookings in this range.",
+    "rangeGroup_current": "Current",
+    "rangeGroup_upcoming": "Upcoming",
+    "rangeGroup_past": "Past"
   },
   "ManageBooking": {
     "title": "Manage booking",
@@ -5572,7 +5575,10 @@
     "title": "Org places",
     "subtitle": "Locations shared with every studio in this organization.",
     "searchPlaceholder": "Search by name or address…",
-    "emptySearch": "No results for “{query}”."
+    "emptySearch": "No results for “{query}”.",
+    "filterAll": "All places",
+    "studioPlacesTitle": "Studio locations",
+    "studioPlacesHint": "Defined by each studio. Read-only here — a studio manages its own locations."
   },
   "EventTypesSettings": {
     "title": "Event types",

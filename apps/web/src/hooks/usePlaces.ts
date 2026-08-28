@@ -16,6 +16,9 @@ import {
   deleteDoc,
   serverTimestamp,
   getCountFromServer,
+  getDoc,
+  query,
+  where,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -24,8 +27,9 @@ import {
   TEAM_PLACES_SUBCOLLECTION,
   ORGANIZATIONS_COLLECTION,
   ORG_PLACES_SUBCOLLECTION,
+  ORG_TEAMS_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { Place } from '@linyup/shared'
+import type { OrgTeam, Place } from '@linyup/shared'
 
 export function teamPlacesCol(teamId: string) {
   return collection(db, TEAMS_COLLECTION, teamId, TEAM_PLACES_SUBCOLLECTION)
@@ -78,6 +82,79 @@ export function useOrgPlaces(orgId: string | null) {
       return snap.docs
         .map((d) => ({ ...(d.data() as Omit<Place, 'id'>), id: d.id, scope: 'org' as const }))
         .sort(sortPlaces)
+    },
+  })
+}
+
+/** A member studio's own place, as the org console sees it. */
+export interface OrgTeamPlace extends Place {
+  teamId: string
+  teamName?: string
+}
+
+/**
+ * EVERY MEMBER STUDIO'S OWN PLACES, for the organisation's Places page.
+ *
+ * Read-only by construction: `firestore.rules` admits an org ADMIN to
+ * `teams/{id}/team_places` for reading and leaves `write` to that studio's own
+ * managers. A studio's locations stay the studio's to edit.
+ *
+ * A FAN-OUT, NOT A COLLECTIONGROUP. A collection-group read is matched only by a
+ * `{path=**}` rule, and the gate this needs — "is the caller an org admin of the
+ * team that owns this document" — is a cross-document `get()` keyed on the
+ * candidate, which a LIST rule cannot satisfy. The fan-out is bounded: MAX_PLACES
+ * caps each studio at 25, and the studio count is the organisation's own.
+ *
+ * EVERY READ IS GUARDED INDIVIDUALLY. The caller is not a member of these
+ * studios, so one denial inside a bare `Promise.all` would reject the whole query
+ * and the page would render as an organisation with no places at all — the
+ * silent-empty failure the Studios page shipped once already.
+ */
+export function useOrgTeamPlaces(orgId: string | null) {
+  return useQuery<OrgTeamPlace[]>({
+    queryKey: ['org-team-places', orgId],
+    enabled: !!orgId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const teamsSnap = await getDocs(
+        query(
+          collection(db, ORGANIZATIONS_COLLECTION, orgId!, ORG_TEAMS_SUBCOLLECTION),
+          where('status', '==', 'active'),
+        ),
+      )
+      const teamIds = teamsSnap.docs
+        .map((d) => (d.data() as OrgTeam).teamId ?? d.id)
+        .filter(Boolean)
+
+      const perTeam = await Promise.all(
+        teamIds.map(async (teamId): Promise<OrgTeamPlace[]> => {
+          try {
+            // The studio's NAME comes from its public_profile, not from
+            // `teams/{id}`: an org admin cannot read the team document of a
+            // studio it does not belong to, but the public profile is
+            // world-readable and carries the name. Spelled inline as every other
+            // hook that reads it does — there is no shared constant for the team
+            // one.
+            const [placesSnap, profileSnap] = await Promise.all([
+              getDocs(teamPlacesCol(teamId)),
+              getDoc(doc(db, TEAMS_COLLECTION, teamId, 'public_profile', teamId)).catch(
+                () => null,
+              ),
+            ])
+            const teamName = (profileSnap?.data()?.name as string | undefined) ?? undefined
+            return placesSnap.docs.map((d) => ({
+              ...(d.data() as Omit<Place, 'id'>),
+              id: d.id,
+              scope: 'team' as const,
+              teamId,
+              teamName,
+            }))
+          } catch {
+            return []
+          }
+        }),
+      )
+      return perTeam.flat().sort(sortPlaces)
     },
   })
 }
