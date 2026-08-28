@@ -2623,7 +2623,8 @@
     "perStudioMonth": "par studio / mois",
     "orgQuoteNote": "Même tarif — dites-nous combien et nous vous envoyons le montant.",
     "orgMoreThan": "Plus de {count} ?",
-    "orgMinStudios": "Minimum {count} studios"
+    "orgMinStudios": "Minimum {count} studios",
+    "websiteNote": "Traduit automatiquement en anglais, allemand, français et italien"
   },
   "Plugins": {
     "title": "Plugins",

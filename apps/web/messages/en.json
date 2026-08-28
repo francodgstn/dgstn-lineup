@@ -2623,7 +2623,8 @@
     "perStudioMonth": "per studio / month",
     "orgQuoteNote": "Same rate — tell us how many and we'll send the number.",
     "orgMoreThan": "More than {count}?",
-    "orgMinStudios": "Minimum {count} studios"
+    "orgMinStudios": "Minimum {count} studios",
+    "websiteNote": "Auto-translated into English, German, French and Italian"
   },
   "Plugins": {
     "title": "Plugins",

@@ -2623,7 +2623,8 @@
     "perStudioMonth": "per studio / mese",
     "orgQuoteNote": "Stessa tariffa — dicci quanti e ti mandiamo la cifra.",
     "orgMoreThan": "Più di {count}?",
-    "orgMinStudios": "Minimo {count} studi"
+    "orgMinStudios": "Minimo {count} studi",
+    "websiteNote": "Tradotto automaticamente in inglese, tedesco, francese e italiano"
   },
   "Plugins": {
     "title": "Plugin",
