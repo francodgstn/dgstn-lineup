@@ -140,6 +140,48 @@ reading is wrong here: the client filters to `status === 'active'` *first* and
 only then lets a team entry take precedence. A server where the team document
 wins merely by existing refuses what the studio can see.
 
+**`resolveActivePluginInstalls` (plural) owns that precedence rule.** The
+singular form reads the team document for `org_id` and delegates; a caller that
+already holds the team document — `syncTeamPublicProfile` does, on every team
+write — passes the `org_id` it is standing on and asks about several plugins in
+one batch. Two `getAll` round trips whatever the plugin count.
+
+### Where the gate must be, and the two seams that did not have it
+
+Two places carried on as if a plugin could never be given back. Both were
+`docs/plugins.md` Phase 1b, both are now closed, and both are pinned by
+`packages/functions/src/plugins/installGate.test.ts`.
+
+**The automation engine** dispatched `plugin:*` actions on the stored action id
+alone: a rule composed while WhatsApp was installed kept sending after the plugin
+was removed. The install is now resolved **once per rule**, in
+`resolveActionResources`, into `ResolvedActions.activePlugins` — never per
+contact, because a rule sweeps every contact in the team and the answer cannot
+change mid-sweep. Fixing it uncovered a second defect: `hasResolvableActions` had
+no arm for a plugin action, so a rule whose ONLY action was one was skipped
+wholesale with the misleading "no executable action resources found" — a
+WhatsApp-only automation had never run.
+
+**`syncTeamPublicProfile`** probed the TEAM install path only, so an org-level
+install was invisible to the one computation that decides what the PUBLIC sees:
+a member studio could publish a site its own public profile then advertised as
+absent. All four liveness probes (`website`, `kiosk`, `custom-forms`,
+`gift-cards`) now go through the resolver. Two of the surfaces are additionally
+gated on published content, so no studio can begin advertising something it
+never created; `kiosk` has no such condition and correctly so — an org install IS
+the grant.
+
+That change is **eventually consistent by design**: nothing fans an org install
+out to its member teams, so each studio's surfaces recompute on its own next team
+write. A trigger on org installs touching every member team is a write
+amplification this flag does not justify, and the previous behaviour was not
+"later" but "never".
+
+**The plugin id inside `plugin:{id}:{name}` is parsed in ONE place** —
+`pluginIdOfNamespacedId` in `packages/shared/src/types/plugin.ts`, beside the id
+types. Rank-progression requirements use the same shape and the same function
+(`pluginIdOfRequirement` is an alias, asserted to be identical).
+
 ---
 
 ## Contributions

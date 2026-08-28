@@ -65,26 +65,69 @@ export async function resolveActivePluginInstall(
   pluginId: string,
 ): Promise<Record<string, unknown> | null> {
   const db = admin.firestore()
-  const teamRef = db.collection(TEAMS_COLLECTION).doc(teamId)
+  const teamSnap = await db.collection(TEAMS_COLLECTION).doc(teamId).get()
+  const orgId = (teamSnap.data()?.org_id as string | undefined) ?? null
+  const resolved = await resolveActivePluginInstalls(teamId, orgId, [pluginId])
+  return resolved.get(pluginId) ?? null
+}
 
-  const [installSnap, teamSnap] = await Promise.all([
-    teamRef.collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(pluginId).get(),
-    teamRef.get(),
-  ])
-  if (installSnap.exists && installSnap.data()?.status === 'active') {
-    return installSnap.data() ?? null
+/**
+ * The same question for SEVERAL plugins at once, asked by a caller that ALREADY
+ * knows the team's `org_id`.
+ *
+ * ── ONE IMPLEMENTATION OF THE PRECEDENCE RULE ────────────────────────────────
+ * This is where the doctrine documented above actually lives;
+ * `resolveActivePluginInstall` reads the team document for `org_id` and then
+ * delegates here. The rule is subtle enough — an INACTIVE team document must not
+ * veto an ACTIVE org one — that a second copy would eventually disagree with the
+ * client, which is the specification.
+ *
+ * ── WHY THE PLURAL FORM EXISTS ───────────────────────────────────────────────
+ * `syncTeamPublicProfile` probes three plugins on EVERY team write and already
+ * holds the team document. Calling the singular form three times would re-read
+ * that document three times for a value it is standing on. Batched, this is two
+ * `getAll` round trips whatever the plugin count — and the second only when
+ * something was not answered by the team's own installs.
+ */
+export async function resolveActivePluginInstalls(
+  teamId: string,
+  orgId: string | null | undefined,
+  pluginIds: readonly string[],
+): Promise<Map<string, Record<string, unknown> | null>> {
+  const db = admin.firestore()
+  const out = new Map<string, Record<string, unknown> | null>()
+  const ids = [...new Set(pluginIds)]
+  if (ids.length === 0) return out
+
+  const teamRef = db.collection(TEAMS_COLLECTION).doc(teamId)
+  const teamSnaps = await db.getAll(
+    ...ids.map((id) => teamRef.collection(INSTALLED_PLUGINS_SUBCOLLECTION).doc(id))
+  )
+  const unresolved: string[] = []
+  ids.forEach((id, i) => {
+    const snap = teamSnaps[i]
+    if (snap?.exists && snap.data()?.status === 'active') out.set(id, snap.data() ?? null)
+    else unresolved.push(id)
+  })
+
+  if (!orgId || unresolved.length === 0) {
+    for (const id of unresolved) out.set(id, null)
+    return out
   }
 
-  const orgId = teamSnap.data()?.org_id as string | undefined
-  if (!orgId) return null
-
-  const orgSnap = await db
+  const orgPluginsRef = db
     .collection(ORGANIZATIONS_COLLECTION)
     .doc(orgId)
     .collection(ORG_INSTALLED_PLUGINS_SUBCOLLECTION)
-    .doc(pluginId)
-    .get()
-  return orgSnap.exists && orgSnap.data()?.status === 'active' ? (orgSnap.data() ?? null) : null
+  const orgSnaps = await db.getAll(...unresolved.map((id) => orgPluginsRef.doc(id)))
+  unresolved.forEach((id, i) => {
+    const snap = orgSnaps[i]
+    out.set(
+      id,
+      snap?.exists && snap.data()?.status === 'active' ? (snap.data() ?? null) : null
+    )
+  })
+  return out
 }
 
 /** Is a plugin installed AND active for this team — its own, or its org's? */

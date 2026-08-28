@@ -23,7 +23,15 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const EMPTY_RESOLVED: ResolvedActions = { template: null, alertPreset: null, language: 'en' }
+// No plugin actions in these fixtures, so the install gate is empty — which is
+// also the correct default: a plugin action is dispatched only when its plugin
+// resolved as active.
+const EMPTY_RESOLVED: ResolvedActions = {
+  template: null,
+  alertPreset: null,
+  language: 'en',
+  activePlugins: new Set<string>(),
+}
 
 // FieldValue sentinels are opaque objects; check their internal _methodName so we
 // don't couple to the private shape — just confirm they are the right sentinel type.
