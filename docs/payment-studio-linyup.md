@@ -44,16 +44,41 @@ starts with `sk_test_`.
 
 ### 3. Create Stripe prices (test mode)
 
-In the Stripe dashboard → **Products** → create one product per plan with a recurring
-monthly price. Set the **Lookup key** exactly as shown:
+Do NOT create these by hand. `pnpm stripe:sync` builds the whole catalogue — plans,
+add-ons and the contact block — from `packages/shared/src/types/plan.ts`, which is the
+source of truth for every amount. Creating a price in the dashboard instead makes the
+dashboard a second source of truth, and the two then drift silently: the app charges
+what Stripe holds while the pricing page advertises what the repo holds.
 
-| Plan         | Lookup key                  |
-|--------------|-----------------------------|
-| Coach        | `linyup_coach_monthly`      |
-| Studio       | `linyup_studio_monthly`       |
-| Organization | `linyup_organization_monthly` |
+```bash
+STRIPE_SECRET_KEY=sk_test_... pnpm stripe:sync
+```
 
-The lookup key is how `createCheckoutSession` resolves the price.
+It is a **dry run** by default and prints one line per entry — `+ create`, `= ok`, or
+`! drift` where the live amount disagrees with the repo. Re-run with `--apply` to write.
+Changing an existing amount additionally needs `--reprice`, because a Stripe price is
+immutable: the flag creates a NEW price and moves the lookup key onto it, which is why
+it is opt-in rather than implied. Scope it with `--only <lookup_key>` when one entry is
+changing and the catalogue holds unrelated drift you have not decided about — the other
+entries still report, tagged with the flag that spared them.
+
+**Existing subscriptions keep the price they were created on.** A reprice changes what
+the NEXT checkout charges and nothing else; migrating a live subscriber is a separate,
+deliberate act.
+
+The script **only ever adds**: an entry deleted from `plan.ts` is left standing in
+Stripe rather than archived, because a script cannot know whether somebody is still
+billed on it. Retiring one is therefore a deliberate manual step in the dashboard —
+archive the price (which stops NEW checkouts and leaves existing subscriptions running
+untouched) after checking who is on it. `linyup_organization_monthly`, the flat
+organisation price that the per-studio rate replaced on 2026-08-28, was retired that way.
+
+The lookup keys are `linyup_{plan}_monthly` for the paid plans, plus
+`linyup_addon_{plugin}_monthly`, `linyup_studio_contact_block_monthly` and — for the
+organisation tier, which is billed **per studio** rather than as one flat amount —
+`linyup_organization_studio_monthly`, subscribed with `quantity` = the studio count.
+The lookup key is how `createCheckoutSession` resolves the price; the script is the only
+thing that should ever create one.
 
 ### 4. Fill in `packages/functions/.env.local`
 
