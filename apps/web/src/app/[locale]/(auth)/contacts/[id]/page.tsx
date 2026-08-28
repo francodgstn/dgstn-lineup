@@ -1179,6 +1179,146 @@ function NotesSheet({
   )
 }
 
+/**
+ * The alerts panel — the same right-hand Sheet the notes use.
+ *
+ * Alerts lived inside the Follow-ups tab, two clicks and a tab away from the
+ * person they are about, while notes — the other thing a coach jots down about
+ * somebody — sat in the profile column with an editor a click away. They are the
+ * same kind of thing and now they behave the same way (Franco, 2026-08-28).
+ *
+ * It takes `teamId` where NotesSheet needed nothing: the alert presets live on
+ * the team.
+ */
+function AlertsSheet({
+  contact,
+  teamId,
+  open,
+  onOpenChange,
+}: {
+  contact: Contact
+  teamId: string | null
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const t = useTranslations('Contacts')
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-md!">
+        <SheetHeader>
+          <SheetTitle>{t('tabAlerts')}</SheetTitle>
+          <SheetDescription className="sr-only">{t('alertsPanelDesc')}</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto px-4 pb-6">
+          <AlertsTab contact={contact} teamId={teamId} />
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/**
+ * Read-only preview of this contact's alerts, under the notes in the profile
+ * column. Tapping anything opens the alerts sheet — same contract as
+ * `NotesGlance`, deliberately, so the two halves of the column behave alike.
+ */
+function AlertsGlance({
+  contact,
+  onOpen,
+}: {
+  contact: Contact
+  onOpen: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const { data: alerts = [], isLoading } = useContactAlerts(contact.id)
+  const GLANCE_LIMIT = 4
+  const shown = alerts.slice(0, GLANCE_LIMIT)
+  const extra = alerts.length - shown.length
+
+  // The same test AlertsTab runs. Duplicated rather than lifted because the two
+  // are three hundred lines apart in one file; if a third reader appears it
+  // wants to become a shared helper.
+  const fired = (alert: ContactAlert): boolean => {
+    if (alert.schedule_type === 'sessions_countdown') {
+      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
+    }
+    if (alert.schedule_type === 'datetime') {
+      const ts = alert.schedule_value as { toDate(): Date } | null
+      return ts ? ts.toDate() <= new Date() : false
+    }
+    return false
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('tabAlerts')}
+          </h3>
+          {alerts.length > 0 && (
+            <span className="text-xs text-muted-foreground">({alerts.length})</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={t('addAlert')}
+          title={t('addAlert')}
+          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+      ) : alerts.length === 0 ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+        >
+          <Plus className="h-4 w-4" />
+          {t('addAlert')}
+        </button>
+      ) : (
+        <div className="space-y-2">
+          {shown.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={onOpen}
+              className={`block w-full rounded-lg border p-2.5 text-left transition-colors hover:border-border ${
+                fired(a) ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''
+              }`}
+            >
+              <p className="truncate text-sm">{a.message}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {fired(a) ? t('alertFired') : t('alertPending')}
+              </p>
+            </button>
+          ))}
+          {extra > 0 && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="w-full rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+            >
+              {t('alertsViewAll', { count: alerts.length })}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Read-only preview of the most recent notes, shown in the profile tab's empty
 // right column on large screens. Each card is truncated with a fade into the
 // card background; tapping anything opens the shared notes sheet to read/edit.
@@ -1279,12 +1419,14 @@ function ProfileTab({
   orgId,
   onSaved,
   onOpenNotes,
+  onOpenAlerts,
 }: {
   contact: Contact
   teamId: string | null
   orgId?: string | null
   onSaved: () => void
   onOpenNotes: () => void
+  onOpenAlerts: () => void
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
@@ -1815,10 +1957,18 @@ function ProfileTab({
       )}
     </form>
 
-    {/* Notes glance — fills the empty right column on large screens; on smaller
-        screens notes live in the header sheet (this column is hidden). */}
+    {/* Notes and alerts — the two things a coach writes down about a person,
+        side by side in what used to be an empty column. On smaller screens both
+        live in the header sheets (this column is hidden).
+
+        A DIVIDER, NOT A SUB-TAB. A tab inside a narrow sticky column hides one
+        of the only two things the column exists to show. */}
     <aside className="hidden lg:sticky lg:top-4 lg:block lg:flex-1 lg:min-w-0">
-      <NotesGlance contact={contact} onOpen={onOpenNotes} />
+      <div className="space-y-5">
+        <NotesGlance contact={contact} onOpen={onOpenNotes} />
+        <div className="h-px bg-border" />
+        <AlertsGlance contact={contact} onOpen={onOpenAlerts} />
+      </div>
     </aside>
     </div>
   )
@@ -3775,28 +3925,15 @@ function FollowUpsTab({ contact, teamId }: { contact: Contact; teamId: string | 
   const outreach = activity.filter((e) => e.event === 'outreach_email_sent')
   const canSend = can('contacts.manage')
 
+  // ONE SECTION NOW. The alerts half moved to the profile column and its own
+  // sheet, beside the notes it is a sibling of; what is left here is email and
+  // nothing else, which is why the tab is labelled "Emails" and why the
+  // two-column grid — which existed only to hold two sections — is gone. The
+  // section heading went with it: it repeated the tab's own name.
   return (
-    <div className="grid gap-8 pb-24 md:grid-cols-2 md:items-start">
-      {/* Alerts / reminders */}
+    <div className="pb-24">
       <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Bell className="h-4 w-4 text-amber-500" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('tabAlerts')}
-          </h3>
-        </div>
-        <AlertsTab contact={contact} teamId={teamId} />
-      </section>
-
-      {/* Outreach */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-blue-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('outreachTitle')}
-            </h3>
-          </div>
+        <div className="flex items-center justify-end">
           {canSend && (
             <Button size="sm" onClick={() => setComposeOpen(true)} disabled={!contact.email}>
               <Mail className="mr-1.5 h-4 w-4" /> {t('outreachSend')}
@@ -4679,6 +4816,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [emailCopied, setEmailCopied] = useState(false)
   // Notes editor sheet — opened from the header icon and the profile-column glance.
   const [notesOpen, setNotesOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
   const { data: notesCount = 0 } = useContactNotesCount(id)
   const { data: contactAlerts = [] } = useContactAlerts(id)
 
@@ -4753,7 +4891,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'affiliation', label: t('tabAffiliation'), icon: IdCard },
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
-    { id: 'followups', label: t('tabFollowups'), icon: Bell },
+    // The ID STAYS `followups` — a `?tab=followups` deep link and every saved
+    // `linyup_contact_tab_order` array in a browser somewhere still name it.
+    // Only the label and the icon change, because with the alerts gone what is
+    // left is email and nothing else.
+    { id: 'followups', label: t('tabEmails'), icon: Mail },
     // What this person has been asked to accept — at signup, before booking, or
     // both — and whether they did. Its own tab: buried under the profile form it
     // was a screen nobody reached, and it rendered nothing at all for a studio
@@ -4949,11 +5091,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 Margin so the buttons don't crowd the detail lines above them. */}
             {!contact.archived_at && !contact.deleted_at && (
               <div className="mt-4 flex items-center gap-2 shrink-0">
+                {/* Opens the alerts PANEL, not a tab. It used to jump to
+                    Follow-ups, which is where alerts used to live. */}
                 <HeaderActionButton
                   icon={Bell}
-                  label={t('tabFollowups')}
+                  label={t('tabAlerts')}
                   count={contactAlerts.length}
-                  onClick={() => setTab('followups')}
+                  onClick={() => setAlertsOpen(true)}
                 />
                 <HeaderActionButton
                   icon={StickyNote}
@@ -5086,6 +5230,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 orgId={team?.org_id}
                 onSaved={invalidate}
                 onOpenNotes={() => setNotesOpen(true)}
+                onOpenAlerts={() => setAlertsOpen(true)}
               />
             )}
             {/* The operator's copy of this person's consent — every document the
@@ -5118,6 +5263,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Single notes editor sheet — shared by the header icon + profile glance. */}
           <NotesSheet contact={contact} open={notesOpen} onOpenChange={setNotesOpen} />
+          {/* Outside the tab content, like the notes sheet, so the header bell
+              opens it from whichever tab you are standing on. */}
+          <AlertsSheet
+            contact={contact}
+            teamId={currentTeamId}
+            open={alertsOpen}
+            onOpenChange={setAlertsOpen}
+          />
         </>
       )}
     </div>

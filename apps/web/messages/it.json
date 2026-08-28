@@ -986,7 +986,9 @@
     "coachingCreateTaskDefaultTitle": "Lavora su {dimension}",
     "coachingCreateTaskSubmit": "Crea attività",
     "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova.",
-    "filterNotesLabel": "Ha note"
+    "filterNotesLabel": "Ha note",
+    "tabEmails": "Email",
+    "alertsViewAll": "Vedi tutti i {count} promemoria"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",

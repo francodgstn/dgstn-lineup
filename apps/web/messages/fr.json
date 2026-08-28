@@ -986,7 +986,9 @@
     "coachingCreateTaskDefaultTitle": "Travailler sur {dimension}",
     "coachingCreateTaskSubmit": "Créer la tâche",
     "coachingCreateTaskFailed": "Impossible de créer la tâche. Réessayez.",
-    "filterNotesLabel": "A des notes"
+    "filterNotesLabel": "A des notes",
+    "tabEmails": "E-mails",
+    "alertsViewAll": "Voir les {count} rappels"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
