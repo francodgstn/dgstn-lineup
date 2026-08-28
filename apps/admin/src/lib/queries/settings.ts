@@ -18,6 +18,10 @@ export const BREVO_WEBHOOK_SECRET = 'brevo-webhook-secret'
 // the brevo-api-key secret.
 export const BREVO_SYSTEM_SENDER = 'hello@linyup.com'
 
+// Secret Manager secret backing DeepL site translation. Matches the name the
+// Cloud Functions read (see packages/functions/src/translate/).
+export const DEEPL_API_KEY_SECRET = 'deepl-api-key'
+
 export interface BrevoStatus {
   apiKeyConfigured: boolean
   webhookSecretConfigured: boolean
@@ -50,6 +54,14 @@ export async function getBrevoStatus(): Promise<BrevoStatus> {
     webhookSecretConfigured,
     systemSender: BREVO_SYSTEM_SENDER,
   }
+}
+
+// Whether the DeepL key backing site translation is set. Google Cloud
+// Translation (the other provider) needs no secret at all — it runs on the
+// functions service account — so "not configured" here does not mean
+// translation is off (see packages/functions/src/translate/provider.ts).
+export async function getTranslationStatus(): Promise<{ deeplKeyConfigured: boolean }> {
+  return { deeplKeyConfigured: await isSecretConfigured(DEEPL_API_KEY_SECRET) }
 }
 
 // Secret Manager names backing Stripe. Stable identifiers matching what the

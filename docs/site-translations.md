@@ -246,6 +246,10 @@ same regime as the Brevo keys, see `packages/functions/src/mail/README.md`):
 |---|---|---|
 | DeepL API key | `deepl-api-key` | `DEEPL_API_KEY` |
 
+The key can be set from the operator console (Settings → Translation) —
+write-only, like the Brevo and Stripe secrets there — or with `gcloud secrets
+versions add deepl-api-key --data-file=-`.
+
 The API Free tier (≈500k chars/month, keys end `:fx`) is routed to
 `api-free.deepl.com` automatically; it is signed up for at deepl.com/pro-api
 and is easy to miss next to the Pro subscriptions.
