@@ -909,8 +909,15 @@ apps/web/
 - `pnpm i18n:check` enforces parity across all keys (including the 18 **arrays** that hold
   real copy) and runs in CI's Lint job. It is the ONLY enforcement there is: `apps/web` has
   no test runner, and there is no `IntlMessages` augmentation, so **message keys are untyped
-  strings** — a component referencing a key that was never merged compiles, lints, and
-  renders the raw key id to every visitor.
+  strings**.
+- Since 2026-08-28 it ALSO checks the code against the files: every `t('key')` must exist in
+  the namespace its accessor was bound to (`scripts/lib/usedKeys.mjs`). Parity cannot see
+  this class — a key that exists in NO locale is perfectly consistent across all four — and
+  it is the common one, because the string usually does exist and somebody reached it
+  through whichever accessor was in scope. It found eight live ones the day it was added.
+  Computed keys (a template literal rather than a string) are counted and reported, never
+  failed — which is why section labels are written out as literals instead of built from a
+  prefix.
 - Sport type names in the signup form are kept in English for now (they're international proper nouns); translate when the need arises.
 - Date formatting uses the browser locale via `toLocaleDateString()`. "Today"/"Tomorrow" labels come from `Common.today` / `Common.tomorrow` in messages.
 - `typedRoutes: true` is still enabled. With `[locale]` in the path, many route literals need `as Route` cast. This is expected — use casts rather than disabling typedRoutes.
