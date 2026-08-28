@@ -18,6 +18,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { generateSecureToken } from '../utils/crypto'
 import { getHostingUrl } from '../utils/env'
 import { to } from '../utils/async'
+import { paymentsAreChargeable, type EnabledTeam } from '../connect/access'
 import { loadContactPaymentSnapshot } from '../booking/access'
 import { checkoutRateLimit } from '../connect/checkout'
 import { attachWaiverContact, enforceWaiverGate, parseWaiverSubmissions } from '../waivers/gate'
@@ -202,28 +203,26 @@ export const listAvailability = onCall(async (request) => {
     .get()
   let templates: WindowTemplate[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Availability) }))
   if (data.providerId) templates = templates.filter((t) => t.providerId === data.providerId)
-  if (templates.length === 0) return { coaches: [] }
+  if (templates.length === 0) return { coaches: [], settleAtStudio: false }
 
-  // CAN THE STUDIO BE PAID? A priced duration is a door that only opens through
-  // Stripe: `createAppointmentCheckout` calls requireChargeableAccount and
-  // `bookAppointment` refuses a payable caller with `payment_required`. So when
-  // the studio has no chargeable account, offering a priced length puts a slot
-  // in front of a visitor that neither path can complete (UX-33) — the menu
-  // drops those lengths instead, here rather than in each client, so the web
-  // picker and the mobile app cannot disagree.
+  // CAN THE STUDIO BE PAID ONLINE? A priced duration used to be DROPPED when it
+  // could not (UX-33's fail-closed reading), and that produced the wrong
+  // sentence at the wrong moment: a visitor who reached one anyway was told
+  // "This slot is no longer available", which is false — the slot is fine, the
+  // studio simply has no Stripe account yet.
   //
-  // "Cannot take money" is NOT "free": an UNPRICED duration stays bookable for
-  // anyone, exactly as before. The deliberate cost is a member whose
-  // `memberBenefit` would have covered a priced length free — they lose that
-  // length too while the account is unfinished, because this listing is built
-  // once for every caller (anonymous included) and does not resolve the
-  // caller's coverage. Finishing Connect onboarding restores it.
+  // Franco's call (2026-08-28): let them BOOK IT AND SETTLE AT THE STUDIO. So
+  // the length stays on the menu and `settleAtStudio` tells the client to say
+  // where the money changes hands, instead of hiding a bookable time and
+  // costing the studio the appointment.
+  //
+  // It is a TEAM-level fact, not a per-duration one, and it is computed here
+  // rather than in each client so the web picker and the mobile app cannot
+  // disagree about which door a price opens.
   const teamSnap = await db.collection(TEAMS_COLLECTION).doc(data.teamId).get()
-  const teamPayments = teamSnap.data()?.payments as
-    | { connectStatus?: string; connectEnabled?: boolean }
-    | undefined
-  const canCharge =
-    teamPayments?.connectEnabled !== false && teamPayments?.connectStatus === 'enabled'
+  const settleAtStudio = !paymentsAreChargeable(
+    teamSnap.data()?.payments as EnabledTeam['payments']
+  )
 
   // Batch-load the union of referenced activities; keep only bookable appointment offerings.
   const activityIds = new Set<string>()
@@ -239,17 +238,9 @@ export const listAvailability = onCall(async (request) => {
     if (data.activityId && doc.id !== data.activityId) continue
     const info = toActivityInfo(doc.id, a)
     if (!info) continue
-    if (!canCharge) {
-      // 'priced' is the only mode that needs Stripe. A benefit_only length is
-      // paid for by the subscription/pack the contact already holds, so it
-      // survives an unfinished Connect account exactly as an unpriced one does.
-      const bookable = info.durations.filter((d) => resolveDurationSale(d).mode !== 'priced')
-      if (bookable.length === 0) continue // nothing here anyone could book
-      info.durations = bookable
-    }
     activityMap.set(doc.id, info)
   }
-  if (activityMap.size === 0) return { coaches: [] }
+  if (activityMap.size === 0) return { coaches: [], settleAtStudio }
 
   // Group templates by provider so a provider's busy sessions are queried once.
   const byProvider = new Map<string, WindowTemplate[]>()
@@ -260,7 +251,7 @@ export const listAvailability = onCall(async (request) => {
     if (arr) arr.push(t)
     else byProvider.set(t.providerId, [t])
   }
-  if (byProvider.size === 0) return { coaches: [] }
+  if (byProvider.size === 0) return { coaches: [], settleAtStudio }
 
   interface ActivityAccumulator {
     activityId: string
@@ -382,7 +373,7 @@ export const listAvailability = onCall(async (request) => {
     }
   }
 
-  return { coaches }
+  return { coaches, settleAtStudio }
 })
 
 // ─── bookAppointment (public) — the FREE path ──────────────────────────────────
@@ -442,7 +433,27 @@ export const bookAppointment = onCall(async (request) => {
     benefit: ctx.activity.memberBenefit ?? null,
   })
   const priceOption = priced.options[0]
-  if (priceOption?.type === 'pay') {
+
+  // ── A PRICE THE STUDIO CANNOT TAKE ONLINE IS SETTLED AT THE DOOR ──────────
+  // A payable caller normally bounces here so the client can open Stripe
+  // Checkout. That refusal only makes sense if there is a checkout to open: a
+  // studio with no chargeable Connect account had `createAppointmentCheckout`
+  // fail too, and the picker rendered the pair as "This slot is no longer
+  // available" — a false sentence about a slot that was fine.
+  //
+  // Franco's call (2026-08-28): book it, and settle in person. The booking is
+  // confirmed and carries what is OWED, which is the state
+  // `markAppointmentPaid` already exists to clear — the same shape the staff
+  // 'link' rail produces when its payment has not arrived yet. No new
+  // settlement concept, no second ledger.
+  //
+  // Note this is the ONE place a public caller can create an unpaid-but-
+  // confirmed appointment, and it is gated on a fact the caller cannot
+  // influence: whether the studio finished Connect onboarding.
+  const settleAtStudio = !paymentsAreChargeable(ctx.team.payments as EnabledTeam['payments'])
+  const owedAtStudio = priceOption?.type === 'pay' && settleAtStudio ? priceOption.amount : null
+
+  if (priceOption?.type === 'pay' && !settleAtStudio) {
     throw new HttpsError('failed-precondition', 'This duration requires payment.', {
       reason: 'payment_required',
       priceAmount: priceOption.amount,
@@ -592,6 +603,17 @@ export const bookAppointment = onCall(async (request) => {
     }),
     ...(waiverOutcome.bookingWaiverState
       ? { waiver_state: waiverOutcome.bookingWaiverState }
+      : {}),
+    // OWED, NOT PAID. `payment_status: 'required'` is exactly what the staff
+    // 'link' rail writes while a payment is outstanding, so the studio's own
+    // settlement action (`markAppointmentPaid`) closes this booking with no
+    // new branch — it flips this to 'paid' and stamps `settled_offline`.
+    ...(owedAtStudio !== null
+      ? {
+          payment_status: 'required' as const,
+          amount_due: owedAtStudio,
+          settle_at_studio: true,
+        }
       : {}),
   }
 

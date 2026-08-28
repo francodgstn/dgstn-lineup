@@ -269,7 +269,7 @@ its one admitted exception (it now has none) and a descriptive note in the
 kiosk's `WalkIn.tsx` — and both were rewritten rather than left pointing at a
 deleted path.
 
-### A priced appointment at a studio without Stripe Connect says the slot is gone
+### A priced appointment at a studio without Stripe Connect says the slot is gone — FIXED 2026-08-28
 
 `AppointmentPicker.tsx` — a paying visitor at a studio whose Connect account is
 not onboarded is told **"This slot is no longer available."** The slot is fine;
@@ -280,6 +280,30 @@ Pre-existing, and deliberately out of scope for that change: the honest fix need
 a decision about what a visitor should be offered when a studio cannot charge —
 book anyway and settle at the door, or say plainly that online payment is not set
 up. That is Franco's call, not a mechanical repair.
+
+**Franco chose: book anyway, settle at the door** (2026-08-28).
+
+So appointments become the one deliberate exception to UX-33's hiding.
+`listAvailability` no longer drops priced durations a studio cannot charge for —
+it returns `settleAtStudio`, and the picker books through the FREE door and says
+"Pay at the studio when you arrive" beside the figure. Hiding the length cost the
+studio a booking it could have taken in cash; the false sentence cost it the
+visitor as well.
+
+The booking lands as `payment_status: 'required'` + `amount_due` +
+`settle_at_studio`, which is the state the staff 'link' rail already produces
+while a payment is outstanding — so `markAppointmentPaid` closes it with no new
+branch and no second ledger. This is the only place a public caller can create an
+unpaid-but-confirmed appointment, and it is gated on a fact the caller cannot
+influence: whether the studio finished onboarding.
+
+The rest of UX-33 is untouched. The shop, the drop-in price and the priced trial
+still fail closed, because each of those IS a purchase with nothing to hand over
+at a door; an appointment is a time, and the time is real either way.
+
+`paymentsAreChargeable` in `connect/access.ts` is now the ONE predicate both the
+listing and the booking ask, pinned by a test — computing it twice is how a
+visitor ends up shown a price nothing can take.
 
 ## Feature requests, queued (not defects)
 

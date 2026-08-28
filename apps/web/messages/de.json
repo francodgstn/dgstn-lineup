@@ -2489,7 +2489,8 @@
     "payingEllipsis": "Weiterleitung zur Zahlung…",
     "memberCoveredHint": "In deinem Abo inbegriffen — wird gebucht…",
     "errorCheckoutFailed": "Zahlung konnte nicht gestartet werden. Bitte versuche es erneut.",
-    "errorPaymentRequired": "Für diese Sitzung ist jetzt eine Zahlung erforderlich. Bitte versuche es erneut."
+    "errorPaymentRequired": "Für diese Sitzung ist jetzt eine Zahlung erforderlich. Bitte versuche es erneut.",
+    "payAtStudioNote": "Bezahlung vor Ort im Studio."
   },
   "AppointmentCancel": {
     "title": "Termin absagen",

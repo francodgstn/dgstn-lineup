@@ -2489,7 +2489,8 @@
     "payingEllipsis": "Redirection vers le paiement…",
     "memberCoveredHint": "Inclus dans votre abonnement — réservation en cours…",
     "errorCheckoutFailed": "Impossible de démarrer le paiement. Veuillez réessayer.",
-    "errorPaymentRequired": "Cette séance nécessite désormais un paiement. Veuillez réessayer."
+    "errorPaymentRequired": "Cette séance nécessite désormais un paiement. Veuillez réessayer.",
+    "payAtStudioNote": "Paiement sur place au studio."
   },
   "AppointmentCancel": {
     "title": "Annuler le rendez-vous",

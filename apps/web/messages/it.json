@@ -2489,7 +2489,8 @@
     "payingEllipsis": "Reindirizzamento al pagamento…",
     "memberCoveredHint": "Incluso nel tuo abbonamento — prenotazione in corso…",
     "errorCheckoutFailed": "Impossibile avviare il pagamento. Riprova.",
-    "errorPaymentRequired": "Questa sessione ora richiede il pagamento. Riprova."
+    "errorPaymentRequired": "Questa sessione ora richiede il pagamento. Riprova.",
+    "payAtStudioNote": "Pagamento in sede allo studio."
   },
   "AppointmentCancel": {
     "title": "Annulla appuntamento",

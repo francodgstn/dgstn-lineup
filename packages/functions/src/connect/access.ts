@@ -134,6 +134,19 @@ async function resolveFeeWaiver(data: FirebaseFirestore.DocumentData): Promise<b
   }
 }
 
+/**
+ * Can this studio take an online payment RIGHT NOW?
+ *
+ * The same question `requireChargeableAccount` asks, as a boolean over the raw
+ * `payments` map — for the callers that must BRANCH on the answer rather than
+ * refuse on it. It lives here so the two can never drift: `listAvailability`
+ * decides what to offer, `bookAppointment` decides which door the offer opens,
+ * and a disagreement between them is a visitor shown a price nothing can take.
+ */
+export function paymentsAreChargeable(payments: EnabledTeam['payments']): boolean {
+  return payments?.connectEnabled !== false && payments?.connectStatus === 'enabled'
+}
+
 /** Resolve the team's connected account, requiring it be ready to accept charges. */
 export function requireChargeableAccount(team: EnabledTeam): {
   accountId: string

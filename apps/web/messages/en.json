@@ -2489,7 +2489,8 @@
     "payingEllipsis": "Redirecting to payment…",
     "memberCoveredHint": "Included with your subscription — booking…",
     "errorCheckoutFailed": "Couldn't start checkout. Please try again.",
-    "errorPaymentRequired": "This session now requires payment. Please try again."
+    "errorPaymentRequired": "This session now requires payment. Please try again.",
+    "payAtStudioNote": "Pay at the studio when you arrive."
   },
   "AppointmentCancel": {
     "title": "Cancel appointment",
