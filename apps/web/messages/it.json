@@ -985,7 +985,10 @@
     "coachingCreateTaskCta": "Crea un'attività per {dimension}",
     "coachingCreateTaskDefaultTitle": "Lavora su {dimension}",
     "coachingCreateTaskSubmit": "Crea attività",
-    "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova."
+    "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova.",
+    "filterNotesLabel": "Ha note",
+    "tabEmails": "Email",
+    "alertsViewAll": "Vedi tutti i {count} promemoria"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -2060,7 +2063,10 @@
     "referenceSearching": "Ricerca del riferimento…",
     "referenceNotFound": "Nessuna prenotazione trovata con il riferimento {code}.",
     "referenceMultipleMatches": "{count} prenotazioni hanno lo stesso riferimento — controlla il nome e il corso.",
-    "emptyWindow": "Nessuna prenotazione in questo periodo."
+    "emptyWindow": "Nessuna prenotazione in questo periodo.",
+    "rangeGroup_current": "Attuale",
+    "rangeGroup_upcoming": "In arrivo",
+    "rangeGroup_past": "Passato"
   },
   "ManageBooking": {
     "title": "Gestisci prenotazione",
@@ -3105,7 +3111,8 @@
     "terminologyPresetCustom": "Personalizzato…",
     "terminologyDefaultLabel": "Termine",
     "terminologyDefaultHint": "Inseriscine almeno uno — diventa il valore predefinito per tutte le lingue.",
-    "terminologyAddTranslations": "Aggiungi traduzioni (facoltativo)"
+    "terminologyAddTranslations": "Aggiungi traduzioni (facoltativo)",
+    "generalTitle": "Generale"
   },
   "OrgInvite": {
     "title": "Invito organizzazione",
@@ -3314,7 +3321,16 @@
     "addToMenu": "Aggiungi questa sezione al menu",
     "previewDesktop": "Desktop",
     "previewMobile": "Mobile",
-    "menuReorder": "Trascina per riordinare"
+    "menuReorder": "Trascina per riordinare",
+    "editorOrgClubsHeadingPlaceholder": "I nostri club",
+    "editorOrgCoachesHeadingPlaceholder": "I nostri allenatori",
+    "editorOrgVenueName": "Nome della sede",
+    "editorOrgMapsLink": "Link alla mappa (facoltativo)",
+    "editorOrgAddVenue": "Aggiungi sede",
+    "editorOrgCtaPlaceholder": "es. Trova un club vicino a te",
+    "editorOrgClubsNote": "Una scheda per ogni club membro, presa in tempo reale dagli studi della tua organizzazione e dal profilo pubblico di ciascuno (logo, nome, indirizzo).",
+    "editorOrgCoachesNote": "L'elenco viene preso in tempo reale da ogni club membro che ha scelto di mostrare pubblicamente i propri allenatori.",
+    "editorOrgLocationsNote": "L'indirizzo principale di ogni studio è elencato automaticamente. Aggiungi qui sotto altre sedi — una sala eventi, una seconda sede — che non sono uno dei tuoi studi."
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -5571,7 +5587,10 @@
     "title": "Sedi dell'organizzazione",
     "subtitle": "Sedi condivise con ogni studio di questa organizzazione.",
     "searchPlaceholder": "Cerca per nome o indirizzo…",
-    "emptySearch": "Nessun risultato per «{query}»."
+    "emptySearch": "Nessun risultato per «{query}».",
+    "filterAll": "Tutti i luoghi",
+    "studioPlacesTitle": "Sedi degli studi",
+    "studioPlacesHint": "Definite da ciascuno studio. Qui in sola lettura — ogni studio gestisce le proprie sedi."
   },
   "EventTypesSettings": {
     "title": "Tipi di evento",
@@ -6243,7 +6262,8 @@
     "yearClosed": "Esercizio chiuso.",
     "downloadCsv": "Scarica CSV",
     "actionFailed": "Azione non riuscita — riprova.",
-    "backToOverview": "Finanze"
+    "backToOverview": "Finanze",
+    "betaHint": "Beta — il modulo Finanze non è stato verificato da un commercialista. Controlla i dati prima di presentarli."
   },
   "HowTo": {
     "title": "Guida",
@@ -7129,7 +7149,9 @@
     "reason_cancelling": "Abbonamento in scadenza",
     "reason_billing_unlinked": "Addebitato per un abbonamento che non ha più",
     "seatsAttended": "presenti",
-    "metaAttended": "{count} presenti"
+    "metaAttended": "{count} presenti",
+    "startsInHours": "Tra {hours} h",
+    "startsInHoursMinutes": "Tra {hours} h {minutes} min"
   },
   "BookingContactFields": {
     "title": "Dati di contatto da raccogliere",
@@ -7406,5 +7428,10 @@
     "createStepDefaultTitle": "Lavora su {dimension}",
     "createStepSubmit": "Crea passaggio",
     "parentGoalNone": "Generale"
+  },
+  "OrgUpsell": {
+    "title": "Gestisci più di uno studio?",
+    "continueAnyway": "Crea comunque uno studio separato",
+    "continueHint": "Sarà un account a sé — team, contatti e fatturazione separati, senza report condivisi."
   }
 }

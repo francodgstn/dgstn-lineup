@@ -44,6 +44,7 @@ import {
   useInvalidateAccounting,
   usePeriodSummaries,
 } from '@/plugins/finance/hooks'
+import { FinanceBetaChip } from '@/components/finance/FinanceBetaChip'
 
 type RangeKind = 'month' | 'ytd' | 'fy'
 
@@ -154,6 +155,7 @@ export default function AccountingReportsPage() {
         <div className="flex items-center gap-2">
           <Table2 className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t('reports')}</h1>
+          <FinanceBetaChip />
         </div>
         <div className="flex items-center gap-2">
           <Select value={range} onValueChange={(v) => v && setRange(v as RangeKind)}>

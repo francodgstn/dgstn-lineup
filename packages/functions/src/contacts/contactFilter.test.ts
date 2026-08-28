@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   EMPTY_CONTACT_FILTER,
+  activeFilterKeys,
   calcAgeYears,
   compareContactsByAttention,
   contactAttentionReasons,
@@ -580,6 +581,65 @@ describe('dynamic groups', () => {
 })
 
 // UX-62 — the two dimensions a manager kept reaching for and not finding.
+describe('matchesFilter — has notes', () => {
+  // The dimension reads `notes_count`, a denormalised counter the
+  // `trackContactNotes` trigger maintains. The predicate is pure and never
+  // leaves the contact document, which is the whole reason the counter exists:
+  // notes are a subcollection and a filter cannot go and read one.
+  it('is off by default and matches everybody', () => {
+    assert.equal(matchesFilter(contact(), filter()), true)
+    assert.equal(matchesFilter(contact({ notes_count: 0 }), filter()), true)
+  })
+
+  it('keeps a contact with at least one note', () => {
+    assert.equal(matchesFilter(contact({ notes_count: 1 }), filter({ hasNotes: true })), true)
+    assert.equal(matchesFilter(contact({ notes_count: 9 }), filter({ hasNotes: true })), true)
+  })
+
+  it('drops a contact with none', () => {
+    assert.equal(matchesFilter(contact({ notes_count: 0 }), filter({ hasNotes: true })), false)
+  })
+
+  it('treats an ABSENT counter as none', () => {
+    // Every contact written before the counter existed has no field at all, and
+    // a backfill only reaches those that actually have notes. Absent must read
+    // as zero, not as unknown-so-keep — the alternative shows the whole roster
+    // under a filter that promises the opposite.
+    assert.equal(matchesFilter(contact(), filter({ hasNotes: true })), false)
+  })
+
+  it('is independent of hasAlerts', () => {
+    // Two counters, two subcollections, two triggers. They were briefly easy to
+    // confuse because the second was copied from the first.
+    const noted = contact({ notes_count: 2, alerts_count: 0 })
+    const alerted = contact({ notes_count: 0, alerts_count: 2 })
+    assert.equal(matchesFilter(noted, filter({ hasNotes: true })), true)
+    assert.equal(matchesFilter(noted, filter({ hasAlerts: true })), false)
+    assert.equal(matchesFilter(alerted, filter({ hasNotes: true })), false)
+    assert.equal(matchesFilter(alerted, filter({ hasAlerts: true })), true)
+  })
+
+  it('ANDs with the other dimensions, like every arm', () => {
+    const c = contact({ notes_count: 1, tags: ['vip'] })
+    assert.equal(matchesFilter(c, filter({ hasNotes: true, tags: ['vip'] })), true)
+    assert.equal(matchesFilter(c, filter({ hasNotes: true, tags: ['other'] })), false)
+  })
+
+  it('a stored filter written before this dimension existed still parses', () => {
+    // Saved presets and dynamic group rules are both PERSISTED ContactFilters
+    // and neither is migrated, so `normalizeContactFilter` has to default the
+    // key rather than leave it undefined.
+    const stored = { ...EMPTY_CONTACT_FILTER } as Record<string, unknown>
+    delete stored.hasNotes
+    assert.equal(matchesFilter(contact({ notes_count: 0 }), stored as unknown as ContactFilter), true)
+  })
+
+  it('names itself in activeFilterKeys, so a dynamic group can describe it', () => {
+    assert.ok(activeFilterKeys(filter({ hasNotes: true })).includes('hasNotes'))
+    assert.ok(!activeFilterKeys(filter()).includes('hasNotes'))
+  })
+})
+
 describe('matchesFilter — coach assignment', () => {
   const f = (coaches: string[]) => filter({ coaches })
   it("narrows to one coach's people", () => {

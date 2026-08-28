@@ -161,13 +161,38 @@ const SCHEDULE_ITEM: NavItem = {
 }
 
 /**
- * Is this row the page we are on? Prefix match, so `/schedule/places` keeps the
- * Schedule row lit, unless the item asks for an exact one. Shared by the full
- * rows and the head tiles — two answers to "am I here" is how a nav ends up
- * highlighting two places at once.
+ * Is this row the page we are on? Shared by the full rows and the head tiles —
+ * two answers to "am I here" is how a nav ends up highlighting two places at
+ * once.
+ *
+ * ── THE DEEPEST ROW OWNS THE PAGE ────────────────────────────────────────────
+ * A plain prefix match lights every ANCESTOR row as well: standing on
+ * `/schedule/places` lit both Places and Schedule, because Places lives under
+ * the calendar's path (Franco, 2026-08-28). The old comment called that
+ * deliberate; it is not something anybody wants to read, and "two answers to am
+ * I here" is precisely the failure the same comment warned about.
+ *
+ * So a prefix match yields to a MORE SPECIFIC row that also matches. That fixes
+ * the whole class rather than the one pair that was noticed —
+ * `/public-page` under `/public-page/space` and `/settings` under
+ * `/settings/plugins` had it too.
+ *
+ * ── SEGMENT-AWARE ────────────────────────────────────────────────────────────
+ * `startsWith` alone also lights `/schedule` on a hypothetical `/schedules`.
+ * Nothing named that exists today, which is exactly why it would be found the
+ * hard way.
  */
+function pathIsWithin(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(href + '/')
+}
+
 function navItemIsActive(item: NavItem, pathname: string): boolean {
-  return item.exact ? pathname === item.href : pathname.startsWith(item.href)
+  if (item.exact) return pathname === item.href
+  if (!pathIsWithin(pathname, item.href)) return false
+  return !NAV_HREFS.some(
+    (other) =>
+      other !== item.href && other.startsWith(item.href + '/') && pathIsWithin(pathname, other)
+  )
 }
 // Plugin catalogue. Was a text link at the FOOT of the features group, which put
 // discovery of most of the product below everything already installed — the one
@@ -369,6 +394,28 @@ const NAV_SECTIONS: NavSection[] = [
       { id: 'space', href: '/public-page/space', labelKey: 'space', icon: DoorOpen },
     ],
   },
+]
+
+/**
+ * EVERY href a sidebar row can light — the list `navItemIsActive` consults to
+ * decide whether a deeper row owns the page.
+ *
+ * Declared HERE rather than beside the predicate because it reads the catalogue
+ * above; the predicate is only ever called during render, long after this
+ * module has finished initialising, so the forward reference is safe.
+ *
+ * PLUGIN ROWS ARE NOT IN IT, and that is a limitation rather than a decision:
+ * they arrive at runtime from the registry. None of them nests inside another
+ * today (`/plugins/finance`, `/plugins/contact-groups`, … are siblings), so
+ * nothing is currently wrong. A plugin that contributes a row UNDER another
+ * row's path would need this list to become dynamic.
+ */
+const NAV_HREFS: string[] = [
+  ...NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.href)),
+  SCHEDULE_ITEM.href,
+  EXPLORE_PLUGINS_ITEM.href,
+  ALL_SETTINGS_ITEM.href,
+  HOW_TO_ITEM.href,
 ]
 
 // ─── nav link ─────────────────────────────────────────────────────────────────
@@ -669,14 +716,32 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
 
   const expanded = pinned || hovered
 
-  // Destinations follow the scope. An organisation has its own settings and its
-  // own plugins, and sending somebody to the studio's from inside it is the
-  // silent scope exit this row already had once.
-  const tools: NavItem[] = [
-    orgId ? { ...EXPLORE_PLUGINS_ITEM, href: orgHref(orgId, 'plugins') } : EXPLORE_PLUGINS_ITEM,
-    orgId ? { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') } : ALL_SETTINGS_ITEM,
-    HOW_TO_ITEM,
-  ]
+  // Destinations follow the scope AND the role, and the second half was missing.
+  //
+  // An organisation has its own settings and its own plugins, and sending
+  // somebody to the studio's from inside it is the silent scope exit this row
+  // already had once — so in org scope the links must swap. But they are
+  // `adminOnly` in ORG_RAIL_ITEMS and the search catalogue filters them the same
+  // way, and this row did not: it offered a member studio the federation's
+  // settings and plugin catalogue, with the plugins icon sitting at REST rather
+  // than behind the reveal (Franco, 2026-08-28). The pages then load — the rules
+  // admit a member studio to read them — so it was a real disclosure and a false
+  // affordance, not merely a dead end.
+  //
+  // There is deliberately NO fallback to the studio's own /settings here. That
+  // would put the scope exit back.
+  const { isOrgAdmin } = useOrgRole(orgId)
+  const tools: NavItem[] = orgId
+    ? [
+        ...(isOrgAdmin
+          ? [
+              { ...EXPLORE_PLUGINS_ITEM, href: orgHref(orgId, 'plugins') },
+              { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') },
+            ]
+          : []),
+        HOW_TO_ITEM,
+      ]
+    : [EXPLORE_PLUGINS_ITEM, ALL_SETTINGS_ITEM, HOW_TO_ITEM]
 
   // In org scope the first tool is the RESTING icon, so it is not also in the
   // reveal — one control never appears twice on one row.
@@ -702,6 +767,8 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
       onMouseLeave={() => setHovered(false)}
     >
       {!orgId ? <TeamQrButton /> : <UtilityIconLink item={tools[0]} onClick={onLinkClick} />}
+      {/* A member studio's org tray is How-to alone, so there is nothing to
+          reveal and the chevron would open onto empty space. */}
 
       {/* The reveal. Animated by max-width rather than by mounting, so the icons
           slide out from behind the chevron instead of appearing beside it. */}
@@ -717,7 +784,7 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
 
       {expanded && overflows && hidden.length > 0 ? (
         <UtilityFlyout onLinkClick={onLinkClick} items={hidden} />
-      ) : (
+      ) : revealable.length > 0 ? (
         <button
           type="button"
           onClick={() => setPinned((prev) => !prev)}
@@ -730,7 +797,7 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
             className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
           />
         </button>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -755,8 +822,15 @@ function UtilityFlyout({
   //
   // The QR is studio-only for the same reason and is not swapped: it encodes a
   // STUDIO's public links, and there is no org equivalent to put in its place.
+  //
+  // AND THE ROLE. An organisation's settings and plugins are `adminOnly` in
+  // ORG_RAIL_ITEMS; offering them here to a member studio was the same leak the
+  // tray had. A non-admin in org scope is left with How-to, which is the honest
+  // answer: the other two belong to the people who run the federation.
   const { current: scope } = useScope()
   const orgId = scope?.kind === 'org' ? scope.id : null
+  const { isOrgAdmin } = useOrgRole(orgId)
+  const orgToolsAllowed = !orgId || isOrgAdmin
   const settingsItem: NavItem = orgId
     ? { ...ALL_SETTINGS_ITEM, href: orgHref(orgId, 'settings') }
     : ALL_SETTINGS_ITEM
@@ -797,7 +871,7 @@ function UtilityFlyout({
             not fit. The QR belongs to the full set alone: expanded, the tray
             shows it at rest, and one control must not appear twice on a row. */}
         {!items && !orgId && <TeamQrButton showLabel />}
-        {(items ?? [pluginsItem, settingsItem, HOW_TO_ITEM]).map((item) => (
+        {(items ?? (orgToolsAllowed ? [pluginsItem, settingsItem, HOW_TO_ITEM] : [HOW_TO_ITEM])).map((item) => (
           <UtilityIconLink key={item.id} item={item} onClick={onLinkClick} showLabel />
         ))}
       </div>

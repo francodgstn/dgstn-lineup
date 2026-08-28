@@ -206,6 +206,10 @@ export interface ContactData {
   ranks?: Record<string, number>
   custom_fields?: Record<string, string | number | boolean>
   alerts_count?: number
+  // Read by the shared `matchesFilter` for the `hasNotes` dimension. Absent
+  // here, a dynamic group built on "has notes" would match nothing server-side
+  // while working perfectly in the contacts list.
+  notes_count?: number
   pending_signup?: boolean
   // Declared for the same reason as `group_ids` above: a dynamic group's rule
   // may filter on the coach assignment or on "needs attention", and both read

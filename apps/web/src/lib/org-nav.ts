@@ -85,7 +85,16 @@ export interface OrgNavItem {
 export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { id: 'org-teams', path: 'teams', labelKey: 'navStudios', icon: Building2 },
   { id: 'org-events', path: 'events', labelKey: 'tabEvents', icon: CalendarRange },
-  { id: 'org-program-templates', path: 'program-templates', labelKey: 'tabProgramTemplates', icon: ListTodo },
+  {
+    id: 'org-program-templates',
+    path: 'program-templates',
+    labelKey: 'tabProgramTemplates',
+    icon: ListTodo,
+    // The page renders a PageHeader with a subtitle the layout heading cannot
+    // carry, so it owned the title all along and the layout was printing a
+    // second copy of it verbatim above (Franco, 2026-08-28).
+    ownsHeader: true,
+  },
   { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe, ownsHeader: true },
   // THE WAY IN TO THE RAIL, and the reason it is a row rather than a menu item.
   //
@@ -150,6 +159,7 @@ export const ORG_STUDIO_NAV_ITEMS: OrgNavItem[] = [
     path: 'program-templates',
     labelKey: 'tabProgramTemplates',
     icon: ListTodo,
+    ownsHeader: true,
   },
 ]
 

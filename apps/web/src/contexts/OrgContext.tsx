@@ -48,19 +48,25 @@ export function OrgProvider({ orgId, children }: { orgId: string; children: Reac
     },
   })
 
+  // THE ROLE READ LIVES IN `useOrgRole`, not here. The app shell needs the same
+  // answer to choose the org's sidebar rows and it renders OUTSIDE this
+  // provider, so the two share a query key rather than a context — see the
+  // hook's header.
+  const { role: userRole, isOrgAdmin, loading: roleLoading } = useOrgRole(orgId)
+
+  // ADMIN ONLY. `saas_subscriptions/{orgId}` admits an org_admin and nobody else,
+  // so asking unconditionally made every org_viewer and every member studio take
+  // a retried permission-denied on every org page they opened. Only the billing
+  // page reads it, and that is admin-only.
   const { data: subscription, isLoading: subLoading } = useQuery<SaasSubscription | null>({
     queryKey: ['org-subscription', orgId],
+    enabled: isOrgAdmin,
     queryFn: async () => {
       const snap = await getDoc(doc(db, 'saas_subscriptions', orgId))
       return snap.exists() ? (snap.data() as SaasSubscription) : null
     },
   })
 
-  // THE ROLE READ LIVES IN `useOrgRole`, not here. The app shell needs the same
-  // answer to choose the org's sidebar rows and it renders OUTSIDE this
-  // provider, so the two share a query key rather than a context — see the
-  // hook's header.
-  const { role: userRole, loading: roleLoading } = useOrgRole(orgId)
 
   const loading = orgLoading || subLoading || roleLoading
   const affiliationTerm = resolveAffiliationTerm(org?.affiliation_term, locale)

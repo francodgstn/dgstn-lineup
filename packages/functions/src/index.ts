@@ -141,6 +141,9 @@ export { listMyContactPayments, createContactBillingPortalSession } from './cont
 // Contact alerts — the ONE writer of alerts_count (previously dead; see the
 // module header for the two sites that create alerts without it).
 export { trackContactAlerts } from './contacts/trackAlerts'
+// Contact notes — the ONE writer of notes_count, which is what makes the shared
+// contact filter able to ask "has notes" without reading a subcollection.
+export { trackContactNotes } from './contacts/trackNotes'
 
 // Coaching (goals, steps, evaluations, performance check-ins). `trackGoals` is
 // the ONE writer of the contact's coaching counters and the three coaching

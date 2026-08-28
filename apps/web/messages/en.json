@@ -985,7 +985,10 @@
     "coachingCreateTaskCta": "Create a task for {dimension}",
     "coachingCreateTaskDefaultTitle": "Work on {dimension}",
     "coachingCreateTaskSubmit": "Create task",
-    "coachingCreateTaskFailed": "Couldn't create the task. Try again."
+    "coachingCreateTaskFailed": "Couldn't create the task. Try again.",
+    "filterNotesLabel": "Has notes",
+    "tabEmails": "Emails",
+    "alertsViewAll": "View all {count} alerts"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2060,7 +2063,10 @@
     "referenceSearching": "Looking up the reference…",
     "referenceNotFound": "No booking found with reference {code}.",
     "referenceMultipleMatches": "{count} bookings share this reference — check the name and the class.",
-    "emptyWindow": "No bookings in this range."
+    "emptyWindow": "No bookings in this range.",
+    "rangeGroup_current": "Current",
+    "rangeGroup_upcoming": "Upcoming",
+    "rangeGroup_past": "Past"
   },
   "ManageBooking": {
     "title": "Manage booking",
@@ -3105,7 +3111,8 @@
     "terminologyPresetCustom": "Custom…",
     "terminologyDefaultLabel": "Term",
     "terminologyDefaultHint": "Enter at least one — it becomes the default for every language.",
-    "terminologyAddTranslations": "Add translations (optional)"
+    "terminologyAddTranslations": "Add translations (optional)",
+    "generalTitle": "General"
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -3314,7 +3321,16 @@
     "addToMenu": "Add this section to the menu",
     "previewDesktop": "Desktop",
     "previewMobile": "Mobile",
-    "menuReorder": "Drag to reorder"
+    "menuReorder": "Drag to reorder",
+    "editorOrgClubsHeadingPlaceholder": "Our clubs",
+    "editorOrgCoachesHeadingPlaceholder": "Our coaches",
+    "editorOrgVenueName": "Venue name",
+    "editorOrgMapsLink": "Maps link (optional)",
+    "editorOrgAddVenue": "Add venue",
+    "editorOrgCtaPlaceholder": "e.g. Find a club near you",
+    "editorOrgClubsNote": "A card per member club, pulled live from your organisation's studios and each studio's own public profile (logo, name, address).",
+    "editorOrgCoachesNote": "The roster is pulled live from every member club that opted in to list its coaches publicly.",
+    "editorOrgLocationsNote": "Every studio's primary address is listed automatically. Add extra venues below — an event hall, a second site — that are not one of your studios."
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -5571,7 +5587,10 @@
     "title": "Org places",
     "subtitle": "Locations shared with every studio in this organization.",
     "searchPlaceholder": "Search by name or address…",
-    "emptySearch": "No results for “{query}”."
+    "emptySearch": "No results for “{query}”.",
+    "filterAll": "All places",
+    "studioPlacesTitle": "Studio locations",
+    "studioPlacesHint": "Defined by each studio. Read-only here — a studio manages its own locations."
   },
   "EventTypesSettings": {
     "title": "Event types",
@@ -6243,7 +6262,8 @@
     "yearClosed": "Fiscal year closed.",
     "downloadCsv": "Download CSV",
     "actionFailed": "Action failed — please try again.",
-    "backToOverview": "Finance"
+    "backToOverview": "Finance",
+    "betaHint": "Beta — the finance module has not been reviewed by an accountant. Check the figures before filing."
   },
   "HowTo": {
     "title": "How-to",
@@ -7129,7 +7149,9 @@
     "reason_cancelling": "Subscription set to end",
     "reason_billing_unlinked": "Billed for a plan they no longer hold",
     "seatsAttended": "attended",
-    "metaAttended": "{count} attended"
+    "metaAttended": "{count} attended",
+    "startsInHours": "In {hours}h",
+    "startsInHoursMinutes": "In {hours}h {minutes}min"
   },
   "BookingContactFields": {
     "title": "Contact details to collect",
@@ -7406,5 +7428,10 @@
     "createStepDefaultTitle": "Work on {dimension}",
     "createStepSubmit": "Create step",
     "parentGoalNone": "General"
+  },
+  "OrgUpsell": {
+    "title": "Running more than one studio?",
+    "continueAnyway": "Create a separate studio anyway",
+    "continueHint": "It will be its own account — separate team, contacts and billing, with no shared reporting."
   }
 }

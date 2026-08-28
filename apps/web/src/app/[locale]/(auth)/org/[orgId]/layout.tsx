@@ -53,7 +53,28 @@ function OrgPageHeading({ pathname }: { pathname: string }) {
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
   const t = useTranslations('Org')
   const pathname = usePathname()
-  const onRailRoute = orgRailSegment(pathname) !== null
+  const { userRole, loading: roleLoading } = useOrg()
+
+  // A MEMBER STUDIO HAS NO RAIL.
+  //
+  // Whether to render the management shell was decided from the PATHNAME alone,
+  // so somebody with no seat in the organisation — arriving at `/org/{id}/ranking`
+  // from Settings → Team, which is a legitimate link — was handed the rail and
+  // with it every destination `ORG_STUDIO_NAV_ITEMS` deliberately withholds
+  // (Franco, 2026-08-28). `OrgRail` filters `adminOnly`, which separates an
+  // org_admin from an org_viewer; it cannot separate either from a person who is
+  // not a member at all, and that is a different question — so it is answered
+  // here, beside the decision to render the shell in the first place.
+  //
+  // The page itself still renders, full width with its own heading: those links
+  // promise the ranking scale, and the scale is genuinely readable by a member
+  // studio (`firestore.rules` admits `currentTeamInOrg` to the org document).
+  const onRailRoute = orgRailSegment(pathname) !== null && userRole != null
+
+  // WAIT rather than guess. On a rail route the shell would otherwise render
+  // for a beat and then vanish once the role arrives, which reads as the app
+  // taking something away.
+  if (roleLoading && orgRailSegment(pathname) !== null) return null
 
   // A sidebar row renders full-width, exactly as a studio's own pages do. Only
   // the rail destinations get the master-detail shell.

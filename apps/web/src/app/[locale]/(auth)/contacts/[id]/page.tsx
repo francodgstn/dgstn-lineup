@@ -89,7 +89,6 @@ import {
   CONTACT_ALERTS_SUBCOLLECTION,
   ALERT_PRESETS_SUBCOLLECTION,
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
-  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
   contactDeletionState,
 } from '@linyup/shared'
 import type {
@@ -184,18 +183,11 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 
-import {
-  LineChart,
-  Line,
-  XAxis,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-} from 'recharts'
+import { XAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab, useContactNotesCount, useContactNotes, noteColorClasses, type ContactNote } from './NotesTab'
 import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
+import { isoWeekLabel, useContactWeeklyReports } from './AttendanceTrendCard'
 import { PlanGate } from '@/components/plan/PlanGate'
 import {
   RelationshipTimeline,
@@ -640,32 +632,6 @@ function useContactRecentSessions(contactId: string, count: number) {
   })
 }
 
-interface WeeklyReport {
-  iso_week: string
-  sessions_count: number
-}
-
-function useContactWeeklyReports(contactId: string, weeks = 16) {
-  return useQuery<WeeklyReport[]>({
-    queryKey: ['contact-weekly-reports', contactId, weeks],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, CONTACTS_COLLECTION, contactId, CONTACT_WEEKLY_REPORTS_SUBCOLLECTION),
-          orderBy('iso_week', 'desc'),
-          limit(weeks)
-        )
-      )
-      return snap.docs
-        .map((d) => ({
-          iso_week: d.data().iso_week as string,
-          sessions_count: (d.data().sessions_count as number) ?? 0,
-        }))
-        .reverse()
-    },
-  })
-}
-
 /**
  * TWO shapes exist in `contact_alerts`, and this page only ever understood one.
  *
@@ -849,140 +815,6 @@ function FormBlock({ title, children }: { title: React.ReactNode; children: Reac
         {title}
       </p>
       {children}
-    </div>
-  )
-}
-
-// ─── chart helpers ────────────────────────────────────────────────────────────
-// CSS variables don't resolve in SVG *presentation* attributes — must use style prop
-
-function LineXTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
-  if (!payload?.value) return null
-  return (
-    <g transform={`translate(${x},${y})`}>
-      {/* fill="currentColor" reads CSS color prop, which resolves CSS vars reliably in SVG */}
-      <text
-        fill="currentColor"
-        textAnchor="middle"
-        dy={12}
-        style={{ fontSize: 9, color: 'hsl(var(--muted-foreground))', fontFamily: 'inherit' }}
-      >
-        {payload.value}
-      </text>
-    </g>
-  )
-}
-
-// ─── stats tab (attendance trend) ────────────────────────────────────────────
-// The performance profile radar used to live here too, gated on the same
-// `advanced_dashboard` feature — it moved to the Coaching tab (see
-// `PerformanceProfilePanel`), where it feeds directly into the goals below it
-// instead of sitting a tab away from them.
-
-function isoWeekLabel(isoWeek: string) {
-  const [year, week] = isoWeek.split('-W').map(Number)
-  if (!year || !week) return isoWeek
-  const jan4 = new Date(year, 0, 4)
-  const dayOfWeek = jan4.getDay() || 7
-  const weekStart = new Date(jan4)
-  weekStart.setDate(jan4.getDate() - dayOfWeek + 1 + (week - 1) * 7)
-  return weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
-const TREND_PERIODS = [
-  { key: '4w', weeks: 4, label: '1M' },
-  { key: '12w', weeks: 12, label: '3M' },
-  { key: '24w', weeks: 24, label: '6M' },
-  { key: '52w', weeks: 52, label: '1Y' },
-] as const
-type TrendPeriodKey = (typeof TREND_PERIODS)[number]['key']
-
-function StatsTab({ contact }: { contact: Contact; teamId: string | null }) {
-  const t = useTranslations('Contacts')
-  const [period, setPeriod] = useState<TrendPeriodKey>('12w')
-  const selectedPeriod = TREND_PERIODS.find((p) => p.key === period)!
-  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(
-    contact.id,
-    selectedPeriod.weeks
-  )
-
-  const chartData = weeklyReports.map((r) => ({
-    label: isoWeekLabel(r.iso_week),
-    sessions: r.sessions_count,
-  }))
-
-  // Tooltip style — inline style prop resolves CSS vars; SVG attrs do not
-  const tooltipStyle = {
-    fontSize: 12,
-    padding: '6px 10px',
-    borderRadius: 8,
-    border: '1px solid hsl(var(--border))',
-    backgroundColor: 'hsl(var(--card))',
-    color: 'hsl(var(--card-foreground))',
-  }
-
-  return (
-    <div className="pb-16 space-y-6">
-      {/* ── Attendance trend ── */}
-      <div className="rounded-xl border bg-card p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('statsPanelAttendance')}
-          </p>
-          {/* Period selector */}
-          <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5">
-            {TREND_PERIODS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setPeriod(p.key)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
-                  period === p.key
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {reportsLoading ? (
-          <div className="h-[200px] rounded-lg bg-muted animate-pulse" />
-        ) : chartData.length === 0 ? (
-          <div className="h-[120px] flex items-center justify-center rounded-lg border border-dashed">
-            <p className="text-sm text-muted-foreground">{t('noActivity')}</p>
-          </div>
-        ) : (
-          <div className="h-[200px]">
-            <ResponsiveContainer width="99%" height="100%">
-              <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <XAxis
-                  dataKey="label"
-                  tick={<LineXTick />}
-                  tickLine={false}
-                  axisLine={false}
-                  interval="preserveStartEnd"
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v) => [v, t('statTotalSessions')]}
-                  labelStyle={{ display: 'none' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="sessions"
-                  stroke="#6366f1"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 4, fill: '#6366f1' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
@@ -1347,6 +1179,146 @@ function NotesSheet({
   )
 }
 
+/**
+ * The alerts panel — the same right-hand Sheet the notes use.
+ *
+ * Alerts lived inside the Follow-ups tab, two clicks and a tab away from the
+ * person they are about, while notes — the other thing a coach jots down about
+ * somebody — sat in the profile column with an editor a click away. They are the
+ * same kind of thing and now they behave the same way (Franco, 2026-08-28).
+ *
+ * It takes `teamId` where NotesSheet needed nothing: the alert presets live on
+ * the team.
+ */
+function AlertsSheet({
+  contact,
+  teamId,
+  open,
+  onOpenChange,
+}: {
+  contact: Contact
+  teamId: string | null
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const t = useTranslations('Contacts')
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-md!">
+        <SheetHeader>
+          <SheetTitle>{t('tabAlerts')}</SheetTitle>
+          <SheetDescription className="sr-only">{t('alertsPanelDesc')}</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto px-4 pb-6">
+          <AlertsTab contact={contact} teamId={teamId} />
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/**
+ * Read-only preview of this contact's alerts, under the notes in the profile
+ * column. Tapping anything opens the alerts sheet — same contract as
+ * `NotesGlance`, deliberately, so the two halves of the column behave alike.
+ */
+function AlertsGlance({
+  contact,
+  onOpen,
+}: {
+  contact: Contact
+  onOpen: () => void
+}) {
+  const t = useTranslations('Contacts')
+  const { data: alerts = [], isLoading } = useContactAlerts(contact.id)
+  const GLANCE_LIMIT = 4
+  const shown = alerts.slice(0, GLANCE_LIMIT)
+  const extra = alerts.length - shown.length
+
+  // The same test AlertsTab runs. Duplicated rather than lifted because the two
+  // are three hundred lines apart in one file; if a third reader appears it
+  // wants to become a shared helper.
+  const fired = (alert: ContactAlert): boolean => {
+    if (alert.schedule_type === 'sessions_countdown') {
+      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
+    }
+    if (alert.schedule_type === 'datetime') {
+      const ts = alert.schedule_value as { toDate(): Date } | null
+      return ts ? ts.toDate() <= new Date() : false
+    }
+    return false
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('tabAlerts')}
+          </h3>
+          {alerts.length > 0 && (
+            <span className="text-xs text-muted-foreground">({alerts.length})</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={t('addAlert')}
+          title={t('addAlert')}
+          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+      ) : alerts.length === 0 ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+        >
+          <Plus className="h-4 w-4" />
+          {t('addAlert')}
+        </button>
+      ) : (
+        <div className="space-y-2">
+          {shown.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={onOpen}
+              className={`block w-full rounded-lg border p-2.5 text-left transition-colors hover:border-border ${
+                fired(a) ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''
+              }`}
+            >
+              <p className="truncate text-sm">{a.message}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {fired(a) ? t('alertFired') : t('alertPending')}
+              </p>
+            </button>
+          ))}
+          {extra > 0 && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="w-full rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+            >
+              {t('alertsViewAll', { count: alerts.length })}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Read-only preview of the most recent notes, shown in the profile tab's empty
 // right column on large screens. Each card is truncated with a fade into the
 // card background; tapping anything opens the shared notes sheet to read/edit.
@@ -1447,12 +1419,14 @@ function ProfileTab({
   orgId,
   onSaved,
   onOpenNotes,
+  onOpenAlerts,
 }: {
   contact: Contact
   teamId: string | null
   orgId?: string | null
   onSaved: () => void
   onOpenNotes: () => void
+  onOpenAlerts: () => void
 }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
@@ -1983,10 +1957,18 @@ function ProfileTab({
       )}
     </form>
 
-    {/* Notes glance — fills the empty right column on large screens; on smaller
-        screens notes live in the header sheet (this column is hidden). */}
+    {/* Notes and alerts — the two things a coach writes down about a person,
+        side by side in what used to be an empty column. On smaller screens both
+        live in the header sheets (this column is hidden).
+
+        A DIVIDER, NOT A SUB-TAB. A tab inside a narrow sticky column hides one
+        of the only two things the column exists to show. */}
     <aside className="hidden lg:sticky lg:top-4 lg:block lg:flex-1 lg:min-w-0">
-      <NotesGlance contact={contact} onOpen={onOpenNotes} />
+      <div className="space-y-5">
+        <NotesGlance contact={contact} onOpen={onOpenNotes} />
+        <div className="h-px bg-border" />
+        <AlertsGlance contact={contact} onOpen={onOpenAlerts} />
+      </div>
     </aside>
     </div>
   )
@@ -3943,28 +3925,15 @@ function FollowUpsTab({ contact, teamId }: { contact: Contact; teamId: string | 
   const outreach = activity.filter((e) => e.event === 'outreach_email_sent')
   const canSend = can('contacts.manage')
 
+  // ONE SECTION NOW. The alerts half moved to the profile column and its own
+  // sheet, beside the notes it is a sibling of; what is left here is email and
+  // nothing else, which is why the tab is labelled "Emails" and why the
+  // two-column grid — which existed only to hold two sections — is gone. The
+  // section heading went with it: it repeated the tab's own name.
   return (
-    <div className="grid gap-8 pb-24 md:grid-cols-2 md:items-start">
-      {/* Alerts / reminders */}
+    <div className="pb-24">
       <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Bell className="h-4 w-4 text-amber-500" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('tabAlerts')}
-          </h3>
-        </div>
-        <AlertsTab contact={contact} teamId={teamId} />
-      </section>
-
-      {/* Outreach */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-blue-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('outreachTitle')}
-            </h3>
-          </div>
+        <div className="flex items-center justify-end">
           {canSend && (
             <Button size="sm" onClick={() => setComposeOpen(true)} disabled={!contact.email}>
               <Mail className="mr-1.5 h-4 w-4" /> {t('outreachSend')}
@@ -4793,9 +4762,13 @@ function UpsertAffiliationDialog({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
+// 'stats' is deliberately absent. Its one remaining card — the attendance trend
+// — moved to Coaching, where the question it answers is actually asked, and a
+// tab that exists to be empty is worse than one destination fewer. A bookmarked
+// `?tab=stats` is safe: `useTabParam` falls back rather than opening an empty
+// pane on an id it does not recognise.
 const TAB_IDS = [
   'profile',
-  'stats',
   'activity',
   'followups',
   'bookings',
@@ -4843,6 +4816,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [emailCopied, setEmailCopied] = useState(false)
   // Notes editor sheet — opened from the header icon and the profile-column glance.
   const [notesOpen, setNotesOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
   const { data: notesCount = 0 } = useContactNotesCount(id)
   const { data: contactAlerts = [] } = useContactAlerts(id)
 
@@ -4913,12 +4887,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const TABS: { id: TabId; label: string; icon: React.ElementType; feature?: PlanFeature }[] = [
     { id: 'profile', label: t('tabProfile'), icon: User },
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
-    { id: 'stats', label: t('tabStats'), icon: BarChart2 },
     { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
     { id: 'affiliation', label: t('tabAffiliation'), icon: IdCard },
     { id: 'payments', label: t('tabPayments'), icon: CreditCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
-    { id: 'followups', label: t('tabFollowups'), icon: Bell },
+    // The ID STAYS `followups` — a `?tab=followups` deep link and every saved
+    // `linyup_contact_tab_order` array in a browser somewhere still name it.
+    // Only the label and the icon change, because with the alerts gone what is
+    // left is email and nothing else.
+    { id: 'followups', label: t('tabEmails'), icon: Mail },
     // What this person has been asked to accept — at signup, before booking, or
     // both — and whether they did. Its own tab: buried under the profile form it
     // was a screen nobody reached, and it rendered nothing at all for a studio
@@ -5114,11 +5091,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 Margin so the buttons don't crowd the detail lines above them. */}
             {!contact.archived_at && !contact.deleted_at && (
               <div className="mt-4 flex items-center gap-2 shrink-0">
+                {/* Opens the alerts PANEL, not a tab. It used to jump to
+                    Follow-ups, which is where alerts used to live. */}
                 <HeaderActionButton
                   icon={Bell}
-                  label={t('tabFollowups')}
+                  label={t('tabAlerts')}
                   count={contactAlerts.length}
-                  onClick={() => setTab('followups')}
+                  onClick={() => setAlertsOpen(true)}
                 />
                 <HeaderActionButton
                   icon={StickyNote}
@@ -5251,6 +5230,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 orgId={team?.org_id}
                 onSaved={invalidate}
                 onOpenNotes={() => setNotesOpen(true)}
+                onOpenAlerts={() => setAlertsOpen(true)}
               />
             )}
             {/* The operator's copy of this person's consent — every document the
@@ -5263,7 +5243,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
               />
             )}
-            {tab === 'stats' && <StatsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
             {tab === 'followups' && <FollowUpsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
@@ -5284,6 +5263,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Single notes editor sheet — shared by the header icon + profile glance. */}
           <NotesSheet contact={contact} open={notesOpen} onOpenChange={setNotesOpen} />
+          {/* Outside the tab content, like the notes sheet, so the header bell
+              opens it from whichever tab you are standing on. */}
+          <AlertsSheet
+            contact={contact}
+            teamId={currentTeamId}
+            open={alertsOpen}
+            onOpenChange={setAlertsOpen}
+          />
         </>
       )}
     </div>

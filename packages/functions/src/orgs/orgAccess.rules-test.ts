@@ -119,6 +119,14 @@ describe('firestore.rules — organization access', function () {
         name: 'Main Dojo',
         orgId: ORG,
       })
+
+      // A place belonging to the MEMBER STUDIO — what Org > Places lists beside
+      // the organisation's own.
+      await setDoc(doc(db, 'teams', 'legitTeam', 'team_places', 'tp1'), {
+        name: 'Studio Hall',
+        teamId: 'legitTeam',
+        scope: 'team',
+      })
     })
   })
 
@@ -197,6 +205,39 @@ describe('firestore.rules — organization access', function () {
     // …the read is gated on org_teams membership, which the attacker cannot forge
     // (allow write: if false), so the shared collection stays shut.
     await assertFails(getDocs(query(collection(attacker, 'organizations', ORG, 'org_places'))))
+  })
+
+  // ── Org > Places lists the member studios' own locations ──────────────────
+  //
+  // An org admin is NOT a member of the studios it federates, so without an
+  // explicit disjunct `teams/{id}/team_places` is closed to them and the page
+  // renders as an organisation whose studios have no locations at all — a denied
+  // list and an empty one are the same thing on screen, which is how this class
+  // of defect ships twice.
+  describe('a member studio’s places, from the organisation', () => {
+    it('the org admin CAN read them', async () => {
+      const orgAdmin = testEnv.authenticatedContext('realOrgAdmin').firestore()
+      await assertSucceeds(getDocs(collection(orgAdmin, 'teams', 'legitTeam', 'team_places')))
+    })
+
+    it('…but CANNOT write them — a studio’s locations stay the studio’s', async () => {
+      const orgAdmin = testEnv.authenticatedContext('realOrgAdmin').firestore()
+      await assertFails(
+        setDoc(doc(orgAdmin, 'teams', 'legitTeam', 'team_places', 'tp1'), { name: 'Renamed' }),
+      )
+    })
+
+    it('an org_VIEWER cannot read them', async () => {
+      // `isOrgAdminOfTeam` is deliberately admin-only: this is a studio's own
+      // operational data, not the federation's shared standards.
+      const viewer = testEnv.authenticatedContext('viewerV').firestore()
+      await assertFails(getDocs(collection(viewer, 'teams', 'legitTeam', 'team_places')))
+    })
+
+    it('an unrelated signed-in user still cannot read them', async () => {
+      const outsider = testEnv.authenticatedContext('nobody').firestore()
+      await assertFails(getDocs(collection(outsider, 'teams', 'legitTeam', 'team_places')))
+    })
   })
 
   it('a genuine sub-studio member CAN still read the org’s shared collections', async () => {

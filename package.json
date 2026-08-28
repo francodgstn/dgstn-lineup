@@ -53,6 +53,7 @@
     "backfill:gateway-data": "tsx scripts/backfill-gateway-data.ts",
     "backfill:booking-joined-at": "tsx scripts/backfill-booking-joined-at.ts",
     "backfill:partner-apps": "tsx scripts/backfill-partner-apps.ts",
+    "backfill:contact-notes-count": "tsx scripts/backfill-contact-notes-count.ts",
     "typecheck:seeds": "tsc -p tsconfig.seedcheck.json",
     "verify:waiver-ledger": "tsx scripts/verify-waiver-ledger.ts"
   },

@@ -96,8 +96,16 @@ function OrgPluginCard({
             {manifest.status === 'coming_soon' && (
               <Badge variant="secondary" className="text-xs">{t('statusComingSoon')}</Badge>
             )}
-            {manifest.status === 'beta' && !isInstalled && (
-              <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">{t('statusBeta')}</Badge>
+            {/* Shown once INSTALLED too. The `!isInstalled` gate hid the caveat
+                from exactly the organisations that had adopted the module — the
+                only ones whose numbers it is about. */}
+            {manifest.status === 'beta' && (
+              <Badge
+                variant="secondary"
+                className="border-blue-200 bg-blue-50 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"
+              >
+                {t('statusBeta')}
+              </Badge>
             )}
           </div>
           <span className="text-xs text-muted-foreground">{categoryLabel[manifest.category]}</span>

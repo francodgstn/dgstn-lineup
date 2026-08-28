@@ -35,6 +35,7 @@ import {
   useAccountingSettings,
   useInvalidateAccounting,
 } from '@/plugins/finance/hooks'
+import { FinanceBetaChip } from '@/components/finance/FinanceBetaChip'
 
 const TYPE_ORDER: AccountType[] = ['asset', 'liability', 'equity', 'revenue', 'expense']
 
@@ -126,6 +127,7 @@ export default function AccountingAccountsPage() {
         <div className="flex items-center gap-2">
           <BookOpenText className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t('accounts')}</h1>
+          <FinanceBetaChip />
         </div>
         <div className="flex items-center gap-2">
           {isOwner && settings && (

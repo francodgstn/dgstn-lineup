@@ -240,6 +240,10 @@ export interface ContactFilter {
   engagement: EngagementBand[]
   tags: string[]
   hasAlerts: boolean
+  /** Somebody has written a note on this contact. Reads `notes_count`, which the
+   *  `trackContactNotes` trigger maintains — a note is a subcollection document
+   *  and this predicate never leaves the contact it was handed. */
+  hasNotes: boolean
   pendingSignup: boolean
   /** "Who needs me today" — derived, never stored; see
    *  `contactAttentionReasons` for exactly what counts and why the answer is a
@@ -270,7 +274,7 @@ export const EMPTY_CONTACT_FILTER: ContactFilter = {
   search: '',
   stages: [], sources: [], statuses: [], subscriptions: [], groups: [], coaches: [],
   engagement: [], tags: [],
-  hasAlerts: false, pendingSignup: false, needsAttention: false,
+  hasAlerts: false, hasNotes: false, pendingSignup: false, needsAttention: false,
   sessionsMin: null, sessionsMax: null,
   inactivity: null, rankFilter: null, age: null, customFields: [],
   consent: null,
@@ -297,6 +301,10 @@ export function normalizeContactFilter(filter: Partial<ContactFilter> | null | u
     engagement: [...(f.engagement ?? [])],
     tags: [...(f.tags ?? [])],
     hasAlerts: f.hasAlerts ?? false,
+    // `?? false` is what makes every filter document written before this
+    // dimension existed still valid — saved presets and dynamic group rules are
+    // both stored, and neither is migrated.
+    hasNotes: f.hasNotes ?? false,
     pendingSignup: f.pendingSignup ?? false,
     needsAttention: f.needsAttention ?? false,
     sessionsMin: f.sessionsMin ?? null,
@@ -340,6 +348,7 @@ export function activeFilterKeys(filter: Partial<ContactFilter> | null | undefin
   if (f.engagement.length) keys.push('engagement')
   if (f.tags.length) keys.push('tags')
   if (f.hasAlerts) keys.push('hasAlerts')
+  if (f.hasNotes) keys.push('hasNotes')
   if (f.pendingSignup) keys.push('pendingSignup')
   if (f.needsAttention) keys.push('needsAttention')
   if (f.sessionsMin != null || f.sessionsMax != null) keys.push('sessionsMin')
@@ -441,6 +450,7 @@ export interface ContactFilterSubject {
   assigned_coach_ids?: string[]
   tags?: string[]
   alerts_count?: number
+  notes_count?: number
   pending_signup?: boolean
   /** `false` = a lead nobody has opened yet. Absent/true = seen. */
   lead_acknowledged?: boolean
@@ -932,6 +942,7 @@ export function matchesFilter(
   }
 
   if (f.hasAlerts && (subject.alerts_count ?? 0) <= 0) return false
+  if (f.hasNotes && (subject.notes_count ?? 0) <= 0) return false
 
   if (f.needsAttention && contactAttentionReasons(subject, ctx).length === 0) return false
 

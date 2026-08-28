@@ -985,7 +985,10 @@
     "coachingCreateTaskCta": "Créer une tâche pour {dimension}",
     "coachingCreateTaskDefaultTitle": "Travailler sur {dimension}",
     "coachingCreateTaskSubmit": "Créer la tâche",
-    "coachingCreateTaskFailed": "Impossible de créer la tâche. Réessayez."
+    "coachingCreateTaskFailed": "Impossible de créer la tâche. Réessayez.",
+    "filterNotesLabel": "A des notes",
+    "tabEmails": "E-mails",
+    "alertsViewAll": "Voir les {count} rappels"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2060,7 +2063,10 @@
     "referenceSearching": "Recherche de la référence…",
     "referenceNotFound": "Aucune réservation trouvée avec la référence {code}.",
     "referenceMultipleMatches": "{count} réservations partagent cette référence — vérifiez le nom et le cours.",
-    "emptyWindow": "Aucune réservation sur cette période."
+    "emptyWindow": "Aucune réservation sur cette période.",
+    "rangeGroup_current": "En cours",
+    "rangeGroup_upcoming": "À venir",
+    "rangeGroup_past": "Passé"
   },
   "ManageBooking": {
     "title": "Gérer la réservation",
@@ -3105,7 +3111,8 @@
     "terminologyPresetCustom": "Personnalisé…",
     "terminologyDefaultLabel": "Terme",
     "terminologyDefaultHint": "Saisissez-en au moins un — il devient la valeur par défaut pour toutes les langues.",
-    "terminologyAddTranslations": "Ajouter des traductions (facultatif)"
+    "terminologyAddTranslations": "Ajouter des traductions (facultatif)",
+    "generalTitle": "Général"
   },
   "OrgInvite": {
     "title": "Invitation d'organisation",
@@ -3314,7 +3321,16 @@
     "addToMenu": "Ajouter cette section au menu",
     "previewDesktop": "Ordinateur",
     "previewMobile": "Mobile",
-    "menuReorder": "Glisser pour réordonner"
+    "menuReorder": "Glisser pour réordonner",
+    "editorOrgClubsHeadingPlaceholder": "Nos clubs",
+    "editorOrgCoachesHeadingPlaceholder": "Nos entraîneurs",
+    "editorOrgVenueName": "Nom du lieu",
+    "editorOrgMapsLink": "Lien vers la carte (facultatif)",
+    "editorOrgAddVenue": "Ajouter un lieu",
+    "editorOrgCtaPlaceholder": "p. ex. Trouver un club près de chez vous",
+    "editorOrgClubsNote": "Une carte par club membre, tirée en direct des studios de votre organisation et du profil public de chaque studio (logo, nom, adresse).",
+    "editorOrgCoachesNote": "La liste est tirée en direct de chaque club membre ayant choisi d'afficher publiquement ses entraîneurs.",
+    "editorOrgLocationsNote": "L'adresse principale de chaque studio est listée automatiquement. Ajoutez ci-dessous d'autres lieux — une salle d'événement, un second site — qui ne sont pas l'un de vos studios."
   },
   "Kiosk": {
     "title": "Kiosque",
@@ -5571,7 +5587,10 @@
     "title": "Lieux de l'organisation",
     "subtitle": "Emplacements partagés avec chaque studio de cette organisation.",
     "searchPlaceholder": "Rechercher par nom ou adresse…",
-    "emptySearch": "Aucun résultat pour « {query} »."
+    "emptySearch": "Aucun résultat pour « {query} ».",
+    "filterAll": "Tous les lieux",
+    "studioPlacesTitle": "Lieux des studios",
+    "studioPlacesHint": "Définis par chaque studio. En lecture seule ici — chaque studio gère ses propres lieux."
   },
   "EventTypesSettings": {
     "title": "Types d'événements",
@@ -6243,7 +6262,8 @@
     "yearClosed": "Exercice clôturé.",
     "downloadCsv": "Télécharger le CSV",
     "actionFailed": "Échec de l'action — veuillez réessayer.",
-    "backToOverview": "Finances"
+    "backToOverview": "Finances",
+    "betaHint": "Bêta — le module Finances n'a pas été vérifié par un comptable. Vérifiez les chiffres avant toute déclaration."
   },
   "HowTo": {
     "title": "Guide",
@@ -7129,7 +7149,9 @@
     "reason_cancelling": "Abonnement bientôt résilié",
     "reason_billing_unlinked": "Facturé pour un abonnement qu'il n'a plus",
     "seatsAttended": "présents",
-    "metaAttended": "{count} présents"
+    "metaAttended": "{count} présents",
+    "startsInHours": "Dans {hours} h",
+    "startsInHoursMinutes": "Dans {hours} h {minutes} min"
   },
   "BookingContactFields": {
     "title": "Coordonnées à collecter",
@@ -7406,5 +7428,10 @@
     "createStepDefaultTitle": "Travailler sur {dimension}",
     "createStepSubmit": "Créer l'étape",
     "parentGoalNone": "Général"
+  },
+  "OrgUpsell": {
+    "title": "Vous gérez plusieurs studios ?",
+    "continueAnyway": "Créer quand même un studio distinct",
+    "continueHint": "Ce sera un compte distinct — équipe, contacts et facturation séparés, sans rapports communs."
   }
 }

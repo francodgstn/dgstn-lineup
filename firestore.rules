@@ -82,6 +82,31 @@ service cloud.firestore {
              (role == 'viewer' && (userRole == 'owner' || userRole == 'manager' || userRole == 'viewer'));
     }
 
+    // ── Plugin install eligibility ───────────────────────────────────────────
+    //
+    // The plan tiers as an ORDER, so a rule can ask "at least" instead of
+    // enumerating. Mirrors PLAN_ORDER in packages/shared/src/types/plan.ts.
+    function planRank(plan) {
+      return plan == 'organization' ? 3
+           : plan == 'studio' ? 2
+           : plan == 'coach' ? 1
+           : 0;
+    }
+
+    function teamPlanOf(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', '');
+    }
+
+    // The lowest plan that may install each plugin from the CLIENT — the twin of
+    // CLIENT_INSTALLABLE_FROM in packages/shared/src/types/pluginDefaults.ts.
+    // See the installed_plugins rule for why this list exists and what keeps it
+    // honest (a test that reads the manifests, that file and this one).
+    function clientInstallableRank(pluginId) {
+      return pluginId in ['gift-cards'] ? 0
+           : pluginId in ['contact-groups', 'custom-fields'] ? 1
+           : 2;
+    }
+
     // The team's `payments` map (Stripe Connect feature flag + connected-account
     // mirror) is managed only by Cloud Functions (Admin SDK) and platform admins.
     // Owners must not self-toggle connectEnabled (the feature ships dark, enabled
@@ -541,8 +566,14 @@ service cloud.firestore {
       }
 
       // Team places subcollection. Team members read; managers manage (CRUD).
+      //
+      // AN ORG ADMIN ALSO READS, so Org > Places can list every member studio's
+      // locations beside the organisation's own — the same shape
+      // `program_templates` and `contacts` already use. READ ONLY, deliberately:
+      // a studio's locations stay the studio's to edit, so `write` is untouched,
+      // and an org_viewer is not admitted at all.
       match /team_places/{placeId} {
-        allow read:  if isTeamMember(teamId);
+        allow read:  if isTeamMember(teamId) || isOrgAdminOfTeam(teamId);
         allow write: if hasTeamRole(teamId, 'manager');
       }
 
@@ -624,12 +655,30 @@ service cloud.firestore {
         allow write: if hasTeamRole(teamId, 'owner');
       }
 
-      // Installed plugins — teams enable/configure add-on plugins here.
+      // Installed plugins — teams enable/configure plugins here.
       // All members can read (needed by automation UI and nav display).
-      // Studio/Org owners install client-side (plugins are included). Coach plans
-      // activate plugins as PAID add-ons via the activatePluginAddon Cloud
-      // Function (admin SDK), so client writes are denied on Coach — this stops
-      // a coach self-granting a paid plugin for free.
+      //
+      // AN OWNER MAY INSTALL WHAT THEIR PLAN ALREADY INCLUDES, which is not the
+      // same as "Studio and up". This rule used to say exactly that, with a
+      // comment explaining that Coach plans activate plugins as PAID add-ons —
+      // true when written, and falsified by the 2026-06 overhaul that made
+      // Contact Groups and Custom Fields *included* from Coach and removed them
+      // from PLUGIN_ADDONS. After it, a Coach saw both offered as "Included",
+      // was denied here on click, and `activatePluginAddon` refused them too
+      // ("not an add-on plugin") — no path at all. Gift Cards had the same hole
+      // one tier lower, at Free.
+      //
+      // `clientInstallableRank` mirrors `pluginAccessForPlan`'s `included` arm.
+      // The default is Studio, which keeps every paid add-on server-only: at
+      // Coach an add-on must go through `activatePluginAddon` so it cannot be
+      // self-granted, and at Studio/Org it is included anyway.
+      //
+      // THIS LIST IS DERIVED DATA. `CLIENT_INSTALLABLE_FROM` in
+      // packages/shared/src/types/pluginDefaults.ts is its twin, the plugin
+      // manifests in apps/web are the truth, and
+      // packages/functions/src/teams/teamDefaults.test.ts reads all three and
+      // fails the build when they disagree. Do not edit one alone.
+      //
       // Locked plugins (e.g. 'ai-assistant') can be installed ONLY via the
       // unlockPlugin callable (admin SDK, strong-key checked) — the direct client
       // `create` is denied for those ids below. Owners may still configure
@@ -637,10 +686,10 @@ service cloud.firestore {
       match /installed_plugins/{pluginId} {
         allow read:   if isTeamMember(teamId);
         allow create: if hasTeamRole(teamId, 'owner')
-                      && get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', '') in ['studio', 'organization']
+                      && planRank(teamPlanOf(teamId)) >= clientInstallableRank(pluginId)
                       && !(pluginId in ['ai-assistant']);
         allow update, delete: if hasTeamRole(teamId, 'owner')
-                      && get(/databases/$(database)/documents/teams/$(teamId)).data.get('plan', '') in ['studio', 'organization'];
+                      && planRank(teamPlanOf(teamId)) >= clientInstallableRank(pluginId);
       }
 
       // Subscription types subcollection (team-defined subscription plans and aggregators)
@@ -1013,7 +1062,7 @@ service cloud.firestore {
                        || hasRole('admin')
                        || (isSelfContact(contactId)
                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
-                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count']);
+                       && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count', 'notes_count']);
       allow delete: if (canAccessContact(resource)
                           && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
                        || hasRole('admin');

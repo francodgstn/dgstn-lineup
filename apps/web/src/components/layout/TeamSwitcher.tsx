@@ -144,7 +144,7 @@ export function useMyTeams() {
  * Renders inside the account dropdown. Emits its own trailing separator so the
  * caller only has to decide where the block goes.
  */
-export function TeamSwitcher() {
+export function TeamSwitcher({ onCreateStudio }: { onCreateStudio?: () => void } = {}) {
   const t = useTranslations('TopBar')
   const locale = useLocale()
   const router = useRouter()
@@ -271,7 +271,18 @@ export function TeamSwitcher() {
               THAT BRANCH LIVES IN `app/[locale]/signup/page.tsx` — this entry
               is the only thing that sets the flag, so the two move together or
               the item goes nowhere. */}
-          <DropdownMenuItem onClick={() => router.push('/signup?new=1' as Route)}>
+          <DropdownMenuItem
+            onClick={() => {
+              // A login that already has an organisation has met this offer and
+              // is not the audience for it; so has one with no handler, which is
+              // every caller that has not opted in.
+              if (orgs.length > 0 || !onCreateStudio) {
+                router.push('/signup?new=1' as Route)
+                return
+              }
+              onCreateStudio()
+            }}
+          >
             <Plus className="mr-2 h-4 w-4" />
             {t('createStudio')}
           </DropdownMenuItem>
