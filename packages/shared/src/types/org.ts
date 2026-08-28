@@ -33,6 +33,10 @@ export interface Organization {
   // Per-locale custom label for the affiliation concept (e.g. "Membership", "Lizenz").
   // Resolved at render time: term[locale] ?? term['en'] ?? 'Affiliation'.
   affiliation_term?: Partial<Record<'en' | 'de' | 'fr' | 'it', string>>
+  // The language the org authors content in — same semantics as Team.language.
+  // Site translations treat it as the source locale (resolveSiteSourceLocale in
+  // shared/utils/siteTranslation.ts: validated value, else 'en').
+  language?: 'en' | 'de' | 'fr' | 'it'
   // When true, a contact's affiliation status is read-only for team managers.
   // Only org admins (and org-level automations when implemented) may change it.
   lock_affiliation?: boolean

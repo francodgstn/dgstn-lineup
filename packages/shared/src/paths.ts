@@ -269,6 +269,18 @@ export const SITE_PUBLISHED_COLLECTION = 'site_published'
 // keyed by teamId; managers author it directly (no draft/publish split).
 export const EMBED_WIDGETS_COLLECTION = 'embed_widgets'
 
+// Per-locale machine-translation sidecars for the published sites, stored in
+// the SAME collections as the site they translate:
+//   site_published/{teamId}__i18n_{locale}
+//   org_site_published/{orgId}__i18n_{locale}
+// (SiteTranslationDoc in types/website.ts). Function-write only, like every
+// other doc there. INVARIANT: no real team/org id contains this separator, so
+// a sidecar id can never collide with a site doc — and sidecars carry NO `slug`
+// field, so the public slug queries can never return one.
+export const SITE_I18N_SEPARATOR = '__i18n_'
+export const siteI18nDocId = (id: string, locale: string): string =>
+  `${id}${SITE_I18N_SEPARATOR}${locale}`
+
 // Organization website (org-level site builder). Mirrors the team site but keyed
 // by orgId. org_site_drafts: PRIVATE working copy (org_admin). org_site_published:
 // PUBLIC snapshot, written only by the publishOrgWebsite Cloud Function.
