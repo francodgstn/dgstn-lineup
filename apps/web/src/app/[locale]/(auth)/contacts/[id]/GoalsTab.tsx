@@ -26,6 +26,12 @@ import {
 } from 'lucide-react'
 import { CoachAssignment } from './CoachAssignment'
 import { PerformanceProfilePanel } from './PerformanceProfilePanel'
+import {
+  AttendanceTrendCard,
+  TREND_PERIODS,
+  useContactWeeklyReports,
+  type TrendPeriodKey,
+} from './AttendanceTrendCard'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 // Categories used to be a fixed technique/attitude/attendance/physical/mental
@@ -727,6 +733,14 @@ export function GoalsTab({ contact, teamId, team }: Props) {
   const qc = useQueryClient()
   const { data: goals = [], isLoading } = useGoals(contact.id)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
+  // The attendance trend's own period selector. Default 12 weeks, as it was in
+  // the Stats tab it came from.
+  const [trendPeriod, setTrendPeriod] = useState<TrendPeriodKey>('12w')
+  const trendWeeks = TREND_PERIODS.find((p) => p.key === trendPeriod)!.weeks
+  const { data: weeklyReports = [], isLoading: reportsLoading } = useContactWeeklyReports(
+    contact.id,
+    trendWeeks,
+  )
   // ONE shared "add/edit step" dialog for every entry point: a goal card's own
   // "add step" button (parentGoalId pre-filled), the General section's add
   // button (parentGoalId unset) and editing an existing step from either place.
@@ -800,6 +814,17 @@ export function GoalsTab({ contact, teamId, team }: Props) {
       {/* The check-in radar feeds straight into the goals below it — see
           PerformanceProfilePanel's header for why it moved out of Stats. */}
       <PerformanceProfilePanel contact={contact} team={team} goals={goals} />
+
+      {/* AND SO DOES ATTENDANCE. Whether somebody is actually turning up is the
+          first question anyone asks before setting them a goal, and it was a tab
+          away — the last card in Stats, which is why that tab is now gone
+          (Franco, 2026-08-28). */}
+      <AttendanceTrendCard
+        reports={weeklyReports}
+        loading={reportsLoading}
+        period={trendPeriod}
+        onPeriodChange={setTrendPeriod}
+      />
 
       {/* One column: every goal card carries its own steps inline (with a
           completion count), and unparented steps fall into a virtual "General"
