@@ -16,6 +16,7 @@ import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge
 import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
 import { getMessagingInfo, MAIL_LEDGER_NOTE } from '@/lib/queries/messaging'
+import { CompCard } from './comp-card'
 import { ConnectToggle } from './connect-toggle'
 import { DisconnectConnect } from './disconnect-connect'
 import { MessagingPolicyCard } from './messaging-policy-card'
@@ -155,6 +156,33 @@ export default async function AccountDetailPage({
             ) : (
               <p className="col-span-2 text-sm text-muted-foreground">
                 No saas_subscriptions record (manually managed or not yet provisioned).
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Linyup → tenant: is this tenant billed at all?
+            Sits directly under the subscription card because it is the ANSWER to
+            the question that card raises for a comped tenant — a paid plan badge
+            with no subscription record, which reads as broken until you know it
+            was a decision. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Linyup billing</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CompCard
+              kind={account.type}
+              entityId={account.id}
+              initialComped={account.comped}
+              initialReason={account.compedReason}
+              compedSince={account.compedSinceMs ? formatDate(account.compedSinceMs) : null}
+            />
+            {account.type === 'org' && account.comped && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Every studio in this organisation also pays no platform fee on member
+                payments — the waiver is read from this document, so a studio that
+                joins later inherits it.
               </p>
             )}
           </CardContent>
