@@ -1,11 +1,13 @@
 'use client'
 
-// Walk-in registration overlay — a kiosk-shaped adaptation of
-// trial-booking/TrialBookingForm.tsx's session → details → confirmed flow, reusing
-// the same bookSession callable payload shape. The provided Kiosk.walkInNameLabel
-// copy ("Full name") calls for a single name field rather than TrialBookingForm's
-// first/last split, so the single value is split on the first space before it's
-// sent to bookSession (which requires firstname + lastname separately).
+// Walk-in registration overlay — a session → details → confirmed flow over the
+// same bookSession callable payload the public booking form uses. (It was
+// adapted from the old `trial-booking/TrialBookingForm.tsx`, which was deleted
+// on 2026-08-28 once the trial flow merged into `/booking` and left it
+// unreachable.) The provided Kiosk.walkInNameLabel copy ("Full name") calls for
+// a single name field rather than a first/last split, so the single value is
+// split on the first space before it is sent to bookSession (which requires
+// firstname + lastname separately).
 //
 // PRIVACY: this component keeps NO persistence of its own — no localStorage, no
 // cookies. All form state is plain React state and is fully discarded on

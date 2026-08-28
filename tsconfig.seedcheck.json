@@ -11,13 +11,6 @@
     "baseUrl": ".",
     "paths": { "@linyup/shared": ["packages/shared/src/index.ts"] }
   },
-  "include": [
-    "scripts/seed-emulator.ts",
-    "scripts/seed-sandbox.ts",
-    "scripts/seed-staging.ts",
-    "scripts/seed-lead.ts",
-    "scripts/lib/**/*.ts",
-    "scripts/migration/**/*.ts",
-    "scripts/migrate-hmd.ts"
-  ]
+  "//": "A GLOB, NOT A LIST. This named seven paths and scripts/ holds 27 files, so twenty of them — every backfill, purge-team, reset-sandbox-db, stripe-sync — were typechecked by nobody. scripts/migrate-hmd.ts sat in that blind spot until 2026-08-27 and was only added by hand after it broke. Anything added under scripts/ is now checked without anybody remembering to list it.",
+  "include": ["scripts/**/*.ts"]
 }

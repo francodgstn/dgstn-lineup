@@ -244,7 +244,7 @@ sandbox, staging or production.**
 
 ---
 
-### Trial booking hides a failed read as "no trial sessions"
+### Trial booking hides a failed read as "no trial sessions" — CLOSED 2026-08-28
 
 `apps/web/src/app/[locale]/(public)/public/[slug]/trial-booking/TrialBookingForm.tsx`
 logs its failed session read (2026-08-16), but still renders the failure as an
@@ -260,6 +260,14 @@ reach this component. `trial-booking/page.tsx` redirects to `/booking` with the
 query intact, and nothing imports `TrialBookingForm`. So the exception above is
 currently an exception to nothing — which makes deleting the file the cheapest
 close, not threading the error state. Verify the redirect before acting on that.
+
+**Closed 2026-08-28 by deleting the file.** The redirect was verified first: the
+route is an unconditional `redirect()` to `publicPath(slug, 'booking')` carrying
+the query, with no branch that renders anything. The only remaining references
+were two comments — the rule in `lib/publicQueryError.ts` that carried this as
+its one admitted exception (it now has none) and a descriptive note in the
+kiosk's `WalkIn.tsx` — and both were rewritten rather than left pointing at a
+deleted path.
 
 ### A priced appointment at a studio without Stripe Connect says the slot is gone
 
@@ -582,7 +590,7 @@ were checked in a browser against computed styles.
 
 ## Newly recorded, 2026-08-27 — left open by the org-scope build
 
-### `useAffiliationTerm` resolves the wrong organisation in org scope
+### `useAffiliationTerm` resolves the wrong organisation in org scope — FIXED 2026-08-28
 
 `hooks/useAffiliationTerm.ts` calls `useOrg()`, and the studio sidebar is a
 SIBLING of the org route's children — so `OrgProvider` does not wrap it and the
@@ -595,6 +603,12 @@ scope a place people spend time, so it is worth fixing.
 The fix is not to widen `OrgProvider` — the scope is already resolved from the
 URL in `ScopeContext`, so the hook should read the ROUTE's org id from there
 rather than the team's.
+
+**Fixed 2026-08-28, as described.** The hook now reads `orgIdFromPath(pathname)`
+and falls back to the team's `org_id` only when the URL names no organisation at
+all — the route is the more specific fact, and the team's org is a default for
+pages that are not about an organisation. `useOrg()` still wins where it has an
+org, because there it has already resolved and cached the document.
 
 ### The sidebar quick-search does not index org destinations — FIXED 2026-08-27
 
@@ -774,13 +788,24 @@ The same top-level → `checkin_data` drift the exam pass fixed, for
 `categories` / `weight`. New pass `09-cup-checkins`, run before the category
 reconstruction so the ids are in their final home first.
 
-### Still open here: `scripts/` is typechecked in exactly one place
+### `scripts/` is typechecked in exactly one place — FIXED 2026-08-28
 
 `turbo run typecheck` does not see `scripts/`; only
 `tsconfig.seedcheck.json` does, and only what its `include` names. Anything
 added there and not listed is checked by nobody. `scripts/migrate-hmd.ts` — the
 entry point registering every migration pass — was in that blind spot until
 2026-08-27. Worth a lint rule or a glob rather than a list.
+
+**Fixed with the glob.** The list named seven paths against a directory of
+twenty-seven files, so twenty were unchecked — every backfill, `purge-team`,
+`reset-sandbox-db`, `reset-staging-db`, `promote-team`, `stripe-sync`.
+
+It found a live one immediately: `scripts/connect-test-account.ts` declared
+`type StripeClient = InstanceType<typeof import('stripe').default>`, which this
+tsconfig cannot resolve because `stripe` uses `export =` — while the same
+`.default` on the VALUE side is synthesised by esModuleInterop and runs fine.
+The type is now DERIVED from the loader expression the runtime evaluates, so the
+two cannot disagree again.
 
 ---
 
