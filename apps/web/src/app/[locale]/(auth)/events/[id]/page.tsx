@@ -594,7 +594,7 @@ export default function EventDetailPage() {
     { key: 'program',     label: t('detail_tabProgram') },
     { key: 'checkins',    label: checkinLabel },
     ...(showCategoriesTab ? [{ key: 'categories' as DetailTab, label: 'Categories' }] : []),
-    ...(canSeeAttendees ? [{ key: 'attendees' as DetailTab, label: `${t('detail_tabAttendees')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` }] : []),
+    ...(canSeeAttendees ? [{ key: 'attendees' as DetailTab, label: `${t('detail_tabRsvps')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` }] : []),
     { key: 'invitations', label: `${t('detail_tabInvitations')}${event.invitations_sent_count ? ` (${event.invitations_sent_count})` : ''}` },
   ]
 
@@ -788,7 +788,18 @@ export default function EventDetailPage() {
         <CategoryManager eventId={id} />
       )}
 
-      {/* ── Attendees tab ────────────────────────────────────────────────────── */}
+      {/* ── RSVPs tab ────────────────────────────────────────────────────────
+           WHO ACCEPTED, not who came. The rows carry `respondedAt` and the
+           invitee's reply note, and a DECLINE deletes its row outright
+           (`handleEventInvitationResponse`) — so this list is the yeses, and
+           the empty state says so rather than saying "no attendees".
+
+           Presence is the separate `checkins` collection, shown by the
+           Check-ins tab and counted by `participants_count`. The two were both
+           called "attendees" and the stat tile above already said RSVPs, so a
+           single page named one thing two ways (Franco, 2026-08-28). The URL
+           key stays `attendees` — it matches the subcollection, which is a
+           data migration rather than a label. */}
       {tab === 'attendees' && canSeeAttendees && (
         <div className="rounded-xl border overflow-hidden bg-card">
           {attendeesQ.isLoading && (
@@ -805,7 +816,7 @@ export default function EventDetailPage() {
 
           {!attendeesQ.isLoading && (attendeesQ.data?.length ?? 0) === 0 && (
             <div className="py-14 text-center text-muted-foreground text-sm">
-              {t('detail_attendeesEmpty')}
+              {t('detail_rsvpsEmpty')}
             </div>
           )}
 

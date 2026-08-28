@@ -382,7 +382,7 @@ inferred from a symptom. The ranking-system org-awareness bugs, the duplicate
 `RankLevel.value` bug and the mobile scalar-rank bug found in the same pass are
 **not** here — they shipped in PR#105.
 
-### `attendees` is an RSVP list wearing the word "attendance"
+### `attendees` is an RSVP list wearing the word "attendance" — LABELS FIXED 2026-08-28
 
 `events/{id}/attendees/{contactId}` is written by `handleEventInvitationResponse`
 on `action: 'attend'` and deleted on `'decline'`. Nothing ever reconciles it
@@ -398,8 +398,29 @@ The two vocabularies have crossed: **`trackEventAttendees` is a trigger on
 hmd-lineup/functions/src/trackEventAttendees", so the name arrived with the code
 and the meaning drifted underneath it.
 
-Renaming the function is free. Renaming the subcollection is a data migration, so
-the cheap honest fix is the UI label plus the function name.
+Renaming the subcollection is a data migration, so the fix is the UI label.
+
+**Resolved for the labels.** The event detail page named one thing two ways on a
+single screen: the stat tile already read "RSVPs" while the tab beside it read
+"Attendees" (Franco, 2026-08-28 — "I still see attendees instead of RSVPs"). The
+tab, its empty state and the duplicate-event copy now say RSVPs in all four
+locales, and the message keys were renamed with them (`detail_tabRsvps`,
+`detail_rsvpsEmpty`) so the old word cannot come back by autocomplete.
+
+The empty state says "No one has accepted yet" rather than "No RSVPs yet",
+because a DECLINE deletes its row — the list is the yeses, not every reply.
+
+`EventPeekSheet` carried a second crossing, found while fixing the first: it read
+`attendees_count ?? participants_count` and labelled whichever it got with the
+same word, so an event with no acceptances and twelve people through the door
+reported twelve RSVPs. It reads the RSVP count alone now.
+
+**The FUNCTION name deliberately stays.** `trackEventAttendees` is the deployed
+Cloud Function name, so renaming the export deletes one Firestore trigger and
+creates another — and in the window between them every check-in write goes
+uncounted, drifting the counters on a live event with nothing to announce it.
+Its header carries the correction instead. What remains here is the
+subcollection itself, which is a data migration.
 
 ### A manager can send event invitations but cannot see who accepted — FIXED 2026-08-27 (#120)
 

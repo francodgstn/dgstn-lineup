@@ -1285,7 +1285,6 @@
     "emptyPast": "Keine vergangenen Veranstaltungen.",
     "detail_back": "Zeitplan",
     "detail_tabOverview": "Übersicht",
-    "detail_tabAttendees": "Teilnehmer",
     "detail_tabInvitations": "Einladungen",
     "detail_sendInvitations": "Einladungen senden",
     "detail_resendAll": "Alle neu senden",
@@ -1298,7 +1297,6 @@
     "detail_status_cancelled": "Abgesagt",
     "detail_fieldDescription": "Beschreibung",
     "detail_noDescription": "Keine Beschreibung angegeben.",
-    "detail_attendeesEmpty": "Noch keine Teilnehmer.",
     "detail_invitationsEmpty": "Noch keine Einladungen gesendet.",
     "detail_invStatus_sent": "Gesendet",
     "detail_invStatus_opened": "Geöffnet",
@@ -1327,7 +1325,9 @@
     "invitation_confirmedDeclined": "Kein Problem. Danke für deine Rückmeldung.",
     "invitation_fee": "Gebühr: {amount}",
     "invitation_free": "Kostenlos",
-    "detail_tabProgram": "Programm"
+    "detail_tabProgram": "Programm",
+    "detail_tabRsvps": "Rückmeldungen",
+    "detail_rsvpsEmpty": "Noch hat niemand zugesagt."
   },
   "EventProgram": {
     "emptyTitle": "Noch kein Programm",
@@ -1431,7 +1431,7 @@
     "templateInherited": "Von deiner Organisation übernommen — schreibgeschützt.",
     "duplicateEvent": "Duplizieren",
     "duplicateTitle": "Dieses Event duplizieren",
-    "duplicateDescription": "Kopiert die Einstellungen und das gesamte Programm. Teilnehmende, Einladungen und Check-ins werden nicht kopiert, und die Kopie bleibt privat.",
+    "duplicateDescription": "Kopiert die Einstellungen und das gesamte Programm. Rückmeldungen, Einladungen und Check-ins werden nicht kopiert, und die Kopie bleibt privat.",
     "duplicateNewTitle": "Titel",
     "duplicateNewStart": "Neues Startdatum",
     "duplicateSuffix": "{title} (Kopie)",

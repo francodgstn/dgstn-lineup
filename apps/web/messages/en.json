@@ -1285,7 +1285,6 @@
     "emptyPast": "No past events.",
     "detail_back": "Schedule",
     "detail_tabOverview": "Overview",
-    "detail_tabAttendees": "Attendees",
     "detail_tabInvitations": "Invitations",
     "detail_sendInvitations": "Send invitations",
     "detail_resendAll": "Resend all",
@@ -1298,7 +1297,6 @@
     "detail_status_cancelled": "Cancelled",
     "detail_fieldDescription": "Description",
     "detail_noDescription": "No description provided.",
-    "detail_attendeesEmpty": "No attendees yet.",
     "detail_invitationsEmpty": "No invitations sent yet.",
     "detail_invStatus_sent": "Sent",
     "detail_invStatus_opened": "Opened",
@@ -1327,7 +1325,9 @@
     "invitation_confirmedDeclined": "No problem. Thanks for letting us know.",
     "invitation_fee": "Fee: {amount}",
     "invitation_free": "Free",
-    "detail_tabProgram": "Program"
+    "detail_tabProgram": "Program",
+    "detail_tabRsvps": "RSVPs",
+    "detail_rsvpsEmpty": "No one has accepted yet."
   },
   "EventProgram": {
     "emptyTitle": "No programme yet",
@@ -1431,7 +1431,7 @@
     "templateInherited": "Inherited from your organisation — read-only.",
     "duplicateEvent": "Duplicate",
     "duplicateTitle": "Duplicate this event",
-    "duplicateDescription": "Copies the settings and the whole programme. Attendees, invitations and check-ins are not copied, and the copy stays private.",
+    "duplicateDescription": "Copies the settings and the whole programme. RSVPs, invitations and check-ins are not copied, and the copy stays private.",
     "duplicateNewTitle": "Title",
     "duplicateNewStart": "New start date",
     "duplicateSuffix": "{title} (copy)",

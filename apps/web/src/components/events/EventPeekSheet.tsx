@@ -80,7 +80,12 @@ export function EventPeekSheet({ eventId, onClose, onEdit, onDelete }: EventPeek
       ? tE(`type_${event.type}` as Parameters<typeof tE>[0])
       : event.type
     : ''
-  const attendees = event?.attendees_count ?? event?.participants_count ?? 0
+  // RSVPs ONLY. This fell back to `participants_count` — the CHECK-IN count —
+  // and then labelled whichever it found with the same word, so an event with
+  // no acceptances and twelve people through the door reported "12 RSVPs".
+  // They are different facts; the fallback silently substituted one for the
+  // other.
+  const rsvps = event?.attendees_count ?? 0
   const invitations = event?.invitations_sent_count ?? 0
 
   return (
@@ -187,7 +192,7 @@ export function EventPeekSheet({ eventId, onClose, onEdit, onDelete }: EventPeek
               <div className="flex flex-wrap gap-2">
                 <div className="flex items-center gap-1.5 rounded-lg bg-muted text-muted-foreground px-2.5 py-1.5 text-xs font-medium">
                   <Users className="h-3.5 w-3.5" />
-                  {attendees} {tE('detail_tabAttendees')}
+                  {rsvps} {tE('detail_tabRsvps')}
                 </div>
                 {invitations > 0 && (
                   <div className="flex items-center gap-1.5 rounded-lg bg-muted text-muted-foreground px-2.5 py-1.5 text-xs font-medium">
