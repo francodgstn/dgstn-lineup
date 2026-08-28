@@ -344,8 +344,40 @@ async function loadPlacePool(
   return { byId, primary }
 }
 
-// Embed selected places into 'places' sections + default the Contact map from the
-// team's primary place. Mutates the sanitized sections in place.
+export type PlacePool = Awaited<ReturnType<typeof loadPlacePool>>
+
+/**
+ * Embed selected places into 'places' sections + default the Contact map from
+ * the team's primary place. Mutates the sanitized sections in place.
+ *
+ * NEVER ASSIGN `undefined` HERE. Every section arrives from a sanitizer that
+ * ran it through `clean()`, so an absent optional field has NO KEY — and
+ * `s.field = undefined` puts the key back, holding a value Firestore rejects
+ * outright (`Cannot use "undefined" as a Firestore value`). That is not a
+ * degraded publish, it is a failed one: the whole `site_published` write
+ * throws. It reached staging as `sections.N.address` from a primary place that
+ * has a name but no address, which is an ordinary thing for a place to be.
+ *
+ * Pure and exported so the invariant is testable without a Firestore double —
+ * `enrichSectionsWithPlaces` is only the loader in front of it.
+ */
+export function applyPlacePool(sections: WebsiteSection[], pool: PlacePool): void {
+  const { byId, primary } = pool
+  for (const s of sections) {
+    if (s.type === 'places') {
+      const resolved = (s.placeIds ?? []).map((id) => byId.get(id)).filter((x): x is NonNullable<typeof x> => !!x)
+      if (resolved.length) s.places = resolved
+      else delete s.places
+    } else if (s.type === 'contact' && primary) {
+      if (!s.address && primary.address) s.address = primary.address
+      if (!s.mapQuery) {
+        const q = primary.address || primary.name
+        if (q) s.mapQuery = q
+      }
+    }
+  }
+}
+
 async function enrichSectionsWithPlaces(
   fs: admin.firestore.Firestore,
   teamId: string,
@@ -353,16 +385,7 @@ async function enrichSectionsWithPlaces(
   sections: WebsiteSection[]
 ): Promise<void> {
   if (!sections.some((s) => s.type === 'places' || s.type === 'contact')) return
-  const { byId, primary } = await loadPlacePool(fs, teamId, team)
-  for (const s of sections) {
-    if (s.type === 'places') {
-      const resolved = (s.placeIds ?? []).map((id) => byId.get(id)).filter((x): x is NonNullable<typeof x> => !!x)
-      s.places = resolved.length ? resolved : undefined
-    } else if (s.type === 'contact' && primary) {
-      if (!s.address) s.address = primary.address
-      if (!s.mapQuery) s.mapQuery = primary.address || primary.name
-    }
-  }
+  applyPlacePool(sections, await loadPlacePool(fs, teamId, team))
 }
 
 /**
