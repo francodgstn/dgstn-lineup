@@ -1,5 +1,6 @@
 'use client'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -196,7 +197,7 @@ export default function OrgBillingPage() {
         </div>
       )}
 
-      <h2 className="text-lg font-semibold">{t('title')}</h2>
+      <PageHeader title={t('title')} />
 
       <Card>
         <CardHeader>

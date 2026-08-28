@@ -2900,13 +2900,10 @@
     "pluginsErrorUninstall": "Impossible de supprimer le plugin. Veuillez réessayer.",
     "tabProgramTemplates": "Modèles de programme",
     "navStudios": "Studios",
-    "railGroupStandards": "Standards que vous définissez",
-    "railGroupShared": "Ressources partagées",
-    "railGroupAdministration": "Administration",
     "railSearchPlaceholder": "Rechercher dans les réglages de l'organisation",
     "railNoResults": "Aucun réglage d'organisation ne correspond à votre recherche.",
     "manageTitle": "Réglages de l'organisation",
-    "manageSubtitle": "Les standards définis par cette organisation, ce qu'elle partage avec ses studios, et sa propre administration.",
+    "manageSubtitle": "Classement, membres, plugins, facturation et les informations de l'organisation.",
     "navOverview": "Aperçu",
     "overviewStandingTitle": "Votre studio ici",
     "overviewStandingActive": "Membre actif",
@@ -2921,10 +2918,11 @@
     "overviewEventsTitle": "Prochains événements de l'organisation",
     "overviewEventsAll": "Tous les événements",
     "overviewEventsNone": "Aucun événement prévu.",
-    "overviewSharedAffiliationTypes": "Types de {term}"
+    "overviewSharedAffiliationTypes": "Types de {term}",
+    "railGroupGeneral": "Général"
   },
   "OrgTeams": {
-    "title": "Équipes",
+    "title": "Studios",
     "inviteButton": "Inviter une équipe",
     "noTeams": "Aucune équipe n'a encore rejoint cette organisation.",
     "colTeam": "Équipe",
@@ -3122,7 +3120,9 @@
     "socialTitle": "Liens sociaux",
     "socialDescription": "Affichés sous forme d'icônes dans la section contact de votre site, si celle-ci est configurée pour les montrer.",
     "language": "Langue",
-    "languageHint": "La langue dans laquelle le contenu et les communications de cette organisation sont rédigés — invitations, avis et contenu partagé. La langue de votre propre tableau de bord est choisie séparément."
+    "languageHint": "La langue dans laquelle le contenu et les communications de cette organisation sont rédigés — invitations, avis et contenu partagé. La langue de votre propre tableau de bord est choisie séparément.",
+    "pageTitle": "Paramètres",
+    "pageSubtitle": "Informations, terminologie et adresse d'expéditeur de l'organisation."
   },
   "OrgInvite": {
     "title": "Invitation d'organisation",
@@ -5608,7 +5608,7 @@
     "holdersSystemWarning": "Leur grade ne correspondra plus à aucun niveau configuré."
   },
   "OrgPlaces": {
-    "title": "Lieux de l'organisation",
+    "title": "Lieux",
     "subtitle": "Emplacements partagés avec chaque studio de cette organisation.",
     "searchPlaceholder": "Rechercher par nom ou adresse…",
     "emptySearch": "Aucun résultat pour « {query} ».",

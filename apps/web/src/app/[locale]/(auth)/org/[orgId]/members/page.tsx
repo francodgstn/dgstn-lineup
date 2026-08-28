@@ -1,5 +1,6 @@
 'use client'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore'
@@ -326,15 +327,17 @@ export default function OrgMembersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t('title')}</h2>
-        {isAdmin && (
-          <Button onClick={() => setAddOpen(true)} size="sm">
-            <UserPlus className="h-4 w-4 mr-1.5" />
-            {t('inviteButton')}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={t('title')}
+        action={
+          isAdmin ? (
+            <Button onClick={() => setAddOpen(true)} size="sm">
+              <UserPlus className="h-4 w-4 mr-1.5" />
+              {t('inviteButton')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Search — mounted once there is a list to narrow. A field over a page
           that has no members yet is a control with nothing to do. */}

@@ -2900,13 +2900,10 @@
     "pluginsErrorUninstall": "Plugin konnte nicht entfernt werden. Bitte erneut versuchen.",
     "tabProgramTemplates": "Programmvorlagen",
     "navStudios": "Studios",
-    "railGroupStandards": "Vorgaben der Organisation",
-    "railGroupShared": "Gemeinsame Ressourcen",
-    "railGroupAdministration": "Verwaltung",
     "railSearchPlaceholder": "Organisationseinstellungen durchsuchen",
     "railNoResults": "Keine Organisationseinstellungen entsprechen Ihrer Suche.",
     "manageTitle": "Organisationseinstellungen",
-    "manageSubtitle": "Die Vorgaben dieser Organisation, was sie mit ihren Studios teilt, und ihre eigene Verwaltung.",
+    "manageSubtitle": "Rangsystem, Mitglieder, Plugins, Abrechnung und die Angaben der Organisation.",
     "navOverview": "Übersicht",
     "overviewStandingTitle": "Ihr Studio hier",
     "overviewStandingActive": "Aktives Mitglied",
@@ -2921,10 +2918,11 @@
     "overviewEventsTitle": "Kommende Organisationsanlässe",
     "overviewEventsAll": "Alle Anlässe",
     "overviewEventsNone": "Keine Anlässe geplant.",
-    "overviewSharedAffiliationTypes": "{term}-Typen"
+    "overviewSharedAffiliationTypes": "{term}-Typen",
+    "railGroupGeneral": "Allgemein"
   },
   "OrgTeams": {
-    "title": "Teams",
+    "title": "Studios",
     "inviteButton": "Team einladen",
     "noTeams": "Noch kein Team hat sich dieser Organisation angeschlossen.",
     "colTeam": "Team",
@@ -3122,7 +3120,9 @@
     "socialTitle": "Social-Media-Links",
     "socialDescription": "Werden im Kontaktbereich Ihrer Website als Symbole angezeigt, sofern dort aktiviert.",
     "language": "Sprache",
-    "languageHint": "Die Sprache, in der die Inhalte und Mitteilungen dieser Organisation verfasst werden – Einladungen, Hinweise und geteilte Inhalte. Die Sprache Ihres eigenen Dashboards wird separat gewählt."
+    "languageHint": "Die Sprache, in der die Inhalte und Mitteilungen dieser Organisation verfasst werden – Einladungen, Hinweise und geteilte Inhalte. Die Sprache Ihres eigenen Dashboards wird separat gewählt.",
+    "pageTitle": "Einstellungen",
+    "pageSubtitle": "Angaben, Begriffe und Absenderadresse der Organisation."
   },
   "OrgInvite": {
     "title": "Organisationseinladung",
@@ -5608,7 +5608,7 @@
     "holdersSystemWarning": "Ihr Rang entspricht dann keiner konfigurierten Stufe mehr."
   },
   "OrgPlaces": {
-    "title": "Standorte der Organisation",
+    "title": "Orte",
     "subtitle": "Standorte, die mit jedem Studio dieser Organisation geteilt werden.",
     "searchPlaceholder": "Nach Name oder Adresse suchen…",
     "emptySearch": "Keine Ergebnisse für „{query}“.",

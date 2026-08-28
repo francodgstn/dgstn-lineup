@@ -2900,13 +2900,10 @@
     "pluginsErrorUninstall": "Could not remove plugin. Please try again.",
     "tabProgramTemplates": "Programme templates",
     "navStudios": "Studios",
-    "railGroupStandards": "Standards you set",
-    "railGroupShared": "Shared resources",
-    "railGroupAdministration": "Administration",
     "railSearchPlaceholder": "Search organisation settings",
     "railNoResults": "No organisation settings match your search.",
     "manageTitle": "Organisation settings",
-    "manageSubtitle": "The standards this organisation sets, what it shares with its studios, and its own administration.",
+    "manageSubtitle": "Ranking, members, plugins, billing and the organisation's own details.",
     "navOverview": "Overview",
     "overviewStandingTitle": "Your studio here",
     "overviewStandingActive": "Active member",
@@ -2921,10 +2918,11 @@
     "overviewEventsTitle": "Upcoming organisation events",
     "overviewEventsAll": "All events",
     "overviewEventsNone": "No events scheduled.",
-    "overviewSharedAffiliationTypes": "{term} types"
+    "overviewSharedAffiliationTypes": "{term} types",
+    "railGroupGeneral": "General"
   },
   "OrgTeams": {
-    "title": "Teams",
+    "title": "Studios",
     "inviteButton": "Invite team",
     "noTeams": "No teams have joined this organization yet.",
     "colTeam": "Team",
@@ -3122,7 +3120,9 @@
     "socialTitle": "Social links",
     "socialDescription": "Shown as icons on your website's contact section, when that section is set to show them.",
     "language": "Language",
-    "languageHint": "The language this organisation's content and communications are written in — invitations, notices and shared content. Your own dashboard language is chosen separately."
+    "languageHint": "The language this organisation's content and communications are written in — invitations, notices and shared content. Your own dashboard language is chosen separately.",
+    "pageTitle": "Settings",
+    "pageSubtitle": "The organisation's own details, terminology and sender address."
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -5608,7 +5608,7 @@
     "holdersSystemWarning": "Their rank will no longer match any configured level."
   },
   "OrgPlaces": {
-    "title": "Org places",
+    "title": "Places",
     "subtitle": "Locations shared with every studio in this organization.",
     "searchPlaceholder": "Search by name or address…",
     "emptySearch": "No results for “{query}”.",

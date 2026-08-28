@@ -1,5 +1,6 @@
 'use client'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -363,19 +364,17 @@ export default function OrgRankingPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">{t('title')}</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitle')}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button size="sm" onClick={openAdd} disabled={saving}>
-            <Plus className="h-4 w-4 mr-1.5" />{t('addSystem')}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        action={
+          isAdmin ? (
+            <Button size="sm" onClick={openAdd} disabled={saving}>
+              <Plus className="h-4 w-4 mr-1.5" />{t('addSystem')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {loading ? (
         <div className="space-y-2">

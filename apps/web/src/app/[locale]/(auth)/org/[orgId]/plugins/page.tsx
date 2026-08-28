@@ -1,5 +1,6 @@
 'use client'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { useParams } from 'next/navigation'
@@ -230,11 +231,7 @@ export default function OrgPluginsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-semibold">{t('pluginsTitle')}</h2>
-        <p className="text-sm text-muted-foreground mt-1">{t('pluginsSubtitle')}</p>
-      </div>
+      <PageHeader title={t('pluginsTitle')} subtitle={t('pluginsSubtitle')} />
 
       {!isAdmin && (
         <p className="text-sm text-muted-foreground">{t('pluginsReadOnly')}</p>

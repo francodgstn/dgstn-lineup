@@ -2900,13 +2900,10 @@
     "pluginsErrorUninstall": "Impossibile rimuovere il plugin. Riprova.",
     "tabProgramTemplates": "Modelli di programma",
     "navStudios": "Studi",
-    "railGroupStandards": "Standard che definisci",
-    "railGroupShared": "Risorse condivise",
-    "railGroupAdministration": "Amministrazione",
     "railSearchPlaceholder": "Cerca nelle impostazioni dell'organizzazione",
     "railNoResults": "Nessuna impostazione dell'organizzazione corrisponde alla ricerca.",
     "manageTitle": "Impostazioni organizzazione",
-    "manageSubtitle": "Gli standard definiti da questa organizzazione, ciò che condivide con i suoi studi e la sua amministrazione.",
+    "manageSubtitle": "Classifiche, membri, plugin, fatturazione e i dati dell'organizzazione.",
     "navOverview": "Panoramica",
     "overviewStandingTitle": "Il tuo studio qui",
     "overviewStandingActive": "Membro attivo",
@@ -2921,10 +2918,11 @@
     "overviewEventsTitle": "Prossimi eventi dell'organizzazione",
     "overviewEventsAll": "Tutti gli eventi",
     "overviewEventsNone": "Nessun evento in programma.",
-    "overviewSharedAffiliationTypes": "Tipi di {term}"
+    "overviewSharedAffiliationTypes": "Tipi di {term}",
+    "railGroupGeneral": "Generale"
   },
   "OrgTeams": {
-    "title": "Team",
+    "title": "Studi",
     "inviteButton": "Invita team",
     "noTeams": "Nessun team ha ancora aderito a questa organizzazione.",
     "colTeam": "Team",
@@ -3122,7 +3120,9 @@
     "socialTitle": "Link social",
     "socialDescription": "Mostrati come icone nella sezione contatti del tuo sito, se impostata per visualizzarli.",
     "language": "Lingua",
-    "languageHint": "La lingua in cui sono scritti i contenuti e le comunicazioni di questa organizzazione — inviti, avvisi e contenuti condivisi. La lingua della tua dashboard viene scelta separatamente."
+    "languageHint": "La lingua in cui sono scritti i contenuti e le comunicazioni di questa organizzazione — inviti, avvisi e contenuti condivisi. La lingua della tua dashboard viene scelta separatamente.",
+    "pageTitle": "Impostazioni",
+    "pageSubtitle": "Dati, terminologia e indirizzo mittente dell'organizzazione."
   },
   "OrgInvite": {
     "title": "Invito organizzazione",
@@ -5608,7 +5608,7 @@
     "holdersSystemWarning": "Il loro grado non corrisponderà più a nessun livello configurato."
   },
   "OrgPlaces": {
-    "title": "Sedi dell'organizzazione",
+    "title": "Luoghi",
     "subtitle": "Sedi condivise con ogni studio di questa organizzazione.",
     "searchPlaceholder": "Cerca per nome o indirizzo…",
     "emptySearch": "Nessun risultato per «{query}».",
