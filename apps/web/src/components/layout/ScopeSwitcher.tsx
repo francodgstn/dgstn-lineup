@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useScope } from '@/contexts/ScopeContext'
-import { TeamSwitcher, useMyTeams } from '@/components/layout/TeamSwitcher'
+import { TeamSwitcher } from '@/components/layout/TeamSwitcher'
 import { OrgUpsellDialog } from '@/components/plan/OrgUpsellDialog'
 import { useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
@@ -48,18 +48,12 @@ import { useState } from 'react'
 
 export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations('TopBar')
-  const { current, available } = useScope()
-  // THIS MOVES THE STUDIOS QUERY FROM MENU-OPEN TO SIDEBAR-MOUNT, and that is a
-  // real trade rather than a free one. It was deliberately lazy before: a
-  // collection-group query plus a document read per studio, paid only by someone
-  // who actually opened the account menu.
-  //
-  // It is paid up front now because the control cannot be drawn correctly
-  // without the answer — whether there is anywhere to go decides whether this is
-  // a button or a label, and a chevron that opens nothing is worse than the
-  // query. `staleTime: 5 * 60_000` makes it roughly once a session rather than
-  // once a page, and the menu now opens already populated instead of spinning.
-  const { data: teams = [] } = useMyTeams()
+  const { current } = useScope()
+  // THE STUDIOS QUERY IS LAZY AGAIN. It was pulled up to sidebar-mount so this
+  // control could decide whether to be a button or a label; now that it is
+  // always a button, the answer is not needed before the menu opens, and the
+  // query goes back to where it costs nothing until somebody asks — inside
+  // `TeamSwitcher`, behind base-ui's `Menu.Portal`.
   const router = useRouter()
   // ABOVE the early return below — hooks must run in the same order on every
   // render, and `if (!current) return null` is that early return.
@@ -70,13 +64,21 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   // exactly as long as that was uncertain. The kind word is always known.
   if (!current) return null
 
-  // MOST PEOPLE HAVE NOWHERE TO SWITCH TO, and for them this is a label rather
-  // than a control. TeamSwitcher's own rule was that "the account menu is
-  // unchanged for the overwhelming majority" — a chevron and a dropdown whose
-  // only row is "Create another studio" would break that promise for every
-  // single-studio login, which is nearly all of them. They get the identity,
-  // plainly, and reach studio creation where it already lives.
-  const canSwitch = teams.length > 1 || available.some((s) => s.kind === 'org')
+  // THE SWITCHER IS ALWAYS A CONTROL, and it used not to be.
+  //
+  // A single-studio login with no organisation got a plain label on the rule
+  // that "a chevron and a dropdown whose only row is Create another studio"
+  // was not worth the promise it broke. That rule assumed the row led nowhere
+  // interesting. It now leads to the Organisation offer — and it was ALSO the
+  // only route to studio creation anywhere in the product, so the audience the
+  // Organisation tier is sold to was the one audience that could not reach it
+  // (Franco, 2026-08-28). The old comment said they "reach studio creation
+  // where it already lives"; there was nowhere else.
+  //
+  // What the menu holds still depends on what there is to say — see
+  // `TeamSwitcher`, which hides a studios list of one. For that login the menu
+  // is the create row alone, which is the honest content rather than a
+  // padded-out list.
 
   const isOrg = current.kind === 'org'
   const kindLabel = isOrg ? t('scopeOrganisation') : t('scopeStudio')
@@ -143,18 +145,6 @@ export function ScopeSwitcher({ collapsed }: { collapsed: boolean }) {
   const shape = `flex min-w-0 items-center rounded-lg border text-left transition-colors ${accent} ${
     collapsed ? 'h-8 w-8 shrink-0 justify-center' : 'flex-1 gap-2 pl-1 pr-2 py-1.5'
   }`
-
-  if (!canSwitch) {
-    return (
-      <div
-        title={collapsed ? `${kindLabel} · ${name}` : undefined}
-        aria-label={`${kindLabel} · ${name}`}
-        className={shape}
-      >
-        {identity}
-      </div>
-    )
-  }
 
   return (
     <>

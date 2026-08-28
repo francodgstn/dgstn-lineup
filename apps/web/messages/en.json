@@ -3112,7 +3112,9 @@
     "terminologyDefaultLabel": "Term",
     "terminologyDefaultHint": "Enter at least one — it becomes the default for every language.",
     "terminologyAddTranslations": "Add translations (optional)",
-    "generalTitle": "General"
+    "generalTitle": "General",
+    "socialTitle": "Social links",
+    "socialDescription": "Shown as icons on your website's contact section, when that section is set to show them."
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -3330,7 +3332,20 @@
     "editorOrgCtaPlaceholder": "e.g. Find a club near you",
     "editorOrgClubsNote": "A card per member club, pulled live from your organisation's studios and each studio's own public profile (logo, name, address).",
     "editorOrgCoachesNote": "The roster is pulled live from every member club that opted in to list its coaches publicly.",
-    "editorOrgLocationsNote": "Every studio's primary address is listed automatically. Add extra venues below — an event hall, a second site — that are not one of your studios."
+    "editorOrgLocationsNote": "Every studio's primary address is listed automatically. Add extra venues below — an event hall, a second site — that are not one of your studios.",
+    "apSiteTitle": "Site title",
+    "apTheme": "Theme",
+    "apFont": "Font",
+    "apAccentColor": "Accent color",
+    "apShowNav": "Show navigation bar",
+    "apHeaderCtaLabel": "Header button label",
+    "apHeaderCtaAction": "Header button action",
+    "apHeaderCtaUrl": "Header button URL",
+    "apHeaderCtaPlaceholderTeam": "Book now",
+    "apHeaderCtaPlaceholderOrg": "Find a club",
+    "apShowSocialFooter": "Show social links in footer",
+    "apPageTitle": "Page title",
+    "apMetaDescription": "Meta description"
   },
   "Kiosk": {
     "title": "Kiosk",

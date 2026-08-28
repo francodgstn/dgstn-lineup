@@ -1,5 +1,5 @@
 import type { Timestamp } from './common'
-import type { SaasStatus, RankingSystem, TenantFlags } from './team'
+import type { SaasStatus, RankingSystem, TenantFlags, SocialLink } from './team'
 import type { Sha256Hex } from '../utils/identity'
 import { normalizeEmail } from '../utils/normalizeEmail'
 
@@ -36,6 +36,17 @@ export interface Organization {
   // When true, a contact's affiliation status is read-only for team managers.
   // Only org admins (and org-level automations when implemented) may change it.
   lock_affiliation?: boolean
+  /**
+   * The organisation's own social profiles, rendered by the contact section of
+   * its website when that section asks for them.
+   *
+   * SAME TYPE AS A TEAM'S (`Team.socialLinks`), because they are the same thing
+   * and the renderer is already shared — `ContactBlock` reads `ctx.socialLinks`
+   * without caring which tenant filled it. The org side simply never filled it,
+   * so the section's "show social links" switch could not, in any state, change
+   * what a visitor saw.
+   */
+  socialLinks?: SocialLink[]
   created: Timestamp
   createdBy: string
 }

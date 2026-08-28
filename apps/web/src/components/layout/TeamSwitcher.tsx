@@ -224,10 +224,20 @@ export function TeamSwitcher({ onCreateStudio }: { onCreateStudio?: () => void }
           question the control exists to answer. */}
       {!isError && teams.length > 0 && (
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {t('switchStudio')}
-          </DropdownMenuLabel>
-          {teams.map((team) => {
+          {/* A LIST OF ONE IS NOT A LIST. With a single studio the only row
+              would be the studio you are standing in, under a heading that
+              offers to switch you to it — so the heading and the rows are both
+              held back and the group is the create row alone (Franco,
+              2026-08-28). That is what the switcher shows somebody who has one
+              studio and no organisation: a way to get a second, and the offer
+              behind it. */}
+          {teams.length > 1 && (
+            <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {t('switchStudio')}
+            </DropdownMenuLabel>
+          )}
+          {teams.length > 1 &&
+            teams.map((team) => {
             const isCurrent = standingIn(team.id)
             return (
               <DropdownMenuItem

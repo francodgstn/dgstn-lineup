@@ -3112,7 +3112,9 @@
     "terminologyDefaultLabel": "Termine",
     "terminologyDefaultHint": "Inseriscine almeno uno — diventa il valore predefinito per tutte le lingue.",
     "terminologyAddTranslations": "Aggiungi traduzioni (facoltativo)",
-    "generalTitle": "Generale"
+    "generalTitle": "Generale",
+    "socialTitle": "Link social",
+    "socialDescription": "Mostrati come icone nella sezione contatti del tuo sito, se impostata per visualizzarli."
   },
   "OrgInvite": {
     "title": "Invito organizzazione",
@@ -3330,7 +3332,20 @@
     "editorOrgCtaPlaceholder": "es. Trova un club vicino a te",
     "editorOrgClubsNote": "Una scheda per ogni club membro, presa in tempo reale dagli studi della tua organizzazione e dal profilo pubblico di ciascuno (logo, nome, indirizzo).",
     "editorOrgCoachesNote": "L'elenco viene preso in tempo reale da ogni club membro che ha scelto di mostrare pubblicamente i propri allenatori.",
-    "editorOrgLocationsNote": "L'indirizzo principale di ogni studio è elencato automaticamente. Aggiungi qui sotto altre sedi — una sala eventi, una seconda sede — che non sono uno dei tuoi studi."
+    "editorOrgLocationsNote": "L'indirizzo principale di ogni studio è elencato automaticamente. Aggiungi qui sotto altre sedi — una sala eventi, una seconda sede — che non sono uno dei tuoi studi.",
+    "apSiteTitle": "Titolo del sito",
+    "apTheme": "Tema",
+    "apFont": "Carattere",
+    "apAccentColor": "Colore principale",
+    "apShowNav": "Mostra la barra di navigazione",
+    "apHeaderCtaLabel": "Etichetta del pulsante di intestazione",
+    "apHeaderCtaAction": "Azione del pulsante di intestazione",
+    "apHeaderCtaUrl": "URL del pulsante di intestazione",
+    "apHeaderCtaPlaceholderTeam": "Prenota ora",
+    "apHeaderCtaPlaceholderOrg": "Trova un club",
+    "apShowSocialFooter": "Mostra i link social nel piè di pagina",
+    "apPageTitle": "Titolo della pagina",
+    "apMetaDescription": "Meta descrizione"
   },
   "Kiosk": {
     "title": "Kiosk",

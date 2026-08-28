@@ -855,16 +855,42 @@ decision above, because each was a live defect rather than a design question:
 - **The image box was the shape the team's `BOX` constant replaced** — a fixed
   `h-28` letterbox when filled and `h-20` when empty, so uploading an image
   shifted every field below it down by 32px.
-- **The contact section's "show social links" switch could never do anything.**
-  `ContactBlock` renders socials from `ctx.socialLinks`; the org renderer never
-  fills it and `Organization` carries no social links. Removed rather than
-  faked — a control that cannot change what a visitor sees is worse than none.
+- **The contact section's "show social links" switch had nothing to show.**
+  `ContactBlock` renders socials from `ctx.socialLinks` and `Organization`
+  carried no such field, so nothing could ever set any. Removed at first, then
+  put back the same day with the field, an editor in Organisation settings and
+  the draft preview reading it — `publishOrgWebsite` turned out to have been
+  reading `org.socialLinks` defensively all along, waiting for exactly that.
 
-STILL OPEN, and still the substance of this entry: the menu tree, the preview
-overlay, the duplicated `SectionEditor`/`defaults`/`hooks` pairs, and the
-one-model-or-two decision. `sanitizeMenu` in `functions/src/website/index.ts`
-is one `export` keyword away from being reusable, and `utils/siteMenu.ts` is
-already tenant-agnostic, so the menu tree is the cheapest next slice.
+### The capability gaps closed, same day
+
+The menu tree and the preview overlay are done, and they cost far less than the
+table above implies because the pieces were already tenant-agnostic:
+
+- **The header menu.** `menu?: SiteMenuItem[]` on `OrgSiteDraft` and
+  `OrgPublishedSite`, carried by `saveOrgSiteDraft` and sanitised by the SAME
+  `sanitizeMenu` the team publish uses (it only needed an `export` — its rules
+  bound depth and breadth and validate a target's shape, none of which differs
+  between tenants). `MenuPanel` took a widened `sections` type and nothing else;
+  `utils/siteMenu.ts` needed no change at all. ADDITIVE: an absent menu still
+  derives, so no published org site changed.
+  `surfaces={[]}` because an organisation has no cross-surface links — Shop, My
+  space and Documents are studio surfaces.
+- **The preview overlay**, in place of the sticky 420px column — and that column
+  is what the menu tree now occupies, which is exactly the trade
+  `PreviewOverlay`'s own header proposed. It gained `orgId`/`orgTeams`: without
+  them the clubs, locations and coaches blocks render empty, and a preview that
+  silently drops three of seven section types is worse than none.
+- **Both appearance panels are translated.** They were equally untranslated, so
+  they were "aligned" — at English. Twelve shared keys, one placeholder each.
+- `SurfaceLinksEditor.tsx` deleted (exported, imported by nothing).
+
+STILL OPEN, and now the whole of what is left: the duplicated
+`SectionEditor`/`defaults`/`hooks` pairs and the one-model-or-two decision — the
+authoring SHELL, which is pure React and the only part that was never converged.
+The render layer, the type layer and the sanitiser layer were shared already.
+Embed widgets for orgs stay descoped: they need a new public collection and an
+`/embed/org/...` route, which is a feature rather than a convergence.
 
 ---
 

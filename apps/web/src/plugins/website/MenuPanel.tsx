@@ -60,6 +60,7 @@ import {
   type PublicSurface,
   type SiteMenuItem,
   type WebsiteSection,
+  type OrgSiteSection,
 } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,11 +82,14 @@ export function MenuPanel({
   onChange,
 }: {
   menu: SiteMenuItem[]
-  sections: WebsiteSection[]
+  /** Team OR org sections — the panel reads only `id` and `type`, so it is
+   *  tenant-agnostic in exactly the way `siteMenu.ts`'s tree operations and
+   *  `RenderableSite` already are. */
+  sections: (WebsiteSection | OrgSiteSection)[]
   /** Surfaces that are actually live — the only ones worth offering. */
   surfaces: readonly PublicSurface[]
   surfaceLabel: (s: PublicSurface) => string
-  sectionLabel: (s: WebsiteSection) => string
+  sectionLabel: (s: WebsiteSection | OrgSiteSection) => string
   onChange: (menu: SiteMenuItem[]) => void
 }) {
   const t = useTranslations('Website')

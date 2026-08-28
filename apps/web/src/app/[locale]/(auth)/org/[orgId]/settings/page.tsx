@@ -28,7 +28,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock, Mail, Copy, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { Settings, IdCard, Pencil, Trash2, Plus, ChevronUp, ChevronDown, RotateCcw, Languages, Lock, Mail, Copy, CheckCircle2, Clock, XCircle, Share2 } from 'lucide-react'
 import { deleteField } from 'firebase/firestore'
 import {
   ORGANIZATIONS_COLLECTION, ORG_AFFILIATION_STATUSES_SUBCOLLECTION,
@@ -36,6 +36,7 @@ import {
 } from '@linyup/shared'
 import type { OrgAffiliationStatusDef, AffiliationStatusColor, Organization, AffiliationType, AffiliationIssuer } from '@linyup/shared'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
+import { SOCIAL_PLATFORMS, SOCIAL_LABELS } from '@/lib/bioLink'
 
 // ─── colour config ────────────────────────────────────────────────────────────
 
@@ -746,6 +747,106 @@ function MembershipLockCard({
   )
 }
 
+
+// ─── org social links card ────────────────────────────────────────────────────
+
+/**
+ * The organisation's own social profiles.
+ *
+ * SAME SHAPE AS A STUDIO'S — `SocialLink[]`, the same `SOCIAL_PLATFORMS` list
+ * and the same labels — because the renderer is already shared: `ContactBlock`
+ * reads `ctx.socialLinks` without caring which tenant filled it. The org side
+ * simply never filled it, so the website's "show social links" switch could not,
+ * in any state, change what a visitor saw, and was removed rather than faked.
+ * This is the field that earns it back.
+ *
+ * ONE INPUT PER PLATFORM, not a repeatable row: the platform list is closed (the
+ * renderer maps each to an icon), so a free-form "add a link" control would let
+ * somebody enter a platform nothing can draw.
+ */
+function OrgSocialLinksCard({
+  orgId,
+  org,
+  isAdmin,
+  onSaved,
+}: {
+  orgId: string
+  org: Organization | null
+  isAdmin: boolean
+  onSaved: (msg: string, type?: 'success' | 'error') => void
+}) {
+  const t = useTranslations('OrgSettings')
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  const [dirty, setDirty] = useState(false)
+
+  // Seed from the stored value once it arrives, and not again — re-seeding on
+  // every render would fight whatever is being typed.
+  useEffect(() => {
+    if (dirty) return
+    const next: Record<string, string> = {}
+    for (const l of org?.socialLinks ?? []) next[l.platform] = l.url
+    setUrls(next)
+  }, [org?.socialLinks, dirty])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      // BLANKS ARE DROPPED, not stored as empty strings: the renderer filters on
+      // a truthy url anyway, and a row of empty entries would make an
+      // organisation with no socials look like one with six broken links.
+      const socialLinks = SOCIAL_PLATFORMS.filter((pf) => (urls[pf] ?? '').trim()).map((pf) => ({
+        platform: pf,
+        url: urls[pf].trim(),
+      }))
+      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { socialLinks })
+      qc.invalidateQueries({ queryKey: ['org', orgId] })
+      setDirty(false)
+      onSaved(t('saveSuccess'))
+    } catch {
+      onSaved(t('saveError'), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!isAdmin) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Share2 className="h-4 w-4" />
+          {t('socialTitle')}
+        </CardTitle>
+        <CardDescription>{t('socialDescription')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {SOCIAL_PLATFORMS.map((platform) => (
+          <div key={platform} className="flex items-center gap-3">
+            <span className="w-24 shrink-0 text-sm font-medium">{SOCIAL_LABELS[platform]}</span>
+            <Input
+              value={urls[platform] ?? ''}
+              onChange={(e) => {
+                setDirty(true)
+                setUrls((prev) => ({ ...prev, [platform]: e.target.value }))
+              }}
+              placeholder="https://"
+              className="h-8 font-mono text-sm"
+            />
+          </div>
+        ))}
+        <div className="flex justify-end">
+          <Button size="sm" onClick={handleSave} disabled={saving || !dirty}>
+            {t('saveButton')}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── org email sender card ────────────────────────────────────────────────────
 
 function OrgEmailSenderCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
@@ -1355,6 +1456,7 @@ export default function OrgSettingsPage() {
       </Card>
 
       <TerminologyCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg) => showToast(msg)} />
+      <OrgSocialLinksCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={showToast} />
 
       <MembershipLockCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg, type) => showToast(msg, type)} />
 
