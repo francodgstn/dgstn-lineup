@@ -1016,7 +1016,13 @@
     "bookingsTruncated": "Affichage des {count} réservations les plus récentes.",
     "noBookingsFilter": "Aucune réservation ne correspond à ce filtre.",
     "goalFromDimension": "À partir de {dimension}",
-    "alertTypeAlways": "Dès maintenant"
+    "alertTypeAlways": "Dès maintenant",
+    "alertDismissTitle": "Masquer l'alerte",
+    "alertDismissBody": "Supprimer aussi « {message} » du profil de {name} ?",
+    "alertDismissOnly": "Masquer seulement",
+    "alertDismissAndDelete": "Masquer et supprimer",
+    "alertDismissed": "Masquée",
+    "alertDeleteBody": "« {message} » sera définitivement supprimée de la fiche de ce contact."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -4425,7 +4431,12 @@
     "successBodyCourseSignedIn": "Merci ! Vous avez désormais un accès à vie. Ouvrez votre Space pour commencer à regarder."
   },
   "Notifications": {
-    "dismiss": "Fermer"
+    "dismiss": "Fermer",
+    "bellTitle": "Notifications",
+    "panelTitle": "Notifications",
+    "unreadCount": "{count, plural, =0 {Aucune notification non lue} one {# notification non lue} other {# notifications non lues}}",
+    "emptyTitle": "Tout est à jour",
+    "emptyBody": "Les nouvelles notifications s'afficheront ici."
   },
   "Affiliations": {
     "tabLabel": "Affiliations",

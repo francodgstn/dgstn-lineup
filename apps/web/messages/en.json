@@ -1016,7 +1016,13 @@
     "bookingsTruncated": "Showing the {count} most recent bookings.",
     "noBookingsFilter": "No bookings match this filter.",
     "goalFromDimension": "From {dimension}",
-    "alertTypeAlways": "Active now"
+    "alertTypeAlways": "Active now",
+    "alertDismissTitle": "Dismiss alert",
+    "alertDismissBody": "Also delete “{message}” from {name}'s profile?",
+    "alertDismissOnly": "Dismiss only",
+    "alertDismissAndDelete": "Dismiss & delete",
+    "alertDismissed": "Dismissed",
+    "alertDeleteBody": "“{message}” will be permanently deleted from this contact's record."
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -4425,7 +4431,12 @@
     "successBodyCourseSignedIn": "Thank you! You now have lifetime access. Open your Space to start watching."
   },
   "Notifications": {
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "bellTitle": "Notifications",
+    "panelTitle": "Notifications",
+    "unreadCount": "{count, plural, =0 {No unread notifications} one {# unread notification} other {# unread notifications}}",
+    "emptyTitle": "You're all caught up",
+    "emptyBody": "New notifications will show up here."
   },
   "Affiliations": {
     "tabLabel": "Affiliations",

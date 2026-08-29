@@ -1016,7 +1016,13 @@
     "bookingsTruncated": "Es werden die {count} neuesten Buchungen angezeigt.",
     "noBookingsFilter": "Keine Buchungen entsprechen diesem Filter.",
     "goalFromDimension": "Aus {dimension}",
-    "alertTypeAlways": "Sofort aktiv"
+    "alertTypeAlways": "Sofort aktiv",
+    "alertDismissTitle": "Erinnerung ausblenden",
+    "alertDismissBody": "„{message}“ auch aus dem Profil von {name} löschen?",
+    "alertDismissOnly": "Nur ausblenden",
+    "alertDismissAndDelete": "Ausblenden & löschen",
+    "alertDismissed": "Ausgeblendet",
+    "alertDeleteBody": "„{message}“ wird endgültig aus dem Datensatz dieses Kontakts gelöscht."
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -4425,7 +4431,12 @@
     "successBodyCourseSignedIn": "Vielen Dank! Sie haben jetzt lebenslangen Zugang. Öffnen Sie Ihren Space, um loszulegen."
   },
   "Notifications": {
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "bellTitle": "Benachrichtigungen",
+    "panelTitle": "Benachrichtigungen",
+    "unreadCount": "{count, plural, =0 {Keine ungelesenen Benachrichtigungen} one {# ungelesene Benachrichtigung} other {# ungelesene Benachrichtigungen}}",
+    "emptyTitle": "Alles erledigt",
+    "emptyBody": "Neue Benachrichtigungen werden hier angezeigt."
   },
   "Affiliations": {
     "tabLabel": "Affiliationen",

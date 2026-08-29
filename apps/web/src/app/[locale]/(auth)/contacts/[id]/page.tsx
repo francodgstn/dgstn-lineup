@@ -3804,27 +3804,115 @@ function AlertPresetPicker({
   )
 }
 
+/**
+ * The three-way dismissal, restored from the original product.
+ *
+ * A two-button confirm cannot express this choice, because "dismiss" and
+ * "delete" are genuinely different intentions here and the destructive one is
+ * not recoverable. So the dialog names both outcomes rather than making the
+ * coach infer them from a single "Remove this alert?".
+ *
+ * An ALREADY-dismissed alert drops to two buttons: dismissing it again would do
+ * nothing, and a control that does nothing reads as a broken one.
+ */
+function AlertDismissDialog({
+  alert,
+  contactName,
+  onCancel,
+  onDismissOnly,
+  onDelete,
+}: {
+  alert: ContactAlert | null
+  contactName: string
+  onCancel: () => void
+  onDismissOnly: (alert: ContactAlert) => void
+  onDelete: (alert: ContactAlert) => void
+}) {
+  const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
+  const dismissed = !!alert?.archived_at
+
+  return (
+    <Dialog open={!!alert} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {dismissed ? t('alertDeleteConfirm') : t('alertDismissTitle')}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {dismissed
+            ? t('alertDeleteBody', { message: alert?.message ?? '' })
+            : t('alertDismissBody', { message: alert?.message ?? '', name: contactName })}
+        </p>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="ghost" onClick={onCancel}>
+            {tCommon('cancel')}
+          </Button>
+          {!dismissed && (
+            <Button variant="outline" onClick={() => alert && onDismissOnly(alert)}>
+              {t('alertDismissOnly')}
+            </Button>
+          )}
+          <Button variant="destructive" onClick={() => alert && onDelete(alert)}>
+            {dismissed ? tCommon('delete') : t('alertDismissAndDelete')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const qc = useQueryClient()
-  const { confirm, confirmDialog } = useConfirm()
   const { data: alerts = [], isLoading } = useContactAlerts(contact.id)
   const { data: presets = [] } = useAlertPresets(teamId)
   const [addOpen, setAddOpen] = useState(false)
   const [presetOpen, setPresetOpen] = useState(false)
+  // The alert awaiting a dismissal decision. See AlertDismissDialog.
+  const [dismissing, setDismissing] = useState<ContactAlert | null>(null)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-alerts', contact.id] })
 
-  const handleDeleteAlert = async (id: string) => {
-    const ok = await confirm({
-      title: t('alertDeleteConfirm'),
-      confirmLabel: tCommon('delete'),
-    })
-    if (!ok) return
-    await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, id))
+  // DISMISSING IS NOT DELETING, and a single confirm cannot say which one you
+  // meant. An alert is two things at once: a notification, and a note the coach
+  // wrote on this person's record. Clearing the first must not silently destroy
+  // the second — so the choice is explicit, as it was in the original product.
+  //
+  //   Dismiss only    -> archived_at. The record stays; it stops counting
+  //                      towards alerts_count (trackContactAlerts counts
+  //                      non-archived rows), so the contacts-list badge and the
+  //                      dashboard queue row clear.
+  //   Dismiss & delete-> the document goes.
+  //
+  // This is the only writer of `archived_at` for a contact alert. Every reader
+  // already honoured the field — the mobile query filters on it and the counter
+  // respects it — but nothing had ever set it, so "dismiss" was unreachable and
+  // permanent deletion was the only way out of a fired alert.
+  const dismissOnly = async (alert: ContactAlert) => {
+    setDismissing(null)
+    await updateDoc(
+      doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, alert.id),
+      { archived_at: serverTimestamp() }
+    )
     invalidate()
   }
+
+  const dismissAndDelete = async (alert: ContactAlert) => {
+    setDismissing(null)
+    await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, alert.id))
+    invalidate()
+  }
+
+  // Live alerts first, dismissed ones after. Dismissed alerts stay VISIBLE —
+  // this page is the record, and hiding them would make "dismiss only" look
+  // identical to a delete — but they must not push live ones down the list.
+  const orderedAlerts = useMemo(
+    () => [...alerts].sort((a, b) => Number(!!a.archived_at) - Number(!!b.archived_at)),
+    [alerts]
+  )
 
   const applyPreset = async (preset: AlertPresetRecord, date?: Date) => {
     const payload: Record<string, unknown> = {
@@ -3883,12 +3971,15 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
         <div className="py-12 text-center text-muted-foreground text-sm">{t('noAlerts')}</div>
       ) : (
         <div className="space-y-2">
-          {alerts.map((alert) => {
-            const fired = alertIsFired(alert, { totalSessions: contact.total_sessions })
+          {orderedAlerts.map((alert) => {
+            const dismissed = !!alert.archived_at
+            // A dismissed alert is never "fired" — it has been dealt with, and
+            // showing it in alarm colours would undo the dismissal visually.
+            const fired = !dismissed && alertIsFired(alert, { totalSessions: contact.total_sessions })
             return (
               <div
                 key={alert.id}
-                className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''}`}
+                className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''} ${dismissed ? 'opacity-60' : ''}`}
               >
                 <div
                   className={`mt-0.5 shrink-0 ${fired ? 'text-orange-500' : 'text-muted-foreground'}`}
@@ -3920,7 +4011,11 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                       variant={fired ? 'default' : 'outline'}
                       className={`text-xs ${fired ? 'bg-orange-500 border-orange-500' : ''}`}
                     >
-                      {fired ? t('alertFired') : t('alertPending')}
+                      {dismissed
+                        ? t('alertDismissed')
+                        : fired
+                          ? t('alertFired')
+                          : t('alertPending')}
                     </Badge>
                     {alert.show_in_app && (
                       <Badge variant="outline" className="text-xs">
@@ -3931,7 +4026,8 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                   <p className="text-sm mt-0.5">{alert.message}</p>
                 </div>
                 <button
-                  onClick={() => handleDeleteAlert(alert.id)}
+                  onClick={() => setDismissing(alert)}
+                  aria-label={dismissed ? tCommon('delete') : t('alertDismissTitle')}
                   className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -3954,7 +4050,13 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
         presets={presets}
         onSelect={applyPreset}
       />
-      {confirmDialog}
+      <AlertDismissDialog
+        alert={dismissing}
+        contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
+        onCancel={() => setDismissing(null)}
+        onDismissOnly={dismissOnly}
+        onDelete={dismissAndDelete}
+      />
     </div>
   )
 }
