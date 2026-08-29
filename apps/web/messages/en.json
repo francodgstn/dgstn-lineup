@@ -2910,7 +2910,9 @@
     "convertToManualBody": "Copies the current {count} members in and drops the rule. Membership stops updating.",
     "convertedToast": "“{name}” is now a manual group",
     "editInContacts": "Edit in contacts",
-    "dynamicDropsGroupsWarning": "A rule can’t depend on another group, so that filter is dropped — this group will match {count} contacts, not the list behind this dialog. Use Snapshot to keep the current members."
+    "dynamicDropsGroupsWarning": "A rule can’t depend on another group, so that filter is dropped — this group will match {count} contacts, not the list behind this dialog. Use Snapshot to keep the current members.",
+    "dynamicHint": "This makes a manual group. In a dynamic group the filter IS the membership, so it starts life as a contact filter — build one on Contacts and save it as a group.",
+    "dynamicHintCta": "Build a filter in Contacts"
   },
   "Org": {
     "tabPlaces": "Places",

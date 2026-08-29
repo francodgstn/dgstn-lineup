@@ -2910,7 +2910,9 @@
     "convertToManualBody": "Übernimmt die aktuellen {count} Mitglieder und entfernt die Regel. Die Mitgliedschaft wird nicht mehr aktualisiert.",
     "convertedToast": "„{name}“ ist jetzt eine manuelle Gruppe",
     "editInContacts": "In Kontakten bearbeiten",
-    "dynamicDropsGroupsWarning": "Eine Regel kann nicht von einer anderen Gruppe abhängen, daher entfällt dieser Filter — diese Gruppe trifft auf {count} Kontakte zu, nicht auf die Liste hinter diesem Dialog. Nutzen Sie Momentaufnahme, um die aktuellen Mitglieder zu behalten."
+    "dynamicDropsGroupsWarning": "Eine Regel kann nicht von einer anderen Gruppe abhängen, daher entfällt dieser Filter — diese Gruppe trifft auf {count} Kontakte zu, nicht auf die Liste hinter diesem Dialog. Nutzen Sie Momentaufnahme, um die aktuellen Mitglieder zu behalten.",
+    "dynamicHint": "Hier entsteht eine manuelle Gruppe. Bei einer dynamischen Gruppe ist der Filter die Mitgliedschaft — erstelle ihn unter Kontakte und speichere ihn als Gruppe.",
+    "dynamicHintCta": "Filter unter Kontakte erstellen"
   },
   "Org": {
     "tabPlaces": "Orte",

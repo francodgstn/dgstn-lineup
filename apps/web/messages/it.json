@@ -2910,7 +2910,9 @@
     "convertToManualBody": "Copia gli attuali {count} membri e rimuove la regola. L’appartenenza smette di aggiornarsi.",
     "convertedToast": "«{name}» ora è un gruppo manuale",
     "editInContacts": "Modifica nei contatti",
-    "dynamicDropsGroupsWarning": "Una regola non può dipendere da un altro gruppo, quindi quel filtro viene rimosso: questo gruppo corrisponderà a {count} contatti, non all’elenco dietro questa finestra. Usa Istantanea per mantenere i membri attuali."
+    "dynamicDropsGroupsWarning": "Una regola non può dipendere da un altro gruppo, quindi quel filtro viene rimosso: questo gruppo corrisponderà a {count} contatti, non all’elenco dietro questa finestra. Usa Istantanea per mantenere i membri attuali.",
+    "dynamicHint": "Questo modulo crea un gruppo manuale. In un gruppo dinamico il filtro è l’appartenenza: crealo in Contatti e salvalo come gruppo.",
+    "dynamicHintCta": "Crea un filtro in Contatti"
   },
   "Org": {
     "tabPlaces": "Sedi",

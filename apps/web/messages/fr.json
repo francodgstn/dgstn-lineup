@@ -2910,7 +2910,9 @@
     "convertToManualBody": "Copie les {count} membres actuels et supprime la règle. L’appartenance cesse de se mettre à jour.",
     "convertedToast": "« {name} » est désormais un groupe manuel",
     "editInContacts": "Modifier dans les contacts",
-    "dynamicDropsGroupsWarning": "Une règle ne peut pas dépendre d’un autre groupe : ce filtre est retiré — ce groupe correspondra à {count} contacts, pas à la liste derrière cette fenêtre. Choisissez Instantané pour conserver les membres actuels."
+    "dynamicDropsGroupsWarning": "Une règle ne peut pas dépendre d’un autre groupe : ce filtre est retiré — ce groupe correspondra à {count} contacts, pas à la liste derrière cette fenêtre. Choisissez Instantané pour conserver les membres actuels.",
+    "dynamicHint": "Ce formulaire crée un groupe manuel. Dans un groupe dynamique, le filtre EST l’appartenance : créez-le depuis Contacts, puis enregistrez-le comme groupe.",
+    "dynamicHintCta": "Créer un filtre dans Contacts"
   },
   "Org": {
     "tabPlaces": "Lieux",
