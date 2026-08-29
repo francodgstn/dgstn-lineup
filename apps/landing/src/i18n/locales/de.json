@@ -450,16 +450,16 @@
         "body": "Akzeptiere die Methoden, die Schweizer Kunden wirklich nutzen — inklusive wiederkehrender Abos über TWINT."
       }
     },
-    "proof": "Ein per TWINT bezahltes Abo auf der Studio-Stufe kostet rund 2 % all-in — etwa die Hälfte dessen, was nur-Karten-Tools aus dem Ausland berechnen.",
+    "proof": "Ein per TWINT bezahltes Abo auf der Studio-Stufe kostet etwa die Hälfte dessen, was nur-Karten-Tools aus dem Ausland berechnen.",
     "cta": "Kostenlos starten",
     "feesTitle": "Zahlungsgebühren, klar sichtbar",
     "feesIntro": "Berechnet zusätzlich zur Standardgebühr von Stripe, die wir zum Selbstkostenpreis weitergeben. Nur Prozente — keine feste Linyup-Gebühr pro Transaktion. Gleicher Satz für Karten und TWINT.",
     "feesPlanHead": "Plan",
     "feesFeeHead": "Linyup-Zahlungsgebühr",
-    "feeFree": "1.7%",
-    "feeCoach": "1.2%",
-    "feeStudio": "0.7%",
-    "feeOrg": "ab 0.4%",
+    "feeFree": "2.5%",
+    "feeCoach": "1.5%",
+    "feeStudio": "0.8%",
+    "feeOrg": "ab 0.5%",
     "feeOrgNote": "Mengenrabatte verfügbar",
     "feesMicrocopy": "Du siehst genau, was du zahlst: Stripes Bearbeitungsgebühr zum Selbstkostenpreis, plus ein kleiner Linyup-Prozentsatz auf die Zahlungen, die du einnimmst. Keine fixe Transaktionsgebühr, kein Aufschlag auf Stripes Anteil."
   },

@@ -2,7 +2,7 @@
 layout: ../layouts/LegalLayout.astro
 title: Terms of Service
 description: The agreement between Linyup and the businesses that use it.
-lastUpdated: 25 August 2026
+lastUpdated: 29 August 2026
 ---
 
 > **DRAFT — NOT YET REVIEWED BY A LAWYER.** This text is a starting point
@@ -79,10 +79,10 @@ minimum and no fixed component:
 
 | Plan | Platform fee |
 |---|---|
-| Free | 1.7% |
-| Coach | 1.2% |
-| Studio | 0.7% |
-| Organization | 0.4% |
+| Free | 2.5% |
+| Coach | 1.5% |
+| Studio | 0.8% |
+| Organization | 0.5% |
 
 Stripe's own processing fees are separate and are charged by Stripe under your
 agreement with them. If we change these rates we will give you notice under

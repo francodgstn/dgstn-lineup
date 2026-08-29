@@ -91,19 +91,55 @@ through Linyup's balance. This is the first-class, fully-integrated rail.
    must use the full dashboard (Standard), so there is **one** account config (see above);
    the separate "Managed/express" account from the brief was dropped after test-mode
    confirmed the combination is unsupported.
-2. **Per-tier take-rate (final, signed off 2026-06-20):**
+2. **Per-tier take-rate (revised 2026-08-29 by commercial review, pre-launch;
+   supersedes the 2026-06-20 set of 1.7 / 1.2 / 0.7 / 0.4 %):**
 
    | Tier | Application fee |
    |---|---|
-   | Free | 1.7% |
-   | Coach | 1.2% |
-   | Studio *(brief's "Club")* | 0.7% |
-   | Organization | 0.4% |
+   | Free | 2.5% |
+   | Coach | 1.5% |
+   | Studio *(brief's "Club")* | 0.8% |
+   | Organization | 0.5% |
 
    Config lives in `packages/shared/src/types/connect.ts` → `CONNECT_TAKE_RATE`
    (basis points + optional minimum fee). The **only** fee entry points are
    `computePlatformFee()` (one-off, returns Rappen) and `takeRatePercent()`
    (subscriptions, returns a percent). No fee is hardcoded anywhere else.
+
+   **Changing a rate is a DEPLOY for everything except recurring memberships.**
+   One-off charges (drop-in, appointment, course, product, gift card, priced
+   trial) recompute `application_fee_amount` per request, so the new rate is live
+   the moment the functions are deployed, and historical charges keep the fee they
+   were actually taken at — which is what a proportional refund reversal needs.
+   `createSubscriptionCheckoutSession` is the exception: it writes
+   `application_fee_percent` ONCE onto the Stripe Subscription on the studio's
+   connected account, and Stripe bills every later invoice at that stored number.
+   A deploy does not touch it. There is no error and no warning — the membership
+   simply keeps billing at the retired rate.
+
+   So every rate change owes ONE Stripe-side check, per environment: walk the
+   platform's connected accounts, list each account's billable subscriptions
+   (`active`, `trialing`, `past_due`, `unpaid`, `paused`) and compare the stored
+   `application_fee_percent` against `takeRatePercent(team.plan, waived)` — resolved
+   through those functions and through `resolveFeeWaiver`'s read-to-the-organisation,
+   never re-derived, because a second implementation of a money decision is the one
+   copy never worth making. The map from account to team is
+   `connect_accounts/{acct}.teamId`; an account with no such document has no
+   derivable rate and must be decided by hand rather than guessed at. Repair is
+   `stripe.subscriptions.update(id, { application_fee_percent }, { stripeAccount })`.
+   The Firestore mirror (`member_subscriptions.*.application_fee_percent`) needs no
+   separate backfill — the update emits `customer.subscription.updated`, which the
+   Connect webhook already re-mirrors.
+
+   **There is deliberately no script for this.** The 2026-08-29 change ran the check
+   against `linyup-sandbox` and `linyup-prod` and found zero stale subscriptions in
+   both — pre-launch, no recurring membership had been sold yet — so the deploy WAS
+   the whole migration. A tool kept alive for months without ever running would go
+   stale against the very comp logic it copies, and be trusted post-launch precisely
+   when being wrong costs money. Write it fresh, against whatever the code says then.
+
+   The Stripe **catalogue** (`pnpm stripe:sync`) is NOT involved: it holds Linyup's
+   own plan Products and Prices, and the take-rate is not a catalogue object.
 3. **TWINT + direct-charge + Connect — validate in test mode.** Documented constraint:
    only **one active TWINT mandate per studio↔member pair**. See "Validate in test mode".
 
