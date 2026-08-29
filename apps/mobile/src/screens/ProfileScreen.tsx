@@ -207,7 +207,7 @@ export const ProfileScreen: React.FC = () => {
         setAgendaSessions(agenda);
       }
 
-      const contactAlerts = await FirestoreService.getContactAlerts(contact.id);
+      const contactAlerts = await FirestoreService.getContactAlerts(contact.id, contact.total_sessions);
       setAlerts(contactAlerts);
 
       if (contact.teamId) {

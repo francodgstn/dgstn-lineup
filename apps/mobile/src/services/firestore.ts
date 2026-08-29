@@ -2,6 +2,7 @@ import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
 import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalCreatedBy, GoalEvaluation, GoalType, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
 import { detectPerformanceProfile, resolveCoachingDimensions, resolveGoalCategories } from '../utils/goalContract';
+import { readAlert, alertIsFired, RawContactAlert } from '../utils/contactAlerts';
 import { httpsCallable } from 'firebase/functions';
 
 export const FirestoreService = {
@@ -633,8 +634,13 @@ export const FirestoreService = {
     }
   },
 
-  // Get active alerts for a contact (alerts with show_in_app=true and not archived)
-  async getContactAlerts(contactId: string): Promise<ContactAlert[]> {
+  // Get active alerts for a contact: fired, not dismissed, and flagged to
+  // show in the app. Reads BOTH document shapes a contact_alerts doc may
+  // carry (flat schedule_type/schedule_value from the studio web app + the
+  // HMD migration, nested schedule{} from bookSession + the automation
+  // engine) and uses the shared fired predicate — see utils/contactAlerts.ts.
+  // `totalSessions` is Contact.total_sessions, needed for sessions_countdown.
+  async getContactAlerts(contactId: string, totalSessions?: number | null): Promise<ContactAlert[]> {
     try {
       const alertsRef = collection(db, 'contacts', contactId, 'contact_alerts');
       const q = query(
@@ -645,48 +651,9 @@ export const FirestoreService = {
       );
       const snapshot = await getDocs(q);
 
-      const now = new Date();
-      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-
       return snapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          const scheduleValue = data.schedule?.value;
-          let parsedValue: number | Date;
-
-          if (data.schedule?.type === 'datetime') {
-            // Convert Firestore Timestamp to Date
-            parsedValue = scheduleValue?.toDate?.() || new Date(scheduleValue);
-          } else {
-            // sessions_countdown - value is a number
-            parsedValue = scheduleValue;
-          }
-
-          return {
-            id: doc.id,
-            message: data.message || '',
-            schedule: {
-              type: data.schedule?.type || 'datetime',
-              value: parsedValue,
-            },
-            alert_type: data.alert_type,
-            show_in_app: data.show_in_app,
-            created_at: data.created_at?.toDate?.() || new Date(data.created_at),
-            archived_at: data.archived_at ? (data.archived_at?.toDate?.() || new Date(data.archived_at)) : null,
-          } as ContactAlert;
-        })
-        .filter(alert => {
-          // Filter based on schedule type
-          if (alert.schedule.type === 'sessions_countdown') {
-            // Show when value <= 1 (1 or fewer sessions remaining)
-            return (alert.schedule.value as number) <= 1;
-          } else {
-            // datetime: show 1 week before and after the scheduled date
-            const scheduledDate = alert.schedule.value as Date;
-            const diff = scheduledDate.getTime() - now.getTime();
-            return diff >= -oneWeekMs && diff <= oneWeekMs;
-          }
-        });
+        .map(doc => readAlert(doc.id, doc.data() as RawContactAlert))
+        .filter(alert => alertIsFired(alert, { totalSessions }));
     } catch (error) {
       console.error('Error fetching contact alerts:', error);
       return [];

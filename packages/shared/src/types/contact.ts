@@ -655,15 +655,39 @@ export interface SubscriptionHistoryEntry {
 }
 
 // ─── contact alert (contacts/{id}/contact_alerts) ─────────────────────────────
+//
+// THREE SCHEDULE KINDS, and `always` is not a degenerate case of the other two.
+//
+//   sessions_countdown — fires once the contact has reached N total sessions.
+//   datetime           — fires once an instant has passed.
+//   always             — fires on creation and stays fired until archived.
+//
+// `always` exists because "active from the moment I wrote it" was previously
+// only expressible by faking one of the other two, and both fakes are wrong:
+// a `datetime` of today is an INSTANT, which the mobile reader only surfaces
+// for a ±7 day window, so an alert meant to stand until dealt with quietly
+// stops showing; and `sessions_countdown: 0` is unreachable from the forms
+// (both enforce min 1) and would read as "0 sessions remaining" to the mobile
+// predicate. The end of an `always` alert is `archived_at`, which already
+// exists and which `trackContactAlerts` already respects.
+//
+// `schedule_value` is NOT narrowed by `schedule_type` — the pair predates the
+// union and is persisted in thousands of documents. Never read it directly:
+// `alertScheduleValue()` in `utils/contactAlerts.ts` narrows it in one place,
+// and `alertIsFired()` is the ONLY predicate that decides a alert has fired.
 
-export type AlertScheduleType = 'sessions_countdown' | 'datetime'
+export type AlertScheduleType = 'sessions_countdown' | 'datetime' | 'always'
 
 export interface ContactAlert {
   id: string
   schedule_type: AlertScheduleType
-  schedule_value: number | Timestamp
+  /** Sessions (number) for `sessions_countdown`, an instant for `datetime`,
+   *  and unused for `always`. Narrow it with `alertScheduleValue()`. */
+  schedule_value: number | Timestamp | null
   message: string
   show_in_app?: boolean
+  /** Set = dismissed. The only end an `always` alert has, and the reason
+   *  `trackContactAlerts` counts non-archived rows only. */
   archived_at?: Timestamp | null
   created_at?: Timestamp
 }

@@ -83,6 +83,11 @@ export interface Contact {
   current_streak?: number;
   max_streak?: number;
   total_sessions_count?: number;
+  /** The real Firestore field (`Contact.total_sessions` in @linyup/shared) —
+   *  feeds the `sessions_countdown` alert trigger. `total_sessions_count`
+   *  above is a stale name that no writer populates; kept as-is since fixing
+   *  it is outside this change. */
+  total_sessions?: number;
   distinct_activities?: string[];
   times_leader?: number;
   times_top5?: number;
@@ -273,19 +278,34 @@ export interface Leaderboard {
   updated_at: Date
 }
 
-export interface AlertSchedule {
-  type: 'sessions_countdown' | 'datetime';
-  value: number | Date;
-}
+// ─── Contact alerts (contacts/{id}/contact_alerts) ─────────────────────────
+// Mirrors packages/shared/src/types/contact.ts's AlertScheduleType +
+// ContactAlert — apps/mobile does not depend on @linyup/shared (see the
+// RankingSystem note further down this file: wiring the workspace package in
+// needs a Metro/monorepo resolution change of its own, not a type fix).
+//
+// A contact_alerts doc arrives in one of TWO shapes: FLAT
+// (`schedule_type`/`schedule_value`, written by the studio web app + the HMD
+// migration) or NESTED (`schedule: { type, value }`, written by bookSession +
+// the automation engine). Never read `schedule_value`/`schedule` directly —
+// go through `alertSchedule()` / `readAlert()` in `utils/contactAlerts.ts`,
+// the one reader that understands both.
+export type AlertScheduleType = 'sessions_countdown' | 'datetime' | 'always';
 
 export interface ContactAlert {
   id: string;
+  schedule_type: AlertScheduleType;
+  /** Sessions count for `sessions_countdown`, a Firestore Timestamp for
+   *  `datetime`, unused (null) for `always`. Narrow it with
+   *  `alertSchedule()`, never read it directly. */
+  schedule_value: number | any | null; // number | Firestore Timestamp | null
   message: string;
-  schedule: AlertSchedule;
+  /** Set on auto-generated alerts (booking / automation / form_submission /
+   *  contact_request); absent on a studio-authored one. */
   alert_type?: string;
-  show_in_app: boolean;
-  created_at: Date;
-  archived_at: Date | null;
+  show_in_app?: boolean;
+  archived_at?: any | null; // Firestore Timestamp | null
+  created_at?: any; // Firestore Timestamp
 }
 
 // ─── Coaching contract ───────────────────────────────────────────────────────

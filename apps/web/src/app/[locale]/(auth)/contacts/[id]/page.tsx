@@ -93,6 +93,8 @@ import {
   ALERT_PRESETS_SUBCOLLECTION,
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   contactDeletionState,
+  readAlert,
+  alertIsFired,
 } from '@linyup/shared'
 import type {
   Contact,
@@ -105,6 +107,7 @@ import type {
   SubscriptionHistoryEntry,
   ContactAlert,
   AlertScheduleType,
+  RawContactAlert,
   RankingSystem,
   ActivityLogEntry,
   ActivityEventType,
@@ -182,6 +185,7 @@ import {
   FileSignature,
   CheckSquare,
   Search,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -646,28 +650,10 @@ function useContactRecentSessions(contactId: string, count: number) {
   })
 }
 
-/**
- * TWO shapes exist in `contact_alerts`, and this page only ever understood one.
- *
- * This page (and the migration) write the FLAT `schedule_type` / `schedule_value`
- * of the `ContactAlert` type. The server writers — `bookSession`'s booking
- * notification and the automation engine's `create_alert` — write a NESTED
- * `schedule: { type, value }` (which is also what the mobile app reads). A
- * nested-shape alert therefore rendered here with no date, no icon and a
- * permanent "pending" badge, because `schedule_type` was simply undefined.
- *
- * Normalising on READ fixes both writers at once and needs no migration; the
- * flat shape stays canonical for anything this page writes.
- */
-function normaliseAlert(raw: Record<string, unknown>, id: string): ContactAlert {
-  const nested = raw.schedule as { type?: string; value?: unknown } | undefined
-  return {
-    ...(raw as Omit<ContactAlert, 'id'>),
-    id,
-    schedule_type: (raw.schedule_type ?? nested?.type ?? 'datetime') as AlertScheduleType,
-    schedule_value: (raw.schedule_value ?? nested?.value) as ContactAlert['schedule_value'],
-  }
-}
+// TWO shapes exist in `contact_alerts` (a flat pair this page/the migration
+// write, and a nested `schedule: { type, value }` the server writers use) —
+// `readAlert()` (`@linyup/shared`) is the one reader that understands both.
+// See its module header for the mobile bug that motivated it.
 
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
@@ -679,7 +665,7 @@ function useContactAlerts(contactId: string) {
           orderBy('created_at', 'desc')
         )
       )
-      return snap.docs.map((d) => normaliseAlert(d.data() as Record<string, unknown>, d.id))
+      return snap.docs.map((d) => readAlert(d.id, d.data() as RawContactAlert))
     },
   })
 }
@@ -1249,19 +1235,8 @@ function AlertsGlance({
   const shown = alerts.slice(0, GLANCE_LIMIT)
   const extra = alerts.length - shown.length
 
-  // The same test AlertsTab runs. Duplicated rather than lifted because the two
-  // are three hundred lines apart in one file; if a third reader appears it
-  // wants to become a shared helper.
-  const fired = (alert: ContactAlert): boolean => {
-    if (alert.schedule_type === 'sessions_countdown') {
-      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
-    }
-    if (alert.schedule_type === 'datetime') {
-      const ts = alert.schedule_value as { toDate(): Date } | null
-      return ts ? ts.toDate() <= new Date() : false
-    }
-    return false
-  }
+  const fired = (alert: ContactAlert) =>
+    alertIsFired(alert, { totalSessions: contact.total_sessions })
 
   return (
     <div className="space-y-3">
@@ -1285,6 +1260,7 @@ function AlertsGlance({
           <Plus className="h-4 w-4" />
         </button>
       </div>
+      <p className="text-xs text-muted-foreground">{t('alertsPanelDesc')}</p>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -1368,6 +1344,7 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
           <Plus className="h-4 w-4" />
         </button>
       </div>
+      <p className="text-xs text-muted-foreground">{t('notesPanelDesc')}</p>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -3547,13 +3524,39 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
 // ─── alerts tab ───────────────────────────────────────────────────────────────
 
 const alertSchema = z.object({
-  schedule_type: z.enum(['sessions_countdown', 'datetime']),
+  schedule_type: z.enum(['sessions_countdown', 'datetime', 'always']),
   schedule_value_sessions: z.coerce.number().min(1).optional(),
   schedule_value_date: z.date().optional(),
   message: z.string().min(1).max(500),
   show_in_app: z.boolean().optional(),
 })
 type AlertFormValues = z.infer<typeof alertSchema>
+
+/** Icon + i18n key for a schedule type — one place, read by the dialog, the
+ *  list and the preset picker so all three render a trigger type the same way. */
+function alertTypeIcon(type: AlertScheduleType, className = 'h-4 w-4') {
+  switch (type) {
+    case 'sessions_countdown':
+      return <Timer className={className} />
+    case 'datetime':
+      return <CalendarDays className={className} />
+    case 'always':
+      return <Zap className={className} />
+  }
+}
+
+function alertTypeLabelKey(
+  type: AlertScheduleType
+): 'alertTypeSessionsCountdown' | 'alertTypeDatetime' | 'alertTypeAlways' {
+  switch (type) {
+    case 'sessions_countdown':
+      return 'alertTypeSessionsCountdown'
+    case 'datetime':
+      return 'alertTypeDatetime'
+    case 'always':
+      return 'alertTypeAlways'
+  }
+}
 
 function AlertDialog({
   open,
@@ -3596,8 +3599,13 @@ function AlertDialog({
     }
     if (data.schedule_type === 'sessions_countdown') {
       payload.schedule_value = Number(data.schedule_value_sessions)
-    } else if (data.schedule_value_date) {
-      payload.schedule_value = Timestamp.fromDate(data.schedule_value_date)
+    } else if (data.schedule_type === 'datetime') {
+      payload.schedule_value = data.schedule_value_date
+        ? Timestamp.fromDate(data.schedule_value_date)
+        : null
+    } else {
+      // 'always' — nothing to collect; it fires on creation (see alertIsFired).
+      payload.schedule_value = null
     }
     await addDoc(
       collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION),
@@ -3615,11 +3623,15 @@ function AlertDialog({
           <DialogTitle>{t('addAlert')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 py-1">
-          {/* Trigger type */}
+          {/* Trigger type — "Active now" sits alongside the other two because
+              this row asks WHEN, not what kind of value to collect. It exists
+              so "active from the moment I wrote it" doesn't have to be faked
+              as today's date or a 0-session countdown (see alertTypeIcon /
+              alertTypeLabel). */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('alertScheduleType')}</label>
             <div className="flex gap-2">
-              {(['sessions_countdown', 'datetime'] as AlertScheduleType[]).map((type) => (
+              {(['sessions_countdown', 'datetime', 'always'] as AlertScheduleType[]).map((type) => (
                 <label key={type} className="flex-1 cursor-pointer">
                   <input
                     type="radio"
@@ -3634,14 +3646,8 @@ function AlertDialog({
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {type === 'sessions_countdown' ? (
-                      <Timer className="h-3.5 w-3.5" />
-                    ) : (
-                      <CalendarDays className="h-3.5 w-3.5" />
-                    )}
-                    {type === 'sessions_countdown'
-                      ? t('alertTypeSessionsCountdown')
-                      : t('alertTypeDatetime')}
+                    {alertTypeIcon(type, 'h-3.5 w-3.5')}
+                    {t(alertTypeLabelKey(type))}
                   </div>
                 </label>
               ))}
@@ -3653,7 +3659,7 @@ function AlertDialog({
               <label className="text-sm font-medium">{t('alertSessionCount')}</label>
               <Input type="number" min="1" {...register('schedule_value_sessions')} />
             </div>
-          ) : (
+          ) : scheduleType === 'datetime' ? (
             <div className="space-y-1">
               <label className="text-sm font-medium">{t('alertDate')}</label>
               <Controller
@@ -3662,7 +3668,7 @@ function AlertDialog({
                 render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
               />
             </div>
-          )}
+          ) : null}
 
           <div className="space-y-1">
             <label className="text-sm font-medium">{t('alertMessage')}</label>
@@ -3735,11 +3741,7 @@ function AlertPresetPicker({
                 className="w-full flex items-center gap-3 p-3 rounded-lg border text-left hover:bg-muted transition-colors"
               >
                 <div className="shrink-0 text-muted-foreground">
-                  {p.schedule_type === 'sessions_countdown' ? (
-                    <Timer className="h-4 w-4" />
-                  ) : (
-                    <CalendarDays className="h-4 w-4" />
-                  )}
+                  {alertTypeIcon(p.schedule_type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{p.name}</p>
@@ -3804,7 +3806,9 @@ function AlertPresetPicker({
 
 function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   const qc = useQueryClient()
+  const { confirm, confirmDialog } = useConfirm()
   const { data: alerts = [], isLoading } = useContactAlerts(contact.id)
   const { data: presets = [] } = useAlertPresets(teamId)
   const [addOpen, setAddOpen] = useState(false)
@@ -3813,6 +3817,11 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-alerts', contact.id] })
 
   const handleDeleteAlert = async (id: string) => {
+    const ok = await confirm({
+      title: t('alertDeleteConfirm'),
+      confirmLabel: tCommon('delete'),
+    })
+    if (!ok) return
     await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, id))
     invalidate()
   }
@@ -3827,26 +3836,17 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
     }
     if (preset.schedule_type === 'sessions_countdown') {
       payload.schedule_value = preset.schedule_value ?? 10
-    } else if (date) {
-      payload.schedule_value = Timestamp.fromDate(date)
+    } else if (preset.schedule_type === 'datetime') {
+      payload.schedule_value = date ? Timestamp.fromDate(date) : null
+    } else {
+      // 'always' — nothing to collect; it fires on creation (see alertIsFired).
+      payload.schedule_value = null
     }
     await addDoc(
       collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION),
       payload
     )
     invalidate()
-  }
-
-  const isAlertFired = (alert: ContactAlert): boolean => {
-    if (alert.schedule_type === 'sessions_countdown') {
-      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
-    }
-    if (alert.schedule_type === 'datetime') {
-      const ts = alert.schedule_value as { toDate(): Date } | null
-      if (!ts) return false
-      return ts.toDate() <= new Date()
-    }
-    return false
   }
 
   if (isLoading)
@@ -3884,7 +3884,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
       ) : (
         <div className="space-y-2">
           {alerts.map((alert) => {
-            const fired = isAlertFired(alert)
+            const fired = alertIsFired(alert, { totalSessions: contact.total_sessions })
             return (
               <div
                 key={alert.id}
@@ -3893,11 +3893,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                 <div
                   className={`mt-0.5 shrink-0 ${fired ? 'text-orange-500' : 'text-muted-foreground'}`}
                 >
-                  {alert.schedule_type === 'sessions_countdown' ? (
-                    <Timer className="h-4 w-4" />
-                  ) : (
-                    <CalendarDays className="h-4 w-4" />
-                  )}
+                  {alertTypeIcon(alert.schedule_type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -3905,7 +3901,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                       <span className="text-xs font-medium text-muted-foreground">
                         {t('alertTypeSessionsCountdown')}: {alert.schedule_value as number}
                       </span>
-                    ) : (
+                    ) : alert.schedule_type === 'datetime' ? (
                       <span className="text-xs font-medium text-muted-foreground">
                         {(alert.schedule_value as { toDate(): Date } | null)
                           ?.toDate()
@@ -3914,6 +3910,10 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                             month: 'short',
                             year: 'numeric',
                           }) ?? '—'}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t('alertTypeAlways')}
                       </span>
                     )}
                     <Badge
@@ -3954,6 +3954,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
         presets={presets}
         onSelect={applyPreset}
       />
+      {confirmDialog}
     </div>
   )
 }
