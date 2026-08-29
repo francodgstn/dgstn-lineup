@@ -11,6 +11,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { createTeamNotification } from '../utils/teamNotifications'
 
 const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
 
@@ -166,26 +167,22 @@ export const requestContactUpdate = onCall(async (request) => {
 
   console.log(`Contact update request created: ${requestRef.id} for contact ${contactId}`)
 
-  // ── Team alert ──────────────────────────────────────────────────────────────
+  // ── In-app notification (teams/{teamId}/notifications/{id}) ────────────────
   try {
-    await db
-      .collection('teams')
-      .doc(teamId)
-      .collection('team_alerts')
-      .doc()
-      .set({
-        teamId,
-        message: `Contact update request from ${contactName}`,
-        schedule: { type: 'datetime', value: Timestamp.now() },
-        alert_type: 'contact_request',
-        request_id: requestRef.id,
-        contact_id: contactId,
-        contact_name: contactName,
-        created_at: FieldValue.serverTimestamp(),
-        archived_at: null,
-      })
-  } catch (alertErr) {
-    console.error('Failed to create team alert for contact request', alertErr)
+    await createTeamNotification(teamId, {
+      type: 'contact_request',
+      title: 'Contact update request',
+      body: `${contactName} has requested a change to their contact details.`,
+      // The requests list lives under the contacts page's "Requests" tab
+      // (apps/web/src/app/[locale]/(auth)/contacts/page.tsx, TAB_IDS +
+      // useTabParam) — ?tab= is that page's existing URL convention.
+      link: '/contacts?tab=requests',
+      request_id: requestRef.id,
+      contact_id: contactId,
+      contact_name: contactName,
+    })
+  } catch (notifyErr) {
+    console.error('Failed to create team notification for contact request', notifyErr)
   }
 
   // ── Mark auth as used ───────────────────────────────────────────────────────

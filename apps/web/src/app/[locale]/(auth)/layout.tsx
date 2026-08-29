@@ -16,6 +16,7 @@ import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { TeamDeletionBanner } from '@/components/layout/TeamDeletionBanner'
 import { UserMenu } from '@/components/layout/UserMenu'
 import { TeamQrButton } from '@/components/layout/TeamQrButton'
+import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import {
   LayoutDashboard,
   Users,
@@ -714,6 +715,15 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
   const [rowWidth, setRowWidth] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
 
+  // THE BELL IS A SECOND RESTING ICON, beside the QR/first tool — a persistent
+  // notifications indicator, not one more thing behind hover/pin (Franco,
+  // 2026-08-29). It self-gates on role (`useTeamNotifications`), and this flag
+  // mirrors that gate here too so the fit arithmetic below reserves space for
+  // exactly what will render — a coach or viewer, who never sees the bell,
+  // keeps the tray's original two-slot reservation.
+  const { teamRole } = useAuth()
+  const showBell = teamRole === 'owner' || teamRole === 'manager'
+
   // The ROW's width, not the tray's — the tray's own width is what we are
   // deciding, so measuring that would be circular.
   useEffect(() => {
@@ -762,8 +772,10 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
   // Two controls are always there besides the reveal — the resting icon and the
   // trailing one — and the trailing one costs the same whether it is the
   // chevron or the overflow menu, so it is reserved once and not counted again
-  // when there IS an overflow.
-  const room = rowWidth - TRAY_ICON_W * 2
+  // when there IS an overflow. THE BELL IS A THIRD, when it renders: reserved
+  // by `showBell` rather than assumed, so a coach/viewer's row (no bell) still
+  // measures against the original two.
+  const room = rowWidth - TRAY_ICON_W * (showBell ? 3 : 2)
   const slots = Math.max(0, Math.floor(room / TRAY_ICON_W))
   const overflows = revealable.length > slots
   const shown = overflows ? revealable.slice(0, slots) : revealable
@@ -779,6 +791,12 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
       {!orgId ? <TeamQrButton /> : <UtilityIconLink item={tools[0]} onClick={onLinkClick} />}
       {/* A member studio's org tray is How-to alone, so there is nothing to
           reveal and the chevron would open onto empty space. */}
+      {/* THE SECOND RESTING ICON. Notifications are a studio-level fact — "does
+          my team have something waiting" — not a scope-level one, so it sits
+          here in BOTH the studio and the org tray rather than only beside the
+          QR. It renders nothing of its own accord for a coach or viewer; see
+          `showBell` above for why the room math already accounts for that. */}
+      {showBell && <NotificationsBell />}
 
       {/* The reveal. Animated by max-width rather than by mounting, so the icons
           slide out from behind the chevron instead of appearing beside it. */}
@@ -2891,6 +2909,10 @@ function SidebarContent({
             Collapsed there is no tray: a w-14 rail has no room to expand into,
             and the search row's menu is where these tools live at that width. */}
         {!collapsed && <UtilityTray onLinkClick={onLinkClick} />}
+        {/* COLLAPSED, THE TRAY DOES NOT MOUNT — so this is the bell's only way
+            onto a w-14 rail, same as `ScopeSwitcher` above it. No props: the
+            icon-only shape is already this row's 32px form (Franco, 2026-08-29). */}
+        {collapsed && <NotificationsBell />}
       </div>
       )}
 

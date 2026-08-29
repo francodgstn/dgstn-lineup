@@ -11,6 +11,16 @@ export const TEAM_ACTIVITY_LOG_SUBCOLLECTION = 'activity_log'
 export const TEAM_WEEKLY_REPORTS_SUBCOLLECTION = 'team_weekly_reports'
 export const TEAM_INVITATIONS_SUBCOLLECTION = 'team_invitations'
 export const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
+/**
+ * @deprecated Superseded by `NOTIFICATIONS_SUBCOLLECTION`
+ * (`teams/{teamId}/notifications`) — see `types/teamNotification.ts`.
+ *
+ * A second, parallel team inbox: two writers, ZERO readers, no `link`, no
+ * `status`, and rules that let a coach read an alert they had no permission to
+ * dismiss. Both writers now create a `TeamNotification` instead. The
+ * collection, its rules and its indexes stay so existing documents are not
+ * stranded — but NOTHING should write it again.
+ */
 export const TEAM_ALERTS_SUBCOLLECTION = 'team_alerts'
 export const ALERT_PRESETS_SUBCOLLECTION = 'alert_presets'
 // Per-team overrides for customizable roles (currently only the Coach role).
