@@ -9,7 +9,7 @@
  * organisation's own word for it, the gate is an ORG ROLE rather than a team
  * capability, and there is no pin — the "always show" store is keyed per studio
  * (see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx), so pinning an org
- * destination into a studio's Shortcuts would file it under whichever studio
+ * destination into a studio's Favourites would file it under whichever studio
  * happened to be current.
  */
 

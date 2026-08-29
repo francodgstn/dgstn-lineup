@@ -94,6 +94,7 @@ import {
 } from './lib/fixtures/engagement'
 import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // Emulator convenience: the Auth host is required alongside Firestore — default
@@ -578,6 +579,8 @@ interface SectorProfile {
     location: string
     description: string
   }[]
+  /** `categories` = GOAL CATEGORY keys (what the goal is about), never
+   *  check-in axis keys — see packages/shared/src/types/goal.ts. */
   goals: { title: string; description: string; categories: string[] }[]
   tasks: string[]
 }
@@ -2197,42 +2200,9 @@ async function seedDemoTeam(profile: SectorProfile) {
         .set(affiliationDoc)
     }
 
-    // subscription history
-    if (sub) {
-      const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
-      if (i % 4 === 0) {
-        const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db
-          .collection('contacts')
-          .doc(id)
-          .collection('subscription_history')
-          .doc(`${id}-sub-prev`)
-          .set({
-            subscription_type_id: sub.id,
-            subscription_type_name: sub.name,
-            recurrence: sub.recurrence,
-            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-            start_date: ts(prevStartedAt),
-            end_date: ts(new Date(startedAt.getTime() - 1)),
-            created_at: ts(prevStartedAt),
-          })
-      }
-      await db
-        .collection('contacts')
-        .doc(id)
-        .collection('subscription_history')
-        .doc(`${id}-sub-current`)
-        .set({
-          subscription_type_id: sub.id,
-          subscription_type_name: sub.name,
-          recurrence: sub.recurrence,
-          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-          start_date: ts(startedAt),
-          end_date: null,
-          created_at: ts(startedAt),
-        })
-    }
-
+    // `subscription_history` is seeded later, by `seedTeamSubscriptionHistory`
+    // (AFTER `seedTeamMoney`, which is what its multi-plan source —
+    // `active_subscriptions` — is read back from). See that call for why.
 
     // weekly reports
     if (c.totalSessions > 0) {
@@ -2269,6 +2239,10 @@ async function seedDemoTeam(profile: SectorProfile) {
   await seedContactAlerts({ teamId, vocabulary: 'generic' })
 
   // ── goals & tasks ──────────────────────────────────────────────────────────
+  // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
+  // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys.
+  // A goal created FROM a weak axis carries `from_dimension` instead; none is
+  // seeded, because no check-ins are seeded.
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]
     if (c.type !== 'student' || c.totalSessions < 5) continue
@@ -2953,6 +2927,11 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   await seedTeamGiftCards({ teamId, uid })
 
   await seedTeamMoney({ teamId })
+  // `subscription_history` — the ONLY store of a contact's plan PERIODS — is
+  // seeded AFTER the money ledger, because it reads `active_subscriptions` back
+  // (the concurrent-plans membership seeded above lands there via
+  // `applySubscriptionRollups`). See scripts/lib/fixtures/subscriptionHistory.ts.
+  await seedTeamSubscriptionHistory({ teamId })
 
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
   // into the journal through the SAME builders the Connect webhook uses.

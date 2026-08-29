@@ -100,6 +100,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Zap,
 } from 'lucide-react'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
@@ -184,7 +185,7 @@ type GeneralData = z.infer<typeof generalSchema>
 const presetSchema = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(300).optional(),
-  schedule_type: z.enum(['sessions_countdown', 'datetime']),
+  schedule_type: z.enum(['sessions_countdown', 'datetime', 'always']),
   schedule_value: z.coerce.number().min(1).optional(),
   message: z.string().min(1).max(500),
   show_in_app: z.boolean().optional(),
@@ -767,6 +768,33 @@ function RegionalForm({
 
 // ─── alert presets tab ────────────────────────────────────────────────────────
 
+/** Icon + i18n key for a schedule type — mirrors the contact detail page's
+ *  `alertTypeIcon` / `alertTypeLabelKey` (a preset's schedule type is the same
+ *  union, rendered the same way, one file over). */
+function alertTypeIcon(type: AlertScheduleType, className = 'h-4 w-4') {
+  switch (type) {
+    case 'sessions_countdown':
+      return <Timer className={className} />
+    case 'datetime':
+      return <CalendarDays className={className} />
+    case 'always':
+      return <Zap className={className} />
+  }
+}
+
+function alertTypeLabelKey(
+  type: AlertScheduleType
+): 'alertTypeSessionsCountdown' | 'alertTypeDatetime' | 'alertTypeAlways' {
+  switch (type) {
+    case 'sessions_countdown':
+      return 'alertTypeSessionsCountdown'
+    case 'datetime':
+      return 'alertTypeDatetime'
+    case 'always':
+      return 'alertTypeAlways'
+  }
+}
+
 function PresetDialog({
   open,
   onOpenChange,
@@ -852,7 +880,7 @@ function PresetDialog({
           <div className="space-y-1.5">
             <Label>{t('alertPresetScheduleType')}</Label>
             <div className="flex gap-2">
-              {(['sessions_countdown', 'datetime'] as AlertScheduleType[]).map((type) => (
+              {(['sessions_countdown', 'datetime', 'always'] as AlertScheduleType[]).map((type) => (
                 <label key={type} className="flex-1 cursor-pointer">
                   <input
                     type="radio"
@@ -867,14 +895,8 @@ function PresetDialog({
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {type === 'sessions_countdown' ? (
-                      <Timer className="h-3.5 w-3.5" />
-                    ) : (
-                      <CalendarDays className="h-3.5 w-3.5" />
-                    )}
-                    {type === 'sessions_countdown'
-                      ? t('alertTypeSessionsCountdown')
-                      : t('alertTypeDatetime')}
+                    {alertTypeIcon(type, 'h-3.5 w-3.5')}
+                    {t(alertTypeLabelKey(type))}
                   </div>
                 </label>
               ))}
@@ -886,9 +908,13 @@ function PresetDialog({
               <Label>{t('alertPresetSessionCount')}</Label>
               <Input type="number" min="1" {...register('schedule_value')} />
             </div>
-          ) : (
+          ) : scheduleType === 'datetime' ? (
             <p className="text-xs text-muted-foreground rounded-lg bg-muted px-3 py-2">
               {t('alertPresetDateInfo')}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground rounded-lg bg-muted px-3 py-2">
+              {t('alertPresetAlwaysInfo')}
             </p>
           )}
 
@@ -982,19 +1008,15 @@ function AlertPresetsTab({ teamId, canEdit }: { teamId: string; canEdit: boolean
           {presets.map((p) => (
             <div key={p.id} className="flex items-start gap-3 p-3 rounded-lg border">
               <div className="mt-0.5 shrink-0 text-muted-foreground">
-                {p.schedule_type === 'sessions_countdown' ? (
-                  <Timer className="h-4 w-4" />
-                ) : (
-                  <CalendarDays className="h-4 w-4" />
-                )}
+                {alertTypeIcon(p.schedule_type)}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium">{p.name}</p>
                   <Badge variant="outline" className="text-xs">
                     {p.schedule_type === 'sessions_countdown'
-                      ? `${p.schedule_value} sessions`
-                      : 'date-based'}
+                      ? t('presetSessionsCount', { count: p.schedule_value ?? 0 })
+                      : t(alertTypeLabelKey(p.schedule_type))}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{p.message}</p>

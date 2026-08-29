@@ -10,7 +10,7 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { ChevronDown, ChevronUp, Info, Pencil, Plus, Star, Trash2 } from 'lucide-react'
-import { dimensionLabel, goalIsOverdue } from '@linyup/shared'
+import { dimensionLabel, goalCategoryLabel, goalIsOverdue } from '@linyup/shared'
 import type { Goal, GoalStatus, PerformanceIndicator } from '@linyup/shared'
 import type { ConfirmOptions } from '@/components/ui/confirm-dialog'
 import { QueryErrorState } from '@/components/ui/query-error'
@@ -33,6 +33,9 @@ const STATUS_KEYS: Record<GoalStatus, string> = {
 interface Props {
   goal: Goal
   steps: Goal[]
+  /** What a goal is ABOUT — labels the category chips and fills the picker. */
+  categories: PerformanceIndicator[]
+  /** Check-in axes — used ONLY to label the `from_dimension` provenance chip. */
   dimensions: PerformanceIndicator[]
   createGoal: SpaceGoalsState['createGoal']
   updateGoal: SpaceGoalsState['updateGoal']
@@ -41,7 +44,7 @@ interface Props {
   confirm: (options: ConfirmOptions) => Promise<boolean>
 }
 
-export function GoalCard({ goal, steps, dimensions, createGoal, updateGoal, deleteGoal, setStepDone, confirm }: Props) {
+export function GoalCard({ goal, steps, categories, dimensions, createGoal, updateGoal, deleteGoal, setStepDone, confirm }: Props) {
   const t = useTranslations('SpaceCoaching')
   const tCommon = useTranslations('Common')
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
@@ -114,9 +117,20 @@ export function GoalCard({ goal, steps, dimensions, createGoal, updateGoal, dele
         )}
         {(goal.categories ?? []).map((cat) => (
           <span key={cat} className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: cardBorder, color: textMuted }}>
-            {dimensionLabel(cat, dimensions)}
+            {goalCategoryLabel(cat, categories)}
           </span>
         ))}
+        {/* Provenance, not a category — the axis this goal was created FROM.
+            Drawn deliberately quieter than the category chips (outline, no
+            fill) so the two never read as one list. */}
+        {goal.from_dimension && (
+          <span
+            className="rounded-full border border-dashed px-2 py-0.5 text-[10px]"
+            style={{ borderColor: cardBorder, color: textMuted }}
+          >
+            {t('goalFromDimension', { dimension: dimensionLabel(goal.from_dimension, dimensions) })}
+          </span>
+        )}
         {goal.target_date && (
           <span className="text-[10px]" style={{ color: textMuted }}>
             {t('targetDateLabel', { date: goal.target_date.toDate().toLocaleDateString() })}
@@ -219,7 +233,7 @@ export function GoalCard({ goal, steps, dimensions, createGoal, updateGoal, dele
         open={editing}
         onOpenChange={setEditing}
         kind="goal"
-        dimensions={dimensions}
+        categories={categories}
         initialGoal={goal}
         onSubmit={async (values) => {
           await updateGoal.mutateAsync({ goalId: goal.id, ...values })
@@ -230,7 +244,7 @@ export function GoalCard({ goal, steps, dimensions, createGoal, updateGoal, dele
         open={addingStep}
         onOpenChange={setAddingStep}
         kind="task"
-        dimensions={dimensions}
+        categories={categories}
         onSubmit={async (values) => {
           await createGoal.mutateAsync({ type: 'task', parentGoalId: goal.id, ...values })
           setAddingStep(false)

@@ -86,6 +86,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       'kiosk',
       'custom-forms',
       'gift-cards',
+      'gamification',
     ]),
     db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
   ])
@@ -222,6 +223,12 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   const bookingActive = true
 
   const giftCardsPluginActive = pluginInstalls.get('gift-cards') !== null
+  // Gamification: the Space's Gamification tab is gated on the plugin install
+  // alone — the DATA it shows (the contact's own score/streak/badges, and
+  // teams/{id}/leaderboard/current) is already readable by a contact session
+  // under firestore.rules without any mirror. See
+  // TeamPublicProfile.gamificationEnabled.
+  const gamificationEnabled = pluginInstalls.get('gamification') !== null
   // CAN THIS STUDIO BE PAID? Both halves of the server-side answer, read from
   // the same two fields `loadEnabledTeam` + `requireChargeableAccount` enforce
   // (connect/access.ts): the operator kill-switch must not be down, and the
@@ -340,16 +347,20 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
         type: f.type,
         ...(f.options?.length ? { options: f.options } : {}),
       })),
-    // The team's coaching dimensions — the ONE list behind both goal categories
-    // and check-in axes. Mirrored because the Space runs on a contact session,
-    // which cannot read `teams/{id}` at all; without this a studio that
-    // customises its axes never reaches the member filling in the form, who
-    // silently gets the defaults instead. Absent when never configured, which
-    // `resolveCoachingDimensions` already reads as "use the defaults".
+    // The two coaching vocabularies — check-in axes and goal categories, which
+    // are separate lists answering separate questions (see the header of
+    // packages/shared/src/types/goal.ts). Both mirrored because the Space runs
+    // on a contact session, which cannot read `teams/{id}` at all; without this
+    // a studio that customises either one never reaches the member filling in
+    // the form, who silently gets the defaults instead. Null when never
+    // configured, which `resolveCoachingDimensions` / `resolveGoalCategories`
+    // already read as "use the defaults".
     performance_indicators: data.performance_indicators ?? null,
+    goal_categories: data.goal_categories ?? null,
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!data.settings?.referral?.enabled,
+    gamificationEnabled,
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',

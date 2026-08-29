@@ -407,6 +407,9 @@ export interface LeadEventDef {
 export interface LeadGoalDef {
   title: string
   description: string
+  /** GOAL CATEGORY keys — what the goal is about (technique / attitude /
+   *  attendance / physical / mental, or the tenant's own list). NEVER
+   *  check-in axis keys: see the header of packages/shared/src/types/goal.ts. */
   categories: string[]
 }
 

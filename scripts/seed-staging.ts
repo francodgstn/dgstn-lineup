@@ -109,6 +109,7 @@ import {
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
 import { seedTeamMoney } from './lib/fixtures/money'
+import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -1497,42 +1498,9 @@ async function seedTeam(opts: TeamSeed) {
         .set(affiliationDoc)
     }
 
-    // subscription history
-    if (sub) {
-      const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
-      if (i % 4 === 0) {
-        const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db
-          .collection('contacts')
-          .doc(id)
-          .collection('subscription_history')
-          .doc(`${id}-sub-prev`)
-          .set({
-            subscription_type_id: sub.id,
-            subscription_type_name: sub.name,
-            recurrence: sub.recurrence,
-            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-            start_date: ts(prevStartedAt),
-            end_date: ts(new Date(startedAt.getTime() - 1)),
-            created_at: ts(prevStartedAt),
-          })
-      }
-      await db
-        .collection('contacts')
-        .doc(id)
-        .collection('subscription_history')
-        .doc(`${id}-sub-current`)
-        .set({
-          subscription_type_id: sub.id,
-          subscription_type_name: sub.name,
-          recurrence: sub.recurrence,
-          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-          start_date: ts(startedAt),
-          end_date: null,
-          created_at: ts(startedAt),
-        })
-    }
-
+    // `subscription_history` is seeded later, by `seedTeamSubscriptionHistory`
+    // (AFTER `seedTeamMoney`, which is what its multi-plan source —
+    // `active_subscriptions` — is read back from). See that call for why.
 
     // weekly reports
     if (c.totalSessions > 0) {
@@ -1569,6 +1537,10 @@ async function seedTeam(opts: TeamSeed) {
   await seedContactAlerts({ teamId, vocabulary: 'martial_arts' })
 
   // ── goals & tasks ──────────────────────────────────────────────────────────────
+  // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
+  // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys.
+  // A goal created FROM a weak axis carries `from_dimension` instead; none is
+  // seeded, because no check-ins are seeded.
   const goalDefs = [
     {
       title: 'Improve guard passing',
@@ -1990,6 +1962,11 @@ async function seedTeam(opts: TeamSeed) {
   await seedTeamGiftCards({ teamId, uid })
 
   await seedTeamMoney({ teamId })
+  // `subscription_history` — the ONLY store of a contact's plan PERIODS — is
+  // seeded AFTER the money ledger, because it reads `active_subscriptions` back
+  // (the concurrent-plans membership seeded above lands there via
+  // `applySubscriptionRollups`). See scripts/lib/fixtures/subscriptionHistory.ts.
+  await seedTeamSubscriptionHistory({ teamId })
 
   // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
   // Each of these was a shipped feature with zero data behind it on every

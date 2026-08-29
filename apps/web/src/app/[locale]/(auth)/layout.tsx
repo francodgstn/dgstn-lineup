@@ -16,6 +16,7 @@ import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { TeamDeletionBanner } from '@/components/layout/TeamDeletionBanner'
 import { UserMenu } from '@/components/layout/UserMenu'
 import { TeamQrButton } from '@/components/layout/TeamQrButton'
+import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import {
   LayoutDashboard,
   Users,
@@ -42,7 +43,6 @@ import {
   DoorOpen,
   UserCog,
   Star,
-  Pin,
   Activity,
   Tag,
   TrendingUp,
@@ -242,7 +242,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       // Schedule KEEPS ITS HOME ROW even though it is also the default head
       // tile. A tile is a shortcut, and a shortcut has always been a duplicate
-      // of a row that exists elsewhere — pinning Contacts shows it in Shortcuts
+      // of a row that exists elsewhere — pinning Contacts shows it in Favourites
       // AND in Run. It briefly lived only as a tile, back when that tile was
       // fixed; now that a studio can swap it out, removing the tile would have
       // deleted the destination from the nav altogether and left it reachable
@@ -269,10 +269,16 @@ const NAV_SECTIONS: NavSection[] = [
       // because "who is paying me" and "who holds a plan" are the same question
       // asked twice and a studio should not have to guess which screen answers
       // it (Franco, 2026-08-23). `/subscriptions` redirects in.
+      //
+      // The ROW SAYS "Payments", not "Payments & Subscriptions" — the destination
+      // did not change, only the label. Naming both halves was explaining the
+      // merge in the nav; the gateways a studio already uses (Payrexx among them)
+      // file subscriptions under payments and nobody looks for them elsewhere. A
+      // shorter row also stops this one wrapping in the sidebar.
       {
         id: 'payments',
         href: '/payments',
-        labelKey: 'paymentsAndSubscriptions',
+        labelKey: 'payments',
         icon: Wallet,
       },
       // Automations is operational (workflows acting on contacts/bookings), so it
@@ -422,8 +428,8 @@ const NAV_HREFS: string[] = [
 
 // Small hover-reveal "always show" control on the right of a shortcut-able nav
 // row (needs a `group` ancestor). Clicking adds/removes the destination from the
-// always-shown half of Shortcuts without navigating. Turning it back OFF is
-// managed from the Shortcuts group only: menu rows and search results pass
+// always-shown half of Favourites without navigating. Turning it back OFF is
+// managed from the Favourites group only: menu rows and search results pass
 // `addOnly`, which hides the button once the destination is already always
 // shown instead of offering a remove toggle there.
 //
@@ -452,14 +458,19 @@ function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
     >
       {/* Filled while ON — an icon that only changes opacity reads as "hovered",
           not as "this is switched on", which is the state that matters here.
-          A PIN, deliberately, and NOT the star used a few hundred lines below for
-          "recommended by Linyup": one glyph cannot carry an endorsement and a
-          personal choice. UX-23 moved away from "pin" when the word meant THREE
-          things — shortcuts, open tabs, and a saved filter "pinned to the filter
-          bar". That third is now "show in filter bar", so what remains is one
-          mental model (keep this within reach) over two different objects on two
-          different surfaces, which is what a pin means everywhere else. */}
-      <Pin className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+          A STAR, since 2026-08-29 (UX-84) — it was a pin (UX-23) until then, but
+          a pin already carries one mental model everywhere else in this nav —
+          "keep this within reach" — worn by the open-tabs strip (see THE
+          NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). Reusing it here for
+          "this is a personal favourite" doubled that meaning onto one glyph,
+          which is also what the star was doing at the other end: a few hundred
+          lines below, the same star meant "recommended by Linyup" on a plugin
+          suggestion row. Both collisions were solved in the same pass by giving
+          each meaning its own glyph — this one keeps the star ("favourite," a
+          personal choice), the plugin suggestion moved to a puzzle piece
+          ("plugin," an endorsement) — so no glyph on this screen carries two
+          meanings any more. */}
+      <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
     </button>
   )
 }
@@ -475,7 +486,7 @@ function NavLink({
   collapsed: boolean
   onClick?: () => void
   // When set (and the sidebar is expanded), a hover "always show" toggle is
-  // shown that adds this destination to the Shortcuts group.
+  // shown that adds this destination to the Favourites group.
   shortcutId?: string
   /** Pre-resolved label, for items whose name the STUDIO chose (see
    *  NavItem.dynamicLabel). Absent ⇒ translated from `labelKey` as usual. */
@@ -704,6 +715,15 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
   const [rowWidth, setRowWidth] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
 
+  // THE BELL IS A SECOND RESTING ICON, beside the QR/first tool — a persistent
+  // notifications indicator, not one more thing behind hover/pin (Franco,
+  // 2026-08-29). It self-gates on role (`useTeamNotifications`), and this flag
+  // mirrors that gate here too so the fit arithmetic below reserves space for
+  // exactly what will render — a coach or viewer, who never sees the bell,
+  // keeps the tray's original two-slot reservation.
+  const { teamRole } = useAuth()
+  const showBell = teamRole === 'owner' || teamRole === 'manager'
+
   // The ROW's width, not the tray's — the tray's own width is what we are
   // deciding, so measuring that would be circular.
   useEffect(() => {
@@ -752,8 +772,10 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
   // Two controls are always there besides the reveal — the resting icon and the
   // trailing one — and the trailing one costs the same whether it is the
   // chevron or the overflow menu, so it is reserved once and not counted again
-  // when there IS an overflow.
-  const room = rowWidth - TRAY_ICON_W * 2
+  // when there IS an overflow. THE BELL IS A THIRD, when it renders: reserved
+  // by `showBell` rather than assumed, so a coach/viewer's row (no bell) still
+  // measures against the original two.
+  const room = rowWidth - TRAY_ICON_W * (showBell ? 3 : 2)
   const slots = Math.max(0, Math.floor(room / TRAY_ICON_W))
   const overflows = revealable.length > slots
   const shown = overflows ? revealable.slice(0, slots) : revealable
@@ -769,6 +791,12 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
       {!orgId ? <TeamQrButton /> : <UtilityIconLink item={tools[0]} onClick={onLinkClick} />}
       {/* A member studio's org tray is How-to alone, so there is nothing to
           reveal and the chevron would open onto empty space. */}
+      {/* THE SECOND RESTING ICON. Notifications are a studio-level fact — "does
+          my team have something waiting" — not a scope-level one, so it sits
+          here in BOTH the studio and the org tray rather than only beside the
+          QR. It renders nothing of its own accord for a coach or viewer; see
+          `showBell` above for why the room math already accounts for that. */}
+      {showBell && <NotificationsBell />}
 
       {/* The reveal. Animated by max-width rather than by mounting, so the icons
           slide out from behind the chevron instead of appearing beside it. */}
@@ -1252,11 +1280,19 @@ function PluginNavItem({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        {/* Marks the row as a suggestion rather than a destination, in the same
-            vocabulary the marketplace uses for `recommended` (an amber star).
-            Swaps to the × on hover — one slot, two states. */}
+        {/* Marks the row as a suggestion rather than a destination — a small
+            puzzle-piece badge (`Puzzle`), the app's one established "plugin"
+            glyph: `PLUGIN_ICON_MAP`'s fallback (`plugins/icons.tsx`), and both
+            the sidebar's own Explore-plugins row (EXPLORE_PLUGINS_ITEM, this
+            file) and the settings-rail's Plugins row (`lib/settings-nav.ts`)
+            already use it as their icon. NOT a star, since 2026-08-29 (UX-84):
+            the marketplace still uses an amber star for `recommended`, but the
+            star in THIS nav now belongs to the "always show in Favourites"
+            toggle a few hundred lines above — one glyph cannot carry an
+            endorsement and a personal choice, and this is the row where they
+            used to collide. Swaps to the × on hover — one slot, two states. */}
         {!collapsed && (
-          <Star className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 fill-amber-500/30 text-amber-500/50 transition-opacity group-hover/suggestion:opacity-0" />
+          <Puzzle className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-amber-500/60 transition-opacity group-hover/suggestion:opacity-0" />
         )}
         {!collapsed && onDismiss && (
           <button
@@ -1369,7 +1405,7 @@ function PluginNavLinks({
   )
 }
 
-// A destination resolved against what's currently visible — used by Shortcuts and
+// A destination resolved against what's currently visible — used by Favourites and
 // search (label pre-translated because entries come from more than one i18n
 // namespace: main nav + settings are in `Nav`, plugin items in `Plugins`).
 type ResolvedNavEntry = {
@@ -1394,7 +1430,7 @@ type ResolvedNavEntry = {
  *
  * A destination may be both the head tile and a shortcut. That duplicate is
  * asked for twice and is not deduplicated: silently hiding a row because it
- * happens to match the tile would make the Shortcuts group lie about its
+ * happens to match the tile would make the Favourites group lie about its
  * contents.
  *
  * ── WHY DASHBOARD IS NOT ADJUSTABLE ─────────────────────────────────────────
@@ -1622,7 +1658,7 @@ function ShortcutRow({
   return (
     <div className={`group relative ${dragging ? 'opacity-40' : ''}`} {...dragProps}>
       {link}
-      {/* Remove from Shortcuts entirely — the star only promotes/demotes
+      {/* Remove from Favourites entirely — the star only promotes/demotes
           (turning "always show" off keeps the row listed as a recent). */}
       <button
         type="button"
@@ -1642,7 +1678,7 @@ function ShortcutRow({
   )
 }
 
-// A light macro-group heading (General / Shortcuts / Features) — Firebase-style:
+// A light macro-group heading (General / Favourites / Features) — Firebase-style:
 // small, sentence-case, low-contrast — deliberately quieter than the uppercase
 // section subheaders so it reads as a background label, not a heading. Hidden in
 // the icon-only sidebar, where a hairline divider separates the macro groups.
@@ -1650,7 +1686,7 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
-// Marks the whole Shortcuts area as a region: a thin, flat, brand-violet rule
+// Marks the whole Favourites area as a region: a thin, flat, brand-violet rule
 // down its left edge, spanning the group heading, both runs and the empty-state
 // hint.
 //
@@ -1690,7 +1726,7 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 const SHORTCUTS_RULE =
   'pointer-events-none absolute inset-y-0 -left-1 z-10 w-px rounded-full bg-primary'
 
-// How many recently-visited items the Shortcuts group keeps, in addition to the
+// How many recently-visited items the Favourites group keeps, in addition to the
 // pinned ones.
 const MAX_RECENT_SHORTCUTS = 5
 // Rows the group aims to show before "Show more". Pinned rows are never
@@ -1703,20 +1739,20 @@ const SHORTCUTS_VISIBLE_MIN = 5
 // more, a run that renders nothing is a run that is simply gone.
 const RECENT_VISIBLE_MIN = 2
 
-// The "Shortcuts" macro group — Firebase-style: the destinations a studio keeps
+// The "Favourites" macro group — Firebase-style: the destinations a studio keeps
 // within reach, held as TWO RUNS of ONE mechanism (item 1 of THE NAV-MEMORY
 // CENSUS in contexts/NavPinsContext.tsx):
 //   · pinned — hand-curated, drag-orderable, never truncated, never ages out.
 //   · recent — the rolling visit history, truncated behind "Show more".
-// The pin on a row PROMOTES a recent into the pinned run (and, turned off,
+// The star on a row PROMOTES a recent into the pinned run (and, turned off,
 // demotes it back); the X removes the row from the group entirely.
 //
 // NOTHING HARD SEPARATES THE TWO RUNS — no headings, no divider. Three signals
 // carry it instead, and every one of them was already there:
 //   1. ORDER. Pinned first, always. `entries` arrives pre-merged that way.
-//   2. THE PIN ITSELF. A pinned row's pin is filled and visible at rest; a recent
-//      row's only appears on hover. Two adjacent rows are tellable apart without
-//      reading anything.
+//   2. THE STAR ITSELF. A pinned row's star is filled and visible at rest; a
+//      recent row's only appears on hover. Two adjacent rows are tellable apart
+//      without reading anything.
 //   3. THE MOVE. Pinning re-renders the row at the end of the pinned run, so a
 //      promotion is seen happening. With no line to cross, that motion is now the
 //      whole story — which is why `pinned`/`recents` must stay derived from
@@ -1777,7 +1813,7 @@ function ShortcutsNav({
   //    it cannot be stored and would be undone by the next navigation — a drag
   //    that silently does nothing, which is worse than one that isn't offered.
   //  · Dragging ACROSS the boundary to promote is not offered either. Promotion
-  //    has one affordance — the pin: hoverable, labelled, keyboard-reachable and
+  //    has one affordance — the star: hoverable, labelled, keyboard-reachable and
   //    reversible. A second, invisible path that promotes on an accidental drop
   //    adds no discoverability and one more way to be surprised.
   const commitDrop = () => {
@@ -2470,7 +2506,7 @@ function NavSearch({
             </kbd>
           </div>
           {/* WHO WAS I JUST LOOKING AT — the panel's answer before a question is
-              asked. Contacts only: nav destinations are already the Shortcuts
+              asked. Contacts only: nav destinations are already the Favourites
               group in the sidebar, and this is the one thing neither that nor
               the tab strip can tell you (see the census in NavPinsContext).
               Rendered under the prompt, so the field → "type to search" reading
@@ -2679,12 +2715,12 @@ function SidebarContent({
     })
   }
   // The head tile is NOT taken from this list — it is census item 5, stored on
-  // its own (see NavPinsContext). Shortcuts are rendered whole; a destination
+  // its own (see NavPinsContext). Favourites are rendered whole; a destination
   // that is both a tile and a shortcut is a duplicate the studio asked for
   // twice.
   const headTileEntry = headTileId ? catalogue.get(headTileId) : undefined
 
-  // Shortcuts = always shown (permanent, stored order) + recently visited
+  // Favourites = always shown (permanent, stored order) + recently visited
   // (rolling history, newest first, minus anything already always shown).
   const alwaysShownEntries = alwaysShownIds
     .map((id) => catalogue.get(id))
@@ -2777,7 +2813,7 @@ function SidebarContent({
     })),
   ]
 
-  // Record the current page into the recents half of Shortcuts. Longest matching
+  // Record the current page into the recents half of Favourites. Longest matching
   // base path wins (so /contacts/123 records "contacts"); hrefs carrying a query
   // are deprioritised so /settings/team?tab=… variants don't shadow the base page.
   useEffect(() => {
@@ -2873,6 +2909,10 @@ function SidebarContent({
             Collapsed there is no tray: a w-14 rail has no room to expand into,
             and the search row's menu is where these tools live at that width. */}
         {!collapsed && <UtilityTray onLinkClick={onLinkClick} />}
+        {/* COLLAPSED, THE TRAY DOES NOT MOUNT — so this is the bell's only way
+            onto a w-14 rail, same as `ScopeSwitcher` above it. No props: the
+            icon-only shape is already this row's 32px form (Franco, 2026-08-29). */}
+        {collapsed && <NotificationsBell />}
       </div>
       )}
 
@@ -2937,7 +2977,7 @@ function SidebarContent({
 
           It is safe to pin only because everything here is fixed-height by
           construction: one search row plus one tile row (or two icon rows
-          collapsed). Shortcuts stayed in the scroll area precisely because they
+          collapsed). Favourites stayed in the scroll area precisely because they
           are NOT — a studio with a dozen pinned pages would push the working
           areas off-screen and have nothing give way.
 
@@ -2946,7 +2986,7 @@ function SidebarContent({
           keeps the ordinary icon-only rows it already knows how to draw.
 
           THE TOUR ANCHOR STAYS ON THE TILES. It used to wrap the tiles AND the
-          Shortcuts group, framing them as one "where do the things I use most
+          Favourites group, framing them as one "where do the things I use most
           live?" region. They are no longer in the same box — one is pinned, the
           other scrolls — and a highlight cannot span a scroll boundary, so the
           anchor keeps the half that is a fixed, always-visible target. */}
@@ -2958,7 +2998,7 @@ function SidebarContent({
           destinations above the org's own navigation, which is the hierarchy
           inversion the pinning exists to prevent, pointed the other way.
 
-          The same reasoning already removed Shortcuts and the plugin rows in org
+          The same reasoning already removed Favourites and the plugin rows in org
           scope (they are pinned PER STUDIO). This was missed because it sits
           above the scroll area rather than inside it (Franco, 2026-08-27). */}
       {!orgScopeId && (
@@ -3028,13 +3068,13 @@ function SidebarContent({
         {/* ORG SCOPE REPLACES THE STUDIO'S ROWS ENTIRELY — it does not sit
             beside them. That is the whole point of a scope: one Events, one
             Places, one Settings on screen at a time, so the word never needs a
-            second look. Shortcuts and the plugin rows are studio-scoped too
+            second look. Favourites and the plugin rows are studio-scoped too
             (the pin store is keyed per studio), so they go with it. */}
         {orgScopeId ? (
           <OrgNavRows orgId={orgScopeId} collapsed={collapsed} onLinkClick={onLinkClick} />
         ) : (
         <>
-        {/* Shortcuts — pinned + recently visited (hidden when empty). THE FIRST
+        {/* Favourites — pinned + recently visited (hidden when empty). THE FIRST
             SCROLLING THING: unlike the head pair above the search, this list
             grows with use, so it is what gives way when the pane runs short. */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />

@@ -1,11 +1,17 @@
 'use client'
 
-// The team's coaching vocabulary — ONE list that drives both goal categories
-// and performance check-in axes (see the header of
-// `packages/shared/src/types/goal.ts`, "ONE VOCABULARY"). `teams/{id}.
-// performance_indicators` was read everywhere (contacts' Coaching tab, the
-// mobile Space) but written by nothing in the repo — every studio silently got
-// the hardcoded default five. This page is that writer.
+// The team's performance CHECK-IN AXES — how someone is doing, the radar's
+// dimensions. `teams/{id}.performance_indicators` was read everywhere
+// (contacts' Coaching tab, the mobile Space) but written by nothing in the
+// repo — every studio silently got the hardcoded default five. This page is
+// that writer.
+//
+// NOT goal categories. Those are a separate list (`teams/{id}.goal_categories`,
+// `resolveGoalCategories`) answering a separate question — see the header of
+// `packages/shared/src/types/goal.ts` for why the two were split apart again.
+// There is deliberately no editor for them yet: every studio is on the defaults
+// (technique / attitude / attendance / physical / mental), and a second editor
+// is only worth building once a studio asks to change them.
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'

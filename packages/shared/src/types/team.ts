@@ -656,11 +656,14 @@ export interface Team {
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
   /**
-   * The team's coaching dimensions — the ONE list naming both goal categories
-   * and performance-check-in axes. Read through `resolveCoachingDimensions`,
-   * which falls back to `DEFAULT_COACHING_DIMENSIONS` when absent, and mirrored
-   * onto `TeamPublicProfile` so the member surfaces (which cannot read this
+   * The team's performance-check-in axes — HOW SOMEONE IS DOING, the radar's
+   * dimensions. Read through `resolveCoachingDimensions`, which falls back to
+   * `DEFAULT_COACHING_DIMENSIONS` when absent, and mirrored onto
+   * `TeamPublicProfile` so the member surfaces (which cannot read this
    * document) see the same vocabulary.
+   *
+   * NOT goal categories — that is `goal_categories` below, and the two lists
+   * answer different questions (see the header of types/goal.ts).
    *
    * Replacing the canonical five disables the NAMED performance profiles:
    * `detectPerformanceProfile` returns a null `profile_key` unless all five are
@@ -668,6 +671,17 @@ export interface Team {
    * Weakest/strongest axis keeps working for any vocabulary.
    */
   performance_indicators?: PerformanceIndicator[]
+  /**
+   * The team's goal categories — WHAT A GOAL IS ABOUT. Read through
+   * `resolveGoalCategories`, which falls back to `DEFAULT_GOAL_CATEGORIES`
+   * (technique / attitude / attendance / physical / mental) when absent, and
+   * mirrored onto `TeamPublicProfile` for the member surfaces.
+   *
+   * Same shape as `performance_indicators`, a different list on purpose: a
+   * category is a label on a piece of work, with no scale and no heuristic
+   * reading it, so a team may replace the whole list freely.
+   */
+  goal_categories?: PerformanceIndicator[]
 
   // Outreach / email template custom variables
   outreach_placeholders?: Record<string, string>
@@ -898,8 +912,8 @@ export interface TeamPublicProfile {
    *  those flagged `publicOnBookingForm`. See CustomFieldDefinition. */
   publicCustomFields?: PublicCustomFieldDefinition[]
   /**
-   * The team's coaching dimensions — the ONE list that names both goal
-   * categories and performance-check-in axes (see `resolveCoachingDimensions`).
+   * The team's performance-check-in axes — the radar's dimensions, NOT goal
+   * categories (see `resolveCoachingDimensions`, and `goal_categories` below).
    *
    * Mirrored because the member surfaces need it and cannot reach the source:
    * `teams/{id}` is members-only, and the Space runs on a contact session. Read
@@ -910,6 +924,12 @@ export interface TeamPublicProfile {
    * Nothing private: a label the member is about to be asked to rate.
    */
   performance_indicators?: PerformanceIndicator[]
+  /**
+   * The team's goal categories (see `resolveGoalCategories`), mirrored for the
+   * same reason and equally public: a label the member is about to be offered
+   * when filing a goal of their own in the Space.
+   */
+  goal_categories?: PerformanceIndicator[]
   // Team-wide cancellation policy shown on public booking pages and appended to
   // confirmation emails when the activity has no `cancellationPolicy` of its
   // own. Denormalized by syncTeamPublicProfile from
@@ -1054,6 +1074,17 @@ export interface TeamPublicProfile {
   //
   // Absent/empty ⇒ this studio accepts none, and the question is not asked.
   partner_apps?: string[]
+  // Whether the `gamification` plugin is installed (team's own, or its org's) —
+  // denormalized by syncTeamPublicProfile through the same org-aware
+  // `resolveActivePluginInstalls` probe as `kiosk`/`gift-cards`, because the
+  // Space's Gamification tab (score/streak/leaderboard/badges) runs on a
+  // contact session and cannot read `teams/{id}/installed_plugins`. This is
+  // ONLY the install gate for showing the tab; the data it displays (the
+  // contact's own score/streak/badges, and `teams/{id}/leaderboard/current`)
+  // is read separately and is already permitted for a contact session by
+  // firestore.rules (`isSelfContact`, and the `leaderboard` subcollection's own
+  // `sessionExpires` arm) — no rules change needed for either.
+  gamificationEnabled?: boolean
   // The team's PUBLIC + active subscription types, mirrored by
   // syncSubscriptionTypesToPublicProfile for the website pricing table, the
   // public shop and the booking form's access lines. The field name predates

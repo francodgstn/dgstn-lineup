@@ -42,13 +42,17 @@
 //  • booking reminders — pre-existing toggle settings.bookingRemindersEnabled
 //    (kept for back-compat; surfaced in the same UI panel)
 //  • form submitter receipts — already opt-in per form (form.notifications)
-//  • studio-facing notifications (new appointment/response/message) — not member mail
+//  • studio-facing notifications for a NEW APPOINTMENT or MESSAGE — still an
+//    uncovered gap (not member mail). The "response" case (a new form
+//    submission) is filled below by `form_submission_notification`, the first
+//    key in this map for a mail that notifies the STUDIO rather than a member.
 import * as admin from 'firebase-admin'
 
 export type SystemEmailKey =
   | 'booking_confirmation' // class + appointment confirmations
   | 'session_cancellation' // session cancelled/changed notices to booked members
   | 'contact_update_review' // outcome email for a contact's data-update request
+  | 'form_submission_notification' // staff email for a new form submission (in-app notification is always written)
 
 /** Sync check when the caller already holds the team doc data. Absent ⇒ enabled. */
 export function systemEmailEnabled(

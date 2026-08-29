@@ -40,7 +40,7 @@ import { toast } from 'sonner'
 // Plugin icons resolve through @/plugins/icons; only this page's own chrome
 // icons are imported here.
 import {
-  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, Star,
+  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, BadgeCheck,
   ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -127,8 +127,15 @@ function PluginBadgeIcons({
   //
   // `tooltip` defaults to `label`. It exists for the one signal whose label is a
   // word rather than a fact: a tooltip reading "Recommended" over an icon that
-  // already means "recommended" explains nothing (UX-65), so the star says who is
+  // already means "recommended" explains nothing (UX-65), so it says who is
   // recommending and on what basis. The aria-label stays the short form.
+  //
+  // NOT A STAR: the star now means "favourite" in the nav, and the settings rail
+  // — which carries that very toggle — renders down the left of THIS page, so a
+  // star here would put both meanings on one screen. Not `Puzzle` either (every
+  // card is a plugin) and not `Sparkles`/`Award` (already the AI and gamification
+  // plugin glyphs in this same grid). `BadgeCheck` reads as endorsed and is
+  // unclaimed here.
   const items: {
     key: string
     icon: LucideIcon
@@ -140,7 +147,7 @@ function PluginBadgeIcons({
   if (manifest.recommended) {
     items.push({
       key: 'recommended',
-      icon: Star,
+      icon: BadgeCheck,
       label: t('recommended'),
       tooltip: t('recommendedWhy'),
       hoverClassName: 'hover:text-amber-500',
@@ -231,7 +238,7 @@ function PluginBadges({
 
       {/* Recommended — the word is meaningless without its basis, so the badge
           carries the explanation on hover here too (UX-65). Same string as the
-          grid's star icon; there is one definition of "recommended", not two. */}
+          grid's signal icon; there is one definition of "recommended", not two. */}
       {manifest.recommended && (
         <TooltipProvider delay={200}>
           <UITooltip>

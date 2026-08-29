@@ -32,9 +32,10 @@ import {
  *    progress bar at 1/5 before anybody had done anything.
  *
  *    That is why the mirror is read for its FIELDS and never for its existence
- *    (see `publicPageHasContent`), and why "pin a shortcut" is an
- *    acknowledgement rather than a derived check: `NavPinsContext` seeds a
- *    default shortcut list, so a derived check there could never be false.
+ *    (see `publicPageHasContent`), and why "star a favourite" (label text since
+ *    2026-08-29, UX-84 — it was "pin a shortcut") is an acknowledgement rather
+ *    than a derived check: `NavPinsContext` seeds a default shortcut list, so a
+ *    derived check there could never be false.
  *
  * 2. **A STEP'S CHECK MUST MEAN WHAT ITS LABEL SAYS.** "Schedule a session"
  *    ticked on the existence of any session — and `allowBooking` used to default

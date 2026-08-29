@@ -39,7 +39,7 @@
     "sectionRun": "Run",
     "sectionGrow": "Grow",
     "sectionOffer": "Offer",
-    "navGroupShortcuts": "Shortcuts",
+    "navGroupShortcuts": "Favourites",
     "navGroupFeatures": "Features",
     "explorePlugins": "Explore plugins",
     "navSearchPlaceholder": "Search…",
@@ -49,7 +49,7 @@
     "navSearchHintTab": "new tab",
     "navShowMore": "Show more",
     "navShowLess": "Show less",
-    "navRemoveShortcut": "Remove from shortcuts",
+    "navRemoveShortcut": "Remove from favourites",
     "navShortcutsEmpty": "Pages you open show up here.",
     "tabNew": "New tab",
     "tabClose": "Close tab",
@@ -152,7 +152,7 @@
     "pricing": "Pricing",
     "promoCodes": "Promo codes",
     "navShortcutsClear": "Clear all",
-    "navShortcutsClearTitle": "Clear all shortcuts?",
+    "navShortcutsClearTitle": "Clear all favourites?",
     "navShortcutsClearCancel": "Cancel",
     "navSearchGroupSettings": "Settings",
     "navSearchGroupContacts": "Contacts",
@@ -161,10 +161,10 @@
     "navSearchSearching": "Searching…",
     "navSearchNoMatches": "Nothing found",
     "navSearchPromptAll": "Search pages, settings, contacts, subscriptions and activities",
-    "shortcutAlwaysShow": "Always show in shortcuts",
+    "shortcutAlwaysShow": "Always show in favourites",
     "shortcutStopAlwaysShowing": "Stop always showing",
-    "navSearchInShortcuts": "Shortcut",
-    "navSearchHintShortcut": "add shortcut",
+    "navSearchInShortcuts": "Favourite",
+    "navSearchHintShortcut": "add favourite",
     "navSearchKeepTyping": "Keep typing to search contacts, plans and activities",
     "navShortcutsClearExplain": "This removes the pages you always show and the ones you recently visited. It can't be undone, and always-shown pages keep their order until you clear them.",
     "navSearchArchivedBadge": "Archived",
@@ -527,8 +527,8 @@
     "noNotes": "No notes yet.",
     "notesAddNote": "Add note",
     "notesViewAll": "View all {count} notes",
-    "notesPanelDesc": "View and manage notes for this contact.",
-    "alertsPanelDesc": "View and manage alerts and reminders for this contact.",
+    "notesPanelDesc": "Internal, rich-text notes for your team — visible only here, on the contact's page.",
+    "alertsPanelDesc": "Scheduled reminders about this contact — visible here, and optionally shown in the member app.",
     "tabProfile": "Profile",
     "tabNotes": "Notes",
     "tabStats": "Stats",
@@ -977,9 +977,9 @@
     "goalFormParentGoalNone": "General (no parent)",
     "goalLastEvaluatedOn": "Last rated {date}",
     "goalMemberAddedBadge": "By member",
-    "goalNoSteps": "No steps yet",
+    "goalNoSteps": "No tasks yet",
     "goalOverdueBadge": "Overdue",
-    "goalStepsCompleted": "{done}/{total} steps done",
+    "goalStepsCompleted": "{done}/{total} tasks done",
     "goalsGeneralHeading": "General",
     "activityFilterCoaching": "Coaching",
     "coachingCreateTaskCta": "Create a task for {dimension}",
@@ -988,7 +988,45 @@
     "coachingCreateTaskFailed": "Couldn't create the task. Try again.",
     "filterNotesLabel": "Has notes",
     "tabEmails": "Emails",
-    "alertsViewAll": "View all {count} alerts"
+    "alertsViewAll": "View all {count} alerts",
+    "tabPlansPayments": "Plans & Payments",
+    "segOverview": "Overview",
+    "segPlans": "Plans",
+    "segPayments": "Payments",
+    "ledgerPeriod_3m": "3M",
+    "ledgerPeriod_6m": "6M",
+    "ledgerPeriod_12m": "12M",
+    "ledgerPeriod_all": "All",
+    "ledgerHeldAtStart": "Held when this period began:",
+    "ledgerHeldAtStartNone": "No plan held when this period began.",
+    "ledgerPaidInPeriod": "{count, plural, one {# payment} other {# payments}}",
+    "ledgerNothingInPeriod": "Nothing recorded in this period.",
+    "ledgerShowAllTime": "Show all time",
+    "ledgerNoPlanLinked": "No plan linked",
+    "ledgerNoPlanLinkedHelp": "This payment does not record which plan it was for. You can set it in the Payments section.",
+    "ledgerPlanTypeOnlyHelp": "Names the plan this payment was for — not a specific subscription period.",
+    "ledgerGatewayDefaultHelp": "This link may come from the payment provider's default plan rather than from the transaction itself.",
+    "ledgerPlanStarted": "Started {plan}",
+    "ledgerPlanEnded": "Ended {plan}",
+    "ledgerCreditsGranted": "{count, plural, one {# lesson credit granted} other {# lesson credits granted}}",
+    "ledgerCreditsExpired": "Lesson credits expired",
+    "ledgerPrimaryPlanOnlyNote": "Some payments name a plan with no recorded period. Plan history follows the contact's main plan, so a contact who held two at once may have gaps.",
+    "unknownPlanName": "Unnamed plan",
+    "bookingsSearchPlaceholder": "Search by class…",
+    "bookingsTruncated": "Showing the {count} most recent bookings.",
+    "noBookingsFilter": "No bookings match this filter.",
+    "goalFromDimension": "From {dimension}",
+    "alertTypeAlways": "Active now",
+    "alertDismissTitle": "Dismiss alert",
+    "alertDismissBody": "Also delete “{message}” from {name}'s profile?",
+    "alertDismissOnly": "Dismiss only",
+    "alertDismissAndDelete": "Dismiss & delete",
+    "alertDismissed": "Dismissed",
+    "alertDeleteBody": "“{message}” will be permanently deleted from this contact's record.",
+    "bulkSetCustomField": "Set custom field…",
+    "bulkSetCustomFieldTitle": "Set custom field",
+    "bulkCustomFieldPicker": "Field",
+    "bulkClearCustomField": "Clear value"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -1998,7 +2036,10 @@
     "rankHoldersSystemWarning": "Their rank will no longer match any configured level.",
     "sectionTeam": "Team",
     "sectionRegionFormat": "Region & format",
-    "sectionOther": "Other"
+    "sectionOther": "Other",
+    "alertTypeAlways": "Active now",
+    "alertPresetAlwaysInfo": "Applies immediately — nothing else to set.",
+    "presetSessionsCount": "{count, plural, one {# session} other {# sessions}}"
   },
   "Bookings": {
     "title": "Bookings",
@@ -2873,7 +2914,9 @@
     "convertToManualBody": "Copies the current {count} members in and drops the rule. Membership stops updating.",
     "convertedToast": "“{name}” is now a manual group",
     "editInContacts": "Edit in contacts",
-    "dynamicDropsGroupsWarning": "A rule can’t depend on another group, so that filter is dropped — this group will match {count} contacts, not the list behind this dialog. Use Snapshot to keep the current members."
+    "dynamicDropsGroupsWarning": "A rule can’t depend on another group, so that filter is dropped — this group will match {count} contacts, not the list behind this dialog. Use Snapshot to keep the current members.",
+    "dynamicHint": "This makes a manual group. In a dynamic group the filter IS the membership, so it starts life as a contact filter — build one on Contacts and save it as a group.",
+    "dynamicHintCta": "Build a filter in Contacts"
   },
   "Org": {
     "tabPlaces": "Places",
@@ -3711,7 +3754,7 @@
           "ack": "I've had a look"
         },
         "shortcuts": {
-          "label": "Pin a shortcut",
+          "label": "Star a favourite",
           "desc": "Keep the pages you use every day at the top of the sidebar.",
           "ack": "I've had a look"
         }
@@ -3885,7 +3928,9 @@
     "gatedPurchaseAlreadyBought": "Already bought it? Sign in",
     "studioTermsLink": "Terms & policies",
     "navCoaching": "Coaching",
-    "coachingSignInPrompt": "Sign in to see your goals and check-ins."
+    "coachingSignInPrompt": "Sign in to see your goals and check-ins.",
+    "navGamification": "Gamification",
+    "gamificationSignInPrompt": "Sign in to see your score, streak and badges."
   },
   "FreePlan": {
     "downgradeBannerTitle": "Your trial has ended — you're now on the Free plan",
@@ -4392,7 +4437,12 @@
     "successBodyCourseSignedIn": "Thank you! You now have lifetime access. Open your Space to start watching."
   },
   "Notifications": {
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "bellTitle": "Notifications",
+    "panelTitle": "Notifications",
+    "unreadCount": "{count, plural, =0 {No unread notifications} one {# unread notification} other {# unread notifications}}",
+    "emptyTitle": "You're all caught up",
+    "emptyBody": "New notifications will show up here."
   },
   "Affiliations": {
     "tabLabel": "Affiliations",
@@ -7382,7 +7432,7 @@
     "goalsLoadFailed": "We couldn't load your goals. Nothing has changed.",
     "generalStepsTitle": "General",
     "addTask": "Add task",
-    "addStep": "Add step",
+    "addStep": "Add task",
     "goalCoachCreatedBadge": "Set by your coach",
     "goalCoachCreatedNote": "This goal was set by your coach — it can't be edited or deleted here.",
     "stepCoachCreatedNote": "This one needs to be updated by your coach.",
@@ -7390,11 +7440,11 @@
     "deleteGoal": "Delete",
     "deleteGoalConfirmTitle": "Delete this goal?",
     "deleteGoalConfirmBody": "This removes “{title}” and its evaluation history. This can't be undone.",
-    "deleteStepConfirmTitle": "Delete this step?",
+    "deleteStepConfirmTitle": "Delete this task?",
     "deleteStepConfirmBody": "This removes “{title}”. This can't be undone.",
     "goalSaveFailed": "We couldn't save this goal. Please try again.",
     "goalDeleteFailed": "We couldn't delete this goal. Please try again.",
-    "stepToggleFailed": "We couldn't update this step. Please try again.",
+    "stepToggleFailed": "We couldn't update this task. Please try again.",
     "overdueBadge": "Overdue",
     "targetDateLabel": "Target: {date}",
     "latestScoreLabel": "Latest: {score}/5",
@@ -7410,7 +7460,7 @@
     "evaluatedBySelf": "You",
     "evaluatedByCoach": "Coach",
     "goalFormTitleCreate": "Add goal",
-    "goalFormTitleCreateStep": "Add step",
+    "goalFormTitleCreateStep": "Add task",
     "goalFormTitleEdit": "Edit goal",
     "fieldTitle": "Title",
     "fieldDescription": "Description (optional)",
@@ -7453,14 +7503,72 @@
     "profileBalancedTitle": "Balanced",
     "profileBalancedDesc": "Every area is strong. Keep it up.",
     "ratingAriaLabel": "Rate {n} out of 5",
-    "createStepCta": "Create a step for {dimension}",
+    "createStepCta": "Create a task for {dimension}",
     "createStepDefaultTitle": "Work on {dimension}",
-    "createStepSubmit": "Create step",
-    "parentGoalNone": "General"
+    "createStepSubmit": "Create task",
+    "parentGoalNone": "General",
+    "goalFromDimension": "From {dimension}"
   },
   "OrgUpsell": {
     "title": "Running more than one studio?",
     "continueAnyway": "Create a separate studio anyway",
     "continueHint": "It will be its own account — separate team, contacts and billing, with no shared reporting."
+  },
+  "SpaceGamification": {
+    "pageTitle": "Gamification",
+    "notEnabledTitle": "Gamification isn't turned on",
+    "notEnabledBody": "This studio hasn't enabled gamification yet.",
+    "scoreTitle": "Score",
+    "scoreUnit": "pts",
+    "scoreSubtitle": "This month",
+    "streakTitle": "Streak",
+    "streakUnit": "weeks",
+    "streakBest": "Best: {count} weeks",
+    "streakZeroHint": "Attend a session this week to start a streak",
+    "leaderboardTitle": "Leaderboard",
+    "leaderboardLoadFailed": "Couldn't load the leaderboard",
+    "leaderboardEmpty": "No scores yet this month — attend a session to get on the board",
+    "leaderboardTrialLabel": "Trial",
+    "leaderboardYou": "You",
+    "badgesTitle": "Badges",
+    "badgesEarnedCount": "{earned}/{total} earned",
+    "badges": {
+      "first_class": {
+        "label": "First Class",
+        "description": "Attend your first session"
+      },
+      "dedicated": {
+        "label": "Dedicated",
+        "description": "Attend 10 sessions"
+      },
+      "committed": {
+        "label": "Committed",
+        "description": "Attend 50 sessions"
+      },
+      "on_fire": {
+        "label": "On Fire",
+        "description": "Reach a 4-week streak"
+      },
+      "unstoppable": {
+        "label": "Unstoppable",
+        "description": "Reach an 8-week streak"
+      },
+      "legendary": {
+        "label": "Legendary",
+        "description": "Reach a 12-week streak"
+      },
+      "rising_star": {
+        "label": "Rising Star",
+        "description": "Score 30+ points in a month"
+      },
+      "monthly_star": {
+        "label": "Monthly Star",
+        "description": "Score 60+ points in a month"
+      },
+      "superstar": {
+        "label": "Superstar",
+        "description": "Score 90+ points in a month"
+      }
+    }
   }
 }

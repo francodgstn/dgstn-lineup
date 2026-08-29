@@ -3,10 +3,11 @@
 import { useTranslations } from 'next-intl'
 import { Link, usePathname } from '@/i18n/navigation'
 import type { Route } from 'next'
-import { Home, CalendarClock, Target, User, Receipt } from 'lucide-react'
+import { Home, CalendarClock, Target, User, Receipt, Trophy } from 'lucide-react'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpacePayments } from './useSpacePayments'
+import { usePublicTeam } from '../PublicTeamProvider'
 
 // Portal module tabs — the whole portal is a signed-in, personal area (home is the
 // member dashboard, not a public course library), so the tabs only render once
@@ -18,6 +19,7 @@ export default function SpacePortalNav() {
   const { accent, textMuted, cardBg, cardBorder } = useSpaceTheme()
   const pathname = usePathname()
   const { data: paymentsData, isError: paymentsFailed } = useSpacePayments()
+  const { team } = usePublicTeam()
 
   // While a stored session is still being checked, keep the tab bar's SPACE
   // rather than deleting it: the nav vanishing and reappearing on every load of
@@ -50,6 +52,11 @@ export default function SpacePortalNav() {
     // Base capability on every plan (`goals` is in PLAN_FEATURES for free
     // through organization), same as Bookings/Account — no conditional gate.
     { href: `${base}/coaching`, label: t('navCoaching'), icon: Target },
+    // Gated on the mirrored plugin flag (Space cannot read `installed_plugins`
+    // directly — see TeamPublicProfile.gamificationEnabled).
+    ...(team?.gamificationEnabled
+      ? [{ href: `${base}/gamification`, label: t('navGamification'), icon: Trophy }]
+      : []),
     ...(hasPayments ? [{ href: `${base}/payments`, label: t('navPayments'), icon: Receipt }] : []),
     { href: `${base}/account`, label: t('navAccount'), icon: User },
   ]

@@ -1,5 +1,5 @@
 // Shared catalogue of "settings" destinations. Consumed by the sidebar (which shows
-// the subset the user always shows, under Shortcuts) and by the settings rail
+// the subset the user always shows, under Favourites) and by the settings rail
 // (/settings/* — which lists them all, grouped, with an "always show" toggle on
 // each). Keeping it in one place means the sidebar and rail never drift.
 // Vocabulary: see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx.

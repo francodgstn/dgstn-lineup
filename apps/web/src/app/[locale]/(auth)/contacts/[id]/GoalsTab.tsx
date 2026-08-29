@@ -8,7 +8,7 @@ import {
   doc, serverTimestamp, Timestamp, writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
+import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveGoalCategories, goalCategoryLabel, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
 import type { Contact, Team, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,10 +34,17 @@ import {
 } from './AttendanceTrendCard'
 
 // ─── constants ────────────────────────────────────────────────────────────────
-// Categories used to be a fixed technique/attitude/attendance/physical/mental
-// list, separate from the check-in axes. They are the SAME team-configurable
-// list now (`resolveCoachingDimensions`, `@linyup/shared`) — see the header of
-// `packages/shared/src/types/goal.ts` ("ONE VOCABULARY").
+// TWO VOCABULARIES, and this file uses both for different jobs:
+//
+//   • GOAL CATEGORIES (`resolveGoalCategories` / `goalCategoryLabel`) — what a
+//     goal is ABOUT. Drives the picker and the chips on a goal card.
+//   • CHECK-IN AXES (`resolveCoachingDimensions` / `dimensionLabel`) — what the
+//     radar measures. Used here for ONE thing: rendering `goal.from_dimension`,
+//     the axis a goal was created from.
+//
+// They were briefly merged into one list; a goal's subject and a radar axis are
+// not the same question, and collapsing them made the picker wrong. See the
+// header of `packages/shared/src/types/goal.ts` for the full reasoning.
 
 const ALL_STATUSES: GoalStatus[] = ['open', 'in_progress', 'achieved', 'abandoned']
 
@@ -374,13 +381,15 @@ interface GoalCardProps {
   goal: Goal
   contactId: string
   categories: PerformanceIndicator[]
+  /** Check-in axes — used ONLY to label `goal.from_dimension`. */
+  dimensions: PerformanceIndicator[]
   steps: Goal[]
   onChanged: () => void
   onAddStep: (goalId: string) => void
   onEditStep: (step: Goal) => void
 }
 
-function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, onEditStep }: GoalCardProps) {
+function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, onAddStep, onEditStep }: GoalCardProps) {
   const t = useTranslations('Contacts')
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState(false)
@@ -499,9 +508,18 @@ function GoalCard({ goal, contactId, categories, steps, onChanged, onAddStep, on
             </span>
             {goal.categories.map((key) => (
               <span key={key} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
-                {dimensionLabel(key, categories)}
+                {goalCategoryLabel(key, categories)}
               </span>
             ))}
+            {/* PROVENANCE, NOT CLASSIFICATION — "this goal came out of a weak
+                Focus score". Deliberately styled apart from the category chips
+                (dashed, unfilled) so it never reads as one: the coach writes
+                categories, the app writes this. */}
+            {goal.from_dimension && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-dashed text-xs text-muted-foreground">
+                {t('goalFromDimension', { dimension: dimensionLabel(goal.from_dimension, dimensions) })}
+              </span>
+            )}
             {targetDateStr && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
                 {t('goalTargetDate')}: {targetDateStr}
@@ -748,7 +766,10 @@ export function GoalsTab({ contact, teamId, team }: Props) {
     { open: false, editing: null, defaultParentGoalId: null },
   )
 
-  const categories = resolveCoachingDimensions(team)
+  // Categories drive the picker + chips; axes are resolved only to LABEL a
+  // goal's `from_dimension` provenance chip (see the header).
+  const categories = resolveGoalCategories(team)
+  const dimensions = resolveCoachingDimensions(team)
 
   const { goals: goalsWithSteps, generalSteps } = groupGoalsWithSteps(goals)
   const goalOptions = goalsWithSteps.map(({ goal }) => ({ id: goal.id, title: goal.title }))
@@ -811,25 +832,42 @@ export function GoalsTab({ contact, teamId, team }: Props) {
     <div className="space-y-6 pb-24">
       <CoachAssignment contact={contact} teamId={teamId} />
 
-      {/* The check-in radar feeds straight into the goals below it — see
-          PerformanceProfilePanel's header for why it moved out of Stats. */}
-      <PerformanceProfilePanel contact={contact} team={team} goals={goals} />
+      {/* THE TWO READINGS, SIDE BY SIDE ON DESKTOP. Both answer "how is this
+          person doing" before you set them anything, and they are read together:
+          a strong radar with collapsing attendance is a different conversation
+          from a weak radar with perfect attendance. Stacked full-width they
+          filled a screen and a half between them and pushed the actual work
+          below the fold; each is narrow content in a wide container. One column
+          under `lg`, where side-by-side would squeeze both charts. */}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        {/* The check-in radar feeds straight into the goals below it — see
+            PerformanceProfilePanel's header for why it moved out of Stats. */}
+        <PerformanceProfilePanel contact={contact} team={team} goals={goals} />
 
-      {/* AND SO DOES ATTENDANCE. Whether somebody is actually turning up is the
-          first question anyone asks before setting them a goal, and it was a tab
-          away — the last card in Stats, which is why that tab is now gone
-          (Franco, 2026-08-28). */}
-      <AttendanceTrendCard
-        reports={weeklyReports}
-        loading={reportsLoading}
-        period={trendPeriod}
-        onPeriodChange={setTrendPeriod}
-      />
+        {/* AND SO DOES ATTENDANCE. Whether somebody is actually turning up is the
+            first question anyone asks before setting them a goal, and it was a tab
+            away — the last card in Stats, which is why that tab is now gone
+            (Franco, 2026-08-28). */}
+        <AttendanceTrendCard
+          reports={weeklyReports}
+          loading={reportsLoading}
+          period={trendPeriod}
+          onPeriodChange={setTrendPeriod}
+        />
+      </div>
 
-      {/* One column: every goal card carries its own steps inline (with a
-          completion count), and unparented steps fall into a virtual "General"
-          heading at the bottom — no document backs it. */}
-      <div className="space-y-3">
+      {/* GENERAL TASKS ARE A COLUMN, NOT A FOOTER.
+          Every goal card carries its own steps inline, and unparented ones fall
+          into a virtual "General" group that no document backs. That group used
+          to sit BELOW every goal — so the more a coach used goals, the further
+          the loose to-dos sank, until a contact with six goals hid them entirely
+          below the fold. They are the most immediately actionable thing on the
+          tab ("bring a new gi", "call about the missed payment"), so their
+          position must not depend on how many goals exist.
+          Side by side on `lg`, stacked below it — where a narrow column would
+          make both unreadable, and where the page scrolls anyway. */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
+        <div className="space-y-3 lg:col-span-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Flag className="h-4 w-4 text-violet-500" />
@@ -852,6 +890,7 @@ export function GoalsTab({ contact, teamId, team }: Props) {
                 goal={goal}
                 contactId={contact.id}
                 categories={categories}
+                dimensions={dimensions}
                 steps={steps}
                 onChanged={invalidate}
                 onAddStep={openAddStep}
@@ -861,9 +900,11 @@ export function GoalsTab({ contact, teamId, team }: Props) {
           </div>
         )}
 
+        </div>
+
         {/* General — steps with no parent goal. Virtual: nothing to create,
             migrate, or clean up when the last one leaves it. */}
-        <div className="space-y-2 pt-2">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckSquare className="h-4 w-4 text-orange-500" />

@@ -1090,11 +1090,21 @@ service cloud.firestore {
                           && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
                        || hasRole('admin');
 
-      // Subscription history subcollection — full CRUD for team members
+      // Subscription history subcollection — the ONLY store of a contact's plan
+      // PERIODS. `onContactSubscriptionChange` (packages/functions/src/sync/) is
+      // the SINGLE writer of periods: it reconciles what a contact currently
+      // HOLDS against this subcollection by set difference, and a client write
+      // racing that reconciliation could open/close a row the trigger doesn't
+      // know about, silently forking the two plans' periods apart. `delete` stays
+      // open — a row is EVIDENCE that a plan was held, not a scarce resource, and
+      // the contact detail page's per-row trash button
+      // (`contacts/[id]/page.tsx`) genuinely uses it to remove a bad record; that
+      // is not a period-integrity risk the way create/update would be.
       match /subscription_history/{historyId} {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin');
-        allow create, update, delete:
+        allow create, update: if false;
+        allow delete:
           if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
           || hasRole('admin');
       }

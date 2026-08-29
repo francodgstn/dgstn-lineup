@@ -68,12 +68,14 @@ function useActiveContacts(teamId: string | null) {
 // ─── create / rename dialog ───────────────────────────────────────────────────
 
 function GroupFormDialog({
-  open, onOpenChange, title, initialName, initialColor, onSubmit,
+  open, onOpenChange, title, initialName, initialColor, isCreate, onSubmit,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void
   title: string
   initialName?: string
   initialColor?: string | null
+  /** Create, not edit — only then is the dynamic-group route worth offering. */
+  isCreate?: boolean
   onSubmit: (name: string, color: string | null) => Promise<void>
 }) {
   const t = useTranslations('ContactGroups')
@@ -125,6 +127,28 @@ function GroupFormDialog({
               ))}
             </div>
           </div>
+          {/* THE OTHER KIND OF GROUP, named where you'd look for it.
+              A dynamic group cannot be created here — its membership IS a
+              contact filter, so it can only be born from one, and the entry
+              point sits inside the saved-filters popover on the Contacts page.
+              Nothing on this page said so, which left this form quietly unable
+              to make half of what "group" means, with no explanation.
+              Create only: when editing an existing group this is just noise. */}
+          {isCreate && (
+            <div className="rounded-lg border border-dashed p-3 space-y-2">
+              <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Zap className="h-3.5 w-3.5 shrink-0 text-violet-500 mt-px" />
+                <span>{t('dynamicHint')}</span>
+              </p>
+              <Link
+                href={'/contacts' as Route}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                {t('dynamicHintCta')}
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <button onClick={() => onOpenChange(false)}
@@ -670,6 +694,7 @@ export default function ContactGroupsPage() {
           : formMode?.parent
             ? t('newSubgroupTitle', { name: formMode.parent.name })
             : t('newGroupTitle')}
+        isCreate={formMode?.kind !== 'edit'}
         initialName={formMode?.kind === 'edit' ? formMode.group.name : ''}
         initialColor={formMode?.kind === 'edit' ? formMode.group.color ?? null : null}
         onSubmit={handleFormSubmit}

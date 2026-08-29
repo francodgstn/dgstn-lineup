@@ -625,7 +625,17 @@ export function compareSubscriptionTypes(a: SubscriptionType, b: SubscriptionTyp
 }
 
 // ─── subscription history (contacts/{id}/subscription_history) ────────────────
-
+//
+// The ONLY store of a contact's plan PERIODS (`[start_date, end_date)`),
+// maintained SOLELY by `onContactSubscriptionChange`
+// (`packages/functions/src/sync/`) — Firestore rules deny client `create`/
+// `update` (a team member may still `delete` a row; see `firestore.rules`).
+//
+// ABSENT `end_date` MEANS OPEN, same as `null` — the reconciler
+// (`resolveHeldPlans` + `planSubscriptionHistory`,
+// `@linyup/shared/utils/subscriptionHistory`) treats the two identically, and a
+// row is only ever OPEN when it also carries a `start_date` (the mitigation for
+// a malformed/legacy row being read as an open track forever).
 export interface SubscriptionHistoryEntry {
   id: string
   subscription_type_id?: string
@@ -636,20 +646,48 @@ export interface SubscriptionHistoryEntry {
   start_date?: Timestamp
   end_date?: Timestamp | null
   termination_reason?: string
+  /** Never written by the reconciler on close — see its module header. Present
+   *  only where something else (a future manual editor) sets it. */
+  notes?: string | null
   created_at?: Timestamp
   created_by?: string
+  updated_at?: Timestamp
 }
 
 // ─── contact alert (contacts/{id}/contact_alerts) ─────────────────────────────
+//
+// THREE SCHEDULE KINDS, and `always` is not a degenerate case of the other two.
+//
+//   sessions_countdown — fires once the contact has reached N total sessions.
+//   datetime           — fires once an instant has passed.
+//   always             — fires on creation and stays fired until archived.
+//
+// `always` exists because "active from the moment I wrote it" was previously
+// only expressible by faking one of the other two, and both fakes are wrong:
+// a `datetime` of today is an INSTANT, which the mobile reader only surfaces
+// for a ±7 day window, so an alert meant to stand until dealt with quietly
+// stops showing; and `sessions_countdown: 0` is unreachable from the forms
+// (both enforce min 1) and would read as "0 sessions remaining" to the mobile
+// predicate. The end of an `always` alert is `archived_at`, which already
+// exists and which `trackContactAlerts` already respects.
+//
+// `schedule_value` is NOT narrowed by `schedule_type` — the pair predates the
+// union and is persisted in thousands of documents. Never read it directly:
+// `alertScheduleValue()` in `utils/contactAlerts.ts` narrows it in one place,
+// and `alertIsFired()` is the ONLY predicate that decides a alert has fired.
 
-export type AlertScheduleType = 'sessions_countdown' | 'datetime'
+export type AlertScheduleType = 'sessions_countdown' | 'datetime' | 'always'
 
 export interface ContactAlert {
   id: string
   schedule_type: AlertScheduleType
-  schedule_value: number | Timestamp
+  /** Sessions (number) for `sessions_countdown`, an instant for `datetime`,
+   *  and unused for `always`. Narrow it with `alertScheduleValue()`. */
+  schedule_value: number | Timestamp | null
   message: string
   show_in_app?: boolean
+  /** Set = dismissed. The only end an `always` alert has, and the reason
+   *  `trackContactAlerts` counts non-archived rows only. */
   archived_at?: Timestamp | null
   created_at?: Timestamp
 }

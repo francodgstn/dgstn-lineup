@@ -39,7 +39,7 @@
     "sectionRun": "Gestione",
     "sectionGrow": "Crescita",
     "sectionOffer": "Offerta",
-    "navGroupShortcuts": "Scorciatoie",
+    "navGroupShortcuts": "Preferiti",
     "navGroupFeatures": "Funzionalità",
     "explorePlugins": "Esplora i plugin",
     "navSearchPlaceholder": "Cerca…",
@@ -49,7 +49,7 @@
     "navSearchHintTab": "nuova scheda",
     "navShowMore": "Mostra altro",
     "navShowLess": "Mostra meno",
-    "navRemoveShortcut": "Rimuovi dalle scorciatoie",
+    "navRemoveShortcut": "Rimuovi dai preferiti",
     "navShortcutsEmpty": "Le pagine aperte appaiono qui.",
     "tabNew": "Nuova scheda",
     "tabClose": "Chiudi scheda",
@@ -152,7 +152,7 @@
     "pricing": "Prezzi",
     "promoCodes": "Codici promo",
     "navShortcutsClear": "Cancella tutto",
-    "navShortcutsClearTitle": "Cancellare tutte le scorciatoie?",
+    "navShortcutsClearTitle": "Cancellare tutti i preferiti?",
     "navShortcutsClearCancel": "Annulla",
     "navSearchGroupSettings": "Impostazioni",
     "navSearchGroupContacts": "Contatti",
@@ -161,10 +161,10 @@
     "navSearchSearching": "Ricerca in corso…",
     "navSearchNoMatches": "Nessun risultato",
     "navSearchPromptAll": "Cerca pagine, impostazioni, contatti, abbonamenti e attività",
-    "shortcutAlwaysShow": "Mostra sempre nelle scorciatoie",
+    "shortcutAlwaysShow": "Mostra sempre nei preferiti",
     "shortcutStopAlwaysShowing": "Non mostrare più sempre",
-    "navSearchInShortcuts": "Scorciatoia",
-    "navSearchHintShortcut": "aggiungi scorciatoia",
+    "navSearchInShortcuts": "Preferito",
+    "navSearchHintShortcut": "aggiungi preferito",
     "navSearchKeepTyping": "Continua a digitare per cercare contatti, abbonamenti e attività",
     "navShortcutsClearExplain": "Rimuove le pagine sempre visibili e quelle visitate di recente. L’azione non è reversibile; le pagine sempre visibili mantengono il loro ordine finché non le cancelli.",
     "navSearchArchivedBadge": "Archiviato",
@@ -527,8 +527,8 @@
     "noNotes": "Nessuna nota ancora.",
     "notesAddNote": "Aggiungi nota",
     "notesViewAll": "Vedi tutte le {count} note",
-    "notesPanelDesc": "Visualizza e gestisci le note di questo contatto.",
-    "alertsPanelDesc": "Visualizza e gestisci avvisi e promemoria di questo contatto.",
+    "notesPanelDesc": "Note interne in testo formattato per il tuo team — visibili solo qui, nella pagina del contatto.",
+    "alertsPanelDesc": "Promemoria programmati su questo contatto — visibili qui, e mostrati facoltativamente nell'app membri.",
     "tabProfile": "Profilo",
     "tabNotes": "Note",
     "tabStats": "Statistiche",
@@ -977,9 +977,9 @@
     "goalFormParentGoalNone": "Generale (nessun obiettivo principale)",
     "goalLastEvaluatedOn": "Ultima valutazione il {date}",
     "goalMemberAddedBadge": "Dal membro",
-    "goalNoSteps": "Nessun passaggio ancora",
+    "goalNoSteps": "Nessun compito ancora",
     "goalOverdueBadge": "In ritardo",
-    "goalStepsCompleted": "{done}/{total} passaggi completati",
+    "goalStepsCompleted": "{done}/{total} compiti completati",
     "goalsGeneralHeading": "Generale",
     "activityFilterCoaching": "Coaching",
     "coachingCreateTaskCta": "Crea un'attività per {dimension}",
@@ -988,7 +988,45 @@
     "coachingCreateTaskFailed": "Impossibile creare l'attività. Riprova.",
     "filterNotesLabel": "Ha note",
     "tabEmails": "Email",
-    "alertsViewAll": "Vedi tutti i {count} promemoria"
+    "alertsViewAll": "Vedi tutti i {count} promemoria",
+    "tabPlansPayments": "Piani e pagamenti",
+    "segOverview": "Panoramica",
+    "segPlans": "Piani",
+    "segPayments": "Pagamenti",
+    "ledgerPeriod_3m": "3M",
+    "ledgerPeriod_6m": "6M",
+    "ledgerPeriod_12m": "12M",
+    "ledgerPeriod_all": "Tutto",
+    "ledgerHeldAtStart": "Attivo all'inizio di questo periodo:",
+    "ledgerHeldAtStartNone": "Nessun piano attivo all'inizio di questo periodo.",
+    "ledgerPaidInPeriod": "{count, plural, one {# pagamento} other {# pagamenti}}",
+    "ledgerNothingInPeriod": "Nessuna registrazione in questo periodo.",
+    "ledgerShowAllTime": "Mostra tutto lo storico",
+    "ledgerNoPlanLinked": "Nessun piano collegato",
+    "ledgerNoPlanLinkedHelp": "Questo pagamento non registra a quale piano si riferisce. Puoi impostarlo nella sezione Pagamenti.",
+    "ledgerPlanTypeOnlyHelp": "Indica il piano a cui si riferisce il pagamento — non uno specifico periodo di abbonamento.",
+    "ledgerGatewayDefaultHelp": "Questo collegamento potrebbe derivare dal piano predefinito del fornitore di pagamento anziché dalla transazione stessa.",
+    "ledgerPlanStarted": "Inizio di {plan}",
+    "ledgerPlanEnded": "Fine di {plan}",
+    "ledgerCreditsGranted": "{count, plural, one {# credito lezione assegnato} other {# crediti lezione assegnati}}",
+    "ledgerCreditsExpired": "Crediti lezione scaduti",
+    "ledgerPrimaryPlanOnlyNote": "Alcuni pagamenti citano un piano senza periodo registrato. Lo storico segue il piano principale del contatto: chi ne aveva due contemporaneamente può avere lacune.",
+    "unknownPlanName": "Piano senza nome",
+    "bookingsSearchPlaceholder": "Cerca per corso…",
+    "bookingsTruncated": "Vengono mostrate le {count} prenotazioni più recenti.",
+    "noBookingsFilter": "Nessuna prenotazione corrisponde a questo filtro.",
+    "goalFromDimension": "Da {dimension}",
+    "alertTypeAlways": "Attivo subito",
+    "alertDismissTitle": "Nascondi avviso",
+    "alertDismissBody": "Eliminare anche «{message}» dal profilo di {name}?",
+    "alertDismissOnly": "Solo nascondi",
+    "alertDismissAndDelete": "Nascondi ed elimina",
+    "alertDismissed": "Nascosto",
+    "alertDeleteBody": "«{message}» verrà eliminato definitivamente dalla scheda di questo contatto.",
+    "bulkSetCustomField": "Imposta campo personalizzato…",
+    "bulkSetCustomFieldTitle": "Imposta campo personalizzato",
+    "bulkCustomFieldPicker": "Campo",
+    "bulkClearCustomField": "Rimuovi valore"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -1998,7 +2036,10 @@
     "rankHoldersSystemWarning": "Il loro grado non corrisponderà più a nessun livello configurato.",
     "sectionTeam": "Team",
     "sectionRegionFormat": "Regione e formato",
-    "sectionOther": "Altro"
+    "sectionOther": "Altro",
+    "alertTypeAlways": "Attivo subito",
+    "alertPresetAlwaysInfo": "Si applica immediatamente — nient'altro da impostare.",
+    "presetSessionsCount": "{count, plural, one {# sessione} other {# sessioni}}"
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -2873,7 +2914,9 @@
     "convertToManualBody": "Copia gli attuali {count} membri e rimuove la regola. L’appartenenza smette di aggiornarsi.",
     "convertedToast": "«{name}» ora è un gruppo manuale",
     "editInContacts": "Modifica nei contatti",
-    "dynamicDropsGroupsWarning": "Una regola non può dipendere da un altro gruppo, quindi quel filtro viene rimosso: questo gruppo corrisponderà a {count} contatti, non all’elenco dietro questa finestra. Usa Istantanea per mantenere i membri attuali."
+    "dynamicDropsGroupsWarning": "Una regola non può dipendere da un altro gruppo, quindi quel filtro viene rimosso: questo gruppo corrisponderà a {count} contatti, non all’elenco dietro questa finestra. Usa Istantanea per mantenere i membri attuali.",
+    "dynamicHint": "Questo modulo crea un gruppo manuale. In un gruppo dinamico il filtro è l’appartenenza: crealo in Contatti e salvalo come gruppo.",
+    "dynamicHintCta": "Crea un filtro in Contatti"
   },
   "Org": {
     "tabPlaces": "Sedi",
@@ -3711,7 +3754,7 @@
           "ack": "Ho dato un'occhiata"
         },
         "shortcuts": {
-          "label": "Aggiungi una scorciatoia",
+          "label": "Aggiungi un preferito",
           "desc": "Tieni in cima alla barra laterale le pagine che usi ogni giorno.",
           "ack": "Ho dato un'occhiata"
         }
@@ -3885,7 +3928,9 @@
     "gatedPurchaseAlreadyBought": "Già acquistato? Accedi",
     "studioTermsLink": "Termini e condizioni",
     "navCoaching": "Coaching",
-    "coachingSignInPrompt": "Accedi per vedere i tuoi obiettivi e i tuoi check-in."
+    "coachingSignInPrompt": "Accedi per vedere i tuoi obiettivi e i tuoi check-in.",
+    "navGamification": "Gamification",
+    "gamificationSignInPrompt": "Accedi per vedere il tuo punteggio, la tua serie e i tuoi badge."
   },
   "FreePlan": {
     "downgradeBannerTitle": "La tua prova è terminata — sei ora sul piano Free",
@@ -4392,7 +4437,12 @@
     "successBodyCourseSignedIn": "Grazie! Ora hai accesso a vita. Apri il tuo Space per iniziare a guardare."
   },
   "Notifications": {
-    "dismiss": "Chiudi"
+    "dismiss": "Chiudi",
+    "bellTitle": "Notifiche",
+    "panelTitle": "Notifiche",
+    "unreadCount": "{count, plural, =0 {Nessuna notifica non letta} one {# notifica non letta} other {# notifiche non lette}}",
+    "emptyTitle": "Tutto aggiornato",
+    "emptyBody": "Le nuove notifiche appariranno qui."
   },
   "Affiliations": {
     "tabLabel": "Affiliazioni",
@@ -7382,7 +7432,7 @@
     "goalsLoadFailed": "Non siamo riusciti a caricare i tuoi obiettivi. Non è cambiato nulla.",
     "generalStepsTitle": "Generale",
     "addTask": "Aggiungi attività",
-    "addStep": "Aggiungi passaggio",
+    "addStep": "Aggiungi compito",
     "goalCoachCreatedBadge": "Impostato dal tuo coach",
     "goalCoachCreatedNote": "Questo obiettivo è stato impostato dal tuo coach — non può essere modificato o eliminato qui.",
     "stepCoachCreatedNote": "Questo passaggio deve essere aggiornato dal tuo coach.",
@@ -7390,11 +7440,11 @@
     "deleteGoal": "Elimina",
     "deleteGoalConfirmTitle": "Eliminare questo obiettivo?",
     "deleteGoalConfirmBody": "Questo eliminerà “{title}” e la relativa cronologia di valutazioni. L'operazione non può essere annullata.",
-    "deleteStepConfirmTitle": "Eliminare questo passaggio?",
+    "deleteStepConfirmTitle": "Eliminare questo compito?",
     "deleteStepConfirmBody": "Questo eliminerà “{title}”. L'operazione non può essere annullata.",
     "goalSaveFailed": "Non siamo riusciti a salvare questo obiettivo. Riprova.",
     "goalDeleteFailed": "Non siamo riusciti a eliminare questo obiettivo. Riprova.",
-    "stepToggleFailed": "Non siamo riusciti ad aggiornare questo passaggio. Riprova.",
+    "stepToggleFailed": "Non siamo riusciti ad aggiornare questo compito. Riprova.",
     "overdueBadge": "In ritardo",
     "targetDateLabel": "Scadenza: {date}",
     "latestScoreLabel": "Ultimo: {score}/5",
@@ -7410,7 +7460,7 @@
     "evaluatedBySelf": "Tu",
     "evaluatedByCoach": "Coach",
     "goalFormTitleCreate": "Aggiungi obiettivo",
-    "goalFormTitleCreateStep": "Aggiungi passaggio",
+    "goalFormTitleCreateStep": "Aggiungi compito",
     "goalFormTitleEdit": "Modifica obiettivo",
     "fieldTitle": "Titolo",
     "fieldDescription": "Descrizione (opzionale)",
@@ -7453,14 +7503,72 @@
     "profileBalancedTitle": "Equilibrato",
     "profileBalancedDesc": "Ogni area è forte. Continua così.",
     "ratingAriaLabel": "Valuta {n} su 5",
-    "createStepCta": "Crea un passaggio per {dimension}",
+    "createStepCta": "Crea un compito per {dimension}",
     "createStepDefaultTitle": "Lavora su {dimension}",
-    "createStepSubmit": "Crea passaggio",
-    "parentGoalNone": "Generale"
+    "createStepSubmit": "Crea compito",
+    "parentGoalNone": "Generale",
+    "goalFromDimension": "Da {dimension}"
   },
   "OrgUpsell": {
     "title": "Gestisci più di uno studio?",
     "continueAnyway": "Crea comunque uno studio separato",
     "continueHint": "Sarà un account a sé — team, contatti e fatturazione separati, senza report condivisi."
+  },
+  "SpaceGamification": {
+    "pageTitle": "Gamification",
+    "notEnabledTitle": "La gamification non è attiva",
+    "notEnabledBody": "Questo studio non ha ancora attivato la gamification.",
+    "scoreTitle": "Punteggio",
+    "scoreUnit": "pt",
+    "scoreSubtitle": "Questo mese",
+    "streakTitle": "Serie",
+    "streakUnit": "settimane",
+    "streakBest": "Record: {count} settimane",
+    "streakZeroHint": "Partecipa a una sessione questa settimana per iniziare una serie",
+    "leaderboardTitle": "Classifica",
+    "leaderboardLoadFailed": "Impossibile caricare la classifica",
+    "leaderboardEmpty": "Ancora nessun punteggio questo mese — partecipa a una sessione per entrare in classifica",
+    "leaderboardTrialLabel": "Prova",
+    "leaderboardYou": "Tu",
+    "badgesTitle": "Badge",
+    "badgesEarnedCount": "{earned}/{total} ottenuti",
+    "badges": {
+      "first_class": {
+        "label": "Prima sessione",
+        "description": "Partecipa alla tua prima sessione"
+      },
+      "dedicated": {
+        "label": "Impegnato",
+        "description": "Partecipa a 10 sessioni"
+      },
+      "committed": {
+        "label": "Determinato",
+        "description": "Partecipa a 50 sessioni"
+      },
+      "on_fire": {
+        "label": "Scatenato",
+        "description": "Raggiungi una serie di 4 settimane"
+      },
+      "unstoppable": {
+        "label": "Inarrestabile",
+        "description": "Raggiungi una serie di 8 settimane"
+      },
+      "legendary": {
+        "label": "Leggendario",
+        "description": "Raggiungi una serie di 12 settimane"
+      },
+      "rising_star": {
+        "label": "Stella nascente",
+        "description": "Ottieni 30+ punti in un mese"
+      },
+      "monthly_star": {
+        "label": "Stella del mese",
+        "description": "Ottieni 60+ punti in un mese"
+      },
+      "superstar": {
+        "label": "Superstar",
+        "description": "Ottieni 90+ punti in un mese"
+      }
+    }
   }
 }

@@ -35,14 +35,17 @@ interface Props {
   onOpenChange: (open: boolean) => void
   kind: 'goal' | 'task'
   /** Category options — only rendered for `kind: 'goal'`. Resolved once at the
-   *  page level via `resolveCoachingDimensions`; see CoachingHome. */
-  dimensions: PerformanceIndicator[]
+   *  page level via `resolveGoalCategories`; see CoachingHome. NOT the check-in
+   *  axes: what a goal is about and how someone is doing are two questions. */
+  categories: PerformanceIndicator[]
   /** Present when editing; absent when creating. */
   initialGoal?: Goal | null
   onSubmit: (values: GoalFormValues) => Promise<void>
 }
 
-export function GoalFormDialog({ open, onOpenChange, kind, dimensions, initialGoal, onSubmit }: Props) {
+// `categories` (the prop) is the OPTIONS list; `selected` below is what this
+// goal carries. Two different things, named apart on purpose.
+export function GoalFormDialog({ open, onOpenChange, kind, categories, initialGoal, onSubmit }: Props) {
   const t = useTranslations('SpaceCoaching')
   const tSpace = useTranslations('Space')
   const tCommon = useTranslations('Common')
@@ -50,7 +53,7 @@ export function GoalFormDialog({ open, onOpenChange, kind, dimensions, initialGo
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [categories, setCategories] = useState<string[]>([])
+  const [selected, setSelected] = useState<string[]>([])
   const [targetDate, setTargetDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -59,13 +62,13 @@ export function GoalFormDialog({ open, onOpenChange, kind, dimensions, initialGo
     if (!open) return
     setTitle(initialGoal?.title ?? '')
     setDescription(initialGoal?.description ?? '')
-    setCategories(initialGoal?.categories ?? [])
+    setSelected(initialGoal?.categories ?? [])
     setTargetDate(toDateInputValue(initialGoal?.target_date))
     setErrorMsg('')
   }, [open, initialGoal])
 
   function toggleCategory(key: string) {
-    setCategories((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+    setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -77,7 +80,7 @@ export function GoalFormDialog({ open, onOpenChange, kind, dimensions, initialGo
       await onSubmit({
         title: title.trim(),
         description: description.trim() || null,
-        ...(kind === 'goal' ? { categories } : {}),
+        ...(kind === 'goal' ? { categories: selected } : {}),
         targetDate: kind === 'goal' && targetDate ? new Date(`${targetDate}T00:00:00`) : null,
       })
     } catch {
@@ -123,13 +126,13 @@ export function GoalFormDialog({ open, onOpenChange, kind, dimensions, initialGo
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">{t('fieldCategories')}</label>
                   <div className="flex flex-wrap gap-1.5">
-                    {dimensions.map((d) => (
+                    {categories.map((d) => (
                       <button
                         key={d.key}
                         type="button"
                         onClick={() => toggleCategory(d.key)}
                         className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                          categories.includes(d.key)
+                          selected.includes(d.key)
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-input text-muted-foreground'
                         }`}

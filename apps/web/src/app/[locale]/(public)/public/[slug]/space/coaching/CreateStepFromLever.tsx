@@ -1,13 +1,17 @@
 'use client'
 
-// The ONE connection `primary_lever` was missing — see
-// packages/shared/src/types/goal.ts ("ONE VOCABULARY") and CheckinSection's
-// focus-area line, right above where this renders. Deliberately NOT the full
-// GoalFormDialog: the title is pre-filled (and editable) and the category is
-// fixed to the one axis, so there is nothing left to ask except, optionally,
-// which open goal this step serves. Picking none files it under the virtual
-// "General" group — no placeholder goal is ever created for it (see
-// `Goal.parent_goal_id`).
+// The ONE connection `primary_lever` was missing — see CheckinSection's
+// focus-area line, right above where this renders. The step it writes carries
+// `from_dimension` (the axis it came FROM) and NO categories: provenance is
+// not classification, and a member working on a low Focus rating has not yet
+// said what the work is about — see the header of
+// packages/shared/src/types/goal.ts.
+//
+// Deliberately NOT the full GoalFormDialog: the title is pre-filled (and
+// editable) and the axis is fixed, so there is nothing left to ask except,
+// optionally, which open goal this step serves. Picking none files it under
+// the virtual "General" group — no placeholder goal is ever created for it
+// (see `Goal.parent_goal_id`).
 //
 // Reuses `useSpaceGoals().createGoal` — the SAME instance CoachingHome already
 // holds and hands to GoalsSection, passed down rather than a second
@@ -55,7 +59,8 @@ export function CreateStepFromLever({
       await createGoal.mutateAsync({
         type: 'task',
         title: title.trim(),
-        categories: [dimensionKey],
+        categories: [],
+        fromDimension: dimensionKey,
         parentGoalId,
       })
       setOpen(false)

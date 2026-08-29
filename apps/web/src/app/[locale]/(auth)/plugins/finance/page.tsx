@@ -100,7 +100,7 @@ export default function FinanceOverviewPage() {
               settings — the two pages that explain a figure on this one. */}
           <QuickLinks
             links={[
-              { href: '/payments' as Route, label: tNav('paymentsAndSubscriptions') },
+              { href: '/payments' as Route, label: tNav('payments') },
               { href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') },
             ]}
           />

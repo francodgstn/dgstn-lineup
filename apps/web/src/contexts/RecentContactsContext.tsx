@@ -9,7 +9,7 @@
  * first, shown ONLY in the sidebar search panel before anything is typed.
  *
  * WHY IT IS NOT ANY OF THE OTHER THREE:
- *  · Shortcuts' recent half is a rolling history of NAV DESTINATIONS (pages),
+ *  · Favourites' recent half is a rolling history of NAV DESTINATIONS (pages),
  *    keyed by nav id. It answers "where do I go often". A person is not a
  *    destination in that catalogue and never enters it — `/contacts/123`
  *    records the "contacts" PAGE there, which is exactly the wrong answer to
