@@ -527,8 +527,8 @@
     "noNotes": "Noch keine Notizen.",
     "notesAddNote": "Notiz hinzufügen",
     "notesViewAll": "Alle {count} Notizen anzeigen",
-    "notesPanelDesc": "Notizen zu diesem Kontakt anzeigen und verwalten.",
-    "alertsPanelDesc": "Hinweise und Erinnerungen zu diesem Kontakt anzeigen und verwalten.",
+    "notesPanelDesc": "Interne Notizen im Rich-Text-Format für dein Team — nur hier, auf der Kontaktseite, sichtbar.",
+    "alertsPanelDesc": "Geplante Erinnerungen zu diesem Kontakt — hier sichtbar und optional auch in der Mitglieder-App.",
     "tabProfile": "Profil",
     "tabNotes": "Notizen",
     "tabStats": "Statistiken",
@@ -1015,7 +1015,8 @@
     "bookingsSearchPlaceholder": "Nach Kurs suchen…",
     "bookingsTruncated": "Es werden die {count} neuesten Buchungen angezeigt.",
     "noBookingsFilter": "Keine Buchungen entsprechen diesem Filter.",
-    "goalFromDimension": "Aus {dimension}"
+    "goalFromDimension": "Aus {dimension}",
+    "alertTypeAlways": "Sofort aktiv"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",
@@ -2025,7 +2026,10 @@
     "rankHoldersSystemWarning": "Ihr Rang entspricht dann keiner konfigurierten Stufe mehr.",
     "sectionTeam": "Team",
     "sectionRegionFormat": "Region & Format",
-    "sectionOther": "Weiteres"
+    "sectionOther": "Weiteres",
+    "alertTypeAlways": "Sofort aktiv",
+    "alertPresetAlwaysInfo": "Wird sofort wirksam — nichts weiter einzustellen.",
+    "presetSessionsCount": "{count, plural, one {# Einheit} other {# Einheiten}}"
   },
   "Bookings": {
     "title": "Buchungen",
@@ -3912,7 +3916,9 @@
     "gatedPurchaseAlreadyBought": "Schon gekauft? Anmelden",
     "studioTermsLink": "Bedingungen & Richtlinien",
     "navCoaching": "Coaching",
-    "coachingSignInPrompt": "Melde dich an, um deine Ziele und Check-ins zu sehen."
+    "coachingSignInPrompt": "Melde dich an, um deine Ziele und Check-ins zu sehen.",
+    "navGamification": "Gamification",
+    "gamificationSignInPrompt": "Melde dich an, um deine Punkte, deine Serie und deine Abzeichen zu sehen."
   },
   "FreePlan": {
     "downgradeBannerTitle": "Deine Testphase ist beendet — du nutzt jetzt den Free-Plan",
@@ -7490,5 +7496,62 @@
     "title": "Betreiben Sie mehr als ein Studio?",
     "continueAnyway": "Trotzdem ein separates Studio erstellen",
     "continueHint": "Es wird ein eigenes Konto — eigenes Team, eigene Kontakte und eigene Abrechnung, ohne gemeinsame Auswertungen."
+  },
+  "SpaceGamification": {
+    "pageTitle": "Gamification",
+    "notEnabledTitle": "Gamification ist nicht aktiviert",
+    "notEnabledBody": "Dieses Studio hat Gamification noch nicht aktiviert.",
+    "scoreTitle": "Punkte",
+    "scoreUnit": "Pkt.",
+    "scoreSubtitle": "Diesen Monat",
+    "streakTitle": "Serie",
+    "streakUnit": "Wochen",
+    "streakBest": "Beste Serie: {count} Wochen",
+    "streakZeroHint": "Nimm diese Woche an einer Session teil, um eine Serie zu starten",
+    "leaderboardTitle": "Bestenliste",
+    "leaderboardLoadFailed": "Bestenliste konnte nicht geladen werden",
+    "leaderboardEmpty": "Diesen Monat noch keine Punkte — nimm an einer Session teil, um auf die Liste zu kommen",
+    "leaderboardTrialLabel": "Schnuppern",
+    "leaderboardYou": "Du",
+    "badgesTitle": "Abzeichen",
+    "badgesEarnedCount": "{earned}/{total} erhalten",
+    "badges": {
+      "first_class": {
+        "label": "Erste Session",
+        "description": "Nimm an deiner ersten Session teil"
+      },
+      "dedicated": {
+        "label": "Engagiert",
+        "description": "Nimm an 10 Sessions teil"
+      },
+      "committed": {
+        "label": "Hingebungsvoll",
+        "description": "Nimm an 50 Sessions teil"
+      },
+      "on_fire": {
+        "label": "In Fahrt",
+        "description": "Erreiche eine 4-wöchige Serie"
+      },
+      "unstoppable": {
+        "label": "Unaufhaltsam",
+        "description": "Erreiche eine 8-wöchige Serie"
+      },
+      "legendary": {
+        "label": "Legendär",
+        "description": "Erreiche eine 12-wöchige Serie"
+      },
+      "rising_star": {
+        "label": "Aufsteigender Stern",
+        "description": "Erziele 30+ Punkte in einem Monat"
+      },
+      "monthly_star": {
+        "label": "Stern des Monats",
+        "description": "Erziele 60+ Punkte in einem Monat"
+      },
+      "superstar": {
+        "label": "Superstar",
+        "description": "Erziele 90+ Punkte in einem Monat"
+      }
+    }
   }
 }

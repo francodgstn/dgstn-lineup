@@ -86,6 +86,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       'kiosk',
       'custom-forms',
       'gift-cards',
+      'gamification',
     ]),
     db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
   ])
@@ -222,6 +223,12 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   const bookingActive = true
 
   const giftCardsPluginActive = pluginInstalls.get('gift-cards') !== null
+  // Gamification: the Space's Gamification tab is gated on the plugin install
+  // alone — the DATA it shows (the contact's own score/streak/badges, and
+  // teams/{id}/leaderboard/current) is already readable by a contact session
+  // under firestore.rules without any mirror. See
+  // TeamPublicProfile.gamificationEnabled.
+  const gamificationEnabled = pluginInstalls.get('gamification') !== null
   // CAN THIS STUDIO BE PAID? Both halves of the server-side answer, read from
   // the same two fields `loadEnabledTeam` + `requireChargeableAccount` enforce
   // (connect/access.ts): the operator kill-switch must not be down, and the
@@ -353,6 +360,7 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!data.settings?.referral?.enabled,
+    gamificationEnabled,
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',

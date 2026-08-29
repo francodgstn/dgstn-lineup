@@ -527,8 +527,8 @@
     "noNotes": "Aucune note pour l'instant.",
     "notesAddNote": "Ajouter une note",
     "notesViewAll": "Voir les {count} notes",
-    "notesPanelDesc": "Consulter et gérer les notes de ce contact.",
-    "alertsPanelDesc": "Consulter et gérer les alertes et rappels de ce contact.",
+    "notesPanelDesc": "Notes internes en texte enrichi pour votre équipe — visibles uniquement ici, sur la page du contact.",
+    "alertsPanelDesc": "Rappels programmés au sujet de ce contact — visibles ici, et affichés en option dans l'app membre.",
     "tabProfile": "Profil",
     "tabNotes": "Notes",
     "tabStats": "Statistiques",
@@ -1015,7 +1015,8 @@
     "bookingsSearchPlaceholder": "Rechercher par cours…",
     "bookingsTruncated": "Affichage des {count} réservations les plus récentes.",
     "noBookingsFilter": "Aucune réservation ne correspond à ce filtre.",
-    "goalFromDimension": "À partir de {dimension}"
+    "goalFromDimension": "À partir de {dimension}",
+    "alertTypeAlways": "Dès maintenant"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2025,7 +2026,10 @@
     "rankHoldersSystemWarning": "Leur grade ne correspondra plus à aucun niveau configuré.",
     "sectionTeam": "Équipe",
     "sectionRegionFormat": "Région et format",
-    "sectionOther": "Autre"
+    "sectionOther": "Autre",
+    "alertTypeAlways": "Dès maintenant",
+    "alertPresetAlwaysInfo": "S'applique immédiatement — rien d'autre à définir.",
+    "presetSessionsCount": "{count, plural, one {# séance} other {# séances}}"
   },
   "Bookings": {
     "title": "Réservations",
@@ -3912,7 +3916,9 @@
     "gatedPurchaseAlreadyBought": "Déjà acheté ? Se connecter",
     "studioTermsLink": "Conditions et règlement",
     "navCoaching": "Coaching",
-    "coachingSignInPrompt": "Connectez-vous pour voir vos objectifs et vos bilans."
+    "coachingSignInPrompt": "Connectez-vous pour voir vos objectifs et vos bilans.",
+    "navGamification": "Gamification",
+    "gamificationSignInPrompt": "Connecte-toi pour voir ton score, ta série et tes badges."
   },
   "FreePlan": {
     "downgradeBannerTitle": "Votre essai est terminé — vous êtes maintenant sur l'offre Gratuite",
@@ -7490,5 +7496,62 @@
     "title": "Vous gérez plusieurs studios ?",
     "continueAnyway": "Créer quand même un studio distinct",
     "continueHint": "Ce sera un compte distinct — équipe, contacts et facturation séparés, sans rapports communs."
+  },
+  "SpaceGamification": {
+    "pageTitle": "Gamification",
+    "notEnabledTitle": "La gamification n'est pas activée",
+    "notEnabledBody": "Ce studio n'a pas encore activé la gamification.",
+    "scoreTitle": "Score",
+    "scoreUnit": "pts",
+    "scoreSubtitle": "Ce mois-ci",
+    "streakTitle": "Série",
+    "streakUnit": "semaines",
+    "streakBest": "Meilleure série : {count} semaines",
+    "streakZeroHint": "Participe à une séance cette semaine pour démarrer une série",
+    "leaderboardTitle": "Classement",
+    "leaderboardLoadFailed": "Impossible de charger le classement",
+    "leaderboardEmpty": "Aucun score ce mois-ci — participe à une séance pour apparaître dans le classement",
+    "leaderboardTrialLabel": "Essai",
+    "leaderboardYou": "Toi",
+    "badgesTitle": "Badges",
+    "badgesEarnedCount": "{earned}/{total} obtenus",
+    "badges": {
+      "first_class": {
+        "label": "Première séance",
+        "description": "Participe à ta première séance"
+      },
+      "dedicated": {
+        "label": "Assidu",
+        "description": "Participe à 10 séances"
+      },
+      "committed": {
+        "label": "Déterminé",
+        "description": "Participe à 50 séances"
+      },
+      "on_fire": {
+        "label": "En feu",
+        "description": "Atteins une série de 4 semaines"
+      },
+      "unstoppable": {
+        "label": "Inarrêtable",
+        "description": "Atteins une série de 8 semaines"
+      },
+      "legendary": {
+        "label": "Légendaire",
+        "description": "Atteins une série de 12 semaines"
+      },
+      "rising_star": {
+        "label": "Étoile montante",
+        "description": "Marque 30 points ou plus en un mois"
+      },
+      "monthly_star": {
+        "label": "Étoile du mois",
+        "description": "Marque 60 points ou plus en un mois"
+      },
+      "superstar": {
+        "label": "Superstar",
+        "description": "Marque 90 points ou plus en un mois"
+      }
+    }
   }
 }

@@ -1074,6 +1074,17 @@ export interface TeamPublicProfile {
   //
   // Absent/empty ⇒ this studio accepts none, and the question is not asked.
   partner_apps?: string[]
+  // Whether the `gamification` plugin is installed (team's own, or its org's) —
+  // denormalized by syncTeamPublicProfile through the same org-aware
+  // `resolveActivePluginInstalls` probe as `kiosk`/`gift-cards`, because the
+  // Space's Gamification tab (score/streak/leaderboard/badges) runs on a
+  // contact session and cannot read `teams/{id}/installed_plugins`. This is
+  // ONLY the install gate for showing the tab; the data it displays (the
+  // contact's own score/streak/badges, and `teams/{id}/leaderboard/current`)
+  // is read separately and is already permitted for a contact session by
+  // firestore.rules (`isSelfContact`, and the `leaderboard` subcollection's own
+  // `sessionExpires` arm) — no rules change needed for either.
+  gamificationEnabled?: boolean
   // The team's PUBLIC + active subscription types, mirrored by
   // syncSubscriptionTypesToPublicProfile for the website pricing table, the
   // public shop and the booking form's access lines. The field name predates

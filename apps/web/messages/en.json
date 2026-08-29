@@ -527,8 +527,8 @@
     "noNotes": "No notes yet.",
     "notesAddNote": "Add note",
     "notesViewAll": "View all {count} notes",
-    "notesPanelDesc": "View and manage notes for this contact.",
-    "alertsPanelDesc": "View and manage alerts and reminders for this contact.",
+    "notesPanelDesc": "Internal, rich-text notes for your team — visible only here, on the contact's page.",
+    "alertsPanelDesc": "Scheduled reminders about this contact — visible here, and optionally shown in the member app.",
     "tabProfile": "Profile",
     "tabNotes": "Notes",
     "tabStats": "Stats",
@@ -1015,7 +1015,8 @@
     "bookingsSearchPlaceholder": "Search by class…",
     "bookingsTruncated": "Showing the {count} most recent bookings.",
     "noBookingsFilter": "No bookings match this filter.",
-    "goalFromDimension": "From {dimension}"
+    "goalFromDimension": "From {dimension}",
+    "alertTypeAlways": "Active now"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2025,7 +2026,10 @@
     "rankHoldersSystemWarning": "Their rank will no longer match any configured level.",
     "sectionTeam": "Team",
     "sectionRegionFormat": "Region & format",
-    "sectionOther": "Other"
+    "sectionOther": "Other",
+    "alertTypeAlways": "Active now",
+    "alertPresetAlwaysInfo": "Applies immediately — nothing else to set.",
+    "presetSessionsCount": "{count, plural, one {# session} other {# sessions}}"
   },
   "Bookings": {
     "title": "Bookings",
@@ -3912,7 +3916,9 @@
     "gatedPurchaseAlreadyBought": "Already bought it? Sign in",
     "studioTermsLink": "Terms & policies",
     "navCoaching": "Coaching",
-    "coachingSignInPrompt": "Sign in to see your goals and check-ins."
+    "coachingSignInPrompt": "Sign in to see your goals and check-ins.",
+    "navGamification": "Gamification",
+    "gamificationSignInPrompt": "Sign in to see your score, streak and badges."
   },
   "FreePlan": {
     "downgradeBannerTitle": "Your trial has ended — you're now on the Free plan",
@@ -7490,5 +7496,62 @@
     "title": "Running more than one studio?",
     "continueAnyway": "Create a separate studio anyway",
     "continueHint": "It will be its own account — separate team, contacts and billing, with no shared reporting."
+  },
+  "SpaceGamification": {
+    "pageTitle": "Gamification",
+    "notEnabledTitle": "Gamification isn't turned on",
+    "notEnabledBody": "This studio hasn't enabled gamification yet.",
+    "scoreTitle": "Score",
+    "scoreUnit": "pts",
+    "scoreSubtitle": "This month",
+    "streakTitle": "Streak",
+    "streakUnit": "weeks",
+    "streakBest": "Best: {count} weeks",
+    "streakZeroHint": "Attend a session this week to start a streak",
+    "leaderboardTitle": "Leaderboard",
+    "leaderboardLoadFailed": "Couldn't load the leaderboard",
+    "leaderboardEmpty": "No scores yet this month — attend a session to get on the board",
+    "leaderboardTrialLabel": "Trial",
+    "leaderboardYou": "You",
+    "badgesTitle": "Badges",
+    "badgesEarnedCount": "{earned}/{total} earned",
+    "badges": {
+      "first_class": {
+        "label": "First Class",
+        "description": "Attend your first session"
+      },
+      "dedicated": {
+        "label": "Dedicated",
+        "description": "Attend 10 sessions"
+      },
+      "committed": {
+        "label": "Committed",
+        "description": "Attend 50 sessions"
+      },
+      "on_fire": {
+        "label": "On Fire",
+        "description": "Reach a 4-week streak"
+      },
+      "unstoppable": {
+        "label": "Unstoppable",
+        "description": "Reach an 8-week streak"
+      },
+      "legendary": {
+        "label": "Legendary",
+        "description": "Reach a 12-week streak"
+      },
+      "rising_star": {
+        "label": "Rising Star",
+        "description": "Score 30+ points in a month"
+      },
+      "monthly_star": {
+        "label": "Monthly Star",
+        "description": "Score 60+ points in a month"
+      },
+      "superstar": {
+        "label": "Superstar",
+        "description": "Score 90+ points in a month"
+      }
+    }
   }
 }
