@@ -1169,7 +1169,14 @@ function NotesSheet({
       <SheetContent side="right" className="sm:max-w-md!">
         <SheetHeader>
           <SheetTitle>{t('tabNotes')}</SheetTitle>
-          <SheetDescription className="sr-only">{t('notesPanelDesc')}</SheetDescription>
+          {/* Notes vs alerts is genuinely ambiguous, so it is worth saying —
+              but HERE, not on the page. The contact page is already dense, and
+              a caption under a glance heading spends permanent page weight on
+              something you need once. In the panel it reaches the reader at the
+              moment they are choosing, and costs the page nothing. It doubles
+              as the sheet's accessible description, so there is still exactly
+              one string. */}
+          <SheetDescription>{t('notesPanelDesc')}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           <NotesTab contact={contact} />
@@ -1207,7 +1214,8 @@ function AlertsSheet({
       <SheetContent side="right" className="sm:max-w-md!">
         <SheetHeader>
           <SheetTitle>{t('tabAlerts')}</SheetTitle>
-          <SheetDescription className="sr-only">{t('alertsPanelDesc')}</SheetDescription>
+          {/* Visible, for the reason given on the notes sheet above. */}
+          <SheetDescription>{t('alertsPanelDesc')}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           <AlertsTab contact={contact} teamId={teamId} />
@@ -1260,7 +1268,6 @@ function AlertsGlance({
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">{t('alertsPanelDesc')}</p>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -1344,7 +1351,6 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">{t('notesPanelDesc')}</p>
 
       {isLoading ? (
         <div className="space-y-2">

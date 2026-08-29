@@ -1022,7 +1022,11 @@
     "alertDismissOnly": "Dismiss only",
     "alertDismissAndDelete": "Dismiss & delete",
     "alertDismissed": "Dismissed",
-    "alertDeleteBody": "“{message}” will be permanently deleted from this contact's record."
+    "alertDeleteBody": "“{message}” will be permanently deleted from this contact's record.",
+    "bulkSetCustomField": "Set custom field…",
+    "bulkSetCustomFieldTitle": "Set custom field",
+    "bulkCustomFieldPicker": "Field",
+    "bulkClearCustomField": "Clear value"
   },
   "TeamAffiliations": {
     "title": "Affiliations",

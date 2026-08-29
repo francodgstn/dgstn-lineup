@@ -1022,7 +1022,11 @@
     "alertDismissOnly": "Nur ausblenden",
     "alertDismissAndDelete": "Ausblenden & löschen",
     "alertDismissed": "Ausgeblendet",
-    "alertDeleteBody": "„{message}“ wird endgültig aus dem Datensatz dieses Kontakts gelöscht."
+    "alertDeleteBody": "„{message}“ wird endgültig aus dem Datensatz dieses Kontakts gelöscht.",
+    "bulkSetCustomField": "Eigenes Feld setzen…",
+    "bulkSetCustomFieldTitle": "Eigenes Feld setzen",
+    "bulkCustomFieldPicker": "Feld",
+    "bulkClearCustomField": "Wert entfernen"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",

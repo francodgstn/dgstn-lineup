@@ -67,13 +67,15 @@ import {
 import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
 import { SaveAsGroupDialog } from '@/plugins/contact-groups/SaveAsGroupDialog'
 import { BulkOutreachDialog } from '@/components/contacts/BulkOutreachDialog'
+import { BulkSetCustomFieldDialog } from '@/plugins/custom-fields/BulkSetCustomFieldDialog'
+import type { CustomFieldValue } from '@/plugins/custom-fields/CustomFieldInput'
 import { toast } from 'sonner'
 import { GROUP_RULE_HANDOFF_KEY } from '@/plugins/contact-groups/GroupRuleDialog'
 import { setGroupRule } from '@/plugins/contact-groups/hooks'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck, StickyNote } from 'lucide-react'
+import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck, StickyNote, ListPlus } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
@@ -2709,7 +2711,7 @@ export default function ContactsPage() {
   // The create dialog always opens — at the Free hard cap it restricts the entry
   // choice to 'booking' (a non-counting provisional lead) instead of blocking.
   const openCreateDialog = () => setDialogOpen(true)
-  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'stage' | 'group-add' | 'group-remove' | null>(null)
+  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'stage' | 'group-add' | 'group-remove' | 'custom-field' | null>(null)
 
   // confirm dialogs
   const [confirmArchive, setConfirmArchive] = useState<string[]>([])
@@ -2858,6 +2860,23 @@ export default function ContactsPage() {
         // Assigning a subscription materializes a provisional lead (offline-paid
         // members count toward the cap too). See Contact.provisional.
         ...(type ? { provisional: deleteField(), provisional_expires_at: deleteField() } : {}),
+        updatedAt: serverTimestamp(),
+      })
+    ))
+    invalidateContacts()
+  }
+
+  // THE SAME `custom_fields.{id}` dotted path bulkSetRank uses for
+  // `ranks.{systemId}` — an `updateDoc` key with a dot in it is a Firestore
+  // field PATH, so this only ever touches the one field being set, leaving
+  // every other custom field on the contact (and every contact not selected)
+  // untouched. `null` means "clear" (the dialog never calls this for a field
+  // nobody explicitly touched) — same `deleteField()` shape bulkSetRank uses.
+  const bulkSetCustomField = async (fieldId: string, value: CustomFieldValue | null) => {
+    const fieldKey = `custom_fields.${fieldId}`
+    await Promise.all([...selected].map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        [fieldKey]: value !== null ? value : deleteField(),
         updatedAt: serverTimestamp(),
       })
     ))
@@ -3228,6 +3247,7 @@ export default function ContactsPage() {
               { label: t('bulkAddToGroup'),      icon: FolderTree, onClick: () => setBulkEditMode('group-add') },
               { label: t('bulkRemoveFromGroup'), icon: FolderTree, onClick: () => setBulkEditMode('group-remove') },
             ] : []),
+            ...(customFieldDefs.length > 0 ? [{ label: t('bulkSetCustomField'), icon: ListPlus, onClick: () => setBulkEditMode('custom-field') }] : []),
           ] : []}
           // The menu itself is no longer plan-gated: gating the whole thing made
           // it vanish, so a Coach had no way to discover outreach exists or to
@@ -3325,6 +3345,14 @@ export default function ContactsPage() {
           onConfirm={(groupId) => bulkGroupUpdate(groupId, bulkEditMode === 'group-remove' ? 'remove' : 'add')}
         />
       )}
+
+      <BulkSetCustomFieldDialog
+        open={bulkEditMode === 'custom-field'}
+        onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
+        definitions={customFieldDefs}
+        count={selected.size}
+        onConfirm={bulkSetCustomField}
+      />
 
       <AskToSignDialog
         open={askToSignOpen}

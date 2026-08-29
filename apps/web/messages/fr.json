@@ -1022,7 +1022,11 @@
     "alertDismissOnly": "Masquer seulement",
     "alertDismissAndDelete": "Masquer et supprimer",
     "alertDismissed": "Masquée",
-    "alertDeleteBody": "« {message} » sera définitivement supprimée de la fiche de ce contact."
+    "alertDeleteBody": "« {message} » sera définitivement supprimée de la fiche de ce contact.",
+    "bulkSetCustomField": "Définir un champ personnalisé…",
+    "bulkSetCustomFieldTitle": "Définir un champ personnalisé",
+    "bulkCustomFieldPicker": "Champ",
+    "bulkClearCustomField": "Supprimer la valeur"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
