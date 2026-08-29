@@ -450,16 +450,16 @@
         "body": "Accetta i metodi che i clienti svizzeri usano davvero — inclusi gli abbonamenti ricorrenti via TWINT."
       }
     },
-    "proof": "Un abbonamento pagato con TWINT sul piano Studio costa circa il 2% all-in — più o meno la metà di quanto fanno pagare gli strumenti internazionali solo-carte.",
+    "proof": "Un abbonamento pagato con TWINT sul piano Studio costa più o meno la metà di quanto fanno pagare gli strumenti internazionali solo-carte.",
     "cta": "Inizia gratis",
     "feesTitle": "Commissioni di pagamento, ben in vista",
     "feesIntro": "Applicate in aggiunta alla commissione standard di Stripe, che trasferiamo al costo. Solo percentuale — nessuna commissione Linyup fissa per transazione. Stessa tariffa su carte e TWINT.",
     "feesPlanHead": "Piano",
     "feesFeeHead": "Commissione di pagamento Linyup",
-    "feeFree": "1.7%",
-    "feeCoach": "1.2%",
-    "feeStudio": "0.7%",
-    "feeOrg": "da 0.4%",
+    "feeFree": "2.5%",
+    "feeCoach": "1.5%",
+    "feeStudio": "0.8%",
+    "feeOrg": "da 0.5%",
     "feeOrgNote": "sconti sul volume disponibili",
     "feesMicrocopy": "Vedi esattamente quanto paghi: la commissione di elaborazione di Stripe al costo, più una piccola percentuale Linyup sui pagamenti che incassi. Nessun costo fisso per transazione, nessun ricarico sulla quota di Stripe."
   },

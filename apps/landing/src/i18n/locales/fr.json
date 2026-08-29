@@ -450,16 +450,16 @@
         "body": "Acceptez les moyens que les clients suisses utilisent vraiment — y compris les abonnements récurrents sur TWINT."
       }
     },
-    "proof": "Un abonnement payé par TWINT sur la formule Studio coûte environ 2 % tout compris — soit à peu près la moitié de ce que facturent les outils internationaux qui n'acceptent que les cartes.",
+    "proof": "Un abonnement payé par TWINT sur la formule Studio coûte à peu près la moitié de ce que facturent les outils internationaux qui n'acceptent que les cartes.",
     "cta": "Commencer gratuitement",
     "feesTitle": "Frais de paiement, en toute transparence",
     "feesIntro": "Facturés en plus des frais standard de Stripe, que nous répercutons au prix coûtant. Uniquement un pourcentage — aucun frais Linyup fixe par transaction. Même taux sur les cartes et TWINT.",
     "feesPlanHead": "Formule",
     "feesFeeHead": "Frais de paiement Linyup",
-    "feeFree": "1.7%",
-    "feeCoach": "1.2%",
-    "feeStudio": "0.7%",
-    "feeOrg": "dès 0.4%",
+    "feeFree": "2.5%",
+    "feeCoach": "1.5%",
+    "feeStudio": "0.8%",
+    "feeOrg": "dès 0.5%",
     "feeOrgNote": "remises selon le volume disponibles",
     "feesMicrocopy": "Vous voyez exactement ce que vous payez : les frais de traitement Stripe au prix coûtant, plus un petit pourcentage Linyup sur les paiements que vous encaissez. Aucuns frais fixes par transaction, aucune majoration sur la part de Stripe."
   },

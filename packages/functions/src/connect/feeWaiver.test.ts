@@ -37,12 +37,12 @@ describe('the platform fee is waived for a comped tenant', () => {
     // place: a zero reachable by omitting something would be a free transaction
     // shipped by a typo.
     const bogus = computePlatformFee({ tier: 'nonsense' as never, amount: 10_000 })
-    assert.equal(bogus, 170, 'an unknown tier must fall back to the free (highest) rate')
+    assert.equal(bogus, 250, 'an unknown tier must fall back to the free (highest) rate')
   })
 
   it('absent and false both mean CHARGE', () => {
     const base = computePlatformFee({ tier: 'studio', amount: 10_000 })
-    assert.equal(base, 70)
+    assert.equal(base, 80)
     assert.equal(computePlatformFee({ tier: 'studio', amount: 10_000, waived: false }), base)
     assert.equal(computePlatformFee({ tier: 'studio', amount: 10_000, waived: undefined }), base)
   })
@@ -50,7 +50,7 @@ describe('the platform fee is waived for a comped tenant', () => {
   it('only an explicit true waives it, on both rails', () => {
     assert.equal(computePlatformFee({ tier: 'studio', amount: 10_000, waived: true }), 0)
     assert.equal(computePlatformFee({ tier: 'organization', amount: 10_000, waived: true }), 0)
-    assert.equal(takeRatePercent('studio'), 0.7)
+    assert.equal(takeRatePercent('studio'), 0.8)
     assert.equal(takeRatePercent('studio', true), 0)
   })
 
