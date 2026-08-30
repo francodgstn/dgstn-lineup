@@ -565,7 +565,7 @@ function applyModifiers(
   }
 }
 
-const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
+export const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
   'included',
   'spend_credits',
   'percent_off',
@@ -573,9 +573,16 @@ const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
 ])
 // Classes: coverage (free/credits) is the accessRule's job — the drop-in
 // benefit is a MEMBER RATE, price-modifying effects only.
-const DROP_IN_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
+//
+// EXPORTED BECAUSE THE EDITOR MUST ASK. These sets decide which effects the
+// resolver will HONOUR, and an editor keeping its own list offered `included`
+// on a class: the studio ticked "members get it included", the resolver ignored
+// it (coverage is the access rule's job), and the member paid the full drop-in
+// price. Two controls that looked like two ways to say "free", one of them
+// inert. An editor that reads these cannot reproduce that.
+export const DROP_IN_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
 // Courses: no grant+spend story in the webhook → no spend_credits.
-const COURSE_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
+export const COURSE_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
   'included',
   'percent_off',
   'fixed_price',

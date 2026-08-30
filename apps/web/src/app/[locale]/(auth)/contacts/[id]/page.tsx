@@ -96,6 +96,7 @@ import {
   readAlert,
   alertIsFired,
   planGrantExpiryMs,
+  planGrantIsCurrent,
 } from '@linyup/shared'
 import type {
   Contact,
@@ -2322,6 +2323,33 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
                     {t(`recurrence_${contact.subscription_recurrence}`)}
                     {contact.subscription_amount != null && (
                       <span> · {formatCurrency(contact.subscription_amount, currency)}</span>
+                    )}
+                  </p>
+                )}
+                {/* WHEN A ONE-OFF GRANT RUNS OUT ("2 months included"). It ends
+                    by comparison and nothing writes when it passes, so this
+                    line is the only place the studio can see it coming — and
+                    once it has passed, the only explanation of why a member
+                    the screen still lists is being turned away at the door. */}
+                {contact.subscription_expires_at && (
+                  <p
+                    className={`text-xs ${
+                      planGrantIsCurrent(contact) ? 'text-muted-foreground' : 'text-amber-600'
+                    }`}
+                  >
+                    {t(
+                      planGrantIsCurrent(contact)
+                        ? 'subscriptionExpiresOn'
+                        : 'subscriptionExpired',
+                      {
+                        date: contact.subscription_expires_at
+                          .toDate()
+                          .toLocaleDateString(undefined, {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          }),
+                      }
                     )}
                   </p>
                 )}
