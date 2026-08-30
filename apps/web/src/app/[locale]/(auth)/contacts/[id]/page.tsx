@@ -95,6 +95,7 @@ import {
   contactDeletionState,
   readAlert,
   alertIsFired,
+  planGrantExpiryMs,
 } from '@linyup/shared'
 import type {
   Contact,
@@ -2799,12 +2800,18 @@ function SetSubscriptionDialog({
 
       const typeName = subTypes.find((s) => s.id === typeId)?.name ?? ''
       const chosenPrice = activePrices.find((p) => p.id === priceId)
+      // The grant's own end date, from the chosen price ("2 months included").
+      // WRITTEN WHOLE, null included — assigning a monthly plan to someone whose
+      // intro lapsed must ERASE that old date, or the plan she was just given is
+      // already expired and no screen would explain why.
+      const grantExpiryMs = planGrantExpiryMs(chosenPrice)
       await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
         subscription_type_id: typeId,
         subscription_type_name: typeName,
         subscription_price_id: chosenPrice ? chosenPrice.id : null,
         subscription_recurrence: chosenPrice ? chosenPrice.recurrence : recurrence || null,
         subscription_amount: chosenPrice ? chosenPrice.amount : null,
+        subscription_expires_at: grantExpiryMs === null ? null : Timestamp.fromMillis(grantExpiryMs),
         subscription_type_updated_at: serverTimestamp(),
         // Assigning a subscription materializes a provisional lead (offline-paid
         // members count toward the cap too). See Contact.provisional.
@@ -2856,6 +2863,8 @@ function SetSubscriptionDialog({
         subscription_price_id: null,
         subscription_recurrence: null,
         subscription_amount: null,
+        // Goes with the grant it described — see the assign branch above.
+        subscription_expires_at: null,
         subscription_type_updated_at: serverTimestamp(),
       })
       onSaved()

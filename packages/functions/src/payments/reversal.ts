@@ -364,6 +364,11 @@ export async function reversePaymentEffects(
           subscription_recurrence: FieldValue.delete(),
           subscription_amount: FieldValue.delete(),
           subscription_source_ref: FieldValue.delete(),
+          // The grant's end date goes with the grant. Left standing it would be
+          // a date describing a subscription that is no longer there — harmless
+          // to the gate (which reads the type id first) but read by the
+          // expiring-soon automation, which would chase a member who has none.
+          subscription_expires_at: FieldValue.delete(),
           subscription_type_updated_at: FieldValue.serverTimestamp(),
         })
         outcome.subscription = 'cleared'

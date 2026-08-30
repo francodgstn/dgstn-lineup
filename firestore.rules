@@ -325,10 +325,33 @@ service cloud.firestore {
              && request.auth.token.sessionExpires >= request.time.toMillis();
     }
 
-    // The calling contact's single active subscription type id (custom-token session).
-    // Costs one extra get() — only evaluated for the 'subscription' course tier.
+    // The calling contact's document (custom-token session). Costs one extra
+    // get(); repeated calls within one evaluation hit the access-call cache,
+    // which is what already lets the course tiers below ask for the id twice.
+    function callerContactData() {
+      return get(/databases/$(database)/documents/contacts/$(request.auth.token.contactId)).data;
+    }
+
+    // Is the contact's flat plan grant still in force? The rules twin of
+    // `planGrantIsCurrent` (@linyup/shared) — a one-time price with
+    // `included_months` stamps an end date, and access must stop at it HERE too,
+    // or a member whose two months ran out could still open the course the gate
+    // and the checkout both refuse her.
+    //
+    // The `== null` guard is not decoration: the field is written EXPLICITLY as
+    // null for every grant with no end of its own, so a `get(…, default)`
+    // fallback would return that stored null and compare it to a timestamp.
+    function planGrantCurrent(d) {
+      return d.get('subscription_expires_at', null) == null
+             || d.subscription_expires_at > request.time;
+    }
+
+    // The calling contact's active subscription type id, or '' once the grant
+    // that carried it has lapsed. Only evaluated for the gated course tiers.
     function callerContactSubscriptionTypeId() {
-      return get(/databases/$(database)/documents/contacts/$(request.auth.token.contactId)).data.get('subscription_type_id', '');
+      return planGrantCurrent(callerContactData())
+             ? callerContactData().get('subscription_type_id', '')
+             : '';
     }
 
     // Whether the calling contact session owns a lifetime purchase of a course.
@@ -1230,10 +1253,23 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Completed purchases of a subscription price — the ledger behind
+      // "this intro can be bought once per person". Cloud Functions only, for
+      // the same reason as the two above: a client-writable row would let a
+      // member delete her own purchase and take a once-per-person offer twice.
+      // Readable by the contact so the shop can mark an offer already taken.
+      match /plan_purchases/{purchaseId} {
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId)
+                      || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
+        allow write: if false;
+      }
+
       // Rules apply to all other child collections. Single-segment on purpose:
       // the only deeper paths (goals/{id}/evaluations) are matched explicitly
       // above, and a recursive wildcard here could not exclude credit_grants /
-      // usage_windows from its write grant.
+      // usage_windows / plan_purchases from its write grant.
       match /{subcollection}/{docId} {
         // `contact_notes` is the studio's PRIVATE staff commentary about a contact
         // (behavioural / health / financial), authored in the staff-only Notes tab
@@ -1261,6 +1297,7 @@ service cloud.firestore {
         // duplicated on that explicit match; nothing is lost by removing it here.
         allow write: if subcollection != 'credit_grants'
                       && subcollection != 'usage_windows'
+                      && subcollection != 'plan_purchases'
                       && subcollection != 'goals'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }

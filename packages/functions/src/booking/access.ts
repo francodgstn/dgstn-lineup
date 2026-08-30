@@ -11,6 +11,7 @@ import { HttpsError } from 'firebase-functions/v2/https'
 import type { Timestamp } from 'firebase-admin/firestore'
 import {
   GUEST_SNAPSHOT,
+  planGrantIsCurrent,
   resolvePaymentOptions,
   resolveUsageLimit,
   usageWindowDocId,
@@ -122,11 +123,20 @@ export function denialMessage(denial: PaymentDenial, isAppointment: boolean): st
 }
 
 // The "held" shape every coverage/benefit resolution starts from: live
-// subscriptions + the primary snapshot, and
+// subscriptions + the primary snapshot while its grant is still current, and
 // non-exhausted, non-expired lesson-credit balances. Pure, no DB call — the DB
 // call (classifyHeldType, above) happens per-id, because it depends on
 // which id is being checked.
-function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
+//
+// The flat grant's expiry runs through `planGrantIsCurrent` (@linyup/shared) —
+// the SAME predicate the client-side union uses, deliberately, because this
+// function and that one answer the same question on the two sides of the wire
+// and a studio would never find out if they disagreed: the member would simply
+// be shown a price the server then refuses (or the reverse).
+function heldAndCreditSets(
+  contact: FirebaseFirestore.DocumentData,
+  nowMs: number
+): {
   held: Set<string>
   creditTypes: Set<string>
 } {
@@ -136,9 +146,13 @@ function heldAndCreditSets(contact: FirebaseFirestore.DocumentData): {
   active.forEach((s) => {
     if (s.subscription_type_id) held.add(s.subscription_type_id)
   })
-  if (contact.subscription_type_id) held.add(contact.subscription_type_id)
+  if (
+    contact.subscription_type_id &&
+    planGrantIsCurrent(contact as { subscription_expires_at?: Timestamp | null }, nowMs)
+  ) {
+    held.add(contact.subscription_type_id)
+  }
 
-  const nowMs = Date.now()
   const creditTypes = new Set(
     (
       (contact.credit_summary as
@@ -193,8 +207,8 @@ export async function loadContactPaymentContext(params: {
   const { teamId, contact, relevantTypeIds, usageAt } = params
   if (!contact) return { snapshot: GUEST_SNAPSHOT, limitedWindows: {} }
 
-  const { held, creditTypes } = heldAndCreditSets(contact)
   const nowMs = Date.now()
+  const { held, creditTypes } = heldAndCreditSets(contact, nowMs)
   const usableRemaining = (id: string): number => {
     const entries =
       (contact.credit_summary as

@@ -502,6 +502,7 @@ export function activityRequiresSubscription(
 // accepts full Contact docs, denormalised snapshots, and test fixtures alike.
 export interface SubscriptionCoverageSnapshot {
   subscription_type_id?: string | null
+  subscription_expires_at?: { toMillis(): number } | null
   active_subscriptions?: Array<{ subscription_type_id?: string | null }> | null
   credit_summary?: Array<{
     subscription_type_id?: string | null
@@ -510,11 +511,63 @@ export interface SubscriptionCoverageSnapshot {
   }> | null
 }
 
+/**
+ * THE ONE PREDICATE for "does the contact's flat plan grant still cover her".
+ *
+ * A one-time price with `included_months` ("CHF 100, 2 months included") is the
+ * only thing that sets an end date, because it is the only plan grant with no
+ * renewal to end it. Absent stamp = no end, which keeps every pre-existing
+ * document, every manual assignment and every recurring subscription behaving
+ * exactly as before.
+ *
+ * Deliberately shaped like the credit-pack expiry two lines below it, because it
+ * is the same idea: the ledger states a date, and every reader compares. Nothing
+ * writes when the date passes — so never ask whether the field is PRESENT, ask
+ * this function. It applies ONLY to the flat `subscription_type_id`;
+ * `active_subscriptions` is a mirror of live Stripe subscriptions and removes
+ * its own entries when they lapse.
+ */
+export function planGrantIsCurrent(
+  contact: Pick<SubscriptionCoverageSnapshot, 'subscription_expires_at'> | null | undefined,
+  nowMs: number = Date.now()
+): boolean {
+  const at = contact?.subscription_expires_at
+  return !at || at.toMillis() > nowMs
+}
+
+/**
+ * When a purchase of this price stops covering the member, as epoch ms — or null
+ * for "no end of its own". THE ONE rule, in epoch ms rather than any SDK's
+ * Timestamp so the server, the client and the seeds all compute the same instant
+ * and each wraps it in its own type.
+ *
+ * ONE-TIME PRICES ONLY. `included_months` on a recurring price would be a
+ * contradiction: a subscription's end is Stripe's to say, and a second end date
+ * stamped beside it would cut off a member who is still paying. A one-time price
+ * with no `included_months` means exactly what it says — bought once, no end (a
+ * lifetime membership, or a credit pack whose real limit is the credits, which
+ * carry their own expiry).
+ */
+export function planGrantExpiryMs(
+  price:
+    | { recurrence?: string | null; included_months?: number | null }
+    | null
+    | undefined,
+  nowMs: number = Date.now()
+): number | null {
+  if (!price || price.recurrence !== 'one_time') return null
+  const months = price.included_months
+  if (typeof months !== 'number' || months <= 0) return null
+  const d = new Date(nowMs)
+  d.setMonth(d.getMonth() + months)
+  return d.getTime()
+}
+
 /** The subscription-type ids a contact currently "holds" for coverage purposes:
  *  live subscriptions in `active_subscriptions`, the primary `subscription_type_id`
- *  snapshot, and non-exhausted, non-expired lesson-credit balances. Mirrors the
- *  coverage union in the bookSession callable (which stays authoritative — it
- *  additionally SPENDS credits). */
+ *  snapshot while its grant is still current, and non-exhausted, non-expired
+ *  lesson-credit balances. Mirrors the coverage union in the bookSession callable
+ *  (which stays authoritative — it additionally SPENDS credits). */
 export function heldSubscriptionTypeIds(
   contact: SubscriptionCoverageSnapshot | null | undefined,
   nowMs: number = Date.now(),
@@ -524,7 +577,9 @@ export function heldSubscriptionTypeIds(
   for (const s of contact.active_subscriptions ?? []) {
     if (s.subscription_type_id) held.add(s.subscription_type_id)
   }
-  if (contact.subscription_type_id) held.add(contact.subscription_type_id)
+  if (contact.subscription_type_id && planGrantIsCurrent(contact, nowMs)) {
+    held.add(contact.subscription_type_id)
+  }
   for (const e of contact.credit_summary ?? []) {
     if (!e.subscription_type_id) continue
     if ((e.remaining ?? 0) <= 0) continue

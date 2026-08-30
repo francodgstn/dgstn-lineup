@@ -68,6 +68,7 @@ import {
 import { persistAccountStatus } from './access'
 import { resolveSingleContact } from '../utils/contacts'
 import { grantCourseEntitlement, writeContactSubscriptionFields } from '../payments/effects'
+import { recordPlanPurchase } from '../payments/planPurchases'
 import {
   commitGiftCardDrawdown,
   giftCardCurrency,
@@ -260,8 +261,17 @@ async function applyCreditGrant(
 }
 
 /** Write the subscription fields onto a known contact + an activity-log entry.
- * Note: membership_expiration is NOT written here — the subscription axis
- * (subscription_type_id etc.) is separate from the affiliation axis. */
+ *
+ * The affiliation axis is still NOT touched here — `membership_expiration` was
+ * an affiliation field and stays gone. What the caller passes as
+ * `membershipExpiration` is the SUBSCRIPTION grant's own end date, computed from
+ * a one-time price's `included_months`, and it now lands on
+ * `subscription_expires_at`. It was computed and discarded until the readers to
+ * honour it existed; they do now (`planGrantIsCurrent`).
+ *
+ * ONE-TIME ONLY, guarded here rather than trusted from metadata: a recurring
+ * plan's end is Stripe's to say, and a second end date stamped alongside it
+ * would cut off a member who is still paying. */
 async function writeContactMembership(
   teamId: string,
   contactId: string,
@@ -275,9 +285,7 @@ async function writeContactMembership(
   }
 ): Promise<void> {
   const db = admin.firestore()
-  // Subscription-axis fields via the shared writer (single source of the field list).
-  // membership_expiration intentionally not written — subscription axis only.
-  void opts.membershipExpiration
+  const grantExpiry = md.recurrence === 'one_time' ? opts.membershipExpiration : null
   await writeContactSubscriptionFields(db, contactId, {
     subscriptionTypeId: md.subscriptionTypeId,
     subscriptionTypeName: md.subscriptionTypeName ?? null,
@@ -288,6 +296,19 @@ async function writeContactMembership(
     // earlier one-off purchase, so refunding that old charge can no longer clear
     // a membership this renewal is paying for.
     sourcePaymentRef: opts.paymentIntentId ?? null,
+    // Whole-record rule: written every time, null included, so starting a proper
+    // subscription ERASES the end date an earlier intro purchase left behind.
+    expiresAt: grantExpiry,
+  })
+  // Counts toward the price's per-contact purchase cap. A renewal carries no
+  // paymentIntentId and is deliberately not a purchase — see planPurchases.ts.
+  await recordPlanPurchase(db, contactId, {
+    teamId,
+    subscriptionTypeId: md.subscriptionTypeId,
+    priceId: md.priceId ?? null,
+    amountMajor: Math.round(opts.amountRappen) / 100,
+    source: 'stripe_connect',
+    paymentRef: opts.paymentIntentId ?? null,
   })
   await db
     .collection(CONTACTS_COLLECTION)

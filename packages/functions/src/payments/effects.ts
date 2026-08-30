@@ -26,12 +26,14 @@ import {
   COURSE_PURCHASES_SUBCOLLECTION,
   CONTACT_CREDIT_GRANTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  planGrantExpiryMs,
   type PaymentLineItem,
   type PaymentLineItemKind,
   type SubscriptionType,
   type SubscriptionPrice,
 } from '@linyup/shared'
 import type { firestore } from 'firebase-admin'
+import { recordPlanPurchase } from './planPurchases'
 
 type Db = firestore.Firestore
 
@@ -77,6 +79,14 @@ function addMonths(months: number): Timestamp {
   return Timestamp.fromDate(d)
 }
 
+/** The shared rule (`planGrantExpiryMs`), in the admin SDK's Timestamp. */
+export function planGrantExpiry(
+  price: Pick<SubscriptionPrice, 'recurrence' | 'included_months'> | null | undefined
+): Timestamp | null {
+  const ms = planGrantExpiryMs(price)
+  return ms === null ? null : Timestamp.fromMillis(ms)
+}
+
 /** Append a contact activity-log entry that references the originating payment. */
 async function logPaymentActivity(
   db: Db,
@@ -110,7 +120,14 @@ async function logPaymentActivity(
  * omitting the key would leave the ref of some earlier one-off purchase
  * standing, and refunding THAT payment would then clear a membership the
  * renewal is paying for. Same rule as the cancellation record in CLAUDE.md:
- * on a live write, write the record whole. */
+ * on a live write, write the record whole.
+ *
+ * `expiresAt` follows the SAME whole-record rule, for the same reason in the
+ * other direction: a member who bought "2 months for CHF 100" and later starts a
+ * proper monthly subscription must have that end date ERASED, and an omitted key
+ * on a merge would leave it standing until it silently cut off a paying member.
+ * So every caller answers the question, and null is a real answer meaning "this
+ * grant has no end of its own" (a recurring plan, whose end is Stripe's to say). */
 export async function writeContactSubscriptionFields(
   db: Db,
   contactId: string,
@@ -123,6 +140,9 @@ export async function writeContactSubscriptionFields(
     /** Doc id of the payment these fields were written FOR, or null when no
      *  single payment owns them (a recurring subscription renewal). */
     sourcePaymentRef: string | null
+    /** When this one-off grant stops covering the member (a one_time price with
+     *  `included_months`), or null for a grant with no end of its own. */
+    expiresAt?: Timestamp | null
   }
 ): Promise<void> {
   const update: Record<string, unknown> = {
@@ -132,6 +152,7 @@ export async function writeContactSubscriptionFields(
     subscription_price_id: fields.priceId ?? null,
     subscription_recurrence: fields.recurrence ?? null,
     subscription_source_ref: fields.sourcePaymentRef ?? null,
+    subscription_expires_at: fields.expiresAt ?? null,
     subscription_type_updated_at: FieldValue.serverTimestamp(),
   }
   if (fields.amountMajor != null) update.subscription_amount = fields.amountMajor
@@ -279,6 +300,18 @@ export async function applyPaymentEffects(db: Db, input: ApplyPaymentEffectsInpu
         amountMajor,
         // This payment owns the fields it just wrote — reversing it may clear them.
         sourcePaymentRef: paymentRef,
+        expiresAt: planGrantExpiry(price),
+      })
+      // Counts toward the price's per-contact purchase cap. Recorded on EVERY
+      // rail (a manager's cash entry included), enforced on the self-service one
+      // — see the header of payments/planPurchases.ts.
+      await recordPlanPurchase(db, contactId, {
+        teamId,
+        subscriptionTypeId: li.subscriptionTypeId,
+        priceId: li.priceId ?? null,
+        amountMajor,
+        source,
+        paymentRef,
       })
       if (price?.credits) {
         await grantPaymentCredits(db, contactId, {
