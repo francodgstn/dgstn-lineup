@@ -40,7 +40,7 @@ import {
   planHasHardContactCap, resolveIntroOffer,
 } from '@linyup/shared'
 import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, SubscriptionPrice, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
-import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, planGrantExpiryMs } from '@linyup/shared'
 // The ONE contact predicate — see packages/shared/src/utils/contactFilter.ts.
 // Never re-implement matching here; extend the resolver instead.
 import {
@@ -2840,15 +2840,18 @@ export default function ContactsPage() {
     invalidateContacts()
   }
 
-  // THE SAME FIVE FIELDS the per-contact dialog writes, every time — see the
-  // note on BulkSetSubscriptionDialog. The three price fields are written even
-  // when they are null: an omitted key on `updateDoc` leaves the PREVIOUS plan's
-  // price standing, which is exactly the defect this replaced, and it reaches
-  // the subscription history and the transitions ledger, not just the screen.
+  // THE SAME FIELDS the per-contact dialog writes, every time — see the note on
+  // BulkSetSubscriptionDialog. The price fields are written even when they are
+  // null: an omitted key on `updateDoc` leaves the PREVIOUS plan's price
+  // standing, which is exactly the defect this replaced, and it reaches the
+  // subscription history and the transitions ledger, not just the screen. The
+  // grant's end date obeys the same rule and for a sharper reason — inherited
+  // from a previous plan it would expire the one being assigned right now.
   const bulkSetSubscription = async (
     type: SubscriptionType | null,
     price: SubscriptionPrice | null
   ) => {
+    const grantExpiryMs = planGrantExpiryMs(price)
     await Promise.all([...selected].map((id) =>
       updateDoc(doc(db, CONTACTS_COLLECTION, id), {
         subscription_type_id: type?.id ?? null,
@@ -2856,6 +2859,8 @@ export default function ContactsPage() {
         subscription_price_id: price?.id ?? null,
         subscription_recurrence: price?.recurrence ?? null,
         subscription_amount: price?.amount ?? null,
+        subscription_expires_at:
+          grantExpiryMs === null ? null : Timestamp.fromMillis(grantExpiryMs),
         subscription_type_updated_at: serverTimestamp(),
         // Assigning a subscription materializes a provisional lead (offline-paid
         // members count toward the cap too). See Contact.provisional.

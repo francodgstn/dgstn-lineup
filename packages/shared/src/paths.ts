@@ -149,6 +149,10 @@ export const CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION = 'performance_checkins'
 export const CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION = 'subscription_history'
 // Lesson-credit grants (pack purchases) — functions-only writes; see CreditGrant.
 export const CONTACT_CREDIT_GRANTS_SUBCOLLECTION = 'credit_grants'
+// Completed purchases of a subscription PRICE — one row per payment, doc id =
+// the payment ref. Functions-only writes; read to enforce
+// `SubscriptionPrice.maxPurchasesPerContact`. See PlanPurchase.
+export const CONTACT_PLAN_PURCHASES_SUBCOLLECTION = 'plan_purchases'
 export const SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION = 'subscription_transitions'
 // Affiliation set — a contact may hold several (club + federation licence + grading).
 export const CONTACT_AFFILIATIONS_SUBCOLLECTION = 'affiliations'

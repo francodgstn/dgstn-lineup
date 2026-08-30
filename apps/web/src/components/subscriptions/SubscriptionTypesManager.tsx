@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, type UseFormRegister, type UseFormSetValue } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
@@ -28,6 +28,7 @@ import {
   isAppointmentActivity,
   introOfferProblem,
   introOfferSupport,
+  introOffersOf,
   isRecurringRecurrence,
   resolveIntroOffer,
   resolveUsageLimit,
@@ -36,6 +37,8 @@ import type {
   SubscriptionType,
   SubscriptionPrice,
   SubscriptionIntroOffer,
+  IntroOfferProblem,
+  IntroOfferSupport,
 } from '@linyup/shared'
 import {
   Dialog,
@@ -68,6 +71,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { useCourses } from '@/plugins/online-courses/hooks'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 const RECURRENCES = [
   'per_class',
@@ -79,29 +83,47 @@ const RECURRENCES = [
   'annual',
 ] as const
 
-const priceSchema = z.object({
-  id: z.string(),
-  amount: z.coerce.number().positive(),
-  recurrence: z.enum(RECURRENCES),
-  // Months of membership granted by a one_time price (e.g. intro offer). On a
-  // credit price, this is the pack's validity window.
-  included_months: z.coerce.number().int().positive().optional(),
-  // Credit pack (one_time only): the purchase grants this many lesson credits.
-  credits: z.coerce.number().int().positive().optional(),
-  label: z.string().max(40).optional(),
-  active: z.boolean().optional(),
-})
-
-// Empty-string-tolerant numeric fields — these live outside a useFieldArray
-// row, so the input may be blank while its sibling toggle is off.
+// Empty-string-tolerant numeric fields. An `<input type="number">` left blank
+// yields `''`, and `z.coerce.number()` turns that into 0 — which `.positive()`
+// then rejects, so the form refuses to save and says nothing about why. That is
+// not hypothetical: it made an UNLIMITED credit pack (the normal case — leave
+// the box empty) impossible to save at all.
+//
+// ZERO IS TREATED THE SAME WAY, and for the same reason: on every field this
+// guards — credits, months included, purchase cap, usage limit, intro periods —
+// zero and blank mean the identical thing ("none" / "no limit"). A stored 0 from
+// a seed or an older document would otherwise reproduce the very bug above on a
+// form the studio never typed a zero into.
 const optionalPositiveInt = z.preprocess(
-  (v) => (v === '' || v === undefined || v === null ? undefined : v),
+  (v) => (v === '' || v === undefined || v === null || Number(v) === 0 ? undefined : v),
   z.coerce.number().int().positive().optional()
 )
 const optionalNonNegativeAmount = z.preprocess(
   (v) => (v === '' || v === undefined || v === null ? undefined : v),
   z.coerce.number().min(0).optional()
 )
+
+const priceSchema = z.object({
+  id: z.string(),
+  amount: z.coerce.number().positive(),
+  recurrence: z.enum(RECURRENCES),
+  // Months of access granted by a one_time price ("2 months included"). On a
+  // credit price, this is the pack's validity window instead.
+  included_months: optionalPositiveInt,
+  // Credit pack (one_time only): the purchase grants this many lesson credits.
+  // BLANK MEANS UNLIMITED, which is why it must tolerate an empty string.
+  credits: optionalPositiveInt,
+  // How many times one contact may buy this price. Blank = unlimited.
+  maxPurchasesPerContact: optionalPositiveInt,
+  // This price's own intro offer ("first 3 months at 29, then the full price").
+  // Per PRICE, not per plan: a plan's monthly and annual price are different
+  // offers and a studio prices openers on both.
+  introEnabled: z.boolean().optional(),
+  introPeriods: optionalPositiveInt,
+  introAmount: optionalNonNegativeAmount,
+  label: z.string().max(40).optional(),
+  active: z.boolean().optional(),
+})
 
 const subTypeSchema = z.object({
   name: z.string().min(1).max(80),
@@ -117,14 +139,6 @@ const subTypeSchema = z.object({
   limitPer: z.enum(['day', 'week', 'month']).optional(),
   // Aggregator-only: what the partner pays per attended visit.
   payoutPerVisit: optionalNonNegativeAmount,
-  // Intro offer — first N periods of ONE recurring price at a reduced or zero
-  // amount, then the full price. Validated by the SHARED `introOfferProblem`
-  // (not by zod), because the rules are Stripe's and the server enforces the
-  // same ones: see @linyup/shared/utils/introOffer.ts.
-  introEnabled: z.boolean().optional(),
-  introPriceId: z.string().optional(),
-  introPeriods: optionalPositiveInt,
-  introAmount: optionalNonNegativeAmount,
 })
 type SubTypeData = z.infer<typeof subTypeSchema>
 
@@ -134,36 +148,33 @@ type SubTypeData = z.infer<typeof subTypeSchema>
  *
  *  • `public` → false. A half-edited copy must not land on the pricing page.
  *  • every price gets a NEW id (they are client-generated uuids, referenced by
- *    `introOffer.priceId`, by member subscriptions and by payment rows) — and
- *    the intro offer is re-pointed at the copy's own price, or dropped if the
- *    one it named was not copied.
+ *    member subscriptions and by payment rows).
  *  • no `id` / `order` / `created_at` — the create path below mints those, the
  *    same way it does for a brand-new type.
+ *
+ * The intro offer needs no remapping here any more: it rides ON its price row,
+ * so a re-issued price id carries its own offer with it. The id-map dance this
+ * used to do — and the "drop the offer if the price it named was not copied"
+ * case it had to handle — was a cost of storing the offer away from its price.
  *
  * There is no Stripe object on a subscription type (prices are minted at
  * checkout from these figures), so nothing Stripe-shaped can be inherited here.
  */
 function duplicateDefaults(source: SubscriptionType, copyName: string): SubTypeData {
   const base = emptyDefaults(source)
-  const idMap = new Map<string, string>()
-  const prices = (base.prices ?? []).map((p) => {
-    const nextId = crypto.randomUUID()
-    idMap.set(p.id, nextId)
-    return { ...p, id: nextId }
-  })
-  const introPriceId = base.introPriceId ? idMap.get(base.introPriceId) : undefined
   return {
     ...base,
     name: copyName,
     public: false,
-    prices,
-    introEnabled: base.introEnabled && !!introPriceId,
-    introPriceId: introPriceId ?? '',
+    prices: (base.prices ?? []).map((p) => ({ ...p, id: crypto.randomUUID() })),
   }
 }
 
 function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
   const limit = resolveUsageLimit(editing ?? {})
+  // Whichever shape the stored plan uses — the per-price list or the legacy
+  // single offer — read through the one normaliser, keyed by price id.
+  const introByPrice = new Map(introOffersOf(editing ?? {}).map((o) => [o.priceId, o]))
   return {
     name: editing?.name ?? '',
     description: editing?.description ?? '',
@@ -177,19 +188,22 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
     limitCount: limit?.count,
     limitPer: limit?.per ?? 'week',
     payoutPerVisit: editing?.payoutPerVisit,
-    introEnabled: !!editing?.introOffer,
-    introPriceId: editing?.introOffer?.priceId ?? '',
-    introPeriods: editing?.introOffer?.periods,
-    introAmount: editing?.introOffer?.amount,
-    prices: (editing?.prices ?? []).map((p) => ({
-      id: p.id,
-      amount: p.amount,
-      recurrence: p.recurrence,
-      included_months: p.included_months,
-      credits: p.credits,
-      label: p.label ?? '',
-      active: p.active ?? true,
-    })),
+    prices: (editing?.prices ?? []).map((p) => {
+      const intro = introByPrice.get(p.id)
+      return {
+        id: p.id,
+        amount: p.amount,
+        recurrence: p.recurrence,
+        included_months: p.included_months,
+        credits: p.credits,
+        maxPurchasesPerContact: p.maxPurchasesPerContact,
+        introEnabled: !!intro,
+        introPeriods: intro?.periods,
+        introAmount: intro?.amount,
+        label: p.label ?? '',
+        active: p.active ?? true,
+      }
+    }),
   }
 }
 
@@ -199,6 +213,128 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
 // second copy of where that edge is stored — and the copies disagreed: it read
 // only `accessRule`, so every appointment benefit looked unlinked, and an
 // unlinked-looking tick got wiped on the next save (UX-69).
+
+/**
+ * A number field that keeps its UNIT visible while you type in it.
+ *
+ * The placeholder is not a label: it disappears at the first keystroke, and a
+ * price row full of bare numbers ("2", "10", "1") cannot be read back at all.
+ * The amount field has always carried its currency this way — this is the same
+ * device, applied to the fields that were relying on a placeholder to explain
+ * themselves. `aria-label` still carries the full name for screen readers, since
+ * the suffix is an abbreviation.
+ */
+const SuffixInput = forwardRef<
+  HTMLInputElement,
+  React.ComponentProps<typeof Input> & { suffix: string }
+>(function SuffixInput({ suffix, className, ...props }, ref) {
+  return (
+    <div className={cn('relative', className)}>
+      {/* The right padding must clear the suffix, which is why the suffix is
+          measured in the same place it is drawn rather than guessed at. */}
+      <Input ref={ref} {...props} className="pr-[4.5rem] w-full" />
+      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+        {suffix}
+      </span>
+    </div>
+  )
+})
+
+/**
+ * One price's intro offer ("first 3 months at 29, then the full price").
+ *
+ * Rendered INSIDE the price row, and only for a recurring price — a one-off or
+ * per-class charge has no "then the full price" to return to, so there is
+ * nothing to offer rather than a control to disable.
+ */
+function IntroOfferRow({
+  index,
+  state,
+  currency,
+  showError,
+  register,
+  setValue,
+}: {
+  index: number
+  state: {
+    eligible: boolean
+    support: IntroOfferSupport
+    enabled: boolean
+    problem: IntroOfferProblem | null
+  }
+  currency: string
+  showError: boolean
+  register: UseFormRegister<SubTypeData>
+  setValue: UseFormSetValue<SubTypeData>
+}) {
+  const t = useTranslations('TeamSettings')
+  if (!state.eligible) return null
+
+  return (
+    <div className="border-t pt-2">
+      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          className="accent-primary"
+          checked={state.enabled}
+          onChange={(e) => setValue(`prices.${index}.introEnabled`, e.target.checked)}
+        />
+        {t('subTypeIntro')}
+      </label>
+      {state.enabled && (
+        <div className="mt-2 space-y-1.5 pl-5">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">{t('subTypeIntroAmount')}</Label>
+              <div className="relative w-[140px]">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  {...register(`prices.${index}.introAmount`)}
+                  className="h-8 pr-12 text-sm"
+                  placeholder="0.00"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                  {currency}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t('subTypeIntroPeriods')}</Label>
+              <Input
+                type="number"
+                step="1"
+                min="1"
+                max={INTRO_OFFER_MAX_PERIODS}
+                // Locked to 1 on a weekly/fortnightly price — the note below
+                // says why, rather than leaving a disabled control unexplained.
+                disabled={state.support === 'first_only'}
+                {...register(`prices.${index}.introPeriods`)}
+                className="h-8 w-[110px] text-sm"
+                placeholder="3"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{t('subTypeIntroFreeHint')}</p>
+          {state.support === 'first_only' && (
+            <p className="text-xs text-amber-600">{t('subTypeIntroWeeklyLimit')}</p>
+          )}
+          {showError && state.problem && (
+            <p className="text-xs text-destructive">
+              {/* `max` is passed for every reason, not just the one that uses
+                  it — next-intl throws on a MISSING placeholder and ignores a
+                  spare one, so the safe direction is to always supply it. */}
+              {t(`subTypeIntroErr_${state.problem}` as Parameters<typeof t>[0], {
+                max: INTRO_OFFER_MAX_PERIODS,
+              })}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SubTypeDialog({
   open,
@@ -226,6 +362,7 @@ function SubTypeDialog({
   const tc = useTranslations('Contacts')
   const tCat = useTranslations('OfferCatalogue')
   const tCommon = useTranslations('Common')
+  const tActivities = useTranslations('Activities')
 
   // The rows the edge editor offers. Built exactly as the catalogue builds them
   // — same shape, same collections — because it IS the same component reading
@@ -233,6 +370,13 @@ function SubTypeDialog({
   // can open one.
   const { data: activities = [] } = useActivities(teamId)
   const { data: courses = [] } = useCourses(teamId)
+  // EVERY plan, not just the one being edited. The rate rule is ONE rule per
+  // offering shared by all the plans on it, and the amber warning that says so
+  // resolves its names from this list — passing `[editing]` filtered every other
+  // plan to undefined, so the one surface where a studio edits a plan's own
+  // links was the one surface where "this also changes Basic and Gold" never
+  // appeared.
+  const { data: allPlans = [] } = useSubscriptionTypes(teamId)
   const offerings: Offering[] = useMemo(
     () => [
       ...activities.map((a) => ({
@@ -282,68 +426,60 @@ function SubTypeDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, duplicating, reset])
 
-  // ── Intro offer ────────────────────────────────────────────────────────────
+  // ── Intro offers, ONE PER PRICE ────────────────────────────────────────────
   // The editor never invents a rule: it offers exactly what
   // `introOfferSupport` / `introOfferProblem` (@linyup/shared) allow, and the
   // checkout applies exactly what they allow. A weekly plan therefore shows a
   // locked "first period only" instead of a periods field that Stripe cannot
   // honour — `duration: 'repeating'` is measured in MONTHS and nothing else, so
   // "the first 3 weeks" is not expressible and must not be offered.
-  const introEnabled = watch('introEnabled') ?? false
-  const introPriceId = watch('introPriceId') ?? ''
+  //
+  // The offer now lives ON its price row, which removed the price CHOOSER this
+  // section used to need, the auto-pick effect behind it, and the whole class of
+  // question "which of my prices did I put the offer on?".
   const watchedPrices = watch('prices') ?? []
-  // Only a RECURRING price can carry one: a per-class or one-off charge has no
-  // "then the full price" to return to.
-  const introEligiblePrices = watchedPrices.filter(
-    (p) => p.active !== false && isRecurringRecurrence(p.recurrence)
-  )
-  const introPrice = introEligiblePrices.find((p) => p.id === introPriceId) ?? null
-  const introSupport = introPrice ? introOfferSupport(introPrice.recurrence) : 'none'
-  // ── NUMBERS, not the strings the form holds ────────────────────────────────
-  // `watch()` returns RAW form state: a `<input type="number">` registered
-  // without `valueAsNumber` yields a STRING, and zod's coercion only runs at
-  // validation. Checking the raw value against `introOfferProblem` would call a
-  // perfectly good "79" not-a-number and refuse every save.
-  const introPeriods = Number(watch('introPeriods') ?? 1) || 1
-  const introAmountRaw = watch('introAmount') as unknown
-  // A BLANK field is not zero. `Number('')` is 0, which would quietly turn "I
-  // haven't typed the price yet" into "the first months are free".
-  const introAmount =
-    introAmountRaw === '' || introAmountRaw === undefined || introAmountRaw === null
-      ? NaN
-      : Number(introAmountRaw)
-  const introPriceForCheck = introPrice
-    ? { amount: Number(introPrice.amount), recurrence: introPrice.recurrence }
-    : null
 
-  // Pick the only eligible price automatically — a chooser with one option is a
-  // question with one answer.
-  useEffect(() => {
-    if (!introEnabled) return
-    if (introPrice) return
-    if (introEligiblePrices.length > 0) setValue('introPriceId', introEligiblePrices[0].id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [introEnabled, introPriceId, introEligiblePrices.length])
+  /** The offer typed into one price row, resolved against that row's own price:
+   *  what Stripe can express for it, the draft, and the shared verdict. */
+  const introRowState = (i: number) => {
+    const p = watchedPrices[i]
+    const recurrence = p?.recurrence
+    const eligible = !!p && p.active !== false && isRecurringRecurrence(recurrence)
+    const support = eligible ? introOfferSupport(recurrence) : 'none'
+    const enabled = eligible && (p?.introEnabled ?? false)
+    // ── NUMBERS, not the strings the form holds ──────────────────────────────
+    // `watch()` returns RAW form state: an `<input type="number">` registered
+    // without `valueAsNumber` yields a STRING, and zod's coercion only runs at
+    // validation. Checking the raw value would call a perfectly good "79"
+    // not-a-number and refuse every save.
+    const periods = support === 'first_only' ? 1 : Number(p?.introPeriods ?? 1) || 1
+    const amountRaw = p?.introAmount as unknown
+    // A BLANK field is not zero. `Number('')` is 0, which would quietly turn "I
+    // haven't typed the price yet" into "the first months are free".
+    const amount =
+      amountRaw === '' || amountRaw === undefined || amountRaw === null ? NaN : Number(amountRaw)
+    const draft: SubscriptionIntroOffer | null = enabled
+      ? { priceId: p!.id, periods, amount }
+      : null
+    const problem = draft
+      ? introOfferProblem(draft, { amount: Number(p!.amount), recurrence: p!.recurrence })
+      : null
+    return { eligible, support, enabled, draft, problem }
+  }
 
-  // A weekly/biweekly plan can only discount its FIRST period, so hold the
-  // stored value at 1 rather than letting a 3 sit in a hidden field and be saved.
-  useEffect(() => {
-    if (introSupport === 'first_only' && introPeriods !== 1) setValue('introPeriods', 1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [introSupport, introPeriods])
-
-  /** The shared verdict on what is currently typed, or null when it is sound.
-   *  Same function the server calls — the editor cannot save an offer the
-   *  checkout would refuse, and cannot refuse one the checkout would apply. */
-  const introDraft: SubscriptionIntroOffer | null = introEnabled
-    ? {
-        priceId: introPriceId,
-        periods: introSupport === 'first_only' ? 1 : introPeriods,
-        amount: introAmount,
-      }
-    : null
-  const introProblem = introDraft ? introOfferProblem(introDraft, introPriceForCheck) : null
+  // Every sound offer currently typed, and whether ANY row is unsound. The save
+  // is refused on the latter — an unsellable offer is worse than none, because
+  // `resolveIntroOffer` returns null for it and the public card would advertise
+  // nothing while the studio believed it had launched a promotion.
+  const introDrafts = watchedPrices
+    .map((_, i) => introRowState(i))
+    .filter((s) => s.draft && !s.problem)
+    .map((s) => s.draft!)
+  const hasIntroProblem = watchedPrices.some((_, i) => introRowState(i).problem)
   const [showIntroError, setShowIntroError] = useState(false)
+  // The linked-plans editor holds ticks this form's Save does not write — see
+  // the note on its mount below.
+  const [planLinksDirty, setPlanLinksDirty] = useState(false)
 
   const source = watch('source')
   const active = watch('active') ?? true
@@ -353,10 +489,8 @@ function SubTypeDialog({
   const limitPer = watch('limitPer') ?? 'week'
 
   async function onSubmit(data: SubTypeData) {
-    // An unsellable intro offer is worse than none: `resolveIntroOffer` returns
-    // null for it, so the public card would advertise nothing while the studio
-    // believed it had launched a promotion. Refuse the save and name the rule.
-    if (introProblem) {
+    // Refuse the save and name the rule on the row that broke it.
+    if (hasIntroProblem) {
       setShowIntroError(true)
       return
     }
@@ -374,6 +508,11 @@ function SubTypeDialog({
       // Credit packs are one_time only; omit credits: 0/undefined (don't write it).
       if (p.recurrence === 'one_time' && p.credits) {
         entry.credits = p.credits
+      }
+      // A purchase cap governs one-time prices only — `resolvePlanPurchaseCap`
+      // ignores it anywhere else, so writing it there would be inert data.
+      if (p.recurrence === 'one_time' && p.maxPurchasesPerContact) {
+        entry.maxPurchasesPerContact = p.maxPurchasesPerContact
       }
       return entry
     })
@@ -398,13 +537,17 @@ function SubTypeDialog({
         : editing?.payoutPerVisit !== undefined
           ? { payoutPerVisit: deleteField() }
           : {}),
-      // Intro offer: written only when it is switched on AND sound (the guard
-      // above has already refused the save otherwise); cleared when switched off.
-      ...(introDraft && !introProblem
-        ? { introOffer: introDraft }
-        : editing?.introOffer
-          ? { introOffer: deleteField() }
+      // Intro offers: the sound ones, one per price (the guard above has already
+      // refused the save if any row is unsound); the key is cleared when none
+      // remain. The LEGACY single-offer field is deleted in the same update —
+      // this write is where a document migrates forward, so the two shapes can
+      // never both stand and `introOffersOf` never has to arbitrate on real data.
+      ...(introDrafts.length > 0
+        ? { introOffers: introDrafts }
+        : editing?.introOffers?.length
+          ? { introOffers: deleteField() }
           : {}),
+      ...(editing?.introOffer ? { introOffer: deleteField() } : {}),
     }
     if (editing) {
       await updateDoc(
@@ -631,30 +774,73 @@ function SubTypeDialog({
                           ))}
                         </SelectContent>
                       </Select>
+                      {/* THE UNIT STAYS ON SCREEN once a value is typed. These
+                          used to carry their meaning in the PLACEHOLDER, which
+                          vanishes at the first keystroke and leaves a bare
+                          number nobody can read back — is "2" two months, two
+                          credits, or two of something else? Same suffix
+                          treatment as the currency on the amount field beside
+                          it, so the row reads as a sentence either way. */}
                       {watch(`prices.${i}.recurrence`) === 'one_time' && (
-                        <Input
+                        <SuffixInput
+                          suffix={t('subTypeIncludedMonthsSuffix')}
                           type="number"
                           step="1"
                           min="1"
+                          className="w-[150px]"
+                          aria-label={t('subTypeIncludedMonths')}
                           {...register(`prices.${i}.included_months`)}
-                          className="w-[130px]"
-                          placeholder={t('subTypeIncludedMonths')}
                         />
                       )}
                     </div>
                     {watch(`prices.${i}.recurrence`) === 'one_time' && (
-                      <div className="space-y-1">
-                        <Input
-                          type="number"
-                          step="1"
-                          min="0"
-                          {...register(`prices.${i}.credits`)}
-                          className="w-[160px] h-8 text-sm"
-                          placeholder={t('subTypeCreditsPlaceholder')}
-                        />
-                        <p className="text-xs text-muted-foreground">{t('subTypeCreditsHelp')}</p>
+                      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                        <div className="space-y-1">
+                          <SuffixInput
+                            suffix={t('subTypeCreditsSuffix')}
+                            type="number"
+                            step="1"
+                            min="1"
+                            className="w-[170px] h-8 text-sm"
+                            aria-label={t('subTypeCreditsPlaceholder')}
+                            {...register(`prices.${i}.credits`)}
+                          />
+                          <p className="text-xs text-muted-foreground">{t('subTypeCreditsHelp')}</p>
+                        </div>
+                        {/* How many times ONE person may buy this — the "our
+                            2-month intro is once per customer" rule. Blank =
+                            unlimited, which is why it is a plain optional
+                            field and not a switch with a number behind it. */}
+                        <div className="space-y-1">
+                          <SuffixInput
+                            suffix={t('subTypeMaxPurchasesSuffix')}
+                            type="number"
+                            step="1"
+                            min="1"
+                            className="w-[170px] h-8 text-sm"
+                            placeholder={t('subTypeMaxPurchasesUnlimited')}
+                            aria-label={t('subTypeMaxPurchases')}
+                            {...register(`prices.${i}.maxPurchasesPerContact`)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t('subTypeMaxPurchasesHelp')}
+                          </p>
+                        </div>
                       </div>
                     )}
+                    {/* This price's own intro offer. It sits INSIDE the row
+                        because it is a fact about this price — a plan may open
+                        its monthly and its annual price differently, and when
+                        the offer lived at plan level only one of them could
+                        have one. */}
+                    <IntroOfferRow
+                      index={i}
+                      state={introRowState(i)}
+                      currency={currency}
+                      showError={showIntroError}
+                      register={register}
+                      setValue={setValue}
+                    />
                     <div className="flex items-center gap-2">
                       <Input
                         {...register(`prices.${i}.label`)}
@@ -695,109 +881,6 @@ function SubTypeDialog({
                   </div>
                 ))}
               </div>
-            )}
-          </FormSection>
-
-          {/* Intro offer — the first N periods of ONE recurring price at a
-              reduced or zero amount, then the full price automatically. It is a
-              Stripe COUPON on the checkout, never a lower recurring price, and
-              the controls below offer only what Stripe can express. */}
-          <FormSection
-            title={t('subTypeIntro')}
-            description={t('subTypeIntroDesc')}
-            action={
-              <Switch
-                checked={introEnabled}
-                disabled={introEligiblePrices.length === 0}
-                onCheckedChange={(v) => {
-                  setValue('introEnabled', v)
-                  if (!v) setShowIntroError(false)
-                }}
-              />
-            }
-          >
-            {introEligiblePrices.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{t('subTypeIntroNoRecurring')}</p>
-            ) : (
-              introEnabled && (
-                <div className="space-y-2">
-                  {introEligiblePrices.length > 1 && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">{t('subTypeIntroPrice')}</Label>
-                      <Select
-                        value={introPriceId}
-                        onValueChange={(v) => setValue('introPriceId', v ?? '')}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {introEligiblePrices.map((p) => (
-                            <SelectItem
-                              key={p.id}
-                              value={p.id}
-                              label={
-                                `${formatCurrency(Number(p.amount) || 0, currency)} · ` +
-                                `${tc(`recurrence_${p.recurrence}`)}` +
-                                (p.label ? ` · ${p.label}` : '')
-                              }
-                            />
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">{t('subTypeIntroAmount')}</Label>
-                      <div className="relative w-[140px]">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          {...register('introAmount')}
-                          className="pr-12"
-                          placeholder="0.00"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-                          {currency}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">{t('subTypeIntroPeriods')}</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        min="1"
-                        max={INTRO_OFFER_MAX_PERIODS}
-                        // Locked to 1 on a weekly/fortnightly plan — see the
-                        // note below the field, which says why rather than
-                        // leaving a disabled control unexplained.
-                        disabled={introSupport === 'first_only'}
-                        {...register('introPeriods')}
-                        className="w-[110px]"
-                        placeholder="3"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{t('subTypeIntroFreeHint')}</p>
-                  {introSupport === 'first_only' && (
-                    <p className="text-xs text-amber-600">{t('subTypeIntroWeeklyLimit')}</p>
-                  )}
-                  {showIntroError && introProblem && (
-                    <p className="text-destructive text-xs">
-                      {/* `max` is passed for every reason, not just the one
-                          that uses it — next-intl throws on a MISSING
-                          placeholder and ignores a spare one, so the safe
-                          direction is to always supply it. */}
-                      {t(`subTypeIntroErr_${introProblem}` as Parameters<typeof t>[0], {
-                        max: INTRO_OFFER_MAX_PERIODS,
-                      })}
-                    </p>
-                  )}
-                </div>
-              )
             )}
           </FormSection>
 
@@ -863,9 +946,16 @@ function SubTypeDialog({
                 direction="from-plan"
                 plan={editing}
                 offerings={offerings}
-                plans={[editing]}
+                plans={allPlans}
                 currency={currency}
                 canEdit
+                // This editor sits INSIDE a form that holds unsaved input, and
+                // it writes the SAME document that form's Save writes. Both
+                // consequences were unhandled here: the empty state linked away
+                // from a half-filled dialog (discarding it), and unsaved ticks
+                // were silently dropped by a Save that writes the STORED links.
+                hostedInForm
+                onDirtyChange={setPlanLinksDirty}
               />
             </FormSection>
           ) : (
@@ -888,13 +978,22 @@ function SubTypeDialog({
           )}
           </DialogBody>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? t('saving') : t('save')}
-            </Button>
+          <DialogFooter className={planLinksDirty ? 'sm:justify-between' : undefined}>
+            {/* Says what this Save will DISCARD, beside the button that would
+                do it — the same warning the activity dialog carries, for the
+                same reason: this form writes the STORED links, so a tick left
+                unsaved in the box above is lost without a word. */}
+            {planLinksDirty && (
+              <p className="text-xs text-amber-600">{tActivities('planLinksUnsaved')}</p>
+            )}
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? t('saving') : t('save')}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -1054,7 +1153,7 @@ export const SubscriptionTypesManager = forwardRef<
                             question the public card asks. A badge on an offer
                             the checkout would ignore is the exact false
                             reassurance this feature must not give. */}
-                        {st.introOffer && resolveIntroOffer(st, st.introOffer.priceId) && (
+                        {(st.prices ?? []).some((p) => resolveIntroOffer(st, p.id)) && (
                           <Badge variant="outline" className="text-xs">
                             {t('subTypeIntroBadge')}
                           </Badge>

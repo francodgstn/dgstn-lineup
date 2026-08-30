@@ -127,7 +127,44 @@ describe('applyPaymentEffects', () => {
       source: 'manual',
       paymentRef: 'manual:x',
     })
-    assert.equal(ops.creates.length, 0)
+    // Assert the ABSENCE OF A GRANT, not the absence of every create: this
+    // purchase legitimately records a plan_purchases row (the per-contact
+    // purchase-cap ledger), and a bare count would have failed for that.
+    assert.equal(
+      ops.creates.filter((c) => c.path.includes('/credit_grants/')).length,
+      0,
+      'no credit grant for a price that carries no credits'
+    )
+  })
+
+  it('subscription → records the purchase, keyed by the payment ref', async () => {
+    const { db, ops } = mockDb({
+      'teams/t1/subscription_types/st1': {
+        name: 'Intro',
+        prices: [{ id: 'p1', amount: 100, recurrence: 'one_time', included_months: 2 }],
+      },
+    })
+    await applyPaymentEffects(db, {
+      teamId: 't1',
+      contactId: 'ct1',
+      lineItem: { kind: 'subscription', subscriptionTypeId: 'st1', priceId: 'p1' },
+      amountRappen: 10000,
+      currency: 'CHF',
+      source: 'manual',
+      paymentRef: 'manual:x',
+    })
+    // Doc id IS the payment ref — that is the whole idempotency story: the same
+    // purchase arriving twice cannot spend two of a member's allowed purchases.
+    const purchase = ops.creates.find((c) => c.path === 'contacts/ct1/plan_purchases/manual:x')
+    assert.ok(purchase, 'plan purchase recorded')
+    assert.equal(purchase!.data.price_id, 'p1')
+    assert.equal(purchase!.data.subscription_type_id, 'st1')
+
+    // ...and the grant it bought carries its own end date, because a one-time
+    // price with included_months has no renewal to end it.
+    const set = ops.sets.find((s) => s.path === 'contacts/ct1')
+    assert.ok(set, 'subscription fields written')
+    assert.ok(set!.data.subscription_expires_at, 'expiry stamped from included_months')
   })
 
   it('course → grants the entitlement + logs activity', async () => {

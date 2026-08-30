@@ -1026,7 +1026,9 @@
     "bulkSetCustomField": "Set custom field…",
     "bulkSetCustomFieldTitle": "Set custom field",
     "bulkCustomFieldPicker": "Field",
-    "bulkClearCustomField": "Clear value"
+    "bulkClearCustomField": "Clear value",
+    "subscriptionExpiresOn": "Access until {date}",
+    "subscriptionExpired": "Access ended {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2039,7 +2041,13 @@
     "sectionOther": "Other",
     "alertTypeAlways": "Active now",
     "alertPresetAlwaysInfo": "Applies immediately — nothing else to set.",
-    "presetSessionsCount": "{count, plural, one {# session} other {# sessions}}"
+    "presetSessionsCount": "{count, plural, one {# session} other {# sessions}}",
+    "subTypeIncludedMonthsSuffix": "mth incl.",
+    "subTypeCreditsSuffix": "lessons",
+    "subTypeMaxPurchases": "Purchases per person",
+    "subTypeMaxPurchasesSuffix": "× / person",
+    "subTypeMaxPurchasesUnlimited": "Any",
+    "subTypeMaxPurchasesHelp": "Leave empty for no limit. Only applies when members buy it themselves."
   },
   "Bookings": {
     "title": "Bookings",
@@ -3930,7 +3938,8 @@
     "navCoaching": "Coaching",
     "coachingSignInPrompt": "Sign in to see your goals and check-ins.",
     "navGamification": "Gamification",
-    "gamificationSignInPrompt": "Sign in to see your score, streak and badges."
+    "gamificationSignInPrompt": "Sign in to see your score, streak and badges.",
+    "membershipUntil": "Until {date}"
   },
   "FreePlan": {
     "downgradeBannerTitle": "Your trial has ended — you're now on the Free plan",
@@ -7318,11 +7327,9 @@
     "appointmentBadge": "Appointment",
     "classBadge": "Class",
     "plansHeading": "Plans",
-    "plansHint": "Tick who may book this, and who gets a member rate.",
+    "plansHint": "For each plan, say whether this is included, cheaper, or neither.",
     "includesHeading": "Includes",
-    "includesHint": "Tick what this plan opens, and where it earns a member rate.",
-    "accessToggle": "Can book",
-    "rateToggle": "Member rate",
+    "includesHint": "For each activity, say whether this plan includes it, makes it cheaper, or neither.",
     "sharedRule": "This rate is shared with {names} — changing it changes theirs too.",
     "unsaved": "Unsaved changes",
     "save": "Save",
@@ -7344,7 +7351,22 @@
     "noEdgeHere": "Open to everyone",
     "summaryCourseGated": "{plans, plural, =0 {Locked to plans, but none chosen yet} one {# plan can open it} other {# plans can open it}}",
     "summaryCoursePriced": "Sold one-off · {plans, plural, =0 {no member rate} one {# plan on the member rate} other {# plans on the member rate}}",
-    "summaryCourseOpen": "Free or sign-in only, so no plan changes who can open it."
+    "summaryCourseOpen": "Free or sign-in only, so no plan changes who can open it.",
+    "outcomeCovered": "Plan holders book this at no extra cost.",
+    "outcomeBoth": "Free for the first {count} {per}. After that, plan holders pay the reduced price instead of the full one.",
+    "outcomeNone": "Not part of this plan.",
+    "choiceNone": "Not included",
+    "afterAllowance": "After the first {count} {per}:",
+    "afterAllowanceFull": "Full price",
+    "per_day": "a day",
+    "per_week": "a week",
+    "per_month": "a month",
+    "setColumn": "Set every row to \"{choice}\"",
+    "outcomeRateOnlyClass": "Plan holders pay a reduced drop-in price — so this only bites if the class sells drop-ins.",
+    "outcomeRateOnlyAppointment": "Plan holders pay a reduced price for this appointment.",
+    "outcomeRateOnlyCourse": "Plan holders pay a reduced price for this course.",
+    "noPriceDropIn": "This class sells no drop-in, so there is no price to reduce yet. Add a drop-in price to make this apply.",
+    "noPriceAppointment": "This appointment has no price, so there is nothing to reduce. Price a duration to make this apply."
   },
   "VerifyEmail": {
     "title": "Confirm {email}",
@@ -7570,5 +7592,9 @@
         "description": "Score 90+ points in a month"
       }
     }
+  },
+  "PublicShop": {
+    "alreadyPurchased": "Already purchased",
+    "purchaseLimitReached": "You have already used this offer."
   }
 }

@@ -10,6 +10,8 @@ import {
   coursePlanEdgeUpdate,
   coursePlanFacets,
   courseGatedPlanIds,
+  offeringRateEffects,
+  rateHasAPriceToApplyTo,
   plansSharingCourseRate,
   type ActivityEdgeFields,
   type CourseEdgeFields,
@@ -360,5 +362,114 @@ describe('the course ↔ plan edge', () => {
       })
       assert.deepEqual(plansSharingCourseRate(fresh, 'premium'), ['basic'])
     })
+  })
+})
+
+// ── Which rate effects an editor may OFFER ───────────────────────────────────
+// The editor kept its own list and offered `included` on every rate row. On a
+// CLASS the resolver ignores that effect — coverage there is the access rule's
+// job — so a studio could tick "members get it included", save it, and watch
+// members pay the full drop-in price anyway. Two controls that read as two ways
+// to say "free", one of them inert.
+//
+// These assertions are the guard: `offeringRateEffects` derives from the very
+// sets `resolvePaymentOptions` honours, so an effect can never again be offered
+// where it would be dropped.
+describe('offeringRateEffects — the editor offers only what the resolver honours', () => {
+  const activityTarget = (type: 'class' | 'appointment') =>
+    ({ kind: 'activity' as const, doc: { type } as never })
+  const courseTarget = (type: 'free' | 'purchase' | 'subscription') =>
+    ({ kind: 'course' as const, doc: { accessRule: { type } } as never })
+
+  it('a CLASS gets price effects only — never `included`', () => {
+    assert.deepEqual(offeringRateEffects(activityTarget('class')), [
+      'percent_off',
+      'fixed_price',
+    ])
+  })
+
+  it('an APPOINTMENT keeps `included` — it is the only way to say "books free"', () => {
+    // The mirror image of the class: an appointment has no access facet at all
+    // (the price is the gate), so removing `included` there would take away the
+    // only control that expresses a covered appointment.
+    assert.deepEqual(offeringRateEffects(activityTarget('appointment')), [
+      'included',
+      'percent_off',
+      'fixed_price',
+    ])
+  })
+
+  it('a PURCHASE course keeps `included` — its tier has no gate to say it with', () => {
+    assert.deepEqual(offeringRateEffects(courseTarget('purchase')), [
+      'included',
+      'percent_off',
+      'fixed_price',
+    ])
+  })
+
+  it('never offers `spend_credits` — the resolver honours it, no editor writes it', () => {
+    for (const t of [
+      activityTarget('class'),
+      activityTarget('appointment'),
+      courseTarget('purchase'),
+    ]) {
+      assert.ok(!offeringRateEffects(t).includes('spend_credits' as never))
+    }
+  })
+})
+
+// ── Whether a member RATE has a price to reduce ──────────────────────────────
+// A rate is a discount ON something, and that something can be absent: a
+// members-only class that sells no drop-in has no second price, so "20% off"
+// there reduces nothing. The editor mutes the price effects when this is false
+// rather than letting a studio configure a rule that silently never applies.
+describe('rateHasAPriceToApplyTo', () => {
+  const activity = (doc: Record<string, unknown>) =>
+    ({ kind: 'activity' as const, doc: doc as never })
+
+  it('a class needs an ENABLED drop-in carrying a real price', () => {
+    assert.equal(rateHasAPriceToApplyTo(activity({ type: 'class' })), false)
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: false, priceAmount: 25 } })),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: true } })),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: true, priceAmount: 0 } })),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: true, priceAmount: 25 } })),
+      true
+    )
+  })
+
+  it('an appointment needs at least one PRICED duration', () => {
+    assert.equal(rateHasAPriceToApplyTo(activity({ type: 'appointment' })), false)
+    assert.equal(
+      rateHasAPriceToApplyTo(
+        activity({ type: 'appointment', durations: [{ minutes: 60, priceAmount: null }] })
+      ),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(
+        activity({
+          type: 'appointment',
+          durations: [{ minutes: 30 }, { minutes: 60, priceAmount: 90 }],
+        })
+      ),
+      true
+    )
+  })
+
+  it('a course always has one — that is what its purchase tier means', () => {
+    assert.equal(
+      rateHasAPriceToApplyTo({ kind: 'course', doc: { accessRule: { type: 'purchase' } } as never }),
+      true
+    )
   })
 })

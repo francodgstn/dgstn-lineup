@@ -311,19 +311,16 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'days_since_created', input: 'number', group: 'acquisition' },
   { value: 'subscription', input: 'subscription_select', group: 'subscription' },
   { value: 'subscription_status', input: 'subscription_status_select', group: 'subscription' },
-  // `subscription_expires_in` is NOT offered — it cannot fire, for two
-  // independent reasons, and an offered condition that silently matches nobody
-  // is the same defect as an action that is silently dropped (UX-51):
-  //   1. the engine tests `contact.membership_expiration`, and nothing writes
-  //      that field on a contact any more — the status-model refactor moved
-  //      expiry onto the affiliation axis, and the HMD migration deletes the
-  //      field outright (scripts/migration/transforms/contacts.ts);
-  //   2. the engine reads `cond.days`, while this editor's number mapping
-  //      writes `value` — so even with the field back, a rule built here would
-  //      compare against `undefined`.
-  // The replacement is the engine's own deferred `affiliation_expires_in`
-  // (see the NOTE in packages/functions/src/utils/automationEngine.ts). No
-  // stored rule, library entry or seed selects it, so nothing is orphaned.
+  { value: 'subscription_expires_in', input: 'number', group: 'subscription' },
+  // `subscription_expires_in` IS offered again. Both reasons it was withheld are
+  // gone: the engine now tests `subscription_expires_at`, which a one-time price
+  // carrying `included_months` writes ("CHF 100, 2 months included"), and the
+  // condition takes `value` like every other number condition, so this editor's
+  // one number mapping builds it correctly.
+  //
+  // It is the win-back lever for a grant that ends by COMPARISON rather than by
+  // an event — nothing fires when the date passes, so without a condition that
+  // asks on a scan there would be no way to reach the member at all.
   { value: 'has_affiliation', input: 'none', group: 'affiliation' },
   { value: 'affiliation_type', input: 'affiliation_type_select', group: 'affiliation' },
   { value: 'sessions_attended_min', input: 'number', group: 'attendance' },

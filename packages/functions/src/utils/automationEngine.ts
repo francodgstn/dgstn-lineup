@@ -99,8 +99,13 @@ export type AutomationCondition =
   | { type: 'subscription_status'; value: string }
   | { type: 'tag'; value: string }
   | { type: 'field_equals'; field: string; value: unknown }
-  // Subscription renewal
-  | { type: 'subscription_expires_in'; days: number } // expires in ≤ N days (and not expired)
+  // A one-off plan grant ending soon ("2 months included" runs out in ≤ N days).
+  // `value`, NOT `days`: every other number condition is authored through the
+  // editor's one number mapping, which writes `value`. This one asked for `days`
+  // and so compared against `undefined` for every rule the editor could build —
+  // one of the two reasons it was withheld from the picker. No stored rule uses
+  // the old key (it was never offered), so this is a rename, not a migration.
+  | { type: 'subscription_expires_in'; value: number }
   // Lifecycle
   | { type: 'days_since_created'; value: number } // created N+ days ago
   | { type: 'birthday_today' } // birthdate day+month matches today
@@ -181,6 +186,15 @@ export interface ContactData {
   acquisition_stage?: string
   subscription_type_id?: string
   subscription_status?: string
+  // End of a one-off plan grant, read by `subscription_expires_in`.
+  //
+  // Declared as a real `Timestamp` — NOT the loose `{seconds, nanoseconds}`
+  // union its neighbours carry — because `ContactData` must satisfy
+  // `ContactFilterSubject`, whose `planGrantIsCurrent` calls `toMillis()`. The
+  // engine reads contacts through the admin SDK, so that is what the field
+  // always is; the loose union would only make a dynamic group's rule and this
+  // condition disagree about the same contact.
+  subscription_expires_at?: Timestamp | null
   // All currently-active subscriptions the contact holds, deduped by type.
   // Maintained by onMemberSubscriptionWrite. Absent/empty = no active subscriptions.
   // The condition evaluator checks this in addition to subscription_type_id for back-compat.
@@ -579,12 +593,24 @@ export function evaluateContactConditions(
       }
 
       case 'subscription_expires_in': {
-        // True only if membership expires in ≤ N days AND hasn't already expired
-        if (!contact.membership_expiration) return false
-        const expiresMs = resolveTimestampMs(contact.membership_expiration)
+        // THE WIN-BACK WINDOW for a one-off plan grant ("CHF 100, 2 months
+        // included"). It reads `subscription_expires_at` — the same stamp the
+        // booking gate compares — so the studio can reach a member BEFORE the
+        // access she bought runs out.
+        //
+        // This is why a lazily-expiring field needs no sweep to be useful:
+        // nothing fires when the date passes, but the automation scan asks every
+        // contact this question on its own schedule, which is the moment the
+        // studio actually cares about anyway — a few days BEFORE.
+        //
+        // Already-expired is deliberately NOT a match: this is "ending soon",
+        // and a member whose access ran out last month is a different message on
+        // a different list, not a late copy of this one.
+        if (!contact.subscription_expires_at) return false
+        const expiresMs = resolveTimestampMs(contact.subscription_expires_at)
         if (expiresMs === null) return false
         const daysUntil = (expiresMs - now.getTime()) / 86400000
-        if (daysUntil < 0 || daysUntil > cond.days) return false
+        if (daysUntil < 0 || daysUntil > cond.value) return false
         break
       }
 

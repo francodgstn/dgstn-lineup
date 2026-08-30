@@ -1026,7 +1026,9 @@
     "bulkSetCustomField": "Définir un champ personnalisé…",
     "bulkSetCustomFieldTitle": "Définir un champ personnalisé",
     "bulkCustomFieldPicker": "Champ",
-    "bulkClearCustomField": "Supprimer la valeur"
+    "bulkClearCustomField": "Supprimer la valeur",
+    "subscriptionExpiresOn": "Accès jusqu'au {date}",
+    "subscriptionExpired": "Accès terminé le {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliations",
@@ -2039,7 +2041,13 @@
     "sectionOther": "Autre",
     "alertTypeAlways": "Dès maintenant",
     "alertPresetAlwaysInfo": "S'applique immédiatement — rien d'autre à définir.",
-    "presetSessionsCount": "{count, plural, one {# séance} other {# séances}}"
+    "presetSessionsCount": "{count, plural, one {# séance} other {# séances}}",
+    "subTypeIncludedMonthsSuffix": "mois incl.",
+    "subTypeCreditsSuffix": "leçons",
+    "subTypeMaxPurchases": "Achats par personne",
+    "subTypeMaxPurchasesSuffix": "× / personne",
+    "subTypeMaxPurchasesUnlimited": "Illimité",
+    "subTypeMaxPurchasesHelp": "Laisser vide pour aucune limite. S'applique uniquement aux achats faits par les membres."
   },
   "Bookings": {
     "title": "Réservations",
@@ -3930,7 +3938,8 @@
     "navCoaching": "Coaching",
     "coachingSignInPrompt": "Connectez-vous pour voir vos objectifs et vos bilans.",
     "navGamification": "Gamification",
-    "gamificationSignInPrompt": "Connecte-toi pour voir ton score, ta série et tes badges."
+    "gamificationSignInPrompt": "Connecte-toi pour voir ton score, ta série et tes badges.",
+    "membershipUntil": "Jusqu'au {date}"
   },
   "FreePlan": {
     "downgradeBannerTitle": "Votre essai est terminé — vous êtes maintenant sur l'offre Gratuite",
@@ -7318,11 +7327,9 @@
     "appointmentBadge": "Rendez-vous",
     "classBadge": "Cours",
     "plansHeading": "Abonnements",
-    "plansHint": "Cochez qui peut réserver et qui bénéficie d'un tarif membre.",
+    "plansHint": "Pour chaque plan, indiquez si ceci est inclus, moins cher, ou ni l'un ni l'autre.",
     "includesHeading": "Comprend",
-    "includesHint": "Cochez ce que cet abonnement ouvre et où il donne un tarif membre.",
-    "accessToggle": "Peut réserver",
-    "rateToggle": "Tarif membre",
+    "includesHint": "Pour chaque activité, indiquez si ce plan l'inclut, la rend moins chère, ou ni l'un ni l'autre.",
     "sharedRule": "Ce tarif est partagé avec {names} — le modifier modifie aussi le leur.",
     "unsaved": "Modifications non enregistrées",
     "save": "Enregistrer",
@@ -7344,7 +7351,22 @@
     "noEdgeHere": "Ouvert à tous",
     "summaryCourseGated": "{plans, plural, =0 {Réservé à des abonnements, mais aucun choisi} one {# abonnement peut l'ouvrir} other {# abonnements peuvent l'ouvrir}}",
     "summaryCoursePriced": "Vendu à l'unité · {plans, plural, =0 {aucun tarif membre} one {# abonnement au tarif membre} other {# abonnements au tarif membre}}",
-    "summaryCourseOpen": "Gratuit ou réservé aux connectés : aucun abonnement ne change qui peut l'ouvrir."
+    "summaryCourseOpen": "Gratuit ou réservé aux connectés : aucun abonnement ne change qui peut l'ouvrir.",
+    "outcomeCovered": "Les détenteurs du plan réservent ceci sans frais supplémentaires.",
+    "outcomeBoth": "Gratuit pour les {count} premiers {per}. Ensuite, les détenteurs du plan paient le prix réduit au lieu du prix plein.",
+    "outcomeNone": "Ne fait pas partie de ce plan.",
+    "choiceNone": "Non inclus",
+    "afterAllowance": "Après les {count} premiers {per} :",
+    "afterAllowanceFull": "Prix plein",
+    "per_day": "par jour",
+    "per_week": "par semaine",
+    "per_month": "par mois",
+    "setColumn": "Mettre toutes les lignes sur « {choice} »",
+    "outcomeRateOnlyClass": "Les détenteurs du plan paient un tarif drop-in réduit — cela ne s'applique que si le cours vend des drop-ins.",
+    "outcomeRateOnlyAppointment": "Les détenteurs du plan paient un tarif réduit pour ce rendez-vous.",
+    "outcomeRateOnlyCourse": "Les détenteurs du plan paient un tarif réduit pour ce cours.",
+    "noPriceDropIn": "Ce cours ne vend pas de drop-in, il n'y a donc pas encore de prix à réduire. Ajoutez un tarif drop-in pour que cela s'applique.",
+    "noPriceAppointment": "Ce rendez-vous n'a pas de tarif, il n'y a donc rien à réduire. Tarifez une durée pour que cela s'applique."
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",
@@ -7570,5 +7592,9 @@
         "description": "Marque 90 points ou plus en un mois"
       }
     }
+  },
+  "PublicShop": {
+    "alreadyPurchased": "Déjà acheté",
+    "purchaseLimitReached": "Vous avez déjà utilisé cette offre."
   }
 }

@@ -33,6 +33,7 @@ import {
 import { getConnectStripe } from '../utils/connect/client'
 import { generateSecureToken } from '../utils/crypto'
 import { applyPaymentEffects } from '../payments/effects'
+import { assertPlanPurchaseAllowance } from '../payments/planPurchases'
 import { assertManager, loadEnabledTeam, requireChargeableAccount } from './access'
 import {
   assertQuotedAmount,
@@ -398,6 +399,11 @@ export const createMembershipCheckout = onCall({ enforceAppCheck: APP_CHECK_ENFO
       throw new HttpsError('already-exists', 'You already have this subscription.')
     }
   }
+
+  // The price's own per-contact purchase cap ("this 2-month intro is once per
+  // person"). One-time prices only, self-service only, and it accepts the same
+  // two-tab race the check above does — see payments/planPurchases.ts.
+  await assertPlanPurchaseAllowance(admin.firestore(), session.contactId, price)
 
   // A 'full' purchase lands the buyer on the signup-finalize page (email prefilled)
   // — the finish-your-profile nudge — but ONLY if this contact hasn't completed

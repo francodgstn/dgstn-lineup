@@ -43,12 +43,16 @@ import type { Activity } from '../types/activity'
 import { resolveActivityAccessRule } from '../types/activity'
 import type { Benefit, BenefitEffect } from '../types/benefit'
 import { normalizeBenefit } from '../types/benefit'
+// The effect sets the RESOLVER honours — the editor offers exactly these.
+import { APPOINTMENT_EFFECTS, COURSE_EFFECTS, DROP_IN_EFFECTS } from './paymentOptions'
 
 /** The fields the edge is read from and written to — narrow on purpose, so a
- *  caller can pass a form's partial state or a Firestore snapshot alike. */
+ *  caller can pass a form's partial state or a Firestore snapshot alike.
+ *  `dropIn` / `durations` are not written by the edge: they are read to answer
+ *  whether a member rate would have any price to reduce (`rateHasAPriceToApplyTo`). */
 export type ActivityEdgeFields = Pick<
   Activity,
-  'type' | 'accessRule' | 'isFreeTrial' | 'memberBenefit'
+  'type' | 'accessRule' | 'isFreeTrial' | 'memberBenefit' | 'dropIn' | 'durations'
 >
 
 /** One (activity, plan) pair, as two independent facts. */
@@ -362,6 +366,63 @@ export function offeringPlanEdge(t: PlanLinkTarget, subTypeId: string): Activity
 
 export function offeringRateChoiceOf(t: PlanLinkTarget): ActivityRateChoice {
   return t.kind === 'activity' ? activityRateChoiceOf(t.doc) : courseRateChoiceOf(t.doc)
+}
+
+/**
+ * The rate effects an editor may OFFER for this offering — derived from the very
+ * sets `resolvePaymentOptions` honours, so the two cannot drift.
+ *
+ * THE CASE THIS EXISTS FOR: a CLASS. Its rate rule is applied to the DROP-IN
+ * price and price-modifying effects are the only ones the resolver reads there,
+ * because being covered is what the ACCESS facet already says. An editor with
+ * its own list offered `included` anyway, which made the two controls on a class
+ * row look like two ways to say "free" — and the second one silently did
+ * nothing. An appointment is the mirror image: it has no access facet at all
+ * (the price is the gate), so `included` there is the ONLY way to say a holder
+ * books free, and it must stay on offer.
+ *
+ * `spend_credits` is filtered out for every kind: the resolver honours it on an
+ * appointment, but no editor writes it and the UI story for it does not exist
+ * yet (see BenefitEditor's module doc). Offering it here would ship a control
+ * ahead of the feature.
+ */
+/**
+ * Is there a price here for a member RATE to reduce?
+ *
+ * A rate is a discount on something, and on two of the three kinds that
+ * something can simply be absent:
+ *
+ *   • a CLASS discounts its DROP-IN price — a members-only class that sells no
+ *     drop-in has no other price, so "20% off" reduces nothing;
+ *   • an APPOINTMENT discounts its priced durations — one with no price is
+ *     already free to everyone;
+ *   • a PURCHASE-tier course always has a price; that is what the tier means.
+ *
+ * `included` is exempt and never asks this: making something free does not need
+ * a price to start from. This answers only for the price-modifying effects, and
+ * the editor uses it to MUTE them rather than to hide them — the studio should
+ * see that the option exists and why it cannot bite yet.
+ */
+export function rateHasAPriceToApplyTo(t: PlanLinkTarget): boolean {
+  if (t.kind === 'course') return true
+  if (isAppointmentActivity(t.doc)) {
+    return (t.doc.durations ?? []).some((d) => (d.priceAmount ?? 0) > 0)
+  }
+  const dropIn = t.doc.dropIn
+  return !!dropIn?.enabled && (dropIn.priceAmount ?? 0) > 0
+}
+
+export type OfferableRateEffect = 'included' | 'percent_off' | 'fixed_price'
+
+export function offeringRateEffects(t: PlanLinkTarget): OfferableRateEffect[] {
+  const allowed =
+    t.kind === 'course'
+      ? COURSE_EFFECTS
+      : isAppointmentActivity(t.doc as Pick<Activity, 'type'>)
+        ? APPOINTMENT_EFFECTS
+        : DROP_IN_EFFECTS
+  // A fixed order, so the chips do not reshuffle between offerings.
+  return (['included', 'percent_off', 'fixed_price'] as const).filter((e) => allowed.has(e))
 }
 
 export function plansSharingOfferingRate(t: PlanLinkTarget, subTypeId: string): string[] {

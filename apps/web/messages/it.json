@@ -1026,7 +1026,9 @@
     "bulkSetCustomField": "Imposta campo personalizzato…",
     "bulkSetCustomFieldTitle": "Imposta campo personalizzato",
     "bulkCustomFieldPicker": "Campo",
-    "bulkClearCustomField": "Rimuovi valore"
+    "bulkClearCustomField": "Rimuovi valore",
+    "subscriptionExpiresOn": "Accesso fino al {date}",
+    "subscriptionExpired": "Accesso terminato il {date}"
   },
   "TeamAffiliations": {
     "title": "Affiliazioni",
@@ -2039,7 +2041,13 @@
     "sectionOther": "Altro",
     "alertTypeAlways": "Attivo subito",
     "alertPresetAlwaysInfo": "Si applica immediatamente — nient'altro da impostare.",
-    "presetSessionsCount": "{count, plural, one {# sessione} other {# sessioni}}"
+    "presetSessionsCount": "{count, plural, one {# sessione} other {# sessioni}}",
+    "subTypeIncludedMonthsSuffix": "mesi incl.",
+    "subTypeCreditsSuffix": "lezioni",
+    "subTypeMaxPurchases": "Acquisti per persona",
+    "subTypeMaxPurchasesSuffix": "× / persona",
+    "subTypeMaxPurchasesUnlimited": "Illimitato",
+    "subTypeMaxPurchasesHelp": "Lascia vuoto per nessun limite. Vale solo per gli acquisti fatti dai membri stessi."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -3930,7 +3938,8 @@
     "navCoaching": "Coaching",
     "coachingSignInPrompt": "Accedi per vedere i tuoi obiettivi e i tuoi check-in.",
     "navGamification": "Gamification",
-    "gamificationSignInPrompt": "Accedi per vedere il tuo punteggio, la tua serie e i tuoi badge."
+    "gamificationSignInPrompt": "Accedi per vedere il tuo punteggio, la tua serie e i tuoi badge.",
+    "membershipUntil": "Fino al {date}"
   },
   "FreePlan": {
     "downgradeBannerTitle": "La tua prova è terminata — sei ora sul piano Free",
@@ -7318,11 +7327,9 @@
     "appointmentBadge": "Appuntamento",
     "classBadge": "Corso",
     "plansHeading": "Abbonamenti",
-    "plansHint": "Seleziona chi può prenotare e chi ottiene una tariffa soci.",
+    "plansHint": "Per ogni piano, indica se questo è incluso, più economico o nessuno dei due.",
     "includesHeading": "Include",
-    "includesHint": "Seleziona cosa sblocca questo abbonamento e dove dà una tariffa soci.",
-    "accessToggle": "Può prenotare",
-    "rateToggle": "Tariffa soci",
+    "includesHint": "Per ogni attività, indica se questo piano la include, la rende più economica o nessuno dei due.",
     "sharedRule": "Questa tariffa è condivisa con {names}: modificarla cambia anche la loro.",
     "unsaved": "Modifiche non salvate",
     "save": "Salva",
@@ -7344,7 +7351,22 @@
     "noEdgeHere": "Aperto a tutti",
     "summaryCourseGated": "{plans, plural, =0 {Riservato agli abbonamenti, ma nessuno scelto} one {# abbonamento può aprirlo} other {# abbonamenti possono aprirlo}}",
     "summaryCoursePriced": "Venduto singolarmente · {plans, plural, =0 {nessuna tariffa soci} one {# abbonamento con tariffa soci} other {# abbonamenti con tariffa soci}}",
-    "summaryCourseOpen": "Gratuito o solo con accesso: nessun abbonamento cambia chi può aprirlo."
+    "summaryCourseOpen": "Gratuito o solo con accesso: nessun abbonamento cambia chi può aprirlo.",
+    "outcomeCovered": "Chi ha il piano prenota senza costi aggiuntivi.",
+    "outcomeBoth": "Gratis per i primi {count} {per}. Poi chi ha il piano paga il prezzo ridotto invece di quello pieno.",
+    "outcomeNone": "Non fa parte di questo piano.",
+    "choiceNone": "Non incluso",
+    "afterAllowance": "Dopo i primi {count} {per}:",
+    "afterAllowanceFull": "Prezzo pieno",
+    "per_day": "al giorno",
+    "per_week": "a settimana",
+    "per_month": "al mese",
+    "setColumn": "Imposta tutte le righe su \"{choice}\"",
+    "outcomeRateOnlyClass": "Chi ha il piano paga un prezzo drop-in ridotto — vale solo se la lezione vende drop-in.",
+    "outcomeRateOnlyAppointment": "Chi ha il piano paga un prezzo ridotto per questo appuntamento.",
+    "outcomeRateOnlyCourse": "Chi ha il piano paga un prezzo ridotto per questo corso.",
+    "noPriceDropIn": "Questa lezione non vende drop-in, quindi non c'è ancora un prezzo da ridurre. Aggiungi un prezzo drop-in perché abbia effetto.",
+    "noPriceAppointment": "Questo appuntamento non ha prezzo, quindi non c'è nulla da ridurre. Assegna un prezzo a una durata perché abbia effetto."
   },
   "VerifyEmail": {
     "title": "Conferma {email}",
@@ -7570,5 +7592,9 @@
         "description": "Ottieni 90+ punti in un mese"
       }
     }
+  },
+  "PublicShop": {
+    "alreadyPurchased": "Già acquistato",
+    "purchaseLimitReached": "Hai già utilizzato questa offerta."
   }
 }

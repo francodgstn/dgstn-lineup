@@ -1,9 +1,14 @@
-// THE ONE validator for a plan's intro offer ("first 3 months at CHF 1, then
+// THE ONE validator for a plan's intro offers ("first 3 months at CHF 1, then
 // CHF 79/month"). Pure and client-safe: the subscription-type editor, the
 // public_profile mirror, the public pricing card, the shop checkout modal and
 // both membership checkout callables all resolve through THIS function, so an
 // offer that cannot be sold is never advertised and an offer that is advertised
 // is exactly the one that gets applied.
+//
+// A plan may carry one offer PER PRICE. Every entry point below is already
+// per-price — `resolveIntroOffer(type, priceId)` is the only way in, and it was
+// so before the list existed, which is why widening the storage changed no
+// caller. `introOffersOf` is the one place that reads the storage shape.
 //
 // ─── What this is NOT ────────────────────────────────────────────────────────
 // It is NOT an arm of `resolvePaymentOptions`, and must never become one. That
@@ -189,19 +194,42 @@ export function introOfferProblem(
 }
 
 /**
+ * Every intro offer this plan carries, whichever shape it is stored in.
+ *
+ * THE ONE PLACE that knows there are two shapes: `introOffers` (one per price,
+ * current) and `introOffer` (a single plan-level offer, legacy). A stored
+ * document is never rewritten to be readable — it is read.
+ *
+ * At most one offer survives per priceId, FIRST WINS. Two offers on one price is
+ * not a state the editor can produce; if hand-edited data ever holds it, taking
+ * the first is stable and order-independent for every caller, which "last wins"
+ * would not be.
+ */
+export function introOffersOf(
+  type: Pick<SubscriptionType, 'introOffer' | 'introOffers'>
+): SubscriptionIntroOffer[] {
+  const list = type.introOffers ?? (type.introOffer ? [type.introOffer] : [])
+  const seen = new Set<string>()
+  return list.filter((o) => {
+    if (!o || typeof o.priceId !== 'string' || seen.has(o.priceId)) return false
+    seen.add(o.priceId)
+    return true
+  })
+}
+
+/**
  * Resolve the plan's intro offer for ONE of its prices.
  *
- * Returns null when the plan has no offer, when the offer names a DIFFERENT
- * price, or when it breaks any rule above. Callers that want to explain the
- * refusal call `introOfferProblem` themselves — the editor does; nothing else
- * needs to.
+ * Returns null when no offer names this price, or when the one that does breaks
+ * any rule above. Callers that want to explain the refusal call
+ * `introOfferProblem` themselves — the editor does; nothing else needs to.
  */
 export function resolveIntroOffer(
-  type: Pick<SubscriptionType, 'introOffer' | 'prices'>,
+  type: Pick<SubscriptionType, 'introOffer' | 'introOffers' | 'prices'>,
   priceId: string
 ): ResolvedIntroOffer | null {
-  const offer = type.introOffer
-  if (!offer || offer.priceId !== priceId) return null
+  const offer = introOffersOf(type).find((o) => o.priceId === priceId)
+  if (!offer) return null
   const price = (type.prices ?? []).find((p) => p.id === priceId && p.active !== false)
   if (!price) return null
   if (introOfferProblem(offer, price)) return null
