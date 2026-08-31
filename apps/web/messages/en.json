@@ -6582,7 +6582,7 @@
       "intro": "Pricing pulls together three ideas that usually live in different places — what you offer, what you sell, and the benefits that connect them. Explore the map, browse a few common setups, then try it live with a fictional visitor.",
       "linkLabels": {
         "plans": "Offer → Plans",
-      "activities": "Offer → Activities",
+        "activities": "Offer → Activities",
         "courses": "Offer → Online courses",
         "payments": "Payments",
         "booking": "Settings → Booking",
@@ -7435,7 +7435,8 @@
     "setAllLabel": "Set all",
     "choiceNoneDesc": "Holders pay the normal price — this plan does nothing here.",
     "noPriceDropIn": "This class sells no drop-in, so there is no price to reduce yet. Add a drop-in price to make this apply.",
-    "noPriceAppointment": "This appointment has no price, so there is nothing to reduce. Price a duration to make this apply."
+    "noPriceAppointment": "This appointment has no price, so there is nothing to reduce. Price a duration to make this apply.",
+    "naCourseNotSold": "Not on sale, so there is no price to reduce. Turn on “Sell it without a plan” in the course settings."
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

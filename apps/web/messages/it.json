@@ -6582,7 +6582,7 @@
       "intro": "I prezzi mettono insieme tre idee che di solito vivono separate — ciò che offri, ciò che vendi e i vantaggi che le collegano. Esplora la mappa, dai un'occhiata ad alcune configurazioni comuni, poi provala dal vivo con un visitatore fittizio.",
       "linkLabels": {
         "plans": "Offerta → Piani",
-      "activities": "Offerta → Attività",
+        "activities": "Offerta → Attività",
         "courses": "Offerta → Corsi online",
         "payments": "Pagamenti",
         "booking": "Impostazioni → Prenotazione",
@@ -7435,7 +7435,8 @@
     "setAllLabel": "Imposta tutto",
     "choiceNoneDesc": "Chi lo possiede paga il prezzo normale — questo piano non fa nulla qui.",
     "noPriceDropIn": "Questa lezione non vende drop-in, quindi non c'è ancora un prezzo da ridurre. Aggiungi un prezzo drop-in perché abbia effetto.",
-    "noPriceAppointment": "Questo appuntamento non ha prezzo, quindi non c'è nulla da ridurre. Assegna un prezzo a una durata perché abbia effetto."
+    "noPriceAppointment": "Questo appuntamento non ha prezzo, quindi non c'è nulla da ridurre. Assegna un prezzo a una durata perché abbia effetto.",
+    "naCourseNotSold": "Non in vendita, quindi non c'è alcun prezzo da ridurre. Attiva «Vendilo senza piano» nelle impostazioni del corso."
   },
   "VerifyEmail": {
     "title": "Conferma {email}",
