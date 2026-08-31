@@ -48,12 +48,14 @@ const ACCESS_BADGE: Record<string, string> = {
 function CourseCard({ course, onOpen, currency }: { course: Course; onOpen: () => void; currency: string }) {
   const t = useTranslations('Courses')
   const accessType = course.accessRule?.type ?? 'registered'
+  // THE SAME NAMES THE SETTINGS TIER CARDS USE (`access_*`) — the chip on this
+  // card and the option a studio picked have to be the same word, or the list
+  // and the form describe one course two ways. Sold keeps its own chip, because
+  // here the PRICE is the useful half.
   const accessLabel =
-    accessType === 'free' ? t('accessFree')
-    : accessType === 'subscription' ? t('accessSubscription')
-    : accessType === 'purchase'
+    accessType === 'purchase'
       ? t('soldBadge', { price: formatCurrency(course.accessRule?.priceAmount ?? 0, currency) })
-      : t('accessRegistered')
+      : t(`access_${accessType}` as const)
   return (
     <button
       type="button"

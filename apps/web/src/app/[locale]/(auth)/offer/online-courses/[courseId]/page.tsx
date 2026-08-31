@@ -9,6 +9,8 @@ import { storage } from '@/lib/firebase'
 import { Link, useRouter } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useAuth } from '@/contexts/AuthContext'
+import { COURSES_COLLECTION } from '@linyup/shared'
+import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
 import { useTabParam } from '@/hooks/useTabParam'
 import { Button } from '@/components/ui/button'
@@ -17,7 +19,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -44,13 +45,6 @@ import {
 } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
-import {
-  BenefitEditor,
-  toBenefitFormValue,
-  toBenefitPayload,
-  benefitPercentInvalid,
-  benefitAmountInvalid,
-} from '@/components/pricing/BenefitEditor'
 
 const LESSON_ICON: Record<LessonType, typeof FileText> = {
   text: FileText,
@@ -545,8 +539,11 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, benefit, status, hideFromShop,
+  course, courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, benefit, status, hideFromShop,
 }: {
+  /** The whole document — the matcher reads the edge off it, and reading the
+   *  scalars below from the same object keeps the two in step. */
+  course: Course
   courseId: string
   teamId: string
   title: string
@@ -560,7 +557,8 @@ function SettingsTab({
   hideFromShop?: boolean
 }) {
   const t = useTranslations('Courses')
-  const tBenefit = useTranslations('Benefit')
+  // The matcher's own copy lives in the catalogue namespace that owns it.
+  const tCat = useTranslations('OfferCatalogue')
   const { team } = useAuth()
   const currency = team?.default_currency ?? 'CHF'
   const queryClient = useQueryClient()
@@ -568,12 +566,13 @@ function SettingsTab({
   const [localTitle, setLocalTitle] = useState(title)
   const [localSummary, setLocalSummary] = useState(summary)
   const [localAccess, setLocalAccess] = useState(accessType)
-  const [localSubIds, setLocalSubIds] = useState<string[]>(initialSubIds ?? [])
   const initialPriceText = typeof priceAmount === 'number' ? String(priceAmount) : ''
   const [localPriceText, setLocalPriceText] = useState(initialPriceText)
-  // Subscriber benefit on the purchase price — 'purchase' tier only.
-  const initialBenefit = toBenefitFormValue(benefit)
-  const [localBenefit, setLocalBenefit] = useState(initialBenefit)
+  // WHICH PLANS open or discount this course is NOT edited here any more — see
+  // the matcher below. This form owns the TIER and the PRICE; the plan edge has
+  // exactly one writer in the product and it is `ActivityPlanLinks`, which saves
+  // itself (no `onDirtyChange` here: unlike the activity DIALOG, nothing on this
+  // page closes over an unsaved edge).
   // Modelled as "show in shop" for the UI (on = visible); stored as hideFromShop.
   const [localShowInShop, setLocalShowInShop] = useState(hideFromShop !== true)
   const [uploading, setUploading] = useState(false)
@@ -590,14 +589,14 @@ function SettingsTab({
 
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(teamId)
 
-  // The included-subs checkbox list is shared by the 'subscription' and 'purchase' tiers.
-  const showSubsList = localAccess === 'subscription' || localAccess === 'purchase'
   const localPriceNum = parseFloat(localPriceText.replace(',', '.'))
   // Stripe's minimum charge is ~0.50 in the team's currency.
   const purchasePriceInvalid =
     localAccess === 'purchase' && !(Number.isFinite(localPriceNum) && localPriceNum >= 0.5)
-  const benefitPercentInvalidNow = localAccess === 'purchase' && benefitPercentInvalid(localBenefit)
-  const benefitAmountInvalidNow = localAccess === 'purchase' && benefitAmountInvalid(localBenefit)
+  // The matcher only has an edge to draw once the TIER gives it one: a free or
+  // sign-in-only course has neither a gate nor a price, so there is nothing for
+  // a plan to open or reduce (`coursePlanFacets` says the same thing).
+  const tierHasPlanEdge = localAccess === 'subscription' || localAccess === 'purchase'
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['course', courseId] })
   const dirty =
@@ -605,19 +604,46 @@ function SettingsTab({
     localSummary !== summary ||
     localAccess !== accessType ||
     localPriceText !== initialPriceText ||
-    localShowInShop !== (hideFromShop !== true) ||
-    JSON.stringify(localSubIds.slice().sort()) !==
-      JSON.stringify((initialSubIds ?? []).slice().sort()) ||
-    JSON.stringify(localBenefit) !== JSON.stringify(initialBenefit)
+    localShowInShop !== (hideFromShop !== true)
 
   const saveMutation = useMutation({
     mutationFn: () => {
+      // THE GATE LIST IS CARRIED, NEVER REWRITTEN, by this form. On the
+      // 'subscription' tier `accessRule.subscriptionTypeIds` IS the gate, and
+      // the matcher below is its writer — so saving the title must not put a
+      // stale copy back over what the matcher just wrote.
+      const gateIds = accessType === 'subscription' ? (initialSubIds ?? []) : []
+
       let accessRule: Course['accessRule']
       if (localAccess === 'subscription') {
-        accessRule = { type: 'subscription', subscriptionTypeIds: localSubIds }
+        accessRule = { type: 'subscription', subscriptionTypeIds: gateIds }
       } else if (localAccess === 'purchase') {
-        // localSubIds here is the OPTIONAL "included free for these subs" list.
-        accessRule = { type: 'purchase', priceAmount: localPriceNum, subscriptionTypeIds: localSubIds }
+        // NO "included free for these subs" LIST ANY MORE. It was a second way
+        // to say what the matcher's "Included" column says, on the same course,
+        // and the two could disagree — which is the overlap this change removes
+        // (Franco, 2026-08-31). Migrated rather than dropped: the ids move to a
+        // `benefit` with effect 'included', which BOTH firestore.rules and
+        // storage.rules already honour on exactly the same terms, so nobody
+        // loses access in the move.
+        //
+        // Only when there is no benefit yet. With one already set, its own list
+        // is the studio's more recent answer and a merge would silently widen
+        // it; the legacy ids stay on the doc, keep granting what they granted,
+        // and the matcher is the way to change them from here on.
+        accessRule = { type: 'purchase', priceAmount: localPriceNum }
+        const legacyIncluded = accessType === 'purchase' ? (initialSubIds ?? []) : []
+        if (legacyIncluded.length > 0 && !benefit) {
+          return updateCourse(courseId, {
+            title: localTitle.trim(),
+            summary: localSummary.trim(),
+            accessRule,
+            benefit: { effect: 'included', subscriptionTypeIds: legacyIncluded },
+            hideFromShop: !localShowInShop,
+          })
+        }
+        if (legacyIncluded.length > 0) {
+          accessRule = { ...accessRule, subscriptionTypeIds: legacyIncluded }
+        }
       } else {
         accessRule = { type: localAccess }
       }
@@ -625,10 +651,11 @@ function SettingsTab({
         title: localTitle.trim(),
         summary: localSummary.trim(),
         accessRule,
-        // Cleared outside the 'purchase' tier — there's no purchase price to
-        // modify for the other tiers, so a leftover benefit would be inert
-        // data the UI can't show.
-        benefit: localAccess === 'purchase' ? toBenefitPayload(localBenefit) : null,
+        // The benefit is the RATE half of the edge and the matcher owns it —
+        // carried through untouched here, except outside the 'purchase' tier,
+        // where there is no price to reduce and a leftover rule would be inert
+        // data nothing can show.
+        ...(localAccess === 'purchase' ? {} : { benefit: null }),
         hideFromShop: !localShowInShop,
       })
     },
@@ -638,13 +665,7 @@ function SettingsTab({
 
   // Ctrl/Cmd+S saves the settings (when there are unsaved changes).
   useSaveShortcut(() => {
-    if (
-      dirty &&
-      !purchasePriceInvalid &&
-      !benefitPercentInvalidNow &&
-      !benefitAmountInvalidNow &&
-      !saveMutation.isPending
-    ) {
+    if (dirty && !purchasePriceInvalid && !saveMutation.isPending) {
       saveMutation.mutate()
     }
   })
@@ -703,27 +724,47 @@ function SettingsTab({
         <Textarea id="settings-summary" rows={3} value={localSummary} onChange={(e) => setLocalSummary(e.target.value)} />
       </div>
 
-      {/* Access rule */}
+      {/* ── WHO CAN OPEN THIS ─────────────────────────────────────────────
+          The TIER, and (for a sold course) the price. Nothing else: which plans
+          open it or make it cheaper is the matcher below, which is the same
+          control the activity editor and the catalogue mount.
+
+          THE TIERS OVERLAPPED BEFORE (Franco, 2026-08-31). "Specific
+          subscriptions" and "Sold" both carried a subscription list, so a studio
+          could express one intent two ways — pick Sold, then mark a plan
+          "Included" — and end up with two lists on one course that could
+          disagree. They are genuinely different questions and now look it: the
+          tier says whether the course is GATED or SOLD, and the matcher says
+          what each plan does about it. */}
       <div className="space-y-2">
         <Label>{t('fieldAccess')}</Label>
-        <RadioGroup value={localAccess} onValueChange={(v) => setLocalAccess(v as typeof localAccess)}>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="registered" id="access-registered" />
-            <Label htmlFor="access-registered" className="font-normal">{t('accessRegistered')}</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="free" id="access-free" />
-            <Label htmlFor="access-free" className="font-normal">{t('accessFree')}</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="subscription" id="access-sub" />
-            <Label htmlFor="access-sub" className="font-normal">{t('accessSubscription')}</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="purchase" id="access-purchase" />
-            <Label htmlFor="access-purchase" className="font-normal">{t('accessPurchase')}</Label>
-          </div>
-        </RadioGroup>
+        {/* Tier CARDS with their consequence written under them — the same
+            control the activity editor uses for "Who can book", because it is
+            the same decision about a different thing. A bare radio label made
+            the reader infer what "Sign-in required" costs them. */}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(['free', 'registered', 'subscription', 'purchase'] as const).map((tier) => (
+            <label
+              key={tier}
+              className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm transition-colors ${
+                localAccess === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
+              }`}
+            >
+              <input
+                type="radio"
+                className="mt-0.5 accent-primary"
+                checked={localAccess === tier}
+                onChange={() => setLocalAccess(tier)}
+              />
+              <span>
+                <span className="font-medium">{t(`access_${tier}` as const)}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {t(`access_${tier}_desc` as const)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
 
         {localAccess === 'purchase' && (
           <div className="mt-3 space-y-1.5">
@@ -739,52 +780,45 @@ function SettingsTab({
             {purchasePriceInvalid && (
               <p className="text-xs text-destructive">{t('priceMin')}</p>
             )}
-            <p className="text-xs text-muted-foreground">{t('accessPurchaseHint')}</p>
-          </div>
-        )}
-
-        {showSubsList && (
-          <div className="mt-3 space-y-2 rounded-md border bg-muted/30 p-3">
-            <p className="text-xs font-medium">
-              {localAccess === 'purchase' ? t('accessIncludedSubsLabel') : t('accessSubscriptionTypesLabel')}
-            </p>
-            {subscriptionTypes.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{t('accessNoSubscriptionTypes')}</p>
-            ) : (
-              <div className="space-y-1.5">
-                {subscriptionTypes.map((st) => (
-                  <label key={st.id} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={localSubIds.includes(st.id)}
-                      onChange={(e) => {
-                        setLocalSubIds((prev) =>
-                          e.target.checked ? [...prev, st.id] : prev.filter((id) => id !== st.id)
-                        )
-                      }}
-                      className="h-4 w-4 rounded border-gray-300 accent-primary"
-                    />
-                    <span className="text-sm">{st.name}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {localAccess === 'purchase' && (
-          <div className="mt-3 rounded-md border p-3">
-            <BenefitEditor
-              value={localBenefit}
-              onChange={setLocalBenefit}
-              subscriptionTypes={subscriptionTypes}
-              context="course"
-              percentError={benefitPercentInvalidNow ? tBenefit('percentValidation') : null}
-              amountError={benefitAmountInvalidNow ? tBenefit('amountValidation') : null}
-            />
           </div>
         )}
       </div>
+
+      {/* ── WHAT EACH PLAN DOES ABOUT IT ──────────────────────────────────
+          The matcher, in its offering direction — the SAME component the
+          activity editor and the catalogue mount, so there is one writer of the
+          plan edge and the three surfaces cannot drift.
+
+          It reads the tier: `coursePlanFacets` offers the gate columns for a
+          subscription course and the rate columns for a sold one, so the
+          columns that appear are the ones the tier can honour. A free or
+          sign-in-only course has neither, which is why this is hidden rather
+          than shown empty.
+
+          IT SAVES ITSELF, separately from the fields above — same as in the
+          activity editor. `hostedInForm` is what tells it it is a guest here. */}
+      {tierHasPlanEdge && (
+        <div className="space-y-2">
+          <Label>{t('planLinksLabel')}</Label>
+          <div className="rounded-md border p-3">
+            <ActivityPlanLinks
+              direction="from-offering"
+              offering={{
+                id: courseId,
+                name: localTitle || title,
+                collection: COURSES_COLLECTION,
+                badge: tCat('courseBadge'),
+                target: { kind: 'course', doc: course },
+              }}
+              offerings={[]}
+              plans={subscriptionTypes}
+              currency={currency}
+              canEdit
+              hostedInForm
+            />
+          </div>
+        </div>
+      )}
 
       {/* Shop visibility — the shop lists every published course; a studio can hide
           a specific one from the catalogue (it stays openable via direct link). */}
@@ -799,13 +833,7 @@ function SettingsTab({
       <div className="flex gap-2">
         <Button
           onClick={() => saveMutation.mutate()}
-          disabled={
-            !dirty ||
-            purchasePriceInvalid ||
-            benefitPercentInvalidNow ||
-            benefitAmountInvalidNow ||
-            saveMutation.isPending
-          }
+          disabled={!dirty || purchasePriceInvalid || saveMutation.isPending}
         >
           {saveMutation.isPending ? t('saving') : t('saveSettings')}
         </Button>
@@ -938,6 +966,7 @@ export default function CourseBuilderPage() {
         </TabsContent>
         <TabsContent value="settings" className="mt-4">
           <SettingsTab
+            course={course}
             courseId={courseId}
             teamId={currentTeamId}
             title={course.title}
