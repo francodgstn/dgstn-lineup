@@ -71,6 +71,7 @@ import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentCont
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { ORG_RAIL_ITEMS, orgHref, orgNavItemsForRole } from '@/lib/org-nav'
+import { sortNavRows } from '@/lib/navSort'
 import { useOrgRole } from '@/hooks/useOrgRole'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
 import { ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
@@ -128,6 +129,10 @@ type NavItem = {
    *  disagreeing with itself. Resolved ONCE in SidebarContent and applied to
    *  both the row and the search catalogue, so the two cannot diverge. */
   dynamicLabel?: 'affiliationTerm'
+  /** Pin to the head of its section, ahead of the alphabetical run. Read
+   *  `lib/navSort.ts` before adding one — the marker is deliberately hard to
+   *  justify, and each existing one states its reason where it is declared. */
+  lead?: boolean
 }
 
 type NavSection = { labelKey: string; icon: React.ElementType; items: NavItem[] }
@@ -155,6 +160,8 @@ const DASHBOARD_ITEM: NavItem = {
   exact: true,
 }
 const SCHEDULE_ITEM: NavItem = {
+  // See the LEAD note where this is referenced from NAV_SECTIONS' Run section.
+  lead: true,
   id: 'calendar',
   href: '/schedule',
   labelKey: 'calendar',
@@ -226,21 +233,25 @@ const HOW_TO_ITEM: NavItem = {
 // configuration lives behind "All settings" (the /settings hub) + whatever the user
 // pins to the Pinned block — see src/lib/settings-nav.ts.
 //
-// ORDER WITHIN A SECTION IS FREQUENCY OF USE, MOST-USED FIRST, and it is the
-// order that renders — see the render in SidebarContent, which deliberately does
-// NOT sort. It was sorted alphabetically by translated label for one day
-// (6d94638f); the effect was that Schedule — the destination a studio opens every
-// single session — fell to the BOTTOM of Run, behind every row used less often,
-// and in German/French/Italian it landed somewhere else again, so nothing about
-// the list could be learned once (UX-29). Alphabetical is the right answer
-// only for a list nobody can rank; these are ranked, so declaration order wins.
-// Plugin-contributed rows still sort alphabetically: they arrive from a registry
-// in an order the studio did not author and cannot be ranked here.
+// ORDER WITHIN A SECTION IS ALPHABETICAL BY TRANSLATED LABEL, except for rows
+// marked `lead`. The rule, and the UX-29 defect that makes the exception
+// necessary, are written down ONCE in `lib/navSort.ts` — read it there rather
+// than restating it here.
+//
+// DECLARATION ORDER BELOW MEANS NOTHING except among leads. It used to be
+// "frequency of use, most-used first", which had to be re-decided on every
+// addition and had quietly become the order things were written in. Do not
+// spend time on it; put a new row wherever it reads best in this file.
 const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionRun',
     icon: Activity,
     items: [
+      // LEAD of Run — and the one the rule exists for. Alphabetically Schedule
+      // sorts last here, behind Automations, Bookings, Coaches, Contacts, Day
+      // sheet, Payments and Places, and differently again per locale; it is the
+      // destination a studio opens every single session (UX-29).
+      //
       // Schedule KEEPS ITS HOME ROW even though it is also the default head
       // tile. A tile is a shortcut, and a shortcut has always been a duplicate
       // of a row that exists elsewhere — pinning Contacts shows it in Favourites
@@ -313,7 +324,9 @@ const NAV_SECTIONS: NavSection[] = [
       // the shape UX-99 keeps fixing. Ordering by frequency of use would put it
       // lower; a section's map is the exception, because it is also how you find
       // out what the section contains.
-      { id: 'catalogue', href: '/offer/catalogue', labelKey: 'catalogue', icon: Library },
+      // LEAD of Offer: it is the section's MAP, and a map that sorts into the
+      // middle of the things it maps is just another row.
+      { id: 'catalogue', href: '/offer/catalogue', labelKey: 'catalogue', icon: Library, lead: true },
       { id: 'activities', href: '/offer/activities', labelKey: 'activities', icon: Zap },
       // Subscriptions only. This was an umbrella ("Plans & Affiliations") whose
       // second tab held the affiliation TYPES while the roster below had no nav
@@ -406,7 +419,9 @@ const NAV_SECTIONS: NavSection[] = [
       // row, deliberately: ONE destination, one shortcut star, one search result.
       // Listing it here is what makes it findable from where public surfaces are
       // actually worked on.
-      { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, exact: true },
+      // LEAD of Grow, for the same reason Catalogue leads Offer: it is the map
+      // of everything public, and the rows under it are what it maps.
+      { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, exact: true, lead: true },
       { id: 'bioLink', href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
       // Space is the contacts' personal portal (membership, bookings, profile, their
       // courses) — a base surface, not tied to the online-courses plugin.
@@ -3041,7 +3056,10 @@ function SidebarContent({
         ) : (
           <HeadTiles
             tile={headTileEntry}
-            choices={[...catalogue.values()]}
+            // ALPHABETICAL, and no leads: this is a flat searchable list of
+            // every destination the nav can reach, in no meaningful order —
+            // catalogue insertion order, which is a fact about the source file.
+            choices={sortNavRows([...catalogue.values()], locale)}
             onSet={(id) => setHeadTile(id)}
             onClear={() => setHeadTile(null)}
             onLinkClick={onLinkClick}
@@ -3099,26 +3117,42 @@ function SidebarContent({
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
-              // DECLARATION ORDER — which is frequency of use, most-used first
-              // (see NAV_SECTIONS). Deliberately NOT sorted: alphabetical by
-              // translated label put Schedule last in Run, behind five items a
-              // studio opens far less often, and put it somewhere different again
-              // in each locale (UX-29).
-              const byLabel = (a: string, b: string) => a.localeCompare(b, locale)
+              // ONE SORTED RUN, built-in rows and plugin-contributed rows
+              // TOGETHER — see `lib/navSort.ts` for the rule.
+              //
+              // They used to be two runs: built-ins in declaration order, then
+              // plugin rows alphabetically after them. A section that is two
+              // ordered lists is, to a reader, one unordered one — and the split
+              // was invisible, because nothing on screen says which rows came
+              // from a plugin. Merging them is most of the point of having a
+              // rule at all.
               const items = section.items.filter(mainItemVisible)
-              // Plugin rows keep the alphabetical sort: they come from a registry
-              // in an order the studio did not author, so there is no ranking to
-              // preserve — only a stable, readable one to impose.
-              const secPlugins = sectionedEntries
-                .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
-                .slice()
-                .sort((a, b) =>
-                  byLabel(
-                    tp(a.labelKey as Parameters<typeof tp>[0]),
-                    tp(b.labelKey as Parameters<typeof tp>[0])
-                  )
-                )
+              const secPlugins = sectionedEntries.filter(
+                (e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey
+              )
               if (items.length === 0 && secPlugins.length === 0) return null
+              const rowEntries = sortNavRows(
+                [
+                  ...items.map((item) => ({
+                    kind: 'item' as const,
+                    key: item.id,
+                    label: navLabel(item),
+                    lead: item.lead,
+                    item,
+                  })),
+                  ...secPlugins.map((nav) => ({
+                    kind: 'plugin' as const,
+                    key: nav.pluginId + nav.href,
+                    label: tp(nav.labelKey as Parameters<typeof tp>[0]),
+                    // A plugin cannot claim a lead: it arrives from a registry
+                    // in an order the studio did not author, and the marker is
+                    // an assertion about THIS product's shape.
+                    lead: false,
+                    nav,
+                  })),
+                ],
+                locale
+              )
               const SectionIcon = section.icon
               const label = t(section.labelKey as Parameters<typeof t>[0])
 
@@ -3126,25 +3160,26 @@ function SidebarContent({
               // and inside the flyout panel when the section is collapsed.
               const rows = (
                 <>
-                  {items.map((item) => (
-                    <NavLink
-                      key={item.id}
-                      item={item}
-                      collapsed={false}
-                      onClick={onLinkClick}
-                      shortcutId={item.id}
-                      label={navLabel(item)}
-                    />
-                  ))}
-                  {secPlugins.map((nav) => (
-                    <PluginNavItem
-                      key={nav.pluginId + nav.href}
-                      nav={nav}
-                      collapsed={false}
-                      onLinkClick={onLinkClick}
-                      onDismiss={dismissSuggestion}
-                    />
-                  ))}
+                  {rowEntries.map((entry) =>
+                    entry.kind === 'item' ? (
+                      <NavLink
+                        key={entry.key}
+                        item={entry.item}
+                        collapsed={false}
+                        onClick={onLinkClick}
+                        shortcutId={entry.item.id}
+                        label={entry.label}
+                      />
+                    ) : (
+                      <PluginNavItem
+                        key={entry.key}
+                        nav={entry.nav}
+                        collapsed={false}
+                        onLinkClick={onLinkClick}
+                        onDismiss={dismissSuggestion}
+                      />
+                    )
+                  )}
                 </>
               )
 

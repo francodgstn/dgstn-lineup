@@ -57,9 +57,21 @@ export interface SettingsNavItem {
   group: SettingsGroupKey
   exact?: boolean // active only on exact path match (hub routes like /settings/plugins)
   gate?: SettingsGate // hidden unless the runtime condition holds
+  /** Pin to the head of its group, ahead of the alphabetical run. Read
+   *  `lib/navSort.ts` before adding one. */
+  lead?: boolean
 }
 
-// Order here drives the rail (within each group) and the pinned sidebar list.
+// ORDER WITHIN A GROUP IS ALPHABETICAL BY TRANSLATED LABEL, except for rows
+// marked `lead` — the rule lives in `lib/navSort.ts` and the rail applies it.
+// DECLARATION ORDER BELOW MEANS NOTHING: it groups related rows together for
+// whoever is reading this file, and nothing else. Put a new row wherever it
+// reads best here.
+//
+// (The PINNED sidebar list is a different thing and is not sorted: those are in
+// the order the studio itself dragged them into — census item 3 in
+// contexts/NavPinsContext.tsx.)
+//
 // Activities + Subscriptions live in the main nav's "Offer" section now. Most items
 // render under a shared /settings/* layout (the master-detail rail + detail pane);
 // legacy paths (/team/settings, /billing, …) resolve via redirect stubs.
@@ -83,7 +95,12 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // It used to hold the email and public-surface rows too, which made it long
   // enough that a reader arrived here by elimination. Those became their own
   // groups — see the note on SETTINGS_GROUPS below.
-  { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true },
+  // LEAD of Studio: it is the studio's identity — name, logo, branding — and the
+  // most-opened settings page there is. Alphabetically "General" would land
+  // mid-group in English and elsewhere again in German ("Allgemein" first,
+  // "Générale" mid-list in French), so the one page a studio comes here for
+  // would move depending on the language it reads in.
+  { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true, lead: true },
   { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio', gate: 'ownerOnly' },
   { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },
   // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
@@ -149,7 +166,9 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // listed in the main nav's Grow section under the same id, so the map is
   // reachable from where public surfaces are worked on (UX-28) — one
   // destination, one shortcut star, listed twice.
-  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'publicSurfaces', exact: true },
+  // LEAD of Public pages: Shop below is a SECTION of this hub, so the hub coming
+  // second would put a part before its whole.
+  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'publicSurfaces', exact: true, lead: true },
   // The public storefront that aggregates subscriptions, products and courses.
   // It renders in this shell and is a SECTION of the public-page hub above, so
   // the row belongs beside it — it spent a while in the main nav's Offer section
@@ -179,9 +198,12 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
  * What stayed in Studio is what is genuinely the studio's own configuration:
  * identity, how it takes money, ranks, custom fields, coaching axes, plugins.
  *
- * ORDER is by how often a settings visit lands there, not alphabetical (the
- * same rule the sidebar's sections follow): Account, then Studio — General is
- * the single most-opened settings page — then the three topic groups.
+ * GROUP ORDER is by how often a settings visit lands there: Account, then Studio
+ * — General is the single most-opened settings page — then the three topic
+ * groups. That is a ranking of FIVE things that changes once a year, which is
+ * exactly the case where a considered order is worth keeping; the rows INSIDE
+ * each group are the case where it is not, and they sort alphabetically
+ * (`lib/navSort.ts`).
  */
 export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
   { key: 'account', labelKey: 'groupAccount' },

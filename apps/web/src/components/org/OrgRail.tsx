@@ -13,14 +13,16 @@
  * happened to be current.
  */
 
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { usePathname } from '@/i18n/navigation'
 import { useOrg } from '@/contexts/OrgContext'
 import { ORG_RAIL_GROUPS, ORG_RAIL_ITEMS, orgHref } from '@/lib/org-nav'
 import { NavRail, type NavRailGroup } from '@/components/settings/NavRail'
+import { sortNavRows } from '@/lib/navSort'
 
 export function OrgRail({ orgId }: { orgId: string }) {
   const t = useTranslations('Org')
+  const locale = useLocale()
   const pathname = usePathname()
   const { affiliationTerm, isAdmin } = useOrg()
 
@@ -32,23 +34,31 @@ export function OrgRail({ orgId }: { orgId: string }) {
   const groups: NavRailGroup[] = ORG_RAIL_GROUPS.map((group) => ({
     key: group.key,
     label: t(group.labelKey as Parameters<typeof t>[0]),
-    rows: ORG_RAIL_ITEMS.filter((i) => i.group === group.key)
-      // NAVIGATION, NOT ENFORCEMENT. The pages and the rules both check for
-      // themselves; hiding a row a member studio could only look at is the same
-      // courtesy `SettingsGate.ownerOnly` does on the studio side.
-      .filter((i) => !i.adminOnly || isAdmin)
-      .map((item) => {
-        const href = orgHref(orgId, item.path)
-        return {
-          id: item.id,
-          href,
-          label: label(item),
-          icon: item.icon,
-          // `startsWith`, so a detail route under a rail destination keeps its
-          // own row lit rather than lighting none.
-          active: pathname === href || pathname.startsWith(`${href}/`),
-        }
-      }),
+    // ALPHABETICAL WITHIN THE GROUP — the one rule all three navs follow, in
+    // `lib/navSort.ts`. No org row is a `lead`: none of them is opened often
+    // enough for its position to be load-bearing, which is the only thing that
+    // marker is for. Affiliations sorts under the ORGANISATION'S OWN WORD for
+    // it, which is the label actually on screen.
+    rows: sortNavRows(
+      ORG_RAIL_ITEMS.filter((i) => i.group === group.key)
+        // NAVIGATION, NOT ENFORCEMENT. The pages and the rules both check for
+        // themselves; hiding a row a member studio could only look at is the same
+        // courtesy `SettingsGate.ownerOnly` does on the studio side.
+        .filter((i) => !i.adminOnly || isAdmin)
+        .map((item) => ({ item, label: label(item) })),
+      locale
+    ).map(({ item, label: rowLabel }) => {
+      const href = orgHref(orgId, item.path)
+      return {
+        id: item.id,
+        href,
+        label: rowLabel,
+        icon: item.icon,
+        // `startsWith`, so a detail route under a rail destination keeps its
+        // own row lit rather than lighting none.
+        active: pathname === href || pathname.startsWith(`${href}/`),
+      }
+    }),
   }))
 
   return (
