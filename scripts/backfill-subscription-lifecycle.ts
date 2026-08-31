@@ -16,10 +16,12 @@
  *     RENEWAL, because a period advance is a `customer.subscription.updated`.
  *     That is up to a month away on a monthly plan and up to a YEAR away on an
  *     annual one. The two moved onto the subscription ITEM together and were
- *     nulled together — but only the SAAS rail stores both, so only there are
- *     they repaired together (settings/billing and the operator console's
- *     account detail render the period as a PAIR, and fixing only the end leaves
- *     each of them half-right). The Connect rail stores the END alone.
+ *     nulled together, and both rails store the pair — the SaaS rail from the
+ *     start (settings/billing and the operator console's account detail render
+ *     the period as a PAIR, and fixing only the end leaves each of them
+ *     half-right), the Connect rail since 2026-08-31 (accrual readiness, see
+ *     docs/finance-accrual.md) — so both are repaired together, and a run over
+ *     older member docs is what fills their missing starts.
  *
  *   • `cancel_at_period_end: false` on a subscription cancelled in the billing
  *     portal does NOT heal in any useful window. The `updated` event carrying
@@ -205,18 +207,18 @@ const STRIPE_ENDED = new Set(['canceled', 'incomplete_expired'])
 /** The lifecycle fields as Stripe currently states them, in stored shape. */
 interface Target {
   /**
-   * SAAS RAIL ONLY when it comes to being WRITTEN — see `payload()`.
+   * Written on BOTH rails — see `payload()` for how each writes it.
    *
    * The same defect nulled it (the period moved onto the subscription item as a
    * PAIR), and on the SaaS rail it is displayed in two places — settings/billing
    * renders "period start – end" and the operator console's account detail
    * prints the whole period — so repairing only the end leaves both half-fixed.
    *
-   * The CONNECT rail has no such field: `handleSubscription` writes only
-   * `current_period_end` and `MemberSubscription` declares only that one. It is
-   * computed here for both rails because `readSubscriptionPeriod` returns the
-   * pair, and dropped in `payload()` for connect rather than invented onto a
-   * member's doc.
+   * The CONNECT rail declares and writes it too since 2026-08-31 (accrual
+   * readiness — docs/finance-accrual.md, Phase 0), under that rail's
+   * whole-record rule: nulls included, exactly as `handleSubscription` would
+   * have written on receiving the same state. Docs from before that date carry
+   * only the end; a run of this script is what fills their starts.
    */
   current_period_start: Timestamp | null
   current_period_end: Timestamp | null
@@ -349,13 +351,14 @@ type Rail = 'connect' | 'saas'
  * straight into the same handler as `{ ...obj, status: 'canceled' }`. So that
  * rail has no ended-branch here.
  *
- * It also has NO `current_period_start`. The handler writes only
- * `current_period_end`, `MemberSubscription` declares only that one, and nothing
- * in web or admin reads a member's period start. Writing it was this script
- * inventing a field on the Connect rail — a "repair" that reported a delta on
- * every member subscription whose Stripe object states a period start (which is
- * every live one) and wrote data no event would ever produce.
- * `dahliaReads.test.ts` now pins the handler side and the script side together.
+ * Since 2026-08-31 it writes the period as a PAIR: `current_period_start`
+ * joined `current_period_end` for accrual readiness (which service period an
+ * invoice bought — docs/finance-accrual.md, Phase 0), declared on
+ * `MemberSubscription` and written by `handleSubscription` under the same rail
+ * rule as the end (whole, nulls included). So this branch writes both, making a
+ * run over pre-change docs the repair that fills the missing starts.
+ * `dahliaReads.test.ts` pins the handler side, the type and the script side
+ * together — all three move together or none do.
  *
  * SAAS (`handleStripeWebhook`'s `subscription.cancelled` branch,
  * saas-billing/index.ts) does something different once a subscription has
@@ -419,7 +422,11 @@ function payload(target: Target, rail: Rail): Record<string, unknown> {
   }
 
   if (rail === 'connect') {
-    return { current_period_end: target.current_period_end, ...cancellation }
+    return {
+      current_period_start: target.current_period_start,
+      current_period_end: target.current_period_end,
+      ...cancellation,
+    }
   }
 
   if (rail === 'saas' && target.endedAtStripe) {

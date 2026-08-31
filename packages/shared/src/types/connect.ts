@@ -357,6 +357,17 @@ export interface MemberSubscription {
   application_fee_percent?: number
   status: MemberSubscriptionStatus
   /**
+   * Start of the current billing period — WHICH SERVICE PERIOD the latest
+   * invoice bought. Stored for accrual readiness (spreading a quarterly/annual
+   * charge over its covered months needs the pair, and Stripe's period data is
+   * not re-fetchable for the BYO/manual rails — see docs/finance-accrual.md,
+   * Phase 0): nothing in web or admin reads it yet. Same source as the end
+   * (`readSubscriptionPeriod`, always the same item, so the pair is coherent).
+   * Absent on docs written before 2026-08-31; `backfill:subscription-lifecycle`
+   * repairs those from Stripe. Readers must tolerate absence.
+   */
+  current_period_start: Timestamp | null
+  /**
    * End of the current billing period. Sourced from the subscription ITEM
    * (Stripe removed the subscription-level field in Basil) — see
    * `readSubscriptionPeriod` in functions/src/utils/stripe/objectShape.ts.
