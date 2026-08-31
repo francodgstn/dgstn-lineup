@@ -565,7 +565,31 @@ function SettingsTab({
   const router = useRouter()
   const [localTitle, setLocalTitle] = useState(title)
   const [localSummary, setLocalSummary] = useState(summary)
-  const [localAccess, setLocalAccess] = useState(accessType)
+  /**
+   * THREE TIERS, NOT FOUR — and the fourth was a price, not a tier.
+   *
+   * "Specific subscriptions" and "Sold" asked one question ("who gets this, and
+   * through what?") and answered it in two mutually exclusive rows, so a studio
+   * that wanted BOTH — plan holders included, everyone else can buy — had to
+   * discover that "Sold" was the one that also carried a plan list (Franco,
+   * 2026-09-01). They are now one tier with a price SWITCH, the same shape a
+   * class uses for its drop-in: unticked, only the plans you pick get it;
+   * ticked, anyone else can buy it at the price, and the same table gains the
+   * "% off" and "Fixed price" columns because now there is a price to reduce.
+   *
+   * NOTHING MOVED IN STORAGE. The stored tiers are still `subscription` (a gate,
+   * no price) and `purchase` (a price plus a `benefit`), which is exactly what
+   * the switch is off and on — so the rules, the resolver and the public
+   * surfaces are untouched, and there is no migration. The pair is derived here
+   * and collapsed back on save.
+   */
+  const [localTier, setLocalTier] = useState<'free' | 'registered' | 'plans'>(
+    accessType === 'subscription' || accessType === 'purchase' ? 'plans' : accessType
+  )
+  const [localSold, setLocalSold] = useState(accessType === 'purchase')
+  /** What the two controls above mean in the stored vocabulary. */
+  const localAccess: typeof accessType =
+    localTier === 'plans' ? (localSold ? 'purchase' : 'subscription') : localTier
   const initialPriceText = typeof priceAmount === 'number' ? String(priceAmount) : ''
   const [localPriceText, setLocalPriceText] = useState(initialPriceText)
   // WHICH PLANS open or discount this course is NOT edited here any more — see
@@ -608,54 +632,84 @@ function SettingsTab({
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      // THE GATE LIST IS CARRIED, NEVER REWRITTEN, by this form. On the
-      // 'subscription' tier `accessRule.subscriptionTypeIds` IS the gate, and
-      // the matcher below is its writer — so saving the title must not put a
-      // stale copy back over what the matcher just wrote.
-      const gateIds = accessType === 'subscription' ? (initialSubIds ?? []) : []
+      /**
+       * THE PLAN LIST SURVIVES THE PRICE SWITCH.
+       *
+       * The switch moves the course between two stored homes for the same
+       * answer — a gate (`accessRule.subscriptionTypeIds`, no price) and a
+       * benefit (`benefit`, alongside a price) — so flicking it must carry the
+       * studio's selection across rather than silently emptying the table it
+       * just filled in.
+       *
+       * WHAT CARRIES, AND WHAT CANNOT:
+       *  • gate → sold: every gated plan keeps the course FREE, as an
+       *    `included` benefit. Same members, same access, now with a price for
+       *    everyone else.
+       *  • sold → gate: the plans marked "Included" keep access (plus any ids
+       *    left in the legacy "included free" list, which meant the same
+       *    thing). A plan that merely had a REDUCED price cannot carry: its
+       *    whole route in was the sale, and the sale is what is being removed.
+       *    Promoting it to free would hand out more than the studio ever
+       *    granted, so it is dropped — and the form says so before the save
+       *    rather than after (`sellOffWarning`).
+       *
+       * THIS FORM NEVER REWRITES A LIST IT DID NOT CHANGE. When the tier is
+       * unchanged, the stored ids are passed straight back through: the matcher
+       * is their writer, and saving a title must not put a stale copy over what
+       * the matcher just wrote.
+       */
+      const wasGate = accessType === 'subscription'
+      const wasSold = accessType === 'purchase'
+      const storedGateIds = wasGate ? (initialSubIds ?? []) : []
+      // On the sold tier `accessRule.subscriptionTypeIds` is the LEGACY
+      // "included free" list, which means exactly what an `included` benefit
+      // means; both rule files honour either.
+      const legacyIncluded = wasSold ? (initialSubIds ?? []) : []
+      const benefitIncluded =
+        benefit && benefit.effect === 'included' ? (benefit.subscriptionTypeIds ?? []) : []
+      const unique = (ids: string[]) => [...new Set(ids)]
 
       let accessRule: Course['accessRule']
+      let nextBenefit: Course['benefit'] | undefined
+
       if (localAccess === 'subscription') {
-        accessRule = { type: 'subscription', subscriptionTypeIds: gateIds }
-      } else if (localAccess === 'purchase') {
-        // NO "included free for these subs" LIST ANY MORE. It was a second way
-        // to say what the matcher's "Included" column says, on the same course,
-        // and the two could disagree — which is the overlap this change removes
-        // (Franco, 2026-08-31). Migrated rather than dropped: the ids move to a
-        // `benefit` with effect 'included', which BOTH firestore.rules and
-        // storage.rules already honour on exactly the same terms, so nobody
-        // loses access in the move.
-        //
-        // Only when there is no benefit yet. With one already set, its own list
-        // is the studio's more recent answer and a merge would silently widen
-        // it; the legacy ids stay on the doc, keep granting what they granted,
-        // and the matcher is the way to change them from here on.
-        accessRule = { type: 'purchase', priceAmount: localPriceNum }
-        const legacyIncluded = accessType === 'purchase' ? (initialSubIds ?? []) : []
-        if (legacyIncluded.length > 0 && !benefit) {
-          return updateCourse(courseId, {
-            title: localTitle.trim(),
-            summary: localSummary.trim(),
-            accessRule,
-            benefit: { effect: 'included', subscriptionTypeIds: legacyIncluded },
-            hideFromShop: !localShowInShop,
-          })
+        accessRule = {
+          type: 'subscription',
+          subscriptionTypeIds: wasGate
+            ? storedGateIds
+            : unique([...benefitIncluded, ...legacyIncluded]),
         }
-        if (legacyIncluded.length > 0) {
-          accessRule = { ...accessRule, subscriptionTypeIds: legacyIncluded }
+        // No price ⇒ nothing for a rate rule to reduce.
+        nextBenefit = null
+      } else if (localAccess === 'purchase') {
+        accessRule = { type: 'purchase', priceAmount: localPriceNum }
+        if (wasGate) {
+          // Arriving from the gate: those plans keep it free.
+          nextBenefit = storedGateIds.length
+            ? { effect: 'included', subscriptionTypeIds: storedGateIds }
+            : (benefit ?? null)
+        } else if (legacyIncluded.length > 0 && !benefit) {
+          // The legacy list, retired into the one expression the matcher edits.
+          nextBenefit = { effect: 'included', subscriptionTypeIds: legacyIncluded }
+        } else {
+          // The matcher owns it; carry it through untouched. A legacy list that
+          // coexists with a benefit stays put — the benefit is the studio's more
+          // recent answer and merging would silently widen it.
+          if (legacyIncluded.length > 0) {
+            accessRule = { ...accessRule, subscriptionTypeIds: legacyIncluded }
+          }
+          nextBenefit = undefined
         }
       } else {
         accessRule = { type: localAccess }
+        nextBenefit = null
       }
+
       return updateCourse(courseId, {
         title: localTitle.trim(),
         summary: localSummary.trim(),
         accessRule,
-        // The benefit is the RATE half of the edge and the matcher owns it —
-        // carried through untouched here, except outside the 'purchase' tier,
-        // where there is no price to reduce and a leftover rule would be inert
-        // data nothing can show.
-        ...(localAccess === 'purchase' ? {} : { benefit: null }),
+        ...(nextBenefit === undefined ? {} : { benefit: nextBenefit }),
         hideFromShop: !localShowInShop,
       })
     },
@@ -742,57 +796,90 @@ function SettingsTab({
           what each plan does about it. */}
       <div className="space-y-2">
         <Label>{t('fieldAccess')}</Label>
-        {/* ONE STACKED LIST, not a grid of tiles. Four two-line tiles in two
-            columns is a shape the eye has to read in both directions to compare
-            — and comparing is the whole task here, because the four options are
-            a ladder from "anyone" to "only buyers" (Franco, 2026-08-31). Stacked
-            in that order, the ladder is the layout.
+        {/* ONE STACKED LIST, not a grid of tiles. Two columns of two-line tiles
+            is a shape the eye has to read in both directions to compare — and
+            comparing is the whole task here, because the options are a ladder
+            from "anyone" to "only the plans you pick". Stacked in that order,
+            the ladder is the layout.
 
             One outlined box with hairlines between the rows, the idiom the
-            booking settings panel uses — four separately-outlined boxes read as
-            four unrelated decisions rather than one choice with four answers.
-            Each row still carries its consequence, which is what the activity
-            editor's "Who can book" cards established. */}
+            booking settings panel uses — separately-outlined boxes read as
+            unrelated decisions rather than one choice with three answers. Each
+            row carries its consequence, which is what the activity editor's
+            "Who can book" cards established. */}
         <div className="divide-y overflow-hidden rounded-lg border">
-          {(['free', 'registered', 'subscription', 'purchase'] as const).map((tier) => (
-            <label
+          {(['free', 'registered', 'plans'] as const).map((tier) => (
+            <div
               key={tier}
-              className={`flex cursor-pointer items-start gap-2.5 p-3 text-sm transition-colors ${
-                localAccess === tier ? 'bg-primary/5' : 'hover:bg-muted/50'
-              }`}
+              className={localTier === tier ? 'bg-primary/5' : 'hover:bg-muted/50'}
             >
-              <input
-                type="radio"
-                className="mt-0.5 accent-primary"
-                checked={localAccess === tier}
-                onChange={() => setLocalAccess(tier)}
-              />
-              <span className="min-w-0">
-                <span className="font-medium">{t(`access_${tier}` as const)}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {t(`access_${tier}_desc` as const)}
+              <label className="flex cursor-pointer items-start gap-2.5 p-3 text-sm">
+                <input
+                  type="radio"
+                  className="mt-0.5 accent-primary"
+                  checked={localTier === tier}
+                  onChange={() => setLocalTier(tier)}
+                />
+                <span className="min-w-0">
+                  <span className="font-medium">{t(`access_${tier}` as const)}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t(`access_${tier}_desc` as const)}
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+
+              {/* THE PRICE IS A SWITCH INSIDE THE TIER, not a tier of its own —
+                  the same shape a class's drop-in price has. Nested here because
+                  it only means anything under this one: "sell it as well" is a
+                  second question about the same answer, and asking it as a
+                  sibling made the two look like alternatives. */}
+              {tier === 'plans' && localTier === 'plans' && (
+                <div className="space-y-2 border-t px-3 pb-3 pt-2.5">
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 accent-primary"
+                      checked={localSold}
+                      onChange={(e) => setLocalSold(e.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="font-medium">{t('alsoSellLabel')}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t('alsoSellHint')}
+                      </span>
+                    </span>
+                  </label>
+
+                  {localSold && (
+                    <div className="space-y-1.5 pl-7">
+                      <Label htmlFor="course-price">{t('fieldPrice', { currency })}</Label>
+                      <Input
+                        id="course-price"
+                        inputMode="decimal"
+                        value={localPriceText}
+                        onChange={(e) => setLocalPriceText(e.target.value)}
+                        placeholder="0.00"
+                        className="max-w-[10rem]"
+                      />
+                      {purchasePriceInvalid && (
+                        <p className="text-xs text-destructive">{t('priceMin')}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SAID BEFORE THE SAVE, not discovered after it. Switching the
+                      sale off takes the course off sale for everyone, and only
+                      the plans marked "Included" in the table keep it — a plan
+                      that merely had a reduced price had no other way in, so it
+                      loses access with the price it was reducing. */}
+                  {!localSold && accessType === 'purchase' && (
+                    <p className="pl-7 text-xs text-amber-600">{t('sellOffWarning')}</p>
+                  )}
+                </div>
+              )}
+            </div>
           ))}
         </div>
-
-        {localAccess === 'purchase' && (
-          <div className="mt-3 space-y-1.5">
-            <Label htmlFor="course-price">{t('fieldPrice', { currency })}</Label>
-            <Input
-              id="course-price"
-              inputMode="decimal"
-              value={localPriceText}
-              onChange={(e) => setLocalPriceText(e.target.value)}
-              placeholder="0.00"
-              className="max-w-[10rem]"
-            />
-            {purchasePriceInvalid && (
-              <p className="text-xs text-destructive">{t('priceMin')}</p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── WHAT EACH PLAN DOES ABOUT IT ──────────────────────────────────
