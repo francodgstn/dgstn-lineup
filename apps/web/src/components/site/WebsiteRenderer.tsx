@@ -12,6 +12,7 @@ import type {
   OrgSiteTeamRef,
   SocialLink,
 } from '@linyup/shared'
+import { surfaceThemePreset } from '@linyup/shared'
 import { deriveSiteMenu } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, bookProps, SOCIAL_ICONS, type RenderCtx } from './sections'
@@ -75,14 +76,20 @@ export default function WebsiteRenderer({
   const [systemDark, setSystemDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  // SUBSCRIBE WHENEVER THE ANSWER COULD MATTER — which is any adaptive preset,
+  // not just the legacy `theme: 'auto'`. Guarding on the old field alone would
+  // have left a preset-themed site frozen at "light" for a viewer in dark mode:
+  // `buildPalette` asks for `systemDark`, and nothing would ever have set it.
+  const themePreset = surfaceThemePreset(site.meta.themePreset)
+  const followsSystem = themePreset ? themePreset.adaptive : site.meta.theme === 'auto'
   useEffect(() => {
-    if (site.meta.theme !== 'auto') return
+    if (!followsSystem) return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     setSystemDark(mq.matches)
     const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
-  }, [site.meta.theme])
+  }, [followsSystem])
 
   const palette = buildPalette(site.meta, systemDark)
   const font = FONT_STACK[site.meta.font] ?? FONT_STACK.sans

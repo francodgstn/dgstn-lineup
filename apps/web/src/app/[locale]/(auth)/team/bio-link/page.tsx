@@ -34,8 +34,14 @@ import {
 import BioLinkHome from '../../../(public)/public/[slug]/BioLinkHome'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION, SYSTEM_LINK_META, resolveSystemLinkTarget } from '@linyup/shared'
-import type { Team, SocialPlatform, SystemLinkTarget } from '@linyup/shared'
-import { BIO_LINK_GRADIENTS, SOCIAL_PLATFORMS, SOCIAL_LABELS } from '@/lib/bioLink'
+import type {
+  Team,
+  SocialPlatform,
+  SurfaceThemePresetId,
+  SystemLinkTarget,
+} from '@linyup/shared'
+import { SOCIAL_PLATFORMS, SOCIAL_LABELS } from '@/lib/bioLink'
+import { ThemePresetPicker } from '@/components/theme/ThemePresetPicker'
 import {
   ExternalLink,
   Globe,
@@ -73,10 +79,11 @@ const linkSchema = z.object({
 })
 
 const schema = z.object({
-  bioLinkTheme: z.enum(['light', 'dark', 'auto']),
+  // ONE choice, both colour schemes — see packages/shared/src/types/themePreset.ts.
+  // '' means "still on the legacy theme + background fields", which is what a
+  // bio-link authored before presets has and what the picker shows as unchosen.
+  themePreset: z.string(),
   accentColor: z.string(),
-  bgType: z.enum(['solid', 'gradient']),
-  bgColor: z.string(),
   // social — one flat field per platform
   instagram: z.string().optional(),
   facebook: z.string().optional(),
@@ -179,7 +186,6 @@ function ImageUploadField({
 
 function AppearanceTab({
   control,
-  register,
   profileImageUrl,
   heroImageUrl,
   onProfileUpload,
@@ -188,7 +194,6 @@ function AppearanceTab({
   onHeroRemove,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
-  register: ReturnType<typeof useForm<FormData>>['register']
   profileImageUrl: string | null
   heroImageUrl: string | null
   onProfileUpload: (f: File) => Promise<void>
@@ -197,7 +202,9 @@ function AppearanceTab({
   onHeroRemove: () => Promise<void>
 }) {
   const t = useTranslations('BioLink')
-  const bgType = useWatch({ control, name: 'bgType' })
+  // Fed to the picker so each swatch shows the studio's OWN accent against both
+  // halves, rather than the preset's placeholder one.
+  const accentColorValue = useWatch({ control, name: 'accentColor' })
 
   return (
     <div className="space-y-6">
@@ -224,29 +231,25 @@ function AppearanceTab({
         </div>
       </div>
 
-      {/* Theme */}
+      {/* Theme — ONE control carrying both colour schemes.
+          It replaces a light/dark/auto switch AND a free background colour or
+          gradient. Those two crossed: "auto" with a fixed background followed
+          the viewer for the text and not for the page, and a light theme with a
+          dark background was patched over by a luminance check that silently
+          ignored the studio's own choice. The registry
+          (packages/shared/src/types/themePreset.ts) holds the full list of
+          crossings this removed, and the hooks for a custom theme later. */}
       <div className="space-y-2">
         <p className="text-sm font-medium">{t('bioLinkTheme')}</p>
         <Controller
           control={control}
-          name="bioLinkTheme"
+          name="themePreset"
           render={({ field }) => (
-            <div className="flex rounded-lg border overflow-hidden w-fit">
-              {(['light', 'dark', 'auto'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => field.onChange(v)}
-                  className={`px-4 py-1.5 text-sm transition-colors ${
-                    field.value === v
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {t(`theme_${v}` as const)}
-                </button>
-              ))}
-            </div>
+            <ThemePresetPicker
+              value={(field.value as SurfaceThemePresetId | '') ?? ''}
+              onChange={field.onChange}
+              accentColor={accentColorValue}
+            />
           )}
         />
       </div>
@@ -268,83 +271,11 @@ function AppearanceTab({
         />
       </div>
 
-      {/* Background */}
-      <div className="space-y-3">
-        <p className="text-sm font-medium">{t('background')}</p>
-        <Controller
-          control={control}
-          name="bgType"
-          render={({ field }) => (
-            <div className="flex rounded-lg border overflow-hidden w-fit">
-              {(['solid', 'gradient'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => field.onChange(v)}
-                  className={`px-4 py-1.5 text-sm transition-colors ${
-                    field.value === v
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {t(`bg_${v}` as const)}
-                </button>
-              ))}
-            </div>
-          )}
-        />
-
-        {bgType === 'solid' ? (
-          <div className="flex items-center gap-3">
-            <Controller
-              control={control}
-              name="bgColor"
-              render={({ field }) => (
-                <ColorPicker value={field.value} onChange={field.onChange} className="h-9 w-16" />
-              )}
-            />
-            <Controller
-              control={control}
-              name="bgColor"
-              render={({ field }) => (
-                <Input
-                  value={field.value}
-                  onChange={field.onChange}
-                  className="w-32 font-mono text-xs h-8"
-                />
-              )}
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
-            <Controller
-              control={control}
-              name="bgColor"
-              render={({ field }) => (
-                <>
-                  {Object.entries(BIO_LINK_GRADIENTS).map(([key, g]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => field.onChange(key)}
-                      className="h-14 rounded-lg transition-all hover:scale-105"
-                      style={{
-                        background: g.css,
-                        outline:
-                          field.value === key
-                            ? '2px solid var(--primary)'
-                            : '2px solid transparent',
-                        outlineOffset: 2,
-                      }}
-                      title={g.label}
-                    />
-                  ))}
-                </>
-              )}
-            />
-          </div>
-        )}
-      </div>
+      {/* THE BACKGROUND PICKER IS GONE, and that is the point. It was the
+          half of the pair that crossed with the theme above; a preset carries
+          the background for BOTH colour schemes, so there is nothing left to
+          choose separately. A studio that had picked a colour or a gradient
+          keeps it until it chooses a preset here — the renderer falls back. */}
     </div>
   )
 }
@@ -809,9 +740,13 @@ export default function TeamBioLinkEditorPage() {
 
     // Firestore rejects `undefined` values — strip them before any write
     const bioLinkPayload = stripUndefined({
-      bioLinkTheme: data.bioLinkTheme,
+      // WRITTEN ONLY WHEN CHOSEN, and the legacy fields are left exactly as they
+      // are. A studio that set its look with the old controls and has not
+      // touched the picker keeps that look; converting a live public page as a
+      // side effect of saving an unrelated field would be a change nobody asked
+      // for. `resolveBioLinkPalette` reads the preset first and falls back.
+      ...(data.themePreset ? { bioLinkThemePreset: data.themePreset } : {}),
       bioLinkAccentColor: data.accentColor,
-      bioLinkBackground: { type: data.bgType, color: data.bgColor },
       socialLinks,
       links: data.links,
     })
@@ -859,11 +794,12 @@ export default function TeamBioLinkEditorPage() {
     description: team?.description,
     profileImage: profileImageUrl ?? undefined,
     heroImage: heroImageUrl ?? undefined,
-    bioLinkTheme: formValues.bioLinkTheme,
+    // The preview reads the same fields the public page does, in the same
+    // order — preset first, the stored legacy pair behind it.
+    bioLinkThemePreset: (formValues.themePreset as SurfaceThemePresetId) || undefined,
+    bioLinkTheme: team?.bioLinkTheme,
     bioLinkAccentColor: formValues.accentColor,
-    bioLinkBackground: formValues.bgType
-      ? { type: formValues.bgType as 'solid' | 'gradient', color: formValues.bgColor ?? '' }
-      : undefined,
+    bioLinkBackground: team?.bioLinkBackground,
     socialLinks: SOCIAL_PLATFORMS.filter(
       (p) => formValues[p as keyof FormData] as string | undefined
     ).map((p) => ({ platform: p, url: formValues[p as keyof FormData] as string })),
@@ -962,7 +898,6 @@ export default function TeamBioLinkEditorPage() {
             {tab === 'appearance' && (
               <AppearanceTab
                 control={control}
-                register={register}
                 profileImageUrl={profileImageUrl}
                 heroImageUrl={heroImageUrl}
                 onProfileUpload={handleProfileUpload}
@@ -1046,14 +981,8 @@ function getDefaults(team: Team | null): FormData {
   const getSocial = (p: SocialPlatform) => sl.find((s) => s.platform === p)?.url ?? ''
 
   return {
-    bioLinkTheme: (['light', 'dark', 'auto'] as const).includes(team?.bioLinkTheme as never)
-      ? (team!.bioLinkTheme as FormData['bioLinkTheme'])
-      : 'light',
+    themePreset: team?.bioLinkThemePreset ?? '',
     accentColor: typeof team?.bioLinkAccentColor === 'string' ? team.bioLinkAccentColor : DEFAULT_ACCENT,
-    bgType: team?.bioLinkBackground?.type === 'gradient' ? 'gradient' : 'solid',
-    bgColor:
-      typeof team?.bioLinkBackground?.color === 'string' ? team.bioLinkBackground.color : '#ffffff',
-    instagram: getSocial('instagram'),
     facebook: getSocial('facebook'),
     youtube: getSocial('youtube'),
     tiktok: getSocial('tiktok'),

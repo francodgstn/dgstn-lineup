@@ -12,6 +12,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   serverTimestamp,
   setDoc,
@@ -82,6 +83,25 @@ export function useOrgProgramTemplates(orgId: string | null) {
   })
 }
 
+/** ONE template, read directly rather than filtered out of the list — the
+ *  standalone editor is deep-linkable, so it must resolve without the list
+ *  query having run. */
+export function useProgramTemplate(
+  scope: 'team' | 'org',
+  ownerId: string | null,
+  templateId: string | null,
+) {
+  return useQuery<ProgramTemplate | null>({
+    queryKey: ['program-template', scope, ownerId, templateId],
+    enabled: !!ownerId && !!templateId,
+    queryFn: async () => {
+      const snap = await getDoc(templateDoc(scope, ownerId!, templateId!))
+      if (!snap.exists()) return null
+      return { ...(snap.data() as Omit<ProgramTemplate, 'id'>), id: snap.id, scope }
+    },
+  })
+}
+
 export type TemplateBody = Pick<
   ProgramTemplate,
   'days' | 'tracks' | 'items' | 'timezoneLabel' | 'note'
@@ -133,6 +153,41 @@ export function useSaveProgramTemplate(scope: 'team' | 'org', ownerId: string | 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['program-templates'] })
       qc.invalidateQueries({ queryKey: ['org-program-templates'] })
+      qc.invalidateQueries({ queryKey: ['program-template'] })
+    },
+  })
+}
+
+/** Mint an EMPTY template and hand back its id, so the caller can open the
+ *  editor on it.
+ *
+ *  Creating one with no days and no items is the point: a studio authoring its
+ *  standard camp agenda in January should not have to invent an event to hang it
+ *  on (see ProgramTemplateEditor's header). The empty state that results is a
+ *  real one the editor renders and offers to fill. */
+export function useCreateProgramTemplate(scope: 'team' | 'org', ownerId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ name, description }: { name: string; description?: string }) => {
+      if (!ownerId) throw new Error('No owner for the template')
+      const ref = templateDoc(scope, ownerId)
+      await setDoc(ref, {
+        scope,
+        ...(scope === 'team' ? { teamId: ownerId } : { orgId: ownerId }),
+        name,
+        ...(description ? { description } : {}),
+        days: [],
+        tracks: [],
+        items: [],
+        itemCount: 0,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      })
+      return ref.id
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['program-templates'] })
+      qc.invalidateQueries({ queryKey: ['org-program-templates'] })
     },
   })
 }
@@ -153,6 +208,7 @@ export function useRenameProgramTemplate(scope: 'team' | 'org', ownerId: string 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['program-templates'] })
       qc.invalidateQueries({ queryKey: ['org-program-templates'] })
+      qc.invalidateQueries({ queryKey: ['program-template'] })
     },
   })
 }
@@ -167,6 +223,7 @@ export function useDeleteProgramTemplate(scope: 'team' | 'org', ownerId: string 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['program-templates'] })
       qc.invalidateQueries({ queryKey: ['org-program-templates'] })
+      qc.invalidateQueries({ queryKey: ['program-template'] })
     },
   })
 }

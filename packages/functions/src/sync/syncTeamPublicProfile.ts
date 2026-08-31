@@ -317,6 +317,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     sport_type: data.sport_type || null,
     profileImage: data.profileImage || null,
     heroImage: data.heroImage || null,
+    // The preset WINS over the two legacy fields when present, but all three
+    // are mirrored: the renderer falls back to them for a bio-link authored
+    // before presets, so dropping them here would blank those pages.
+    bioLinkThemePreset: data.bioLinkThemePreset || null,
     bioLinkTheme: data.bioLinkTheme || 'light',
     bioLinkAccentColor: data.bioLinkAccentColor || null,
     bioLinkBackground: data.bioLinkBackground || null,

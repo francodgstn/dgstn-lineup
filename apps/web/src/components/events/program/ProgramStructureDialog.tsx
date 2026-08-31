@@ -43,7 +43,16 @@ function isoDateOf(ts: { toDate(): Date } | undefined | null): string | null {
 export interface ProgramStructureDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  event: Event
+  /**
+   * The event whose programme this is — absent for a TEMPLATE, which has no
+   * dates of its own. Without it the "fill from the event's dates" shortcut has
+   * nothing to fill from and is not rendered, and a new day is simply appended
+   * after the last one.
+   */
+  event?: Event | null
+  /** Hide the per-day date field. Template days are a relative index; see
+   *  ProgramTimeline.hideDayDates. */
+  hideDates?: boolean
   config: EventProgramConfig
   items: EventProgramItem[]
   onSave: (config: EventProgramConfig) => Promise<void> | void
@@ -55,7 +64,7 @@ export interface ProgramStructureDialogProps {
 }
 
 export function ProgramStructureDialog({
-  open, onOpenChange, event, config, items, onSave, onDeleteDay, onDeleteTrack, saving,
+  open, onOpenChange, event, hideDates, config, items, onSave, onDeleteDay, onDeleteTrack, saving,
 }: ProgramStructureDialogProps) {
   const t = useTranslations('EventProgram')
   const [days, setDays] = useState<ProgramDay[]>(() => sortedDays(config))
@@ -77,13 +86,15 @@ export function ProgramStructureDialog({
 
   function addDay() {
     const last = days[days.length - 1]
-    const date = last ? addDaysISO(last.date, 1) : isoDateOf(event.start) ?? toISODate(new Date())
+    const anchor = (event ? isoDateOf(event.start) : null) ?? toISODate(new Date())
+    const date = last ? addDaysISO(last.date, 1) : anchor
     setDays([...days, { id: newId(), date, order: days.length }])
   }
 
   /** Fill the day list from the event's own start → end dates. The quickest way
    *  to set up a multi-day camp, and the empty-state's primary action. */
   function generateDaysFromEvent() {
+    if (!event) return
     const start = isoDateOf(event.start)
     const end = isoDateOf(event.end) ?? start
     if (!start || !end) return
@@ -152,10 +163,12 @@ export function ProgramStructureDialog({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">{t('daysTitle')}</h3>
                 <div className="flex gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={generateDaysFromEvent}>
-                    <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                    {t('generateDays')}
-                  </Button>
+                  {event && (
+                    <Button type="button" size="sm" variant="outline" onClick={generateDaysFromEvent}>
+                      <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+                      {t('generateDays')}
+                    </Button>
+                  )}
                   <Button type="button" size="sm" variant="outline" onClick={addDay}>
                     <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
                     {t('addDay')}
@@ -191,14 +204,16 @@ export function ProgramStructureDialog({
                           <span className="w-12 shrink-0 text-xs text-muted-foreground">
                             {t('dayN', { n: index + 1 })}
                           </span>
-                          <Input
-                            type="date"
-                            value={day.date}
-                            onChange={(e) =>
-                              setDays(days.map((d) => (d.id === day.id ? { ...d, date: e.target.value } : d)))
-                            }
-                            className="w-[9.5rem] shrink-0"
-                          />
+                          {!hideDates && (
+                            <Input
+                              type="date"
+                              value={day.date}
+                              onChange={(e) =>
+                                setDays(days.map((d) => (d.id === day.id ? { ...d, date: e.target.value } : d)))
+                              }
+                              className="w-[9.5rem] shrink-0"
+                            />
+                          )}
                           <Input
                             value={day.title ?? ''}
                             placeholder={t('dayTitlePlaceholder')}

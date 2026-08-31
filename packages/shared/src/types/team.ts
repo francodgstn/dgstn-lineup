@@ -1,3 +1,4 @@
+import type { SurfaceThemePresetId } from './themePreset'
 import type { PerformanceIndicator } from './goal'
 import type { Timestamp } from './common'
 import type { TermsAcceptance } from '../legal'
@@ -652,8 +653,17 @@ export interface Team {
   profileImage?: string
   heroImage?: string
   socialLinks?: SocialLink[]
+  /**
+   * ONE choice carrying both a light and a dark palette — see
+   * `types/themePreset.ts`. When set it WINS over `bioLinkTheme` and
+   * `bioLinkBackground` below, which stay only so a bio-link authored before
+   * presets keeps its look until the studio picks one (no backfill).
+   */
+  bioLinkThemePreset?: SurfaceThemePresetId
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkTheme?: BioLinkTheme
   bioLinkAccentColor?: string
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkBackground?: BioLinkBackground
   /**
    * The team's performance-check-in axes — HOW SOMEONE IS DOING, the radar's
@@ -904,8 +914,17 @@ export interface TeamPublicProfile {
   profileImage?: string
   heroImage?: string
   socialLinks?: SocialLink[]
+  /**
+   * ONE choice carrying both a light and a dark palette — see
+   * `types/themePreset.ts`. When set it WINS over `bioLinkTheme` and
+   * `bioLinkBackground` below, which stay only so a bio-link authored before
+   * presets keeps its look until the studio picks one (no backfill).
+   */
+  bioLinkThemePreset?: SurfaceThemePresetId
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkTheme?: BioLinkTheme
   bioLinkAccentColor?: string
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
   /** Opt-in custom field definitions the public book form may render — only

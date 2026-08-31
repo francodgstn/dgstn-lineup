@@ -21,14 +21,20 @@ import {
 import { Link } from '@/i18n/navigation'
 import { DynamicIcon } from '@/components/ui/icon-picker'
 import { LocaleSwitcher } from '@/components/LocaleSwitcher'
-import { resolveBackground, getTextColor } from '@/lib/bioLink'
-import { SYSTEM_LINK_META, SYSTEM_LINK_ROUTE, systemLinkIsLive } from '@linyup/shared'
+import { resolveBioLinkPalette } from '@/lib/bioLink'
+import {
+  SYSTEM_LINK_META,
+  SYSTEM_LINK_ROUTE,
+  surfaceThemePreset,
+  systemLinkIsLive,
+} from '@linyup/shared'
 import { publicHrefLocalized } from '@/lib/publicRoutes'
 import type {
   TeamLink,
   SocialLink,
   BioLinkTheme,
   BioLinkBackground,
+  SurfaceThemePresetId,
   PublicMainAddress,
   ActivePublicSurfaces,
 } from '@linyup/shared'
@@ -43,6 +49,10 @@ export interface BioLinkTeamData {
   heroImage?: string
   socialLinks?: SocialLink[]
   links?: TeamLink[]
+  /** ONE choice carrying both a light and a dark palette. Wins over the two
+   *  legacy fields below, which still answer for a page authored before
+   *  presets — see packages/shared/src/types/themePreset.ts. */
+  bioLinkThemePreset?: SurfaceThemePresetId
   bioLinkTheme?: BioLinkTheme
   bioLinkAccentColor?: string
   bioLinkBackground?: BioLinkBackground
@@ -116,14 +126,20 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
     if (teamProp) setTeam(teamProp)
   }, [teamProp])
 
+  // SUBSCRIBE WHENEVER THE ANSWER COULD MATTER — any adaptive preset, not just
+  // the legacy `bioLinkTheme: 'auto'`. Guarding on the old field alone would
+  // freeze a preset-themed page at "light" for a viewer in dark mode, because
+  // nothing would ever set `systemDark`.
+  const bioPreset = surfaceThemePreset(team?.bioLinkThemePreset)
+  const followsSystem = bioPreset ? bioPreset.adaptive : team?.bioLinkTheme === 'auto'
   useEffect(() => {
-    if (team?.bioLinkTheme !== 'auto') return
+    if (!followsSystem) return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     setSystemDark(mq.matches)
     const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
-  }, [team?.bioLinkTheme])
+  }, [followsSystem])
 
   if (loading) {
     return (
@@ -142,14 +158,13 @@ export default function BioLinkHome({ slug, team: teamProp, onLinkClick }: Props
     )
   }
 
-  const isDark = team.bioLinkTheme === 'dark' || (team.bioLinkTheme === 'auto' && systemDark)
-
-  const bg = team.bioLinkBackground
-  const bgStyle = resolveBackground(bg, isDark)
-  const textScheme = getTextColor(bg, isDark)
-  const onDark = textScheme === 'light'
-
-  const accent = team.bioLinkAccentColor ?? DEFAULT_ACCENT
+  // ONE resolver — preset first, the legacy theme + background pair second.
+  // See packages/shared/src/types/themePreset.ts for the crossings it removed.
+  const { background: bgStyle, onDark, accent } = resolveBioLinkPalette(
+    team,
+    systemDark,
+    DEFAULT_ACCENT
+  )
 
   const textMain = onDark ? '#f9fafb' : '#111827'
   const textMuted = onDark ? 'rgba(249,250,251,0.65)' : '#6b7280'

@@ -66,6 +66,8 @@ export interface ProgramItemDialogProps {
   onSubmit: (draft: ProgramItemDraft) => Promise<void> | void
   onDelete?: () => Promise<void> | void
   saving?: boolean
+  /** Label days "Day 1" rather than by date — see ProgramTimeline.hideDayDates. */
+  hideDayDates?: boolean
 }
 
 export function ProgramItemDialog({
@@ -78,6 +80,7 @@ export function ProgramItemDialog({
   onSubmit,
   onDelete,
   saving,
+  hideDayDates,
 }: ProgramItemDialogProps) {
   const t = useTranslations('EventProgram')
 
@@ -175,7 +178,11 @@ export function ProgramItemDialog({
                         <SelectItem
                           key={d.id}
                           value={d.id}
-                          label={`${d.title || t('dayN', { n: index + 1 })} · ${d.date}`}
+                          label={
+                            hideDayDates
+                              ? d.title || t('dayN', { n: index + 1 })
+                              : `${d.title || t('dayN', { n: index + 1 })} · ${d.date}`
+                          }
                         />
                       ))}
                     </SelectContent>

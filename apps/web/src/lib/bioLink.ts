@@ -1,4 +1,5 @@
-import type { SocialPlatform } from '@linyup/shared'
+import { resolveSurfacePalette, surfaceThemePreset } from '@linyup/shared'
+import type { SocialPlatform, SurfaceThemePresetId } from '@linyup/shared'
 
 export const BIO_LINK_GRADIENTS: Record<string, { label: string; css: string; dark: boolean }> = {
   'blue-violet': {
@@ -70,6 +71,44 @@ export const ICON_CATEGORIES: { label: string; icons: string[] }[] = [
     icons: ['Sparkles', 'Bookmark', 'Share2', 'Check', 'ArrowRight', 'Lightbulb'],
   },
 ]
+
+/**
+ * THE bio-link palette — preset first, legacy theme+background second.
+ *
+ * Mirrors `buildPalette` in components/site/theme.ts on purpose: the two public
+ * surfaces are themed by the same registry and must not drift. See
+ * types/themePreset.ts for why a preset carries both schemes.
+ *
+ * `resolveBackground` / `getTextColor` below are the LEGACY half, and are only
+ * reached from here — a bio-link with no preset chosen yet.
+ */
+export function resolveBioLinkPalette(
+  team: {
+    bioLinkThemePreset?: SurfaceThemePresetId | null
+    bioLinkTheme?: 'light' | 'dark' | 'auto'
+    bioLinkAccentColor?: string | null
+    bioLinkBackground?: { type: 'solid' | 'gradient'; color: string } | null
+  },
+  systemDark: boolean,
+  defaultAccent: string
+): { background: string; onDark: boolean; accent: string } {
+  const preset = surfaceThemePreset(team.bioLinkThemePreset)
+  if (preset) {
+    const palette = resolveSurfacePalette(preset, systemDark)
+    return {
+      background: palette.background,
+      onDark: palette.scheme === 'light',
+      accent: team.bioLinkAccentColor || preset.defaultAccent,
+    }
+  }
+  const isDark = team.bioLinkTheme === 'dark' || (team.bioLinkTheme === 'auto' && systemDark)
+  const bg = team.bioLinkBackground ?? undefined
+  return {
+    background: resolveBackground(bg, isDark),
+    onDark: getTextColor(bg, isDark) === 'light',
+    accent: team.bioLinkAccentColor || defaultAccent,
+  }
+}
 
 export function resolveBackground(
   bg: { type: 'solid' | 'gradient'; color: string } | undefined,
