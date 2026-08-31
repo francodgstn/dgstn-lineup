@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { toast } from 'sonner'
-import { BookOpenText, Calculator, ListOrdered, Loader2, RefreshCw, Table2 } from 'lucide-react'
+import { BookOpenText, Calculator, ListOrdered, Loader2, RefreshCw, Scale, Table2 } from 'lucide-react'
 import { formatMinorUnits, monthKey } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -166,12 +166,13 @@ export default function FinanceOverviewPage() {
       <FinanceTrendsSection teamId={teamId} />
 
       {/* Accounting subpages */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(
           [
             ['/plugins/finance/accounts', BookOpenText, t('accounts'), t('accountsDescription')],
             ['/plugins/finance/entries', ListOrdered, t('entries'), t('entriesDescription')],
             ['/plugins/finance/reports', Table2, t('reports'), t('reportsDescription')],
+            ['/plugins/finance/opening', Scale, t('openingTitle'), t('openingCardDescription')],
           ] as Array<[string, typeof BookOpenText, string, string]>
         ).map(([href, Icon, label, description]) => (
           <Link key={href} href={href as Route}>
@@ -196,7 +197,6 @@ export default function FinanceOverviewPage() {
             ` · ${t('foreignCurrencySkipped', { count: settings.last_rebuild.skipped_foreign_currency })}`}
         </p>
       )}
-      <p className="text-xs text-muted-foreground">{t('openingBalancesHint')}</p>
     </div>
   )
 }

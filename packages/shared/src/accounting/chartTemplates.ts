@@ -257,6 +257,60 @@ export const CHART_TEMPLATES: Record<ChartTemplateId, ChartTemplate> = {
   it_standard: IT_STANDARD,
 }
 
+/**
+ * Seeded account codes behind the opening-balances wizard's guided questions
+ * ("cash on hand", "unpaid bills", …). NOT part of `AccountingMapping` — the
+ * posting engine never reads these. They are UI DEFAULTS: the wizard lets the
+ * owner re-pick any active account per line, and a code that was deactivated
+ * simply leaves its row unselected. Cash and bank duplicate what `mapping`
+ * could derive (manual clearing / bank_account); the other roles have no
+ * mapping key, so all seven live here together, beside the account tables they
+ * must track (pinned by chartTemplates.test.ts). The accrual activation flow
+ * is planned to reuse these — docs/finance-accrual.md.
+ */
+export interface OpeningBalanceRoleAccounts {
+  cash: string
+  bank: string
+  receivables: string
+  payables: string
+  ownerLoan: string
+  deferredIncome: string
+  /** The balancing line — plain equity, NOT retained earnings (that account
+   * belongs to the fiscal-year close). */
+  equity: string
+}
+
+export const OPENING_BALANCE_ROLE_ACCOUNTS: Record<ChartTemplateId, OpeningBalanceRoleAccounts> =
+  {
+    ch_kmu: {
+      cash: '1000',
+      bank: '1020',
+      receivables: '1100',
+      payables: '2000',
+      ownerLoan: '2400',
+      deferredIncome: '2300',
+      equity: '2800',
+    },
+    de_skr04: {
+      cash: '1600',
+      bank: '1800',
+      receivables: '1200',
+      payables: '3300',
+      ownerLoan: '3560',
+      deferredIncome: '3900',
+      equity: '2000',
+    },
+    it_standard: {
+      cash: '1000',
+      bank: '1200',
+      receivables: '1400',
+      payables: '2400',
+      ownerLoan: '2700',
+      deferredIncome: '2500',
+      equity: '2800',
+    },
+  }
+
 /** Template default for a team country (ISO 3166-1 alpha-2). CH-first fallback. */
 export function templateForCountry(country?: string | null): ChartTemplateId {
   switch ((country ?? '').trim().toUpperCase()) {
