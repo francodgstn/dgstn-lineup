@@ -54,6 +54,7 @@ import {
   Plus,
   Check,
   MoreHorizontal,
+  Library,
 } from 'lucide-react'
 import { Eraser } from 'lucide-react'
 import type { Route } from 'next'
@@ -301,6 +302,18 @@ const NAV_SECTIONS: NavSection[] = [
     labelKey: 'sectionOffer',
     icon: Tag,
     items: [
+      // THE MAP OF THE SECTION, first — the same shape as `publicPages` at the
+      // head of Grow. The catalogue shows plans against the activities and
+      // courses they open, which is the one question this section exists to
+      // answer and the one no single list page can: a coach asking "what does
+      // Premium get?" had to open a plan, then an activity, then a modal.
+      //
+      // It EXISTED before this row and was reachable only from links inside
+      // Activities, Plans and Pricing — findable if you already knew, which is
+      // the shape UX-99 keeps fixing. Ordering by frequency of use would put it
+      // lower; a section's map is the exception, because it is also how you find
+      // out what the section contains.
+      { id: 'catalogue', href: '/offer/catalogue', labelKey: 'catalogue', icon: Library },
       { id: 'activities', href: '/offer/activities', labelKey: 'activities', icon: Zap },
       // Subscriptions only. This was an umbrella ("Plans & Affiliations") whose
       // second tab held the affiliation TYPES while the roster below had no nav
