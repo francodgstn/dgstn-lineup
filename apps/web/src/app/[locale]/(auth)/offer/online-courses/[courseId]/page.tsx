@@ -694,7 +694,11 @@ function SettingsTab({
   }
 
   return (
-    <div className="max-w-lg space-y-6">
+    // `max-w-3xl`, matching the Content tab beside it. It was `max-w-lg` — 512px,
+    // narrower than the plan matcher's own 576px minimum, so the matcher arrived
+    // with a horizontal scrollbar inside a page with room to spare. A settings
+    // pane should be as wide as the widest thing in it.
+    <div className="max-w-3xl space-y-6">
       {/* Cover */}
       <div className="space-y-1.5">
         <Label>{t('fieldCover')}</Label>
@@ -738,16 +742,23 @@ function SettingsTab({
           what each plan does about it. */}
       <div className="space-y-2">
         <Label>{t('fieldAccess')}</Label>
-        {/* Tier CARDS with their consequence written under them — the same
-            control the activity editor uses for "Who can book", because it is
-            the same decision about a different thing. A bare radio label made
-            the reader infer what "Sign-in required" costs them. */}
-        <div className="grid gap-2 sm:grid-cols-2">
+        {/* ONE STACKED LIST, not a grid of tiles. Four two-line tiles in two
+            columns is a shape the eye has to read in both directions to compare
+            — and comparing is the whole task here, because the four options are
+            a ladder from "anyone" to "only buyers" (Franco, 2026-08-31). Stacked
+            in that order, the ladder is the layout.
+
+            One outlined box with hairlines between the rows, the idiom the
+            booking settings panel uses — four separately-outlined boxes read as
+            four unrelated decisions rather than one choice with four answers.
+            Each row still carries its consequence, which is what the activity
+            editor's "Who can book" cards established. */}
+        <div className="divide-y overflow-hidden rounded-lg border">
           {(['free', 'registered', 'subscription', 'purchase'] as const).map((tier) => (
             <label
               key={tier}
-              className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm transition-colors ${
-                localAccess === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
+              className={`flex cursor-pointer items-start gap-2.5 p-3 text-sm transition-colors ${
+                localAccess === tier ? 'bg-primary/5' : 'hover:bg-muted/50'
               }`}
             >
               <input
@@ -756,7 +767,7 @@ function SettingsTab({
                 checked={localAccess === tier}
                 onChange={() => setLocalAccess(tier)}
               />
-              <span>
+              <span className="min-w-0">
                 <span className="font-medium">{t(`access_${tier}` as const)}</span>
                 <span className="block text-xs text-muted-foreground">
                   {t(`access_${tier}_desc` as const)}
