@@ -3631,7 +3631,6 @@
     "access_plans_desc": "Members on the plans you pick below get it. Price it as well and anyone else can buy it.",
     "alsoSellLabel": "Sell it without a plan",
     "alsoSellHint": "Anyone can buy it once, for lifetime access. Your plans can still include it free or reduce the price, in the table below.",
-    "sellOffWarning": "Turning this off takes the course off sale. Only the plans marked “Included” below keep access — a plan with a reduced price loses the price it was reducing.",
     "access_subscription": "Specific subscriptions",
     "access_purchase": "Sold",
     "planLinksLabel": "What each plan does about it",
@@ -7436,7 +7435,8 @@
     "choiceNoneDesc": "Holders pay the normal price — this plan does nothing here.",
     "noPriceDropIn": "This class sells no drop-in, so there is no price to reduce yet. Add a drop-in price to make this apply.",
     "noPriceAppointment": "This appointment has no price, so there is nothing to reduce. Price a duration to make this apply.",
-    "naCourseNotSold": "Not on sale, so there is no price to reduce. Turn on “Sell it without a plan” in the course settings."
+    "noPriceCourse": "This course is not on sale, so there is no price to reduce yet. Tick “Sell it without a plan” in the course settings to price it.",
+    "naCourseOpen": "This course is already open without a plan, so there is nothing for a plan to open or discount."
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

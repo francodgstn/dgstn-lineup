@@ -43,6 +43,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Plus, AlertTriangle, ChevronsDown } from 'lucide-react'
 
 import {
+  coursePlanFacets,
   offeringFacets,
   offeringPlanEdge,
   offeringPlanEdgeUpdate,
@@ -105,20 +106,23 @@ function rowChoicesFor(t: PlanLinkTarget): RowChoice[] {
 /**
  * Why a column is a DASH rather than a control.
  *
- * THE ONE CASE THERE IS: a course with its sale switched off. Its two rate
- * columns have no price to reduce, because a course's price *is* the sale.
- * An activity never shows a dash at all — a class carries a gate AND an
- * independent drop-in price, and an appointment's price is its gate, so all
- * four columns mean something on both. That asymmetry is what makes a studio
- * read the dashes as "the editor is broken for courses" (Franco, 2026-09-01).
+ * THE ONE CASE THERE IS: a course that is free to everyone or open to any
+ * signed-in contact. There is nothing for a plan to open or discount, so all
+ * four columns are dashes — and a studio meets this in the CATALOGUE, which
+ * mounts the matcher beside every course rather than only the plan-bearing
+ * ones.
  *
- * SAYING WHY IS THE WHOLE POINT. The dimmed-but-live cells have explained
- * themselves on hover since they existed (`noPriceHint`); the dash explained
- * nothing, which left the only unavailable state in the grid as the only one
- * with no reason attached.
+ * An unsold course is NOT this case. Its rate columns are live-but-dimmed with
+ * `noPriceHint`, exactly like a class that sells no drop-in yet — the two were
+ * unified on 2026-09-01, when a course gained the same gate-plus-rate pair a
+ * class has always had.
+ *
+ * SAYING WHY IS THE WHOLE POINT. The dimmed cells have explained themselves on
+ * hover since they existed; the dash explained nothing, which left the only
+ * unavailable state in the grid as the only one with no reason attached.
  */
-function isUnsoldCourseRateCell(t: PlanLinkTarget, c: RowChoice): boolean {
-  return t.kind === 'course' && (c === 'percent_off' || c === 'fixed_price')
+function isOpenCourse(t: PlanLinkTarget): boolean {
+  return t.kind === 'course' && !coursePlanFacets(t.doc).access
 }
 
 /** Which option the stored edge currently represents. */
@@ -516,7 +520,16 @@ export function ActivityPlanLinks({
           const isAppointment =
             off.target.kind === 'activity' && isAppointmentActivity(off.target.doc)
           const hasPriceToReduce = rateHasAPriceToApplyTo(off.target)
-          const noPriceHint = isAppointment ? t('noPriceAppointment') : t('noPriceDropIn')
+          // Three kinds of "no price yet", and each names the control that
+          // creates one — a class's drop-in, an appointment's duration price, a
+          // course's sale switch. A generic sentence would leave the studio
+          // hunting for which of those it meant.
+          const noPriceHint =
+            off.target.kind === 'course'
+              ? t('noPriceCourse')
+              : isAppointment
+                ? t('noPriceAppointment')
+                : t('noPriceDropIn')
 
           // The sub-row is drawn only when it has something to say, so an
           // untouched list stays exactly one line per row.
@@ -575,8 +588,7 @@ export function ActivityPlanLinks({
                 // studio mid-setup may well tick it before adding the price, and
                 // the stored rule is correct the moment that price exists.
                 const inert = offered && c !== 'none' && c !== 'included' && !hasPriceToReduce
-                const naHint =
-                  !offered && isUnsoldCourseRateCell(off.target, c) ? t('naCourseNotSold') : null
+                const naHint = !offered && isOpenCourse(off.target) ? t('naCourseOpen') : null
                 return (
                   <div
                     key={c}

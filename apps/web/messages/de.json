@@ -3631,7 +3631,6 @@
     "access_plans_desc": "Mitglieder mit den unten gewählten Plänen erhalten ihn. Mit einem Preis kann ihn zusätzlich jede andere Person kaufen.",
     "alsoSellLabel": "Ohne Plan verkaufen",
     "alsoSellHint": "Jede Person kann ihn einmal kaufen, mit lebenslangem Zugang. Ihre Pläne können ihn in der Tabelle unten weiterhin kostenlos enthalten oder den Preis reduzieren.",
-    "sellOffWarning": "Wird dies ausgeschaltet, ist der Kurs nicht mehr im Verkauf. Nur die unten mit „Enthalten“ markierten Pläne behalten den Zugang — ein Plan mit reduziertem Preis verliert den Preis, den er reduziert hat.",
     "access_subscription": "Bestimmte Abos",
     "access_purchase": "Verkauf",
     "planLinksLabel": "Was jeder Plan damit macht",
@@ -7436,7 +7435,8 @@
     "choiceNoneDesc": "Mitglieder zahlen den normalen Preis — dieser Plan bewirkt hier nichts.",
     "noPriceDropIn": "Diese Klasse verkauft keine Drop-ins, es gibt also noch keinen Preis zu reduzieren. Fügen Sie einen Drop-in-Preis hinzu, damit dies greift.",
     "noPriceAppointment": "Dieser Termin hat keinen Preis, es gibt also nichts zu reduzieren. Versehen Sie eine Dauer mit einem Preis, damit dies greift.",
-    "naCourseNotSold": "Nicht im Verkauf, also gibt es keinen Preis zu reduzieren. Aktivieren Sie „Ohne Plan verkaufen“ in den Kurseinstellungen."
+    "noPriceCourse": "Dieser Kurs ist nicht im Verkauf, es gibt also noch keinen Preis zu reduzieren. Aktivieren Sie „Ohne Plan verkaufen“ in den Kurseinstellungen.",
+    "naCourseOpen": "Dieser Kurs ist bereits ohne Plan zugänglich, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte."
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",

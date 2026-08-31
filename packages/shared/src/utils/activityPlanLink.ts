@@ -216,24 +216,33 @@ export function plansSharingRate(a: Pick<Activity, 'memberBenefit'>, subTypeId: 
 
 // ─── COURSES ─────────────────────────────────────────────────────────────────
 //
-// A course carries the same two facets, in different fields and — this is the
-// part that bites — only on some of its tiers. The rules below are not a choice
-// made here; they are what `resolvePaymentOptions`' course arm actually honours,
-// read off that function:
+// A course carries THE SAME TWO FACETS AS A CLASS, in different fields: a GATE
+// (`accessRule.subscriptionTypeIds` — the plans that get it free) and a RATE
+// (`benefit` — one price rule for the plans that get it cheaper). Both are live
+// on both plan-bearing tiers, and they are ADDITIVE: free wins where a plan is
+// on both lists.
 //
-//   free        neither. It is free to everyone; there is nothing to gate.
-//   registered  neither. Any signed-in contact opens it.
-//   subscription ACCESS only. `accessRule.subscriptionTypeIds` is the gate, and
-//               the arm RETURNS before it ever looks at `benefit` — so a rate
-//               written here would be inert data that no reader consults.
-//   purchase    RATE only. `benefit` decides what a holder pays, and it WINS
-//               over the legacy free-inclusion list, which is why this editor
-//               never writes that list: "included free" is expressible as a
-//               benefit with effect 'included', through the same control every
-//               other rate uses.
+//   free         neither. It is free to everyone; there is nothing to gate.
+//   registered   neither. Any signed-in contact opens it.
+//   subscription both, but the rate is INERT until there is a price — exactly a
+//                class that sells no drop-in yet. `rateHasAPriceToApplyTo` says
+//                so, and the editor dims it and explains.
+//   purchase     both, both live.
 //
-// Offering a control the stored tier cannot honour is the failure mode here.
-// It writes successfully, shows no error, and changes nothing a member sees.
+// HISTORY, because the shape used to be the opposite of this one. Until
+// 2026-09-01 the gate and the rate were mutually exclusive per tier, and the
+// resolver enforced it with `if (!benefit && included)` — a benefit made the
+// gate list INVISIBLE. `firestore.rules` had always ORed the two instead, so
+// "Premium free, Elite 20% off" would have let Premium READ the course while
+// the shop quoted them full price. The editor hid the contradiction by never
+// offering both controls at once; making the resolver additive is what fixes
+// it, and per-plan rates on a course are what falls out (Franco, 2026-09-01).
+//
+// THE LEGACY SPELLING. A `benefit` with effect `included` is the OLD way to say
+// "these plans get it free", and both rule files still honour it. It is read
+// here as part of the GATE, and the first edge write ABSORBS it into
+// `accessRule.subscriptionTypeIds` and clears it — so there is one canonical
+// home going forward and no backfill to deploy.
 
 import type { Course, CourseAccessRule } from '../types/course'
 
@@ -252,19 +261,37 @@ export function activityPlanFacets(a: Pick<Activity, 'type'>): OfferingFacets {
 }
 
 export function coursePlanFacets(c: { accessRule?: CourseAccessRule | null }): OfferingFacets {
-  const type = c.accessRule?.type
-  return { access: type === 'subscription', rate: type === 'purchase' }
+  // Both, or neither. A course no plan can open or discount is one that is
+  // already open to everybody.
+  const bearsPlans = c.accessRule?.type === 'subscription' || c.accessRule?.type === 'purchase'
+  return { access: bearsPlans, rate: bearsPlans }
 }
 
-/** Plans on a course's gate. Empty on every tier that does not have one. */
+/**
+ * The ids on a `benefit` that mean "free" rather than "cheaper" — the legacy
+ * spelling of the gate. `spend_credits` is here because the resolver treats it
+ * as coverage too, and no course editor has ever offered it.
+ */
+function legacyIncludedIds(c: Pick<Course, 'benefit'>): string[] {
+  const n = normalizeBenefit(c.benefit)
+  if (!n) return []
+  return n.effect === 'included' || n.effect === 'spend_credits' ? n.subscriptionTypeIds : []
+}
+
+/** Plans that get a course FREE — the gate, plus its legacy spelling. */
 export function courseGatedPlanIds(c: CourseEdgeFields): string[] {
-  if (c.accessRule?.type !== 'subscription') return []
-  return c.accessRule.subscriptionTypeIds ?? []
+  if (!coursePlanFacets(c).access) return []
+  const gate = c.accessRule?.subscriptionTypeIds ?? []
+  const legacy = legacyIncludedIds(c)
+  return legacy.length ? [...new Set([...gate, ...legacy])] : gate
 }
 
-/** Plans on a course's rate rule. */
+/** Plans that get a course CHEAPER. A benefit meaning "free" is the gate, so it
+ *  is deliberately not counted here — it would otherwise show as both. */
 export function courseRatedPlanIds(c: Pick<Course, 'benefit'>): string[] {
-  return normalizeBenefit(c.benefit)?.subscriptionTypeIds ?? []
+  const n = normalizeBenefit(c.benefit)
+  if (!n || n.effect === 'included' || n.effect === 'spend_credits') return []
+  return n.subscriptionTypeIds
 }
 
 export function coursePlanEdge(c: CourseEdgeFields, subTypeId: string): ActivityPlanEdge {
@@ -274,24 +301,30 @@ export function coursePlanEdge(c: CourseEdgeFields, subTypeId: string): Activity
   }
 }
 
+/** The price rule a course carries today, or the default for a fresh one.
+ *  `percent_off`, NOT the `included` an activity defaults to: on a course
+ *  "included" is the GATE column, and offering it in both places is what the
+ *  two overlapping tiers used to do. */
 export function courseRateChoiceOf(c: Pick<Course, 'benefit'>): ActivityRateChoice {
   const n = normalizeBenefit(c.benefit)
-  if (!n) return { effect: 'included' }
-  return {
-    effect: n.effect === 'spend_credits' ? 'included' : n.effect,
-    percent: n.percent ?? null,
-    amount: n.amount ?? null,
+  if (!n || n.effect === 'included' || n.effect === 'spend_credits') {
+    return { effect: 'percent_off' }
   }
+  return { effect: n.effect, percent: n.percent ?? null, amount: n.amount ?? null }
+}
+
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i])
 }
 
 /**
  * The course half of the ONE edge write. Same contract as
- * `activityPlanEdgeUpdate`: the fresh document read inside the transaction, and
+ * `activityPlanEdgeUpdate`: the fresh document read INSIDE the transaction, and
  * null when nothing would change.
  *
- * A facet the tier does not honour is IGNORED rather than written — the caller
- * should not have offered the control, and writing it anyway would store data
- * the resolver never reads.
+ * Both facets are computed every time — a course, unlike an appointment, has no
+ * tier where one of them is unwritable, so the caller can always have offered
+ * both controls. A tier that bears no plans at all writes nothing.
  */
 export function coursePlanEdgeUpdate(
   fresh: CourseEdgeFields,
@@ -299,33 +332,44 @@ export function coursePlanEdgeUpdate(
   next: ActivityPlanEdge,
   choice?: ActivityRateChoice
 ): Record<string, unknown> | null {
-  const facets = coursePlanFacets(fresh)
-  const now = coursePlanEdge(fresh, subTypeId)
+  if (!coursePlanFacets(fresh).access) return null
   const update: Record<string, unknown> = {}
 
-  if (facets.rate) {
-    const ids = courseRatedPlanIds(fresh)
-    const nextIds = next.rate
-      ? ids.includes(subTypeId)
-        ? ids
-        : [...ids, subTypeId]
-      : ids.filter((id) => id !== subTypeId)
-    const nextRate = buildRate(
-      nextIds,
-      next.rate ? (choice ?? courseRateChoiceOf(fresh)) : courseRateChoiceOf(fresh)
-    )
-    if (!sameRate(normalizeBenefit(fresh.benefit), nextRate)) update.benefit = nextRate
+  const gateIds = courseGatedPlanIds(fresh)
+  const rateIds = courseRatedPlanIds(fresh)
+
+  const nextGateIds = next.access
+    ? gateIds.includes(subTypeId)
+      ? gateIds
+      : [...gateIds, subTypeId]
+    : gateIds.filter((id) => id !== subTypeId)
+  const nextRateIds = next.rate
+    ? rateIds.includes(subTypeId)
+      ? rateIds
+      : [...rateIds, subTypeId]
+    : rateIds.filter((id) => id !== subTypeId)
+
+  const nextRate = buildRate(
+    nextRateIds,
+    next.rate ? (choice ?? courseRateChoiceOf(fresh)) : courseRateChoiceOf(fresh)
+  )
+  // A legacy `included` benefit has just been read as part of the GATE, so
+  // leaving it in place would count its plans twice. Writing the (price-only)
+  // rate here clears it — the absorption, and the only migration there is.
+  const legacyAbsorbed = legacyIncludedIds(fresh).length > 0
+  if (legacyAbsorbed || !sameRate(normalizeBenefit(fresh.benefit), nextRate)) {
+    update.benefit = nextRate
   }
 
-  if (facets.access && next.access !== now.access) {
-    const ids = courseGatedPlanIds(fresh)
-    const nextIds = next.access ? [...ids, subTypeId] : ids.filter((id) => id !== subTypeId)
-    // The tier is NOT changed here. Emptying a course's gate leaves it
-    // subscription-tier with nobody on it, which the pricing health check
-    // reports — the same shape as a class with an empty allow-list. Silently
-    // demoting it to 'registered' would hand a paid course to every signed-in
-    // contact, which is not what removing one plan asked for.
-    update.accessRule = { ...fresh.accessRule, subscriptionTypeIds: nextIds }
+  // Compared against what is STORED, not against the union read above, so that
+  // absorbing the legacy list registers as a change and gets written.
+  if (!sameIds(nextGateIds, fresh.accessRule?.subscriptionTypeIds ?? [])) {
+    // The tier is NOT changed here. Emptying a course's gate leaves the tier as
+    // it was with nobody on it, which the pricing health check reports — the
+    // same shape as a class with an empty allow-list. Silently demoting it to
+    // 'registered' would hand a paid course to every signed-in contact, which is
+    // not what removing one plan asked for.
+    update.accessRule = { ...fresh.accessRule, subscriptionTypeIds: nextGateIds }
   }
 
   return Object.keys(update).length ? update : null
@@ -404,7 +448,13 @@ export function offeringRateChoiceOf(t: PlanLinkTarget): ActivityRateChoice {
  * see that the option exists and why it cannot bite yet.
  */
 export function rateHasAPriceToApplyTo(t: PlanLinkTarget): boolean {
-  if (t.kind === 'course') return true
+  // A course's price IS its sale, so an unsold course has nothing to reduce —
+  // the same inert-until-priced state a class with no drop-in is in, and shown
+  // the same way (dimmed, with a reason) rather than withheld.
+  if (t.kind === 'course') {
+    const r = t.doc.accessRule
+    return r?.type === 'purchase' && typeof r.priceAmount === 'number' && r.priceAmount > 0
+  }
   if (isAppointmentActivity(t.doc)) {
     return (t.doc.durations ?? []).some((d) => (d.priceAmount ?? 0) > 0)
   }
