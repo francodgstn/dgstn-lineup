@@ -99,6 +99,8 @@ import { reorderWithinSection } from '@/lib/reorder'
 import { SortableItem, SortableList, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatCurrency } from '@/lib/format'
 import { OfferFacts, type OfferChip, type OfferFactsProps } from '@/components/offer/OfferFacts'
+import { ActivityDialog } from '@/components/activities/ActivityDialog'
+import { SubTypeDialog } from '@/components/subscriptions/SubscriptionTypeDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
 
@@ -113,6 +115,13 @@ const DEAD_END_CODES = new Set<PricingWarning['code']>([
 ])
 
 type Selection = { kind: 'activity' | 'course' | 'plan' | 'product'; id: string } | null
+
+/**
+ * HOW A THING IS EDITED FROM THIS PAGE: open a dialog here, or go to the page
+ * that owns the form. One type for both, so a row and the pane it opens cannot
+ * end up offering different things — see `editActionFor`.
+ */
+type EditAction = { open: () => void } | { href: Route } | undefined
 
 /** The rail's tabs. `activities` holds classes AND appointments — see the header. */
 type TabKey = 'activities' | 'plans' | 'courses' | 'products'
@@ -162,7 +171,7 @@ export default function CataloguePage() {
   const tAct = useTranslations('Activities')
   const tSet = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
-  const { currentTeamId, team } = useAuth()
+  const { currentTeamId, team, user } = useAuth()
   const canEdit = useCapabilities().can('team.settings')
   const router = useRouter()
   const params = useSearchParams()
@@ -176,6 +185,19 @@ export default function CataloguePage() {
   // beside it does not list. Once a tab is picked it wins — selecting within it
   // must not be able to move the reader somewhere else.
   const [pickedTab, setPickedTab] = useState<TabKey | null>(null)
+  // ── THE EDITORS, MOUNTED HERE ────────────────────────────────────────────
+  // The catalogue is where a studio reasons about what it sells, so it is where
+  // the things it sells should be editable — it used to be able to do nothing
+  // but link away to the list page that owned the form (Franco, 2026-08-31).
+  // Both dialogs are the SAME components those pages mount, lifted out of them
+  // for the purpose; nothing about either form changed in the move.
+  //
+  // Courses and products keep their links: a course's editor is a whole PAGE
+  // (media, lessons, ordering), not a dialog, and a product's is still a fixture
+  // of its own page. Linking to a form that exists is better than half-lifting
+  // one that does not.
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
+  const [editingPlan, setEditingPlan] = useState<SubscriptionType | null>(null)
 
   const { data: activities = [], isLoading: loadingActivities } = useActivities(currentTeamId)
   const { data: plans = [], isLoading: loadingPlans } = useSubscriptionTypes(currentTeamId)
@@ -397,16 +419,31 @@ export default function CataloguePage() {
     // there to be read at a glance, and that is the one thing it could not be.
     chips.map((c) => c.label).join(' • ') || undefined
 
-  /** Where a row's pencil goes — the SAME destinations the pane's Edit button
-   *  uses, named once so a row and the pane it opens cannot lead to different
-   *  places. Absent for a reader who cannot edit: a shortcut to a form that
-   *  refuses them is worse than no shortcut. */
-  const editHrefFor = (kind: NonNullable<Selection>['kind'], id: string): Route | undefined => {
+  /**
+   * HOW A THING IS EDITED FROM HERE — the one answer, shared by a row's pencil
+   * and by the pane's Edit button, so the two can never lead somewhere
+   * different.
+   *
+   * An activity or a plan opens its form RIGHT HERE. A course or a product
+   * still navigates: a course's editor is a page, and a product's is a fixture
+   * of its own page — linking to a form that exists beats half-lifting one that
+   * does not.
+   *
+   * A reader who cannot edit gets neither: a shortcut into a form that refuses
+   * them is worse than no shortcut.
+   */
+  const editActionFor = (kind: NonNullable<Selection>['kind'], id: string): EditAction => {
     if (!canEdit) return undefined
-    if (kind === 'activity') return `/offer/activities?edit=${id}` as Route
-    if (kind === 'plan') return `/offer/plans?edit=${id}` as Route
-    if (kind === 'course') return `/offer/online-courses/${id}` as Route
-    return `/offer/products?edit=${id}` as Route
+    if (kind === 'activity') {
+      const a = activities.find((x) => x.id === id)
+      return a ? { open: () => setEditingActivity(a) } : undefined
+    }
+    if (kind === 'plan') {
+      const pl = plans.find((x) => x.id === id)
+      return pl ? { open: () => setEditingPlan(pl) } : undefined
+    }
+    if (kind === 'course') return { href: `/offer/online-courses/${id}` as Route }
+    return { href: `/offer/products?edit=${id}` as Route }
   }
 
   // ── ORDERING ─────────────────────────────────────────────────────────────
@@ -590,7 +627,7 @@ export default function CataloguePage() {
                         onClick={() => toggle('activity', a.id)}
                         sortable={sortable}
                         reorderLabel={t('reorder')}
-                        editHref={editHrefFor('activity', a.id)}
+                        edit={editActionFor('activity', a.id)}
                         editLabel={t('editAll')}
                       />
                     )}
@@ -616,7 +653,7 @@ export default function CataloguePage() {
                         onClick={() => toggle('activity', a.id)}
                         sortable={sortable}
                         reorderLabel={t('reorder')}
-                        editHref={editHrefFor('activity', a.id)}
+                        edit={editActionFor('activity', a.id)}
                         editLabel={t('editAll')}
                       />
                     )}
@@ -643,7 +680,7 @@ export default function CataloguePage() {
                       onClick={() => toggle('plan', pl.id)}
                       sortable={sortable}
                       reorderLabel={t('reorder')}
-                      editHref={editHrefFor('plan', pl.id)}
+                      edit={editActionFor('plan', pl.id)}
                       editLabel={t('editAll')}
                     />
                   )}
@@ -665,7 +702,7 @@ export default function CataloguePage() {
                     warn={deadEndIds.has(c.id)}
                     selected={selection?.kind === 'course' && selection.id === c.id}
                     onClick={() => toggle('course', c.id)}
-                    editHref={editHrefFor('course', c.id)}
+                    edit={editActionFor('course', c.id)}
                     editLabel={t('editAll')}
                   />
                 ))
@@ -688,7 +725,7 @@ export default function CataloguePage() {
                     detail={detailLine(productChips(p))}
                     selected={selection?.kind === 'product' && selection.id === p.id}
                     onClick={() => toggle('product', p.id)}
-                    editHref={editHrefFor('product', p.id)}
+                    edit={editActionFor('product', p.id)}
                     editLabel={t('editAll')}
                   />
                 ))
@@ -725,7 +762,7 @@ export default function CataloguePage() {
                 chips: activityChips(selectedActivity),
                 description: selectedActivity.description,
               }}
-              editHref={`/offer/activities?edit=${selectedActivity.id}` as Route}
+              edit={editActionFor('activity', selectedActivity.id)}
             >
               <ActivityPlanLinks
                 direction="from-offering"
@@ -759,7 +796,7 @@ export default function CataloguePage() {
                 chips: planChips(selectedPlan),
                 description: selectedPlan.description,
               }}
-              editHref={`/offer/plans?edit=${selectedPlan.id}` as Route}
+              edit={editActionFor('plan', selectedPlan.id)}
             >
               <ActivityPlanLinks
                 direction="from-plan"
@@ -794,7 +831,7 @@ export default function CataloguePage() {
                 // `summary`, not `description`: a course's blurb is its summary.
                 description: selectedCourse.summary,
               }}
-              editHref={`/offer/online-courses/${selectedCourse.id}` as Route}
+              edit={editActionFor('course', selectedCourse.id)}
             >
               <ActivityPlanLinks
                 direction="from-offering"
@@ -824,7 +861,7 @@ export default function CataloguePage() {
                 // the fact, and the fact is the part a studio needs.
                 note: t('productNoPlanEdge'),
               }}
-              editHref={`/offer/products?edit=${selectedProduct.id}` as Route}
+              edit={editActionFor('product', selectedProduct.id)}
             />
           )}
 
@@ -845,6 +882,47 @@ export default function CataloguePage() {
             )}
         </div>
       </div>
+
+      {/* THE EDITORS. Keyed by the record so reopening on a different one
+          remounts the form rather than leaving the previous draft in it — the
+          same key both list pages use. `currentTeamId` and `user` gate the
+          activity form because it writes with both. */}
+      {currentTeamId && user && editingActivity && (
+        <ActivityDialog
+          key={editingActivity.id}
+          open
+          onClose={() => setEditingActivity(null)}
+          teamId={currentTeamId}
+          userId={user.uid}
+          // The LIVE document, re-read from the query on every render — the plan
+          // editor inside the form writes `accessRule` on this same doc, so a
+          // snapshot taken when the dialog opened would have Save write the
+          // pre-edit allow-list back over it.
+          editing={activities.find((a) => a.id === editingActivity.id) ?? editingActivity}
+          duplicating={null}
+          nextOrder={activities.length}
+          currency={currency}
+          subscriptionTypes={plans}
+          canEditPlanLinks={canEdit}
+        />
+      )}
+
+      {currentTeamId && editingPlan && (
+        <SubTypeDialog
+          key={editingPlan.id}
+          open
+          onOpenChange={(v) => !v && setEditingPlan(null)}
+          teamId={currentTeamId}
+          editing={plans.find((pl) => pl.id === editingPlan.id) ?? editingPlan}
+          duplicating={null}
+          currency={currency}
+          nextOrder={plans.length}
+          onSaved={() => {
+            void qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+            void qc.invalidateQueries({ queryKey: ['activities'] })
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -878,7 +956,7 @@ function PaneBody({
   badge,
   summary,
   facts,
-  editHref,
+  edit,
   children,
 }: {
   title: string
@@ -886,7 +964,8 @@ function PaneBody({
   summary: string
   /** What the list page would show on this thing's row — see OfferFacts. */
   facts?: OfferFactsProps
-  editHref: Route
+  /** Open the editor, or go to it. Absent for a reader who cannot edit. */
+  edit?: EditAction
   /** The edge editor. ABSENT for a product, which has no edge — the facts block
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
@@ -907,13 +986,18 @@ function PaneBody({
           </div>
           <p className="text-xs text-muted-foreground">{summary}</p>
         </div>
-        {/* Shown to a reader who cannot edit as well: it is how they OPEN the
-            thing, and the form refuses them on its own terms rather than this
-            page pretending the destination does not exist. */}
-        <Link href={editHref} className={buttonVariants({ size: 'sm' })}>
-          <Pencil className="mr-1.5 h-3.5 w-3.5" />
-          {t('editAll')}
-        </Link>
+        {edit &&
+          ('open' in edit ? (
+            <Button size="sm" onClick={edit.open}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              {t('editAll')}
+            </Button>
+          ) : (
+            <Link href={edit.href} className={buttonVariants({ size: 'sm' })}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              {t('editAll')}
+            </Link>
+          ))}
       </div>
 
       {/* THE FACTS, above the hairline: they belong to the header — what this
@@ -981,7 +1065,7 @@ function RailRow({
   onClick,
   sortable,
   reorderLabel,
-  editHref,
+  edit,
   editLabel,
 }: {
   name: string
@@ -994,8 +1078,9 @@ function RailRow({
   /** Present only when this list is orderable — see `canReorder` in the page. */
   sortable?: SortableRenderProps
   reorderLabel?: string
-  /** Where the pencil goes. Absent for a reader who cannot edit. */
-  editHref?: Route
+  /** What the pencil does — open a dialog, or go somewhere. Absent for a reader
+   *  who cannot edit. */
+  edit?: EditAction
   editLabel?: string
 }) {
   return (
@@ -1046,16 +1131,8 @@ function RailRow({
         {warn && <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />}
       </button>
 
-      {editHref && (
-        <Link
-          href={editHref}
-          aria-label={editLabel}
-          title={editLabel}
-          onClick={(e) => e.stopPropagation()}
-          className="mr-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Link>
+      {edit && (
+        <EditPencil edit={edit} label={editLabel} />
       )}
     </div>
   )
@@ -1101,6 +1178,41 @@ function OrderableRows<T extends { id: string }>({
         ))}
       </div>
     </SortableList>
+  )
+}
+
+/** The row's pencil. A BUTTON or a LINK depending on what editing this thing
+ *  means — the two must look identical, because to the reader they are the same
+ *  affordance and the difference is ours, not theirs. */
+function EditPencil({ edit, label }: { edit: NonNullable<EditAction>; label?: string }) {
+  const className =
+    'mr-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100'
+  if ('open' in edit) {
+    return (
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={(e) => {
+          e.stopPropagation()
+          edit.open()
+        }}
+        className={className}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    )
+  }
+  return (
+    <Link
+      href={edit.href}
+      aria-label={label}
+      title={label}
+      onClick={(e) => e.stopPropagation()}
+      className={className}
+    >
+      <Pencil className="h-3.5 w-3.5" />
+    </Link>
   )
 }
 
