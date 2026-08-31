@@ -55,6 +55,7 @@ import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { usePlanName } from '@/hooks/usePlanName'
 import { activityMoneyChipLabels } from '@/lib/activityTerms'
+import { reorderWithinSection } from '@/lib/reorder'
 import { formatCurrency } from '@/lib/format'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -1612,19 +1613,14 @@ export default function ActivitiesPage() {
     appointments: false,
   })
 
-  // Drag-and-drop reorder, scoped to one section. The moved section's items are
-  // permuted among the GLOBAL positions they already occupy, so the other
-  // section's ordering (and any interleaving on public surfaces, which sort the
-  // full list) is untouched. Persists `order = global index` for the whole list
-  // in one batch, normalising docs that never had an explicit order.
+  // Drag-and-drop reorder, scoped to one section. The permutation itself is
+  // `reorderWithinSection` (lib/reorder.ts) — shared with the catalogue's rail,
+  // which reorders the same collection from a different screen. Persists
+  // `order = global index` for the whole list in one batch, normalising docs
+  // that never had an explicit order.
   async function reorderSection(section: Activity[], from: number, to: number) {
     if (from === to || !currentTeamId) return
-    const nextSection = [...section]
-    const [moved] = nextSection.splice(from, 1)
-    nextSection.splice(to, 0, moved)
-    const inSection = new Set(section.map((a) => a.id))
-    let si = 0
-    const full = activities.map((a) => (inSection.has(a.id) ? nextSection[si++] : a))
+    const full = reorderWithinSection(activities, section, from, to)
     const batch = writeBatch(db)
     full.forEach((a, i) => {
       if (a.order !== i) batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), { order: i })

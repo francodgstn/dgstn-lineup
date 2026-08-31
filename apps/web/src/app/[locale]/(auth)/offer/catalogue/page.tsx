@@ -46,18 +46,19 @@
 // plan on it. The per-pair matrix existed and was cut in 2026-07 after it
 // produced real coach confusion.
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { collection, doc, getDocs, updateDoc } from 'firebase/firestore'
+import { collection, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   AlertTriangle,
   IdCard,
   Zap,
   CalendarClock,
   GraduationCap,
+  GripVertical,
   Package,
   Pencil,
   Check,
@@ -98,6 +99,8 @@ import { ActivityPlanLinks, type Offering } from '@/components/offer/ActivityPla
 import { useCourses } from '@/plugins/online-courses/hooks'
 import { useProducts } from '@/plugins/products/hooks'
 import { activityMoneyChipLabels } from '@/lib/activityTerms'
+import { reorderWithinSection } from '@/lib/reorder'
+import { SortableItem, SortableList, type SortableRenderProps } from '@/components/ui/sortable'
 import { formatCurrency } from '@/lib/format'
 import { OfferFacts, type OfferChip, type OfferFactsProps } from '@/components/offer/OfferFacts'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -360,6 +363,45 @@ export default function CataloguePage() {
     select(selection?.kind === kind && selection.id === id ? null : { kind, id })
   }
 
+  // ── ORDERING ─────────────────────────────────────────────────────────────
+  // The same `order` field the activities list and the subscriptions manager
+  // write, through the same `reorderWithinSection` permutation — so a studio
+  // that arranges its plans here sees that arrangement everywhere, including on
+  // the public surfaces, and not a third opinion about the order.
+  //
+  // NOT WHILE THE DEAD-END FILTER IS ON. The rail then shows a SUBSET, and every
+  // one of these writes `order = index over the full list`: dragging within a
+  // filtered view would compute positions from rows that are not all the rows.
+  // The handles disappear rather than misbehave.
+  const canReorder = canEdit && !onlyDeadEnds
+
+  async function reorderActivities(section: Activity[], from: number, to: number) {
+    if (from === to) return
+    const full = reorderWithinSection(activities, section, from, to)
+    const batch = writeBatch(db)
+    full.forEach((a, i) => {
+      if (a.order !== i) batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), { order: i })
+    })
+    await batch.commit()
+    await qc.invalidateQueries({ queryKey: ['activities'] })
+  }
+
+  async function reorderPlans(from: number, to: number) {
+    if (from === to || !currentTeamId) return
+    const next = reorderWithinSection(plans, plans, from, to)
+    const batch = writeBatch(db)
+    next.forEach((st, i) => {
+      if (st.order !== i) {
+        batch.update(
+          doc(db, TEAMS_COLLECTION, currentTeamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, st.id),
+          { order: i }
+        )
+      }
+    })
+    await batch.commit()
+    await qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+  }
+
   const selectedActivity =
     selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : undefined
   const selectedCourse =
@@ -476,20 +518,30 @@ export default function CataloguePage() {
             <>
               {/* Classes and appointments stay SUB-HEADINGS, not tabs — same
                   kind of thing, one asymmetry worth seeing. See the header. */}
+              {/* Classes and appointments reorder SEPARATELY, exactly as they do
+                  on the activities page: they are two groups over one stored
+                  list, and `reorderWithinSection` keeps a drag inside a group
+                  from renumbering the other one. */}
               <RailGroup icon={Zap} label={t('railClasses')}>
                 {visible(classes).length === 0 ? (
                   <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noClasses')} />
                 ) : (
-                  visible(classes).map((a) => (
-                    <RailRow
-                      key={a.id}
-                      name={a.name}
-                      color={a.color}
-                      warn={deadEndIds.has(a.id)}
-                      selected={selection?.kind === 'activity' && selection.id === a.id}
-                      onClick={() => toggle('activity', a.id)}
-                    />
-                  ))
+                  <OrderableRows
+                    items={visible(classes)}
+                    canReorder={canReorder}
+                    onReorder={(from, to) => void reorderActivities(classes, from, to)}
+                    renderRow={(a, sortable) => (
+                      <RailRow
+                        name={a.name}
+                        color={a.color}
+                        warn={deadEndIds.has(a.id)}
+                        selected={selection?.kind === 'activity' && selection.id === a.id}
+                        onClick={() => toggle('activity', a.id)}
+                        sortable={sortable}
+                        reorderLabel={t('reorder')}
+                      />
+                    )}
+                  />
                 )}
               </RailGroup>
 
@@ -497,16 +549,22 @@ export default function CataloguePage() {
                 {visible(appointments).length === 0 ? (
                   <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noAppointments')} />
                 ) : (
-                  visible(appointments).map((a) => (
-                    <RailRow
-                      key={a.id}
-                      name={a.name}
-                      color={a.color}
-                      warn={deadEndIds.has(a.id)}
-                      selected={selection?.kind === 'activity' && selection.id === a.id}
-                      onClick={() => toggle('activity', a.id)}
-                    />
-                  ))
+                  <OrderableRows
+                    items={visible(appointments)}
+                    canReorder={canReorder}
+                    onReorder={(from, to) => void reorderActivities(appointments, from, to)}
+                    renderRow={(a, sortable) => (
+                      <RailRow
+                        name={a.name}
+                        color={a.color}
+                        warn={deadEndIds.has(a.id)}
+                        selected={selection?.kind === 'activity' && selection.id === a.id}
+                        onClick={() => toggle('activity', a.id)}
+                        sortable={sortable}
+                        reorderLabel={t('reorder')}
+                      />
+                    )}
+                  />
                 )}
               </RailGroup>
             </>
@@ -517,14 +575,20 @@ export default function CataloguePage() {
               {plans.length === 0 ? (
                 <RailEmpty text={t('noPlans')} />
               ) : (
-                plans.map((p) => (
-                  <RailRow
-                    key={p.id}
-                    name={p.name}
-                    selected={selection?.kind === 'plan' && selection.id === p.id}
-                    onClick={() => toggle('plan', p.id)}
-                  />
-                ))
+                <OrderableRows
+                  items={plans}
+                  canReorder={canReorder}
+                  onReorder={(from, to) => void reorderPlans(from, to)}
+                  renderRow={(pl, sortable) => (
+                    <RailRow
+                      name={pl.name}
+                      selected={selection?.kind === 'plan' && selection.id === pl.id}
+                      onClick={() => toggle('plan', pl.id)}
+                      sortable={sortable}
+                      reorderLabel={t('reorder')}
+                    />
+                  )}
+                />
               )}
             </div>
           )}
@@ -899,25 +963,41 @@ function RailGroup({
   )
 }
 
+/**
+ * One row of the rail — a select target, and (where the list is orderable) a
+ * drag handle beside it.
+ *
+ * THE HANDLE IS ITS OWN BUTTON, not the row. Two reasons, and the first is not
+ * negotiable: a `<button>` inside a `<button>` is invalid, so the row cannot
+ * both be the select target and carry the drag listeners. The second is that
+ * dragging and selecting are different intents on the same pixels — making the
+ * whole row draggable means every mis-drag also changes what the pane is
+ * showing. Same shape the activities and subscription lists already use.
+ */
 function RailRow({
   name,
   color,
   warn,
   selected,
   onClick,
+  sortable,
+  reorderLabel,
 }: {
   name: string
   color?: string
   warn?: boolean
   selected: boolean
   onClick: () => void
+  /** Present only when this list is orderable — see `canReorder` in the page. */
+  sortable?: SortableRenderProps
+  reorderLabel?: string
 }) {
-  return (
+  const row = (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
+      className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
         selected ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
       }`}
     >
@@ -930,6 +1010,72 @@ function RailRow({
       <span className="truncate text-sm">{name}</span>
       {warn && <AlertTriangle className="ml-auto h-3.5 w-3.5 shrink-0 text-amber-600" />}
     </button>
+  )
+
+  if (!sortable) return row
+
+  return (
+    <div
+      ref={sortable.setNodeRef}
+      style={sortable.style}
+      className={`flex items-center rounded-lg ${sortable.isDragging ? 'bg-card shadow-lg' : ''}`}
+    >
+      <button
+        type="button"
+        {...sortable.attributes}
+        {...sortable.listeners}
+        aria-label={reorderLabel}
+        // `touch-none` is what makes this work on a phone at all: without it the
+        // browser claims the gesture for scrolling before the sensor sees it.
+        className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+      {row}
+    </div>
+  )
+}
+
+/**
+ * A rail list that is orderable, or the same list that is not.
+ *
+ * The branch is here rather than at each call site because there are three of
+ * them and the difference is one wrapper: with `canReorder` the rows sit in a
+ * `SortableList` and each gets its handle props; without it they render plain.
+ * Writing that out three times is how one of them ends up still draggable while
+ * the dead-end filter is on — which would reorder the whole collection from a
+ * subset of it.
+ */
+function OrderableRows<T extends { id: string }>({
+  items,
+  canReorder,
+  onReorder,
+  renderRow,
+}: {
+  items: T[]
+  canReorder: boolean
+  onReorder: (from: number, to: number) => void
+  renderRow: (item: T, sortable?: SortableRenderProps) => React.ReactNode
+}) {
+  if (!canReorder) {
+    return (
+      <div className="space-y-0.5">
+        {items.map((item) => (
+          <Fragment key={item.id}>{renderRow(item)}</Fragment>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <SortableList ids={items.map((item) => item.id)} onReorder={onReorder}>
+      <div className="space-y-0.5">
+        {items.map((item) => (
+          <SortableItem key={item.id} id={item.id}>
+            {(sortable) => <>{renderRow(item, sortable)}</>}
+          </SortableItem>
+        ))}
+      </div>
+    </SortableList>
   )
 }
 

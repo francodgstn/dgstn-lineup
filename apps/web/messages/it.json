@@ -7403,6 +7403,7 @@
     "save": "Salva",
     "saving": "Salvataggio…",
     "rename": "Rinomina",
+    "reorder": "Riordina",
     "nameLabel": "Nome",
     "editAll": "Modifica",
     "deadEnds": "{count, plural, one {# attività che nessuno può prenotare} other {# attività che nessuno può prenotare}}",

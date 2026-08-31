@@ -7403,6 +7403,7 @@
     "save": "Save",
     "saving": "Saving…",
     "rename": "Rename",
+    "reorder": "Reorder",
     "nameLabel": "Name",
     "editAll": "Edit",
     "deadEnds": "{count, plural, one {# activity nobody can book} other {# activities nobody can book}}",

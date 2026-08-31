@@ -55,6 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { reorderWithinSection } from '@/lib/reorder'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -1071,11 +1072,13 @@ export const SubscriptionTypesManager = forwardRef<
   // Drag-and-drop reorder. Persists `order = position` for the whole list in one
   // batch (normalizes any docs that never had an explicit order). The list is
   // already sorted by `compareSubscriptionTypes` via the hook.
+  //
+  // The permutation is `reorderWithinSection` (lib/reorder.ts) with no section —
+  // shared with the activities list and the catalogue's rail, which reorder the
+  // same collections from other screens.
   const reorder = async (from: number, to: number) => {
     if (from === to) return
-    const next = [...types]
-    const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
+    const next = reorderWithinSection(types, types, from, to)
     const batch = writeBatch(db)
     next.forEach((st, i) => {
       if (st.order !== i) {

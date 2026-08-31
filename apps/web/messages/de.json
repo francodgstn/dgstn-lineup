@@ -7403,6 +7403,7 @@
     "save": "Speichern",
     "saving": "Speichern…",
     "rename": "Umbenennen",
+    "reorder": "Neu anordnen",
     "nameLabel": "Name",
     "editAll": "Bearbeiten",
     "deadEnds": "{count, plural, one {# Aktivität, die niemand buchen kann} other {# Aktivitäten, die niemand buchen kann}}",
