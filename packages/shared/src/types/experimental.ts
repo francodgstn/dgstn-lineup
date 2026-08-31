@@ -20,6 +20,11 @@
 // doc is `allow update: if hasTeamRole(teamId, 'owner') && paymentsUnchanged()`.
 // So OWNER-ONLY, no rules change, and nothing here touches `payments`.
 //
+// …for every entry EXCEPT one. An experiment whose switch was already a stored
+// field with its own readers keeps that field — see `ExperimentalFeatureStore`.
+// `resolveExperimentalFeatures` below therefore answers for the entries this map
+// owns and NOT for the others: ask each of those where it actually lives.
+//
 // OFF BY DEFAULT, ALWAYS. An experimental feature that arrives switched on is
 // just a feature — and one nobody agreed to.
 
@@ -29,7 +34,24 @@ import type { SaasPlan } from './team'
  * Stable machine identifier for one experiment. Kebab-case, matching plugin ids.
  * These are stored in Firestore, so a rename is a migration, not an edit.
  */
-export type ExperimentalFeatureId = 'extra-dashboard'
+export type ExperimentalFeatureId = 'extra-dashboard' | 'waitlist'
+
+/**
+ * WHERE an experiment's on/off state lives.
+ *
+ * `team-settings` is the default and the home this module documents above:
+ * `teams/{teamId}.settings.experimentalFeatures`, owned by this registry.
+ *
+ * `booking-settings` is the exception, and it exists because one experiment's
+ * switch was ALREADY a stored field with readers: `waitlist` is
+ * `bookingSettings.waitlistEnabled` on the team's public profile, read by the
+ * activity editor and (with its claim window) by the promoter server-side.
+ * Copying that state into this map would have created a second answer to one
+ * question — the failure mode this codebase spends most of its comments
+ * avoiding — so the settings LIST is unified here while the STORE stays where
+ * its readers already look. Nothing else about the entry differs.
+ */
+export type ExperimentalFeatureStore = 'team-settings' | 'booking-settings'
 
 export interface ExperimentalFeature {
   id: ExperimentalFeatureId
@@ -54,6 +76,12 @@ export interface ExperimentalFeature {
    * left hunting for something that was never going to appear for them.
    */
   minPlan?: SaasPlan
+  /**
+   * Which document holds this experiment's flag. Absent ⇒ `team-settings`, the
+   * map this module owns. See `ExperimentalFeatureStore` for the one exception
+   * and why it is one.
+   */
+  store?: ExperimentalFeatureStore
 }
 
 /**
@@ -81,6 +109,29 @@ export const EXPERIMENTAL_FEATURES: readonly ExperimentalFeature[] = [
     // the tier — refusing it would read as an upsell for something never sold.
     minPlan: 'studio',
   },
+  {
+    // Reader: the per-activity waitlist toggle in
+    // apps/web/src/app/[locale]/(auth)/offer/activities/page.tsx, which shows
+    // the control only while this is on — plus the claim-window control that
+    // renders beside this switch.
+    //
+    // It moved here from Settings → Booking, where it wore a "Beta" chip
+    // (2026-08-31). A maturity chip on one row of a settings panel says the
+    // same thing this page says, in a place nobody can switch it off from, and
+    // it left the reader to work out that "may change" meant "opt-in". A queue
+    // is also not a booking-page SETTING in the way the window and the cutoff
+    // are: those configure a flow every studio has, this decides whether a
+    // whole feature exists for them.
+    //
+    // STORE: `booking-settings` — see ExperimentalFeatureStore. The flag keeps
+    // its home on the public profile because the activity editor and the
+    // promoter already read it there.
+    id: 'waitlist',
+    nameKey: 'waitlistName',
+    descriptionKey: 'waitlistDescription',
+    surfaceKey: 'waitlistSurface',
+    store: 'booking-settings',
+  },
 ]
 
 /** The shape stored at `teams/{teamId}.settings.experimentalFeatures`. */
@@ -95,6 +146,11 @@ interface TeamWithExperimental {
 /**
  * Read the stored map off a team doc. Unknown ids are dropped and non-boolean
  * values ignored, so a hand-edited doc cannot switch anything on by accident.
+ *
+ * It answers only for entries stored in THIS map. An entry with another `store`
+ * is absent from the result rather than reported as off, because "off" would be
+ * a claim about a document this function never read — and a team with the
+ * waitlist switched on would read as having it off, confidently and wrongly.
  */
 export function resolveExperimentalFeatures(
   team: TeamWithExperimental | null | undefined
@@ -105,13 +161,26 @@ export function resolveExperimentalFeatures(
   const stored = raw as Record<string, unknown>
   const out: ExperimentalFeatureSettings = {}
   for (const feature of EXPERIMENTAL_FEATURES) {
+    if (featureStore(feature) !== 'team-settings') continue
     // Strictly `=== true`: absent, null, 0 and "false" all mean off.
     if (stored[feature.id] === true) out[feature.id] = true
   }
   return out
 }
 
-/** Is `id` switched on for this team? Off unless explicitly stored as `true`. */
+/** Where one entry's flag lives. Absent ⇒ the map this module owns. */
+export function featureStore(feature: ExperimentalFeature): ExperimentalFeatureStore {
+  return feature.store ?? 'team-settings'
+}
+
+/**
+ * Is `id` switched on for this team? Off unless explicitly stored as `true`.
+ *
+ * Only for entries stored in `settings.experimentalFeatures`; it cannot answer
+ * for an entry with another `store` and would say "off" for one that is on, so
+ * asking it for `waitlist` is a bug. That one is
+ * `bookingSettings.waitlistEnabled` on the team's public profile.
+ */
 export function isExperimentalFeatureEnabled(
   team: TeamWithExperimental | null | undefined,
   id: ExperimentalFeatureId

@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Check,
 } from 'lucide-react'
+import { ThemePresetPicker } from '@/components/theme/ThemePresetPicker'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { arrayMove } from '@dnd-kit/sortable'
 import { useAuth } from '@/contexts/AuthContext'
@@ -105,39 +106,37 @@ function AppearancePanel({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t('apTheme')}</Label>
-          <Select
-            value={meta.theme}
-            onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="light">Light</SelectItem>
-              <SelectItem value="dark">Dark</SelectItem>
-              <SelectItem value="auto">Auto</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t('apFont')}</Label>
-          <Select
-            value={meta.font}
-            onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sans">Sans</SelectItem>
-              <SelectItem value="serif">Serif</SelectItem>
-              <SelectItem value="rounded">Rounded</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Theme — ONE control carrying both colour schemes. It replaces a
+          light/dark/auto select that crossed with `meta.background`: "auto"
+          followed the viewer for the text and not for the page, and a light
+          theme over a dark background was patched by a luminance check that
+          silently overrode the studio's own choice. See
+          packages/shared/src/types/themePreset.ts for the full list, and for
+          the hooks a custom theme will use later. */}
+      <div className="space-y-2">
+        <Label className="text-xs">{t('apTheme')}</Label>
+        <ThemePresetPicker
+          value={meta.themePreset ?? ''}
+          onChange={(id) => onChange({ themePreset: id })}
+          accentColor={meta.accentColor}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">{t('apFont')}</Label>
+        <Select
+          value={meta.font}
+          onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sans">Sans</SelectItem>
+            <SelectItem value="serif">Serif</SelectItem>
+            <SelectItem value="rounded">Rounded</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">

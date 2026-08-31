@@ -8,8 +8,8 @@ import { ProgramTemplatesManager } from '@/components/events/program/ProgramTemp
 import type { Team } from '@linyup/shared'
 
 // Reusable event programmes for this studio, plus any inherited from the parent
-// organisation (read-only). Templates are authored on an event and saved from
-// there; this page is the list/rename/delete surface.
+// organisation (read-only). Authored EITHER here — "New template" opens the
+// standalone editor at ./[templateId] — or on an event via "Save as template".
 
 export default function ProgramTemplatesSettingsPage() {
   const t = useTranslations('EventProgram')
@@ -24,6 +24,7 @@ export default function ProgramTemplatesSettingsPage() {
         ownerId={currentTeamId}
         inheritedOrgId={(team as Team & { org_id?: string })?.org_id ?? null}
         canEdit={can('events.manage')}
+        basePath="/settings/program-templates"
       />
     </div>
   )

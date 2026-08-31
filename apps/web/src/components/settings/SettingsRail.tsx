@@ -7,11 +7,12 @@
 // THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). On desktop it sits beside
 // the detail pane; on mobile it IS the /settings index list.
 
-import { useMessages, useTranslations } from 'next-intl'
+import { useLocale, useMessages, useTranslations } from 'next-intl'
 import { usePathname } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import { Star } from 'lucide-react'
 import { SETTINGS_ITEMS, SETTINGS_GROUPS } from '@/lib/settings-nav'
+import { sortNavRows } from '@/lib/navSort'
 import { useNavPins } from '@/contexts/NavPinsContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -19,6 +20,7 @@ import { NavRail, type NavRailGroup } from './NavRail'
 
 export function SettingsRail() {
   const t = useTranslations('Nav')
+  const locale = useLocale()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const currentTab = searchParams.get('tab')
@@ -70,12 +72,22 @@ export function SettingsRail() {
   const railGroups: NavRailGroup[] = SETTINGS_GROUPS.map((group) => ({
     key: group.key,
     label: labelOf(group.labelKey),
-    rows: SETTINGS_ITEMS.filter((i) => i.group === group.key && gateOk(i)).map((item) => {
+    // ALPHABETICAL WITHIN THE GROUP, leads first — the same rule the sidebar's
+    // sections follow, written down once in `lib/navSort.ts`. Sorted on the
+    // RESOLVED label, so it is alphabetical in the language actually on screen.
+    rows: sortNavRows(
+      SETTINGS_ITEMS.filter((i) => i.group === group.key && gateOk(i)).map((item) => ({
+        item,
+        label: labelOf(item.labelKey),
+        lead: item.lead,
+      })),
+      locale
+    ).map(({ item, label }) => {
       const shown = isAlwaysShown(item.id)
       return {
         id: item.id,
         href: item.href,
-        label: labelOf(item.labelKey),
+        label,
         icon: item.icon,
         active: isActive(item.href),
         keywords: keywordsOf(item.id),

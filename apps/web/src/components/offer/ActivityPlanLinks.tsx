@@ -40,7 +40,7 @@ import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
 import { doc, runTransaction } from 'firebase/firestore'
 import { useQueryClient } from '@tanstack/react-query'
-import { Plus, AlertTriangle } from 'lucide-react'
+import { Plus, AlertTriangle, ChevronsDown } from 'lucide-react'
 
 import {
   offeringFacets,
@@ -382,39 +382,72 @@ export function ActivityPlanLinks({
           row's height, so the one column holding an input keeps the others
           filled beside it rather than leaving gaps in the tint. */}
       <div className="grid min-w-[36rem] grid-cols-[minmax(9rem,1fr)_repeat(4,5.75rem)]">
-        {/* The header — the labels, once. It draws no bottom rule of its own:
-            every row draws ONE continuous line above itself (see below), and a
-            second line here would sit a hair off it.
+        {/* ── THE HEADER: LABELS ONLY ─────────────────────────────────────
+            It draws no bottom rule of its own: every row draws ONE continuous
+            line above itself (see below), and a second line here would sit a
+            hair off it.
 
-            EACH LABEL IS ALSO THE COLUMN'S SWITCH. Once the answers are columns,
-            "everything is included in this plan" is a column, and setting it row
-            by row is work the shape of the screen already suggests should be one
-            click. It only touches rows that can HONOUR the choice — an
-            appointment has no gate to include, and skipping it silently is
-            right: the alternative is refusing the whole gesture over a row the
-            studio was not thinking about. Like every other edit here it lands as
-            an unsaved draft, so it is reviewed before it is written. */}
+            EACH LABEL USED TO BE THE COLUMN'S SET-ALL BUTTON. Two jobs on one
+            target: a heading names a column, and a heading you can press CHANGES
+            EVERY ROW — the most destructive gesture on the screen, on the one
+            element a reader clicks to find out what a column means (Franco,
+            2026-08-31). The set-all moved to its own line below, where it is
+            visibly a control rather than a caption.
+
+            THE LABEL NOW CARRIES THE EXPLANATION, as a tooltip. That sentence
+            used to be printed UNDER EVERY TICKED ROW, and it is invariant per
+            column — "Holders get it for free" says the same thing about the
+            fortieth row as the first, so a list of twelve plans repeated three
+            sentences twelve times. What is genuinely row-specific stayed on the
+            row: the shared-rule warning, the validation error, and the
+            "nothing to reduce here" hint on the dot itself. */}
         <div className="bg-muted/30 px-3 py-1.5" />
         {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((c) => (
-          <button
+          <div
             key={c}
-            type="button"
-            disabled={!canEdit}
-            onClick={() => setColumn(c)}
             title={
-              canEdit
-                ? t('setColumn', {
-                    choice: c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const),
-                  })
-                : c === 'none'
-                  ? undefined
-                  : tb(`effect_${c}_desc` as const)
+              c === 'none' ? t('choiceNoneDesc') : tb(`effect_${c}_desc` as const)
             }
-            className="bg-muted/30 px-1 py-1.5 text-center text-[11px] font-medium text-muted-foreground transition-colors enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default"
+            className="cursor-help bg-muted/30 px-1 py-1.5 text-center text-[11px] font-medium text-muted-foreground"
           >
             {c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)}
-          </button>
+          </div>
         ))}
+
+        {/* ── THE SET-ALL LINE ────────────────────────────────────────────────
+            Its own row under the headers, because it is an ACTION and the row
+            above it is a caption. Once the answers are columns, "everything is
+            included in this plan" is a column, and setting it row by row is work
+            the shape of the screen already suggests should be one click.
+
+            It only touches rows that can HONOUR the choice — an appointment has
+            no gate to include, and skipping it silently is right: the
+            alternative is refusing the whole gesture over a row the studio was
+            not thinking about. Like every other edit here it lands as an unsaved
+            draft, so it is reviewed before it is written. */}
+        {canEdit && (
+          <>
+            <div className="flex items-center justify-end bg-muted/10 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground/60">
+              {t('setAllLabel')}
+            </div>
+            {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((c) => {
+              const choiceLabel = c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)
+              return (
+                <div key={c} className="flex items-center justify-center bg-muted/10 px-1 py-1">
+                  <button
+                    type="button"
+                    onClick={() => setColumn(c)}
+                    title={t('setColumn', { choice: choiceLabel })}
+                    aria-label={t('setColumn', { choice: choiceLabel })}
+                    className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <ChevronsDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </>
+        )}
         {rows.map(({ key, off, plan: p }) => {
           const d = draftFor(key, off, p.id)
           // Which controls this offering can actually honour. An appointment has
@@ -444,41 +477,31 @@ export function ActivityPlanLinks({
           const limit = resolveUsageLimit(p)
           const asksAfterAllowance = choice === 'included' && facets.access && facets.rate && !!limit
           const afterAllowance: 'full' | RateEffect = d.edge.rate ? d.rate.effect : 'full'
-          // What this row DOES, in the studio's words rather than the model's —
-          // and NAMING THE PRICE IT REDUCES, because "everyone else pays full
-          // price" was not always true. A class's rate applies to its DROP-IN
-          // price specifically: on a members-only class that sells no drop-in
-          // there is no other price for it to reduce, and the rule sits there
-          // doing nothing. The sentence now says which price it means, so the
-          // studio can see that for itself.
+          // 'included' is dropped: see the panel below for why it is the one
+          // answer this question cannot take.
+          const afterAllowanceEffects = offeringRateEffects(off.target).filter(
+            (e) => e !== 'included'
+          )
+          // WHAT A COLUMN MEANS IS NOT A PROPERTY OF THE ROW, so it is not
+          // printed on one. It was: every ticked row carried a sentence
+          // explaining its answer, and those sentences are invariant per column
+          // — twelve plans meant three sentences repeated twelve times. They are
+          // the column headers' tooltips now.
+          //
+          // What is genuinely row-specific stays here. `noPriceHint` is the
+          // sharpest of it: a class's rate applies to its DROP-IN price
+          // specifically, so on a members-only class that sells no drop-in there
+          // is nothing for the rule to reduce and it would sit there doing
+          // nothing. That fires on the exact rows where it is true, on the dot
+          // it is about, rather than as prose under all of them.
           const isAppointment =
             off.target.kind === 'activity' && isAppointmentActivity(off.target.doc)
-          const rateOnlyCopy =
-            off.target.kind === 'course'
-              ? t('outcomeRateOnlyCourse')
-              : isAppointment
-                ? t('outcomeRateOnlyAppointment')
-                : t('outcomeRateOnlyClass')
-          // Whether a price effect would have anything to reduce here, and the
-          // one-line explanation shown on the muted options when it would not.
           const hasPriceToReduce = rateHasAPriceToApplyTo(off.target)
           const noPriceHint = isAppointment ? t('noPriceAppointment') : t('noPriceDropIn')
-          const outcome =
-            choice === 'none'
-              ? null
-              : choice === 'included'
-                ? asksAfterAllowance && d.edge.rate
-                  ? t('outcomeBoth', { count: limit!.count, per: t(`per_${limit!.per}`) })
-                  : t('outcomeCovered')
-                : rateOnlyCopy
 
           // The sub-row is drawn only when it has something to say, so an
           // untouched list stays exactly one line per row.
-          const detail =
-            outcome ||
-            asksAfterAllowance ||
-            err ||
-            (sharedWith.length > 0 && d.edge.rate)
+          const detail = err || (sharedWith.length > 0 && d.edge.rate)
 
           return (
             // NO PER-ROW BORDER. A card around every ticked row turned a list of
@@ -588,17 +611,11 @@ export function ActivityPlanLinks({
                         // the ring, the row tint and the sentence underneath all
                         // say the same thing, which is what keeps the table
                         // readable for anyone who cannot separate these hues.
-                        className={`h-3.5 w-3.5 rounded-full border transition-colors disabled:opacity-50 ${
-                          inert ? 'opacity-40' : ''
-                        } ${
-                          on
-                            ? c === 'none'
-                              ? 'border-rose-500 bg-rose-500 ring-2 ring-rose-500/25'
-                              : c === 'included'
-                                ? 'border-emerald-500 bg-emerald-500 ring-2 ring-emerald-500/25'
-                                : 'border-amber-500 bg-amber-500 ring-2 ring-amber-500/25'
-                            : 'border-muted-foreground/40 hover:border-foreground/70'
-                        }`}
+                        className={choiceDotClass(
+                          on,
+                          c === 'none' ? 'none' : c === 'included' ? 'included' : 'reduced',
+                          inert
+                        )}
                       />
                     )}
 
@@ -648,6 +665,134 @@ export function ActivityPlanLinks({
                 )
               })}
 
+              {/* ── THE FOLLOW-UP, IN THE SAME COLUMNS ──────────────────────
+                  Asked only of a LIMITED plan (see `asksAfterAllowance`): once
+                  the allowance runs out, what does a member pay?
+
+                  IT IS A GRID ROW, not a line inside the spanning detail block
+                  below. It is the same question as the row above it — what this
+                  plan does about this activity — asked about the classes past
+                  the allowance, so its answers belong UNDER THE SAME HEADERS.
+                  Free-flowing beneath them, the reader had to re-read three
+                  labels that were already written across the top of the table
+                  (Franco, 2026-08-31).
+
+                  "Full price" lands in the `Not included` column, which is what
+                  it means here: beyond the allowance the plan covers nothing, so
+                  the member pays what anyone else would. THE `Included` COLUMN
+                  IS DELIBERATELY EMPTY — "after your first 3 a week, the rest
+                  are included" says the limit is not a limit, and it is the one
+                  answer this question cannot take. An empty cell says that more
+                  plainly than an absent option ever did.
+
+                  History: this began as a joined button group with no way to
+                  type the percent or the price it asked for — `rateError` then
+                  refused the save over a blank field with no control on screen
+                  that could fill it. The value inputs are the same ones the
+                  cells above use, in the same cells. */}
+              {asksAfterAllowance && (
+                <>
+                  <div
+                    className={`flex min-w-0 items-center justify-end px-3 py-1.5 text-right text-xs text-muted-foreground ${
+                      active ? 'border-l-2 border-l-primary bg-muted/40' : 'border-l-2 border-l-transparent'
+                    }`}
+                  >
+                    {t('afterAllowance', { count: limit!.count, per: t(`per_${limit!.per}`) })}
+                  </div>
+                  {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((col) => {
+                    // The column this sub-row's options live under. `included`
+                    // has none — see above.
+                    const opt = col === 'none' ? 'full' : col
+                    const offered =
+                      col === 'none' ||
+                      (col !== 'included' && afterAllowanceEffects.includes(col))
+                    const chosen = offered && afterAllowance === opt
+                    return (
+                      <div
+                        key={col}
+                        className={`flex h-full flex-col items-center justify-center gap-1 px-1 py-1.5 ${
+                          active ? 'bg-muted/40' : ''
+                        }`}
+                      >
+                        {!offered ? (
+                          <span className="text-xs text-muted-foreground/40" aria-hidden>
+                            —
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={chosen}
+                            disabled={!canEdit}
+                            aria-label={`${t('afterAllowance', {
+                              count: limit!.count,
+                              per: t(`per_${limit!.per}`),
+                            })} ${
+                              opt === 'full'
+                                ? t('afterAllowanceFull')
+                                : tb(`effect_${opt}` as const)
+                            }`}
+                            onClick={() =>
+                              setDraft(key, {
+                                ...d,
+                                edge: { access: true, rate: opt !== 'full' },
+                                rate:
+                                  opt === 'full'
+                                    ? d.rate
+                                    : { ...d.rate, effect: opt as RateEffect },
+                              })
+                            }
+                            className={choiceDotClass(chosen, opt === 'full' ? 'none' : 'reduced')}
+                          />
+                        )}
+                        {chosen && opt === 'percent_off' && (
+                          <span className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={99}
+                              value={d.rate.percent}
+                              disabled={!canEdit}
+                              onChange={(e) =>
+                                setDraft(key, {
+                                  ...d,
+                                  rate: { ...d.rate, percent: e.target.value },
+                                })
+                              }
+                              placeholder="20"
+                              className="h-7 w-12 px-1 text-center text-xs"
+                              aria-label={tb('percentLabel')}
+                            />
+                            <span className="text-[10px] text-muted-foreground">%</span>
+                          </span>
+                        )}
+                        {chosen && opt === 'fixed_price' && (
+                          <span className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min={0.5}
+                              step="0.01"
+                              value={d.rate.amount}
+                              disabled={!canEdit}
+                              onChange={(e) =>
+                                setDraft(key, {
+                                  ...d,
+                                  rate: { ...d.rate, amount: e.target.value },
+                                })
+                              }
+                              placeholder="0.00"
+                              className="h-7 w-14 px-1 text-center text-xs"
+                              aria-label={tb('amountLabel')}
+                            />
+                            <span className="text-[10px] text-muted-foreground">{currency}</span>
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+
               {/* The row's own line: what it means, and the warning that names
                   who else this rate touches. It SPANS the grid, so nothing here
                   can shift the columns. */}
@@ -657,36 +802,6 @@ export function ActivityPlanLinks({
                     active ? 'border-l-primary bg-muted/40' : 'border-l-transparent'
                   }`}
                 >
-                  {outcome && <p className="text-muted-foreground">{outcome}</p>}
-
-                  {/* The follow-up, asked only of a LIMITED plan (see above). */}
-                  {asksAfterAllowance && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-muted-foreground">
-                        {t('afterAllowance', { count: limit!.count, per: t(`per_${limit!.per}`) })}
-                      </span>
-                      <Segmented
-                        options={[
-                          { value: 'full', label: t('afterAllowanceFull') },
-                          ...offeringRateEffects(off.target).map((e) => ({
-                            value: e,
-                            label: tb(`effect_${e}` as const),
-                          })),
-                        ]}
-                        value={afterAllowance}
-                        disabled={!canEdit}
-                        onChange={(next) =>
-                          setDraft(key, {
-                            ...d,
-                            edge: { access: true, rate: next !== 'full' },
-                            rate:
-                              next === 'full' ? d.rate : { ...d.rate, effect: next as RateEffect },
-                          })
-                        }
-                      />
-                    </div>
-                  )}
-
                   {err && (
                     <p className="text-destructive">
                       {tb(err === 'percent' ? 'percentValidation' : 'amountValidation')}
@@ -720,53 +835,47 @@ export function ActivityPlanLinks({
 }
 
 /**
- * An exclusive choice, rendered as one joined group.
+ * THE ANSWER DOT — one control for every "what does this plan do here?" answer
+ * on this screen, in the grid cells and in the after-allowance follow-up alike.
  *
- * A RADIO, not checkboxes, because the answers really are mutually exclusive —
- * which is the whole correction here. Two independent checkboxes invited a
- * combination that is meaningless on most plans, and the studio had to work out
- * which pairs meant something. A group of buttons cannot express the impossible
- * state at all.
+ * Extracted when the follow-up stopped being a joined button group (2026-08-31):
+ * two controls for one decision, drawn two ways, is how a reader learns that
+ * they are different decisions.
+ *
+ * SEMANTIC, NOT DECORATIVE — and a THREE-step scale, because there are three
+ * answers and not two: nothing (rose), reduced (amber), free (emerald). Amber
+ * earns its place by carrying information green would throw away: scanning a
+ * column, "included" and "20% off" are the difference between a plan that covers
+ * a class and one that merely discounts it.
+ *
+ * Muted, not an alarm palette: "not included" is an ordinary, correct answer for
+ * most pairings, not a fault to fix. And colour is never the only signal — the
+ * ring, the row tint and the sentence underneath all say the same thing, which
+ * is what keeps this readable for anyone who cannot separate these hues.
+ *
+ * `inert` dims an option that would do nothing if chosen (a price effect with no
+ * price to reduce). It is NOT disabled: a studio mid-setup may well tick it
+ * before adding the price, and the stored rule is correct the moment that price
+ * exists.
  */
-function Segmented({
-  options,
-  value,
-  disabled,
-  onChange,
-}: {
-  options: { value: string; label: string; title?: string }[]
-  value: string
-  disabled?: boolean
-  onChange: (v: string) => void
-}) {
-  return (
-    <div
-      role="radiogroup"
-      className="flex shrink-0 overflow-hidden rounded-md border text-xs"
-    >
-      {options.map((o) => {
-        const on = o.value === value
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            disabled={disabled}
-            title={o.title}
-            onClick={() => onChange(o.value)}
-            className={`px-2.5 py-1 transition-colors disabled:opacity-50 not-first:border-l ${
-              on
-                ? 'bg-primary/10 font-medium text-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
+function choiceDotClass(
+  on: boolean,
+  tone: 'none' | 'included' | 'reduced',
+  inert = false
+): string {
+  return [
+    'h-3.5 w-3.5 rounded-full border transition-colors disabled:opacity-50',
+    inert ? 'opacity-40' : '',
+    on
+      ? tone === 'none'
+        ? 'border-rose-500 bg-rose-500 ring-2 ring-rose-500/25'
+        : tone === 'included'
+          ? 'border-emerald-500 bg-emerald-500 ring-2 ring-emerald-500/25'
+          : 'border-amber-500 bg-amber-500 ring-2 ring-amber-500/25'
+      : 'border-muted-foreground/40 hover:border-foreground/70',
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 function EmptyLink({ text, action, href }: { text: string; action: string; href: Route }) {

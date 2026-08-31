@@ -60,6 +60,15 @@ export interface ProgramTimelineProps {
   dayId?: string
   /** Show staff-only internal notes. NEVER pass true on a public surface. */
   showInternalNotes?: boolean
+  /**
+   * Render day headings as "Day 1", "Day 2" instead of calendar dates.
+   *
+   * For a TEMPLATE, whose days are a relative `dayIndex` and whose dates are a
+   * scratch anchor invented so the shared editor has something to key items on.
+   * Printing "Monday 1 September" over a reusable programme states a fact that
+   * is not one — the studio would reasonably read it as when the camp runs.
+   */
+  hideDayDates?: boolean
   /** Renders an edit affordance on each item (admin only). */
   onEditItem?: (item: TimelineItem) => void
   className?: string
@@ -166,32 +175,37 @@ function ItemCard({
 
 function DaySection({
   day,
+  dayIndex,
   dayItems,
   tracks,
   showInternalNotes,
   onEditItem,
   showDayHeading,
+  hideDayDates,
 }: {
   day: ProgramDay
+  dayIndex: number
   dayItems: TimelineItem[]
   tracks: ProgramTrack[]
   showInternalNotes?: boolean
   onEditItem?: (item: TimelineItem) => void
   showDayHeading: boolean
+  hideDayDates?: boolean
 }) {
   const t = useTranslations('EventProgram')
   const multiTrack = tracks.length > 1
   const plenary = itemsForTrack(dayItems, null)
+  const dayCaption = hideDayDates ? t('dayN', { n: dayIndex + 1 }) : formatDayDate(day.date)
 
   return (
     <section className="program-day space-y-3">
       {showDayHeading && (
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <h3 className="text-sm font-semibold">
-            {day.title || formatDayDate(day.date)}
+            {day.title || dayCaption}
           </h3>
           {day.title && (
-            <span className="text-xs text-muted-foreground">{formatDayDate(day.date)}</span>
+            <span className="text-xs text-muted-foreground">{dayCaption}</span>
           )}
           {day.subtitle && (
             <span className="text-xs text-muted-foreground">· {day.subtitle}</span>
@@ -281,6 +295,7 @@ export function ProgramTimeline({
   showInternalNotes,
   onEditItem,
   className,
+  hideDayDates,
 }: ProgramTimelineProps) {
   const t = useTranslations('EventProgram')
   const days = sortedDays(config)
@@ -307,12 +322,17 @@ export function ProgramTimeline({
         <DaySection
           key={day.id}
           day={day}
+          // Index within the WHOLE programme, not within `visibleDays` — with one
+          // day selected the filtered list is length 1 and every day would
+          // caption itself "Day 1".
+          dayIndex={days.findIndex((d) => d.id === day.id)}
           dayItems={itemsForDay(items, day.id)}
           tracks={tracks}
           showInternalNotes={showInternalNotes}
           onEditItem={onEditItem}
           // With a single day selected the surrounding UI already names it.
           showDayHeading={!dayId}
+          hideDayDates={hideDayDates}
         />
       ))}
 

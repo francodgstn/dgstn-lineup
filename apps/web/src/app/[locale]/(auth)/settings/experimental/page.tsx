@@ -13,25 +13,59 @@
 // manager who deep-links here gets the list read-only with the reason stated.
 // The rail hides the row for her (`gate: 'ownerOnly'`) — that is navigation,
 // never enforcement.
+//
+// ── TWO STORES, ONE LIST ────────────────────────────────────────────────────
+// Most entries are a key in `teams/{id}.settings.experimentalFeatures`. One is
+// not: `waitlist` is `bookingSettings.waitlistEnabled` on the team's public
+// profile, because that field already existed and already had readers (the
+// activity editor, and the promoter server-side via the claim window beside
+// it). Copying it into the map would have created a second answer to one
+// question. `ExperimentalFeatureStore` in the registry is the discriminator;
+// this page is the only place both stores are written.
+//
+// The public profile is team-member writable, so hosting that switch here makes
+// it owner-only in practice. That is a tightening, and the intended one: it is
+// the switch that decides whether the studio has queues at all, not a booking
+// preference a manager tunes.
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { doc, updateDoc } from 'firebase/firestore'
+import { useQueryClient } from '@tanstack/react-query'
+import { doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { TEAMS_COLLECTION, type ExperimentalFeatureId } from '@linyup/shared'
+import {
+  TEAMS_COLLECTION,
+  featureStore,
+  type ExperimentalFeature,
+  type ExperimentalFeatureId,
+} from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useExperimentalFeatures } from '@/hooks/useExperimentalFeatures'
+import { bookingSettingsRef, useBookingSettings } from '@/hooks/useBookingSettings'
 import { usePlan } from '@/hooks/usePlan'
 import { usePlanName } from '@/hooks/usePlanName'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { FlaskConical } from 'lucide-react'
 
+/** Absent falls back to the SAME default the promoter applies server-side
+ *  (WAITLIST_DEFAULT_CLAIM_MINUTES) — showing a different number here than the
+ *  one actually used is worse than showing none. */
+const DEFAULT_CLAIM_MINUTES = 120
+const CLAIM_MINUTE_CHOICES = [60, 120, 240, 480, 1440]
+
 export default function ExperimentalSettingsPage() {
   const t = useTranslations('SettingsExperimental')
+  // The claim-window copy stays in the namespace that owns it — the control
+  // moved page, the wording did not, and duplicating it into a second namespace
+  // is how two screens start describing one setting differently.
+  const tb = useTranslations('SettingsBooking')
   const { currentTeamId, teamRole } = useAuth()
   const { features, enabled, isLoading } = useExperimentalFeatures()
+  const { data: bookingSettings, isLoading: bookingLoading } = useBookingSettings(currentTeamId)
+  const qc = useQueryClient()
   // A tier note, never a tier gate: an experiment is not sold, so the switch
   // stays live below the tier and only says where the surface will appear.
   const { isAtLeast } = usePlan()
@@ -39,23 +73,56 @@ export default function ExperimentalSettingsPage() {
   const canEdit = teamRole === 'owner'
   const [pending, setPending] = useState<ExperimentalFeatureId | null>(null)
 
+  const waitlistOn = bookingSettings?.waitlistEnabled === true
+  const rawClaim = Number(bookingSettings?.waitlistClaimMinutes)
+  const claimMinutes =
+    Number.isInteger(rawClaim) && rawClaim >= 60 && rawClaim <= 1440
+      ? rawClaim
+      : DEFAULT_CLAIM_MINUTES
+
+  /** Is this entry on? Asked of whichever store the entry declares — never of
+   *  the map alone, which does not hold every answer. */
+  const isOn = (feature: ExperimentalFeature) =>
+    featureStore(feature) === 'booking-settings' ? waitlistOn : enabled[feature.id] === true
+
   // The whole map is written at once, never a per-key dotted path: a feature id
   // is kebab-case and a hyphen is not legal in an unquoted Firestore field path.
   // Rebuilding from `enabled` (already normalised) also drops any stale id a
   // withdrawn experiment left behind.
-  async function toggle(id: ExperimentalFeatureId, next: boolean) {
-    if (!currentTeamId || !canEdit) return
-    setPending(id)
+  async function toggleTeamSetting(id: ExperimentalFeatureId, next: boolean) {
     const map: Record<string, boolean> = {}
     for (const [key, value] of Object.entries(enabled)) if (value) map[key] = true
     if (next) map[id] = true
     else delete map[id]
+    await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId!), {
+      'settings.experimentalFeatures': map,
+    })
+    // No local state to reconcile — AuthContext holds the team doc on an
+    // onSnapshot, so the switch and the consuming surface both follow the write.
+  }
+
+  /** A MERGE into the nested `bookingSettings` map, so nothing else the booking
+   *  settings page owns (window, cutoff, contact fields) is touched. */
+  async function writeBookingSettings(patch: Record<string, unknown>) {
+    await setDoc(bookingSettingsRef(currentTeamId!), { bookingSettings: patch }, { merge: true })
+    await qc.invalidateQueries({ queryKey: ['booking-settings', currentTeamId] })
+  }
+
+  async function toggle(feature: ExperimentalFeature, next: boolean) {
+    if (!currentTeamId || !canEdit) return
+    setPending(feature.id)
     try {
-      await updateDoc(doc(db, TEAMS_COLLECTION, currentTeamId), {
-        'settings.experimentalFeatures': map,
-      })
-      // No local state to reconcile — AuthContext holds the team doc on an
-      // onSnapshot, so the switch and the consuming surface both follow the write.
+      if (featureStore(feature) === 'booking-settings') {
+        // The claim window is written alongside, so switching the queue on
+        // stores the number this page is showing rather than leaving the field
+        // absent and the displayed value a guess about the server's default.
+        await writeBookingSettings({
+          waitlistEnabled: next,
+          waitlistClaimMinutes: claimMinutes,
+        })
+      } else {
+        await toggleTeamSetting(feature.id, next)
+      }
       toast.success(next ? t('toastEnabled') : t('toastDisabled'))
     } catch (err) {
       console.error('[experimental toggle] failed:', err)
@@ -63,6 +130,52 @@ export default function ExperimentalSettingsPage() {
     } finally {
       setPending(null)
     }
+  }
+
+  async function setClaimMinutes(minutes: number) {
+    if (!currentTeamId || !canEdit) return
+    setPending('waitlist')
+    try {
+      await writeBookingSettings({ waitlistClaimMinutes: minutes })
+      toast.success(t('toastEnabled'))
+    } catch (err) {
+      console.error('[experimental claim window] failed:', err)
+      toast.error(err instanceof Error ? err.message : t('toastFailed'))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  /** The one bespoke sub-control on this page: the waitlist's claim window,
+   *  which is the waitlist's OWN setting and means nothing without it. It sits
+   *  inside the row rather than as a peer, so a studio with no queue never meets
+   *  it as a question (UX-41). */
+  function subControl(feature: ExperimentalFeature) {
+    if (feature.id !== 'waitlist' || !waitlistOn) return null
+    return (
+      <div className="mt-3 space-y-2 border-t pt-3">
+        <p className="text-sm font-medium">{tb('waitlistClaimMinutesLabel')}</p>
+        <p className="text-xs text-muted-foreground">{tb('waitlistClaimMinutesHint')}</p>
+        <Select
+          value={String(claimMinutes)}
+          onValueChange={(v) => setClaimMinutes(Number(v))}
+          disabled={!canEdit || pending === 'waitlist'}
+        >
+          <SelectTrigger className="h-9 w-48">
+            <span className="flex flex-1 truncate text-left text-sm">
+              {tb('waitlistClaimMinutesValue', { minutes: claimMinutes })}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {CLAIM_MINUTE_CHOICES.map((minutes) => (
+              <SelectItem key={minutes} value={String(minutes)}>
+                {tb('waitlistClaimMinutesValue', { minutes })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )
   }
 
   return (
@@ -85,7 +198,7 @@ export default function ExperimentalSettingsPage() {
 
         {!canEdit && <p className="text-xs text-muted-foreground">{t('ownerOnly')}</p>}
 
-        {isLoading ? (
+        {isLoading || bookingLoading ? (
           <Skeleton className="h-24 rounded-xl" />
         ) : features.length === 0 ? (
           // Reachable: the list empties whenever the last experiment graduates
@@ -97,7 +210,7 @@ export default function ExperimentalSettingsPage() {
         ) : (
           <div className="space-y-3">
             {features.map((feature) => {
-              const on = enabled[feature.id] === true
+              const on = isOn(feature)
               return (
                 <div key={feature.id} className="rounded-xl border bg-card p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -109,23 +222,20 @@ export default function ExperimentalSettingsPage() {
                         {t(feature.descriptionKey as Parameters<typeof t>[0])}
                       </p>
                       <p className="text-xs text-muted-foreground/80">
-                        {t('whereLabel')}{' '}
-                        {t(feature.surfaceKey as Parameters<typeof t>[0])}
+                        {t('whereLabel')} {t(feature.surfaceKey as Parameters<typeof t>[0])}
                         {feature.minPlan && !isAtLeast(feature.minPlan) && (
-                          <>
-                            {' '}
-                            {t('planNote', { plan: planName(feature.minPlan) })}
-                          </>
+                          <> {t('planNote', { plan: planName(feature.minPlan) })}</>
                         )}
                       </p>
                     </div>
                     <Switch
                       checked={on}
                       disabled={!canEdit || pending === feature.id}
-                      onCheckedChange={(checked: boolean) => toggle(feature.id, checked)}
+                      onCheckedChange={(checked: boolean) => toggle(feature, checked)}
                       aria-label={t(feature.nameKey as Parameters<typeof t>[0])}
                     />
                   </div>
+                  {subControl(feature)}
                 </div>
               )
             })}

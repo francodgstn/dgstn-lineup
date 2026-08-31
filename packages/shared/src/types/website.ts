@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { SurfaceThemePresetId } from './themePreset'
 import type { PublicSurface, SocialLink } from './team'
 import type { UiLanguage } from '../utils/regional'
 
@@ -382,6 +383,16 @@ export interface SiteFooter {
 
 export interface SiteMeta {
   title: string
+  /**
+   * ONE choice carrying both a light and a dark palette — see
+   * `types/themePreset.ts`. When set it WINS over `theme` and `background`
+   * below, which stay only so a site authored before presets keeps its look
+   * until the studio picks one (no backfill, no deploy ordering).
+   */
+  themePreset?: SurfaceThemePresetId
+  /** LEGACY, and only read while `themePreset` is absent. It crosses with
+   *  `background`: "auto" with a fixed background follows the viewer for the
+   *  text and not for the page. That is the bug presets exist to remove. */
   theme: SiteTheme
   accentColor: string
   font: SiteFont

@@ -289,3 +289,67 @@ export function resolveActivityPricingDisplay(
     appointmentPrice,
   }
 }
+
+// ─── the ADMIN money chips ────────────────────────────────────────────────────
+
+/**
+ * The money chips an ADMIN surface shows for one activity, as ready labels.
+ *
+ * Extracted from the activities list (2026-08-31) when the catalogue's detail
+ * pane started showing the same facts. Two surfaces deriving "what does this
+ * cost" from `resolveActivityTerms` in two places is how they end up disagreeing
+ * about, say, whether a benefit chip names its plan — and the catalogue exists
+ * precisely to be believed about pricing.
+ *
+ * It stays HERE rather than in a component because it is the same kind of thing
+ * as `resolveActivityTerms` above: a pure derivation, rendered differently per
+ * surface. The `t` it takes is bound to the `Activities` namespace, which owns
+ * this copy.
+ *
+ * The GATE and the FREE trial are deliberately excluded: both are access facts
+ * with their own badges, not money. A PRICED trial is money and is kept.
+ */
+export function activityMoneyChipLabels(
+  activity: ActivityTermsInput,
+  currency: string,
+  subscriptionTypes: Array<{ id: string; name: string }>,
+  t: (key: string, values?: Record<string, string | number>) => string,
+  formatMoney: (amount: number, currency: string) => string
+): string[] {
+  const nameFor = (ids?: string[]) =>
+    ids?.length === 1 ? subscriptionTypes.find((s) => s.id === ids[0])?.name : undefined
+
+  return resolveActivityTerms(activity)
+    .filter(
+      (term) =>
+        (term.kind !== 'trial' && term.kind !== 'gate') ||
+        (term.kind === 'trial' && typeof term.amount === 'number')
+    )
+    .map((term): string | null => {
+      switch (term.kind) {
+        case 'trial':
+          return typeof term.amount === 'number'
+            ? t('chipTrialPriced', { amount: formatMoney(term.amount, currency) })
+            : null
+        case 'dropIn':
+          return t('chipDropIn', { amount: formatMoney(term.amount ?? 0, currency) })
+        case 'price':
+          return term.min === term.max
+            ? formatMoney(term.min ?? 0, currency)
+            : `${formatMoney(term.min ?? 0, currency)}–${formatMoney(term.max ?? 0, currency)}`
+        case 'benefitIncluded': {
+          const name = nameFor(term.subscriptionTypeIds)
+          return name ? t('chipBenefitIncludedNamed', { name }) : t('chipBenefitIncluded')
+        }
+        case 'benefitDiscount': {
+          const name = nameFor(term.subscriptionTypeIds)
+          return name
+            ? t('chipBenefitDiscountNamed', { percent: term.percent ?? 0, name })
+            : t('chipBenefitDiscount', { percent: term.percent ?? 0 })
+        }
+        default:
+          return null
+      }
+    })
+    .filter((label): label is string => label !== null)
+}

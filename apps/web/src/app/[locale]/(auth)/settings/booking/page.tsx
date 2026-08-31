@@ -21,7 +21,7 @@ import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { useSaveShortcut } from '@/hooks/useSaveShortcut'
-import { useForm, Controller, useWatch } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslations } from 'next-intl'
@@ -29,7 +29,6 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { TEAMS_COLLECTION } from '@linyup/shared'
@@ -206,30 +205,25 @@ function FlowPreview({
 // unrelated decisions; one box with dividers reads as one panel, which is what
 // it is.
 //
-// Extracted from the old inline map because the waitlist row nests a control
-// inside itself, and two shapes of the same row rendered two different ways is
-// how they drift apart.
+// Extracted from the old inline map because the appointments row nests a
+// control inside itself, and two shapes of the same row rendered two different
+// ways is how they drift apart.
+//
+// IT CARRIES NO MATURITY CHIP any more. `badge`/`badgeHint` existed for the
+// waitlist row's "Beta", and left with it — a chip on one row of a settled
+// panel was saying "this is opt-in" in the one place the reader could not act
+// on it. Settings → Experimental says it once, for everything that is.
 function ToggleRow({
   control,
   name,
   label,
   desc,
-  badge,
-  badgeHint,
   children,
 }: {
   control: ReturnType<typeof useForm<FormData>>['control']
-  name: 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled' | 'booking.waitlistEnabled'
+  name: 'booking.showActivityDescription' | 'booking.showFitnessAppField' | 'booking.appointmentsEnabled'
   label: string
   desc: string
-  /** Chip beside the label — a maturity marker, not a state ("Beta"). */
-  badge?: React.ReactNode
-  /** What the chip PROMISES, in prose under the description. The chip also
-   *  carries it as a `title`, but a native tooltip never appears on touch and
-   *  is not reachable by keyboard, so for most of the audience the chip would
-   *  say "Beta" and nothing else — leaving "may change" and "may misbehave"
-   *  equally readable. The caveat is the substance; the chip is the marker. */
-  badgeHint?: string
   /** Rendered under the row, inside its border — the settings this switch owns. */
   children?: React.ReactNode
 }) {
@@ -237,12 +231,8 @@ function ToggleRow({
     <div>
       <div className="flex items-center justify-between gap-4 p-3">
         <div>
-          <p className="flex items-center gap-2 text-sm font-medium">
-            {label}
-            {badge}
-          </p>
+          <p className="text-sm font-medium">{label}</p>
           <p className="text-xs text-muted-foreground">{desc}</p>
-          {badgeHint && <p className="text-xs text-muted-foreground">{badgeHint}</p>}
         </div>
         <Controller
           control={control}
@@ -286,9 +276,6 @@ function BookingForm({
   customFieldsInstalled: boolean
 }) {
   const t = useTranslations('SettingsBooking')
-  // Subscribed, not read once: the claim window below appears the moment the
-  // queue is switched on, without a save in between.
-  const waitlistEnabled = useWatch({ control, name: 'booking.waitlistEnabled' })
   // The SAME two halves the Public pages screen reads, through the same hook, so
   // the two screens can never say different things about whether the picker is
   // live. `appointmentsLive` is the composed answer (`appointmentPickerLive`);
@@ -365,15 +352,13 @@ function BookingForm({
           looking for the booking window had to guess that a collapsed grey bar
           contained it. Ordering carries that weight instead: what the page
           OFFERS comes first (appointments), then how the form BEHAVES (window,
-          cutoff, which fields to ask for), then the optional custom button, then
-          anything still in BETA last.
+          cutoff, which fields to ask for), then the optional custom button.
 
-          WAITLISTS USED TO SIT SECOND, as the other thing the page offers. It
-          moved to the bottom with the Beta chip: a queue is a niche answer to a
-          problem most studios do not have yet, and meeting it second — above the
-          booking window — made it read as a decision every studio owes an answer
-          to. The chip says the feature may still change; it is not a warning
-          that it misbehaves.
+          WAITLISTS USED TO SIT SECOND, as the other thing the page offers, then
+          last with a Beta chip. They are not on this page at all now — the
+          switch is in Settings → Experimental, which is where an opt-in belongs
+          and says the "may change" part once, on a page about exactly that,
+          instead of as a chip on one row of a panel of settled settings.
 
           Each of these still has a default that is right for a studio that
           never opens this panel, so none of them is a question it must answer
@@ -386,7 +371,6 @@ function BookingForm({
             • show description -> on (what the studio wrote is what visitors see)
             • fitness-app field-> on
             • custom button    -> empty, so no extra button is rendered
-            • waitlists        -> off (a new studio never meets the concept)
           Nothing here changes what anybody is charged or who may book. */}
       <div className="divide-y rounded-lg border">
         <ToggleRow
@@ -531,60 +515,15 @@ function BookingForm({
           </div>
         </div>
 
-        {/* LAST ROW, AND BETA — see the ordering note at the top of the panel.
-            The claim window is the waitlist's OWN setting, so it lives inside
-            this row and renders only once the queue is on. It used to sit
-            further up as a peer of the cutoff, where a studio with no waitlist
-            at all met it as a question — and where the only thing it could
-            possibly do was make a queue that studio did not have worse (UX-41).
-            Its default, 120 minutes, is the SAME one the promoter applies
-            server-side (WAITLIST_DEFAULT_CLAIM_MINUTES), so a studio that
-            switches the queue on and never opens this gets exactly what the
-            server would have done anyway. Still a maximum: the cutoff above and
-            the session start both clamp it. */}
-        <ToggleRow
-          control={control}
-          name="booking.waitlistEnabled"
-          label={t('toggleWaitlistEnabledLabel')}
-          desc={t('toggleWaitlistEnabledDesc')}
-          badgeHint={t('betaBadgeHint')}
-          badge={
-            <Badge
-              variant="secondary"
-              className="text-xs bg-blue-50 text-blue-700 border-blue-200"
-              title={t('betaBadgeHint')}
-            >
-              {t('betaBadge')}
-            </Badge>
-          }
-        >
-          {waitlistEnabled && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">{t('waitlistClaimMinutesLabel')}</p>
-              <p className="text-xs text-muted-foreground">{t('waitlistClaimMinutesHint')}</p>
-              <Controller
-                control={control}
-                name="booking.waitlistClaimMinutes"
-                render={({ field }) => (
-                  <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-                    <SelectTrigger className="h-9 w-48">
-                      <span className="flex flex-1 text-left text-sm truncate">
-                        {t('waitlistClaimMinutesValue', { minutes: field.value })}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[60, 120, 240, 480, 1440].map((minutes) => (
-                        <SelectItem key={minutes} value={String(minutes)}>
-                          {t('waitlistClaimMinutesValue', { minutes })}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          )}
-        </ToggleRow>
+        {/* THE WAITLIST ROW IS NOT HERE ANY MORE (2026-08-31). It sat last with
+            a "Beta" chip; it now lives in Settings → Experimental, with its
+            claim window, because a queue is not a booking-page setting in the
+            way the window and the cutoff are — those configure a flow every
+            studio has, that one decides whether a whole feature exists for
+            them. The STORE did not move: `bookingSettings.waitlistEnabled` and
+            `waitlistClaimMinutes` are still the fields, still read by the
+            activity editor and by the promoter, and this form still carries
+            them through a save untouched (see onSubmit). */}
       </div>
     </div>
   )
@@ -654,6 +593,12 @@ export default function BookingSettingsPage() {
       // never be the thing that decides the default differently from the form
       // that produced it.
       appointmentsEnabled: data.booking.appointmentsEnabled ?? true,
+      // CARRIED THROUGH, NOT EDITED. Both moved to Settings → Experimental; the
+      // form still hydrates them (getDefaults) and still writes them back, so
+      // saving this page cannot silently close a studio's queues or reset a
+      // claim window it no longer shows. Dropping them from the write would
+      // leave the stored values standing (the setDoc merges) but would let this
+      // form's re-hydrate disagree with the store, which is the shape of UX-6.
       waitlistEnabled: data.booking.waitlistEnabled ?? false,
       cutoffMinutes: data.booking.cutoffMinutes,
       waitlistClaimMinutes: data.booking.waitlistClaimMinutes,
