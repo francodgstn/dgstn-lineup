@@ -670,7 +670,13 @@ export interface LeadProfile {
   /** No-show policy (settings.noShowPolicy): every `threshold` accumulated
    *  no-show strikes create ONE `feeAmount` policy fee (major units) on the
    *  contact (TeamUp-style — never per incident; managers can waive). Absent ⇒
-   *  the policy stays off. */
+   *  the policy stays off.
+   *
+   *  LEAVE IT ABSENT unless the lead has SAID they charge for no-shows. Whether
+   *  to bill somebody for missing a class is their commercial decision, not a
+   *  demo default: a sandbox that arrives with it on has made that decision for
+   *  them, and it is the kind of setting a prospect notices and objects to. No
+   *  shipped lead profile sets it. */
   noShowPolicy?: { feeAmount: number; threshold: number }
   documents: LeadDocumentDef[]
   /** Public forms (installs the `custom-forms` plugin + flips the team's
