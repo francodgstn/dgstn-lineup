@@ -102,6 +102,25 @@ function rowChoicesFor(t: PlanLinkTarget): RowChoice[] {
   return ['none', ...included, ...effects.filter((e) => !(facets.access && e === 'included'))]
 }
 
+/**
+ * Why a column is a DASH rather than a control.
+ *
+ * THE ONE CASE THERE IS: a course with its sale switched off. Its two rate
+ * columns have no price to reduce, because a course's price *is* the sale.
+ * An activity never shows a dash at all — a class carries a gate AND an
+ * independent drop-in price, and an appointment's price is its gate, so all
+ * four columns mean something on both. That asymmetry is what makes a studio
+ * read the dashes as "the editor is broken for courses" (Franco, 2026-09-01).
+ *
+ * SAYING WHY IS THE WHOLE POINT. The dimmed-but-live cells have explained
+ * themselves on hover since they existed (`noPriceHint`); the dash explained
+ * nothing, which left the only unavailable state in the grid as the only one
+ * with no reason attached.
+ */
+function isUnsoldCourseRateCell(t: PlanLinkTarget, c: RowChoice): boolean {
+  return t.kind === 'course' && (c === 'percent_off' || c === 'fixed_price')
+}
+
 /** Which option the stored edge currently represents. */
 function choiceOf(edge: ActivityPlanEdge, rate: RateDraft, facets: OfferingFacets): RowChoice {
   if (edge.access) return 'included' // with or without an after-allowance rate
@@ -556,6 +575,8 @@ export function ActivityPlanLinks({
                 // studio mid-setup may well tick it before adding the price, and
                 // the stored rule is correct the moment that price exists.
                 const inert = offered && c !== 'none' && c !== 'included' && !hasPriceToReduce
+                const naHint =
+                  !offered && isUnsoldCourseRateCell(off.target, c) ? t('naCourseNotSold') : null
                 return (
                   <div
                     key={c}
@@ -564,8 +585,12 @@ export function ActivityPlanLinks({
                     }`}
                   >
                     {!offered ? (
-                      <span className="text-xs text-muted-foreground/40" aria-hidden>
-                        —
+                      <span
+                        className="text-xs text-muted-foreground/40"
+                        title={naHint ?? undefined}
+                      >
+                        <span aria-hidden>—</span>
+                        {naHint && <span className="sr-only">{naHint}</span>}
                       </span>
                     ) : (
                       <button

@@ -6582,7 +6582,7 @@
       "intro": "Les tarifs réunissent trois idées qui vivent souvent séparément — ce que vous proposez, ce que vous vendez, et les avantages qui relient les deux. Explorez la carte, parcourez quelques configurations courantes, puis testez-la en direct avec un visiteur fictif.",
       "linkLabels": {
         "plans": "Offre → Formules",
-      "activities": "Offre → Activités",
+        "activities": "Offre → Activités",
         "courses": "Offre → Cours en ligne",
         "payments": "Paiements",
         "booking": "Paramètres → Réservation",
@@ -7435,7 +7435,8 @@
     "setAllLabel": "Tout définir",
     "choiceNoneDesc": "Les détenteurs paient le prix normal — cette formule ne fait rien ici.",
     "noPriceDropIn": "Ce cours ne vend pas de drop-in, il n'y a donc pas encore de prix à réduire. Ajoutez un tarif drop-in pour que cela s'applique.",
-    "noPriceAppointment": "Ce rendez-vous n'a pas de tarif, il n'y a donc rien à réduire. Tarifez une durée pour que cela s'applique."
+    "noPriceAppointment": "Ce rendez-vous n'a pas de tarif, il n'y a donc rien à réduire. Tarifez une durée pour que cela s'applique.",
+    "naCourseNotSold": "Pas en vente, il n'y a donc aucun prix à réduire. Activez « Vendre sans formule » dans les réglages du cours."
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",

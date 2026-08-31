@@ -6582,7 +6582,7 @@
       "intro": "Preise bringen drei Dinge zusammen, die sonst oft getrennt leben — was du anbietest, was du verkaufst, und die Mitgliedervergünstigungen, die beides verbinden. Erkunde die Karte, sieh dir ein paar gängige Einrichtungen an und probiere es live an einer fiktiven Besucherin aus.",
       "linkLabels": {
         "plans": "Angebot → Pläne",
-      "activities": "Angebot → Aktivitäten",
+        "activities": "Angebot → Aktivitäten",
         "courses": "Angebot → Online-Kurse",
         "payments": "Zahlungen",
         "booking": "Einstellungen → Buchung",
@@ -7435,7 +7435,8 @@
     "setAllLabel": "Alle setzen",
     "choiceNoneDesc": "Mitglieder zahlen den normalen Preis — dieser Plan bewirkt hier nichts.",
     "noPriceDropIn": "Diese Klasse verkauft keine Drop-ins, es gibt also noch keinen Preis zu reduzieren. Fügen Sie einen Drop-in-Preis hinzu, damit dies greift.",
-    "noPriceAppointment": "Dieser Termin hat keinen Preis, es gibt also nichts zu reduzieren. Versehen Sie eine Dauer mit einem Preis, damit dies greift."
+    "noPriceAppointment": "Dieser Termin hat keinen Preis, es gibt also nichts zu reduzieren. Versehen Sie eine Dauer mit einem Preis, damit dies greift.",
+    "naCourseNotSold": "Nicht im Verkauf, also gibt es keinen Preis zu reduzieren. Aktivieren Sie „Ohne Plan verkaufen“ in den Kurseinstellungen."
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",
