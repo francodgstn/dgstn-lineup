@@ -20,6 +20,7 @@
 // question occurs to them.
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -140,6 +141,7 @@ export default function ProductsPage() {
   const currency = team?.default_currency ?? 'CHF'
 
   const { data: products = [], isLoading } = useProducts(currentTeamId)
+  const editParam = useSearchParams().get('edit')
   const limits = getProductLimits(team?.plan ?? null)
   const atCap = products.length >= limits.maxProductsPerTeam
 
@@ -242,6 +244,23 @@ export default function ProductsPage() {
     clearImage()
     setDialogOpen(true)
   }
+
+  // ── arriving from the catalogue's Edit button (?edit=<id>) ──
+  // The same seam the activities and subscriptions pages carry, and for the same
+  // reason: landing on a list page with the row somewhere on it is the shape
+  // UX-99 is about — a page naming a destination and then making you find it.
+  //
+  // It runs when the DATA arrives, not on first render (there is nothing to find
+  // before then), and the ref makes it run ONCE — without that, closing the
+  // dialog while the param is still in the URL would immediately reopen it.
+  const consumedEditParam = useRef(false)
+  useEffect(() => {
+    if (consumedEditParam.current || !editParam || products.length === 0) return
+    const target = products.find((p) => p.id === editParam)
+    consumedEditParam.current = true
+    if (target) openEdit(target)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editParam, products])
 
   /**
    * Copy a product into the CREATE dialog (`editing` stays null), so it is saved

@@ -54,7 +54,7 @@ import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { usePlanName } from '@/hooks/usePlanName'
-import { resolveActivityTerms } from '@/lib/activityTerms'
+import { activityMoneyChipLabels } from '@/lib/activityTerms'
 import { formatCurrency } from '@/lib/format'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -1395,46 +1395,11 @@ function ActivityDialog({
 
 // ─── activity card ────────────────────────────────────────────────────────────
 
-// Money-chip label for one resolved term — the only NEW badges this list adds
-// (the free trial / gate badges keep their existing, separate badge block
-// below; a PRICED trial gets a money chip here instead, since it's a real
-// money story). Benefit chips try to stay compact by resolving a single
-// subscription type's name when the admin already has the list loaded;
-// multiple types (or an unresolved id) fall back to the generic label.
-function moneyChipLabel(
-  term: ReturnType<typeof resolveActivityTerms>[number],
-  currency: string,
-  subscriptionTypes: SubscriptionType[],
-  t: ReturnType<typeof useTranslations>,
-): string | null {
-  const nameFor = (ids?: string[]) =>
-    ids?.length === 1 ? subscriptionTypes.find((s) => s.id === ids[0])?.name : undefined
-
-  switch (term.kind) {
-    case 'trial':
-      return typeof term.amount === 'number'
-        ? t('chipTrialPriced', { amount: formatCurrency(term.amount, currency) })
-        : null
-    case 'dropIn':
-      return t('chipDropIn', { amount: formatCurrency(term.amount ?? 0, currency) })
-    case 'price':
-      return term.min === term.max
-        ? formatCurrency(term.min ?? 0, currency)
-        : `${formatCurrency(term.min ?? 0, currency)}–${formatCurrency(term.max ?? 0, currency)}`
-    case 'benefitIncluded': {
-      const name = nameFor(term.subscriptionTypeIds)
-      return name ? t('chipBenefitIncludedNamed', { name }) : t('chipBenefitIncluded')
-    }
-    case 'benefitDiscount': {
-      const name = nameFor(term.subscriptionTypeIds)
-      return name
-        ? t('chipBenefitDiscountNamed', { percent: term.percent ?? 0, name })
-        : t('chipBenefitDiscount', { percent: term.percent ?? 0 })
-    }
-    default:
-      return null
-  }
-}
+// The money chips this list adds are derived in `lib/activityTerms.ts`
+// (`activityMoneyChipLabels`) — the catalogue's detail pane shows the same facts
+// and reads the same function, so the two cannot disagree about, say, whether a
+// benefit chip names its plan. The access badges below are separate and stay
+// here: they are what a row says about who may book, not about money.
 
 function ActivityCard({
   activity,
@@ -1458,10 +1423,14 @@ function ActivityCard({
   const t = useTranslations('Activities')
   const tCommon = useTranslations('Common')
   const { setNodeRef, style, attributes, listeners, isDragging } = sortable
-  const moneyTerms = resolveActivityTerms(activity).filter(
-    // The FREE trial keeps its own badge below (freeTrialBadge); a PRICED
-    // trial is a real money story, so it earns a money chip here instead.
-    (term) => (term.kind !== 'trial' && term.kind !== 'gate') || (term.kind === 'trial' && typeof term.amount === 'number')
+  // The FREE trial keeps its own badge below (freeTrialBadge); a PRICED trial is
+  // a real money story, so the shared resolver gives it a money chip instead.
+  const moneyChips = activityMoneyChipLabels(
+    activity,
+    currency,
+    subscriptionTypes,
+    t as unknown as (key: string, values?: Record<string, string | number>) => string,
+    formatCurrency
   )
 
   return (
@@ -1517,14 +1486,11 @@ function ActivityCard({
               <Badge variant="outline" className="text-xs">{t('freeTrialBadge')}</Badge>
             ) : null
           })()}
-          {moneyTerms.map((term, i) => {
-            const label = moneyChipLabel(term, currency, subscriptionTypes, t)
-            return label ? (
-              <Badge key={`${term.kind}-${i}`} variant="secondary" className="text-xs">
-                {label}
-              </Badge>
-            ) : null
-          })}
+          {moneyChips.map((label, i) => (
+            <Badge key={`money-${i}`} variant="secondary" className="text-xs">
+              {label}
+            </Badge>
+          ))}
         </div>
         {activity.description && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{activity.description}</p>

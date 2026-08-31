@@ -19,10 +19,26 @@
 // this way scrolling only ever happens INSIDE the long list you are already
 // browsing.
 //
-// ── WHY THREE GROUPS AND NOT TWO ────────────────────────────────────────────
-// Classes and appointments differ in a way the pane has to show — an
-// appointment has no access gate, because the price is the gate — so the rail
-// is where that asymmetry costs nothing to make visible.
+// ── THE RAIL IS TABBED, AND PRODUCTS ARE ONE OF THE TABS ────────────────────
+// It was four stacked groups, which meant scrolling past every plan to reach a
+// class, and past every class to reach a course. Tabs are the right shape for
+// lists that are alternatives to each other rather than parts of one list.
+//
+// Classes and appointments stay as SUB-HEADINGS inside the Activities tab: they
+// differ in a way the pane has to show (an appointment has no access gate,
+// because the price is the gate), and that asymmetry is worth seeing, but they
+// are the same kind of thing and splitting them into two tabs would say
+// otherwise.
+//
+// PRODUCTS ARE HERE NOW, and the file used to say flatly that they were not.
+// The old reasoning was sound about the EDGE — a product carries no access rule
+// and no benefit, so no plan can open it and the edge editor has nothing to
+// draw. It was wrong about the PAGE: a studio opening "the catalogue" expects
+// everything it sells to be in it, and being told nothing is worse than being
+// told "this one is sold on its own" (Franco, 2026-08-31). So a product selects
+// like anything else, the pane shows its facts, and where the edge editor would
+// be it says plainly that a plan cannot open a product. Gift cards stay out:
+// a gift card is a TENDER, not a thing that is sold.
 //
 // ── NO MATRIX ───────────────────────────────────────────────────────────────
 // Not because a cell could not hold "20% off", but because there is no per-pair
@@ -36,11 +52,22 @@ import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore'
-import { AlertTriangle, IdCard, Zap, CalendarClock, GraduationCap, Pencil, Check, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  IdCard,
+  Zap,
+  CalendarClock,
+  GraduationCap,
+  Package,
+  Pencil,
+  Check,
+  X,
+} from 'lucide-react'
 
 import {
   ACTIVITIES_COLLECTION,
   COURSES_COLLECTION,
+  PRODUCTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   courseGatedPlanIds,
@@ -49,8 +76,10 @@ import {
   gatedPlanIds,
   isAppointmentActivity,
   ratedPlanIds,
+  resolveActivityAccessRule,
   type Activity,
   type Course,
+  type Product,
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
@@ -67,6 +96,10 @@ import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
 import { useGatewayCurrency } from '@/components/connect/BillingCurrencyCard'
 import { ActivityPlanLinks, type Offering } from '@/components/offer/ActivityPlanLinks'
 import { useCourses } from '@/plugins/online-courses/hooks'
+import { useProducts } from '@/plugins/products/hooks'
+import { activityMoneyChipLabels } from '@/lib/activityTerms'
+import { formatCurrency } from '@/lib/format'
+import { OfferFacts, type OfferChip, type OfferFactsProps } from '@/components/offer/OfferFacts'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
 
@@ -80,7 +113,18 @@ const DEAD_END_CODES = new Set<PricingWarning['code']>([
   'appointment_no_way_in',
 ])
 
-type Selection = { kind: 'activity' | 'course' | 'plan'; id: string } | null
+type Selection = { kind: 'activity' | 'course' | 'plan' | 'product'; id: string } | null
+
+/** The rail's tabs. `activities` holds classes AND appointments — see the header. */
+type TabKey = 'activities' | 'plans' | 'courses' | 'products'
+
+/** Which tab a selection belongs to, so a deep link opens the tab holding it. */
+const TAB_FOR_KIND: Record<NonNullable<Selection>['kind'], TabKey> = {
+  activity: 'activities',
+  plan: 'plans',
+  course: 'courses',
+  product: 'products',
+}
 
 /** Selection rides in the URL so the pane is deep-linkable — which is what lets
  *  the pricing surface's warnings point AT the thing to fix instead of at a list
@@ -90,7 +134,8 @@ function parseSelection(raw: string | null): Selection {
   const [kind, ...rest] = raw.split(':')
   const id = rest.join(':')
   if (!id) return null
-  if (kind === 'activity' || kind === 'course' || kind === 'plan') return { kind, id }
+  if (kind === 'activity' || kind === 'course' || kind === 'plan' || kind === 'product')
+    return { kind, id }
   return null
 }
 
@@ -112,6 +157,12 @@ function useSubscriptionTypes(teamId: string | null) {
 
 export default function CataloguePage() {
   const t = useTranslations('OfferCatalogue')
+  // The facts block reuses the list pages' OWN copy rather than restating it:
+  // three namespaces, because three pages own these words and a fourth set of
+  // strings saying the same things is how they start saying different ones.
+  const tAct = useTranslations('Activities')
+  const tSet = useTranslations('TeamSettings')
+  const tc = useTranslations('Contacts')
   const { currentTeamId, team } = useAuth()
   const canEdit = useCapabilities().can('team.settings')
   const router = useRouter()
@@ -120,6 +171,12 @@ export default function CataloguePage() {
 
   const selection = parseSelection(params.get('sel'))
   const [onlyDeadEnds, setOnlyDeadEnds] = useState(false)
+  // NULL until the studio picks a tab, so a deep link (`?sel=plan:x`, which the
+  // pricing warnings and both editors produce) opens on the tab that HOLDS the
+  // selection rather than on Activities with the pane showing something the rail
+  // beside it does not list. Once a tab is picked it wins — selecting within it
+  // must not be able to move the reader somewhere else.
+  const [pickedTab, setPickedTab] = useState<TabKey | null>(null)
 
   const { data: activities = [], isLoading: loadingActivities } = useActivities(currentTeamId)
   const { data: plans = [], isLoading: loadingPlans } = useSubscriptionTypes(currentTeamId)
@@ -127,11 +184,22 @@ export default function CataloguePage() {
   // Courses only exist for a studio that installed the plugin, so the group is
   // absent rather than empty when it is not — an empty "Courses" heading would
   // advertise a feature this studio has not got.
-  const coursesInstalled = useInstalledPlugins().isInstalled('online-courses')
+  const { isInstalled } = useInstalledPlugins()
+  const coursesInstalled = isInstalled('online-courses')
   const { data: courses = [], isLoading: loadingCourses } = useCourses(
     coursesInstalled ? currentTeamId : null
   )
-  const loading = loadingActivities || loadingPlans || (coursesInstalled && loadingCourses)
+  // Same gate, same reason: a "Products" tab on a studio without the plugin
+  // advertises a feature it has not got.
+  const productsInstalled = isInstalled('products')
+  const { data: products = [], isLoading: loadingProducts } = useProducts(
+    productsInstalled ? currentTeamId : null
+  )
+  const loading =
+    loadingActivities ||
+    loadingPlans ||
+    (coursesInstalled && loadingCourses) ||
+    (productsInstalled && loadingProducts)
   // Same derivation as the Subscriptions panel — the stored team currency, else
   // whatever the payment gateway is configured in, else CHF. Two surfaces
   // showing a rate in different currencies would be worse than either being
@@ -177,11 +245,119 @@ export default function CataloguePage() {
     onlyDeadEnds ? list.filter((a) => deadEndIds.has(a.id)) : list
   const visibleCourses = onlyDeadEnds ? courses.filter((c) => deadEndIds.has(c.id)) : courses
 
+  // ICON ABOVE THE LABEL, not beside it. Side by side, four labelled-and-iconed
+  // tabs do not fit the rail column once the pane opens next to it: the strip
+  // wrapped to two lines, which moves the tab a studio is aiming at at exactly
+  // the moment it selects something. Stacked, each tab is as narrow as its word
+  // and the icons cost no width at all — and the SAME icons name these things in
+  // the sidebar, so they are what the studio already recognises them by.
+  const tabs: { key: TabKey; label: string; icon: React.ElementType }[] = [
+    { key: 'activities', label: t('tabActivities'), icon: Zap },
+    { key: 'plans', label: t('railPlans'), icon: IdCard },
+    ...(coursesInstalled
+      ? [{ key: 'courses' as const, label: t('railCourses'), icon: GraduationCap }]
+      : []),
+    ...(productsInstalled
+      ? [{ key: 'products' as const, label: t('tabProducts'), icon: Package }]
+      : []),
+  ]
+  const fallbackTab: TabKey = selection ? TAB_FOR_KIND[selection.kind] : 'activities'
+  // A tab can vanish under a stored choice: uninstall the products plugin with
+  // that tab open and `pickedTab` names a tab that is not rendered, which would
+  // show an empty rail with nothing selected in the strip.
+  const activeTab = tabs.some((x) => x.key === (pickedTab ?? fallbackTab))
+    ? (pickedTab ?? fallbackTab)
+    : 'activities'
+
+  /** How many dead ends each tab holds — shown on the strip while the filter is
+   *  on, because a tab that filters to nothing otherwise reads as "no problems
+   *  here" exactly when the studio is hunting for problems. */
+  const deadEndsPerTab: Partial<Record<TabKey, number>> = {
+    activities: activities.filter((a) => deadEndIds.has(a.id)).length,
+    courses: courses.filter((c) => deadEndIds.has(c.id)).length,
+  }
+
+  // ── THE FACTS, per kind ──────────────────────────────────────────────────
+  // What each list page shows on a row, for the one thing that is selected.
+  // Derived HERE because this page already holds the documents; the one part
+  // that is real logic — an activity's money chips — comes from the SHARED
+  // `activityMoneyChipLabels` the activities list itself reads, so the two
+  // surfaces cannot disagree about what something costs.
+  const activityChips = (a: Activity): OfferChip[] => {
+    const rule = resolveActivityAccessRule(a)
+    return [
+      { label: isAppointmentActivity(a) ? t('appointmentBadge') : t('classBadge') },
+      ...(a.tags ?? []).map((tag) => ({ label: tag })),
+      ...(rule.type === 'subscription'
+        ? [{ label: tAct('accessBadgeSubscription'), tone: 'accent' as const }]
+        : rule.type === 'members'
+          ? [{ label: tAct('accessBadgeMembers'), tone: 'accent' as const }]
+          : a.isFreeTrial
+            ? [{ label: tAct('freeTrialBadge') }]
+            : []),
+      ...activityMoneyChipLabels(
+        a,
+        currency,
+        plans,
+        tAct as unknown as (key: string, values?: Record<string, string | number>) => string,
+        formatCurrency
+      ).map((label) => ({ label })),
+    ]
+  }
+
+  const planChips = (st: SubscriptionType): OfferChip[] => [
+    {
+      label: tSet(
+        st.source === 'aggregator' ? 'subTypeSourceAggregator' : 'subTypeSourceInternal'
+      ),
+    },
+    // INACTIVE AND PRIVATE ARE WARNINGS, not neutral facts: a plan the studio
+    // is reading the coverage of, that nobody can currently buy, is the single
+    // most useful thing this pane can tell them.
+    ...(st.active === false ? [{ label: tSet('subTypeInactive'), tone: 'warn' as const }] : []),
+    ...(st.public ? [{ label: tSet('subTypePublicBadge') }] : []),
+    ...(st.prices ?? [])
+      .filter((price) => price.active !== false)
+      .map((price) => ({
+        label:
+          `${formatCurrency(price.amount, currency)} · ${tc(`recurrence_${price.recurrence}`)}` +
+          (price.credits ? ` · ${tSet('subTypeCreditsBadge', { count: price.credits })}` : ''),
+      })),
+  ]
+
+  const courseChips = (c: Course): OfferChip[] => [
+    { label: t('courseBadge') },
+    ...(c.status !== 'published'
+      ? [{ label: t(c.status === 'draft' ? 'courseDraft' : 'courseArchived'), tone: 'warn' as const }]
+      : []),
+    {
+      label:
+        c.accessRule.type === 'purchase' && typeof c.accessRule.priceAmount === 'number'
+          ? formatCurrency(c.accessRule.priceAmount, currency)
+          : t(`courseAccess_${c.accessRule.type}` as Parameters<typeof t>[0]),
+      tone: 'accent' as const,
+    },
+  ]
+
+  const productChips = (pr: Product): OfferChip[] => [
+    { label: formatCurrency(pr.priceAmount, currency), tone: 'accent' as const },
+    ...(pr.active === false ? [{ label: t('productInactive'), tone: 'warn' as const }] : []),
+    ...(pr.variants?.length
+      ? [{ label: t('productVariants', { count: pr.variants.length }) }]
+      : []),
+  ]
+
   function select(next: Selection) {
     const sel = next ? `${next.kind}:${next.id}` : null
     router.replace((sel ? `/offer/catalogue?sel=${sel}` : '/offer/catalogue') as Route, {
       scroll: false,
     })
+  }
+
+  /** Click a row: select it, or clear it if it was already the selection. Was
+   *  written out per row four times over; one helper is one behaviour. */
+  function toggle(kind: NonNullable<Selection>['kind'], id: string) {
+    select(selection?.kind === kind && selection.id === id ? null : { kind, id })
   }
 
   const selectedActivity =
@@ -190,6 +366,8 @@ export default function CataloguePage() {
     selection?.kind === 'course' ? courses.find((c) => c.id === selection.id) : undefined
   const selectedPlan =
     selection?.kind === 'plan' ? plans.find((p) => p.id === selection.id) : undefined
+  const selectedProduct =
+    selection?.kind === 'product' ? products.find((p) => p.id === selection.id) : undefined
 
   // ── the way back ──
   // Same markup as the course and document detail pages, but the target is NOT
@@ -245,7 +423,47 @@ export default function CataloguePage() {
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,2fr)_3fr]">
         {/* ── the rail ── */}
-        <div className="space-y-4 rounded-xl border bg-card p-2">
+        <div className="space-y-3 rounded-xl border bg-card p-2">
+          {/* THE TAB STRIP. Wraps rather than scrolls: there are at most four,
+              and a horizontally scrolling strip hides the very tab a studio is
+              looking for on the width where it matters most. */}
+          <div className="flex gap-0.5 rounded-lg bg-muted/50 p-0.5" role="tablist" aria-label={t('title')}>
+            {tabs.map((tab) => {
+              const on = tab.key === activeTab
+              const dead = onlyDeadEnds ? (deadEndsPerTab[tab.key] ?? 0) : 0
+              const TabIcon = tab.icon
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setPickedTab(tab.key)}
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium leading-none transition-colors ${
+                    on
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <TabIcon className="h-4 w-4" />
+                  <span className="truncate">{tab.label}</span>
+                  {/* The dead-end count rides in the CORNER rather than in the
+                      flow: inline it would widen one tab and unbalance a strip
+                      whose whole job is four equal targets. */}
+                  {dead > 0 && (
+                    <span
+                      className={`absolute right-1 top-1 rounded-full px-1 text-[9px] leading-tight ${
+                        on ? 'bg-primary-foreground/20' : 'bg-amber-500/20 text-amber-700'
+                      }`}
+                    >
+                      {dead}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
           {loading && (
             <div className="space-y-2 p-2">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -254,29 +472,10 @@ export default function CataloguePage() {
             </div>
           )}
 
-          {!loading && (
+          {!loading && activeTab === 'activities' && (
             <>
-              <RailGroup icon={IdCard} label={t('railPlans')}>
-                {plans.length === 0 ? (
-                  <RailEmpty text={t('noPlans')} />
-                ) : (
-                  plans.map((p) => (
-                    <RailRow
-                      key={p.id}
-                      name={p.name}
-                      selected={selection?.kind === 'plan' && selection.id === p.id}
-                      onClick={() =>
-                        select(
-                          selection?.kind === 'plan' && selection.id === p.id
-                            ? null
-                            : { kind: 'plan', id: p.id }
-                        )
-                      }
-                    />
-                  ))
-                )}
-              </RailGroup>
-
+              {/* Classes and appointments stay SUB-HEADINGS, not tabs — same
+                  kind of thing, one asymmetry worth seeing. See the header. */}
               <RailGroup icon={Zap} label={t('railClasses')}>
                 {visible(classes).length === 0 ? (
                   <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noClasses')} />
@@ -288,13 +487,7 @@ export default function CataloguePage() {
                       color={a.color}
                       warn={deadEndIds.has(a.id)}
                       selected={selection?.kind === 'activity' && selection.id === a.id}
-                      onClick={() =>
-                        select(
-                          selection?.kind === 'activity' && selection.id === a.id
-                            ? null
-                            : { kind: 'activity', id: a.id }
-                        )
-                      }
+                      onClick={() => toggle('activity', a.id)}
                     />
                   ))
                 )}
@@ -311,42 +504,67 @@ export default function CataloguePage() {
                       color={a.color}
                       warn={deadEndIds.has(a.id)}
                       selected={selection?.kind === 'activity' && selection.id === a.id}
-                      onClick={() =>
-                        select(
-                          selection?.kind === 'activity' && selection.id === a.id
-                            ? null
-                            : { kind: 'activity', id: a.id }
-                        )
-                      }
+                      onClick={() => toggle('activity', a.id)}
                     />
                   ))
                 )}
               </RailGroup>
-
-              {coursesInstalled && (
-                <RailGroup icon={GraduationCap} label={t('railCourses')}>
-                  {visibleCourses.length === 0 ? (
-                    <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noCourses')} />
-                  ) : (
-                    visibleCourses.map((c) => (
-                      <RailRow
-                        key={c.id}
-                        name={c.title}
-                        warn={deadEndIds.has(c.id)}
-                        selected={selection?.kind === 'course' && selection.id === c.id}
-                        onClick={() =>
-                          select(
-                            selection?.kind === 'course' && selection.id === c.id
-                              ? null
-                              : { kind: 'course', id: c.id }
-                          )
-                        }
-                      />
-                    ))
-                  )}
-                </RailGroup>
-              )}
             </>
+          )}
+
+          {!loading && activeTab === 'plans' && (
+            <div className="space-y-0.5 p-1">
+              {plans.length === 0 ? (
+                <RailEmpty text={t('noPlans')} />
+              ) : (
+                plans.map((p) => (
+                  <RailRow
+                    key={p.id}
+                    name={p.name}
+                    selected={selection?.kind === 'plan' && selection.id === p.id}
+                    onClick={() => toggle('plan', p.id)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          {!loading && activeTab === 'courses' && (
+            <div className="space-y-0.5 p-1">
+              {visibleCourses.length === 0 ? (
+                <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noCourses')} />
+              ) : (
+                visibleCourses.map((c) => (
+                  <RailRow
+                    key={c.id}
+                    name={c.title}
+                    warn={deadEndIds.has(c.id)}
+                    selected={selection?.kind === 'course' && selection.id === c.id}
+                    onClick={() => toggle('course', c.id)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          {!loading && activeTab === 'products' && (
+            <div className="space-y-0.5 p-1">
+              {/* NEVER filtered by the dead-end banner: no health code is ever
+                  raised for a product (it has no access rule to be wrong), so
+                  filtering would empty the tab and imply the opposite. */}
+              {products.length === 0 ? (
+                <RailEmpty text={t('noProducts')} />
+              ) : (
+                products.map((p) => (
+                  <RailRow
+                    key={p.id}
+                    name={p.name}
+                    selected={selection?.kind === 'product' && selection.id === p.id}
+                    onClick={() => toggle('product', p.id)}
+                  />
+                ))
+              )}
+            </div>
           )}
         </div>
 
@@ -374,6 +592,10 @@ export default function CataloguePage() {
                       rated: ratedPlanIds(selectedActivity).length,
                     })
               }
+              facts={{
+                chips: activityChips(selectedActivity),
+                description: selectedActivity.description,
+              }}
               editHref={`/offer/activities?edit=${selectedActivity.id}` as Route}
               canEdit={canEdit}
               onRename={async (name) => {
@@ -409,6 +631,10 @@ export default function CataloguePage() {
                       courseRatedPlanIds(c).includes(selectedPlan.id)
                   ).length,
               })}
+              facts={{
+                chips: planChips(selectedPlan),
+                description: selectedPlan.description,
+              }}
               editHref={`/offer/plans?edit=${selectedPlan.id}` as Route}
               canEdit={canEdit}
               onRename={async (name) => {
@@ -454,6 +680,11 @@ export default function CataloguePage() {
                     courseRatedPlanIds(selectedCourse).length,
                 }
               )}
+              facts={{
+                chips: courseChips(selectedCourse),
+                // `summary`, not `description`: a course's blurb is its summary.
+                description: selectedCourse.summary,
+              }}
               editHref={`/offer/online-courses/${selectedCourse.id}` as Route}
               canEdit={canEdit}
               onRename={async (title) => {
@@ -472,16 +703,50 @@ export default function CataloguePage() {
             </PaneBody>
           )}
 
+          {selectedProduct && (
+            <PaneBody
+              key={selectedProduct.id}
+              title={selectedProduct.name}
+              badge={t('productBadge')}
+              summary={t('summaryProduct')}
+              facts={{
+                chips: productChips(selectedProduct),
+                description: selectedProduct.description,
+                // WHERE THE EDGE EDITOR WOULD BE, the pane says why there is
+                // none. A product carries no access rule and no benefit, so no
+                // plan can open it — that is a fact about the model, not a gap
+                // in this screen, and leaving the space blank would read as the
+                // latter.
+                note: t('productNoPlanEdge'),
+              }}
+              editHref={`/offer/products?edit=${selectedProduct.id}` as Route}
+              canEdit={canEdit}
+              onRename={async (name) => {
+                if (!currentTeamId) return
+                await updateDoc(
+                  doc(db, TEAMS_COLLECTION, currentTeamId, PRODUCTS_SUBCOLLECTION, selectedProduct.id),
+                  { name }
+                )
+                await qc.invalidateQueries({ queryKey: ['products', currentTeamId] })
+              }}
+            />
+          )}
+
           {/* Selected, but gone — a stale deep link, or something archived in
               another tab. Saying so beats an empty pane that looks like a bug. */}
-          {selection && !selectedActivity && !selectedCourse && !selectedPlan && !loading && (
-            <div className="space-y-2 px-4 py-12 text-center">
-              <p className="text-sm text-muted-foreground">{t('paneMissing')}</p>
-              <Button variant="outline" size="sm" onClick={() => select(null)}>
-                {t('paneMissingAction')}
-              </Button>
-            </div>
-          )}
+          {selection &&
+            !selectedActivity &&
+            !selectedCourse &&
+            !selectedPlan &&
+            !selectedProduct &&
+            !loading && (
+              <div className="space-y-2 px-4 py-12 text-center">
+                <p className="text-sm text-muted-foreground">{t('paneMissing')}</p>
+                <Button variant="outline" size="sm" onClick={() => select(null)}>
+                  {t('paneMissingAction')}
+                </Button>
+              </div>
+            )}
         </div>
       </div>
     </div>
@@ -499,6 +764,7 @@ function PaneBody({
   title,
   badge,
   summary,
+  facts,
   editHref,
   canEdit,
   onRename,
@@ -507,10 +773,14 @@ function PaneBody({
   title: string
   badge?: string
   summary: string
+  /** What the list page would show on this thing's row — see OfferFacts. */
+  facts?: OfferFactsProps
   editHref: Route
   canEdit: boolean
   onRename: (name: string) => Promise<void>
-  children: React.ReactNode
+  /** The edge editor. ABSENT for a product, which has no edge — the facts block
+   *  says so in its `note` rather than leaving a gap that reads as a bug. */
+  children?: React.ReactNode
 }) {
   const t = useTranslations('OfferCatalogue')
   // A pane that shows a name but cannot change it sends you to a modal for the
@@ -603,7 +873,11 @@ function PaneBody({
         </Link>
       </div>
 
-      <div className="border-t pt-4">{children}</div>
+      {/* THE FACTS, above the hairline: they belong to the header — what this
+          thing IS — while everything below the line is what it CONNECTS to. */}
+      {facts && <OfferFacts {...facts} />}
+
+      {children && <div className="border-t pt-4">{children}</div>}
     </div>
   )
 }

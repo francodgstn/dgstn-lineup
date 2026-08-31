@@ -444,6 +444,11 @@ export function ActivityPlanLinks({
           const limit = resolveUsageLimit(p)
           const asksAfterAllowance = choice === 'included' && facets.access && facets.rate && !!limit
           const afterAllowance: 'full' | RateEffect = d.edge.rate ? d.rate.effect : 'full'
+          // 'included' is dropped: see the panel below for why it is the one
+          // answer this question cannot take.
+          const afterAllowanceEffects = offeringRateEffects(off.target).filter(
+            (e) => e !== 'included'
+          )
           // What this row DOES, in the studio's words rather than the model's —
           // and NAMING THE PRICE IT REDUCES, because "everyone else pays full
           // price" was not always true. A class's rate applies to its DROP-IN
@@ -588,17 +593,11 @@ export function ActivityPlanLinks({
                         // the ring, the row tint and the sentence underneath all
                         // say the same thing, which is what keeps the table
                         // readable for anyone who cannot separate these hues.
-                        className={`h-3.5 w-3.5 rounded-full border transition-colors disabled:opacity-50 ${
-                          inert ? 'opacity-40' : ''
-                        } ${
-                          on
-                            ? c === 'none'
-                              ? 'border-rose-500 bg-rose-500 ring-2 ring-rose-500/25'
-                              : c === 'included'
-                                ? 'border-emerald-500 bg-emerald-500 ring-2 ring-emerald-500/25'
-                                : 'border-amber-500 bg-amber-500 ring-2 ring-amber-500/25'
-                            : 'border-muted-foreground/40 hover:border-foreground/70'
-                        }`}
+                        className={choiceDotClass(
+                          on,
+                          c === 'none' ? 'none' : c === 'included' ? 'included' : 'reduced',
+                          inert
+                        )}
                       />
                     )}
 
@@ -659,31 +658,113 @@ export function ActivityPlanLinks({
                 >
                   {outcome && <p className="text-muted-foreground">{outcome}</p>}
 
-                  {/* The follow-up, asked only of a LIMITED plan (see above). */}
+                  {/* The follow-up, asked only of a LIMITED plan (see above).
+                      THREE THINGS WERE WRONG WITH IT (Franco, 2026-08-31):
+
+                      • It wore a joined button group while the answer directly
+                        above it — the same question, about the same money — was
+                        a row of coloured dots. Two controls for one decision,
+                        drawn two ways.
+                      • Choosing "% off" or "Fixed price" gave nowhere to TYPE
+                        the number. The value inputs live in the grid cells and
+                        render only when that cell is the row's answer; a limited
+                        plan's answer is `included`, so neither ever appeared.
+                        `rateError` then refused the save for a blank percent —
+                        an error with no control on screen that could clear it.
+                      • It offered "Included", straight out of
+                        `offeringRateEffects`. "After your 8 classes a month,
+                        extra classes are included" says the limit is not a
+                        limit; it is the one answer this question cannot take. */}
                   {asksAfterAllowance && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-muted-foreground">
+                    <div className="space-y-1.5">
+                      <p className="text-muted-foreground">
                         {t('afterAllowance', { count: limit!.count, per: t(`per_${limit!.per}`) })}
-                      </span>
-                      <Segmented
-                        options={[
-                          { value: 'full', label: t('afterAllowanceFull') },
-                          ...offeringRateEffects(off.target).map((e) => ({
-                            value: e,
-                            label: tb(`effect_${e}` as const),
-                          })),
-                        ]}
-                        value={afterAllowance}
-                        disabled={!canEdit}
-                        onChange={(next) =>
-                          setDraft(key, {
-                            ...d,
-                            edge: { access: true, rate: next !== 'full' },
-                            rate:
-                              next === 'full' ? d.rate : { ...d.rate, effect: next as RateEffect },
-                          })
-                        }
-                      />
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        {(['full', ...afterAllowanceEffects] as const).map((opt) => {
+                          const chosen = afterAllowance === opt
+                          return (
+                            <span key={opt} className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                role="radio"
+                                aria-checked={chosen}
+                                disabled={!canEdit}
+                                aria-label={
+                                  opt === 'full'
+                                    ? t('afterAllowanceFull')
+                                    : tb(`effect_${opt}` as const)
+                                }
+                                onClick={() =>
+                                  setDraft(key, {
+                                    ...d,
+                                    edge: { access: true, rate: opt !== 'full' },
+                                    rate:
+                                      opt === 'full'
+                                        ? d.rate
+                                        : { ...d.rate, effect: opt as RateEffect },
+                                  })
+                                }
+                                className={choiceDotClass(
+                                  chosen,
+                                  opt === 'full' ? 'none' : 'reduced'
+                                )}
+                              />
+                              <span className={chosen ? 'font-medium' : 'text-muted-foreground'}>
+                                {opt === 'full'
+                                  ? t('afterAllowanceFull')
+                                  : tb(`effect_${opt}` as const)}
+                              </span>
+                              {/* THE VALUE, beside the answer it belongs to —
+                                  the same rule the grid cells follow. */}
+                              {chosen && opt === 'percent_off' && (
+                                <span className="flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={99}
+                                    value={d.rate.percent}
+                                    disabled={!canEdit}
+                                    onChange={(e) =>
+                                      setDraft(key, {
+                                        ...d,
+                                        rate: { ...d.rate, percent: e.target.value },
+                                      })
+                                    }
+                                    placeholder="20"
+                                    className="h-7 w-12 px-1 text-center text-xs"
+                                    aria-label={tb('percentLabel')}
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">%</span>
+                                </span>
+                              )}
+                              {chosen && opt === 'fixed_price' && (
+                                <span className="flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    min={0.5}
+                                    step="0.01"
+                                    value={d.rate.amount}
+                                    disabled={!canEdit}
+                                    onChange={(e) =>
+                                      setDraft(key, {
+                                        ...d,
+                                        rate: { ...d.rate, amount: e.target.value },
+                                      })
+                                    }
+                                    placeholder="0.00"
+                                    className="h-7 w-14 px-1 text-center text-xs"
+                                    aria-label={tb('amountLabel')}
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {currency}
+                                  </span>
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -720,53 +801,47 @@ export function ActivityPlanLinks({
 }
 
 /**
- * An exclusive choice, rendered as one joined group.
+ * THE ANSWER DOT — one control for every "what does this plan do here?" answer
+ * on this screen, in the grid cells and in the after-allowance follow-up alike.
  *
- * A RADIO, not checkboxes, because the answers really are mutually exclusive —
- * which is the whole correction here. Two independent checkboxes invited a
- * combination that is meaningless on most plans, and the studio had to work out
- * which pairs meant something. A group of buttons cannot express the impossible
- * state at all.
+ * Extracted when the follow-up stopped being a joined button group (2026-08-31):
+ * two controls for one decision, drawn two ways, is how a reader learns that
+ * they are different decisions.
+ *
+ * SEMANTIC, NOT DECORATIVE — and a THREE-step scale, because there are three
+ * answers and not two: nothing (rose), reduced (amber), free (emerald). Amber
+ * earns its place by carrying information green would throw away: scanning a
+ * column, "included" and "20% off" are the difference between a plan that covers
+ * a class and one that merely discounts it.
+ *
+ * Muted, not an alarm palette: "not included" is an ordinary, correct answer for
+ * most pairings, not a fault to fix. And colour is never the only signal — the
+ * ring, the row tint and the sentence underneath all say the same thing, which
+ * is what keeps this readable for anyone who cannot separate these hues.
+ *
+ * `inert` dims an option that would do nothing if chosen (a price effect with no
+ * price to reduce). It is NOT disabled: a studio mid-setup may well tick it
+ * before adding the price, and the stored rule is correct the moment that price
+ * exists.
  */
-function Segmented({
-  options,
-  value,
-  disabled,
-  onChange,
-}: {
-  options: { value: string; label: string; title?: string }[]
-  value: string
-  disabled?: boolean
-  onChange: (v: string) => void
-}) {
-  return (
-    <div
-      role="radiogroup"
-      className="flex shrink-0 overflow-hidden rounded-md border text-xs"
-    >
-      {options.map((o) => {
-        const on = o.value === value
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            disabled={disabled}
-            title={o.title}
-            onClick={() => onChange(o.value)}
-            className={`px-2.5 py-1 transition-colors disabled:opacity-50 not-first:border-l ${
-              on
-                ? 'bg-primary/10 font-medium text-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
+function choiceDotClass(
+  on: boolean,
+  tone: 'none' | 'included' | 'reduced',
+  inert = false
+): string {
+  return [
+    'h-3.5 w-3.5 rounded-full border transition-colors disabled:opacity-50',
+    inert ? 'opacity-40' : '',
+    on
+      ? tone === 'none'
+        ? 'border-rose-500 bg-rose-500 ring-2 ring-rose-500/25'
+        : tone === 'included'
+          ? 'border-emerald-500 bg-emerald-500 ring-2 ring-emerald-500/25'
+          : 'border-amber-500 bg-amber-500 ring-2 ring-amber-500/25'
+      : 'border-muted-foreground/40 hover:border-foreground/70',
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 function EmptyLink({ text, action, href }: { text: string; action: string; href: Route }) {
