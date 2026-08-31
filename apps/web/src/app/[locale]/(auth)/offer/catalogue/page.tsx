@@ -286,16 +286,37 @@ export default function CataloguePage() {
   // name, and in the rail the row sits under a heading that says it — so it was
   // printed twice on one screen and told the reader nothing either time.
   const activityChips = (a: Activity): OfferChip[] => {
+    const appointment = isAppointmentActivity(a)
     const rule = resolveActivityAccessRule(a)
     return [
       ...(a.tags ?? []).map((tag) => ({ label: tag })),
-      ...(rule.type === 'subscription'
-        ? [{ label: tAct('accessBadgeSubscription'), tone: 'accent' as const }]
-        : rule.type === 'members'
-          ? [{ label: tAct('accessBadgeMembers'), tone: 'accent' as const }]
-          : a.isFreeTrial
-            ? [{ label: tAct('freeTrialBadge') }]
-            : []),
+      // THE FORM'S OWN WORDS for who can book — `access_open` / `access_members`
+      // / `access_subscription`, the exact three options the activity editor
+      // offers. It used to be a shorter private vocabulary ("Members",
+      // "Subscription") that appeared nowhere the studio had chosen from, and
+      // said NOTHING AT ALL for an open class — the commonest answer of the
+      // three rendered as an absent chip, which reads as "not configured"
+      // rather than "anyone can book" (Franco, 2026-08-31).
+      //
+      // CLASS-ONLY. An appointment has no access rule — the price is the gate —
+      // so `resolveActivityAccessRule` falls back to 'open' for one, and
+      // printing "Open to everyone" over a paid appointment would be a claim
+      // about a field it does not have.
+      ...(appointment
+        ? []
+        : [{ label: tAct(`access_${rule.type}` as const), tone: 'accent' as const }]),
+      // The newcomer's trial door, where it opens something: it is independent
+      // of the tier above, but on an OPEN class it grants nothing extra
+      // (everyone already books free), so the editor ignores it there and so
+      // does this. A PRICED trial is money and comes through the money chips
+      // below as "Trial {amount}" instead — one trial fact per row, not two.
+      ...(!appointment &&
+      rule.type !== 'open' &&
+      a.trialEnabled === true &&
+      a.trialPriceAmount == null
+        ? [{ label: tAct('freeTrialBadge') }]
+        : []),
+      // "Drop-in {amount}" is one of these — the drop-in fact, with its price.
       ...activityMoneyChipLabels(
         a,
         currency,
