@@ -7362,7 +7362,6 @@
   },
   "OfferCatalogue": {
     "title": "Catalogo",
-    "subtitle": "Cosa offri e quali abbonamenti lo sbloccano.",
     "toPricing": "Vedi i prezzi",
     "toActivities": "Tutte le attività",
     "tabActivities": "Attività",
@@ -7372,7 +7371,7 @@
     "productInactive": "Nascosto nello shop",
     "productVariants": "{count, plural, one {# variante} other {# varianti}}",
     "summaryProduct": "Venduto singolarmente nello shop.",
-    "productNoPlanEdge": "Un piano non può includere un prodotto — qui non c'è nulla che un abbonamento possa sbloccare o scontare. Prezzi e varianti sono nella pagina Prodotti.",
+    "productNoPlanEdge": "I prodotti non possono essere inclusi nei piani.",
     "courseDraft": "Bozza",
     "courseArchived": "Archiviato",
     "courseAccess_free": "Gratuito",

@@ -51,7 +51,7 @@ import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { collection, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDocs, writeBatch } from 'firebase/firestore'
 import {
   AlertTriangle,
   IdCard,
@@ -61,14 +61,11 @@ import {
   GripVertical,
   Package,
   Pencil,
-  Check,
-  X,
 } from 'lucide-react'
 
 import {
   ACTIVITIES_COLLECTION,
   COURSES_COLLECTION,
-  PRODUCTS_SUBCOLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   TEAMS_COLLECTION,
   courseGatedPlanIds,
@@ -90,7 +87,6 @@ import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link, useRouter } from '@/i18n/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
@@ -286,10 +282,12 @@ export default function CataloguePage() {
   // that is real logic — an activity's money chips — comes from the SHARED
   // `activityMoneyChipLabels` the activities list itself reads, so the two
   // surfaces cannot disagree about what something costs.
+  // NO KIND BADGE IN THE CHIPS. The pane's header already carries it beside the
+  // name, and in the rail the row sits under a heading that says it — so it was
+  // printed twice on one screen and told the reader nothing either time.
   const activityChips = (a: Activity): OfferChip[] => {
     const rule = resolveActivityAccessRule(a)
     return [
-      { label: isAppointmentActivity(a) ? t('appointmentBadge') : t('classBadge') },
       ...(a.tags ?? []).map((tag) => ({ label: tag })),
       ...(rule.type === 'subscription'
         ? [{ label: tAct('accessBadgeSubscription'), tone: 'accent' as const }]
@@ -329,7 +327,6 @@ export default function CataloguePage() {
   ]
 
   const courseChips = (c: Course): OfferChip[] => [
-    { label: t('courseBadge') },
     ...(c.status !== 'published'
       ? [{ label: t(c.status === 'draft' ? 'courseDraft' : 'courseArchived'), tone: 'warn' as const }]
       : []),
@@ -361,6 +358,34 @@ export default function CataloguePage() {
    *  written out per row four times over; one helper is one behaviour. */
   function toggle(kind: NonNullable<Selection>['kind'], id: string) {
     select(selection?.kind === kind && selection.id === id ? null : { kind, id })
+  }
+
+  /**
+   * The row's second line — the chips, flattened.
+   *
+   * THE SAME DERIVATION THE PANE USES, joined rather than re-decided: a row that
+   * summarised the thing differently from the pane it opens would make the
+   * reader check which one to believe. Truncation is the layout's job (the row
+   * is `truncate`), not this function's — cutting the string here would put an
+   * ellipsis in the middle of the accessible name too.
+   */
+  const detailLine = (chips: OfferChip[]) =>
+    // A BULLET BETWEEN CHIPS, not the middot the chips use INSIDE themselves. A
+    // plan's price chip is already "CHF 89.00 · Monthly", so joining chips with
+    // the same mark turned two prices into six anonymous fragments — the line is
+    // there to be read at a glance, and that is the one thing it could not be.
+    chips.map((c) => c.label).join(' • ') || undefined
+
+  /** Where a row's pencil goes — the SAME destinations the pane's Edit button
+   *  uses, named once so a row and the pane it opens cannot lead to different
+   *  places. Absent for a reader who cannot edit: a shortcut to a form that
+   *  refuses them is worse than no shortcut. */
+  const editHrefFor = (kind: NonNullable<Selection>['kind'], id: string): Route | undefined => {
+    if (!canEdit) return undefined
+    if (kind === 'activity') return `/offer/activities?edit=${id}` as Route
+    if (kind === 'plan') return `/offer/plans?edit=${id}` as Route
+    if (kind === 'course') return `/offer/online-courses/${id}` as Route
+    return `/offer/products?edit=${id}` as Route
   }
 
   // ── ORDERING ─────────────────────────────────────────────────────────────
@@ -433,7 +458,11 @@ export default function CataloguePage() {
           href: (backToPlans ? '/offer/plans' : '/offer/activities') as Route,
           label: backToPlans ? t('backToSubscriptions') : t('backToActivities'),
         }}
-        subtitle={t('subtitle')}
+        // NO SUBTITLE. "What you offer, and which plans open it" restated the
+        // page title in a longer sentence, above a screen that demonstrates the
+        // same thing in the first second of looking at it (Franco, 2026-08-31).
+        // The related links stay: those are the two questions this page cannot
+        // answer about itself.
         quickLinks={[
           { href: '/offer/pricing' as Route, label: t('toPricing') },
           { href: '/offer/activities' as Route, label: t('toActivities') },
@@ -533,12 +562,15 @@ export default function CataloguePage() {
                     renderRow={(a, sortable) => (
                       <RailRow
                         name={a.name}
+                        detail={detailLine(activityChips(a))}
                         color={a.color}
                         warn={deadEndIds.has(a.id)}
                         selected={selection?.kind === 'activity' && selection.id === a.id}
                         onClick={() => toggle('activity', a.id)}
                         sortable={sortable}
                         reorderLabel={t('reorder')}
+                        editHref={editHrefFor('activity', a.id)}
+                        editLabel={t('editAll')}
                       />
                     )}
                   />
@@ -556,12 +588,15 @@ export default function CataloguePage() {
                     renderRow={(a, sortable) => (
                       <RailRow
                         name={a.name}
+                        detail={detailLine(activityChips(a))}
                         color={a.color}
                         warn={deadEndIds.has(a.id)}
                         selected={selection?.kind === 'activity' && selection.id === a.id}
                         onClick={() => toggle('activity', a.id)}
                         sortable={sortable}
                         reorderLabel={t('reorder')}
+                        editHref={editHrefFor('activity', a.id)}
+                        editLabel={t('editAll')}
                       />
                     )}
                   />
@@ -582,10 +617,13 @@ export default function CataloguePage() {
                   renderRow={(pl, sortable) => (
                     <RailRow
                       name={pl.name}
+                      detail={detailLine(planChips(pl))}
                       selected={selection?.kind === 'plan' && selection.id === pl.id}
                       onClick={() => toggle('plan', pl.id)}
                       sortable={sortable}
                       reorderLabel={t('reorder')}
+                      editHref={editHrefFor('plan', pl.id)}
+                      editLabel={t('editAll')}
                     />
                   )}
                 />
@@ -602,9 +640,12 @@ export default function CataloguePage() {
                   <RailRow
                     key={c.id}
                     name={c.title}
+                    detail={detailLine(courseChips(c))}
                     warn={deadEndIds.has(c.id)}
                     selected={selection?.kind === 'course' && selection.id === c.id}
                     onClick={() => toggle('course', c.id)}
+                    editHref={editHrefFor('course', c.id)}
+                    editLabel={t('editAll')}
                   />
                 ))
               )}
@@ -623,8 +664,11 @@ export default function CataloguePage() {
                   <RailRow
                     key={p.id}
                     name={p.name}
+                    detail={detailLine(productChips(p))}
                     selected={selection?.kind === 'product' && selection.id === p.id}
                     onClick={() => toggle('product', p.id)}
+                    editHref={editHrefFor('product', p.id)}
+                    editLabel={t('editAll')}
                   />
                 ))
               )}
@@ -661,11 +705,6 @@ export default function CataloguePage() {
                 description: selectedActivity.description,
               }}
               editHref={`/offer/activities?edit=${selectedActivity.id}` as Route}
-              canEdit={canEdit}
-              onRename={async (name) => {
-                await updateDoc(doc(db, ACTIVITIES_COLLECTION, selectedActivity.id), { name })
-                await qc.invalidateQueries({ queryKey: ['activities'] })
-              }}
             >
               <ActivityPlanLinks
                 direction="from-offering"
@@ -700,21 +739,6 @@ export default function CataloguePage() {
                 description: selectedPlan.description,
               }}
               editHref={`/offer/plans?edit=${selectedPlan.id}` as Route}
-              canEdit={canEdit}
-              onRename={async (name) => {
-                if (!currentTeamId) return
-                await updateDoc(
-                  doc(
-                    db,
-                    TEAMS_COLLECTION,
-                    currentTeamId,
-                    SUBSCRIPTION_TYPES_SUBCOLLECTION,
-                    selectedPlan.id
-                  ),
-                  { name }
-                )
-                await qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
-              }}
             >
               <ActivityPlanLinks
                 direction="from-plan"
@@ -750,11 +774,6 @@ export default function CataloguePage() {
                 description: selectedCourse.summary,
               }}
               editHref={`/offer/online-courses/${selectedCourse.id}` as Route}
-              canEdit={canEdit}
-              onRename={async (title) => {
-                await updateDoc(doc(db, COURSES_COLLECTION, selectedCourse.id), { title })
-                await qc.invalidateQueries({ queryKey: ['courses'] })
-              }}
             >
               <ActivityPlanLinks
                 direction="from-offering"
@@ -780,19 +799,11 @@ export default function CataloguePage() {
                 // none. A product carries no access rule and no benefit, so no
                 // plan can open it — that is a fact about the model, not a gap
                 // in this screen, and leaving the space blank would read as the
-                // latter.
+                // latter. ONE SENTENCE: it explained the reasoning as well as
+                // the fact, and the fact is the part a studio needs.
                 note: t('productNoPlanEdge'),
               }}
               editHref={`/offer/products?edit=${selectedProduct.id}` as Route}
-              canEdit={canEdit}
-              onRename={async (name) => {
-                if (!currentTeamId) return
-                await updateDoc(
-                  doc(db, TEAMS_COLLECTION, currentTeamId, PRODUCTS_SUBCOLLECTION, selectedProduct.id),
-                  { name }
-                )
-                await qc.invalidateQueries({ queryKey: ['products', currentTeamId] })
-              }}
             />
           )}
 
@@ -817,21 +828,36 @@ export default function CataloguePage() {
   )
 }
 
-/** The pane's frame: name (inline-editable), a one-line summary, an Edit escape
- *  hatch, and the edge editor below.
+/**
+ * The pane's frame: the name, a one-line summary, the facts, an Edit button and
+ * the edge editor below.
  *
- *  Edit deep-links: it lands on the owning page AND opens that entity's editor
- *  (`?edit=<id>`). Sending the studio to a list page with the row somewhere on
- *  it is the shape UX-99 is about — a page naming a destination and then making
- *  you look for it. */
+ * ── NO INLINE RENAME ────────────────────────────────────────────────────────
+ * The name used to be editable here, on the reasoning that a pane showing a name
+ * but unable to change it sends you to a modal for the commonest small edit
+ * there is. That was the wrong trade (Franco, 2026-08-31): it put a second,
+ * quieter way to change one field beside a button that changes all of them, so
+ * the screen had two edit affordances with different scopes and no way to tell
+ * from looking which one a given change needed. One Edit, and it opens the
+ * editor that owns the whole record.
+ *
+ * ── EDIT IS PRIMARY ─────────────────────────────────────────────────────────
+ * It was an outline button, which is what you use for the SECOND action on a
+ * screen. There is no first one here: this pane reads, and the only thing it
+ * does is send you to the form. Primary, with the pencil, because the thing it
+ * competes with for attention is the edge grid below it — which saves itself.
+ *
+ * Edit deep-links: it lands on the owning page AND opens that entity's editor
+ * (`?edit=<id>`). Sending the studio to a list page with the row somewhere on
+ * it is the shape UX-99 is about — a page naming a destination and then making
+ * you look for it.
+ */
 function PaneBody({
   title,
   badge,
   summary,
   facts,
   editHref,
-  canEdit,
-  onRename,
   children,
 }: {
   title: string
@@ -840,99 +866,31 @@ function PaneBody({
   /** What the list page would show on this thing's row — see OfferFacts. */
   facts?: OfferFactsProps
   editHref: Route
-  canEdit: boolean
-  onRename: (name: string) => Promise<void>
   /** The edge editor. ABSENT for a product, which has no edge — the facts block
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
 }) {
   const t = useTranslations('OfferCatalogue')
-  // A pane that shows a name but cannot change it sends you to a modal for the
-  // commonest small edit there is. So the NAME is here and everything else is
-  // behind Edit.
-  const [renaming, setRenaming] = useState(false)
-  const [draft, setDraft] = useState(title)
-  const [busy, setBusy] = useState(false)
-
-  async function commit() {
-    const next = draft.trim()
-    if (!next || next === title) {
-      setRenaming(false)
-      setDraft(title)
-      return
-    }
-    setBusy(true)
-    try {
-      await onRename(next)
-      setRenaming(false)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          {renaming ? (
-            <div className="flex items-center gap-1.5">
-              <Input
-                autoFocus
-                value={draft}
-                disabled={busy}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void commit()
-                  if (e.key === 'Escape') {
-                    setRenaming(false)
-                    setDraft(title)
-                  }
-                }}
-                className="h-8 w-56 text-sm"
-                aria-label={t('nameLabel')}
-              />
-              <Button size="icon" variant="ghost" disabled={busy} onClick={() => void commit()}>
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  setRenaming(false)
-                  setDraft(title)
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-lg font-semibold">{title}</h2>
-              {badge && (
-                <Badge variant="outline" className="text-[10px] font-normal">
-                  {badge}
-                </Badge>
-              )}
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraft(title)
-                    setRenaming(true)
-                  }}
-                  title={t('rename')}
-                  aria-label={t('rename')}
-                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold">{title}</h2>
+            {badge && (
+              <Badge variant="outline" className="text-xs font-normal">
+                {badge}
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">{summary}</p>
         </div>
-        <Link href={editHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+        {/* Shown to a reader who cannot edit as well: it is how they OPEN the
+            thing, and the form refuses them on its own terms rather than this
+            page pretending the destination does not exist. */}
+        <Link href={editHref} className={buttonVariants({ size: 'sm' })}>
+          <Pencil className="mr-1.5 h-3.5 w-3.5" />
           {t('editAll')}
         </Link>
       </div>
@@ -974,16 +932,40 @@ function RailGroup({
  * whole row draggable means every mis-drag also changes what the pane is
  * showing. Same shape the activities and subscription lists already use.
  */
+/**
+ * One row of the rail: a drag handle where the list is orderable, a two-line
+ * select target, and an edit shortcut that appears on hover.
+ *
+ * ── TWO LINES ───────────────────────────────────────────────────────────────
+ * The rail was one name per row, which was all it had space for while it stacked
+ * four groups. Tabs gave it the height back, so the row now carries the same
+ * summary the pane does (price, access, state) — enough to pick the right thing
+ * WITHOUT selecting each one to find out, which is the whole job of a list you
+ * scan. Exactly one detail line: a third would make the list a second copy of
+ * the pane, and then the pane is the redundant one.
+ *
+ * ── THREE CONTROLS, THREE BUTTONS ───────────────────────────────────────────
+ * The handle and the edit shortcut are siblings of the select target, not
+ * children: a `<button>` inside a `<button>` is invalid, and all three are
+ * different intents on the same row. The edit shortcut is hidden until hover or
+ * KEYBOARD FOCUS — `focus-visible:opacity-100` is not decoration, it is the only
+ * thing that keeps it reachable without a mouse.
+ */
 function RailRow({
   name,
+  detail,
   color,
   warn,
   selected,
   onClick,
   sortable,
   reorderLabel,
+  editHref,
+  editLabel,
 }: {
   name: string
+  /** The second line — see `detailLine` in the page. */
+  detail?: string
   color?: string
   warn?: boolean
   selected: boolean
@@ -991,47 +973,69 @@ function RailRow({
   /** Present only when this list is orderable — see `canReorder` in the page. */
   sortable?: SortableRenderProps
   reorderLabel?: string
+  /** Where the pencil goes. Absent for a reader who cannot edit. */
+  editHref?: Route
+  editLabel?: string
 }) {
-  const row = (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
-        selected ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
-      }`}
-    >
-      {color !== undefined && (
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ background: color || DEFAULT_ACCENT }}
-        />
-      )}
-      <span className="truncate text-sm">{name}</span>
-      {warn && <AlertTriangle className="ml-auto h-3.5 w-3.5 shrink-0 text-amber-600" />}
-    </button>
-  )
-
-  if (!sortable) return row
-
   return (
     <div
-      ref={sortable.setNodeRef}
-      style={sortable.style}
-      className={`flex items-center rounded-lg ${sortable.isDragging ? 'bg-card shadow-lg' : ''}`}
+      ref={sortable?.setNodeRef}
+      style={sortable?.style}
+      className={`group flex items-center rounded-lg ${
+        sortable?.isDragging ? 'bg-card shadow-lg' : ''
+      } ${selected ? 'bg-primary/10' : 'hover:bg-muted'}`}
     >
+      {sortable && (
+        <button
+          type="button"
+          {...sortable.attributes}
+          {...sortable.listeners}
+          aria-label={reorderLabel}
+          // `touch-none` is what makes this work on a phone at all: without it
+          // the browser claims the gesture for scrolling before the sensor sees
+          // it.
+          className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/50 transition-colors hover:text-foreground active:cursor-grabbing"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
+
       <button
         type="button"
-        {...sortable.attributes}
-        {...sortable.listeners}
-        aria-label={reorderLabel}
-        // `touch-none` is what makes this work on a phone at all: without it the
-        // browser claims the gesture for scrolling before the sensor sees it.
-        className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
+        onClick={onClick}
+        aria-pressed={selected}
+        className={`flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1.5 text-left ${
+          selected ? 'text-primary' : ''
+        }`}
       >
-        <GripVertical className="h-3.5 w-3.5" />
+        {color !== undefined && (
+          <span
+            className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ background: color || DEFAULT_ACCENT }}
+          />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm leading-tight">{name}</span>
+          {detail && (
+            <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
+              {detail}
+            </span>
+          )}
+        </span>
+        {warn && <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />}
       </button>
-      {row}
+
+      {editHref && (
+        <Link
+          href={editHref}
+          aria-label={editLabel}
+          title={editLabel}
+          onClick={(e) => e.stopPropagation()}
+          className="mr-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Link>
+      )}
     </div>
   )
 }

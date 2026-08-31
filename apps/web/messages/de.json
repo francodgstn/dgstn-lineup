@@ -7362,7 +7362,6 @@
   },
   "OfferCatalogue": {
     "title": "Katalog",
-    "subtitle": "Was du anbietest und welche Abos es freischalten.",
     "toPricing": "Preise ansehen",
     "toActivities": "Alle Aktivitäten",
     "tabActivities": "Aktivitäten",
@@ -7372,7 +7371,7 @@
     "productInactive": "Im Shop ausgeblendet",
     "productVariants": "{count, plural, one {# Variante} other {# Varianten}}",
     "summaryProduct": "Wird eigenständig im Shop verkauft.",
-    "productNoPlanEdge": "Ein Plan kann kein Produkt enthalten — hier gibt es nichts, was ein Abo freischalten oder rabattieren könnte. Preise und Varianten stehen auf der Produktseite.",
+    "productNoPlanEdge": "Produkte können nicht in Pläne aufgenommen werden.",
     "courseDraft": "Entwurf",
     "courseArchived": "Archiviert",
     "courseAccess_free": "Kostenlos",

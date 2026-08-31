@@ -7362,7 +7362,6 @@
   },
   "OfferCatalogue": {
     "title": "Catalogue",
-    "subtitle": "What you offer, and which plans open it.",
     "toPricing": "See prices",
     "toActivities": "All activities",
     "tabActivities": "Activities",
@@ -7372,7 +7371,7 @@
     "productInactive": "Hidden from the shop",
     "productVariants": "{count, plural, one {# variant} other {# variants}}",
     "summaryProduct": "Sold on its own in the shop.",
-    "productNoPlanEdge": "A plan cannot include a product — there is nothing here for a subscription to open or discount. Prices and variants are on the Products page.",
+    "productNoPlanEdge": "Products cannot be included in plans.",
     "courseDraft": "Draft",
     "courseArchived": "Archived",
     "courseAccess_free": "Free",

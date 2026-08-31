@@ -7362,7 +7362,6 @@
   },
   "OfferCatalogue": {
     "title": "Catalogue",
-    "subtitle": "Ce que vous proposez et les abonnements qui y donnent accès.",
     "toPricing": "Voir les prix",
     "toActivities": "Toutes les activités",
     "tabActivities": "Activités",
@@ -7372,7 +7371,7 @@
     "productInactive": "Masqué dans la boutique",
     "productVariants": "{count, plural, one {# variante} other {# variantes}}",
     "summaryProduct": "Vendu séparément dans la boutique.",
-    "productNoPlanEdge": "Une formule ne peut pas inclure un produit — il n'y a rien ici qu'un abonnement puisse débloquer ou remiser. Les prix et les variantes sont sur la page Produits.",
+    "productNoPlanEdge": "Les produits ne peuvent pas être inclus dans les formules.",
     "courseDraft": "Brouillon",
     "courseArchived": "Archivé",
     "courseAccess_free": "Gratuit",
